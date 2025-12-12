@@ -1,0 +1,83 @@
+---
+title: ChartStructure
+description: Configure categorical structure charts (rankings, breakdowns, variances).
+---
+
+`ChartStructure` manifests describe charts that show categories, groups, and variances.
+They work on datasets with category-style dimensions and scenario-style measures.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: revenue_by_region_chart
+spec:
+  dataset: revenue_by_region   # string or array
+  chartTitle: "Revenue by region"
+  filter: "region_group = 'EMEA'"
+  level: category              # rowcategory | category | subcategory
+  order: ac1                   # category | categoryindex | rowgroup | rowgroupindex | ac1-4 | fc1-4 | pp1-4 | pl1-4
+  orderDirection: desc
+  measureScale: M              # SI prefix or GREATEST/LEAST
+  measureUnit: "EUR"
+  percentageScaling: "default" # name or number
+  unitScaling: "default"        # name or number
+  internationalisation: "_system"
+  internationalisationMode: "default"
+  componentStatus: "ok"
+  translation: "chart.revenue.by_region"
+  hideCategories: false
+  showCategories: true
+  showMeasureScale: true
+  limit: 10
+  pixelPerPercentage: 2
+  pixelPerUnit: 0.1
+  scenarios: ["ac1", "py1"]
+  variances: ["dpy1_ac1_pos"]
+```
+
+## Fields
+
+- `dataset` – required; string or array of dataset names.
+- `chartTitle` – optional custom title.
+- `filter` – optional filter expression.
+- `level` – aggregation level: `rowcategory`, `category`, `subcategory`.
+- `order` / `orderDirection` – sort key and direction; if you use a scenario, it must appear in `scenarios`.
+- `measureScale` – SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
+- `measureUnit` – unit string, for example `mEUR`.
+- `percentageScaling` / `unitScaling` – name of a scaling group or numeric scaling factor.
+- `showCategories`, `hideCategories`, `showMeasureScale` – visibility flags.
+- `limit` – maximum bars per group; rows beyond the limit are cumulated as REST.
+- `pixelPerPercentage`, `pixelPerUnit` – explicit scaling overrides.
+- `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`.
+- `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
+
+## Example: Top 10 regions with variance
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: top_regions_chart
+spec:
+  dataset: revenue_by_region
+  chartTitle: "Top 10 regions by revenue"
+  level: category
+  order: ac1
+  orderDirection: desc
+  measureScale: M
+  measureUnit: "EUR"
+  limit: 10
+  scenarios: ["ac1", "py1"]
+  variances: ["dpy1_ac1_pos"]
+  showMeasureScale: true
+```
+
+You can document chart appearances in your own reports using placeholder screenshots such as:
+
+```md
+![Structure chart placeholder](https://via.placeholder.com/1200x600?text=Structure+Chart)
+```

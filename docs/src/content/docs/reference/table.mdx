@@ -1,0 +1,99 @@
+---
+title: Table
+description: Configure tabular output with grouping, variances, and drilldowns.
+---
+
+`Table` manifests describe tables bound to datasets.
+They control formatting, grouping, scenarios, and optional drilldown views.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_by_customer
+  tableTitle: "Top customers"
+  filter: "region = 'DE'"
+  order: ac1                         # category | categoryindex | rowgroup | rowgroupindex | ac1-4 | fc1-4 | pp1-4 | pl1-4
+  orderDirection: desc
+  measureScale: M
+  measureType: currency              # volume | currency
+  measureUnit: "EUR"
+  internationalisation: "_system"
+  internationalisationMode: "default"
+  componentStatus: "ok"
+  translation: "table.revenue.by_customer"
+  categoryWidth: w25                 # w5 | w10 | w15 | w20 | w25 | w50 | inf
+  dataFormat: decimal                # percent | decimal
+  dataFormatDigitsDecimal: 1
+  dataFormatDigitsPercent: 1
+  grouped: true
+  showGroupTitle: true
+  showMeasureScale: true
+  limit: 10
+  type: list                         # list | sum | opt | sumnototal | optnototal
+  scenarios: ["ac1", "py1"]
+  variances: ["dpy1_ac1_pos"]
+  thereof: []
+  partof: []
+  columnthereof: null
+  scenariosDataFormat: "default"
+```
+
+## Fields
+
+- `dataset` – required dataset reference.
+- `tableTitle` – optional human-readable title.
+- `filter`, `order`, `orderDirection` – restrict and sort rows; using scenario names in `order` requires them to appear in `scenarios`.
+- `measureScale`, `measureType`, `measureUnit` – control how measures are interpreted and displayed.
+- `categoryWidth` – width of the category column (`w5`..`w50`, `inf`).
+- `dataFormat`, `dataFormatDigitsDecimal`, `dataFormatDigitsPercent` – number formatting.
+- `grouped`, `showGroupTitle` – group rows by `rowgroup` and optionally show group headers.
+- `showMeasureScale` – toggle measure unit in table header.
+- `limit` – maximum rows per group; extra rows are cumulated as REST.
+- `type` – table type (`list`, `sum`, `opt`, `sumnototal`, `optnototal`).
+- `scenarios`, `variances` – scenario measures and variances, similar to charts.
+- `thereof`, `partof`, `columnthereof` – drilldown configuration.
+
+## Example: Grouped table with drilldown
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_grouped_table
+spec:
+  dataset: revenue_detail
+  tableTitle: "Revenue by segment and product"
+  measureScale: M
+  measureType: currency
+  measureUnit: "EUR"
+  grouped: true
+  showGroupTitle: true
+  categoryWidth: w25
+  type: list
+  limit: 5
+  scenarios: ["ac1", "py1"]
+  variances: ["dpy1_ac1_pos"]
+  thereof:
+    - rowGroup: "Revenue"
+      category: "Applications"
+      subCategory: "Applications-A"
+  partof:
+    - rowGroup: "Revenue"
+      category: "Applications"
+  columnthereof:
+    - scenario: "ac1"
+      name: "DE"
+      subGroups: ["Berlin", "Hamburg"]
+```
+
+You can document the resulting layout using a placeholder image:
+
+```md
+![Table placeholder](https://via.placeholder.com/1200x600?text=Table)
+```

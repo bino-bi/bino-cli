@@ -1,0 +1,36 @@
+---
+title: bino preview
+description: Run a live preview server for your report bundle.
+---
+
+`bino preview` starts a local HTTP server that renders your report in a browser.
+It reloads automatically when you change manifests or data files.
+
+## Usage
+
+```bash
+bino preview [flags]
+```
+
+Common flags:
+
+- `--work-dir` – report bundle directory (default: `.`).
+- `--port` – HTTP port (default: `45678`).
+- `--log-sql` – log executed SQL queries.
+
+## Examples
+
+Preview the bundle in the current directory:
+
+```bash
+bino preview
+```
+
+Preview a different workdir and log SQL:
+
+```bash
+bino preview --work-dir my-report --log-sql
+```
+
+If the browser does not open automatically, open `http://127.0.0.1:45678/` manually.
+Use placeholder screenshots in your docs to show the preview UI.

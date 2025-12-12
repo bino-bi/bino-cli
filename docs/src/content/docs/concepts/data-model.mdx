@@ -1,0 +1,51 @@
+---
+title: Data model
+description: How datasources, datasets, secrets, and external storage work together.
+---
+
+bino uses DuckDB as an embedded analytical engine.
+`DataSource` and `DataSet` manifests describe how raw data becomes analytical tables used by layouts and reports.
+
+## Datasources as DuckDB views
+
+Each `DataSource` creates a DuckDB view named after `metadata.name`.
+Depending on `spec.type`, bino loads data from:
+
+- Inline rows embedded in the manifest (`type: inline`)
+- Local files and directories (`type: csv`, `excel`, `parquet`)
+- Remote databases queried via SQL (`type: postgres_query`, `mysql_query`)
+- Object storage endpoints via DuckDB secrets (S3, GCS, R2, Azure, HTTP, HuggingFace)
+
+The `ephemeral` flag controls caching behavior:
+
+- When omitted, bino infers ephemerality from source type (remote and database sources are treated as changing).
+- Set `ephemeral: false` to explicitly allow caching for otherwise dynamic-looking sources.
+
+See the [DataSource reference](/reference/datasource/) for full details.
+
+## Datasets as derived tables
+
+`DataSet` manifests define SQL queries that run on top of datasources or other datasets.
+The query is executed in DuckDB, and the results are reused by layouts and charts.
+
+Key ideas:
+
+- `spec.query` is DuckDB SQL; refer to datasources and datasets using their `metadata.name`.
+- `spec.dependencies` is an optional list of datasource names that must be materialized before the query runs.
+- Use dependencies to make relationships explicit and to help graph inspection.
+
+See the [DataSet reference](/reference/dataset/) for examples.
+
+## Secrets and external storage
+
+External storage and APIs (S3, GCS, HTTP, R2, Azure, HuggingFace) are configured via `ConnectionSecret` manifests.
+A connection secret has a `spec.type` (for example `s3` or `http`) and a type-specific block (`s3`, `http`, `azure`, ...).
+
+Examples:
+
+- S3 access keys via `spec.s3.keyIdFromEnv` and `spec.s3.secretFromEnv`
+- HTTP basic auth via `spec.http.usernameFromEnv` and `spec.http.passwordFromEnv`
+- HuggingFace token via `spec.huggingface.tokenFromEnv`
+
+Database credentials (`postgres`, `mysql`) are also stored in connection secrets, while non-credential connection details live in `DataSource.spec.connection`.
+See the [ConnectionSecret reference](/reference/connection-secret/) for full schemas and examples.

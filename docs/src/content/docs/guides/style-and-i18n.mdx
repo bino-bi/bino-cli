@@ -1,0 +1,50 @@
+---
+title: Styling and internationalization
+description: Apply consistent styles and translations to your reports.
+---
+
+This guide shows how to combine `ComponentStyle` and `Internationalization` manifests.
+You will define a style, a translation block, and reference them from layouts conceptually.
+
+## 1. Define a component style
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporateTheme
+spec:
+  content:
+    fontFamily: "Inter, system-ui, sans-serif"
+    headingColor: "#111827"
+    textColor: "#374151"
+    accentColor: "#1D4ED8"
+```
+
+## 2. Define translations
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: systemTexts_en
+spec:
+  code: en-US
+  namespace: _system
+  content:
+    report.title.sales_overview: "Sales Overview"
+    report.subtitle.q1_2024: "Q1 2024"
+```
+
+## 3. Use them in layouts
+
+The exact wiring between styles/i18n and components depends on the front-end implementation.
+Conceptually:
+
+- Layouts and components refer to text keys (for example `report.title.sales_overview`) rather than hard-coded strings.
+- Styles are referenced by name in component configuration.
+
+Keep your documentation clear about which keys and style names are used where.
+Add placeholder screenshots showing the same layout with default vs corporate styles to highlight the difference.

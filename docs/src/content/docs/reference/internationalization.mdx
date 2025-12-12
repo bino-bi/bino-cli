@@ -1,0 +1,61 @@
+---
+title: Internationalization
+description: Manage translations for report text by language and namespace.
+---
+
+`Internationalization` manifests hold localized messages for one language and optional namespace.
+Layouts and components refer to keys; the renderer selects messages based on `ReportArtefact.language` and namespaces.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: systemTexts_de
+spec:
+  code: de-DE
+  namespace: _system
+  content: {} # object or JSON string
+```
+
+Fields:
+
+- `spec.code` – locale code, for example `de-DE` or `en-US`.
+- `spec.namespace` – optional namespace to group keys.
+- `spec.content` – key/value map as object or JSON string.
+
+## YAML object content
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: systemTexts_de
+spec:
+  code: de-DE
+  namespace: _system
+  content:
+    report.title.sales_overview: "Sales Overview"
+    report.subtitle.q1_2024: "Q1 2024"
+    card.title.revenue: "Revenue"
+    card.title.ebit: "EBIT"
+```
+
+## JSON string content
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: productTexts_en
+spec:
+  code: en-US
+  namespace: products
+  content: >-
+    {"product.applications":"Applications","product.infrastructure":"Infrastructure"}
+```
+
+You can organize translations by language, business domain, or report, as long as namespaces and keys stay consistent with layout conventions.

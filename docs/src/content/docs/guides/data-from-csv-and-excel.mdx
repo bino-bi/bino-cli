@@ -1,0 +1,106 @@
+---
+title: Using CSV and Excel data
+description: Connect CSV and Excel files to datasets, tables, and charts.
+---
+
+This guide walks through using CSV and Excel files as datasources.
+You will create a datasource, a dataset, and a simple layout that displays the data.
+
+## 1. CSV datasource
+
+Create a datasource for a CSV file under `data/sales.csv`:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./data/sales.csv
+```
+
+- Place `sales.csv` relative to the manifest or adjust `path` accordingly.
+- Use a glob (for example `./data/sales_*.csv`) to read multiple files.
+
+## 2. Excel datasource
+
+For Excel, use `type: excel` and point to the file:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: budget_excel
+spec:
+  type: excel
+  path: ./data/budget.xlsx
+```
+
+Depending on your DuckDB setup, you may use additional options (sheet, range) via DuckDB's Excel support.
+
+## 3. Dataset over CSV/Excel
+
+Define a dataset that aggregates sales by region:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_by_region
+spec:
+  query: |
+    SELECT
+      region,
+      SUM(amount) AS total_amount
+    FROM sales_csv
+    GROUP BY region
+  dependencies:
+    - sales_csv
+```
+
+## 4. Simple layout with table and chart
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_from_csv_page
+spec:
+  pageLayout: split-horizontal
+  pageFormat: a4
+  pageOrientation: landscape
+  children:
+    - kind: Table
+      spec:
+        dataset: sales_by_region
+        tableTitle: "Sales by region"
+        type: list
+    - kind: ChartStructure
+      spec:
+        dataset: sales_by_region
+        chartTitle: "Sales by region"
+        level: category
+        measureScale: M
+        measureUnit: "EUR"
+```
+
+## 5. Run preview and build
+
+From the workdir:
+
+```bash
+bino preview --log-sql
+```
+
+Once the result looks good, build the PDF:
+
+```bash
+bino build
+```
+
+Use placeholder screenshots (later replaced with real ones) to document the resulting table and chart in your docs.

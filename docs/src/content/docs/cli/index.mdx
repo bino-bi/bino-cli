@@ -1,0 +1,39 @@
+---
+title: CLI overview
+description: Overview of bino CLI commands and common workflows.
+---
+
+The bino CLI drives the full report lifecycle: scaffold, iterate, build, inspect, and maintain.
+This page summarizes the main commands and links to detailed topics.
+
+## Lifecycle
+
+A typical workflow looks like this:
+
+1. `bino init` – scaffold a new report bundle.
+2. `bino preview` – iterate on layouts and data with a live browser preview.
+3. `bino build` – validate manifests, execute datasets, and produce PDFs.
+4. `bino graph` – inspect dependencies between artefacts, datasets, and datasources.
+5. `bino playwright install` – install browser runtimes for rendering.
+6. `bino cache clean` – clear caches when needed.
+7. `bino version` and `bino about` – inspect version and dependency information.
+
+You can document this visually using a simple placeholder diagram image:
+
+```md
+![CLI lifecycle placeholder](https://via.placeholder.com/1200x300?text=init+%E2%86%92+preview+%E2%86%92+build+%E2%86%92+graph+%E2%86%92+cache)
+```
+
+## Command reference
+
+- [bino init](/cli/init/)
+- [bino preview](/cli/preview/)
+- [bino build](/cli/build/)
+- [bino graph](/cli/graph/)
+- [bino playwright install](/cli/playwright/)
+- [bino cache clean](/cli/cache/)
+- [bino version and about](/cli/version-about/)
+
+## Additional topics
+
+- [Build Logs](/cli/build-logs/) – JSON logs, CSV embedding, and execution plan tracking

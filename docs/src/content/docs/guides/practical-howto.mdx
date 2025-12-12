@@ -1,0 +1,43 @@
+---
+title: Practical how-to tips
+description: Task-oriented tips for building and maintaining bino report bundles.
+---
+
+This page collects practical tips for everyday bino work.
+Use it as a checklist when setting up new bundles or troubleshooting.
+
+## Structure your workdir
+
+- Start with one workdir per logical report bundle (for example `monthly-group-report`).
+- Create subdirectories like `manifests/`, `data/`, and `assets/` to keep configuration, input data, and images separate.
+- Keep build output in a dedicated `dist/` directory and add it to `.gitignore`.
+
+## Naming and referencing
+
+- Use descriptive `metadata.name` values like `salesDailyCsv`, `revenueByRegion`, `annualSalesReport`.
+- Remember that `DataSource` names must be valid unquoted SQL identifiers: lowercase letters, digits, underscores, starting with a letter or underscore.
+- When refactoring, use `bino graph` to understand dependencies before renaming.
+
+## Environment variables and configuration
+
+- Use `${VAR}` and `${VAR:default}` to keep paths and secrets out of manifests.
+- Expect `bino preview` to warn but continue with missing variables, while `bino build` will fail.
+- Prefer `*FromEnv` fields in `ConnectionSecret` (for example `passwordFromEnv`, `keyIdFromEnv`).
+
+## Iterating quickly
+
+- Use `bino preview --log-sql` while designing layouts to see which queries run.
+- Keep SQL in `DataSet` manifests readable; use CTEs for complex logic.
+- Use small inline datasources for prototypes, then move to real files or databases.
+
+## Performance and stability
+
+- Avoid overly broad file globs; point `DataSource.spec.path` at focused directories.
+- Use `ephemeral: false` for large but stable external datasets to benefit from caching.
+- Raise runtime limits via environment variables only when needed and document them in your project README or CI scripts.
+
+## Collaboration
+
+- Use `metadata.labels` and `metadata.annotations` to tag manifests with team, domain, or lifecycle information.
+- Keep how-to notes in your Starlight docs so new team members can follow established patterns.
+- Use placeholder screenshots in docs and replace them as real reports stabilize.

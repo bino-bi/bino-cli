@@ -1,0 +1,92 @@
+---
+title: ChartTime
+description: Configure time-series charts with smart date axes and overlays.
+---
+
+`ChartTime` manifests describe time-based charts.
+They share many fields with `ChartStructure` but add date-axis-specific options.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_time_chart
+spec:
+  dataset: revenue_daily
+  chartTitle: "Daily revenue"
+  axisLabelsMode: smart      # smart | long | short
+  dateInterval: auto         # year | quarter | month | week | day | hour | minute | second | millisecond | auto
+  filter: "region_group = 'EMEA'"
+  level: category
+  order: category
+  orderDirection: asc
+  measureScale: M
+  measureUnit: "EUR"
+  type: line                 # bar | line | area
+  internationalisation: "_system"
+  internationalisationMode: "default"
+  componentStatus: "ok"
+  translation: "chart.revenue.time"
+  hideAxisLabels: false
+  showCategories: true
+  showMeasureScale: true
+  showOverlayAvg: true
+  showOverlayMedian: false
+  limit: 0
+  intervalSpanLimit: 50
+  percentageScaling: "default"
+  unitScaling: "default"
+  syncSpaceLeft: 0
+  pixelPerPercentage: 2
+  pixelPerUnit: 0.1
+  leftSideOffsetForHorizontalSync: 0
+  scenarios: ["ac1", "fc1"]
+  variances: ["dfc1_ac1_pos"]
+```
+
+## Fields
+
+- `dataset` – required dataset name or array.
+- `chartTitle` – optional title.
+- `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
+- `dateInterval` – desired time granularity; `auto` lets the renderer choose.
+- `filter`, `level`, `order`, `orderDirection`, `measureScale`, `measureUnit` – similar semantics to `ChartStructure`.
+- `type` – chart type: `bar`, `line`, or `area`.
+- `hideAxisLabels`, `showCategories`, `showMeasureScale` – visibility flags.
+- `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
+- `limit` – column stack limit; 0 means unlimited.
+- `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
+- `percentageScaling`, `unitScaling`, `pixelPerPercentage`, `pixelPerUnit`, `syncSpaceLeft`, `leftSideOffsetForHorizontalSync` – scaling and sync options.
+- `scenarios` and `variances` – configured as for `ChartStructure`.
+
+## Example: Monthly revenue line chart
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_monthly_chart
+spec:
+  dataset: revenue_monthly
+  chartTitle: "Monthly revenue"
+  axisLabelsMode: smart
+  dateInterval: month
+  level: category
+  order: category
+  orderDirection: asc
+  measureScale: M
+  measureUnit: "EUR"
+  type: line
+  showMeasureScale: true
+  showOverlayAvg: true
+  scenarios: ["ac1"]
+```
+
+Use a placeholder image when documenting expected output:
+
+```md
+![Time chart placeholder](https://via.placeholder.com/1200x600?text=Time+Chart)
+```

@@ -1,0 +1,57 @@
+---
+title: bino build
+description: Validate manifests, execute datasets, and export PDFs.
+---
+
+`bino build` is the main command for producing PDFs from your report bundle.
+It validates manifests, runs SQL in DuckDB, and renders PDFs via Playwright.
+
+## Usage
+
+```bash
+bino build [flags]
+```
+
+Common flags:
+
+- `--work-dir` – report bundle directory (default: `.`).
+- `--out-dir` – output directory relative to workdir (default: `dist`).
+- `--include` – build only specified report names (can be repeated).
+- `--exclude` – skip specified report names (can be repeated).
+- `--browser` – browser engine for Playwright (for example `chromium`, `firefox`, `webkit`).
+- `--no-graph` – skip writing dependency graph files.
+- `--log-sql` – log executed SQL queries.
+
+Build log flags:
+
+- `--log-format` – log format: `text` (default) or `json`.
+- `--embed-data-csv` – embed CSV data previews in JSON log.
+- `--detailed-execution-plan` – include step-by-step timing.
+
+See [Build Logs](/cli/build-logs/) for full documentation on JSON logs, CSV embedding, and execution plan tracking.
+
+## Examples
+
+Build all reports in the current directory:
+
+```bash
+bino build
+```
+
+Build only selected artefacts:
+
+```bash
+bino build --include monthly_sales --include annual_sales
+```
+
+Change the output directory and log SQL:
+
+```bash
+bino build --out-dir dist/reports --log-sql
+```
+
+## CI tips
+
+- Use `--work-dir` to point at the repository checkout.
+- Fail builds early by ensuring environment variables for secrets are set.
+- Archive the `dist/` directory as a build artefact.

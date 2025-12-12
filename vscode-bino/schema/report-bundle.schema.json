@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bino.bi/schemas/report-bundle-local.json",
+  "title": "Bino Report Bundle",
+  "description": "Schema for Bino report manifests.",
+  "allOf": [
+    {
+      "$ref": "./document.schema.json"
+    }
+  ]
+}

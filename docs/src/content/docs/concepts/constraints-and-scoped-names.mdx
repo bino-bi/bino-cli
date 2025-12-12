@@ -1,0 +1,360 @@
+---
+title: Constraints and Scoped Names
+description: Use metadata.constraints to conditionally include documents and inline children for specific artefacts, and understand per-artefact name scoping.
+---
+
+bino supports **constraints** that let you conditionally include documents and inline layout children based on the target `ReportArtefact`'s labels, spec, or the current execution mode.
+This enables scenarios like mode-specific pages (preview-only debug views), environment-specific data sources, artefact-specific layouts, or conditional components within a page.
+
+## How constraints work
+
+When building or previewing a specific `ReportArtefact`, bino evaluates the `metadata.constraints` on:
+
+- Every non-artefact document (DataSource, DataSet, LayoutPage, Asset, etc.)
+- Inline children of `LayoutPage` and `LayoutCard` (nested components)
+
+A document or inline child is included only if **all** its constraints evaluate to true.
+Items without constraints are always included.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: debugPage
+  constraints:
+    - mode==preview
+spec:
+  # This page is only included when running `bino preview`
+  children:
+    - kind: Text
+      spec:
+        value: "Debug information - only visible in preview mode"
+```
+
+## Constraint syntax
+
+Each constraint is a string with the format:
+
+```
+<left> <operator> <value>
+```
+
+### Left operand
+
+The left side determines what is being checked:
+
+| Prefix         | Description                        | Example            |
+| -------------- | ---------------------------------- | ------------------ |
+| `mode`         | Current execution mode             | `mode==preview`    |
+| `labels.<key>` | Artefact's `metadata.labels.<key>` | `labels.env==prod` |
+| `spec.<field>` | Artefact's `spec.<field>`          | `spec.format==a4`  |
+
+### Operators
+
+| Operator | Description                |
+| -------- | -------------------------- |
+| `==`     | Equals (string comparison) |
+| `!=`     | Not equals                 |
+
+### Value
+
+The right side is a literal value. Boolean values use `true` or `false` as strings.
+
+## Constraint context
+
+Constraints are evaluated against the target `ReportArtefact`:
+
+- **`mode`**: The current execution mode, either `build` or `preview`
+- **`labels`**: The artefact's `metadata.labels` map
+- **`spec`**: The artefact's `spec` fields (e.g., `format`, `orientation`, `language`)
+
+### Example artefact with labels
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: weeklyReport
+  labels:
+    env: prod
+    region: europe
+spec:
+  title: Weekly Sales Report
+  filename: weekly-report.pdf
+  format: a4
+```
+
+Documents can now reference these labels and spec fields:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_data
+  constraints:
+    - labels.env==prod
+spec:
+  type: postgres_query
+  # ... production database connection
+```
+
+## Multiple constraints
+
+When multiple constraints are specified, **all must match** for the document to be included.
+
+```yaml
+metadata:
+  name: europeOnlyPage
+  constraints:
+    - labels.region==europe
+    - mode==build
+```
+
+This page is included only when:
+
+1. The artefact has `labels.region: europe`, AND
+2. The command is `bino build` (not preview)
+
+## Common patterns
+
+### Preview-only content
+
+Show debug information or work-in-progress pages only during development:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dataDebugPage
+  constraints:
+    - mode==preview
+spec:
+  children:
+    - kind: Table
+      spec:
+        dataset: raw_data
+```
+
+### Environment-specific data sources
+
+Use different data sources for development vs production:
+
+```yaml
+# Development mock data
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales
+  constraints:
+    - labels.env==dev
+spec:
+  type: inline
+  content: |
+    [{"region": "Test", "amount": 100}]
+---
+# Production database
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales
+  constraints:
+    - labels.env==prod
+spec:
+  type: postgres_query
+  connection:
+    host: prod-db.example.com
+    # ...
+```
+
+### Format-specific layouts
+
+Create different layouts for different output formats:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: summaryPage
+  constraints:
+    - spec.format==a4
+spec:
+  pageFormat: a4
+  # A4-optimized layout
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: summaryPage
+  constraints:
+    - spec.format==xga
+spec:
+  pageFormat: xga
+  # Screen-optimized layout
+```
+
+### Inline child constraints
+
+Constraints also work on **inline children** of `LayoutPage` and `LayoutCard`. This allows you to conditionally include or exclude specific components within a layout:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboardPage
+spec:
+  pageLayout: split-vertical
+  children:
+    # This card only appears in build mode
+    - kind: LayoutCard
+      metadata:
+        name: productionCard
+        constraints:
+          - mode==build
+      spec:
+        cardLayout: full
+        children:
+          - kind: Table
+            spec:
+              dataset: production_data
+
+    # This card only appears in preview mode
+    - kind: LayoutCard
+      metadata:
+        name: debugCard
+        constraints:
+          - mode==preview
+      spec:
+        cardLayout: full
+        children:
+          - kind: Text
+            spec:
+              value: "Debug view - not included in final PDF"
+
+    # This table always appears (no constraints)
+    - kind: Table
+      spec:
+        dataset: summary_data
+```
+
+Inline child constraints support the same syntax as document-level constraints:
+
+```yaml
+children:
+  - kind: ChartStructure
+    metadata:
+      name: europeChart
+      constraints:
+        - labels.region==europe
+    spec:
+      dataset: regional_data
+```
+
+:::note
+The `metadata` block on inline children is optional. If omitted, the child has no constraints and is always included.
+:::
+
+## Name scoping
+
+With constraints, `metadata.name` uniqueness is **per artefact after filtering**, not global.
+
+This means:
+
+- The same name can appear multiple times in your configuration
+- After applying constraints for a specific artefact, each kind must have unique names
+- Different artefacts can include different documents with the same name (if constraints prevent both from matching the same artefact)
+
+### Example: Same name, different artefacts
+
+```yaml
+# Both documents have the same name
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: mainPage
+  constraints:
+    - labels.variant==simple
+spec:
+  # Simple layout
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: mainPage
+  constraints:
+    - labels.variant==detailed
+spec:
+  # Detailed layout
+```
+
+With two artefacts:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: simpleReport
+  labels:
+    variant: simple
+spec:
+  # Uses the first mainPage
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: detailedReport
+  labels:
+    variant: detailed
+spec:
+  # Uses the second mainPage
+```
+
+### Conflict example
+
+If constraints allow two documents with the same name and kind to match a single artefact, bino fails with an error:
+
+```
+artefact "weeklyReport": duplicate LayoutPage name "mainPage" - defined in report.yaml #3 and report.yaml #7 (after applying constraints)
+```
+
+## Error handling
+
+Constraints are validated at build/preview time. Errors are reported immediately with helpful hints:
+
+### Invalid syntax
+
+```
+constraint error in DataSet "sales_ds": missing operator
+  constraint: labels.env prod
+  hint: use '==' or '!=' to compare values, e.g., 'mode==preview'
+```
+
+### Missing label
+
+```
+constraint error in LayoutPage "europeOnlyPage": label "region" not defined on artefact
+  constraint: labels.region==europe
+  hint: add 'labels.region' to the ReportArtefact's metadata
+```
+
+### Unknown spec field
+
+```
+constraint error in DataSource "sales": spec field "unknown" not found
+  constraint: spec.unknown==value
+  hint: check that the spec field exists on the ReportArtefact
+```
+
+## Limitations
+
+- `ReportArtefact` documents cannot have constraints (they define the context, not consume it)
+- Only top-level and nested `spec` fields are accessible; arrays are not traversable
+- Constraint expressions support only string comparison (`==`, `!=`)
+- All constraints in a list must pass (AND logic); OR logic requires multiple documents
+
+## Best practices
+
+1. **Use labels for logical groupings**: Define labels like `env`, `region`, or `variant` on artefacts rather than relying solely on spec fields
+2. **Keep constraints simple**: Complex filtering logic is hard to debug; prefer clear, single-purpose constraints
+3. **Document your constraints**: Add comments explaining why a constraint exists, especially for non-obvious cases
+4. **Test with preview first**: Use `bino preview` to verify constraint behavior before building
+5. **Avoid duplicate names when possible**: Even though scoped names are supported, unique names reduce confusion

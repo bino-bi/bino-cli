@@ -1,0 +1,34 @@
+---
+title: bino cache clean
+description: Clear bino caches for a workdir or globally.
+---
+
+`bino cache clean` removes cached data created by previous runs.
+Use it when schema changes, data locations change, or caches get too large.
+
+## Usage
+
+```bash
+bino cache clean [flags]
+```
+
+Common flags:
+
+- `--work-dir` – workdir whose local cache (for example `.bncache`) should be removed.
+- `--all` – remove both the local cache and the global cache.
+
+## Examples
+
+Remove caches for the current workdir only:
+
+```bash
+bino cache clean --work-dir .
+```
+
+Remove all caches (local and global):
+
+```bash
+bino cache clean --work-dir my-report --all
+```
+
+Clearing caches may increase build time for the next run but can fix issues caused by stale intermediate data.

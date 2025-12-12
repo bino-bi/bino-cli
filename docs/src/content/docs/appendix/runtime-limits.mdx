@@ -1,0 +1,48 @@
+---
+title: Runtime limits and environment variables
+description: Tune bino runtime limits and configure environment variable substitution.
+---
+
+This appendix summarizes runtime limits and environment variables relevant to bino.
+Exact names and defaults may evolve; always consult the CLI help for the latest list.
+
+## Environment variable substitution
+
+You can reference environment variables in any string value with:
+
+- `${VAR}` – replaced with the value of `VAR`.
+- `${VAR:default}` – replaced with the value of `VAR`, or `default` if `VAR` is not set.
+- `\${VAR}` – escape sequence, produces `${VAR}` literally.
+
+Behavior:
+
+- `bino preview` warns about unresolved variables and substitutes empty strings.
+- `bino build` fails with an error listing unresolved variables.
+
+Example:
+
+```yaml
+path: "${DATA_DIR:./data}/sales.csv"
+```
+
+## Manifest scanning limits
+
+bino enforces limits on manifest scanning to keep builds predictable:
+
+- Maximum number of manifest files.
+- Maximum documents per file.
+- Maximum total manifest size.
+
+If limits are exceeded, bino fails with a clear error message.
+Override these via environment variables documented in the CLI help when necessary.
+
+## Query and data limits
+
+To protect your environment, bino applies limits to queries and data:
+
+- Maximum rows per query.
+- Maximum query runtime.
+- Maximum size and timeout for external assets.
+
+Raise these limits carefully when running large monthly or quarterly reports.
+Document any overrides in your project README and CI configuration.

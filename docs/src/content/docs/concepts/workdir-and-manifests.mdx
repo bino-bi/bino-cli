@@ -1,0 +1,98 @@
+---
+title: Workdirs and manifests
+description: Understand how bino organizes configuration into workdirs and YAML manifests.
+---
+
+bino operates on a **workdir**: a directory containing YAML manifests, data files, and build output.
+Within the workdir, bino discovers configuration by scanning YAML documents with matching `apiVersion` and `kind` fields.
+
+## Workdir layout
+
+A typical workdir contains:
+
+- YAML manifests (one or more per file, separated by `---`)
+- Data files such as CSV, Excel, Parquet, or JSON
+- A build output directory, usually `dist/`
+- Local caches, for example `.bncache/`
+
+You can pass `--work-dir` to most CLI commands (`bino preview`, `bino build`, `bino graph`, `bino cache clean`).
+If omitted, bino uses the current working directory.
+
+## Manifests, apiVersion, and kind
+
+Each manifest is a YAML document with:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource # or DataSet, LayoutPage, ...
+metadata:
+  name: sales_csv
+spec:
+  # kind-specific configuration
+```
+
+- `apiVersion` selects the schema version. For this repository it must be `bino.bi/v1alpha1`.
+- `kind` chooses which spec block is expected.
+- `metadata.name` provides a unique name used for references (for example in SQL queries or layout specs).
+
+## Naming rules
+
+The top-level schema defines `metadata` once for all kinds.
+For most kinds, `metadata.name` accepts letters, digits, hyphens, and underscores, but **`DataSource` names are further restricted**:
+
+- `DataSource` names must match the `sqlIdentifier` pattern: `^[a-z_][a-z0-9_]*$`
+- Names must be lowercase and may contain digits and underscores, for example `coffee_sales_daily`.
+- This is because bino creates DuckDB views with that name and uses them directly in SQL.
+
+## Multiple documents per file
+
+A single YAML file can hold multiple manifests separated by `---`.
+This is useful for grouping related configuration (for example a `DataSource` and its `DataSet` and `LayoutPage`) in one file.
+
+Example with two documents in one file:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./data/sales.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_summary
+spec:
+  query: |
+    SELECT
+      region,
+      SUM(amount) AS total_amount
+    FROM sales_csv
+    GROUP BY region
+  dependencies:
+    - sales_csv
+```
+
+## Environment variable substitution
+
+You can embed environment variables in any string value using `${VAR}` or `${VAR:default}` syntax.
+
+- `bino preview` warns about unresolved variables and substitutes empty strings so you can still iterate on layouts.
+- `bino build` fails with an error listing unresolved variables (unless a default is provided).
+
+Example:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_data
+spec:
+  type: csv
+  path: "${DATA_DIR:./data}/sales.csv"
+```
+
+See [Runtime limits & environment variables](/appendix/runtime-limits/) for more details.

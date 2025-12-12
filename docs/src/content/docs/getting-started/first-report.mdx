@@ -1,0 +1,71 @@
+---
+title: Your first report
+description: Scaffold, preview, and build a simple bino report bundle.
+---
+
+This guide walks through creating a new report bundle, previewing it in the browser, and exporting a PDF.
+It assumes you have `bino` installed and available on your `PATH`.
+
+## 1. Create a new workdir
+
+A **workdir** is the root directory of a report bundle.
+Create a fresh folder and run `bino init`:
+
+```bash
+mkdir my-report
+cd my-report
+bino init
+```
+
+Without flags, `bino init` asks a few questions (target directory, report name, title, language).
+Use `-y` / `--yes` to accept defaults non-interactively.
+
+## 2. Inspect the generated files
+
+After initialization, the workdir contains YAML manifests, data files, and helper files.
+Typical contents include:
+
+- One or more `ReportArtefact` manifests describing the report outputs
+- `DataSource` and `DataSet` manifests defining input data and SQL transforms
+- At least one `LayoutPage` describing page layout
+- `ComponentStyle` and `Internationalization` manifests for styling and translations
+- A `.gitignore` tuned for bino caches and build artefacts
+
+Use your editor to explore these files.
+The manifests all share `apiVersion: bino.bi/v1alpha1` and a `kind` that selects the spec.
+
+## 3. Preview the report
+
+Start a live preview server from the workdir:
+
+```bash
+bino preview
+```
+
+bino scans the directory for manifests, starts a local HTTP server (by default `http://127.0.0.1:45678/`), and opens your default browser.
+As you edit YAML or data files, it reloads the preview automatically.
+
+> Tip: run `bino preview --log-sql` to see the DuckDB queries used to populate datasets.
+
+## 4. Build a PDF
+
+When you are happy with the preview, export a PDF:
+
+```bash
+bino build
+```
+
+This runs schema validation, executes datasets in DuckDB, renders HTML for each report artefact, and converts the pages to PDF using Playwright.
+By default, PDFs are written into a `dist/` directory under the workdir.
+
+Example using a custom output directory:
+
+```bash
+bino build --out-dir dist/reports
+```
+
+## 5. Where to go next
+
+- Learn about [workdirs and manifests](/concepts/workdir-and-manifests/).
+- Explore the [schema reference](/reference/report-artefact/) to understand each `kind` in detail.
+- Browse [how-to guides](/guides/practical-howto/) for common tasks like connecting CSVs, databases, and styling layouts.

@@ -1,0 +1,88 @@
+---
+title: ReportArtefact
+description: Describe PDF outputs including filename, metadata, and signing profile.
+---
+
+`ReportArtefact` manifests define top-level report outputs.
+Each artefact typically corresponds to one PDF file.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: sales_report
+spec:
+  format: xga              # logical page size (e.g. xga, a4, letter)
+  orientation: landscape   # portrait | landscape
+  language: en             # de | en
+  filename: sales-report.pdf
+  title: "Sales Overview"
+  description: "Quarterly sales overview for the group."
+  subject: "Sales report"
+  author: "Group Controlling"
+  keywords: ["sales", "quarterly", "internal"]
+  signingProfile: corporateSigner
+```
+
+Fields:
+
+- `spec.format` – logical page size, default `xga`.
+- `spec.orientation` – `portrait` or `landscape`, default `landscape`.
+- `spec.language` – current options: `de` or `en`.
+- `spec.filename` – required output filename (relative to output directory).
+- `spec.title` – required human-readable title; also used in PDF metadata.
+- `spec.description` – optional description.
+- `spec.subject` – optional subject stored in PDF metadata.
+- `spec.author` – optional author name.
+- `spec.keywords` – optional list of metadata keywords.
+- `spec.signingProfile` – optional reference to a `SigningProfile` manifest.
+
+## Minimal artefact
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: monthly_sales
+spec:
+  filename: monthly-sales.pdf
+  title: "Monthly Sales Report"
+```
+
+## Artefact with signing
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: SigningProfile
+metadata:
+  name: corporateSigner
+spec:
+  certificate:
+    path: ./certs/corporate-cert.pem
+  privateKey:
+    path: ./certs/corporate-key.pem
+  signer:
+    name: "Group Controlling"
+    location: "Headquarters"
+    reason: "Approved financial report"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: annual_sales
+spec:
+  format: a4
+  orientation: portrait
+  language: en
+  filename: annual-sales.pdf
+  title: "Annual Sales Report"
+  description: "Yearly consolidated sales figures."
+  author: "Group Controlling"
+  signingProfile: corporateSigner
+```
+
+Use placeholder screenshots in your docs to illustrate final PDFs, then replace them with real examples later.

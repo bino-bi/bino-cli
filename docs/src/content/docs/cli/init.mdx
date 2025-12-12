@@ -1,0 +1,44 @@
+---
+title: bino init
+description: Scaffold a new report bundle with starter manifests and data.
+---
+
+`bino init` creates a new workdir with sample manifests, data, and configuration.
+It is the recommended way to start a new report bundle.
+
+## Usage
+
+```bash
+bino init [flags]
+```
+
+Common flags:
+
+- `--directory, -d` – target directory (default: current directory).
+- `--name` – internal report name.
+- `--title` – human-readable report title.
+- `--language` – language code (for example `en`, `de`).
+- `-y, --yes` – run non-interactively with defaults.
+- `--force` – overwrite existing files.
+
+## Examples
+
+Create a bundle in the current directory interactively:
+
+```bash
+bino init
+```
+
+Create a bundle in a new directory with explicit title and language:
+
+```bash
+bino init --directory monthly-report --title "Monthly Sales" --language en
+```
+
+Run non-interactively with defaults, overwriting existing files:
+
+```bash
+bino init -d my-report -y --force
+```
+
+After initialization, continue with [Your first report](/getting-started/first-report/).

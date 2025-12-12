@@ -1,0 +1,277 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Resolve tag for both push and workflow_dispatch triggers
+  resolve-tag:
+    name: Resolve Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+    steps:
+      - name: Resolve tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "Resolved tag: ${TAG}, version: ${TAG#v}"
+
+  test:
+    name: Test
+    needs: [resolve-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  build-vscode-extension:
+    name: Build VS Code Extension
+    needs: [resolve-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vscode-bino/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode-bino
+        run: npm ci
+
+      - name: Compile extension
+        working-directory: vscode-bino
+        run: npm run compile
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package extension
+        working-directory: vscode-bino
+        run: vsce package --out vscode-bino.vsix
+
+      - name: Upload VS Code extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: vscode-bino/vscode-bino.vsix
+          retention-days: 30
+
+  # Build binaries on native runners for each platform (CGO required for duckdb-go)
+  build:
+    name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
+    needs: [test, resolve-tag]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+          # - goos: linux
+          #   goarch: arm64
+          #   runner: ubuntu-24.04-arm
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        shell: bash
+        env:
+          CGO_ENABLED: 1
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${{ needs.resolve-tag.outputs.version }}"
+          COMMIT=${GITHUB_SHA::8}
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          LDFLAGS="-s -w"
+          LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Version=${VERSION}'"
+          LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Commit=${COMMIT}'"
+          LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Date=${DATE}'"
+
+          mkdir -p dist
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            go build -ldflags "${LDFLAGS}" -o dist/bino.exe ./cmd/bino
+          else
+            go build -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
+          fi
+
+      - name: Create archive (Unix)
+        if: matrix.goos != 'windows'
+        run: |
+          cd dist
+          ARCH=${{ matrix.goarch }}
+          if [ "$ARCH" = "amd64" ]; then
+            ARCH="x86_64"
+          fi
+          OS=$(echo "${{ matrix.goos }}" | sed 's/darwin/Darwin/;s/linux/Linux/')
+          tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
+          rm bino
+
+      - name: Create archive (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          cd dist
+          Compress-Archive -Path bino.exe -DestinationPath bino-cli_Windows_x86_64.zip
+          Remove-Item bino.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          retention-days: 7
+
+  release:
+    name: Release
+    needs: [build, build-vscode-extension, resolve-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Download VS Code extension
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: dist/
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          sha256sum *.tar.gz *.zip *.vsix > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: bino-bi/bino-cli-releases
+          token: ${{ secrets.BINO_CLI_RELEASES_TOKEN }}
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
+          name: ${{ needs.resolve-tag.outputs.tag }}
+          body: |
+            ## Bino CLI ${{ needs.resolve-tag.outputs.tag }}
+
+            **Source:** [ThatScalaGuy/bino-rainbow@${{ needs.resolve-tag.outputs.tag }}](https://github.com/ThatScalaGuy/bino-rainbow/releases/tag/${{ needs.resolve-tag.outputs.tag }})
+            **Commit:** `${{ github.sha }}`
+
+            See the [source release](https://github.com/ThatScalaGuy/bino-rainbow/releases/tag/${{ needs.resolve-tag.outputs.tag }}) for full release notes.
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.vsix
+            dist/checksums.txt
+          fail_on_unmatched_files: true
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/
+          retention-days: 30
+
+  build-docs:
+    name: Build and Push Docs
+    needs: [release, resolve-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push docs image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docs
+          push: true
+          tags: |
+            registry.sys.bino.bi/bino/cli-docs:${{ needs.resolve-tag.outputs.version }}
+            registry.sys.bino.bi/bino/cli-docs:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

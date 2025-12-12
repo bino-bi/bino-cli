@@ -1,0 +1,335 @@
+---
+title: Build Logs
+description: Understand and configure build logs for debugging, CI/CD integration, and data auditing.
+---
+
+import { Aside, Code, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Build logs capture detailed information about each `bino build` run, including timing, executed queries, generated artefacts, and optionally embedded data previews. They're invaluable for debugging, auditing, and integrating bino into CI/CD pipelines.
+
+## Output Files
+
+Every build produces at least a human-readable text log. When JSON features are enabled, a machine-readable JSON log is also generated:
+
+| File                        | Format | When Generated                                         |
+| --------------------------- | ------ | ------------------------------------------------------ |
+| `dist/bino-build-<id>.log`  | Text   | Always                                                 |
+| `dist/bino-build-<id>.json` | JSON   | When `--log-format=json` or `--embed-data-csv` is used |
+
+The `<id>` is a unique identifier (hash) for each build run.
+
+## Text Log Format
+
+The text log (`*.log`) provides a human-readable summary of the build:
+
+```plaintext
+bino build started at 2025-01-15T10:30:00Z
+Workdir: /path/to/project
+
+=== Documents ===
+  [1] report.yaml (kind: report, name: monthly-sales)
+  [2] datasources/sales.yaml (kind: datasource, name: sales_db)
+
+=== Artefacts ===
+  monthly-sales → dist/monthly-sales.pdf
+
+=== Queries ===
+  [query-001] SELECT * FROM sales WHERE month = 1
+    Duration: 45ms | Rows: 1,234
+
+Build completed in 2.5s
+```
+
+This format is optimized for quick visual inspection in terminals and log viewers.
+
+## JSON Log Format
+
+The JSON log (`*.json`) provides structured, machine-readable build data suitable for programmatic analysis, CI/CD integration, and debugging tools.
+
+### When It's Generated
+
+The JSON log is written when you use:
+
+- `--log-format=json` — Explicitly request JSON output
+- `--embed-data-csv` — CSV embedding requires JSON format
+
+### JSON Schema Overview
+
+```json
+{
+  "run_id": "e7d7742d",
+  "started": "2025-01-15T10:30:00Z",
+  "completed": "2025-01-15T10:30:02.5Z",
+  "duration_ms": 2500,
+  "workdir": "/path/to/project",
+  "documents": [
+    {
+      "file": "report.yaml",
+      "position": 1,
+      "kind": "report",
+      "name": "monthly-sales"
+    }
+  ],
+  "artefacts": [
+    {
+      "name": "monthly-sales",
+      "pdf": "dist/monthly-sales.pdf",
+      "graph": "dist/monthly-sales.dot"
+    }
+  ],
+  "queries": [
+    {
+      "id": "query-001",
+      "query": "SELECT * FROM sales WHERE month = 1",
+      "query_type": "dataset",
+      "dataset": "sales_summary",
+      "start_time": "2025-01-15T10:30:00.5Z",
+      "duration_ms": 45,
+      "row_count": 1234,
+      "columns": ["id", "product", "amount"],
+      "csv": { ... }
+    }
+  ],
+  "execution_plan": [ ... ]
+}
+```
+
+## CSV Data Embedding
+
+Embed query result previews directly in your build logs for data auditing and debugging. This feature captures the first N rows of each query result as CSV data.
+
+### Enabling CSV Embedding
+
+```bash
+bino build --embed-data-csv
+```
+
+This automatically enables JSON log output and embeds CSV previews in each query entry.
+
+### Configuration Options
+
+| Flag                     | Default | Description                        |
+| ------------------------ | ------- | ---------------------------------- |
+| `--embed-data-csv`       | `false` | Enable CSV data embedding          |
+| `--embed-data-max-rows`  | `10`    | Maximum rows to capture per query  |
+| `--embed-data-max-bytes` | `65536` | Maximum bytes per CSV blob (64 KB) |
+| `--embed-data-base64`    | `true`  | Base64 encode CSV data             |
+| `--embed-data-redact`    | `true`  | Redact sensitive column values     |
+
+### CSV Result Structure
+
+When embedded, each query includes a `csv` field:
+
+```json
+{
+  "id": "query-001",
+  "query": "SELECT id, email, api_key FROM users LIMIT 5",
+  "csv": {
+    "encoding": "base64",
+    "mime_type": "text/csv",
+    "bytes": 156,
+    "rows": 5,
+    "truncated": false,
+    "data": "aWQsZW1haWwsYXBpX2tleQoxLGFsaWNlQGV4YW1wbGUuY29tLFtSRURBQ1RFRF0K..."
+  }
+}
+```
+
+### Security: Automatic Redaction
+
+<Aside type="caution" title="Sensitive Data Warning">
+  Build logs may contain query results. Always review logs before sharing or
+  storing in CI artifacts.
+</Aside>
+
+When `--embed-data-redact` is enabled (default), columns matching sensitive patterns are automatically replaced with `[REDACTED]`:
+
+**Redacted patterns include:**
+
+- `password`, `passwd`
+- `secret`, `token`, `key`, `api_key`
+- `private`, `credential`, `auth`
+
+**Example:**
+
+```csv
+id,email,api_key
+1,alice@example.com,[REDACTED]
+2,bob@example.com,[REDACTED]
+```
+
+### Truncation Behavior
+
+Data is truncated when:
+
+- Row count exceeds `--embed-data-max-rows`
+- Byte size exceeds `--embed-data-max-bytes`
+
+When truncated, the `truncated` field is set to `true`.
+
+## Detailed Execution Plan
+
+Track step-by-step timing of build phases for performance analysis and debugging.
+
+### Enabling Execution Plan
+
+```bash
+bino build --detailed-execution-plan
+```
+
+This adds an `execution_plan` array to the JSON log.
+
+### Tracked Steps
+
+| Step Name             | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `load_manifests`      | Loading and parsing YAML manifest files     |
+| `validate_manifests`  | Validating manifest schemas and references  |
+| `build_graph`         | Building the dependency graph               |
+| `collect_datasources` | Connecting to and introspecting datasources |
+| `execute_datasets`    | Running SQL queries for datasets            |
+| `render_html`         | Rendering HTML templates                    |
+| `generate_pdf`        | Converting HTML to PDF via Playwright       |
+| `sign_pdf`            | Signing PDF with digital certificates       |
+| `write_outputs`       | Writing final output files                  |
+
+### Execution Step Structure
+
+```json
+{
+  "execution_plan": [
+    {
+      "id": "step-001",
+      "name": "load_manifests",
+      "phase": "global",
+      "start_time": "2025-01-15T10:30:00.1Z",
+      "end_time": "2025-01-15T10:30:00.15Z",
+      "duration_ms": 50,
+      "status": "completed"
+    },
+    {
+      "id": "step-005",
+      "name": "execute_datasets",
+      "phase": "artefact:monthly-sales",
+      "start_time": "2025-01-15T10:30:00.5Z",
+      "end_time": "2025-01-15T10:30:01.2Z",
+      "duration_ms": 700,
+      "status": "completed",
+      "details": "Executed 5 queries"
+    }
+  ]
+}
+```
+
+### Interpreting Timing Data
+
+- **`phase`**: Either `"global"` for overall build steps, or `"artefact:<name>"` for per-artefact steps
+- **`status`**: One of `"running"`, `"completed"`, `"failed"`, or `"skipped"`
+- **`duration_ms`**: Elapsed time in milliseconds
+- **`error`**: Present only when `status` is `"failed"`
+
+## CLI Reference
+
+### Log Format Flags
+
+| Flag                        | Type   | Default  | Description                             |
+| --------------------------- | ------ | -------- | --------------------------------------- |
+| `--log-format`              | string | `"text"` | Build log format: `"text"` or `"json"`  |
+| `--detailed-execution-plan` | bool   | `false`  | Include step-by-step timing in JSON log |
+
+### CSV Embedding Flags
+
+| Flag                     | Type | Default | Description                                  |
+| ------------------------ | ---- | ------- | -------------------------------------------- |
+| `--embed-data-csv`       | bool | `false` | Enable CSV data embedding (implies JSON log) |
+| `--embed-data-max-rows`  | int  | `10`    | Maximum rows per query preview               |
+| `--embed-data-max-bytes` | int  | `65536` | Maximum bytes per CSV blob                   |
+| `--embed-data-base64`    | bool | `true`  | Base64 encode CSV data                       |
+| `--embed-data-redact`    | bool | `true`  | Redact sensitive column values               |
+
+## Examples
+
+### Basic JSON Log
+
+Generate a machine-readable JSON log alongside the text log:
+
+```bash
+bino build --log-format=json
+```
+
+### Full Debugging Output
+
+Capture everything—JSON format, embedded data previews, and execution timing:
+
+```bash
+bino build --log-format=json --embed-data-csv --detailed-execution-plan
+```
+
+### Custom CSV Limits
+
+Embed more rows with larger size limit:
+
+```bash
+bino build --embed-data-csv --embed-data-max-rows=50 --embed-data-max-bytes=131072
+```
+
+### Disable Redaction (Use with Caution)
+
+<Aside type="danger">
+  Only disable redaction in secure, isolated environments. Never commit
+  unredacted logs to version control.
+</Aside>
+
+```bash
+bino build --embed-data-csv --embed-data-redact=false
+```
+
+### CI/CD Integration
+
+#### GitHub Actions
+
+```yaml
+- name: Build Reports
+  run: bino build --log-format=json --detailed-execution-plan
+
+- name: Upload Build Artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: reports
+    path: |
+      dist/*.pdf
+      dist/*.json
+      dist/*.log
+```
+
+#### GitLab CI
+
+```yaml
+build:
+  script:
+    - bino build --log-format=json --detailed-execution-plan
+  artifacts:
+    paths:
+      - dist/*.pdf
+      - dist/*.json
+      - dist/*.log
+    expire_in: 1 week
+```
+
+#### Parsing JSON Logs
+
+Use `jq` to extract information from JSON logs:
+
+```bash
+# Get total build duration
+jq '.duration_ms' dist/bino-build-*.json
+
+# List all queries with their durations
+jq '.queries[] | {id, duration_ms, row_count}' dist/bino-build-*.json
+
+# Find slow queries (>100ms)
+jq '.queries[] | select(.duration_ms > 100) | {id, query, duration_ms}' dist/bino-build-*.json
+
+# Get execution plan summary
+jq '.execution_plan[] | {name, phase, duration_ms, status}' dist/bino-build-*.json
+```

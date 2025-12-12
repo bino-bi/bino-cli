@@ -1,0 +1,78 @@
+---
+title: SigningProfile
+description: Configure digital signatures for generated PDFs.
+---
+
+`SigningProfile` manifests describe how bino signs PDFs.
+`ReportArtefact` manifests can reference a signing profile by name.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: SigningProfile
+metadata:
+  name: corporateSigner
+spec:
+  certificate:            # pemSource
+    path: ./certs/corporate-cert.pem
+  privateKey:             # pemSource
+    path: ./certs/corporate-key.pem
+  tsaURL: https://tsa.example.com/tsa
+  digestAlgorithm: sha256 # sha256 | sha384 | sha512
+  certType: approval      # certification | approval | usage-rights | timestamp
+  docMDPPerm: form-fill-sign # no-changes | form-fill-sign | annotate
+  signer:
+    name: "Group Controlling"
+    location: "Headquarters"
+    reason: "Approved report"
+    contact: "controlling@example.com"
+```
+
+## PEM source
+
+`certificate` and `privateKey` both use a `pemSource` structure:
+
+```yaml
+certificate:
+  inline: |
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+# or
+certificate:
+  path: ./certs/report-cert.pem
+```
+
+Exactly one of `inline` or `path` must be provided.
+Storing secrets in files and referencing them via `path` is usually safer than embedding them directly.
+
+## Example: Using a signing profile
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: SigningProfile
+metadata:
+  name: corporateSigner
+spec:
+  certificate:
+    path: ./certs/corporate-cert.pem
+  privateKey:
+    path: ./certs/corporate-key.pem
+  signer:
+    name: "Group Controlling"
+    location: "Headquarters"
+    reason: "Approved financial statements"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: annual_report
+spec:
+  filename: annual-report.pdf
+  title: "Annual Financial Report"
+  signingProfile: corporateSigner
+```
+
+In your documentation, you can show screenshots of the PDF signature panel using placeholder images first and replace them later.

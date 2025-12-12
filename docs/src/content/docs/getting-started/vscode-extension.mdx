@@ -1,0 +1,365 @@
+---
+title: VS Code Extension
+description: Use the Bino Reports VS Code extension for schema-aware YAML editing, navigation, validation, preview, and dependency graph exploration.
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+# VS Code Extension
+
+The Bino Reports VS Code extension provides schema-aware YAML editing, navigation, validation, preview, and dependency graph exploration for Bino report manifests.
+
+> NOTE: Screenshot placeholders are included below. Replace them with real images when you have them.
+
+<CardGrid>
+  <Card title="Bino Explorer" icon="file-code">
+    Browse all Bino manifests in your workspace, grouped by kind
+    (ReportArtefact, DataSource, DataSet, LayoutPage, etc.), with inline
+    children for layouts and quick navigation.
+  </Card>
+  <Card title="Smart Editing" icon="lightbulb">
+    Get completions, go-to-definition, and hover information for datasets,
+    datasources, layouts, and more, all powered by the `bino` CLI.
+  </Card>
+  <Card title="Validation & Preview" icon="check">
+    Validate your workspace, see problems inline, and run the preview server
+    directly from VS Code.
+  </Card>
+  <Card title="Graph Navigation" icon="type-hierarchy">
+    Explore dependencies and dependents ("What uses this?") using the manifest
+    dependency graph, with click-to-open navigation.
+  </Card>
+</CardGrid>
+
+---
+
+## 1. Prerequisites
+
+Before installing the extension, make sure you have:
+
+- **VS Code** 1.85.0 or newer
+- **Bino CLI** installed and on your `PATH` (or a known location)
+- **RedHat YAML extension** (`redhat.vscode-yaml`) installed
+
+If `bino` is not on your `PATH`, you can configure a custom path later via the `bino.binPath` setting.
+
+---
+
+## 2. Installation
+
+### 2.1 From the Marketplace
+
+1. Open the **Extensions** view in VS Code.
+2. Search for **"Bino Reports Reports"**.
+3. Click **Install**.
+
+Once installed, the extension activates automatically when you open a YAML file or the **Bino Reports** explorer view.
+
+### 2.2 From a `.vsix` (local build)
+
+If you are working from this repository and packaging the extension yourself:
+
+```bash
+cd vscode-bino
+npm install
+npm install -g @vscode/vsce
+vsce package --allow-missing-repository
+
+code --install-extension ./vscode-bino-0.1.0.vsix
+```
+
+Then reload VS Code:
+
+```text
+Cmd+Shift+P → "Developer: Reload Window"
+```
+
+To uninstall a locally installed build:
+
+```bash
+code --uninstall-extension bino.vscode-bino
+```
+
+---
+
+## 3. First-Time Setup
+
+### 3.1 Check your setup
+
+Run the **Bino: Check Setup** command:
+
+1. Press `Cmd+Shift+P` / `Ctrl+Shift+P`.
+2. Run **"Bino: Check Setup"**.
+
+This command verifies:
+
+- Whether the `bino` CLI can be found.
+- Whether required subcommands (like `lsp-helper` and `validate`) are available.
+- Basic version and environment information.
+
+If something is wrong, the command shows a detailed message and may offer quick actions (for example, opening settings to configure `bino.binPath`).
+
+### 3.2 Configure `bino.binPath` (optional)
+
+If the CLI is not on your `PATH`, set a custom path in your VS Code settings:
+
+```jsonc
+// .vscode/settings.json
+{
+  "bino.binPath": "/absolute/path/to/bino"
+}
+```
+
+Or via **Settings UI**: search for **"Bino: Bin Path"**.
+
+---
+
+## 4. Bino Explorer
+
+The **Bino Reports** explorer view lives in the standard **Explorer** sidebar.
+
+- View ID: `binoExplorer`
+- Activation: `View → Bino Reports`
+
+**What you see:**
+
+- Documents grouped by kind (ReportArtefact, DataSource, DataSet, LayoutPage, LayoutCard, Table, Text, etc.).
+- Count badges on each kind group.
+- Icons that reflect the manifest kind (database for DataSource, table for DataSet, PDF icon for ReportArtefact, etc.).
+- Inline children for layouts (LayoutPage, LayoutCard) – nested Text/Table/Chart components.
+
+**Screenshot placeholder:**
+
+```md
+![VS Code Bino Explorer placeholder](../assets/vscode-bino-explorer-placeholder.png)
+```
+
+### 4.1 Interactions
+
+- **Click** a document to open it.
+  - If the document has problems, the editor jumps to the first diagnostic.
+  - Otherwise, it jumps to the start of that YAML document (supports multi-doc files).
+- **Click** an inline child (component) to open the parent file and focus the correct line.
+- **Refresh / Validate:**
+  - Use the toolbar buttons at the top of the Bino Explorer:
+    - **Refresh Index** – `bino.refreshIndex`
+    - **Validate Workspace** – `bino.validateWorkspace`
+
+### 4.2 Context Menu
+
+Right-click on a document in the Bino Explorer to access:
+
+- **Go to First Problem** – jumps to the first diagnostic in that file.
+- **Show Graph (Dependencies & Dependents)** – opens a QuickPick built from the dependency graph.
+- **Show Dependencies** – shows what this document depends on.
+- **Show Dependents (What Uses This?)** – shows what uses this document.
+
+---
+
+## 5. Smart Editing Features
+
+### 5.1 Autocompletion
+
+The extension provides completions in YAML files for:
+
+- `dataset:` – suggests DataSet names and `$DataSource` references.
+- `signingProfile:` – suggests SigningProfile names.
+- `kind:` fields – suggests all known Bino kinds.
+- Scenario/variance references – suggests column names based on the referenced dataset/datasource.
+
+Completion is powered by the `bino lsp-helper index` and `bino lsp-helper columns` commands.
+
+**Screenshot placeholder:**
+
+```md
+![VS Code completion placeholder](../assets/vscode-bino-completion-placeholder.png)
+```
+
+### 5.2 Go to Definition
+
+Ctrl/Cmd+Click (or F12) on:
+
+- `dataset:` values → jumps to DataSet or DataSource.
+- `signingProfile:` → SigningProfile.
+- `secret:` → ConnectionSecret.
+- `layout:` and `report:` references.
+- `dependencies:` entries.
+
+Definitions are resolved from the workspace index and support multi-document YAML.
+
+### 5.3 Hover Information
+
+Hover over dataset/datasource references to see:
+
+- The kind (DataSet or DataSource).
+- A preview of available columns.
+
+Columns are fetched via `bino lsp-helper columns` with caching (configurable TTL).
+
+**Screenshot placeholder:**
+
+```md
+![VS Code hover placeholder](../assets/vscode-bino-hover-placeholder.png)
+```
+
+---
+
+## 6. Validation
+
+### 6.1 Manual Validation
+
+Use the **Bino: Validate Workspace** command or the toolbar button in the Bino Explorer.
+
+- Runs `bino lsp-helper validate` on the workspace.
+- Reports schema and configuration errors as VS Code diagnostics.
+- Problems appear in the **Problems** panel and inline in the editor.
+
+### 6.2 Validate on Save
+
+Enable in settings:
+
+```jsonc
+{
+  "bino.validateOnSave": true
+}
+```
+
+When enabled, saving a Bino YAML file automatically triggers validation.
+
+### 6.3 Diagnostics in the Explorer
+
+- Document items show badges when there are diagnostics.
+- The **Go to First Problem** context menu item jumps directly to the first issue.
+
+**Screenshot placeholder:**
+
+```md
+![VS Code validation placeholder](../assets/vscode-bino-validation-placeholder.png)
+```
+
+---
+
+## 7. Preview and Build
+
+### 7.1 Preview Server
+
+The extension integrates with the `bino preview` command via a **Preview Manager**:
+
+- Start: **Bino: Start Preview** (`bino.startPreview`)
+- Stop: **Bino: Stop Preview** (`bino.stopPreview`)
+- Restart: **Bino: Restart Preview** (`bino.restartPreview`)
+- Open in browser: **Bino: Open Preview in Browser** (`bino.openPreviewInBrowser`)
+
+A status item in the VS Code status bar shows the preview state (stopped/starting/running/error).
+
+### 7.2 Preview Menu
+
+Run **Bino: Preview Menu** (`bino.previewMenu`) to get a QuickPick of preview-related actions.
+
+### 7.3 Build Command
+
+Run **Bino: Build Report** (`bino.build`) to execute `bino build` from within VS Code.
+
+**Screenshot placeholder:**
+
+```md
+![VS Code preview placeholder](../assets/vscode-bino-preview-placeholder.png)
+```
+
+---
+
+## 8. Dependency Graph Navigation
+
+The extension uses the `bino lsp-helper graph-deps` command and the internal manifest graph to show dependencies and dependents.
+
+### 8.1 Opening the Graph
+
+In the **Bino Explorer**:
+
+1. Right-click any document (DataSet, DataSource, LayoutPage, ReportArtefact, etc.).
+2. Choose one of:
+   - **Show Graph (Dependencies & Dependents)**
+   - **Show Dependencies**
+   - **Show Dependents (What Uses This?)**
+
+The extension runs a graph query for the selected node and opens a **QuickPick** listing related nodes.
+
+### 8.2 Reading the QuickPick
+
+Each entry shows:
+
+- Label: `kind: name` with an icon.
+- Description: relative file path.
+- Detail: relationship to the root node:
+  - `↓ dependency` – this node is a dependency (what the root uses).
+  - `↑ dependent` – this node depends on the root (what uses the root).
+  - `↕ both` – this node is both dependent and dependency.
+
+Selecting an item:
+
+- Opens the corresponding file.
+- Attempts to jump to the correct document position based on the workspace index.
+
+**Screenshot placeholder:**
+
+```md
+![VS Code graph placeholder](../assets/vscode-bino-graph-placeholder.png)
+```
+
+---
+
+## 9. Configuration Reference
+
+All settings live under the **Bino Reports** section in VS Code Settings.
+
+| Setting                 | Type    | Default | Description                                                   |
+| ----------------------- | ------- | ------- | ------------------------------------------------------------- |
+| `bino.binPath`          | string  | ""      | Path to the `bino` CLI. If empty, uses `bino` from `PATH`.    |
+| `bino.enableCompletion` | boolean | true    | Enable intelligent autocompletion in YAML files.              |
+| `bino.columnCacheTTL`   | number  | 60000   | Column cache TTL (ms) for hover/completion column lookups.    |
+| `bino.validateOnSave`   | boolean | false   | Automatically validate workspace when saving Bino YAML files. |
+| `bino.previewPort`      | number  | 3000    | Port number for the `bino preview` server.                    |
+
+Example configuration:
+
+```jsonc
+{
+  "bino.binPath": "/usr/local/bin/bino",
+  "bino.enableCompletion": true,
+  "bino.columnCacheTTL": 120000,
+  "bino.validateOnSave": true,
+  "bino.previewPort": 3100
+}
+```
+
+---
+
+## 10. Troubleshooting
+
+### 10.1 Bino CLI Not Found
+
+- Symptom: Setup check fails, commands log errors like `bino: command not found`.
+- Fix:
+  - Ensure the CLI is installed and on your `PATH`, or
+  - Set `bino.binPath` to the absolute path of the binary.
+
+### 10.2 No Completions or Hovers
+
+- Check that the RedHat YAML extension is installed.
+- Confirm the file contains `apiVersion: bino.bi/v1alpha1`.
+- Run **Bino: Refresh Index** to rebuild the workspace index.
+
+### 10.3 Validation Errors
+
+- Open the **Problems** panel to see details.
+- Use **Go to First Problem** from the Bino Explorer context menu for a document.
+
+### 10.4 Debug Logs
+
+- Open the **Bino Reports** output channel:
+  - `View → Output`, then select **Bino Reports** from the dropdown.
+- All CLI invocations and errors from the indexer are logged here.
+
+---
+
+This page is a living document. As the VS Code extension grows (new commands, graph views, or additional editor integrations), update this page to keep it in sync with the implementation.

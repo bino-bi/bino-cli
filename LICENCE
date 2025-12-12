@@ -1,0 +1,269 @@
+BinoBi – Commercial Source Available License
+Version 1.0 – 2025
+
+Copyright (c) 2025 SVEN HERRMANN. Alle Rechte vorbehalten.
+
+1. Begriffe
+
+"Software" bezeichnet das Kommandozeilen-Tool `bino`, einschließlich
+sämtlichen Quellcodes, Binärdateien, Konfigurationsdateien, Dokumentation
+und sonstigem zugehörigen Material, das von SVEN HERRMANN bereitgestellt wird.
+
+"Interne Nutzung" bezeichnet die Verwendung der Software ausschließlich
+innerhalb einer Organisation zu eigenen internen Zwecken, ohne dass Dritte
+(wie Kunden oder externe Partner) gegen Entgelt oder in einem kommerziellen
+Kontext von der Nutzung der Software oder den mit ihr erzeugten Ergebnissen
+profitieren.
+
+"Kommerzielle Nutzung" bezeichnet jede Nutzung der Software oder der mit
+ihr erzeugten Ergebnisse, die direkt oder indirekt auf Einnahmenerzielung
+abzielt oder Bestandteil eines bezahlten Produkts oder Dienstes ist.
+
+2. Gewährte Rechte
+
+2.1. Einsicht in den Quellcode  
+Sie dürfen den Quellcode der Software lesen, inspizieren und zu Zwecken des
+Verständnisses, der Evaluierung und der internen Nutzung studieren.
+
+2.2. Interne Nutzung  
+Sie dürfen die Software innerhalb Ihrer eigenen Organisation unentgeltlich
+nutzen, um interne Analysen, Auswertungen oder Berichte (z. B. Business Reports,
+PDF-Reports) zu erstellen, sofern diese Ergebnisse ausschließlich für interne
+Zwecke verwendet werden.
+
+3. Einschränkungen
+
+Sofern Sie keine individuelle, schriftliche kommerzielle Lizenz von SVEN HERRMANN
+erworben haben, ist Ihnen Folgendes ausdrücklich UNTERSAGT:
+
+3.1. Kommerzielle Nutzung der Software  
+Sie dürfen die Software nicht für kommerzielle Zwecke einsetzen. Insbesondere
+dürfen Sie die Software nicht:
+
+    a) als Teil eines bezahlten Produkts oder Dienstes anbieten,
+    b) in eine SaaS-, Cloud- oder Plattformlösung integrieren, die Dritten
+       (entgeltlich oder im Rahmen eines kommerziellen Angebots) zur Verfügung
+       gestellt wird,
+    c) als technische Grundlage für ein Konkurrenzprodukt oder ein anderes
+       kommerzielles Werkzeug verwenden.
+
+3.2. Kommerzielle Nutzung der mit der Software erzeugten Ergebnisse  
+Sie dürfen die mit der Software erzeugten Ergebnisse (z. B. Reports, PDFs,
+Analysen) nicht dazu verwenden,
+
+    a) diese Ergebnisse an Dritte zu verkaufen oder gegen Entgelt anzubieten,
+    b) diese Ergebnisse im Rahmen von bezahlten Dienstleistungen für Kunden
+       zu erstellen (z. B. als Reporting-Dienstleister, Agentur oder Berater),
+    c) diese Ergebnisse als Bestandteil eines kommerziellen Produkts oder
+       Dienstes zu nutzen.
+
+Zulässig ist lediglich die interne Nutzung der Ergebnisse innerhalb Ihrer
+eigenen Organisation.
+
+3.3. Weitergabe und Unterlizenzierung  
+Sie dürfen die Software ohne schriftliche Zustimmung von [AUTOR/IN] nicht:
+
+    a) kopieren, veröffentlichen oder an Dritte weitergeben,
+    b) verbreiten, vermieten, verleasen oder anderweitig zur Verfügung stellen,
+    c) unterlizenzieren oder Dritten Nutzungsrechte einräumen.
+
+3.4. Modifikation und abgeleitete Werke  
+Sie dürfen die Software nicht modifizieren, bearbeiten oder abgeleitete Werke
+erstellen, die Sie Dritten zugänglich machen, verbreiten oder kommerziell
+nutzen, es sei denn, Sie verfügen über eine schriftliche Vereinbarung mit
+`Sven Herrmann`, die dies ausdrücklich erlaubt.
+
+Interne Anpassungen für den eigenen Gebrauch sind nur zulässig, sofern die
+angepasste Software ausschließlich intern verwendet wird und weder die
+angepasste Software noch ihre Ergebnisse kommerziell im Sinne von Abschnitt 3.1
+oder 3.2 genutzt werden.
+
+4. Individuelle kommerzielle Lizenz
+
+Wenn Sie die Software oder ihre Ergebnisse kommerziell nutzen möchten
+(z. B. zur Erbringung von Dienstleistungen für Kunden, zum Aufbau eines
+kommerziellen Produkts oder einer SaaS-Lösung), wenden Sie sich bitte an:
+
+    SVEN HERRMANN
+    Oskar-Eckert-Ste. 6
+    97250 Erlabrunn
+    GERMANY
+
+    sven@bino.bi
+
+um eine individuelle kommerzielle Lizenz zu verhandeln.
+
+5. Kein Anspruch auf Open-Source-Lizenz
+
+SVEN HERRMANN kann in Zukunft beschließen, die Software ganz oder teilweise
+unter einer Open-Source-Lizenz zu veröffentlichen. Es besteht jedoch kein
+Rechtsanspruch darauf, dass eine solche Umstellung erfolgt oder zu einem
+bestimmten Zeitpunkt stattfindet.
+
+6. Gewährleistungsausschluss
+
+DIE SOFTWARE WIRD "WIE BESEHEN" BEREITGESTELLT, OHNE JEGLICHE AUSDRÜCKLICHE
+ODER STILLSCHWEIGENDE GEWÄHRLEISTUNG, EINSCHLIESSLICH, ABER NICHT
+BESCHRÄNKT AUF DIE GEWÄHRLEISTUNG DER MARKTGÄNGIGKEIT, DER EIGNUNG FÜR EINEN
+BESTIMMTEN ZWECK UND DER NICHTVERLETZUNG VON RECHTEN DRITTER. DIE GESAMTE
+GEFAHR HINSICHTLICH QUALITÄT UND LEISTUNG DER SOFTWARE LIEGT BEI IHNEN.
+
+7. Haftungsbeschränkung
+
+IN KEINEM FALL HAFTET `SVEN HERRMANN` IHNEN ODER DRITTEN GEGENÜBER FÜR IRGENDWELCHE
+SCHÄDEN (EINSCHLIESSLICH, ABER NICHT BESCHRÄNKT AUF ENTGANGENEN GEWINN,
+GESCHÄFTSUNTERBRECHUNG, VERLUST VON GESCHÄFTSINFORMATIONEN ODER ANDERE
+WIRTSCHAFTLICHE VERLUSTE), DIE AUS DER NUTZUNG ODER DER UNMÖGLICHKEIT DER
+NUTZUNG DER SOFTWARE ENTSTEHEN, SELBST WENN `SVEN HERRMANN` AUF DIE MÖGLICHKEIT
+SOLCHER SCHÄDEN HINGEWIESEN WURDE.
+
+8. Laufzeit und Beendigung
+
+Diese Lizenz tritt mit dem ersten Herunterladen, Installieren oder Verwenden
+der Software in Kraft und gilt bis zu ihrer Beendigung.
+
+SVEN HERRMANN kann diese Lizenz fristlos kündigen, wenn Sie gegen eine der
+Bedingungen dieser Lizenz verstoßen. Im Falle einer Kündigung müssen Sie:
+
+    a) die Nutzung der Software unverzüglich einstellen und
+    b) alle Kopien der Software und jegliche abgeleiteten internen Versionen
+       vernichten oder dauerhaft löschen.
+
+Bestimmungen, die ihrer Natur nach über die Beendigung hinaus wirksam bleiben
+sollen (einschließlich, aber nicht beschränkt auf Abschnitte 3, 6 und 7),
+bleiben weiterhin in Kraft.
+
+Durch die Nutzung der Software erklären Sie sich mit den Bestimmungen dieser
+Lizenz einverstanden.
+
+---
+
+Unofficial English Convenience Translation (non-binding)
+
+BinoBi – Commercial Source Available License
+Version 1.0 – 2025
+
+Copyright (c) 2025 SVEN HERRMANN. All rights reserved.
+
+1. Definitions
+
+"Software" means the command line tool `bino`, including all source code,
+binary files, configuration files, documentation and any other related
+materials provided by SVEN HERRMANN.
+
+"Internal Use" means use of the Software solely within a single
+organization for its own internal purposes, without third parties (such as
+customers or external partners) receiving payment for, or commercially
+benefiting from, the use of the Software or the results generated with it.
+
+"Commercial Use" means any use of the Software or its results that directly
+or indirectly aims at generating revenue or forms part of a paid product or
+service.
+
+2. Granted Rights
+
+2.1. Source Code Access  
+You may read and inspect the source code of the Software and study it for the
+purposes of understanding, evaluation and internal use.
+
+2.2. Internal Use  
+You may use the Software within your own organization free of charge to create
+internal analyses, evaluations or reports (for example business reports,
+PDF reports), provided that such results are used exclusively for internal
+purposes.
+
+3. Restrictions
+
+Unless you have obtained an individual, written commercial license from
+SVEN HERRMANN, you are expressly PROHIBITED from doing the following:
+
+3.1. Commercial use of the Software  
+You may not use the Software for commercial purposes. In particular, you may
+not:
+
+    a) offer the Software as part of a paid product or service,
+    b) integrate the Software into a SaaS, cloud or platform solution that is
+       made available to third parties (whether for payment or as part of a
+       commercial offering),
+    c) use the Software as the technical basis for a competing product or any
+       other commercial tool.
+
+3.2. Commercial use of results produced by the Software  
+You may not use results produced by the Software (for example reports, PDFs,
+analyses) in order to:
+
+    a) sell these results to third parties or offer them for payment,
+    b) create such results as part of paid services for clients (for example
+       as a reporting provider, agency or consultant),
+    c) use these results as part of a commercial product or service.
+
+Only internal use of results within your own organization is permitted.
+
+3.3. Distribution and sublicensing  
+Without the prior written consent of SVEN HERRMANN, you may not:
+
+    a) copy, publish or distribute the Software to third parties,
+    b) distribute, rent, lease or otherwise make the Software available,
+    c) sublicense or grant usage rights to third parties.
+
+3.4. Modification and derivative works  
+You may not modify or edit the Software or create derivative works that you
+make available to third parties, distribute or use commercially, unless you
+have a written agreement with SVEN HERRMANN that expressly permits this.
+
+Internal adaptations for your own use are permitted only if the adapted
+Software is used exclusively internally and neither the adapted Software nor
+its results are used commercially within the meaning of Sections 3.1 or 3.2.
+
+4. Individual Commercial License
+
+If you wish to use the Software or its results commercially (for example to
+provide services to clients, to build a commercial product or a SaaS
+solution), please contact:
+
+    SVEN HERRMANN
+    Oskar-Eckert-Ste. 6
+    97250 Erlabrunn
+    GERMANY
+
+    sven@bino.bi
+
+to negotiate an individual commercial license.
+
+5. No entitlement to an open source license
+
+SVEN HERRMANN may decide in the future to release the Software in whole or in
+part under an open source license. However, there is no legal entitlement to
+such a change or to it taking place at any specific time.
+
+6. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED WARRANTY,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD-PARTY RIGHTS. THE ENTIRE
+RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE LIES WITH YOU.
+
+7. Limitation of Liability
+
+IN NO EVENT SHALL SVEN HERRMANN BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY
+DAMAGES (INCLUDING BUT NOT LIMITED TO LOST PROFITS, BUSINESS INTERRUPTION,
+LOSS OF BUSINESS INFORMATION OR OTHER ECONOMIC LOSS) ARISING OUT OF THE USE
+OF OR INABILITY TO USE THE SOFTWARE, EVEN IF SVEN HERRMANN HAS BEEN ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGES.
+
+8. Term and Termination
+
+This license becomes effective upon the first download, installation or use
+of the Software and remains in effect until terminated.
+
+SVEN HERRMANN may terminate this license without notice if you violate any of
+the terms of this license. In the event of termination, you must:
+
+    a) immediately cease using the Software, and
+    b) destroy or permanently delete all copies of the Software and any
+       derived internal versions.
+
+Provisions which by their nature are intended to survive termination
+(including but not limited to Sections 3, 6 and 7) shall remain in effect.
+
+By using the Software, you agree to the terms of this license.

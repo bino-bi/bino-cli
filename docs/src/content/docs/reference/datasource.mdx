@@ -1,0 +1,148 @@
+---
+title: DataSource
+description: Configure raw data sources as DuckDB views.
+---
+
+`DataSource` manifests describe how bino loads raw data into DuckDB.
+Each datasource becomes a DuckDB view named after `metadata.name`.
+
+## Name and SQL identifier
+
+`metadata.name` for `DataSource` must match the `sqlIdentifier` pattern:
+
+- `^[a-z_][a-z0-9_]*$`
+- Lowercase letters, digits, and underscores only
+- Must start with a letter or underscore
+
+Use these names directly in `DataSet.spec.query`.
+
+## Spec overview
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv           # inline | excel | csv | parquet | postgres_query | mysql_query
+  inline: {}          # for type: inline
+  content: []         # alternative inline content
+  path: ./data/*.csv  # for file-based types
+  connection: {}      # for database queries
+  query: ""          # SQL for postgres_query / mysql_query
+  ephemeral: false    # optional caching hint
+```
+
+Type-specific rules (simplified from the schema):
+
+- `type: inline` – requires either `inline` (object with `content`) or `content` (array or JSON string).
+- `type: excel | csv | parquet` – requires `path`.
+- `type: postgres_query | mysql_query` – requires `connection` and `query`.
+
+See the JSON schema for precise conditions.
+
+## Inline datasource
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: kpi_inline
+spec:
+  type: inline
+  inline:
+    content:
+      - { label: "Revenue", value: 123.45 }
+      - { label: "EBIT", value: 12.34 }
+```
+
+## CSV files
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_daily
+spec:
+  type: csv
+  path: ./data/sales_daily/*.csv
+```
+
+## Parquet files
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: fact_sales_parquet
+spec:
+  type: parquet
+  path: ./warehouse/fact_sales/*.parquet
+  ephemeral: false # allow caching between builds
+```
+
+## PostgreSQL query
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: postgresCredentials
+spec:
+  type: postgres
+  postgres:
+    passwordFromEnv: POSTGRES_PASSWORD
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_from_postgres
+spec:
+  type: postgres_query
+  connection:
+    host: ${DB_HOST:db.example.com}
+    port: 5432
+    database: analytics
+    schema: public
+    user: reporting
+    secret: postgresCredentials
+  query: |
+    SELECT *
+    FROM fact_sales
+    WHERE booking_date >= DATE '2024-01-01';
+```
+
+## MySQL query
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: mysqlCredentials
+spec:
+  type: mysql
+  mysql:
+    passwordFromEnv: MYSQL_PASSWORD
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_from_mysql
+spec:
+  type: mysql_query
+  connection:
+    host: ${DB_HOST:db.example.com}
+    port: 3306
+    database: analytics
+    user: reporting
+    secret: mysqlCredentials
+  query: |
+    SELECT * FROM fact_sales WHERE year = 2024;
+```
+
+For more on secrets and object storage, see [ConnectionSecret](/reference/connection-secret/).

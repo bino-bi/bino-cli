@@ -1,0 +1,36 @@
+---
+title: bino graph
+description: Inspect dependencies between artefacts, datasets, and datasources.
+---
+
+`bino graph` prints a dependency graph of your bundle.
+Use it to understand how datasources, datasets, layouts, and artefacts are connected.
+
+## Usage
+
+```bash
+bino graph [flags]
+```
+
+Common flags:
+
+- `--work-dir` – report bundle directory.
+- `--include` – focus on specific report names.
+- `--exclude` – exclude certain report names.
+- `--mode` – graph mode, for example `tree` or `flat`.
+
+## Examples
+
+View the full dependency tree for all reports:
+
+```bash
+bino graph --mode tree
+```
+
+Focus on a single artefact:
+
+```bash
+bino graph --include monthly_sales --mode tree
+```
+
+You can copy graph output into your docs and accompany it with a placeholder diagram image for easier reading.

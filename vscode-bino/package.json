@@ -1,0 +1,298 @@
+{
+  "name": "vscode-bino",
+  "displayName": "Bino Reports",
+  "description": "Enhanced YAML editing for Bino report manifests with intelligent autocompletion",
+  "version": "0.1.0",
+  "publisher": "bino",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bino-bi/bino-cli"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "yaml",
+    "bino",
+    "reports",
+    "data"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "workspaceContains:**/*.yaml",
+    "workspaceContains:**/*.yml",
+    "onView:binoExplorer",
+    "onCommand:bino.refreshIndex"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "binoExplorer",
+          "name": "Bino Reports",
+          "when": "workspaceFolderCount > 0",
+          "icon": "$(file-code)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "bino.refreshIndex",
+        "title": "Refresh Index",
+        "category": "Bino",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bino.openDocument",
+        "title": "Open Document",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.openInlineChild",
+        "title": "Open Component",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.validateWorkspace",
+        "title": "Validate Workspace",
+        "category": "Bino",
+        "icon": "$(check)"
+      },
+      {
+        "command": "bino.clearDiagnostics",
+        "title": "Clear Diagnostics",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.startPreview",
+        "title": "Start Preview",
+        "category": "Bino",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bino.stopPreview",
+        "title": "Stop Preview",
+        "category": "Bino",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "bino.restartPreview",
+        "title": "Restart Preview",
+        "category": "Bino",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "bino.openPreviewInBrowser",
+        "title": "Open Preview in Browser",
+        "category": "Bino",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "bino.openPreviewInWebview",
+        "title": "Open Preview in Webview",
+        "category": "Bino",
+        "icon": "$(window)"
+      },
+      {
+        "command": "bino.previewMenu",
+        "title": "Preview Menu",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.build",
+        "title": "Build Report",
+        "category": "Bino",
+        "icon": "$(package)"
+      },
+      {
+        "command": "bino.checkSetup",
+        "title": "Check Setup",
+        "category": "Bino",
+        "icon": "$(info)"
+      },
+      {
+        "command": "bino.showColumnsForCurrentDataset",
+        "title": "Show Columns for Current Dataset/DataSource",
+        "category": "Bino",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "bino.openFirstProblem",
+        "title": "Go to First Problem",
+        "category": "Bino",
+        "icon": "$(error)"
+      },
+      {
+        "command": "bino.showGraphForItem",
+        "title": "Show Graph (Dependencies & Dependents)",
+        "category": "Bino",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "bino.showDependenciesForItem",
+        "title": "Show Dependencies",
+        "category": "Bino",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "bino.showDependentsForItem",
+        "title": "Show Dependents (What Uses This?)",
+        "category": "Bino",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "bino.openPrqlEditor",
+        "title": "Open PRQL Editor",
+        "category": "Bino",
+        "icon": "$(code)"
+      },
+      {
+        "command": "bino.openPrqlSqlPreview",
+        "title": "Open PRQL SQL Preview",
+        "category": "Bino",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "bino.refreshIndex",
+          "when": "view == binoExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "bino.validateWorkspace",
+          "when": "view == binoExplorer",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bino.openDocument",
+          "when": "false"
+        },
+        {
+          "command": "bino.openInlineChild",
+          "when": "false"
+        },
+        {
+          "command": "bino.previewMenu",
+          "when": "false"
+        },
+        {
+          "command": "bino.openFirstProblem",
+          "when": "false"
+        },
+        {
+          "command": "bino.openPrqlEditor",
+          "when": "editorLangId == yaml"
+        },
+        {
+          "command": "bino.openPrqlSqlPreview",
+          "when": "editorLangId == yaml"
+        },
+        {
+          "command": "bino.showGraphForItem",
+          "when": "false"
+        },
+        {
+          "command": "bino.showDependenciesForItem",
+          "when": "false"
+        },
+        {
+          "command": "bino.showDependentsForItem",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "bino.openFirstProblem",
+          "when": "view == binoExplorer && viewItem == binoDocument",
+          "group": "navigation"
+        },
+        {
+          "command": "bino.showGraphForItem",
+          "when": "view == binoExplorer && viewItem == binoDocument",
+          "group": "graph@1"
+        },
+        {
+          "command": "bino.showDependenciesForItem",
+          "when": "view == binoExplorer && viewItem == binoDocument",
+          "group": "graph@2"
+        },
+        {
+          "command": "bino.showDependentsForItem",
+          "when": "view == binoExplorer && viewItem == binoDocument",
+          "group": "graph@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "bino.openPrqlEditor",
+          "when": "editorLangId == yaml && bino.inPrqlBlock",
+          "group": "bino@1"
+        },
+        {
+          "command": "bino.openPrqlSqlPreview",
+          "when": "editorLangId == yaml && bino.inPrqlBlock",
+          "group": "bino@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Bino Reports",
+      "properties": {
+        "bino.binPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the bino CLI executable. If not set, uses 'bino' from PATH."
+        },
+        "bino.enableCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable intelligent autocompletion for dataset references, scenarios, etc."
+        },
+        "bino.columnCacheTTL": {
+          "type": "number",
+          "default": 60000,
+          "description": "Time in milliseconds to cache column introspection results (default: 60 seconds)."
+        },
+        "bino.validateOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically validate workspace when saving a bino YAML file."
+        },
+        "bino.previewPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "Port number for the bino preview server."
+        }
+      }
+    }
+  },
+  "extensionDependencies": [
+    "redhat.vscode-yaml"
+  ],
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  }
+}

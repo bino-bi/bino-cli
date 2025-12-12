@@ -1,0 +1,94 @@
+---
+title: LayoutCard
+description: Define reusable cards with headers, footers, and component grids.
+---
+
+`LayoutCard` manifests describe card-shaped containers that can host charts, tables, and text.
+They are useful for dashboards and reusable widgets.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: revenue_card
+spec:
+  titleImage: "debug/concordia.png"
+  titleBusinessUnit: "Sales"
+  titleScenarios: "ac,fc,py"
+  titleVariances: "dpy_ac_pos"
+  titleOrder: category
+  titleOrderDirection: desc
+  titleMeasures:
+    - name: "Revenue"
+      unit: "mEUR"
+  titleDateStart: 2024-01-01
+  titleDateEnd: 2024-03-31
+  titleDateFormat: quarter
+  titleDateLink: interval
+  titleNamespace: _system
+  footerText: "Quarterly revenue overview"
+  cardLayout: split-horizontal
+  cardCustomTemplate: '"a b" "c d"'
+  cardGridGap: "0.5rem"
+  cardFitToContent: true
+  cardShowBorder: true
+  children:
+    - kind: ChartStructure
+      spec: { ... }
+    - kind: Table
+      spec: { ... }
+```
+
+Important fields mirror `LayoutPage` but are scoped to a card:
+
+- Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`.
+- Footer: `footerText`.
+- Layout: `cardLayout`, `cardCustomTemplate`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
+- Content: `children` – required array of `layoutChild` objects.
+
+## Card inside a page
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: revenue_card
+spec:
+  titleBusinessUnit: "Sales"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "mEUR"
+  cardLayout: full
+  children:
+    - kind: ChartTime
+      spec:
+        dataset: revenue_monthly
+        chartTitle: "Monthly revenue"
+        type: line
+        dateInterval: month
+        axisLabelsMode: smart
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard_page
+spec:
+  pageLayout: 2x2
+  children:
+    - kind: LayoutCard
+      spec:
+        # embed card spec directly or reference by convention
+        titleBusinessUnit: "Sales"
+        cardLayout: full
+        children:
+          - kind: ChartTime
+            spec:
+              dataset: revenue_monthly
+              chartTitle: "Monthly revenue"
+              type: line
+```
+
+Use cards to keep layout definitions modular and to reuse card patterns across multiple reports.

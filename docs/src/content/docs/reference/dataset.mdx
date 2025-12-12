@@ -1,0 +1,177 @@
+---
+title: DataSet
+description: Define derived tables with DuckDB SQL or PRQL.
+---
+
+`DataSet` manifests describe derived tables built using SQL or [PRQL](https://prql-lang.org) (Pipelined Relational Query Language).
+Datasets typically select from `DataSource` views and may depend on other datasets.
+
+## Spec overview
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_summary
+spec:
+  query: |
+    SELECT ...
+  dependencies:
+    - sales_csv
+    - exchange_rates
+```
+
+Fields:
+
+- `spec.query` – DuckDB SQL query. Required if `spec.prql` is not set.
+- `spec.prql` – [PRQL](https://prql-lang.org) query. When set, takes precedence over `spec.query`. The PRQL is sent directly to DuckDB which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
+- `spec.dependencies` – optional list of datasource names that must be materialized before the query runs.
+
+## Simple aggregation
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./data/sales.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_by_region
+spec:
+  query: |
+    SELECT
+      region,
+      SUM(amount) AS total_amount
+    FROM sales_csv
+    GROUP BY region
+  dependencies:
+    - sales_csv
+```
+
+## Dataset depending on multiple inputs
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_fact
+spec:
+  type: parquet
+  path: ./warehouse/fact_sales/*.parquet
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: currency_rates
+spec:
+  type: csv
+  path: ./data/currency_rates.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: revenue_eur
+spec:
+  query: |
+    SELECT
+      f.region,
+      f.booking_date,
+      f.amount * r.rate_to_eur AS revenue_eur
+    FROM sales_fact f
+    JOIN currency_rates r
+      ON r.currency = f.currency
+     AND r.valid_on = f.booking_date;
+  dependencies:
+    - sales_fact
+    - currency_rates
+```
+
+Datasets are referenced from layouts via their `metadata.name` using the `dataset` field of charts, tables, and text components.
+
+## Using PRQL
+
+[PRQL](https://prql-lang.org) is a modern language for transforming data that compiles to SQL. It offers a more readable, pipeline-based syntax compared to traditional SQL.
+
+When you specify `spec.prql`, bino automatically loads the [DuckDB PRQL extension](https://duckdb.org/community_extensions/extensions/prql) and sends your PRQL query directly to DuckDB for compilation and execution.
+
+### Simple PRQL example
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./data/sales.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_by_region
+spec:
+  prql: |
+    from sales_csv
+    filter amount > 0
+    group {region} (
+      aggregate {
+        total_amount = sum amount,
+        order_count = count this
+      }
+    )
+    sort {-total_amount}
+  dependencies:
+    - sales_csv
+```
+
+### PRQL with joins and transformations
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: orders
+spec:
+  type: csv
+  path: ./data/orders.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: customers
+spec:
+  type: csv
+  path: ./data/customers.csv
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: customer_orders
+spec:
+  prql: |
+    from orders
+    join customers (==customer_id)
+    derive full_name = f"{customers.first_name} {customers.last_name}"
+    select {
+      order_id,
+      full_name,
+      order_date,
+      total
+    }
+    sort {-order_date}
+    take 100
+  dependencies:
+    - orders
+    - customers
+```
+
+For more PRQL syntax and examples, see the [PRQL documentation](https://prql-lang.org/book/).

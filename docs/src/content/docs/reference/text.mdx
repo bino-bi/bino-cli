@@ -1,0 +1,54 @@
+---
+title: Text
+description: Define text blocks, optionally bound to datasets.
+---
+
+`Text` manifests define text values that can be used directly or as children of layouts and cards.
+They can optionally bind to one or more datasets.
+
+## Spec overview
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: reportSubtitle
+spec:
+  value: "Quarterly performance overview"
+  dataset: kpi_summary   # string or array
+```
+
+Fields:
+
+- `spec.value` – required string value.
+- `spec.dataset` – optional dataset reference; either a single string or an array of strings.
+
+## Standalone text manifest
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: mainTitle
+spec:
+  value: "Sales Overview Report"
+```
+
+## Text as a layout child
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_layout
+spec:
+  pageLayout: full
+  children:
+    - kind: Text
+      spec:
+        value: "Sales Overview Report"
+```
+
+In more advanced setups, text components may consult datasets or i18n keys via front-end conventions.

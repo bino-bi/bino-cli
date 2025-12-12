@@ -1,0 +1,60 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+# NOTE: This config is for LOCAL development only.
+# CI releases use the GitHub Actions workflow with native runners for CGO builds.
+# For local builds: goreleaser build --snapshot --clean --single-target
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: bino
+    main: ./cmd/bino
+    binary: bino
+    env:
+      - CGO_ENABLED=1
+    # Local builds only - use --single-target flag
+    # CI builds use native runners per platform (see .github/workflows/release.yml)
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - "-s -w -X 'bino.bi/bino/internal/version.Version={{ .Version }}' -X 'bino.bi/bino/internal/version.Commit={{ .Commit }}' -X 'bino.bi/bino/internal/version.Date={{ .Date }}'"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

@@ -1,0 +1,121 @@
+---
+title: Using database data
+description: Query PostgreSQL or MySQL databases via datasources and secrets.
+---
+
+This guide shows how to connect bino to PostgreSQL and MySQL.
+You will define a `ConnectionSecret`, a `DataSource` with a SQL query, and a small layout consuming the data.
+
+## 1. PostgreSQL connection secret
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: postgresCredentials
+spec:
+  type: postgres
+  postgres:
+    passwordFromEnv: POSTGRES_PASSWORD
+```
+
+Set the environment variable before running bino:
+
+```bash
+export POSTGRES_PASSWORD='your-secure-password'
+```
+
+## 2. PostgreSQL datasource
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_pg
+spec:
+  type: postgres_query
+  connection:
+    host: ${DB_HOST:db.example.com}
+    port: 5432
+    database: analytics
+    schema: public
+    user: reporting
+    secret: postgresCredentials
+  query: |
+    SELECT
+      region,
+      booking_date,
+      amount
+    FROM fact_sales
+    WHERE booking_date >= DATE '2024-01-01';
+```
+
+## 3. Dataset and layout
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_pg_by_region
+spec:
+  query: |
+    SELECT
+      region,
+      SUM(amount) AS total_amount
+    FROM sales_pg
+    GROUP BY region;
+  dependencies:
+    - sales_pg
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_pg_page
+spec:
+  pageLayout: full
+  children:
+    - kind: Table
+      spec:
+        dataset: sales_pg_by_region
+        tableTitle: "Sales by region (PostgreSQL)"
+```
+
+## 4. MySQL example
+
+Switch `type` and create a MySQL secret:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: mysqlCredentials
+spec:
+  type: mysql
+  mysql:
+    passwordFromEnv: MYSQL_PASSWORD
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_mysql
+spec:
+  type: mysql_query
+  connection:
+    host: ${DB_HOST:db.example.com}
+    port: 3306
+    database: analytics
+    user: reporting
+    secret: mysqlCredentials
+  query: |
+    SELECT region, amount FROM fact_sales WHERE year = 2024;
+```
+
+## 5. Troubleshooting
+
+- Verify network connectivity to the database host from the machine running bino.
+- Check environment variables (user, password, host, port) and ensure they match the database configuration.
+- Use `bino preview --log-sql` to see executed queries and confirm results.

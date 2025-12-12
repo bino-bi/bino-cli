@@ -1,0 +1,108 @@
+---
+title: LayoutPage
+description: Define report pages including headers, footers, and component grids.
+---
+
+`LayoutPage` manifests describe full pages of a report.
+They control headers, date and measure metadata, page size/orientation, and child components.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_overview_page
+spec:
+  titleBusinessUnit: "Sales"
+  titleNamespace: _system
+  titleDateStart: 2024-01-01
+  titleDateEnd: 2024-03-31
+  titleDateFormat: quarter
+  titleDateLink: interval
+  titleMeasures: []
+  titleScenarios: "ac,fc,py"
+  titleVariances: "dac_ac_pos"
+  titleOrder: category
+  titleOrderDirection: asc
+  pageLayout: 2x2
+  pageFormat: a4
+  pageOrientation: landscape
+  footerDisplayPageNumber: true
+  footerText: "Internal use only"
+  messageImage: "debug/concordia.png"
+  messageText: "Placeholder message"
+  children:
+    - kind: ChartStructure
+      spec: { ... }
+    - kind: Table
+      spec: { ... }
+```
+
+Key fields (see JSON schema for full list):
+
+- Title row fields: `titleBusinessUnit`, `titleNamespace`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`.
+- Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
+- Message row: `messageImage`, `messageText`.
+- Content: `children` – required array of `layoutChild` objects.
+
+## Page layouts
+
+`pageLayout` controls how components are arranged. The enum includes:
+
+- `full`
+- `split-horizontal`, `split-vertical`
+- `2x2`, `3x3`, `4x4`
+- `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`
+- `custom-template`
+
+For `custom-template`, set `pageCustomTemplate` to a CSS `grid-template-areas` string, for example:
+
+```yaml
+pageLayout: custom-template
+pageCustomTemplate: |
+  "a a" \
+  "b c"
+```
+
+## Minimal full-page example
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: kpi_dashboard
+spec:
+  titleBusinessUnit: "Group Controlling"
+  titleNamespace: _system
+  titleDateStart: 2024-01-01
+  titleDateEnd: 2024-12-31
+  titleDateFormat: year
+  titleDateLink: none
+  titleMeasures:
+    - name: "Revenue"
+      unit: "mEUR"
+  titleScenarios: "ac,fc,py"
+  pageLayout: 2x2
+  pageFormat: a4
+  pageOrientation: landscape
+  footerDisplayPageNumber: true
+  footerText: "bino – internal preview"
+  children:
+    - kind: ChartStructure
+      spec:
+        dataset: revenue_by_region
+        chartTitle: "Revenue by region"
+        level: category
+        scenarios: ["ac1", "py1"]
+        variances: ["dpy1_ac1_pos"]
+    - kind: Table
+      spec:
+        dataset: revenue_by_customer
+        tableTitle: "Top customers"
+        type: list
+        limit: 10
+```
+
+Later you can add more components or convert parts of the page into `LayoutCard` children.

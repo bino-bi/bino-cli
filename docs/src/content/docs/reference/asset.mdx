@@ -1,0 +1,83 @@
+---
+title: Asset
+description: Register images, fonts, and files for use in layouts.
+---
+
+`Asset` manifests declare binary resources such as logos, pictograms, and fonts.
+Layouts refer to assets by `metadata.name` so that paths and URLs are centralized.
+
+## Spec overview
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: brandLogo
+spec:
+  type: image            # image | file | font
+  mediaType: image/png   # MIME type
+  purpose: brand-logo    # optional free-form description
+  source:
+    # exactly one of: inlineBase64 | localPath | remoteURL
+```
+
+Important fields:
+
+- `spec.type` – one of `image`, `file`, `font`.
+- `spec.mediaType` – MIME type, for example `image/png`, `image/svg+xml`, `font/woff2`.
+- `spec.purpose` – optional description of how the asset is used.
+- `spec.source.inlineBase64` – base64-encoded content embedded in the manifest.
+- `spec.source.localPath` – relative or absolute path to a file in your project.
+- `spec.source.remoteURL` – HTTP/HTTPS URL pointing to a remote asset.
+
+## Examples
+
+### Local logo file
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: brandLogo
+spec:
+  type: image
+  mediaType: image/png
+  purpose: brand-logo
+  source:
+    localPath: ./assets/brand-logo.png
+```
+
+### Remote placeholder image
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: sampleReportPreview
+spec:
+  type: image
+  mediaType: image/png
+  purpose: "Sample report preview screenshot"
+  source:
+    remoteURL: https://via.placeholder.com/1200x800?text=Report+Preview
+```
+
+### Embedded font
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: corporateHeadingFont
+spec:
+  type: font
+  mediaType: font/woff2
+  purpose: "Heading font for corporate reports"
+  source:
+    localPath: ./assets/fonts/corporate-heading.woff2
+```
+
+Use assets from layout components (for example via a URL field) by referring to their registered paths or by using front-end conventions.

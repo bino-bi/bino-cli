@@ -1,0 +1,66 @@
+---
+title: Installation
+description: Install the bino CLI and verify your setup.
+---
+
+bino is a command-line tool for building pixel-perfect PDF reports from YAML and SQL.
+This page shows how to install the binary on common platforms and confirm that everything works.
+
+## Supported platforms
+
+bino provides pre-built binaries for:
+
+- macOS (Intel, Apple Silicon)
+- Linux x86_64
+- Windows x86_64
+
+## Install from GitHub Releases (recommended)
+
+1. Open the bino GitHub repository in your browser and go to the **Releases** page.
+2. Download the archive that matches your platform, for example:
+   - `bino-cli_Darwin_x86_64.tar.gz`
+   - `bino-cli_Darwin_arm64.tar.gz`
+   - `bino-cli_Linux_x86_64.tar.gz`
+   - `bino-cli_Windows_x86_64.zip`
+3. Unpack the archive:
+
+   ```bash
+   # macOS / Linux
+   tar -xzvf bino-cli_Darwin_x86_64.tar.gz
+   # or
+   tar -xzvf bino-cli_Linux_x86_64.tar.gz
+   ```
+
+   On Windows, extract the `.zip` using File Explorer or a tool like 7-Zip.
+
+4. Move the `bino` (or `bino.exe`) binary onto your `PATH`:
+
+   ```bash
+   # macOS / Linux (example)
+   mv bino /usr/local/bin/
+   ```
+
+   On Windows, either place `bino.exe` in a folder that is already on `%PATH%` or add its folder to the system/user `PATH`.
+
+5. Verify the installation:
+
+   ```bash
+   bino version
+   ```
+
+   This should print the installed version and exit with status code 0.
+
+## Install from source using Go tooling
+
+If you have Go installed and prefer to build from source, you can use:
+
+```bash
+go install bino.bi/bino/cmd/bino@latest
+```
+
+This is mainly useful for contributors or environments without access to GitHub Releases.
+
+## Next steps
+
+- Continue with [Your first report](/getting-started/first-report/) to scaffold and build a sample report.
+- See the [CLI overview](/cli/) for a quick tour of available commands.

@@ -1,0 +1,57 @@
+---
+title: Layout and rendering
+description: How layouts, components, assets, and artefacts become a rendered PDF.
+---
+
+Layout manifests describe how data turns into visual pages and cards.
+The bino CLI renders HTML layouts and uses Playwright to convert them into high-quality PDFs.
+
+## Layout building blocks
+
+bino distinguishes several layout-related kinds:
+
+- `LayoutPage` – defines a page, including header/footer, page size/orientation, and a grid of child components.
+- `LayoutCard` – defines a self-contained card with header/footer and its own grid of child components.
+- `ChartStructure` – describes categorical charts such as rankings and structure charts.
+- `ChartTime` – describes time-series charts.
+- `Table` – describes tabular output.
+- `Text` – describes text blocks, optionally bound to datasets.
+- `ComponentStyle` – defines reusable style configuration for components.
+- `Internationalization` – holds translations for text in a given language/namespace.
+- `Asset` – registers images, fonts, and files used in layouts.
+- `ReportArtefact` – describes PDF-level metadata (title, filename, language, signing profile).
+- `SigningProfile` – configures digital signatures applied to PDFs.
+
+## From layout to PDF
+
+At a high level, the rendering flow is:
+
+1. `bino build` validates manifests and executes datasets in DuckDB.
+2. bino passes layout specs (`LayoutPage`, `LayoutCard`, child components) and data to the front-end renderer.
+3. The renderer produces HTML for each report artefact.
+4. Playwright runs a real browser (for example Chromium) to export HTML pages as PDFs.
+
+This approach ensures consistent typography and layout across platforms.
+Use `bino playwright install` to install the required browser runtimes.
+
+## Choosing layouts
+
+`LayoutPage` and `LayoutCard` provide built-in layout modes via `pageLayout` / `cardLayout`:
+
+- `full`, `split-vertical`, `split-horizontal`
+- Grid layouts like `2x2`, `3x3`, `4x4`
+- Stacked layouts like `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`
+- `custom-template` for full control via CSS grid areas.
+
+You place child components into these layouts using the `children` array.
+See [LayoutPage](/reference/layout-page/) and [LayoutCard](/reference/layout-card/) for examples and tips.
+
+## Images and placeholders
+
+When documenting sample reports and layouts, you can reference placeholder images from the web, for example:
+
+```md
+![Report preview placeholder](https://via.placeholder.com/1200x800?text=Report+Preview)
+```
+
+Later, replace these URLs with real report screenshots or locally hosted assets registered as `Asset` manifests.

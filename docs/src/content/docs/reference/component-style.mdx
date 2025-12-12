@@ -1,0 +1,60 @@
+---
+title: ComponentStyle
+description: Define reusable visual styles for layouts and components.
+---
+
+`ComponentStyle` manifests capture styling information for components.
+They allow you to centralize typography, colors, spacing, and other visual rules.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporateTheme
+spec:
+  content: {}  # object or JSON string
+```
+
+`spec.content` can be either:
+
+- A YAML object
+- A JSON string (useful when copying from front-end configuration)
+
+The exact shape of the content is interpreted by the front-end renderer.
+
+## YAML object style
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporateTheme
+spec:
+  content:
+    fontFamily: "Inter, system-ui, sans-serif"
+    headingColor: "#111827"
+    textColor: "#374151"
+    accentColor: "#1D4ED8"
+    table:
+      headerBackground: "#F3F4F6"
+      rowStripeBackground: "#F9FAFB"
+```
+
+## JSON string style
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: kpiCardStyle
+spec:
+  content: >-
+    {"fontFamily":"Inter,system-ui,sans-serif","accentColor":"#22C55E","borderRadius":"8px"}
+```
+
+You typically reference styles from layout or component configuration according to your front-end conventions.
+Use placeholder screenshots in your docs to compare layouts with and without shared styles.
