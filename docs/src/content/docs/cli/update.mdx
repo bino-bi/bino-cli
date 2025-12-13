@@ -1,0 +1,37 @@
+---
+title: bino update
+description: Update the bino CLI to the latest version.
+---
+
+The `bino update` command allows you to easily upgrade your bino CLI installation to the latest available version from GitHub Releases.
+
+## Usage
+
+```bash
+bino update
+```
+
+## Description
+
+When you run `bino update`, the CLI will:
+
+1.  Check GitHub Releases for a newer version of `bino`.
+2.  Compare the latest version with your currently installed version.
+3.  If a newer version is available, it will download the appropriate binary for your operating system and architecture.
+4.  Verify the integrity of the download.
+5.  Replace the current `bino` binary with the new version.
+
+If you are already on the latest version, the command will inform you and exit without making changes.
+
+## Automatic Update Checks
+
+`bino` automatically checks for updates in the background once every 24 hours when you run any command. If a new version is available, a notification will be printed to the standard error output (stderr) after the command completes.
+
+Example notification:
+
+```text
+Update available: 0.1.0 -> 0.2.0
+Run 'bino update' to upgrade.
+```
+
+This check is non-blocking and will not delay your command execution.
