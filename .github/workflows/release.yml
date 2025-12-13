@@ -285,7 +285,7 @@ jobs:
       - name: Update stack
         uses: fjogeleit/http-request-action@v1
         with:
-          url: "https://deploy.ops.bino.bi/deploy/swarm"
+          url: "https://deploy.sys.bino.bi/deploy/swarm"
           bearerToken: ${{ secrets.DEPLOY_TOKEN }}
           timeout: 60000
           data: |
