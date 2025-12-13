@@ -54,11 +54,14 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/updater"
+	"bino.bi/bino/internal/version"
 )
 
 // newRootCommand creates the root cobra command for the bino CLI.
@@ -80,6 +83,16 @@ func newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			// Run non-blocking update check in background
+			go func() {
+				if result, _ := updater.CheckForUpdate(ctx); result != nil {
+					// Print to stderr to avoid polluting stdout (e.g. json output)
+					fmt.Fprintf(os.Stderr, "\nUpdate available: %s -> %s\nRun 'bino update' to upgrade.\n\n",
+						version.Version, result.LatestVersion)
+				}
+			}()
+
 			ctx = logx.WithDebug(ctx, verbose)
 
 			// Initialize centralized styling with NO_COLOR handling
@@ -121,6 +134,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newInitCommand())
 	cmd.AddCommand(newLSPCommand())
 	cmd.AddCommand(newCacheCommand())
+	cmd.AddCommand(newUpdateCommand())
 
 	return cmd
 }
