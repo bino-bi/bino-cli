@@ -281,3 +281,20 @@ jobs:
             registry.sys.bino.bi/bino/cli-docs:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Update stack
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: "${{ secrets.DEPLOY_URL }}"
+          bearerToken: ${{ secrets.DEPLOY_TOKEN }}
+          timeout: 60000
+          data: |
+            {
+              "resource": "bino-bi",
+              "actions": [
+                { "env": {
+                    "CLI_VERSION": "registry.ops.bino.bi/bino/homepage:${{ needs.resolve-tag.outputs.version }}"
+                  }
+                }
+              ]
+            }
