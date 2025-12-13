@@ -58,6 +58,28 @@ If you have Go installed and prefer to build from source, you can use:
 go install bino.bi/bino/cmd/bino@latest
 ```
 
+## Install using the bundled installer script (recommended)
+
+An `install.sh` asset is published with releases. It automatically detects your OS/architecture, downloads the appropriate archive, verifies the SHA-256 checksum (if present), and installs the `bino` binary.
+
+Run directly (one-liner that executes the installer):
+
+```sh
+curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh | sh
+```
+
+Safer (download then inspect):
+
+```sh
+curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh -o install.sh
+less install.sh
+sh install.sh
+```
+
+Installer flags: `--repo`, `--tag`, `--install-dir`, `--dry-run`, `--yes`.
+
+Prefer the two-step flow if you want to review the script before execution.
+
 This is mainly useful for contributors or environments without access to GitHub Releases.
 
 ## Next steps

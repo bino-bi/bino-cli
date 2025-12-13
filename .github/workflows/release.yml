@@ -218,10 +218,15 @@ jobs:
           name: vscode-extension
           path: dist/
 
+      - name: Add installer script to dist
+        run: |
+          mkdir -p dist
+          cp install.sh dist/
+
       - name: Generate checksums
         working-directory: dist
         run: |
-          sha256sum *.tar.gz *.zip *.vsix > checksums.txt
+          sha256sum *.tar.gz *.zip *.vsix install.sh > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -242,6 +247,7 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/*.vsix
+            dist/install.sh
             dist/checksums.txt
           fail_on_unmatched_files: true
 

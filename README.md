@@ -20,7 +20,35 @@ Pre-built binaries are published for:
 - Linux x86_64
 - Windows x86_64
 
-### Install from GitHub Releases (recommended)
+### Install using the bundled installer script (recommended)
+
+We publish a small installer script as a release asset named `install.sh`. It detects your OS/architecture, downloads the matching pre-built archive, verifies the SHA-256 checksum (if available), and installs the `bino` binary for you.
+
+Direct, single-command install (runs the installer immediately):
+
+```sh
+curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh | sh
+```
+
+Safer: download, inspect, then run:
+
+```sh
+curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh -o install.sh
+less install.sh   # inspect before running
+sh install.sh
+```
+
+Installer options:
+
+- `--repo owner/repo` — install from a different repo (default: `bino-bi/bino-cli-releases`)
+- `--tag <tag|latest>` — install a specific tag instead of `latest`
+- `--install-dir <dir>` — destination directory for the binary (default: `$HOME/.local/bin`)
+- `--dry-run` — show actions without performing them
+- `--yes` — non-interactive; accept prompts
+
+Use the safer two-step download-and-inspect flow if you prefer to review the script before execution.
+
+### Install from GitHub Releases
 
 1. Open the bino GitHub repository in your browser and go to the **Releases** page.
 2. Download the archive that matches your platform:
@@ -62,16 +90,6 @@ Pre-built binaries are published for:
    ```bash
    bino version
    ```
-
-### Optional: install via Go tooling
-
-If you have Go installed and prefer to build from source, you can use:
-
-```bash
-go install bino.bi/bino/cmd/bino@latest
-```
-
-This is primarily useful for contributors or for environments without access to GitHub Releases.
 
 ---
 
