@@ -14,7 +14,29 @@ bino provides pre-built binaries for:
 - Linux x86_64
 - Windows x86_64
 
-## Install from GitHub Releases (recommended)
+## Install using the bundled installer script (recommended)
+
+An `install.sh` asset is published with releases. It automatically detects your OS/architecture, downloads the appropriate archive, verifies the SHA-256 checksum (if present), and installs the `bino` binary.
+
+Run directly (one-liner that executes the installer):
+
+```sh
+/bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+```
+
+Safer (download then inspect):
+
+```sh
+curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh -o install.sh
+less install.sh
+sh install.sh
+```
+
+Installer flags: `--repo`, `--tag`, `--install-dir`, `--dry-run`, `--yes`.
+
+Prefer the two-step flow if you want to review the script before execution.
+
+## Install from GitHub Releases
 
 1. Open the bino GitHub repository in your browser and go to the **Releases** page.
 2. Download the archive that matches your platform, for example:
@@ -49,38 +71,6 @@ bino provides pre-built binaries for:
    ```
 
    This should print the installed version and exit with status code 0.
-
-## Install from source using Go tooling
-
-If you have Go installed and prefer to build from source, you can use:
-
-```bash
-go install bino.bi/bino/cmd/bino@latest
-```
-
-## Install using the bundled installer script (recommended)
-
-An `install.sh` asset is published with releases. It automatically detects your OS/architecture, downloads the appropriate archive, verifies the SHA-256 checksum (if present), and installs the `bino` binary.
-
-Run directly (one-liner that executes the installer):
-
-```sh
-curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh | sh
-```
-
-Safer (download then inspect):
-
-```sh
-curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh -o install.sh
-less install.sh
-sh install.sh
-```
-
-Installer flags: `--repo`, `--tag`, `--install-dir`, `--dry-run`, `--yes`.
-
-Prefer the two-step flow if you want to review the script before execution.
-
-This is mainly useful for contributors or environments without access to GitHub Releases.
 
 ## Next steps
 

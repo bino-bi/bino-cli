@@ -262,4 +262,4 @@ fi
 
 echo "Installation complete."
 echo "Installed: $INSTALL_DIR/$(basename "$BIN_PATH")"
-echo "Run: $(basename "$BIN_PATH") --version"
+echo "Run: $(basename "$BIN_PATH") version"
