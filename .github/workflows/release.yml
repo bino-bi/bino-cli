@@ -239,10 +239,7 @@ jobs:
           body: |
             ## Bino CLI ${{ needs.resolve-tag.outputs.tag }}
 
-            **Source:** [ThatScalaGuy/bino-rainbow@${{ needs.resolve-tag.outputs.tag }}](https://github.com/ThatScalaGuy/bino-rainbow/releases/tag/${{ needs.resolve-tag.outputs.tag }})
             **Commit:** `${{ github.sha }}`
-
-            See the [source release](https://github.com/ThatScalaGuy/bino-rainbow/releases/tag/${{ needs.resolve-tag.outputs.tag }}) for full release notes.
           files: |
             dist/*.tar.gz
             dist/*.zip
