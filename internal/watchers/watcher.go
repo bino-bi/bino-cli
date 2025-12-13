@@ -211,17 +211,23 @@ func compileIgnoreFile(path string) (*gitignore.GitIgnore, error) {
 }
 
 func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
+	rel, ok := y.relativePath(path)
+	if !ok || rel == "" {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+
+	// Always ignore .bncache directory (built-in, not configurable)
+	if rel == ".bncache" || strings.HasPrefix(rel, ".bncache/") {
+		return true
+	}
+
 	y.ignoreMu.RLock()
 	ignore := y.ignore
 	y.ignoreMu.RUnlock()
 	if ignore == nil {
 		return false
 	}
-	rel, ok := y.relativePath(path)
-	if !ok || rel == "" {
-		return false
-	}
-	rel = filepath.ToSlash(rel)
 	if ignore.MatchesPath(rel) {
 		return true
 	}

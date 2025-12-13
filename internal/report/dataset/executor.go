@@ -166,7 +166,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 	}
 
 	// Execute datasets that weren't cached
-	execResults, execWarnings, err := executeDataSets(ctx, toRun, docs, opts)
+	execResults, execWarnings, err := executeDataSets(ctx, workdir, toRun, docs, opts)
 	if err != nil {
 		return results, append(warnings, execWarnings...), err
 	}
@@ -245,7 +245,7 @@ func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceInde
 	return hex.EncodeToString(h.Sum(nil)), warnings
 }
 
-func executeDataSets(ctx context.Context, jobs []dataSetJob, allDocs []config.Document, opts *ExecuteOptions) ([]Result, []Warning, error) {
+func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, allDocs []config.Document, opts *ExecuteOptions) ([]Result, []Warning, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -274,8 +274,17 @@ func executeDataSets(ctx context.Context, jobs []dataSetJob, allDocs []config.Do
 		warnings []Warning
 	)
 
+	// Create temp directory for inline datasource CSV files
+	tempDir := filepath.Join(workdir, ".bncache", "datasources")
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		return nil, nil, fmt.Errorf("create datasources temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
 	// Register all DataSources as views first
-	viewDiags, err := datasource.RegisterViews(ctx, session, allDocs)
+	viewDiags, err := datasource.RegisterViews(ctx, session, allDocs, &datasource.ViewsOptions{
+		TempDir: tempDir,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("register views: %w", err)
 	}

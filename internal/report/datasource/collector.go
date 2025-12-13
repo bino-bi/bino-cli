@@ -113,7 +113,8 @@ func Collect(ctx context.Context, docs []config.Document) ([]Result, []Diagnosti
 	defer session.Close()
 
 	// Register external DataSources as views
-	viewDiags, err := RegisterViews(ctx, session, docs)
+	// Note: inline sources are handled directly above and don't need views here
+	viewDiags, err := RegisterViews(ctx, session, docs, nil)
 	if err != nil {
 		return results, append(diags, viewDiags...), err
 	}

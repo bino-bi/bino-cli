@@ -17,30 +17,45 @@ import (
 	"bino.bi/bino/pkg/duckdb"
 )
 
-// RegisterViews creates DuckDB views for all non-inline DataSource documents in the session.
+// ViewsOptions configures view registration behavior.
+type ViewsOptions struct {
+	// TempDir is the directory for temporary files (e.g., inline CSV files).
+	// If empty, inline sources will be skipped.
+	TempDir string
+}
+
+// RegisterViews creates DuckDB views for all DataSource documents in the session.
 // Each DataSource becomes a view named by metadata.name, so subsequent queries
 // can simply `SELECT * FROM <name>`.
 //
-// Inline sources are skipped - they don't need views since their data is
-// available directly as JSON.
+// Inline sources are materialized as CSV files in opts.TempDir and registered
+// as views using read_csv_auto(). If opts is nil or TempDir is empty, inline
+// sources are skipped.
 //
 // This function:
 //   - Installs required extensions (postgres, mysql) based on source types
 //   - Attaches external databases (postgres, mysql) using ATTACH with appropriate secrets
 //   - Creates `CREATE OR REPLACE VIEW "<name>" AS <sourceSQL>` for each DataSource
 //   - Returns diagnostics for individual failures without aborting the entire operation
-func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.Document) ([]Diagnostic, error) {
+func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.Document, opts *ViewsOptions) ([]Diagnostic, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	var (
-		diags      []Diagnostic
-		extensions = map[string]struct{}{}
-		views      []viewDef
+		diags       []Diagnostic
+		extensions  = map[string]struct{}{}
+		views       []viewDef
+		inlineViews []inlineViewDef
 	)
 
-	// Collect all non-inline DataSource documents and determine required extensions
+	// Determine if we can handle inline sources
+	tempDir := ""
+	if opts != nil {
+		tempDir = opts.TempDir
+	}
+
+	// Collect all DataSource documents and determine required extensions
 	for _, doc := range docs {
 		if doc.Kind != "DataSource" {
 			continue
@@ -52,14 +67,27 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 			continue
 		}
 
-		// Skip inline sources - they don't need views
-		if spec.Type == sourceTypeInline {
-			continue
-		}
-
 		baseDir := filepath.Dir(doc.File)
 		spec.Name = doc.Name
 		spec.BaseDir = baseDir
+
+		// Handle inline sources separately
+		if spec.Type == sourceTypeInline {
+			// Skip inline sources if no tempDir is provided
+			if tempDir == "" {
+				continue
+			}
+			payload, err := spec.inlinePayload()
+			if err != nil {
+				diags = append(diags, diagnostic(doc.Name, "inline", err))
+				continue
+			}
+			inlineViews = append(inlineViews, inlineViewDef{
+				name:    doc.Name,
+				payload: payload,
+			})
+			continue
+		}
 
 		// Track required extensions
 		if ext := extensionForSource(spec.Type); ext != "" {
@@ -72,7 +100,7 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 		})
 	}
 
-	if len(views) == 0 {
+	if len(views) == 0 && len(inlineViews) == 0 {
 		return diags, nil
 	}
 
@@ -167,6 +195,18 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 		}
 	}
 
+	// Create views for inline DataSources
+	for _, iv := range inlineViews {
+		if err := ctx.Err(); err != nil {
+			return diags, err
+		}
+
+		if err := createInlineView(ctx, db, session, iv, tempDir); err != nil {
+			diags = append(diags, diagnostic(iv.name, "create view", err))
+			continue
+		}
+	}
+
 	return diags, nil
 }
 
@@ -174,6 +214,45 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 type viewDef struct {
 	name string
 	spec sourceSpec
+}
+
+// inlineViewDef holds the information needed to create a DuckDB view from inline data.
+type inlineViewDef struct {
+	name    string
+	payload json.RawMessage
+}
+
+// createInlineView creates a DuckDB view from inline data by writing to a temp CSV file.
+func createInlineView(ctx context.Context, db *sql.DB, session *duckdb.Session, iv inlineViewDef, tempDir string) error {
+	viewSQL, err := buildInlineViewSQL(iv.name, tempDir, iv.payload)
+	if err != nil {
+		return err
+	}
+
+	session.LogQuery(viewSQL)
+	viewStart := time.Now()
+	_, execErr := db.ExecContext(ctx, viewSQL)
+	viewDuration := time.Since(viewStart)
+
+	// Emit query execution metadata for CREATE VIEW statement
+	meta := duckdb.QueryExecMeta{
+		Query:      viewSQL,
+		QueryType:  "create_view",
+		Datasource: iv.name,
+		StartTime:  viewStart,
+		DurationMs: viewDuration.Milliseconds(),
+		RowCount:   0,
+	}
+	if execErr != nil {
+		meta.Error = execErr.Error()
+	}
+	session.LogQueryExec(meta)
+
+	if execErr != nil {
+		return fmt.Errorf("execute CREATE VIEW: %w", execErr)
+	}
+
+	return nil
 }
 
 // createView executes CREATE OR REPLACE VIEW for a single DataSource.

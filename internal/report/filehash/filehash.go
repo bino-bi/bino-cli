@@ -155,13 +155,21 @@ func ResolveAndHashFiles(baseDir, path, sourceType string) ([]FileDigest, error)
 // dataSourceSpec is a minimal representation of a DataSource manifest spec
 // for extracting the type, path, and ephemeral fields.
 type dataSourceSpec struct {
-	Type      string `json:"type"`
-	Path      string `json:"path"`
-	Ephemeral *bool  `json:"ephemeral,omitempty"`
+	Type      string          `json:"type"`
+	Path      string          `json:"path"`
+	Ephemeral *bool           `json:"ephemeral,omitempty"`
+	Inline    *inlineSpec     `json:"inline,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
+}
+
+// inlineSpec captures the inline content from a DataSource manifest.
+type inlineSpec struct {
+	Content json.RawMessage `json:"content"`
 }
 
 // HashDataSourceFiles computes a combined hash of all files referenced by a DataSource.
-// Returns an empty string for inline sources (no files) or database sources (ephemeral).
+// For inline sources, returns a hash of the inline content.
+// Returns an empty string for database sources (ephemeral).
 // For file-based sources (csv, excel, parquet), returns a SHA256 hash of all file hashes.
 func HashDataSourceFiles(doc config.Document) (string, error) {
 	if doc.Kind != "DataSource" {
@@ -183,8 +191,8 @@ func HashDataSourceFiles(doc config.Document) (string, error) {
 	case "csv", "excel", "parquet":
 		// Continue to hash files
 	case "inline":
-		// Inline sources have no external files
-		return "", nil
+		// Hash the inline content for cache invalidation
+		return hashInlineContent(spec)
 	case "postgres_query", "mysql_query", "postgres", "mysql":
 		// Database sources are ephemeral - return time-based hash to invalidate cache
 		return EphemeralHash(doc.Name + ":" + sourceType), nil
@@ -331,4 +339,24 @@ func IsEphemeralSource(doc config.Document, workdir string) bool {
 
 	// Local file inside workdir - not ephemeral (file watcher handles it)
 	return false
+}
+
+// hashInlineContent computes a hash of the inline datasource content.
+// This is used for cache invalidation when inline data changes.
+func hashInlineContent(spec dataSourceSpec) (string, error) {
+	// Get the inline content from either spec.Inline.Content or spec.Content
+	var content json.RawMessage
+	switch {
+	case spec.Inline != nil && len(spec.Inline.Content) > 0:
+		content = spec.Inline.Content
+	case len(spec.Content) > 0:
+		content = spec.Content
+	default:
+		// No inline content
+		return "", nil
+	}
+
+	// Hash the raw content bytes
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:]), nil
 }

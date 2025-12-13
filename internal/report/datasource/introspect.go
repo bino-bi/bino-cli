@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"bino.bi/bino/internal/report/config"
@@ -64,8 +65,17 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	}
 	defer session.Close()
 
+	// Create temp directory for inline datasource CSV files
+	tempDir, err := os.MkdirTemp("", "bino-introspect-")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
 	// Register all DataSources as views
-	_, err = RegisterViews(ctx, session, allDocs)
+	_, err = RegisterViews(ctx, session, allDocs, &ViewsOptions{
+		TempDir: tempDir,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("register views: %w", err)
 	}
