@@ -1,39 +1,44 @@
 ---
-title: bino documentation
+title: BinoBI CLI documentation
 description: Declarative report bundles with YAML and SQL.
 template: splash
 hero:
   tagline: Build pixel-perfect PDF reports from YAML and SQL.
   image:
-    file: ../../assets/houston.webp
+    file: ../../assets/landing_page.webp
   actions:
     - text: Get started
       link: /getting-started/installation/
       icon: rocket
     - text: Schema reference
-      link: /reference/datasource/
+      link: /reference/example-kinds/
       icon: document
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid } from "@astrojs/starlight/components";
 
 ## Explore bino
 
 <CardGrid stagger>
   <Card title="Getting started" icon="rocket">
-    Learn how to install <code>bino</code>, scaffold your first report bundle, and preview a PDF locally.
+    Learn how to install <code>bino</code>, scaffold your first report bundle,
+    and preview a PDF locally.
   </Card>
   <Card title="Core concepts" icon="layers">
-    Understand workdirs, manifests, and how datasources, datasets, layouts, and artefacts fit together.
+    Understand workdirs, manifests, and how datasources, datasets, layouts, and
+    artefacts fit together.
   </Card>
   <Card title="How-to guides" icon="pencil">
-    Follow practical, task-oriented guides for connecting data, designing layouts, styling, i18n, and signing PDFs.
+    Follow practical, task-oriented guides for connecting data, designing
+    layouts, styling, i18n, and signing PDFs.
   </Card>
   <Card title="Schema reference" icon="document">
-    Browse detailed reference pages for every <code>kind</code> in the bino schema, each with field descriptions and YAML samples.
+    Browse detailed reference pages for every <code>kind</code> in the bino
+    schema, each with field descriptions and YAML samples.
   </Card>
   <Card title="CLI commands" icon="terminal">
-    Learn how to use <code>bino init</code>, <code>bino preview</code>, <code>bino build</code>, and other commands in local development and CI.
+    Learn how to use <code>bino init</code>, <code>bino preview</code>,{" "}
+    <code>bino build</code>, and other commands in local development and CI.
   </Card>
 </CardGrid>
