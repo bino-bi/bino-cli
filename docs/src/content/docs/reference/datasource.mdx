@@ -24,13 +24,13 @@ kind: DataSource
 metadata:
   name: sales_csv
 spec:
-  type: csv           # inline | excel | csv | parquet | postgres_query | mysql_query
-  inline: {}          # for type: inline
-  content: []         # alternative inline content
-  path: ./data/*.csv  # for file-based types
-  connection: {}      # for database queries
-  query: ""          # SQL for postgres_query / mysql_query
-  ephemeral: false    # optional caching hint
+  type: csv # inline | excel | csv | parquet | postgres_query | mysql_query
+  inline: {} # for type: inline
+  content: [] # alternative inline content
+  path: ./data/*.csv # for file-based types
+  connection: {} # for database queries
+  query: "" # SQL for postgres_query / mysql_query
+  ephemeral: false # optional caching hint
 ```
 
 Type-specific rules (simplified from the schema):
