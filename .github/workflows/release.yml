@@ -290,7 +290,7 @@ jobs:
               "resource": "bino-bi",
               "actions": [
                 { "env": {
-                    "CLI_VERSION": "registry.ops.bino.bi/bino/homepage:${{ needs.resolve-tag.outputs.version }}"
+                    "CLI_VERSION": "${{ needs.resolve-tag.outputs.version }}"
                   }
                 }
               ]
