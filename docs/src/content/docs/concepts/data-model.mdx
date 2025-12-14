@@ -3,18 +3,18 @@ title: Data model
 description: How datasources, datasets, secrets, and external storage work together.
 ---
 
-bino uses DuckDB as an embedded analytical engine.
+bino uses an embedded analytical engine.
 `DataSource` and `DataSet` manifests describe how raw data becomes analytical tables used by layouts and reports.
 
-## Datasources as DuckDB views
+## Datasources as views
 
-Each `DataSource` creates a DuckDB view named after `metadata.name`.
+Each `DataSource` creates a view named after `metadata.name`.
 Depending on `spec.type`, bino loads data from:
 
 - Inline rows embedded in the manifest (`type: inline`)
 - Local files and directories (`type: csv`, `excel`, `parquet`)
 - Remote databases queried via SQL (`type: postgres_query`, `mysql_query`)
-- Object storage endpoints via DuckDB secrets (S3, GCS, R2, Azure, HTTP, HuggingFace)
+- Object storage endpoints via connection secrets (S3, GCS, R2, Azure, HTTP, HuggingFace)
 
 The `ephemeral` flag controls caching behavior:
 
@@ -26,11 +26,11 @@ See the [DataSource reference](/reference/datasource/) for full details.
 ## Datasets as derived tables
 
 `DataSet` manifests define SQL queries that run on top of datasources or other datasets.
-The query is executed in DuckDB, and the results are reused by layouts and charts.
+The query is executed in the query engine, and the results are reused by layouts and charts.
 
 Key ideas:
 
-- `spec.query` is DuckDB SQL; refer to datasources and datasets using their `metadata.name`.
+- `spec.query` is SQL; refer to datasources and datasets using their `metadata.name`.
 - `spec.dependencies` is an optional list of datasource names that must be materialized before the query runs.
 - Use dependencies to make relationships explicit and to help graph inspection.
 

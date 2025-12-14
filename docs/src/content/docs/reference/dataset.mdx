@@ -1,6 +1,6 @@
 ---
 title: DataSet
-description: Define derived tables with DuckDB SQL or PRQL.
+description: Define derived tables with SQL or PRQL.
 ---
 
 `DataSet` manifests describe derived tables built using SQL or [PRQL](https://prql-lang.org) (Pipelined Relational Query Language).
@@ -23,8 +23,8 @@ spec:
 
 Fields:
 
-- `spec.query` – DuckDB SQL query. Required if `spec.prql` is not set.
-- `spec.prql` – [PRQL](https://prql-lang.org) query. When set, takes precedence over `spec.query`. The PRQL is sent directly to DuckDB which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
+- `spec.query` – SQL query. Required if `spec.prql` is not set.
+- `spec.prql` – [PRQL](https://prql-lang.org) query. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
 - `spec.dependencies` – optional list of datasource names that must be materialized before the query runs.
 
 ## Simple aggregation
@@ -99,7 +99,7 @@ Datasets are referenced from layouts via their `metadata.name` using the `datase
 
 [PRQL](https://prql-lang.org) is a modern language for transforming data that compiles to SQL. It offers a more readable, pipeline-based syntax compared to traditional SQL.
 
-When you specify `spec.prql`, bino automatically loads the [DuckDB PRQL extension](https://duckdb.org/community_extensions/extensions/prql) and sends your PRQL query directly to DuckDB for compilation and execution.
+When you specify `spec.prql`, bino automatically loads the [PRQL extension](https://duckdb.org/community_extensions/extensions/prql) and sends your PRQL query directly to the query engine for compilation and execution.
 
 ### Simple PRQL example
 

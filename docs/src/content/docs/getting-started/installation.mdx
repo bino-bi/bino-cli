@@ -6,6 +6,8 @@ description: Install the bino CLI and verify your setup.
 bino is a command-line tool for building pixel-perfect PDF reports from YAML and SQL.
 This page shows how to install the binary on common platforms and confirm that everything works.
 
+import { Aside } from '@astrojs/starlight/components';
+
 ## Supported platforms
 
 bino provides pre-built binaries for:
@@ -15,6 +17,10 @@ bino provides pre-built binaries for:
 - Windows x86_64
 
 ## Install using the bundled installer script (recommended)
+
+<Aside type="note">
+  The installer script currently supports **Linux** and **macOS**. Windows users should download the binary manually or use WSL.
+</Aside>
 
 An `install.sh` asset is published with releases. It automatically detects your OS/architecture, downloads the appropriate archive, verifies the SHA-256 checksum (if present), and installs the `bino` binary.
 
