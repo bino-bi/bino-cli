@@ -8,8 +8,14 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
-			plugins: [ starlightThemeNova(/* options */)],
+			plugins: [ starlightThemeNova({
+				nav: [
+					{ label: 'CLI', href: '/cli' },
+					{ label: 'Reference', href: '/reference' }
+				]
+			})],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/bino-bi/bino-cli-releases' }],
+			lastUpdated: true,
 			sidebar: [
 				{
 					label: 'Getting started',
