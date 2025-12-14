@@ -7,9 +7,9 @@ import starlightThemeNova from 'starlight-theme-nova';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'bino docs',
+			title: 'BinoBI CLI',
 			plugins: [ starlightThemeNova(/* options */)],
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/withastro/starlight' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/bino-bi/bino-cli-releases' }],
 			sidebar: [
 				{
 					label: 'Getting started',
