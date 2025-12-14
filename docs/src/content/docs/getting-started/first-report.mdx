@@ -3,68 +3,87 @@ title: Your first report
 description: Scaffold, preview, and build a simple bino report bundle.
 ---
 
+import { Steps, Aside } from '@astrojs/starlight/components';
+
 This guide walks through creating a new report bundle, previewing it in the browser, and exporting a PDF.
 It assumes you have `bino` installed and available on your `PATH`.
 
-## 1. Create a new workdir
+<Steps>
 
-A **workdir** is the root directory of a report bundle.
-Create a fresh folder and run `bino init`:
+1.  **Create a new workdir**
 
-```bash
-mkdir my-report
-cd my-report
-bino init
-```
+    A **workdir** is the root directory of a report bundle.
+    Run `bino init` to scaffold a new project. By default, it creates a directory named `rainbow-report`.
 
-Without flags, `bino init` asks a few questions (target directory, report name, title, language).
-Use `-y` / `--yes` to accept defaults non-interactively.
+    ```bash
+    bino init
+    ```
 
-## 2. Inspect the generated files
+    Without flags, `bino init` asks a few questions (target directory, report name, title, language).
+    Use `-y` / `--yes` to accept defaults non-interactively.
 
-After initialization, the workdir contains YAML manifests, data files, and helper files.
-Typical contents include:
+    <Aside>
+    You can specify a custom directory name using the `--directory` flag:
+    ```bash
+    bino init --directory my-report
+    ```
+    </Aside>
 
-- One or more `ReportArtefact` manifests describing the report outputs
-- `DataSource` and `DataSet` manifests defining input data and SQL transforms
-- At least one `LayoutPage` describing page layout
-- `ComponentStyle` and `Internationalization` manifests for styling and translations
-- A `.gitignore` tuned for bino caches and build artefacts
+2.  **Inspect the generated files**
 
-Use your editor to explore these files.
-The manifests all share `apiVersion: bino.bi/v1alpha1` and a `kind` that selects the spec.
+    Navigate into the newly created directory:
 
-## 3. Preview the report
+    ```bash
+    cd rainbow-report
+    ```
 
-Start a live preview server from the workdir:
+    After initialization, the workdir contains YAML manifests, data files, and helper files.
+    Typical contents include:
 
-```bash
-bino preview
-```
+    - One or more `ReportArtefact` manifests describing the report outputs
+    - `DataSource` and `DataSet` manifests defining input data and SQL transforms
+    - At least one `LayoutPage` describing page layout
+    - `ComponentStyle` and `Internationalization` manifests for styling and translations
+    - A `.gitignore` tuned for bino caches and build artefacts
 
-bino scans the directory for manifests, starts a local HTTP server (by default `http://127.0.0.1:45678/`), and opens your default browser.
-As you edit YAML or data files, it reloads the preview automatically.
+    Use your editor to explore these files.
+    The manifests all share `apiVersion: bino.bi/v1alpha1` and a `kind` that selects the spec.
 
-> Tip: run `bino preview --log-sql` to see the DuckDB queries used to populate datasets.
+3.  **Preview the report**
 
-## 4. Build a PDF
+    Start a live preview server from the workdir:
 
-When you are happy with the preview, export a PDF:
+    ```bash
+    bino preview
+    ```
 
-```bash
-bino build
-```
+    bino scans the directory for manifests, starts a local HTTP server (by default `http://127.0.0.1:45678/`), and opens your default browser.
+    As you edit YAML or data files, it reloads the preview automatically.
 
-This runs schema validation, executes datasets in DuckDB, renders HTML for each report artefact, and converts the pages to PDF using Playwright.
-By default, PDFs are written into a `dist/` directory under the workdir.
+    <Aside type="tip">
+    Run `bino preview --log-sql` to see the SQL queries used to populate datasets.
+    </Aside>
 
-Example using a custom output directory:
+4.  **Build a PDF**
 
-```bash
-bino build --out-dir dist/reports
-```
+    When you are happy with the preview, export a PDF:
 
-## 5. Where to go next
+    ```bash
+    bino build
+    ```
+
+    This runs schema validation, executes datasets in the embedded query engine, renders HTML for each report artefact, and converts the pages to PDF using the rendering engine.
+    By default, PDFs are written into a `dist/` directory under the workdir.
+
+    Example using a custom output directory:
+
+    ```bash
+    bino build --out-dir dist/reports
+    ```
+
+</Steps>
+
+## Where to go next
 
 - Learn about [workdirs and manifests](/concepts/workdir-and-manifests/).
 - Explore the [schema reference](/reference/report-artefact/) to understand each `kind` in detail.

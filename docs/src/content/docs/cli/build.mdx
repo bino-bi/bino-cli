@@ -4,7 +4,7 @@ description: Validate manifests, execute datasets, and export PDFs.
 ---
 
 `bino build` is the main command for producing PDFs from your report bundle.
-It validates manifests, runs SQL in DuckDB, and renders PDFs via Playwright.
+It validates manifests, runs SQL in the embedded query engine, and renders PDFs via the rendering engine.
 
 ## Usage
 
@@ -18,7 +18,7 @@ Common flags:
 - `--out-dir` – output directory relative to workdir (default: `dist`).
 - `--include` – build only specified report names (can be repeated).
 - `--exclude` – skip specified report names (can be repeated).
-- `--browser` – browser engine for Playwright (for example `chromium`, `firefox`, `webkit`).
+- `--browser` – browser engine for the rendering runtime (for example `chromium`, `firefox`, `webkit`).
 - `--no-graph` – skip writing dependency graph files.
 - `--log-sql` – log executed SQL queries.
 

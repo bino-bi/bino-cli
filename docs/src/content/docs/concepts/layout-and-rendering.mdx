@@ -4,7 +4,7 @@ description: How layouts, components, assets, and artefacts become a rendered PD
 ---
 
 Layout manifests describe how data turns into visual pages and cards.
-The bino CLI renders HTML layouts and uses Playwright to convert them into high-quality PDFs.
+The bino CLI renders HTML layouts and uses a browser runtime to convert them into high-quality PDFs.
 
 ## Layout building blocks
 
@@ -26,10 +26,10 @@ bino distinguishes several layout-related kinds:
 
 At a high level, the rendering flow is:
 
-1. `bino build` validates manifests and executes datasets in DuckDB.
+1. `bino build` validates manifests and executes datasets in the query engine.
 2. bino passes layout specs (`LayoutPage`, `LayoutCard`, child components) and data to the front-end renderer.
 3. The renderer produces HTML for each report artefact.
-4. Playwright runs a real browser (for example Chromium) to export HTML pages as PDFs.
+4. The rendering engine runs a real browser (for example Chromium) to export HTML pages as PDFs.
 
 This approach ensures consistent typography and layout across platforms.
 Use `bino playwright install` to install the required browser runtimes.

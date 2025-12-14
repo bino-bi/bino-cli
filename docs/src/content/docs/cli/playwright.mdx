@@ -3,7 +3,7 @@ title: bino playwright install
 description: Install browser runtimes used for PDF rendering.
 ---
 
-bino relies on Playwright and real browser runtimes to render PDFs.
+bino relies on a browser runtime to render PDFs.
 Use `bino playwright install` to download and configure these dependencies.
 
 ## Usage
@@ -15,7 +15,7 @@ bino playwright install [flags]
 Common flags:
 
 - `--browser` – one or more browsers to install (for example `chromium`).
-- `--driver-dir` – custom directory for the Playwright driver and cache.
+- `--driver-dir` – custom directory for the rendering driver and cache.
 - `--dry-run` – show what would be installed without actually downloading.
 - `--quiet` – reduce output noise.
 
@@ -33,4 +33,4 @@ Install multiple browsers:
 bino playwright install --browser chromium --browser firefox
 ```
 
-If builds fail with Playwright or browser errors, rerun this command and verify that your environment has network and disk access.
+If builds fail with rendering or browser errors, rerun this command and verify that your environment has network and disk access.
