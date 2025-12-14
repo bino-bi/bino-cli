@@ -16,6 +16,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Installation', slug: 'getting-started/installation' },
 						{ label: 'Your first report', slug: 'getting-started/first-report' },
+						// { label: 'Vscode Extension', slug: 'getting-started/vscode-extension' },
 					],
 				},
 				{
