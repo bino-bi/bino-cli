@@ -137,11 +137,10 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
             const lineIndent = this.getIndentation(line);
 
             // Found kind field at same or parent level
-            if (trimmed.startsWith('kind:') && lineIndent <= currentIndent) {
-                const match = trimmed.match(/^kind:\s*["']?(\w+)["']?/);
-                if (match) {
-                    return match[1];
-                }
+            // Handle both "kind:" and "- kind:" (YAML array items)
+            const kindMatch = trimmed.match(/^(?:-\s+)?kind:\s*["']?(\w+)["']?/);
+            if (kindMatch && lineIndent <= currentIndent) {
+                return kindMatch[1];
             }
 
             // Stop if we hit a different block (children array start or parent object)
