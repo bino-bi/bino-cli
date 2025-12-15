@@ -65,7 +65,7 @@ jobs:
 
   build-vscode-extension:
     name: Build VS Code Extension
-    needs: [resolve-tag]
+    needs: [resolve-tag, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -102,10 +102,10 @@ jobs:
           path: vscode-bino/vscode-bino.vsix
           retention-days: 30
       - name: Publish to VS Code Marketplace
+        working-directory: vscode-bino
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }} 
-
+        run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }}
 
   # Build binaries on native runners for each platform (CGO required for duckdb-go)
   build:
