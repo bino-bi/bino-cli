@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
 )
 
@@ -29,6 +30,10 @@ type builder struct {
 	dataSourceIndex map[string]string
 	dataSetIndex    map[string]string
 
+	// docIndex maps kind+name to the document for ref resolution.
+	// Key format: "Kind:Name" (e.g., "ChartTime:sampleTimeChart").
+	docIndex map[string]config.Document
+
 	layoutRootIDs          []string
 	standaloneComponentIDs []string
 	artefactIDs            []string
@@ -43,6 +48,7 @@ func newBuilder(ctx context.Context, docs []config.Document, opts BuildOptions) 
 		componentDocs:          make(map[string][]config.Document),
 		dataSourceIndex:        make(map[string]string),
 		dataSetIndex:           make(map[string]string),
+		docIndex:               make(map[string]config.Document),
 		layoutRootIDs:          nil,
 		artefactIDs:            nil,
 		standaloneComponentIDs: nil,
@@ -96,6 +102,13 @@ func (b *builder) Build() (*Graph, error) {
 
 func (b *builder) categorize() {
 	for _, doc := range b.docs {
+		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
+		switch doc.Kind {
+		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+			key := doc.Kind + ":" + doc.Name
+			b.docIndex[key] = doc
+		}
+
 		switch doc.Kind {
 		case "DataSource":
 			b.dataSourceDocs = append(b.dataSourceDocs, doc)
@@ -243,14 +256,28 @@ func (b *builder) buildLayoutChildren(parentName, file string, children []layout
 }
 
 func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, path []int) (string, error) {
+	// Resolve ref to get the effective spec (base from referenced doc + overrides from child).
+	effectiveSpec, effectiveFile, err := b.resolveChildSpec(parentName, child)
+	if err != nil {
+		return "", err
+	}
+	// If ref resolution returned nil (missing ref), skip this child.
+	if effectiveSpec == nil {
+		return "", nil
+	}
+	// Use resolved file if available, otherwise fall back to parent file.
+	if effectiveFile == "" {
+		effectiveFile = file
+	}
+
 	switch child.Kind {
 	case "LayoutCard":
 		var spec layoutSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
+		if err := json.Unmarshal(effectiveSpec, &spec); err != nil {
 			var wrapper struct {
 				Spec layoutSpec `json:"spec"`
 			}
-			if errWrap := json.Unmarshal(child.Spec, &wrapper); errWrap != nil {
+			if errWrap := json.Unmarshal(effectiveSpec, &wrapper); errWrap != nil {
 				return "", fmt.Errorf("layout card child: %w", err)
 			}
 			spec = wrapper.Spec
@@ -262,11 +289,11 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 			Kind:       NodeLayoutCard,
 			Name:       name,
 			Label:      fmt.Sprintf("LayoutCard %s", name),
-			File:       file,
+			File:       effectiveFile,
 			Attributes: map[string]string{"parent": parentName},
-			baseDigest: hashBytes(child.Spec),
+			baseDigest: hashBytes(effectiveSpec),
 		}
-		children, err := b.buildLayoutChildren(parentName, file, spec.Children, path)
+		children, err := b.buildLayoutChildren(parentName, effectiveFile, spec.Children, path)
 		if err != nil {
 			return "", err
 		}
@@ -275,7 +302,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 		return id, nil
 	case "Text", "Table", "ChartStructure", "ChartTime", "Image":
 		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(path))
-		node, err := b.buildComponentNode(child.Kind, child.Spec, file, label, fmt.Sprintf("%s#%s", parentName, pathKey(path)))
+		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(path)))
 		if err != nil {
 			return "", err
 		}
@@ -285,6 +312,100 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 	default:
 		return "", fmt.Errorf("unsupported child kind %q", child.Kind)
 	}
+}
+
+// resolveChildSpec resolves a layout child's effective spec.
+// For inline children (no ref), it returns child.Spec directly.
+// For ref children, it looks up the referenced document and merges any spec overrides.
+// Returns (nil, "", nil) if the ref is missing (skip with warning).
+// Returns an error if the ref points to LayoutPage (disallowed) or has a kind mismatch.
+func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.RawMessage, string, error) {
+	// Inline child: no ref, just return spec directly.
+	if child.Ref == "" {
+		return child.Spec, "", nil
+	}
+
+	// Ref child: look up the referenced document.
+	key := child.Kind + ":" + child.Ref
+	refDoc, found := b.docIndex[key]
+	if !found {
+		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
+		if lpDoc, lpFound := b.docIndex["LayoutPage:"+child.Ref]; lpFound {
+			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced",
+				parentName, child.Ref, lpDoc.Name)
+		}
+		// Missing ref: warn and skip.
+		log := logx.FromContext(b.ctx).Channel("graph")
+		log.Warnf("layout child in %q: ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
+		return nil, "", nil
+	}
+
+	// Extract the spec from the referenced document.
+	var refPayload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+		return nil, "", fmt.Errorf("layout child in %q: failed to parse ref %q spec: %w", parentName, child.Ref, err)
+	}
+
+	// If no overrides, return the referenced spec directly.
+	if len(child.Spec) == 0 || string(child.Spec) == "null" {
+		return refPayload.Spec, refDoc.File, nil
+	}
+
+	// Merge: referenced spec as base, child.Spec as overrides.
+	mergedSpec, err := mergeJSONObjects(refPayload.Spec, child.Spec)
+	if err != nil {
+		return nil, "", fmt.Errorf("layout child in %q: failed to merge ref %q with overrides: %w", parentName, child.Ref, err)
+	}
+	return mergedSpec, refDoc.File, nil
+}
+
+// mergeJSONObjects performs a deep merge of two JSON objects.
+// Values from override replace values in base. Objects are merged recursively.
+// Arrays are replaced entirely (not merged element-by-element).
+func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
+	var baseMap map[string]json.RawMessage
+	var overrideMap map[string]json.RawMessage
+
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		return nil, fmt.Errorf("base is not a JSON object: %w", err)
+	}
+	if err := json.Unmarshal(override, &overrideMap); err != nil {
+		return nil, fmt.Errorf("override is not a JSON object: %w", err)
+	}
+
+	result := make(map[string]json.RawMessage, len(baseMap)+len(overrideMap))
+	for k, v := range baseMap {
+		result[k] = v
+	}
+
+	for k, overrideVal := range overrideMap {
+		baseVal, hasBase := result[k]
+		if !hasBase {
+			result[k] = overrideVal
+			continue
+		}
+
+		// Check if both are objects for recursive merge.
+		var baseObj map[string]json.RawMessage
+		var overrideObj map[string]json.RawMessage
+		baseIsObj := json.Unmarshal(baseVal, &baseObj) == nil && baseObj != nil
+		overrideIsObj := json.Unmarshal(overrideVal, &overrideObj) == nil && overrideObj != nil
+
+		if baseIsObj && overrideIsObj {
+			merged, err := mergeJSONObjects(baseVal, overrideVal)
+			if err != nil {
+				return nil, err
+			}
+			result[k] = merged
+		} else {
+			// Override replaces base (including arrays).
+			result[k] = overrideVal
+		}
+	}
+
+	return json.Marshal(result)
 }
 
 func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, label, name string) (*Node, error) {

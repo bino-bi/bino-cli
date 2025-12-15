@@ -64,6 +64,11 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             return this.getAssetCompletions();
         }
 
+        // Check for ref field in layout children
+        if (this.isRefField(linePrefix)) {
+            return this.getRefCompletions(document, position);
+        }
+
         return undefined;
     }
 
@@ -119,6 +124,11 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
     private isSourceField(linePrefix: string): boolean {
         const trimmed = linePrefix.trim();
         return trimmed === 'source:' || trimmed.startsWith('source: ');
+    }
+
+    private isRefField(linePrefix: string): boolean {
+        const trimmed = linePrefix.trim();
+        return trimmed === 'ref:' || trimmed.startsWith('ref: ');
     }
 
     private getIndentation(line: string): number {
@@ -202,6 +212,91 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             item.documentation = new vscode.MarkdownString(`Reference to Asset document \`${name}\``);
             return item;
         });
+    }
+
+    /**
+     * Get completions for the ref field in layout children.
+     * Suggests document names that match the kind of the current child.
+     */
+    private getRefCompletions(
+        document: vscode.TextDocument,
+        position: vscode.Position
+    ): vscode.CompletionItem[] {
+        // Find the kind of the current layout child
+        const childKind = this.findLayoutChildKind(document, position);
+        if (!childKind) {
+            // If we can't determine the kind, show all referenceable kinds
+            return this.getAllRefCompletions();
+        }
+
+        // Get documents of the matching kind (excluding LayoutPage which can't be referenced)
+        if (childKind === 'LayoutPage') {
+            return []; // LayoutPage cannot be referenced
+        }
+
+        const docs = this.indexer.getDocuments([childKind]);
+        return docs.map(doc => {
+            const item = new vscode.CompletionItem(doc.name, vscode.CompletionItemKind.Reference);
+            item.detail = childKind;
+            item.documentation = new vscode.MarkdownString(
+                `Reference to ${childKind} document \`${doc.name}\`\n\nDefined in: ${doc.file}`
+            );
+            return item;
+        });
+    }
+
+    /**
+     * Get all documents that can be referenced in layout children.
+     */
+    private getAllRefCompletions(): vscode.CompletionItem[] {
+        const referenceableKinds = ['Text', 'Table', 'ChartStructure', 'ChartTime', 'LayoutCard', 'Image'];
+        const items: vscode.CompletionItem[] = [];
+
+        for (const kind of referenceableKinds) {
+            const docs = this.indexer.getDocuments([kind]);
+            for (const doc of docs) {
+                const item = new vscode.CompletionItem(doc.name, vscode.CompletionItemKind.Reference);
+                item.detail = kind;
+                item.documentation = new vscode.MarkdownString(
+                    `Reference to ${kind} document \`${doc.name}\`\n\nDefined in: ${doc.file}`
+                );
+                // Sort by kind then name
+                item.sortText = `${kind}_${doc.name}`;
+                items.push(item);
+            }
+        }
+
+        return items;
+    }
+
+    /**
+     * Find the kind of the layout child we're currently in.
+     * Looks backwards for a 'kind:' field at the same or parent indentation level.
+     */
+    private findLayoutChildKind(document: vscode.TextDocument, position: vscode.Position): string | undefined {
+        const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+
+        // Look backwards to find the kind field
+        for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 20; lineNum--) {
+            const line = document.lineAt(lineNum).text;
+            const trimmed = line.trim();
+            const lineIndent = this.getIndentation(line);
+
+            // Found kind field at same or parent level
+            if (trimmed.startsWith('kind:') && lineIndent <= currentIndent) {
+                const match = trimmed.match(/^kind:\s*["']?(\w+)["']?/);
+                if (match) {
+                    return match[1];
+                }
+            }
+
+            // Stop if we hit a different block (children array start or parent object)
+            if (lineIndent < currentIndent - 4 && trimmed && !trimmed.startsWith('#')) {
+                break;
+            }
+        }
+
+        return undefined;
     }
 
     private getKindCompletions(): vscode.CompletionItem[] {

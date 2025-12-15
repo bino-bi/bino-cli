@@ -1287,18 +1287,36 @@
     },
     "layoutChild": {
       "type": "object",
-      "required": ["kind", "spec"],
+      "required": ["kind"],
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "LayoutCard", "Image"]
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "LayoutCard", "Image"],
+          "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
           "$ref": "#/$defs/layoutChildMetadata",
-          "description": "Optional metadata for the inline child component, including name and constraints."
+          "description": "Optional metadata for the child component, including name and constraints."
         },
-        "spec": { "type": "object" }
+        "ref": {
+          "type": "string",
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used as the base, and any spec fields provided here act as overrides. The referenced document must have a kind matching this child's kind. LayoutPage cannot be referenced."
+        },
+        "spec": {
+          "type": "object",
+          "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
+        }
       },
+      "anyOf": [
+        {
+          "required": ["spec"],
+          "description": "Inline child: spec is required when ref is not provided."
+        },
+        {
+          "required": ["ref"],
+          "description": "Reference child: ref points to a standalone document. spec is optional for overrides."
+        }
+      ],
       "allOf": [
         {
           "if": {
