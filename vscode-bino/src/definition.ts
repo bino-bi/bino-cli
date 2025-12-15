@@ -45,6 +45,7 @@ const REFERENCE_PATTERNS: ReferencePattern[] = [
         keyPattern: /^\s*report:\s*/,
         kinds: ['ReportArtefact']
     }
+    // Note: ref: is handled specially in provideDefinition to use child's kind field
 ];
 
 /**
@@ -82,6 +83,16 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
             return this.findDefinition(word, ['DataSource', 'DataSet']);
         }
 
+        // Special handling for ref: field - determine kinds from layout child's kind field
+        if (/^\s*ref:\s*/.test(line)) {
+            const childKind = this.findLayoutChildKind(document, position);
+            if (childKind && childKind !== 'LayoutPage') {
+                return this.findDefinition(word, [childKind]);
+            }
+            // Fall back to all referenceable kinds
+            return this.findDefinition(word, ['Text', 'Table', 'ChartStructure', 'ChartTime', 'LayoutCard', 'Image']);
+        }
+
         // Check each reference pattern
         for (const pattern of REFERENCE_PATTERNS) {
             if (pattern.keyPattern.test(line)) {
@@ -112,6 +123,35 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
         return undefined;
     }
 
+    /**
+     * Find the kind of the layout child we're currently in.
+     * Looks backwards for a 'kind:' field at the same or parent indentation level.
+     */
+    private findLayoutChildKind(document: vscode.TextDocument, position: vscode.Position): string | undefined {
+        const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+
+        // Look backwards to find the kind field
+        for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 20; lineNum--) {
+            const line = document.lineAt(lineNum).text;
+            const trimmed = line.trim();
+            const lineIndent = this.getIndentation(line);
+
+            // Found kind field at same or parent level
+            if (trimmed.startsWith('kind:') && lineIndent <= currentIndent) {
+                const match = trimmed.match(/^kind:\s*["']?(\w+)["']?/);
+                if (match) {
+                    return match[1];
+                }
+            }
+
+            // Stop if we hit a different block (children array start or parent object)
+            if (lineIndent < currentIndent - 4 && trimmed && !trimmed.startsWith('#')) {
+                break;
+            }
+        }
+
+        return undefined;
+    }
     /**
      * Check if the cursor is within a dependencies array.
      */

@@ -92,3 +92,41 @@ spec:
 ```
 
 Use cards to keep layout definitions modular and to reuse card patterns across multiple reports.
+
+## Referencing standalone cards
+
+You can define `LayoutCard` as a standalone document and reference it from a `LayoutPage` using `ref`. This enables card reuse across multiple pages.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: revenue_card
+spec:
+  titleBusinessUnit: "Sales"
+  cardLayout: full
+  children:
+    - kind: ChartTime
+      spec:
+        dataset: revenue_monthly
+        chartTitle: "Monthly revenue"
+        type: line
+
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard_page
+spec:
+  pageLayout: 2x2
+  children:
+    - kind: LayoutCard
+      ref: revenue_card
+    - kind: LayoutCard
+      ref: revenue_card
+      spec:
+        titleBusinessUnit: "Marketing" # Override the business unit
+```
+
+See the [LayoutPage reference](/reference/layout-page/#referencing-standalone-components) for more details on ref syntax and override behavior.
