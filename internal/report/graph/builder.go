@@ -104,7 +104,7 @@ func (b *builder) categorize() {
 	for _, doc := range b.docs {
 		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
 		switch doc.Kind {
-		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset":
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
 		}
@@ -118,7 +118,7 @@ func (b *builder) categorize() {
 			b.layoutPageDocs = append(b.layoutPageDocs, doc)
 		case "LayoutCard":
 			b.layoutCardDocs = append(b.layoutCardDocs, doc)
-		case "Text", "Table", "ChartStructure", "ChartTime":
+		case "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset":
 			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
@@ -187,7 +187,7 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime"}
+	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset"}
 	for _, kind := range kinds {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {

@@ -498,6 +498,23 @@ func findGraphNode(g *graph.Graph, kind, name string) *graph.Node {
 		return nil
 	}
 
+	// Check if this is a component kind (Text, Asset, ChartTime, etc.)
+	// Components are stored with Kind=NodeComponent and componentKind in attributes
+	componentKinds := map[string]bool{
+		"Text": true, "Table": true, "ChartStructure": true,
+		"ChartTime": true, "Image": true, "Asset": true,
+	}
+	if componentKinds[kind] {
+		for _, node := range g.Nodes {
+			if node.Kind == graph.NodeComponent &&
+				node.Attributes["componentKind"] == kind &&
+				node.Name == name {
+				return node
+			}
+		}
+		return nil
+	}
+
 	// For other kinds, scan all nodes
 	targetKind := graph.NodeKind(kind)
 	for _, node := range g.Nodes {

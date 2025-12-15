@@ -1307,16 +1307,14 @@
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
         }
       },
-      "anyOf": [
-        {
-          "required": ["spec"],
-          "description": "Inline child: spec is required when ref is not provided."
-        },
-        {
-          "required": ["ref"],
-          "description": "Reference child: ref points to a standalone document. spec is optional for overrides."
+      "if": {
+        "not": {
+          "required": ["ref"]
         }
-      ],
+      },
+      "then": {
+        "required": ["spec"]
+      },
       "allOf": [
         {
           "if": {
