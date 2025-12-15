@@ -74,8 +74,8 @@ func newRootCommand() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "bino",
-		Short: "Generate report bundles for bino rainbows",
-		Long:  "bino orchestrates DuckDB data collection and Playwright rendering pipelines for report automation.",
+		Short: "Generate report bundles for BinoBI",
+		Long:  "bino orchestrates data collection and rendering pipelines for report automation.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
