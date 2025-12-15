@@ -2,11 +2,11 @@
   "name": "vscode-bino",
   "displayName": "Bino Reports",
   "description": "Enhanced YAML editing for Bino report manifests with intelligent autocompletion",
-  "version": "0.1.0",
-  "publisher": "bino",
+  "version": "0.25.0",
+  "publisher": "BinoBI",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bino-bi/bino-cli"
+    "url": "https://github.com/bino-bi/bino-cli-releases"
   },
   "engines": {
     "vscode": "^1.85.0"
