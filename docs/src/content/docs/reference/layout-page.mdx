@@ -106,3 +106,65 @@ spec:
 ```
 
 Later you can add more components or convert parts of the page into `LayoutCard` children.
+
+## Referencing standalone components
+
+Instead of inlining the full `spec` for each child, you can reference standalone document manifests by name using the `ref` field. This enables component reuse across multiple pages and cleaner separation of concerns.
+
+### Basic reference
+
+```yaml
+# Define a reusable chart as a standalone document
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: salesTrendChart
+spec:
+  dataset: monthly_sales
+  chartTitle: "Monthly Sales Trend"
+  dateInterval: month
+  level: category
+
+---
+# Reference it in a LayoutPage
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: 2x2
+  children:
+    - kind: ChartTime
+      ref: salesTrendChart
+```
+
+### Reference with overrides
+
+You can override specific fields from the referenced document by providing a partial `spec`. The override is deep-merged with the base spec (objects merge recursively, arrays replace entirely).
+
+```yaml
+children:
+  - kind: ChartTime
+    ref: salesTrendChart
+    spec:
+      chartTitle: "Q4 Sales Trend" # Override just the title
+      dateInterval: quarter # Override the interval
+```
+
+### Supported reference targets
+
+You can reference documents of these kinds:
+
+- `Text`
+- `Table`
+- `ChartStructure`
+- `ChartTime`
+- `LayoutCard`
+- `Image`
+
+**Note:** `LayoutPage` cannot be referenced. Each page must be a root document.
+
+### Missing references
+
+If a referenced document is not found (e.g., filtered out by constraints or simply doesn't exist), the child is silently skipped and a warning is logged. This allows constraint-based filtering to work naturally with referenced components.

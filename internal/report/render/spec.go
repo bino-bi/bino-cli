@@ -111,10 +111,14 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 }
 
 // layoutChild represents a child component within a layout.
+// It can be either an inline child (with spec) or a reference to a standalone document (with ref).
+// When ref is set, the referenced document's spec is used as the base,
+// and any spec fields provided here act as overrides.
 type layoutChild struct {
 	Kind     string          `json:"kind"`
 	Metadata layoutChildMeta `json:"metadata"`
-	Spec     json.RawMessage `json:"spec"`
+	Ref      string          `json:"ref,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 
 // layoutChildMeta holds metadata for inline layout children.

@@ -219,10 +219,13 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 		segments = append(segments, ds...)
 	}
 
+	// Create render context for layout children ref resolution.
+	rc := newRenderCtx(ctx, docs, constraintCtx)
+
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, constraintCtx)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, rc)
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}
@@ -230,8 +233,10 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "Table":
-			return Result{}, diags, &InvalidRootError{Kind: doc.Kind, Name: doc.Name}
+		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "Table", "Image":
+			// These kinds can be referenced as layout children but cannot be rendered as root.
+			// Skip them silently - they will be rendered when referenced via ref in a LayoutPage.
+			continue
 		}
 	}
 
@@ -304,10 +309,13 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		segments = append(segments, ds...)
 	}
 
+	// Create render context for layout children ref resolution.
+	rc := newRenderCtx(ctx, docs, constraintCtx)
+
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, constraintCtx)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, rc)
 			if err != nil {
 				return FrameResult{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}
@@ -315,8 +323,10 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "Table":
-			return FrameResult{}, diags, &InvalidRootError{Kind: doc.Kind, Name: doc.Name}
+		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "Table", "Image":
+			// These kinds can be referenced as layout children but cannot be rendered as root.
+			// Skip them silently - they will be rendered when referenced via ref in a LayoutPage.
+			continue
 		}
 	}
 

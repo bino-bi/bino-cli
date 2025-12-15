@@ -70,9 +70,13 @@ type layoutSpec struct {
 }
 
 // layoutChild represents a single child element within a layout.
+// It can be either an inline child (with spec) or a reference to a standalone document (with ref).
+// When ref is set, the referenced document's spec is used as the base,
+// and any spec fields provided here act as overrides.
 type layoutChild struct {
 	Kind string          `json:"kind"`
-	Spec json.RawMessage `json:"spec"`
+	Ref  string          `json:"ref,omitempty"`
+	Spec json.RawMessage `json:"spec,omitempty"`
 }
 
 // parseDataSourceSpec extracts the spec from a DataSource manifest.
