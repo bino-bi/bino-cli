@@ -34,13 +34,13 @@ func printAbout(w io.Writer) {
 	fmt.Fprintf(w, "    %s %s\n", SymbolBullet, version.BuildSummary())
 	fmt.Fprintln(w)
 
-	// Project details
-	s.Bold.Fprintf(w, "  Project\n")
-	fmt.Fprintf(w, "    %s URL:     %s\n", SymbolBullet, AppMetadata.URL)
-	fmt.Fprintf(w, "    %s Author:  %s <%s>\n", SymbolBullet, AppMetadata.Author, AppMetadata.Email)
-	fmt.Fprintf(w, "    %s Years:   %s\n", SymbolBullet, AppMetadata.Years)
-	fmt.Fprintf(w, "    %s License: %s\n", SymbolBullet, AppMetadata.License)
-	fmt.Fprintln(w)
+	// // Project details
+	// s.Bold.Fprintf(w, "  Project\n")
+	// fmt.Fprintf(w, "    %s URL:     %s\n", SymbolBullet, AppMetadata.URL)
+	// fmt.Fprintf(w, "    %s Author:  %s <%s>\n", SymbolBullet, AppMetadata.Author, AppMetadata.Email)
+	// fmt.Fprintf(w, "    %s Years:   %s\n", SymbolBullet, AppMetadata.Years)
+	// fmt.Fprintf(w, "    %s License: %s\n", SymbolBullet, AppMetadata.License)
+	// fmt.Fprintln(w)
 
 	// Dependencies
 	s.Bold.Fprintf(w, "  Dependencies (%d direct)\n", len(DirectDependencies))
