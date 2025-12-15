@@ -72,13 +72,3 @@ For the best PRQL editing experience, install the [PRQL extension](https://marke
    - `signingProfile:` → Lists all SigningProfile names
 4. **Go to Definition** works on reference fields - Ctrl+Click to navigate
 5. File changes trigger cache invalidation and re-indexing
-
-## Development
-
-```bash
-cd vscode-bino
-npm install
-npm run compile
-```
-
-Press F5 to launch the Extension Development Host.

@@ -101,6 +101,11 @@ jobs:
           name: vscode-extension
           path: vscode-bino/vscode-bino.vsix
           retention-days: 30
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }} 
+
 
   # Build binaries on native runners for each platform (CGO required for duckdb-go)
   build:
