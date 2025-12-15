@@ -1,15 +1,45 @@
 package render
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
 	"strings"
 
+	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/spec"
 )
+
+// renderCtx holds context needed for rendering layout children with ref support.
+type renderCtx struct {
+	ctx           context.Context
+	docs          []config.Document
+	constraintCtx *spec.ConstraintContext
+	// docIndex maps kind+name to the document for ref resolution.
+	docIndex map[string]config.Document
+}
+
+// newRenderCtx creates a render context with a doc index for ref resolution.
+func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext) *renderCtx {
+	rc := &renderCtx{
+		ctx:           ctx,
+		docs:          docs,
+		constraintCtx: constraintCtx,
+		docIndex:      make(map[string]config.Document, len(docs)),
+	}
+	for _, doc := range docs {
+		switch doc.Kind {
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+			key := doc.Kind + ":" + doc.Name
+			rc.docIndex[key] = doc
+		}
+	}
+	return rc
+}
 
 // renderDatasources generates bn-datasource elements for collected data.
 func renderDatasources(results []datasource.Result) []string {
@@ -132,7 +162,7 @@ func renderFontLinks(fonts []fontAsset) string {
 }
 
 // renderLayoutPage renders a LayoutPage document as HTML.
-func renderLayoutPage(raw json.RawMessage, targetFormat string, constraintCtx *spec.ConstraintContext) (string, bool, error) {
+func renderLayoutPage(raw json.RawMessage, targetFormat string, rc *renderCtx) (string, bool, error) {
 	var payload struct {
 		Spec layoutPageSpec `json:"spec"`
 	}
@@ -144,7 +174,7 @@ func renderLayoutPage(raw json.RawMessage, targetFormat string, constraintCtx *s
 		return "", false, nil
 	}
 
-	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, constraintCtx)
+	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, rc)
 	if err != nil {
 		return "", false, err
 	}
@@ -152,27 +182,32 @@ func renderLayoutPage(raw json.RawMessage, targetFormat string, constraintCtx *s
 }
 
 // renderLayoutContainer renders a layout container (page or card) as HTML.
-func renderLayoutContainer(tag string, spec layoutPageSpec, constraintCtx *spec.ConstraintContext) (string, error) {
+func renderLayoutContainer(tag string, pageSpec layoutPageSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<")
 	b.WriteString(tag)
-	spec.writeAttrs(&b)
+	pageSpec.writeAttrs(&b)
 	b.WriteString(">\n")
 
 	// Filter children by constraints
-	filteredChildren, err := filterChildrenByConstraints(spec.Children, constraintCtx)
+	filteredChildren, err := filterChildrenByConstraints(pageSpec.Children, rc)
 	if err != nil {
 		return "", err
 	}
 
-	for idx, child := range filteredChildren {
-		childHTML, err := renderLayoutChild(child, constraintCtx)
+	slotIdx := 0
+	for _, child := range filteredChildren {
+		childHTML, skip, err := renderLayoutChild(child, rc)
 		if err != nil {
 			return "", err
 		}
-		b.WriteString(fmt.Sprintf("  <div slot=\"slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", idx))
+		if skip {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  <div slot=\"slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", slotIdx))
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
+		slotIdx++
 	}
 	b.WriteString("</")
 	b.WriteString(tag)
@@ -181,34 +216,39 @@ func renderLayoutContainer(tag string, spec layoutPageSpec, constraintCtx *spec.
 }
 
 // renderLayoutCardContainer renders a LayoutCard container as HTML.
-func renderLayoutCardContainer(cardSpec layoutCardSpec, constraintCtx *spec.ConstraintContext) (string, error) {
+func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-layout-card")
 	cardSpec.writeAttrs(&b)
 	b.WriteString(">\n")
 
 	// Filter children by constraints
-	filteredChildren, err := filterChildrenByConstraints(cardSpec.Children, constraintCtx)
+	filteredChildren, err := filterChildrenByConstraints(cardSpec.Children, rc)
 	if err != nil {
 		return "", err
 	}
 
-	for idx, child := range filteredChildren {
-		childHTML, err := renderLayoutChild(child, constraintCtx)
+	slotIdx := 0
+	for _, child := range filteredChildren {
+		childHTML, skip, err := renderLayoutChild(child, rc)
 		if err != nil {
 			return "", err
 		}
-		b.WriteString(fmt.Sprintf("  <div slot=\"card-slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", idx))
+		if skip {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  <div slot=\"card-slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", slotIdx))
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
+		slotIdx++
 	}
 	b.WriteString("</bn-layout-card>")
 	return b.String(), nil
 }
 
 // filterChildrenByConstraints filters layout children based on their metadata.constraints.
-func filterChildrenByConstraints(children []layoutChild, constraintCtx *spec.ConstraintContext) ([]layoutChild, error) {
-	if constraintCtx == nil {
+func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layoutChild, error) {
+	if rc == nil || rc.constraintCtx == nil {
 		return children, nil
 	}
 
@@ -221,7 +261,7 @@ func filterChildrenByConstraints(children []layoutChild, constraintCtx *spec.Con
 		}
 
 		// Evaluate constraints
-		match, err := spec.EvaluateConstraintsWithContext(child.Metadata.Constraints, constraintCtx, child.Kind, child.Metadata.Name)
+		match, err := spec.EvaluateConstraintsWithContext(child.Metadata.Constraints, rc.constraintCtx, child.Kind, child.Metadata.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -235,54 +275,160 @@ func filterChildrenByConstraints(children []layoutChild, constraintCtx *spec.Con
 }
 
 // renderLayoutChild renders a child component within a layout.
-func renderLayoutChild(child layoutChild, constraintCtx *spec.ConstraintContext) (string, error) {
+// Returns (html, skip, error) where skip=true means the child should be skipped (missing ref).
+func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
+	// Resolve ref to get effective spec (base from referenced doc + overrides).
+	effectiveSpec, err := resolveChildSpec(child, rc)
+	if err != nil {
+		return "", false, err
+	}
+	// If ref resolution returned nil (missing ref), skip this child.
+	if effectiveSpec == nil {
+		return "", true, nil
+	}
+
 	var component string
 	switch child.Kind {
 	case "Text":
-		var spec textSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render text child: %w", err)
+		var s textSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render text child: %w", err)
 		}
-		component = renderTextComponent(spec)
+		component = renderTextComponent(s)
 	case "Table":
-		var spec tableSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render table child: %w", err)
+		var s tableSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render table child: %w", err)
 		}
-		component = renderTableComponent(spec)
+		component = renderTableComponent(s)
 	case "ChartStructure":
-		var spec chartStructureSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render chart structure child: %w", err)
+		var s chartStructureSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render chart structure child: %w", err)
 		}
-		component = renderChartStructureComponent(spec)
+		component = renderChartStructureComponent(s)
 	case "ChartTime":
-		var spec chartTimeSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render chart time child: %w", err)
+		var s chartTimeSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render chart time child: %w", err)
 		}
-		component = renderChartTimeComponent(spec)
+		component = renderChartTimeComponent(s)
 	case "LayoutCard":
-		var spec layoutCardSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render layout card child: %w", err)
+		var s layoutCardSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render layout card child: %w", err)
 		}
-		html, err := renderLayoutCardContainer(spec, constraintCtx)
+		html, err := renderLayoutCardContainer(s, rc)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		component = html
 	case "Image":
-		var spec imageSpec
-		if err := json.Unmarshal(child.Spec, &spec); err != nil {
-			return "", fmt.Errorf("render image child: %w", err)
+		var s imageSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render image child: %w", err)
 		}
-		component = renderImageComponent(spec)
+		component = renderImageComponent(s)
 	default:
-		return "", fmt.Errorf("unsupported child kind %q", child.Kind)
+		return "", false, fmt.Errorf("unsupported child kind %q", child.Kind)
 	}
 
-	return indentBlock(component, 4), nil
+	return indentBlock(component, 4), false, nil
+}
+
+// resolveChildSpec resolves a layout child's effective spec.
+// For inline children (no ref), it returns child.Spec directly.
+// For ref children, it looks up the referenced document and merges any spec overrides.
+// Returns nil if the ref is missing (skip with warning).
+// Returns an error if the ref points to LayoutPage (disallowed) or has a kind mismatch.
+func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error) {
+	// Inline child: no ref, just return spec directly.
+	if child.Ref == "" {
+		return child.Spec, nil
+	}
+
+	// Ref child: look up the referenced document.
+	key := child.Kind + ":" + child.Ref
+	refDoc, found := rc.docIndex[key]
+	if !found {
+		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
+		for _, doc := range rc.docs {
+			if doc.Kind == "LayoutPage" && doc.Name == child.Ref {
+				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced", child.Ref)
+			}
+		}
+		// Missing ref: warn and skip.
+		log := logx.FromContext(rc.ctx).Channel("render")
+		log.Warnf("ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
+		return nil, nil
+	}
+
+	// Extract the spec from the referenced document.
+	var refPayload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+		return nil, fmt.Errorf("failed to parse ref %q spec: %w", child.Ref, err)
+	}
+
+	// If no overrides, return the referenced spec directly.
+	if len(child.Spec) == 0 || string(child.Spec) == "null" {
+		return refPayload.Spec, nil
+	}
+
+	// Merge: referenced spec as base, child.Spec as overrides.
+	mergedSpec, err := mergeJSONObjects(refPayload.Spec, child.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge ref %q with overrides: %w", child.Ref, err)
+	}
+	return mergedSpec, nil
+}
+
+// mergeJSONObjects performs a deep merge of two JSON objects.
+// Values from override replace values in base. Objects are merged recursively.
+// Arrays are replaced entirely (not merged element-by-element).
+func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
+	var baseMap map[string]json.RawMessage
+	var overrideMap map[string]json.RawMessage
+
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		return nil, fmt.Errorf("base is not a JSON object: %w", err)
+	}
+	if err := json.Unmarshal(override, &overrideMap); err != nil {
+		return nil, fmt.Errorf("override is not a JSON object: %w", err)
+	}
+
+	result := make(map[string]json.RawMessage, len(baseMap)+len(overrideMap))
+	for k, v := range baseMap {
+		result[k] = v
+	}
+
+	for k, overrideVal := range overrideMap {
+		baseVal, hasBase := result[k]
+		if !hasBase {
+			result[k] = overrideVal
+			continue
+		}
+
+		// Check if both are objects for recursive merge.
+		var baseObj map[string]json.RawMessage
+		var overrideObj map[string]json.RawMessage
+		baseIsObj := json.Unmarshal(baseVal, &baseObj) == nil && baseObj != nil
+		overrideIsObj := json.Unmarshal(overrideVal, &overrideObj) == nil && overrideObj != nil
+
+		if baseIsObj && overrideIsObj {
+			merged, err := mergeJSONObjects(baseVal, overrideVal)
+			if err != nil {
+				return nil, err
+			}
+			result[k] = merged
+		} else {
+			// Override replaces base (including arrays).
+			result[k] = overrideVal
+		}
+	}
+
+	return json.Marshal(result)
 }
 
 // renderTextComponent renders a Text component as HTML.
