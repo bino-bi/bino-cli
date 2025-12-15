@@ -41,13 +41,15 @@ Before installing the extension, make sure you have:
 - **Bino CLI** installed and on your `PATH` (or a known location)
 - **RedHat YAML extension** (`redhat.vscode-yaml`) installed
 
-If `bino` is not on your `PATH`, you can configure a custom path later via the `bino.binPath` setting.
-
 ---
 
 ## 2. Installation
 
 ### 2.1 From the Marketplace
+
+You can install the extension directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=BinoBI.vscode-bino).
+
+Alternatively:
 
 1. Open the **Extensions** view in VS Code.
 2. Search for **"Bino Reports Reports"**.
@@ -97,20 +99,7 @@ This command verifies:
 - Whether required subcommands (like `lsp-helper` and `validate`) are available.
 - Basic version and environment information.
 
-If something is wrong, the command shows a detailed message and may offer quick actions (for example, opening settings to configure `bino.binPath`).
-
-### 3.2 Configure `bino.binPath` (optional)
-
-If the CLI is not on your `PATH`, set a custom path in your VS Code settings:
-
-```jsonc
-// .vscode/settings.json
-{
-  "bino.binPath": "/absolute/path/to/bino"
-}
-```
-
-Or via **Settings UI**: search for **"Bino: Bin Path"**.
+If something is wrong, the command shows a detailed message.
 
 ---
 
@@ -314,7 +303,6 @@ All settings live under the **Bino Reports** section in VS Code Settings.
 
 | Setting                 | Type    | Default | Description                                                   |
 | ----------------------- | ------- | ------- | ------------------------------------------------------------- |
-| `bino.binPath`          | string  | ""      | Path to the `bino` CLI. If empty, uses `bino` from `PATH`.    |
 | `bino.enableCompletion` | boolean | true    | Enable intelligent autocompletion in YAML files.              |
 | `bino.columnCacheTTL`   | number  | 60000   | Column cache TTL (ms) for hover/completion column lookups.    |
 | `bino.validateOnSave`   | boolean | false   | Automatically validate workspace when saving Bino YAML files. |
@@ -324,7 +312,6 @@ Example configuration:
 
 ```jsonc
 {
-  "bino.binPath": "/usr/local/bin/bino",
   "bino.enableCompletion": true,
   "bino.columnCacheTTL": 120000,
   "bino.validateOnSave": true,
@@ -340,8 +327,7 @@ Example configuration:
 
 - Symptom: Setup check fails, commands log errors like `bino: command not found`.
 - Fix:
-  - Ensure the CLI is installed and on your `PATH`, or
-  - Set `bino.binPath` to the absolute path of the binary.
+  - Ensure the CLI is installed and on your `PATH`.
 
 ### 10.2 No Completions or Hovers
 
