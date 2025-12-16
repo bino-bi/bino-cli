@@ -1,0 +1,57 @@
+---
+title: bino lint
+description: Validate manifests and run lint rules without building.
+---
+
+`bino lint` validates your report manifests against the schema and runs content lint rules without executing queries or generating PDFs.
+This is useful for quick validation during development or in CI pipelines.
+
+## Usage
+
+```bash
+bino lint [flags]
+```
+
+Common flags:
+
+- `--work-dir` – report bundle directory (default: `.`).
+- `--out-dir` – output directory for lint logs (default: `dist`).
+- `--log-format` – log format: `text` (default) or `json`.
+
+## Examples
+
+Lint all manifests in the current directory:
+
+```bash
+bino lint
+```
+
+Lint a specific project:
+
+```bash
+bino lint --work-dir ./reports
+```
+
+Output JSON log for CI integration:
+
+```bash
+bino lint --log-format json
+```
+
+## Exit code
+
+`bino lint` always exits with code 0 unless there is a fatal error loading manifests.
+All lint findings are treated as warnings and do not cause a non-zero exit.
+
+## Integration with build and preview
+
+By default:
+
+- `bino build` runs lint rules automatically. Use `--no-lint` to skip.
+- `bino preview` does not run lint rules. Use `--lint` to enable.
+
+## See also
+
+- [Lint rules](/appendix/lint-rules/) – reference of all available lint rules.
+- [bino build](/cli/build/) – build reports (includes lint by default).
+- [bino preview](/cli/preview/) – preview reports with optional lint.

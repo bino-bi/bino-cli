@@ -1,0 +1,39 @@
+---
+title: Lint rules
+description: Reference of all available lint rules for bino report validation.
+---
+
+This appendix lists all lint rules that `bino lint` and `bino build` apply to your report manifests.
+Lint rules check the **content** of your documents (semantic/business rules), while schema validation checks the **structure**.
+
+All lint findings are currently treated as **warnings** and do not block builds.
+
+## Rules
+
+| ID  | Name | Description           |
+| --- | ---- | --------------------- |
+| —   | —    | No rules defined yet. |
+
+:::note
+The lint system is extensible. New rules will be added here as they are implemented.
+:::
+
+## Adding custom rules
+
+The bino linter is designed for easy rule addition. Each rule has:
+
+- **ID**: A unique identifier (e.g., `naming-lowercase`, `reference-undefined-dataset`).
+- **Name**: A short human-readable name.
+- **Description**: An explanation of what the rule checks.
+- **Check function**: The logic that inspects documents and returns findings.
+
+Rules are registered in `internal/report/lint/rules.go`.
+
+## Suppressing warnings
+
+Currently, lint warnings cannot be suppressed. Future versions may add per-rule or per-file suppression.
+
+## See also
+
+- [bino lint](/cli/lint/) – CLI command for running lint.
+- [bino build](/cli/build/) – build command (runs lint by default).

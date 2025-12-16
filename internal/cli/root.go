@@ -130,6 +130,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newPlaywrightCommand())
 	cmd.AddCommand(newBuildCommand())
 	cmd.AddCommand(newPreviewCommand())
+	cmd.AddCommand(newLintCommand())
 	cmd.AddCommand(newGraphCommand())
 	cmd.AddCommand(newInitCommand())
 	cmd.AddCommand(newLSPCommand())

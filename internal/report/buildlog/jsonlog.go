@@ -20,6 +20,19 @@ type JSONBuildLog struct {
 	Artefacts     []ArtefactEntry `json:"artefacts"`
 	Queries       []QueryEntry    `json:"queries"`
 	ExecutionPlan []ExecutionStep `json:"execution_plan,omitempty"`
+	Lint          []LintEntry     `json:"lint,omitempty"`
+}
+
+// LintEntry represents a lint finding in the build log.
+type LintEntry struct {
+	RuleID   string `json:"rule_id"`             // Unique rule identifier.
+	Severity string `json:"severity"`            // Always "warning" for now.
+	Message  string `json:"message"`             // Human-readable description.
+	File     string `json:"file"`                // Absolute path to the file.
+	DocIdx   int    `json:"doc_index,omitempty"` // 1-based document index (0 if unknown).
+	Path     string `json:"path,omitempty"`      // JSON path within the document.
+	Line     int    `json:"line,omitempty"`      // 1-based line number (0 if unknown).
+	Column   int    `json:"column,omitempty"`    // 1-based column number (0 if unknown).
 }
 
 // DocumentEntry represents a document in the build log.
@@ -85,6 +98,21 @@ func BuildQueryEntry(meta duckdb.QueryExecMeta, embedOpts EmbedOptions) QueryEnt
 	}
 
 	return entry
+}
+
+// BuildLintEntry creates a LintEntry from individual fields.
+// This is used to convert lint.Finding to LintEntry without importing the lint package.
+func BuildLintEntry(ruleID, message, file string, docIdx int, path string, line, column int) LintEntry {
+	return LintEntry{
+		RuleID:   ruleID,
+		Severity: "warning", // All lint findings are warnings for now.
+		Message:  message,
+		File:     file,
+		DocIdx:   docIdx,
+		Path:     path,
+		Line:     line,
+		Column:   column,
+	}
 }
 
 // WriteJSONBuildLog marshals the log to indented JSON and writes it to the specified path.

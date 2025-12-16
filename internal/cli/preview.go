@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/watchers"
 )
@@ -34,9 +35,10 @@ const defaultPreviewPort = 45678
 //   - The refresh goroutine exits
 func newPreviewCommand() *cobra.Command {
 	var (
-		port    int
-		workdir string
-		logSQL  bool
+		port       int
+		workdir    string
+		logSQL     bool
+		enableLint bool
 	)
 
 	cmd := &cobra.Command{
@@ -115,6 +117,21 @@ Use --debug for verbose watcher logs and CDN diagnostics.`),
 				// Warn about unresolved environment variables (preview continues with empty values)
 				for _, m := range config.CollectMissingEnvVars(docs) {
 					logger.Warnf("unresolved environment variable %s in %s", m.VarName, m.File)
+				}
+
+				// Run lint rules if enabled
+				if enableLint {
+					lintDocs := configDocsToLintDocs(docs)
+					runner := lint.NewDefaultRunner()
+					findings := runner.Run(ctx, lintDocs)
+					for _, f := range findings {
+						relPath := pathutil.RelPath(watchDir, f.File)
+						loc := relPath
+						if f.DocIdx > 0 {
+							loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
+						}
+						logger.Warnf("[%s] %s: %s", f.RuleID, loc, f.Message)
+					}
 				}
 
 				artefacts, err := config.CollectArtefacts(docs)
@@ -282,6 +299,7 @@ Use --debug for verbose watcher logs and CDN diagnostics.`),
 	cmd.Flags().IntVarP(&port, "port", "p", defaultPreviewPort, "Port to run the preview server on")
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory to watch for changes")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
+	cmd.Flags().BoolVar(&enableLint, "lint", false, "Run lint rules on each refresh")
 
 	return cmd
 }
