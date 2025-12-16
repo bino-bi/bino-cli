@@ -10,13 +10,103 @@ All lint findings are currently treated as **warnings** and do not block builds.
 
 ## Rules
 
-| ID  | Name | Description           |
-| --- | ---- | --------------------- |
-| —   | —    | No rules defined yet. |
+| ID                             | Name                         | Description                                                                    |
+| ------------------------------ | ---------------------------- | ------------------------------------------------------------------------------ |
+| `report-artefact-required`     | Report Artefact Required     | At least one ReportArtefact document must be defined.                          |
+| `artefact-layoutpage-required` | Artefact LayoutPage Required | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
+| `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                      |
+| `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding. |
 
-:::note
-The lint system is extensible. New rules will be added here as they are implemented.
-:::
+## Rule details
+
+### report-artefact-required
+
+Every bino report project needs at least one `ReportArtefact` document to define what PDF(s) to generate.
+
+**Example fix:** Add a `ReportArtefact` manifest to your project:
+
+```yaml
+apiVersion: bino.bi/v1
+kind: ReportArtefact
+metadata:
+  name: my-report
+spec:
+  title: Monthly Sales Report
+```
+
+### artefact-layoutpage-required
+
+Each `ReportArtefact` must have at least one `LayoutPage` that:
+
+1. **Passes constraints** — The page's `metadata.constraints` must match the artefact's context (labels, spec, or mode). The linter checks both `build` and `preview` modes; a page is valid if it matches in either mode.
+2. **Matches format** — The page's `spec.pageFormat` must match the artefact's `spec.format`. Both default to `xga` if not specified.
+
+**Example problem:**
+
+```yaml
+# Artefact with format: a4
+kind: ReportArtefact
+metadata:
+  name: print-report
+spec:
+  format: a4
+---
+# Page with default format (xga) won't match!
+kind: LayoutPage
+metadata:
+  name: page1
+spec:
+  children: [...]
+```
+
+**Fix:** Set `spec.pageFormat: a4` on the LayoutPage.
+
+### text-content-required
+
+`Text` components are meant to display content. An empty `spec.value` produces blank output.
+
+**Example problem:**
+
+```yaml
+kind: Text
+metadata:
+  name: header
+spec:
+  value: ""  # Empty!
+```
+
+**Fix:** Provide meaningful content in `spec.value`.
+
+### dataset-required
+
+Data visualization components (`Table`, `ChartStructure`, `ChartTime`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
+
+**Example problem:**
+
+```yaml
+kind: Table
+metadata:
+  name: sales-table
+spec:
+  tableTitle: Sales Overview
+  # Missing dataset!
+```
+
+**Fix:** Add a dataset reference:
+
+```yaml
+spec:
+  dataset: sales-data
+```
+
+Or multiple datasets for charts:
+
+```yaml
+spec:
+  dataset:
+    - revenue
+    - costs
+```
 
 ## Adding custom rules
 
