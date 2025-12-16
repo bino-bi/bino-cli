@@ -265,8 +265,8 @@
         },
         "bino.validateOnSave": {
           "type": "boolean",
-          "default": false,
-          "description": "Automatically validate workspace when saving a bino YAML file."
+          "default": true,
+          "description": "Validate workspace on save and publish lint diagnostics to the Problems panel."
         },
         "bino.previewPort": {
           "type": "number",

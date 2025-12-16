@@ -14,6 +14,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/spec"
 )
 
@@ -266,6 +267,23 @@ func validateDirectory(ctx context.Context, dir string) ([]LSPDiagnostic, error)
 	if err := config.ValidateDocuments(docs); err != nil {
 		diag := parseValidationError(err, dir)
 		diagnostics = append(diagnostics, diag...)
+	}
+
+	// Run lint rules and add findings as warnings
+	lintDocs := configDocsToLintDocs(docs)
+	runner := lint.NewDefaultRunner()
+	findings := runner.Run(ctx, lintDocs)
+	for _, f := range findings {
+		diagnostics = append(diagnostics, LSPDiagnostic{
+			File:     f.File,
+			Position: f.DocIdx,
+			Line:     f.Line,
+			Column:   f.Column,
+			Severity: "warning",
+			Message:  f.Message,
+			Code:     f.RuleID,
+			Field:    f.Path,
+		})
 	}
 
 	return diagnostics, nil

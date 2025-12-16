@@ -24,6 +24,7 @@ Enhanced YAML editing for Bino Reports report manifests with intelligent autocom
 - `bino.binPath`: Path to the bino CLI executable. If not set, uses 'bino' from PATH.
 - `bino.enableCompletion`: Enable intelligent autocompletion for dataset references, scenarios, etc.
 - `bino.columnCacheTTL`: Time in milliseconds to cache column introspection results (default: 60 seconds).
+- `bino.validateOnSave`: Validate workspace on save and publish lint diagnostics to the Problems panel (default: enabled).
 
 ## Commands
 
