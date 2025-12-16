@@ -10,12 +10,12 @@ All lint findings are currently treated as **warnings** and do not block builds.
 
 ## Rules
 
-| ID                             | Name                         | Description                                                                    |
-| ------------------------------ | ---------------------------- | ------------------------------------------------------------------------------ |
-| `report-artefact-required`     | Report Artefact Required     | At least one ReportArtefact document must be defined.                          |
+| ID                             | Name                         | Description                                                                                    |
+| ------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `report-artefact-required`     | Report Artefact Required     | At least one ReportArtefact document must be defined.                                          |
 | `artefact-layoutpage-required` | Artefact LayoutPage Required | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
-| `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                      |
-| `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding. |
+| `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                                      |
+| `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
 
 ## Rule details
 
@@ -72,7 +72,7 @@ kind: Text
 metadata:
   name: header
 spec:
-  value: ""  # Empty!
+  value: "" # Empty!
 ```
 
 **Fix:** Provide meaningful content in `spec.value`.
