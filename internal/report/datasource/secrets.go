@@ -83,7 +83,7 @@ type GCSAuthSpec struct {
 	SecretFromEnv string `json:"secretFromEnv,omitempty"`
 }
 
-// HTTPAuthSpec holds HTTP/HTTPS authentication credentials.
+// HTTPAuthSpec holds HTTP/HTTPS authentication credentials and proxy configuration.
 type HTTPAuthSpec struct {
 	Username           string `json:"username,omitempty"`
 	UsernameFromEnv    string `json:"usernameFromEnv,omitempty"`
@@ -91,6 +91,13 @@ type HTTPAuthSpec struct {
 	PasswordFromEnv    string `json:"passwordFromEnv,omitempty"`
 	BearerToken        string `json:"bearerToken,omitempty"`
 	BearerTokenFromEnv string `json:"bearerTokenFromEnv,omitempty"`
+	// HTTP proxy configuration (only supported for TYPE http secrets)
+	HTTPProxy                string `json:"httpProxy,omitempty"`
+	HTTPProxyFromEnv         string `json:"httpProxyFromEnv,omitempty"`
+	HTTPProxyUsername        string `json:"httpProxyUsername,omitempty"`
+	HTTPProxyUsernameFromEnv string `json:"httpProxyUsernameFromEnv,omitempty"`
+	HTTPProxyPassword        string `json:"httpProxyPassword,omitempty"`
+	HTTPProxyPasswordFromEnv string `json:"httpProxyPasswordFromEnv,omitempty"`
 }
 
 // R2AuthSpec holds Cloudflare R2 credentials and configuration.
@@ -324,6 +331,19 @@ func addHTTPParams(parts *[]string, auth *HTTPAuthSpec) error {
 
 	if token, err := resolveCredential(auth.BearerToken, auth.BearerTokenFromEnv); err == nil && token != "" {
 		*parts = append(*parts, fmt.Sprintf("BEARER_TOKEN '%s'", escapeSQLString(token)))
+	}
+
+	// HTTP proxy configuration
+	if proxy, err := resolveCredential(auth.HTTPProxy, auth.HTTPProxyFromEnv); err == nil && proxy != "" {
+		*parts = append(*parts, fmt.Sprintf("HTTP_PROXY '%s'", escapeSQLString(proxy)))
+	}
+
+	if proxyUser, err := resolveCredential(auth.HTTPProxyUsername, auth.HTTPProxyUsernameFromEnv); err == nil && proxyUser != "" {
+		*parts = append(*parts, fmt.Sprintf("HTTP_PROXY_USERNAME '%s'", escapeSQLString(proxyUser)))
+	}
+
+	if proxyPass, err := resolveCredential(auth.HTTPProxyPassword, auth.HTTPProxyPasswordFromEnv); err == nil && proxyPass != "" {
+		*parts = append(*parts, fmt.Sprintf("HTTP_PROXY_PASSWORD '%s'", escapeSQLString(proxyPass)))
 	}
 
 	return nil

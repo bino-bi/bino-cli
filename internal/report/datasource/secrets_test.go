@@ -128,6 +128,34 @@ func TestParseSecretSpec(t *testing.T) {
 			},
 		},
 		{
+			name: "http with proxy configuration",
+			raw: `{
+				"spec": {
+					"type": "http",
+					"http": {
+						"httpProxy": "http://proxy:8080",
+						"httpProxyUsername": "user",
+						"httpProxyPasswordFromEnv": "PROXY_PASS"
+					}
+				}
+			}`,
+			wantErr: false,
+			check: func(t *testing.T, spec SecretSpec) {
+				if spec.HTTP == nil {
+					t.Fatal("expected http auth spec")
+				}
+				if spec.HTTP.HTTPProxy != "http://proxy:8080" {
+					t.Errorf("unexpected httpProxy: %s", spec.HTTP.HTTPProxy)
+				}
+				if spec.HTTP.HTTPProxyUsername != "user" {
+					t.Errorf("unexpected httpProxyUsername: %s", spec.HTTP.HTTPProxyUsername)
+				}
+				if spec.HTTP.HTTPProxyPasswordFromEnv != "PROXY_PASS" {
+					t.Errorf("unexpected httpProxyPasswordFromEnv: %s", spec.HTTP.HTTPProxyPasswordFromEnv)
+				}
+			},
+		},
+		{
 			name: "missing type",
 			raw: `{
 				"spec": {}
@@ -222,6 +250,44 @@ func TestBuildCreateSecret(t *testing.T) {
 			contains: []string{
 				"TYPE http",
 				"BEARER_TOKEN 'eyJhbGc...'",
+			},
+		},
+		{
+			name:     "http with proxy configuration",
+			specName: "test-http-proxy",
+			spec: SecretSpec{
+				Type: "http",
+				HTTP: &HTTPAuthSpec{
+					HTTPProxy:         "http://proxy.example.com:8080",
+					HTTPProxyUsername: "proxyuser",
+					HTTPProxyPassword: "proxypass",
+				},
+			},
+			wantErr: false,
+			contains: []string{
+				"TYPE http",
+				"HTTP_PROXY 'http://proxy.example.com:8080'",
+				"HTTP_PROXY_USERNAME 'proxyuser'",
+				"HTTP_PROXY_PASSWORD 'proxypass'",
+			},
+		},
+		{
+			name:     "http with proxy and bearer token",
+			specName: "test-http-proxy-bearer",
+			spec: SecretSpec{
+				Type:  "http",
+				Scope: "https://api.example.com",
+				HTTP: &HTTPAuthSpec{
+					BearerToken: "token123",
+					HTTPProxy:   "http://proxy:3128",
+				},
+			},
+			wantErr: false,
+			contains: []string{
+				"TYPE http",
+				"SCOPE 'https://api.example.com'",
+				"BEARER_TOKEN 'token123'",
+				"HTTP_PROXY 'http://proxy:3128'",
 			},
 		},
 		{
