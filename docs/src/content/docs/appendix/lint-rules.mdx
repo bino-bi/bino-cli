@@ -1,0 +1,207 @@
+---
+title: Lint rules
+description: Reference of all available lint rules for bino report validation.
+---
+
+This appendix lists all lint rules that `bino lint` and `bino build` apply to your report manifests.
+Lint rules check the **content** of your documents (semantic/business rules), while schema validation checks the **structure**.
+
+All lint findings are currently treated as **warnings** and do not block builds.
+
+## Rules
+
+| ID                             | Name                         | Description                                                                                    |
+| ------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `report-artefact-required`     | Report Artefact Required     | At least one ReportArtefact document must be defined.                                          |
+| `artefact-layoutpage-required` | Artefact LayoutPage Required | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
+| `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                                      |
+| `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
+| `page-layout-slots-used`       | Page Layout Slots Used       | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
+| `card-layout-slots-used`       | Card Layout Slots Used       | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
+
+## Rule details
+
+### report-artefact-required
+
+Every bino report project needs at least one `ReportArtefact` document to define what PDF(s) to generate.
+
+**Example fix:** Add a `ReportArtefact` manifest to your project:
+
+```yaml
+apiVersion: bino.bi/v1
+kind: ReportArtefact
+metadata:
+  name: my-report
+spec:
+  title: Monthly Sales Report
+```
+
+### artefact-layoutpage-required
+
+Each `ReportArtefact` must have at least one `LayoutPage` that:
+
+1. **Passes constraints** — The page's `metadata.constraints` must match the artefact's context (labels, spec, or mode). The linter checks both `build` and `preview` modes; a page is valid if it matches in either mode.
+2. **Matches format** — The page's `spec.pageFormat` must match the artefact's `spec.format`. Both default to `xga` if not specified.
+
+**Example problem:**
+
+```yaml
+# Artefact with format: a4
+kind: ReportArtefact
+metadata:
+  name: print-report
+spec:
+  format: a4
+---
+# Page with default format (xga) won't match!
+kind: LayoutPage
+metadata:
+  name: page1
+spec:
+  children: [...]
+```
+
+**Fix:** Set `spec.pageFormat: a4` on the LayoutPage.
+
+### text-content-required
+
+`Text` components are meant to display content. An empty `spec.value` produces blank output.
+
+**Example problem:**
+
+```yaml
+kind: Text
+metadata:
+  name: header
+spec:
+  value: "" # Empty!
+```
+
+**Fix:** Provide meaningful content in `spec.value`.
+
+### dataset-required
+
+Data visualization components (`Table`, `ChartStructure`, `ChartTime`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
+
+**Example problem:**
+
+```yaml
+kind: Table
+metadata:
+  name: sales-table
+spec:
+  tableTitle: Sales Overview
+  # Missing dataset!
+```
+
+**Fix:** Add a dataset reference:
+
+```yaml
+spec:
+  dataset: sales-data
+```
+
+Or multiple datasets for charts:
+
+```yaml
+spec:
+  dataset:
+    - revenue
+    - costs
+```
+
+### page-layout-slots-used
+
+Each `LayoutPage` must have exactly the number of children that match its `pageLayout` slot count. This rule is evaluated **per artefact**, counting only children that:
+
+1. **Pass constraints** — Children with `metadata.constraints` must match the artefact's context.
+2. **Have valid refs** — Children with `ref` must point to an existing document. Missing refs emit a warning and don't count as slots.
+3. **Are renderable** — Children must have either a `ref` or inline `spec`.
+
+**Slot counts for predefined layouts:**
+
+| Layout             | Slots |
+| ------------------ | ----- |
+| `full`             | 1     |
+| `split-horizontal` | 2     |
+| `split-vertical`   | 2     |
+| `2x2`              | 4     |
+| `3x3`              | 9     |
+| `4x4`              | 16    |
+| `1-over-2`         | 3     |
+| `1-over-3`         | 4     |
+| `2-over-1`         | 3     |
+| `3-over-1`         | 4     |
+
+For `custom-template`, the slot count is the number of **distinct named area tokens** in `pageCustomTemplate`:
+
+```yaml
+# 3 slots: a, b, c
+pageLayout: custom-template
+pageCustomTemplate: |
+  "a a"
+  "b c"
+
+# 2 slots: aa, bb
+pageLayout: custom-template
+pageCustomTemplate: |
+  "aa aa"
+  "bb bb"
+```
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: 2x2 # Expects 4 children
+  children:
+    - kind: Text
+      spec: { value: "Hello" }
+    - kind: Table
+      ref: sales-table
+    # Only 2 children, but 2x2 expects 4!
+```
+
+**Fix:** Add children to fill all slots, or change `pageLayout` to match actual children count.
+
+### card-layout-slots-used
+
+Same as `page-layout-slots-used`, but for `LayoutCard` components. Each card's `cardLayout` defines how many children it expects.
+
+**Example problem:**
+
+```yaml
+kind: LayoutCard
+metadata:
+  name: summary-card
+spec:
+  cardLayout: split-horizontal # Expects 2 children
+  children:
+    - kind: Text
+      spec: { value: "Only one child" }
+```
+
+**Fix:** Add a second child or change `cardLayout: full`.
+
+## Adding custom rules
+
+The bino linter is designed for easy rule addition. Each rule has:
+
+- **ID**: A unique identifier (e.g., `naming-lowercase`, `reference-undefined-dataset`).
+- **Name**: A short human-readable name.
+- **Description**: An explanation of what the rule checks.
+- **Check function**: The logic that inspects documents and returns findings.
+
+Rules are registered in `internal/report/lint/rules.go`.
+
+## Suppressing warnings
+
+Currently, lint warnings cannot be suppressed. Future versions may add per-rule or per-file suppression.
+
+## See also
+
+- [bino lint](/cli/lint/) – CLI command for running lint.
+- [bino build](/cli/build/) – build command (runs lint by default).

@@ -150,7 +150,7 @@ export class BinoValidator {
             case 'hint':
                 return vscode.DiagnosticSeverity.Hint;
             default:
-                return vscode.DiagnosticSeverity.Error;
+                return vscode.DiagnosticSeverity.Warning;
         }
     }
 
