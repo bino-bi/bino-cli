@@ -19,6 +19,7 @@ import (
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	reportgraph "bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/signing"
 	"bino.bi/bino/internal/version"
@@ -45,6 +46,7 @@ func newBuildCommand() *cobra.Command {
 		browser   string
 		noGraph   bool
 		logSQL    bool
+		noLint    bool
 
 		// CSV embedding options
 		embedDataCSV      bool
@@ -130,6 +132,18 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				out.ListColored(fmt.Sprintf("%s #%d", relPath, doc.Position), "kind", doc.Kind, "name", doc.Name)
 			}
 			out.Blank()
+
+			// Run lint rules unless disabled
+			var lintFindings []lint.Finding
+			if !noLint {
+				lintDocs := configDocsToLintDocs(documents)
+				runner := lint.NewDefaultRunner()
+				lintFindings = runner.Run(ctx, lintDocs)
+				if len(lintFindings) > 0 {
+					printLintFindings(out, lintFindings, absDir)
+					out.Blank()
+				}
+			}
 
 			artefacts, err := config.CollectArtefacts(documents)
 			if err != nil {
@@ -346,6 +360,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					Artefacts:     artefactEntries,
 					Queries:       queryEntries,
 					ExecutionPlan: planSteps,
+					Lint:          findingsToLintEntries(lintFindings),
 				}
 
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
@@ -392,6 +407,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 	cmd.Flags().StringVar(&driverDir, "driver-dir", "", "Override the Playwright driver cache directory")
 	cmd.Flags().StringVar(&browser, "browser", "chromium", "Browser engine for PDF export (chromium, firefox, webkit)")
 	cmd.Flags().BoolVar(&noGraph, "no-graph", false, "Skip writing .bngraph dependency summaries next to PDFs")
+	cmd.Flags().BoolVar(&noLint, "no-lint", false, "Skip running lint rules")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal and build log")
 
 	// CSV embedding flags - WARNING: enabling may include sensitive data in build logs
