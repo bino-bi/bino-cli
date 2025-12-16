@@ -728,7 +728,7 @@
     },
     "httpAuthSpec": {
       "type": "object",
-      "description": "HTTP/HTTPS authentication configuration.",
+      "description": "HTTP/HTTPS authentication and proxy configuration.",
       "properties": {
         "username": {
           "type": "string",
@@ -753,6 +753,30 @@
         "bearerTokenFromEnv": {
           "type": "string",
           "description": "Environment variable containing the HTTP bearer token."
+        },
+        "httpProxy": {
+          "type": "string",
+          "description": "HTTP proxy URL (e.g. 'http://proxy.example.com:8080'). Used for datasource HTTP access. Note: The CLI respects the http_proxy environment variable only for DuckDB extension downloads; datasource access requires explicit proxy configuration via this field or httpProxyFromEnv."
+        },
+        "httpProxyFromEnv": {
+          "type": "string",
+          "description": "Environment variable containing the HTTP proxy URL (e.g. 'http_proxy'). Takes precedence if httpProxy is not set."
+        },
+        "httpProxyUsername": {
+          "type": "string",
+          "description": "Username for HTTP proxy authentication."
+        },
+        "httpProxyUsernameFromEnv": {
+          "type": "string",
+          "description": "Environment variable containing the HTTP proxy username."
+        },
+        "httpProxyPassword": {
+          "type": "string",
+          "description": "Password for HTTP proxy authentication."
+        },
+        "httpProxyPasswordFromEnv": {
+          "type": "string",
+          "description": "Environment variable containing the HTTP proxy password."
         }
       }
     },
