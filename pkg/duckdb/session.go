@@ -170,11 +170,84 @@ func (s *Session) LogQueryExec(meta QueryExecMeta) {
 
 var extensionNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
+// proxyEnvConfig holds proxy settings read from environment variables.
+// These are applied temporarily during extension install only.
+type proxyEnvConfig struct {
+	proxy    string
+	username string
+	password string
+}
+
+// readProxyEnv reads http_proxy settings from environment variables.
+// Only http_proxy is supported (https_proxy is not used by DuckDB).
+func readProxyEnv() proxyEnvConfig {
+	return proxyEnvConfig{
+		proxy:    os.Getenv("http_proxy"),
+		username: os.Getenv("http_proxy_username"),
+		password: os.Getenv("http_proxy_password"),
+	}
+}
+
+// setProxySettings applies proxy settings via DuckDB SET statements.
+func (s *Session) setProxySettings(ctx context.Context, cfg proxyEnvConfig) error {
+	if cfg.proxy == "" {
+		return nil
+	}
+
+	escaped := strings.ReplaceAll(cfg.proxy, "'", "''")
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("SET http_proxy='%s';", escaped)); err != nil {
+		return fmt.Errorf("set http_proxy: %w", err)
+	}
+
+	if cfg.username != "" {
+		escaped = strings.ReplaceAll(cfg.username, "'", "''")
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("SET http_proxy_username='%s';", escaped)); err != nil {
+			return fmt.Errorf("set http_proxy_username: %w", err)
+		}
+	}
+
+	if cfg.password != "" {
+		escaped = strings.ReplaceAll(cfg.password, "'", "''")
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("SET http_proxy_password='%s';", escaped)); err != nil {
+			return fmt.Errorf("set http_proxy_password: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// resetProxySettings resets proxy settings to their default (empty) values.
+func (s *Session) resetProxySettings(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, "RESET http_proxy;"); err != nil {
+		return fmt.Errorf("reset http_proxy: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "RESET http_proxy_username;"); err != nil {
+		return fmt.Errorf("reset http_proxy_username: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "RESET http_proxy_password;"); err != nil {
+		return fmt.Errorf("reset http_proxy_password: %w", err)
+	}
+	return nil
+}
+
 // InstallAndLoadExtensions downloads (if needed) and loads the provided extensions.
+// If http_proxy environment variable is set, it is applied temporarily during
+// extension download and reset afterwards.
 func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) error {
 	if s == nil || s.db == nil {
 		return errors.New("duckdb session is not initialized")
 	}
+
+	// Apply proxy settings from environment for extension download
+	proxyCfg := readProxyEnv()
+	if err := s.setProxySettings(ctx, proxyCfg); err != nil {
+		return err
+	}
+	defer func() {
+		if proxyCfg.proxy != "" {
+			_ = s.resetProxySettings(ctx)
+		}
+	}()
 
 	for _, name := range names {
 		if !extensionNamePattern.MatchString(name) {
@@ -197,10 +270,23 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 
 // InstallAndLoadCommunityExtensions downloads and loads extensions from the DuckDB community repository.
 // These extensions require the "FROM community" syntax for installation.
+// If http_proxy environment variable is set, it is applied temporarily during
+// extension download and reset afterwards.
 func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names []string) error {
 	if s == nil || s.db == nil {
 		return errors.New("duckdb session is not initialized")
 	}
+
+	// Apply proxy settings from environment for extension download
+	proxyCfg := readProxyEnv()
+	if err := s.setProxySettings(ctx, proxyCfg); err != nil {
+		return err
+	}
+	defer func() {
+		if proxyCfg.proxy != "" {
+			_ = s.resetProxySettings(ctx)
+		}
+	}()
 
 	for _, name := range names {
 		if !extensionNamePattern.MatchString(name) {
