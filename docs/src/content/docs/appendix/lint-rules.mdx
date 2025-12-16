@@ -16,6 +16,8 @@ All lint findings are currently treated as **warnings** and do not block builds.
 | `artefact-layoutpage-required` | Artefact LayoutPage Required | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
 | `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                                      |
 | `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
+| `page-layout-slots-used`       | Page Layout Slots Used       | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
+| `card-layout-slots-used`       | Card Layout Slots Used       | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
 
 ## Rule details
 
@@ -107,6 +109,82 @@ spec:
     - revenue
     - costs
 ```
+
+### page-layout-slots-used
+
+Each `LayoutPage` must have exactly the number of children that match its `pageLayout` slot count. This rule is evaluated **per artefact**, counting only children that:
+
+1. **Pass constraints** — Children with `metadata.constraints` must match the artefact's context.
+2. **Have valid refs** — Children with `ref` must point to an existing document. Missing refs emit a warning and don't count as slots.
+3. **Are renderable** — Children must have either a `ref` or inline `spec`.
+
+**Slot counts for predefined layouts:**
+
+| Layout             | Slots |
+| ------------------ | ----- |
+| `full`             | 1     |
+| `split-horizontal` | 2     |
+| `split-vertical`   | 2     |
+| `2x2`              | 4     |
+| `3x3`              | 9     |
+| `4x4`              | 16    |
+| `1-over-2`         | 3     |
+| `1-over-3`         | 4     |
+| `2-over-1`         | 3     |
+| `3-over-1`         | 4     |
+
+For `custom-template`, the slot count is the number of **distinct named area tokens** in `pageCustomTemplate`:
+
+```yaml
+# 3 slots: a, b, c
+pageLayout: custom-template
+pageCustomTemplate: |
+  "a a"
+  "b c"
+
+# 2 slots: aa, bb
+pageLayout: custom-template
+pageCustomTemplate: |
+  "aa aa"
+  "bb bb"
+```
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: 2x2 # Expects 4 children
+  children:
+    - kind: Text
+      spec: { value: "Hello" }
+    - kind: Table
+      ref: sales-table
+    # Only 2 children, but 2x2 expects 4!
+```
+
+**Fix:** Add children to fill all slots, or change `pageLayout` to match actual children count.
+
+### card-layout-slots-used
+
+Same as `page-layout-slots-used`, but for `LayoutCard` components. Each card's `cardLayout` defines how many children it expects.
+
+**Example problem:**
+
+```yaml
+kind: LayoutCard
+metadata:
+  name: summary-card
+spec:
+  cardLayout: split-horizontal # Expects 2 children
+  children:
+    - kind: Text
+      spec: { value: "Only one child" }
+```
+
+**Fix:** Add a second child or change `cardLayout: full`.
 
 ## Adding custom rules
 

@@ -19,6 +19,8 @@ func DefaultRules() []Rule {
 		artefactLayoutPageRequired,
 		textContentRequired,
 		datasetRequired,
+		pageLayoutSlotsUsed,
+		cardLayoutSlotsUsed,
 	}
 }
 

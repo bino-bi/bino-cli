@@ -421,6 +421,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"artefact-layoutpage-required",
 		"text-content-required",
 		"dataset-required",
+		"page-layout-slots-used",
+		"card-layout-slots-used",
 	}
 
 	if len(rules) != len(expectedIDs) {
