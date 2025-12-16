@@ -33,11 +33,13 @@ import (
 // Document represents a loaded bino document for linting.
 // It mirrors the essential fields from config.Document.
 type Document struct {
-	File     string          // Absolute path to the YAML file.
-	Position int             // 1-based index within multi-doc YAML.
-	Kind     string          // Document kind (e.g., "ReportArtefact", "Dataset").
-	Name     string          // metadata.name value.
-	Raw      json.RawMessage // Validated JSON payload.
+	File        string            // Absolute path to the YAML file.
+	Position    int               // 1-based index within multi-doc YAML.
+	Kind        string            // Document kind (e.g., "ReportArtefact", "Dataset").
+	Name        string            // metadata.name value.
+	Labels      map[string]string // metadata.labels for constraint evaluation.
+	Constraints []string          // metadata.constraints for conditional inclusion.
+	Raw         json.RawMessage   // Validated JSON payload.
 }
 
 // Finding represents a single lint warning.

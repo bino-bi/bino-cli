@@ -156,11 +156,13 @@ func configDocsToLintDocs(docs []config.Document) []lint.Document {
 	lintDocs := make([]lint.Document, 0, len(docs))
 	for _, d := range docs {
 		lintDocs = append(lintDocs, lint.Document{
-			File:     d.File,
-			Position: d.Position,
-			Kind:     d.Kind,
-			Name:     d.Name,
-			Raw:      d.Raw,
+			File:        d.File,
+			Position:    d.Position,
+			Kind:        d.Kind,
+			Name:        d.Name,
+			Labels:      d.Labels,
+			Constraints: d.Constraints,
+			Raw:         d.Raw,
 		})
 	}
 	return lintDocs
