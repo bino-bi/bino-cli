@@ -36,5 +36,6 @@ Found a bug or running into unexpected behavior? Please let us know by opening a
 If you need commercial or enterprise support, or if you wish to use BinoBI CLI to create a commercial service or product (e.g., a SaaS solution, paid reporting service), you will need a commercial license.
 
 Please contact us at [sven@bino.bi](mailto:sven@bino.bi) to:
+
 - Request commercial/enterprise support
 - Discuss commercial licensing options
