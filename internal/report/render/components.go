@@ -204,7 +204,10 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, rc *renderCtx) (
 		if skip {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("  <div slot=\"slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", slotIdx))
+		// Build slot div with source location attributes for click-to-source in preview
+		b.WriteString(fmt.Sprintf("  <div slot=\"slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\"", slotIdx))
+		writeSourceAttrs(&b, child)
+		b.WriteString(">\n")
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
 		slotIdx++
@@ -237,7 +240,10 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		if skip {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("  <div slot=\"card-slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\">\n", slotIdx))
+		// Build slot div with source location attributes for click-to-source in preview
+		b.WriteString(fmt.Sprintf("  <div slot=\"card-slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\"", slotIdx))
+		writeSourceAttrs(&b, child)
+		b.WriteString(">\n")
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
 		slotIdx++
@@ -489,6 +495,21 @@ func writeAttr(b *strings.Builder, name, value string) {
 	b.WriteString("=\"")
 	b.WriteString(html.EscapeString(value))
 	b.WriteString("\"")
+}
+
+// writeSourceAttrs writes data attributes for click-to-source functionality in preview.
+// These attributes allow the VS Code extension to navigate to the YAML source when
+// the user clicks on a component in the preview.
+func writeSourceAttrs(b *strings.Builder, child layoutChild) {
+	writeAttr(b, "data-bino-kind", child.Kind)
+	// For ref children, use the ref as the name (points to standalone document).
+	// For inline children, use the metadata name.
+	if child.Ref != "" {
+		writeAttr(b, "data-bino-ref", child.Ref)
+	}
+	if child.Metadata.Name != "" {
+		writeAttr(b, "data-bino-name", child.Metadata.Name)
+	}
 }
 
 // indentBlock indents each line of a string by the specified number of spaces.

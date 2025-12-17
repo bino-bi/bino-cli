@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import { WorkspaceIndexer, LSPDocument } from './indexer';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -12,19 +13,26 @@ export class BinoPreviewManager {
     private previewStatus: PreviewStatus = 'stopped';
     private statusBarItem: vscode.StatusBarItem;
     private previewPanel: vscode.WebviewPanel | undefined;
+    private indexer: WorkspaceIndexer | undefined;
 
     // Event emitter for status changes
     private _onStatusChange = new vscode.EventEmitter<PreviewStatus>();
     readonly onStatusChange = this._onStatusChange.event;
 
-    constructor(outputChannel: vscode.OutputChannel) {
+    constructor(outputChannel: vscode.OutputChannel, indexer?: WorkspaceIndexer) {
         this.outputChannel = outputChannel;
+        this.indexer = indexer;
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
         );
         this.statusBarItem.command = 'bino.previewMenu';
         this.updateStatusBar();
+    }
+
+    /** Set the workspace indexer for source navigation */
+    setIndexer(indexer: WorkspaceIndexer): void {
+        this.indexer = indexer;
     }
 
     /** Get the configured bino CLI path */
@@ -225,10 +233,150 @@ export class BinoPreviewManager {
 
         this.previewPanel.webview.html = this.getWebviewContent(url);
 
+        // Handle messages from the webview (click-to-source)
+        this.previewPanel.webview.onDidReceiveMessage(async (msg) => {
+            if (msg.type === 'bino:revealSource') {
+                await this.handleRevealSource(msg);
+            }
+        });
+
         // Clear reference when panel is closed
         this.previewPanel.onDidDispose(() => {
             this.previewPanel = undefined;
         });
+    }
+
+    /** Handle reveal source message from preview webview */
+    private async handleRevealSource(msg: { kind: string; name: string; ref: string }): Promise<void> {
+        if (!this.indexer) {
+            this.outputChannel.appendLine('[Preview] No indexer available for source navigation');
+            return;
+        }
+
+        // For ref children, look up the referenced document by kind:ref
+        // For inline children, we need to find them within their parent LayoutPage
+        const searchName = msg.ref || msg.name;
+        if (!searchName || !msg.kind) {
+            this.outputChannel.appendLine('[Preview] Missing kind or name for source navigation');
+            return;
+        }
+
+        const documents = this.indexer.getDocuments([msg.kind]);
+        const targetDoc = documents.find(doc => doc.name === searchName);
+
+        if (targetDoc) {
+            // Found a standalone document, open it
+            try {
+                const uri = vscode.Uri.file(targetDoc.file);
+                const document = await vscode.workspace.openTextDocument(uri);
+                const editor = await vscode.window.showTextDocument(document, {
+                    viewColumn: vscode.ViewColumn.One,
+                    preview: false
+                });
+
+                // Navigate to the document start (position 1 = first doc in file)
+                const lineNumber = this.findDocumentLine(document, targetDoc.position);
+                const position = new vscode.Position(lineNumber, 0);
+                const range = new vscode.Range(position, position);
+                editor.selection = new vscode.Selection(position, position);
+                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            } catch (err) {
+                this.outputChannel.appendLine(`[Preview] Failed to open document: ${err}`);
+            }
+        } else if (msg.name && !msg.ref) {
+            // Inline child - search for it in LayoutPage documents
+            this.outputChannel.appendLine(`[Preview] Inline child "${msg.name}" of kind "${msg.kind}" - searching in LayoutPages...`);
+            await this.searchAndRevealInlineChild(msg.kind, msg.name);
+        } else {
+            this.outputChannel.appendLine(`[Preview] Document ${msg.kind}:${searchName} not found in index`);
+        }
+    }
+
+    /** Search for inline child in LayoutPage files and reveal it */
+    private async searchAndRevealInlineChild(kind: string, name: string): Promise<void> {
+        // Get all LayoutPage documents
+        const layoutPages = this.indexer?.getDocuments(['LayoutPage']) || [];
+
+        for (const layoutPage of layoutPages) {
+            try {
+                const uri = vscode.Uri.file(layoutPage.file);
+                const document = await vscode.workspace.openTextDocument(uri);
+                const text = document.getText();
+
+                // Search for the inline child pattern:
+                // - kind: <kind>
+                //   metadata:
+                //     name: <name>
+                // or within a children array
+                const lines = text.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    // Look for "name: <name>" within metadata of a child with matching kind
+                    if (line.includes(`name: ${name}`) || line.includes(`name: "${name}"`) || line.includes(`name: '${name}'`)) {
+                        // Look backwards to verify the kind matches
+                        for (let j = i - 1; j >= Math.max(0, i - 10); j--) {
+                            const prevLine = lines[j];
+                            if (prevLine.includes(`kind: ${kind}`) || prevLine.includes(`kind: "${kind}"`) || prevLine.includes(`kind: '${kind}'`)) {
+                                // Found it! Open and navigate
+                                const editor = await vscode.window.showTextDocument(document, {
+                                    viewColumn: vscode.ViewColumn.One,
+                                    preview: false
+                                });
+                                const position = new vscode.Position(i, 0);
+                                const range = new vscode.Range(position, position);
+                                editor.selection = new vscode.Selection(position, position);
+                                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+                                return;
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // Continue searching other files
+            }
+        }
+
+        this.outputChannel.appendLine(`[Preview] Could not find inline child "${name}" of kind "${kind}"`);
+    }
+
+    /**
+     * Find the line number where the Nth document starts in a multi-doc YAML file.
+     * @param document The VS Code text document
+     * @param docIndex 1-based document index
+     * @returns 0-based line number
+     */
+    private findDocumentLine(document: vscode.TextDocument, docIndex: number): number {
+        const text = document.getText();
+        const lines = text.split('\n');
+
+        let currentDocIndex = 0;
+
+        for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+            const line = lines[lineNum].trim();
+
+            if (lineNum === 0) {
+                if (line === '---') {
+                    continue;
+                } else if (line && !line.startsWith('#')) {
+                    currentDocIndex = 1;
+                    if (currentDocIndex === docIndex) {
+                        return 0;
+                    }
+                }
+            } else if (line === '---') {
+                currentDocIndex++;
+                if (currentDocIndex === docIndex) {
+                    return lineNum + 1;
+                }
+            } else if (currentDocIndex === 0 && line && !line.startsWith('#')) {
+                currentDocIndex = 1;
+                if (currentDocIndex === docIndex) {
+                    return lineNum;
+                }
+            }
+        }
+
+        return 0;
     }
 
     /** Generate HTML content for the webview with an iframe */
@@ -252,6 +400,16 @@ export class BinoPreviewManager {
 </head>
 <body>
     <iframe src="${url}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <script>
+        // Forward messages from iframe to VS Code extension
+        const vscode = acquireVsCodeApi();
+        window.addEventListener('message', (event) => {
+            const msg = event.data;
+            if (msg && msg.type === 'bino:revealSource') {
+                vscode.postMessage(msg);
+            }
+        });
+    </script>
 </body>
 </html>`;
     }

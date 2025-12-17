@@ -533,6 +533,34 @@ var (
 		window.addEventListener("beforeunload", function () {
 			source.close();
 		});
+
+		// Click-to-source: when user clicks on a component with data-bino-kind,
+		// post a message to parent window (VS Code webview) to reveal the source.
+		document.addEventListener("click", function (e) {
+			// Only handle clicks with Cmd (Mac) or Ctrl (Windows/Linux) held
+			if (!e.metaKey && !e.ctrlKey) {
+				return;
+			}
+			var el = e.target.closest("[data-bino-kind]");
+			if (!el) {
+				return;
+			}
+			var kind = el.getAttribute("data-bino-kind");
+			var name = el.getAttribute("data-bino-name") || "";
+			var ref = el.getAttribute("data-bino-ref") || "";
+			var msg = {
+				type: "bino:revealSource",
+				kind: kind,
+				name: name,
+				ref: ref
+			};
+			// Post to parent window (for iframe in VS Code webview)
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage(msg, "*");
+			}
+			e.preventDefault();
+			e.stopPropagation();
+		});
 	})();
 	</script>
 `)
