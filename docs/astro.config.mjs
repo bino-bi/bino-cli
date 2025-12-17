@@ -2,16 +2,21 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightThemeNova from 'starlight-theme-nova';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 // https://astro.build/config
 export default defineConfig({
+	site: "https://cli.bino.bi",
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
-			plugins: [ starlightThemeNova({
+			plugins: [
+				starlightLlmsTxt(),
+				starlightThemeNova({
 				nav: [
 					{ label: 'CLI', href: '/cli' },
-					{ label: 'Reference', href: '/reference' }
+					{ label: 'Reference', href: '/reference' },
+					{ label: 'Support', href: '/support' },
 				]
 			})],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/bino-bi/bino-cli-releases' }],
@@ -44,6 +49,10 @@ export default defineConfig({
 				{
 					label: 'Appendix',
 					autogenerate: { directory: 'appendix' },
+				},
+				{
+					label: 'Support',
+					slug: 'support',
 				},
 			],
 		}),
