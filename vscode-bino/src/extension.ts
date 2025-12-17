@@ -86,8 +86,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     validator = new BinoValidator(outputChannel);
     context.subscriptions.push({ dispose: () => validator?.dispose() });
 
-    // Initialize preview manager
-    previewManager = new BinoPreviewManager(outputChannel);
+    // Initialize preview manager with indexer for click-to-source navigation
+    previewManager = new BinoPreviewManager(outputChannel, indexer);
     context.subscriptions.push({ dispose: () => previewManager?.dispose() });
 
     // Register schema provider with RedHat YAML extension
