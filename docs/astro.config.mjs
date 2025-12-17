@@ -10,6 +10,9 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
+			components: {
+				Footer: './src/components/Footer.astro',
+			},
 			plugins: [
 				starlightLlmsTxt(),
 				starlightThemeNova({

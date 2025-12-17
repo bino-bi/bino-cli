@@ -1,0 +1,47 @@
+---
+import DefaultFooter from '@astrojs/starlight/components/Footer.astro';
+import type { Props } from '@astrojs/starlight/props';
+---
+
+<DefaultFooter {...Astro.props} />
+
+<div class="custom-footer">
+  <div class="copyright">
+    &copy; {new Date().getFullYear()} BinoBI. All rights reserved.
+  </div>
+  <div class="footer-links">
+    <a href="/support">Support</a>
+    <a href="/imprint">Imprint</a>
+    <a href="https://github.com/bino-bi/bino-cli/blob/main/LICENCE">License</a>
+  </div>
+</div>
+
+<style>
+  .custom-footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  
+  .footer-links {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .footer-links a {
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+  }
+  
+  .footer-links a:hover {
+    color: var(--sl-color-text-accent);
+  }
+</style>
