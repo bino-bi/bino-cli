@@ -63,6 +63,17 @@ export interface LSPGraphDepsResult {
     error?: string;
 }
 
+/** Result from bino lsp-helper rows */
+export interface LSPRowsResult {
+    name: string;
+    kind: string;
+    columns: string[];
+    rows: Record<string, unknown>[];
+    limit: number;
+    truncated: boolean;
+    error?: string;
+}
+
 /**
  * WorkspaceIndexer maintains an index of all Bino documents in the workspace
  * and provides column introspection with caching.
@@ -321,6 +332,38 @@ export class WorkspaceIndexer {
             return result;
         } catch (err) {
             this.outputChannel.appendLine(`Failed to get graph deps for ${kind}:${name}: ${err}`);
+            return undefined;
+        }
+    }
+
+    /**
+     * Get preview rows for a DataSource or DataSet.
+     * @param name Document name
+     * @param limit Maximum number of rows to return
+     */
+    async getRows(name: string, limit: number = 100): Promise<LSPRowsResult | undefined> {
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return undefined;
+        }
+
+        try {
+            const args = [
+                'lsp-helper', 'rows', workDir, name,
+                '--limit', String(limit)
+            ];
+
+            const output = await this.execBino(args);
+            const result: LSPRowsResult = JSON.parse(output);
+
+            if (result.error) {
+                this.outputChannel.appendLine(`Rows error for ${name}: ${result.error}`);
+                return result; // Return with error so caller can show error message
+            }
+
+            return result;
+        } catch (err) {
+            this.outputChannel.appendLine(`Failed to get rows for ${name}: ${err}`);
             return undefined;
         }
     }
