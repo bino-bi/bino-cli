@@ -135,28 +135,28 @@ type textSpec struct {
 
 // chartStructureSpec defines the structure for ChartStructure components.
 type chartStructureSpec struct {
-	Dataset                  reportspec.DatasetList `json:"dataset"`
-	ChartTitle               string                 `json:"chartTitle"`
-	Filter                   string                 `json:"filter"`
-	Level                    string                 `json:"level"`
-	Order                    string                 `json:"order"`
-	OrderDirection           string                 `json:"orderDirection"`
-	MeasureScale             string                 `json:"measureScale"`
-	MeasureUnit              string                 `json:"measureUnit"`
-	PercentageScaling        string                 `json:"percentageScaling"`
-	UnitScaling              string                 `json:"unitScaling"`
-	Internationalisation     string                 `json:"internationalisation"`
-	InternationalisationMode string                 `json:"internationalisationMode"`
-	ComponentStatus          string                 `json:"componentStatus"`
-	Translation              string                 `json:"translation"`
-	HideCategories           *bool                  `json:"hideCategories"`
-	ShowCategories           *bool                  `json:"showCategories"`
-	ShowMeasureScale         *bool                  `json:"showMeasureScale"`
-	Limit                    *int                   `json:"limit"`
-	PixelPerPercentage       *float64               `json:"pixelPerPercentage"`
-	PixelPerUnit             *float64               `json:"pixelPerUnit"`
-	Scenarios                []string               `json:"scenarios"`
-	Variances                []string               `json:"variances"`
+	Dataset                  reportspec.DatasetList   `json:"dataset"`
+	ChartTitle               string                   `json:"chartTitle"`
+	Filter                   string                   `json:"filter"`
+	Level                    string                   `json:"level"`
+	Order                    string                   `json:"order"`
+	OrderDirection           string                   `json:"orderDirection"`
+	MeasureScale             string                   `json:"measureScale"`
+	MeasureUnit              string                   `json:"measureUnit"`
+	PercentageScaling        reportspec.StringOrFloat `json:"percentageScaling"`
+	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
+	Internationalisation     string                   `json:"internationalisation"`
+	InternationalisationMode string                   `json:"internationalisationMode"`
+	ComponentStatus          string                   `json:"componentStatus"`
+	Translation              string                   `json:"translation"`
+	HideCategories           *bool                    `json:"hideCategories"`
+	ShowCategories           *bool                    `json:"showCategories"`
+	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
+	Limit                    *int                     `json:"limit"`
+	PixelPerPercentage       *float64                 `json:"pixelPerPercentage"`
+	PixelPerUnit             *float64                 `json:"pixelPerUnit"`
+	Scenarios                []string                 `json:"scenarios"`
+	Variances                []string                 `json:"variances"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -168,8 +168,8 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "order-direction", s.OrderDirection)
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "percentage-scaling", s.PercentageScaling)
-	writeAttr(b, "unit-scaling", s.UnitScaling)
+	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
+	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeAttr(b, "internationalisation", s.Internationalisation)
 	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
 	writeAttr(b, "component-status", s.ComponentStatus)
@@ -186,36 +186,36 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 
 // chartTimeSpec defines the structure for ChartTime components.
 type chartTimeSpec struct {
-	Dataset                         reportspec.DatasetList `json:"dataset"`
-	ChartTitle                      string                 `json:"chartTitle"`
-	AxisLabelsMode                  string                 `json:"axisLabelsMode"`
-	DateInterval                    string                 `json:"dateInterval"`
-	Filter                          string                 `json:"filter"`
-	Level                           string                 `json:"level"`
-	Order                           string                 `json:"order"`
-	OrderDirection                  string                 `json:"orderDirection"`
-	MeasureScale                    string                 `json:"measureScale"`
-	MeasureUnit                     string                 `json:"measureUnit"`
-	Type                            string                 `json:"type"`
-	Internationalisation            string                 `json:"internationalisation"`
-	InternationalisationMode        string                 `json:"internationalisationMode"`
-	ComponentStatus                 string                 `json:"componentStatus"`
-	Translation                     string                 `json:"translation"`
-	HideAxisLabels                  *bool                  `json:"hideAxisLabels"`
-	ShowCategories                  *bool                  `json:"showCategories"`
-	ShowMeasureScale                *bool                  `json:"showMeasureScale"`
-	ShowOverlayAvg                  *bool                  `json:"showOverlayAvg"`
-	ShowOverlayMedian               *bool                  `json:"showOverlayMedian"`
-	Limit                           *int                   `json:"limit"`
-	IntervalSpanLimit               *int                   `json:"intervalSpanLimit"`
-	PercentageScaling               string                 `json:"percentageScaling"`
-	UnitScaling                     string                 `json:"unitScaling"`
-	SyncSpaceLeft                   *float64               `json:"syncSpaceLeft"`
-	PixelPerPercentage              *float64               `json:"pixelPerPercentage"`
-	PixelPerUnit                    *float64               `json:"pixelPerUnit"`
-	LeftSideOffsetForHorizontalSync *float64               `json:"leftSideOffsetForHorizontalSync"`
-	Scenarios                       []string               `json:"scenarios"`
-	Variances                       []string               `json:"variances"`
+	Dataset                         reportspec.DatasetList   `json:"dataset"`
+	ChartTitle                      string                   `json:"chartTitle"`
+	AxisLabelsMode                  string                   `json:"axisLabelsMode"`
+	DateInterval                    string                   `json:"dateInterval"`
+	Filter                          string                   `json:"filter"`
+	Level                           string                   `json:"level"`
+	Order                           string                   `json:"order"`
+	OrderDirection                  string                   `json:"orderDirection"`
+	MeasureScale                    string                   `json:"measureScale"`
+	MeasureUnit                     string                   `json:"measureUnit"`
+	Type                            string                   `json:"type"`
+	Internationalisation            string                   `json:"internationalisation"`
+	InternationalisationMode        string                   `json:"internationalisationMode"`
+	ComponentStatus                 string                   `json:"componentStatus"`
+	Translation                     string                   `json:"translation"`
+	HideAxisLabels                  *bool                    `json:"hideAxisLabels"`
+	ShowCategories                  *bool                    `json:"showCategories"`
+	ShowMeasureScale                *bool                    `json:"showMeasureScale"`
+	ShowOverlayAvg                  *bool                    `json:"showOverlayAvg"`
+	ShowOverlayMedian               *bool                    `json:"showOverlayMedian"`
+	Limit                           *int                     `json:"limit"`
+	IntervalSpanLimit               *int                     `json:"intervalSpanLimit"`
+	PercentageScaling               reportspec.StringOrFloat `json:"percentageScaling"`
+	UnitScaling                     reportspec.StringOrFloat `json:"unitScaling"`
+	SyncSpaceLeft                   *float64                 `json:"syncSpaceLeft"`
+	PixelPerPercentage              *float64                 `json:"pixelPerPercentage"`
+	PixelPerUnit                    *float64                 `json:"pixelPerUnit"`
+	LeftSideOffsetForHorizontalSync *float64                 `json:"leftSideOffsetForHorizontalSync"`
+	Scenarios                       []string                 `json:"scenarios"`
+	Variances                       []string                 `json:"variances"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -241,8 +241,8 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-overlay-median", s.ShowOverlayMedian)
 	writeIntAttr(b, "limit", s.Limit)
 	writeIntAttr(b, "interval-span-limit", s.IntervalSpanLimit)
-	writeAttr(b, "percentage-scaling", s.PercentageScaling)
-	writeAttr(b, "unit-scaling", s.UnitScaling)
+	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
+	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeFloatAttr(b, "sync-space-left", s.SyncSpaceLeft)
 	writeFloatAttr(b, "pixel-per-percentage", s.PixelPerPercentage)
 	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
@@ -253,33 +253,33 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 
 // tableSpec defines the structure for Table components.
 type tableSpec struct {
-	Dataset                  reportspec.DatasetList `json:"dataset"`
-	TableTitle               string                 `json:"tableTitle"`
-	Filter                   string                 `json:"filter"`
-	Order                    string                 `json:"order"`
-	OrderDirection           string                 `json:"orderDirection"`
-	MeasureScale             string                 `json:"measureScale"`
-	MeasureType              string                 `json:"measureType"`
-	MeasureUnit              string                 `json:"measureUnit"`
-	Internationalisation     string                 `json:"internationalisation"`
-	InternationalisationMode string                 `json:"internationalisationMode"`
-	ComponentStatus          string                 `json:"componentStatus"`
-	Translation              string                 `json:"translation"`
-	CategoryWidth            string                 `json:"categoryWidth"`
-	DataFormat               string                 `json:"dataFormat"`
-	DataFormatDigitsDecimal  *int                   `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent  *int                   `json:"dataFormatDigitsPercent"`
-	Grouped                  *bool                  `json:"grouped"`
-	ShowGroupTitle           *bool                  `json:"showGroupTitle"`
-	ShowMeasureScale         *bool                  `json:"showMeasureScale"`
-	Limit                    *int                   `json:"limit"`
-	ScenariosDataFormat      string                 `json:"scenariosDataFormat"`
-	Type                     string                 `json:"type"`
-	Scenarios                []string               `json:"scenarios"`
-	Variances                []string               `json:"variances"`
-	Thereof                  string                 `json:"thereof"`
-	Partof                   string                 `json:"partof"`
-	Columnthereof            string                 `json:"columnthereof"`
+	Dataset                  reportspec.DatasetList       `json:"dataset"`
+	TableTitle               string                       `json:"tableTitle"`
+	Filter                   string                       `json:"filter"`
+	Order                    string                       `json:"order"`
+	OrderDirection           string                       `json:"orderDirection"`
+	MeasureScale             string                       `json:"measureScale"`
+	MeasureType              string                       `json:"measureType"`
+	MeasureUnit              string                       `json:"measureUnit"`
+	Internationalisation     string                       `json:"internationalisation"`
+	InternationalisationMode string                       `json:"internationalisationMode"`
+	ComponentStatus          string                       `json:"componentStatus"`
+	Translation              string                       `json:"translation"`
+	CategoryWidth            string                       `json:"categoryWidth"`
+	DataFormat               string                       `json:"dataFormat"`
+	DataFormatDigitsDecimal  *int                         `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent  *int                         `json:"dataFormatDigitsPercent"`
+	Grouped                  *bool                        `json:"grouped"`
+	ShowGroupTitle           *bool                        `json:"showGroupTitle"`
+	ShowMeasureScale         *bool                        `json:"showMeasureScale"`
+	Limit                    *int                         `json:"limit"`
+	ScenariosDataFormat      string                       `json:"scenariosDataFormat"`
+	Type                     string                       `json:"type"`
+	Scenarios                []string                     `json:"scenarios"`
+	Variances                []string                     `json:"variances"`
+	Thereof                  reportspec.ThereofList       `json:"thereof"`
+	Partof                   reportspec.PartofList        `json:"partof"`
+	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -307,9 +307,9 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "type", s.Type)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
-	writeAttr(b, "thereof", s.Thereof)
-	writeAttr(b, "partof", s.Partof)
-	writeAttr(b, "columnthereof", s.Columnthereof)
+	writeAttr(b, "thereof", s.Thereof.String())
+	writeAttr(b, "partof", s.Partof.String())
+	writeAttr(b, "columnthereof", s.Columnthereof.String())
 }
 
 // writeBoolAttr writes a boolean attribute if the value is non-nil.
