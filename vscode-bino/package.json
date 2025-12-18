@@ -157,6 +157,12 @@
         "title": "Open PRQL SQL Preview",
         "category": "Bino",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "bino.previewRows",
+        "title": "Preview Rows (100 rows)",
+        "category": "Bino",
+        "icon": "$(preview)"
       }
     ],
     "menus": {
