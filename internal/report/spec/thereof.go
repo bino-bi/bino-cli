@@ -1,0 +1,183 @@
+package spec
+
+import (
+	"bytes"
+	"encoding/json"
+)
+
+// ThereofItem represents a single drilldown object with rowGroup, category, and subCategory.
+type ThereofItem struct {
+	RowGroup    string `json:"rowGroup,omitempty"`
+	Category    string `json:"category,omitempty"`
+	SubCategory string `json:"subCategory,omitempty"`
+}
+
+// ThereofList captures a list of thereof drilldown items that may be specified
+// as either a JSON string or an array of objects in YAML/JSON.
+type ThereofList []ThereofItem
+
+// UnmarshalJSON supports both string (JSON-encoded) and array inputs.
+func (t *ThereofList) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		*t = nil
+		return nil
+	}
+
+	// Try to unmarshal as an array of objects first.
+	var items []ThereofItem
+	if err := json.Unmarshal(data, &items); err == nil {
+		*t = items
+		return nil
+	}
+
+	// Try to unmarshal as a string containing JSON.
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str == "" {
+			*t = nil
+			return nil
+		}
+		// Parse the string as JSON array.
+		var parsed []ThereofItem
+		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
+			*t = parsed
+			return nil
+		}
+		// Keep the raw string value as a single-item placeholder if parsing fails.
+		*t = nil
+		return nil
+	}
+
+	*t = nil
+	return nil
+}
+
+// String returns the JSON string representation of the list.
+func (t ThereofList) String() string {
+	if len(t) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(t)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// PartofItem represents a single part-of object with rowGroup and category.
+type PartofItem struct {
+	RowGroup string `json:"rowGroup,omitempty"`
+	Category string `json:"category,omitempty"`
+}
+
+// PartofList captures a list of partof items that may be specified
+// as either a JSON string or an array of objects in YAML/JSON.
+type PartofList []PartofItem
+
+// UnmarshalJSON supports both string (JSON-encoded) and array inputs.
+func (p *PartofList) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		*p = nil
+		return nil
+	}
+
+	// Try to unmarshal as an array of objects first.
+	var items []PartofItem
+	if err := json.Unmarshal(data, &items); err == nil {
+		*p = items
+		return nil
+	}
+
+	// Try to unmarshal as a string containing JSON.
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str == "" {
+			*p = nil
+			return nil
+		}
+		// Parse the string as JSON array.
+		var parsed []PartofItem
+		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
+			*p = parsed
+			return nil
+		}
+		*p = nil
+		return nil
+	}
+
+	*p = nil
+	return nil
+}
+
+// String returns the JSON string representation of the list.
+func (p PartofList) String() string {
+	if len(p) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ColumnthereofItem represents a single column-thereof object.
+type ColumnthereofItem struct {
+	Scenario  string   `json:"scenario,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	SubGroups []string `json:"subGroups,omitempty"`
+}
+
+// ColumnthereofList captures a list of columnthereof items that may be specified
+// as either a JSON string or an array of objects in YAML/JSON.
+type ColumnthereofList []ColumnthereofItem
+
+// UnmarshalJSON supports both string (JSON-encoded) and array inputs.
+func (c *ColumnthereofList) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		*c = nil
+		return nil
+	}
+
+	// Try to unmarshal as an array of objects first.
+	var items []ColumnthereofItem
+	if err := json.Unmarshal(data, &items); err == nil {
+		*c = items
+		return nil
+	}
+
+	// Try to unmarshal as a string containing JSON.
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str == "" {
+			*c = nil
+			return nil
+		}
+		// Parse the string as JSON array.
+		var parsed []ColumnthereofItem
+		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
+			*c = parsed
+			return nil
+		}
+		*c = nil
+		return nil
+	}
+
+	*c = nil
+	return nil
+}
+
+// String returns the JSON string representation of the list.
+func (c ColumnthereofList) String() string {
+	if len(c) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
