@@ -13,10 +13,13 @@ import { registerRenameProvider } from './rename';
 import { registerPrqlFeatures } from './prql';
 import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
+import { BinoCodeLensProvider } from './codelens';
+import { RowsPreviewManager } from './rowsPreview';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
 let previewManager: BinoPreviewManager | undefined;
+let rowsPreviewManager: RowsPreviewManager | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
 
@@ -126,6 +129,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             hoverProvider
         )
     );
+
+    // Register CodeLens provider for DataSource/DataSet previews
+    const codeLensProvider = new BinoCodeLensProvider(indexer);
+    context.subscriptions.push(
+        vscode.languages.registerCodeLensProvider(
+            yamlSelector,
+            codeLensProvider
+        )
+    );
+    context.subscriptions.push({ dispose: () => codeLensProvider.dispose() });
+
+    // Initialize rows preview manager
+    rowsPreviewManager = new RowsPreviewManager(indexer, outputChannel);
+    context.subscriptions.push({ dispose: () => rowsPreviewManager?.dispose() });
 
     // Register rename provider for document identifiers
     registerRenameProvider(context, indexer);
@@ -333,6 +350,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.showColumnsForCurrentDataset', async () => {
             await showColumnsForCurrentDataset(indexer);
+        })
+    );
+
+    // Preview rows for DataSource/DataSet (called from CodeLens)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.previewRows', async (doc: LSPDocument) => {
+            if (doc && rowsPreviewManager) {
+                await rowsPreviewManager.showPreview(doc);
+            }
         })
     );
 

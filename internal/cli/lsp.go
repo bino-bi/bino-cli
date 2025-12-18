@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 // LSPDocument represents a document entry for the LSP index output.
@@ -83,6 +85,17 @@ type LSPGraphDepsResult struct {
 	Error     string         `json:"error,omitempty"`
 }
 
+// LSPRowsResult is the JSON output for the rows command.
+type LSPRowsResult struct {
+	Name      string           `json:"name"`
+	Kind      string           `json:"kind"`
+	Columns   []string         `json:"columns"`
+	Rows      []map[string]any `json:"rows"`
+	Limit     int              `json:"limit"`
+	Truncated bool             `json:"truncated"`
+	Error     string           `json:"error,omitempty"`
+}
+
 func newLSPCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "lsp-helper",
@@ -95,6 +108,7 @@ func newLSPCommand() *cobra.Command {
 	cmd.AddCommand(newLSPColumnsCommand())
 	cmd.AddCommand(newLSPValidateCommand())
 	cmd.AddCommand(newLSPGraphDepsCommand())
+	cmd.AddCommand(newLSPRowsCommand())
 
 	return cmd
 }
@@ -389,6 +403,230 @@ func parseFileError(errStr string) (file string, position int, message string) {
 	}
 
 	return "", 0, errStr
+}
+
+func newLSPRowsCommand() *cobra.Command {
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "rows <directory> <name>",
+		Short: "Preview rows from a DataSource or DataSet",
+		Long:  "Executes the datasource/dataset query and returns the first N rows for preview.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := args[0]
+			name := args[1]
+			return runLSPRows(cmd.Context(), dir, name, limit, cmd.OutOrStdout())
+		},
+	}
+
+	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of rows to return")
+
+	return cmd
+}
+
+func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer) error {
+	result := LSPRowsResult{
+		Name:    name,
+		Columns: []string{},
+		Rows:    []map[string]any{},
+		Limit:   limit,
+	}
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve path: %v", err)
+		return outputJSON(out, result)
+	}
+
+	// Use lenient mode to skip non-bino YAML files and continue on errors
+	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
+	if err != nil {
+		result.Error = fmt.Sprintf("load documents: %v", err)
+		return outputJSON(out, result)
+	}
+
+	// Find the target document (DataSource or DataSet)
+	var targetDoc *config.Document
+	isDataSource := strings.HasPrefix(name, "$")
+	lookupName := strings.TrimPrefix(name, "$")
+
+	for i := range docs {
+		doc := &docs[i]
+		if doc.Name != lookupName {
+			continue
+		}
+		if isDataSource && doc.Kind == "DataSource" {
+			targetDoc = doc
+			break
+		}
+		if !isDataSource && doc.Kind == "DataSet" {
+			targetDoc = doc
+			break
+		}
+		// Also accept DataSource without $ prefix as fallback
+		if !isDataSource && doc.Kind == "DataSource" {
+			targetDoc = doc
+			// Don't break, prefer DataSet if both exist
+		}
+	}
+
+	if targetDoc == nil {
+		result.Error = fmt.Sprintf("document not found: %s", name)
+		return outputJSON(out, result)
+	}
+
+	result.Kind = targetDoc.Kind
+
+	// Execute the query and get rows
+	columns, rows, truncated, err := executeRowsPreview(ctx, targetDoc, docs, limit)
+	if err != nil {
+		result.Error = fmt.Sprintf("execute query: %v", err)
+		return outputJSON(out, result)
+	}
+
+	result.Columns = columns
+	result.Rows = rows
+	result.Truncated = truncated
+
+	return outputJSON(out, result)
+}
+
+// executeRowsPreview runs a query against a DataSource or DataSet and returns limited rows.
+func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []config.Document, limit int) ([]string, []map[string]any, bool, error) {
+	// Open a DuckDB session
+	opts, err := duckdb.DefaultOptions()
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("duckdb options: %w", err)
+	}
+
+	session, err := duckdb.OpenSession(ctx, opts)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("duckdb open: %w", err)
+	}
+	defer session.Close()
+
+	// Create temp directory for inline datasource CSV files
+	tempDir, err := os.MkdirTemp("", "bino-rows-preview-")
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Register all DataSources as views so DataSets can reference them
+	_, err = datasource.RegisterViews(ctx, session, allDocs, &datasource.ViewsOptions{
+		TempDir: tempDir,
+	})
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("register views: %w", err)
+	}
+
+	// Build the query based on document type
+	var query string
+	switch doc.Kind {
+	case "DataSource":
+		// DataSource is already a view, just select from it
+		query = fmt.Sprintf("SELECT * FROM \"%s\" LIMIT %d", doc.Name, limit+1)
+
+	case "DataSet":
+		// DataSet has a custom query (SQL or PRQL)
+		var payload struct {
+			Spec struct {
+				Query string `json:"query"`
+				Prql  string `json:"prql"`
+			} `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, nil, false, fmt.Errorf("parse dataset spec: %w", err)
+		}
+
+		if payload.Spec.Prql != "" {
+			// Load PRQL extension for PRQL queries
+			if err := session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions()); err != nil {
+				return nil, nil, false, fmt.Errorf("load prql extension: %w", err)
+			}
+			// For PRQL, wrap the query with a LIMIT
+			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", payload.Spec.Prql, limit+1)
+		} else if payload.Spec.Query != "" {
+			// Strip trailing semicolons to avoid syntax errors when wrapping
+			sqlQuery := strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
+			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", sqlQuery, limit+1)
+		} else {
+			return nil, nil, false, fmt.Errorf("dataset has no query or prql")
+		}
+
+	default:
+		return nil, nil, false, fmt.Errorf("unsupported kind: %s", doc.Kind)
+	}
+
+	// Execute the query
+	rows, err := session.DB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	// Get columns
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("get columns: %w", err)
+	}
+
+	// Scan rows
+	var results []map[string]any
+	values := make([]any, len(columns))
+	valuePtrs := make([]any, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	rowCount := 0
+	for rows.Next() {
+		rowCount++
+		// Stop after limit rows (we fetch limit+1 to detect truncation)
+		if rowCount > limit {
+			break
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, nil, false, fmt.Errorf("scan row: %w", err)
+		}
+
+		row := make(map[string]any, len(columns))
+		for i, col := range columns {
+			row[col] = normalizeValue(values[i])
+		}
+		results = append(results, row)
+	}
+
+	if results == nil {
+		results = []map[string]any{}
+	}
+
+	// Truncated if we had more rows than the limit
+	truncated := rowCount > limit
+
+	return columns, results, truncated, nil
+}
+
+// normalizeValue converts database values to JSON-serializable types.
+func normalizeValue(v any) any {
+	if v == nil {
+		return nil
+	}
+
+	switch val := v.(type) {
+	case []byte:
+		// Try to parse as JSON first
+		var jsonVal any
+		if err := json.Unmarshal(val, &jsonVal); err == nil {
+			return jsonVal
+		}
+		// Otherwise return as string
+		return string(val)
+	default:
+		return val
+	}
 }
 
 func newLSPGraphDepsCommand() *cobra.Command {
