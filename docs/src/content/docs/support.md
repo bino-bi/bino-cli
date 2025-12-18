@@ -38,4 +38,5 @@ If you need commercial or enterprise support, or if you wish to use BinoBI CLI t
 Please contact us at [sven@bino.bi](mailto:sven@bino.bi) to:
 
 - Request commercial/enterprise support
+  - including Data Engineering, Information Design, Reporting Infrastructure, Consulting, Training, and more
 - Discuss commercial licensing options
