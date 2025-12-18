@@ -389,33 +389,142 @@ var (
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 			background-color: #f5f6fb;
 		}
+		*, *::before, *::after {
+			box-sizing: border-box;
+		}
+		html {
+			display: block !important;
+			overflow-x: auto;
+		}
 		body {
+			display: block !important;
+			justify-content: initial !important;
 			margin: 0;
 			min-height: 100vh;
+			min-width: fit-content;
 			background: #f5f6fb;
 			font-family: inherit;
 			color: #111827;
-			display: flex;
-			justify-content: center;
-			box-sizing: border-box;
+			padding: 1.5rem;
 		}
 		bn-context {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			gap: 1.75rem;
+			width: fit-content;
+			min-width: 100%;
+			margin: 0 auto;
 		}
-		
-	bn-layout-page {
+		bn-layout-page {
 			box-sizing: border-box;
 			background: #ffffff;
 			box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
-			
+			flex-shrink: 0;
 		}
-		@media (max-width: 768px) {
+		@media (min-width: 769px) {
 			body {
-				padding: 1.5rem;
+				padding: 2rem;
 			}
+		}
+		/* Preview-only error indicator styles */
+		[has-error]::before, [has-errors]::before {
+			content: "⚠";
+			position: absolute;
+			top: 2px;
+			right: 2px;
+			width: 18px;
+			height: 18px;
+			background: #f59e0b;
+			color: #fff;
+			font-size: 12px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 10000;
+			cursor: pointer;
+		}
+		#bn-error-panel {
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			max-height: 200px;
+			overflow-y: auto;
+			background: #fffbeb;
+			border-top: 2px solid #f59e0b;
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+			font-size: 13px;
+			z-index: 10001;
+			box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+		}
+		#bn-error-panel-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 8px 12px;
+			background: #fef3c7;
+			border-bottom: 1px solid #fcd34d;
+			font-weight: 600;
+			color: #92400e;
+		}
+		#bn-error-panel-close {
+			background: none;
+			border: none;
+			font-size: 18px;
+			cursor: pointer;
+			color: #92400e;
+			padding: 0 4px;
+		}
+		#bn-error-panel-close:hover {
+			color: #78350f;
+		}
+		#bn-error-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+		.bn-error-item {
+			padding: 8px 12px;
+			border-bottom: 1px solid #fde68a;
+			cursor: pointer;
+			display: flex;
+			align-items: flex-start;
+			gap: 8px;
+		}
+		.bn-error-item:hover {
+			background: #fef3c7;
+		}
+		.bn-error-item:last-child {
+			border-bottom: none;
+		}
+		.bn-error-badge {
+			flex-shrink: 0;
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-size: 11px;
+			font-weight: 600;
+			text-transform: uppercase;
+		}
+		.bn-error-badge.warning {
+			background: #fcd34d;
+			color: #78350f;
+		}
+		.bn-error-badge.error {
+			background: #fca5a5;
+			color: #7f1d1d;
+		}
+		.bn-error-message {
+			color: #78350f;
+		}
+		.bn-error-highlight {
+			animation: bn-error-pulse 0.6s ease-out;
+		}
+		@keyframes bn-error-pulse {
+			0% { outline-color: #f59e0b; outline-width: 2px; }
+			50% { outline-color: #dc2626; outline-width: 4px; }
+			100% { outline-color: #f59e0b; outline-width: 2px; }
 		}
 	</style>
 	<script id="bn-preview-runtime">
@@ -561,6 +670,156 @@ var (
 			e.preventDefault();
 			e.stopPropagation();
 		});
+
+		// Error panel functionality for preview-only validation feedback
+		var errorPanelVisible = false;
+		var errorPanelElement = null;
+		var scanDebounceTimer = null;
+
+		function parseErrors(attrValue) {
+			if (!attrValue) return [];
+			try {
+				var parsed = JSON.parse(attrValue);
+				return Array.isArray(parsed) ? parsed : [];
+			} catch (e) {
+				console.debug("bn preview: failed to parse error attribute", e);
+				return [];
+			}
+		}
+
+		function collectAllErrors() {
+			var results = [];
+			var elements = document.querySelectorAll("[has-error], [has-errors]");
+			elements.forEach(function (el) {
+				var attrValue = el.getAttribute("has-error") || el.getAttribute("has-errors");
+				var errors = parseErrors(attrValue);
+				errors.forEach(function (err) {
+					results.push({ element: el, error: err });
+				});
+			});
+			return results;
+		}
+
+		function createErrorPanel() {
+			if (errorPanelElement) return errorPanelElement;
+			var panel = document.createElement("div");
+			panel.id = "bn-error-panel";
+			panel.innerHTML = '<div id="bn-error-panel-header"><span id="bn-error-count"></span><button id="bn-error-panel-close" title="Close">&times;</button></div><ul id="bn-error-list"></ul>';
+			document.body.appendChild(panel);
+			panel.querySelector("#bn-error-panel-close").addEventListener("click", function () {
+				hideErrorPanel();
+			});
+			errorPanelElement = panel;
+			return panel;
+		}
+
+		function showErrorPanel(errors) {
+			var panel = createErrorPanel();
+			var countEl = panel.querySelector("#bn-error-count");
+			var listEl = panel.querySelector("#bn-error-list");
+			countEl.textContent = errors.length + " warning" + (errors.length !== 1 ? "s" : "") + " found";
+			listEl.innerHTML = "";
+			errors.forEach(function (item, idx) {
+				var li = document.createElement("li");
+				li.className = "bn-error-item";
+				li.innerHTML = '<span class="bn-error-badge ' + (item.error.type || "warning") + '">' + (item.error.type || "warning") + '</span><span class="bn-error-message">' + escapeHtml(item.error.message || item.error.id || "Unknown error") + '</span>';
+				li.addEventListener("click", function () {
+					scrollToElement(item.element);
+				});
+				listEl.appendChild(li);
+			});
+			panel.style.display = "block";
+			errorPanelVisible = true;
+		}
+
+		function hideErrorPanel() {
+			if (errorPanelElement) {
+				errorPanelElement.style.display = "none";
+			}
+			errorPanelVisible = false;
+		}
+
+		function scrollToElement(el) {
+			if (!el) return;
+			el.scrollIntoView({ behavior: "smooth", block: "center" });
+			el.classList.remove("bn-error-highlight");
+			void el.offsetWidth; // force reflow
+			el.classList.add("bn-error-highlight");
+			setTimeout(function () {
+				el.classList.remove("bn-error-highlight");
+			}, 700);
+		}
+
+		function escapeHtml(str) {
+			var div = document.createElement("div");
+			div.textContent = str;
+			return div.innerHTML;
+		}
+
+		function scanForErrors() {
+			var errors = collectAllErrors();
+			if (errors.length > 0) {
+				showErrorPanel(errors);
+			} else {
+				hideErrorPanel();
+			}
+		}
+
+		function debouncedScan() {
+			if (scanDebounceTimer) {
+				clearTimeout(scanDebounceTimer);
+			}
+			scanDebounceTimer = setTimeout(function () {
+				scanForErrors();
+			}, 100);
+		}
+
+		// Observe DOM for dynamically added/modified has-error attributes
+		var errorObserver = new MutationObserver(function (mutations) {
+			var shouldScan = false;
+			mutations.forEach(function (m) {
+				if (m.type === "attributes" && (m.attributeName === "has-error" || m.attributeName === "has-errors")) {
+					shouldScan = true;
+				}
+				if (m.type === "childList" && m.addedNodes.length > 0) {
+					m.addedNodes.forEach(function (node) {
+						if (node.nodeType === 1 && (node.hasAttribute && (node.hasAttribute("has-error") || node.hasAttribute("has-errors")))) {
+							shouldScan = true;
+						}
+						if (node.nodeType === 1 && node.querySelector && node.querySelector("[has-error], [has-errors]")) {
+							shouldScan = true;
+						}
+					});
+				}
+			});
+			if (shouldScan) {
+				debouncedScan();
+			}
+		});
+
+		// Start observing when DOM is ready
+		function startErrorObserver() {
+			errorObserver.observe(document.body, {
+				childList: true,
+				subtree: true,
+				attributes: true,
+				attributeFilter: ["has-error", "has-errors"]
+			});
+			// Initial scan
+			debouncedScan();
+		}
+
+		// Listen for content updates to rescan
+		document.addEventListener("bn-preview:content-updated", function () {
+			debouncedScan();
+		});
+
+		// Start observer when document is ready
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", startErrorObserver);
+		} else {
+			startErrorObserver();
+		}
 	})();
 	</script>
 `)
