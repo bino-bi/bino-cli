@@ -1,0 +1,229 @@
+---
+import { Card, CardGrid } from '@astrojs/starlight/components';
+---
+
+<div class="landing-section">
+  <section class="features-section">
+    <h2 class="section-title">Why Bino?</h2>
+    <p class="section-subtitle">The developer-first reporting engine.</p>
+    
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">📄</div>
+        <h3>Declarative & Git-Ready</h3>
+        <p>Reports as code. YAML & SQL. Commit, diff, and review your reporting pipeline just like your application code.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔌</div>
+        <h3>Data Agnostic</h3>
+        <p>Powered by DuckDB. Query Postgres, MySQL, Parquet, CSV, and JSON directly. No ETL required.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">✨</div>
+        <h3>Pixel-Perfect PDFs</h3>
+        <p>Typesetting-quality output. Control every margin, header, and page break with absolute precision.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">⚡</div>
+        <h3>Dev Experience</h3>
+        <p>Instant hot-reloading, TypeScript-like schema validation, and a CLI that gets out of your way.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="docs-section">
+    <h2 class="section-title">Start Building</h2>
+    <CardGrid>
+      <Card title="Getting Started" icon="rocket">
+        <a href="/getting-started/installation/">Install CLI</a>, scaffold your first report, and see it live in seconds.
+      </Card>
+      <Card title="Core Concepts" icon="layers">
+        Master <a href="/concepts/workdir/">workdirs & manifests</a>. Learn how datasources and layouts compose together.
+      </Card>
+      <Card title="Guides" icon="open-book">
+        Deep dives into <a href="/guides/">data connection</a>, advanced styling, i18n, and digital signing.
+      </Card>
+      <Card title="Reference" icon="document">
+        Complete <a href="/reference/">schema reference</a>. Every field, every type, every option documented.
+      </Card>
+    </CardGrid>
+  </section>
+
+  <section class="commercial-section">
+    <div class="commercial-content">
+      <h2>Go Further with Enterprise</h2>
+      <p>Scale your reporting infrastructure with expert support and custom solutions.</p>
+      
+      <div class="services-grid">
+        <div class="service-item">
+          <h3>🌟 Enterprise Support</h3>
+          <p>Dedicated SLAs, architectural reviews, and priority troubleshooting for mission-critical pipelines.</p>
+        </div>
+        <div class="service-item">
+          <h3>🧩 Custom Development</h3>
+          <p>Bespoke data connectors, specialized layout components, and custom rendering logic built for you.</p>
+        </div>
+        <div class="service-item">
+          <h3>🎓 Training</h3>
+          <p>Accelerate team adoption with workshops on declarative reporting patterns and data engineering.</p>
+        </div>
+        <div class="service-item">
+          <h3>🔒 Commercial Licensing</h3>
+          <p>Building a SaaS? Embed BinoBI into your product. <a href="mailto:sven@bino.bi">Contact us</a> for OEM & commercial licenses.</p>
+        </div>
+      </div>
+      
+      <div class="cta-container">
+        <a href="mailto:sven@bino.bi" class="primary-cta">Talk to Sales</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .landing-section {
+    padding: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6rem;
+  }
+
+  .hero-install {
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .hero-install h3 {
+    margin-top: 0;
+    font-size: 1rem;
+    color: var(--sl-color-gray-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .install-command {
+    background: var(--sl-color-black);
+    padding: 1rem;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+    font-family: var(--sl-font-mono);
+    color: var(--sl-color-accent-high);
+    border: 1px solid var(--sl-color-gray-5);
+  }
+
+  .section-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+  }
+
+  .section-subtitle {
+    text-align: center;
+    font-size: 1.25rem;
+    color: var(--sl-color-gray-3);
+    margin-bottom: 3rem;
+  }
+
+  /* Features Grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+
+  .feature-card {
+    padding: 1.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: transparent;
+  }
+
+  .feature-card .icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .feature-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+  }
+
+  .feature-card p {
+    color: var(--sl-color-gray-3);
+    line-height: 1.6;
+    font-size: 0.95rem;
+  }
+
+  /* Commercial Section */
+  .commercial-section {
+    border-top: 1px solid var(--sl-color-gray-5);
+    padding-top: 4rem;
+  }
+
+  .commercial-content h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .commercial-content > p {
+    text-align: center;
+    color: var(--sl-color-gray-3);
+    margin-bottom: 3rem;
+    font-size: 1.1rem;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .service-item {
+    padding: 1rem;
+  }
+
+  .service-item h3 {
+    font-size: 1.1rem;
+    color: var(--sl-color-white);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .service-item p {
+    font-size: 0.9rem;
+    color: var(--sl-color-gray-3);
+    line-height: 1.5;
+  }
+
+  .cta-container {
+    text-align: center;
+    margin-top: 2rem;
+  }
+
+  .primary-cta {
+    display: inline-block;
+    background: var(--sl-color-white);
+    color: var(--sl-color-black);
+    font-weight: 600;
+    padding: 0.75rem 2rem;
+    border-radius: 0.25rem;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+
+  .primary-cta:hover {
+    opacity: 0.9;
+    color: var(--sl-color-black);
+  }
+</style>
