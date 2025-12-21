@@ -594,3 +594,108 @@ func TestDefaultGlobPattern(t *testing.T) {
 		})
 	}
 }
+
+func TestFindProjectRoot(t *testing.T) {
+	t.Run("finds bino.toml in current directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, ProjectConfigFile)
+		if err := os.WriteFile(configPath, []byte("report-id = \"test-id\"\n"), 0o644); err != nil {
+			t.Fatalf("failed to create bino.toml: %v", err)
+		}
+
+		got, err := FindProjectRoot(tmpDir)
+		if err != nil {
+			t.Fatalf("FindProjectRoot(%q) error = %v", tmpDir, err)
+		}
+		if got != tmpDir {
+			t.Errorf("FindProjectRoot(%q) = %q, want %q", tmpDir, got, tmpDir)
+		}
+	})
+
+	t.Run("finds bino.toml in parent directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, ProjectConfigFile)
+		if err := os.WriteFile(configPath, []byte("report-id = \"test-id\"\n"), 0o644); err != nil {
+			t.Fatalf("failed to create bino.toml: %v", err)
+		}
+
+		subDir := filepath.Join(tmpDir, "sub", "nested")
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatalf("failed to create subdirectory: %v", err)
+		}
+
+		got, err := FindProjectRoot(subDir)
+		if err != nil {
+			t.Fatalf("FindProjectRoot(%q) error = %v", subDir, err)
+		}
+		if got != tmpDir {
+			t.Errorf("FindProjectRoot(%q) = %q, want %q", subDir, got, tmpDir)
+		}
+	})
+
+	t.Run("returns error when bino.toml not found", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "no-project")
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatalf("failed to create subdirectory: %v", err)
+		}
+
+		_, err := FindProjectRoot(subDir)
+		if err == nil {
+			t.Error("FindProjectRoot() should return error when bino.toml not found")
+		}
+		if err != ErrProjectRootNotFound {
+			t.Errorf("FindProjectRoot() error = %v, want ErrProjectRootNotFound", err)
+		}
+	})
+
+	t.Run("nested bino.toml finds closest one", func(t *testing.T) {
+		// Create parent project
+		parentDir := t.TempDir()
+		parentConfig := filepath.Join(parentDir, ProjectConfigFile)
+		if err := os.WriteFile(parentConfig, []byte("report-id = \"parent-id\"\n"), 0o644); err != nil {
+			t.Fatalf("failed to create parent bino.toml: %v", err)
+		}
+
+		// Create nested project
+		nestedDir := filepath.Join(parentDir, "nested-project")
+		if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+			t.Fatalf("failed to create nested directory: %v", err)
+		}
+		nestedConfig := filepath.Join(nestedDir, ProjectConfigFile)
+		if err := os.WriteFile(nestedConfig, []byte("report-id = \"nested-id\"\n"), 0o644); err != nil {
+			t.Fatalf("failed to create nested bino.toml: %v", err)
+		}
+
+		// Start from nested project's subdirectory
+		subDir := filepath.Join(nestedDir, "src")
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatalf("failed to create src directory: %v", err)
+		}
+
+		got, err := FindProjectRoot(subDir)
+		if err != nil {
+			t.Fatalf("FindProjectRoot(%q) error = %v", subDir, err)
+		}
+		if got != nestedDir {
+			t.Errorf("FindProjectRoot(%q) = %q, want %q (closest bino.toml)", subDir, got, nestedDir)
+		}
+	})
+
+	t.Run("empty startDir defaults to current directory", func(t *testing.T) {
+		// This test just verifies no error for empty input
+		_, err := FindProjectRoot("")
+		// Error is expected since we're likely not in a bino project
+		if err != nil && err != ErrProjectRootNotFound {
+			t.Errorf("FindProjectRoot(\"\") unexpected error = %v", err)
+		}
+	})
+}
+
+func TestProjectConfigPath(t *testing.T) {
+	got := ProjectConfigPath("/some/project")
+	want := filepath.Join("/some/project", ProjectConfigFile)
+	if got != want {
+		t.Errorf("ProjectConfigPath(\"/some/project\") = %q, want %q", got, want)
+	}
+}

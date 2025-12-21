@@ -42,8 +42,13 @@ export class BinoPreviewManager {
         return binPath && binPath.trim() ? binPath : 'bino';
     }
 
-    /** Get workspace root directory */
+    /** Get workspace root directory (bino project root containing bino.toml) */
     private getWorkspaceRoot(): string | undefined {
+        // Use indexer's project root detection if available
+        if (this.indexer) {
+            return this.indexer.getProjectRootForUri();
+        }
+        // Fallback to first workspace folder
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) {
             return undefined;

@@ -62,7 +62,8 @@ there is a fatal error loading manifests.`),
 			// Print header
 			out.Header(fmt.Sprintf("BINO LINT %s", version.Version))
 
-			absDir, err := pipeline.ResolveWorkdir(workdir)
+			// Find project root (directory containing bino.toml)
+			absDir, err := pipeline.ResolveProjectRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
 			}

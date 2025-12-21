@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+
+/** The project configuration filename that marks a bino project root */
+const PROJECT_CONFIG_FILE = 'bino.toml';
 
 /** Document entry from the LSP index */
 export interface LSPDocument {
@@ -125,13 +130,83 @@ export class WorkspaceIndexer {
         return config.get<number>('columnCacheTTL') ?? 60000;
     }
 
-    /** Get workspace root directory */
-    private getWorkspaceRoot(): string | undefined {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            return undefined;
+    /**
+     * Find the bino project root by searching for bino.toml.
+     * Starts from the given directory and walks up the hierarchy.
+     * Returns undefined if no bino.toml is found.
+     */
+    private findProjectRoot(startDir: string): string | undefined {
+        let current = startDir;
+        while (true) {
+            const configPath = path.join(current, PROJECT_CONFIG_FILE);
+            if (fs.existsSync(configPath)) {
+                return current;
+            }
+            const parent = path.dirname(current);
+            if (parent === current) {
+                // Reached filesystem root
+                return undefined;
+            }
+            current = parent;
         }
-        return folders[0].uri.fsPath;
+    }
+
+    /**
+     * Get the bino project root for the given URI or active editor.
+     * For multi-root workspaces, finds the appropriate project root
+     * based on the file's location.
+     */
+    getProjectRootForUri(uri?: vscode.Uri): string | undefined {
+        // If a specific URI is provided, find the project root for that file
+        if (uri) {
+            const fileDir = path.dirname(uri.fsPath);
+            return this.findProjectRoot(fileDir);
+        }
+
+        // Try active editor first
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor?.document.uri.scheme === 'file') {
+            const fileDir = path.dirname(activeEditor.document.uri.fsPath);
+            const projectRoot = this.findProjectRoot(fileDir);
+            if (projectRoot) {
+                return projectRoot;
+            }
+        }
+
+        // Fallback: search all workspace folders for bino.toml
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders) {
+            for (const folder of folders) {
+                const projectRoot = this.findProjectRoot(folder.uri.fsPath);
+                if (projectRoot) {
+                    return projectRoot;
+                }
+            }
+        }
+
+        return undefined;
+    }
+
+    /** Get workspace root directory (legacy method, now uses project root detection) */
+    private getWorkspaceRoot(): string | undefined {
+        return this.getProjectRootForUri();
+    }
+
+    /**
+     * Check if a bino project exists in any workspace folder.
+     * Used to determine if the extension should be fully active.
+     */
+    hasProjectInWorkspace(): boolean {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders) {
+            return false;
+        }
+        for (const folder of folders) {
+            if (this.findProjectRoot(folder.uri.fsPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Execute bino lsp-helper command */

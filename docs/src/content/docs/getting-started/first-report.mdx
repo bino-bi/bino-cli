@@ -3,7 +3,7 @@ title: Your first report
 description: Scaffold, preview, and build a simple bino report bundle.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Steps, Aside } from "@astrojs/starlight/components";
 
 This guide walks through creating a new report bundle, previewing it in the browser, and exporting a PDF.
 It assumes you have `bino` installed and available on your `PATH`.
@@ -23,10 +23,8 @@ It assumes you have `bino` installed and available on your `PATH`.
     Use `-y` / `--yes` to accept defaults non-interactively.
 
     <Aside>
-    You can specify a custom directory name using the `--directory` flag:
-    ```bash
-    bino init --directory my-report
-    ```
+      You can specify a custom directory name using the `--directory` flag:
+      ```bash bino init --directory my-report ```
     </Aside>
 
 2.  **Inspect the generated files**
@@ -40,11 +38,12 @@ It assumes you have `bino` installed and available on your `PATH`.
     After initialization, the workdir contains YAML manifests, data files, and helper files.
     Typical contents include:
 
+    - A `bino.toml` project configuration file marking the project root
     - One or more `ReportArtefact` manifests describing the report outputs
     - `DataSource` and `DataSet` manifests defining input data and SQL transforms
     - At least one `LayoutPage` describing page layout
     - `ComponentStyle` and `Internationalization` manifests for styling and translations
-    - A `.gitignore` tuned for bino caches and build artefacts
+    - A `.bnignore` file tuned for bino caches and build artefacts
 
     Use your editor to explore these files.
     The manifests all share `apiVersion: bino.bi/v1alpha1` and a `kind` that selects the spec.
@@ -61,7 +60,8 @@ It assumes you have `bino` installed and available on your `PATH`.
     As you edit YAML or data files, it reloads the preview automatically.
 
     <Aside type="tip">
-    Run `bino preview --log-sql` to see the SQL queries used to populate datasets.
+      Run `bino preview --log-sql` to see the SQL queries used to populate
+      datasets.
     </Aside>
 
 4.  **Build a PDF**

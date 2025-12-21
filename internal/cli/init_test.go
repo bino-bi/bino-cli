@@ -80,11 +80,22 @@ func TestWriteInitBundleCreatesFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeInitBundle error: %v", err)
 	}
-	want := []string{".bnignore", "data.yaml", "pages.yaml", "report.yaml"}
+	want := []string{".bnignore", "bino.toml", "data.yaml", "pages.yaml", "report.yaml"}
 	slices.Sort(created)
 	if !slices.Equal(created, want) {
 		t.Fatalf("created files %v, want %v", created, want)
 	}
+
+	// Verify bino.toml was created with report-id
+	binoTomlPath := filepath.Join(tmp, "bino.toml")
+	binoContent, err := os.ReadFile(binoTomlPath)
+	if err != nil {
+		t.Fatalf("read bino.toml: %v", err)
+	}
+	if !strings.Contains(string(binoContent), "report-id") {
+		t.Fatalf("bino.toml missing report-id: %s", string(binoContent))
+	}
+
 	ignorePath := filepath.Join(tmp, ".bnignore")
 	content, err := os.ReadFile(ignorePath)
 	if err != nil {

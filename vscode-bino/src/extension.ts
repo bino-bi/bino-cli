@@ -85,6 +85,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize workspace indexer
     indexer = new WorkspaceIndexer(context);
 
+    // Check if this is a bino project and set context for UI visibility
+    const hasBinoProject = indexer.hasProjectInWorkspace();
+    await vscode.commands.executeCommand('setContext', 'bino.projectDetected', hasBinoProject);
+
+    if (!hasBinoProject) {
+        console.log('No bino.toml found in workspace, extension features disabled');
+        outputChannel.appendLine('No bino.toml found in workspace. Run "bino init" to create a new project.');
+        return;
+    }
+
+    console.log('Bino project detected, enabling full extension features');
+
     // Initialize validator
     validator = new BinoValidator(outputChannel);
     context.subscriptions.push({ dispose: () => validator?.dispose() });
