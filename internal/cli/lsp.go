@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/graph"
@@ -147,9 +148,10 @@ func runLSPIndex(ctx context.Context, dir string, out io.Writer) error {
 		Documents: []LSPDocument{},
 	}
 
-	absDir, err := filepath.Abs(dir)
+	// Find project root (directory containing bino.toml)
+	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve path: %v", err)
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		return outputJSON(out, result)
 	}
 
@@ -178,9 +180,10 @@ func runLSPColumns(ctx context.Context, dir, name string, out io.Writer) error {
 		Columns: []string{},
 	}
 
-	absDir, err := filepath.Abs(dir)
+	// Find project root (directory containing bino.toml)
+	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve path: %v", err)
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		return outputJSON(out, result)
 	}
 
@@ -208,6 +211,16 @@ func outputJSON(out io.Writer, v any) error {
 	return encoder.Encode(v)
 }
 
+// resolveProjectRootForLSP finds the project root from the given directory.
+// It searches for bino.toml walking up the directory hierarchy.
+func resolveProjectRootForLSP(dir string) (string, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	return pathutil.FindProjectRoot(absDir)
+}
+
 func newLSPValidateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <directory>",
@@ -228,9 +241,10 @@ func runLSPValidate(ctx context.Context, dir string, out io.Writer) error {
 		Diagnostics: []LSPDiagnostic{},
 	}
 
-	absDir, err := filepath.Abs(dir)
+	// Find project root (directory containing bino.toml)
+	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve path: %v", err)
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		result.Valid = false
 		return outputJSON(out, result)
 	}
@@ -433,9 +447,10 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 		Limit:   limit,
 	}
 
-	absDir, err := filepath.Abs(dir)
+	// Find project root (directory containing bino.toml)
+	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve path: %v", err)
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		return outputJSON(out, result)
 	}
 
@@ -673,9 +688,10 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 		return outputJSON(out, result)
 	}
 
-	absDir, err := filepath.Abs(dir)
+	// Find project root (directory containing bino.toml)
+	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve path: %v", err)
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		return outputJSON(out, result)
 	}
 
