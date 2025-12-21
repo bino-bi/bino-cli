@@ -96,7 +96,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Print header
 			out.Header(fmt.Sprintf("BINO %s", version.Version))
 
-			absDir, err := pipeline.ResolveWorkdir(workdir)
+			// Find project root (directory containing bino.toml)
+			absDir, err := pipeline.ResolveProjectRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
 			}

@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+
+/** The project configuration filename that marks a bino project root */
+const PROJECT_CONFIG_FILE = 'bino.toml';
 
 /** Diagnostic from bino lsp-helper validate */
 export interface LSPDiagnostic {
@@ -94,13 +99,49 @@ export class BinoValidator {
         return binPath && binPath.trim() ? binPath : 'bino';
     }
 
-    /** Get workspace root directory */
-    private getWorkspaceRoot(): string | undefined {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            return undefined;
+    /**
+     * Find the bino project root by searching for bino.toml.
+     * Starts from the given directory and walks up the hierarchy.
+     */
+    private findProjectRoot(startDir: string): string | undefined {
+        let current = startDir;
+        while (true) {
+            const configPath = path.join(current, PROJECT_CONFIG_FILE);
+            if (fs.existsSync(configPath)) {
+                return current;
+            }
+            const parent = path.dirname(current);
+            if (parent === current) {
+                return undefined;
+            }
+            current = parent;
         }
-        return folders[0].uri.fsPath;
+    }
+
+    /** Get workspace root directory (bino project root containing bino.toml) */
+    private getWorkspaceRoot(): string | undefined {
+        // Try active editor first
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor?.document.uri.scheme === 'file') {
+            const fileDir = path.dirname(activeEditor.document.uri.fsPath);
+            const projectRoot = this.findProjectRoot(fileDir);
+            if (projectRoot) {
+                return projectRoot;
+            }
+        }
+
+        // Fallback: search workspace folders
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders) {
+            for (const folder of folders) {
+                const projectRoot = this.findProjectRoot(folder.uri.fsPath);
+                if (projectRoot) {
+                    return projectRoot;
+                }
+            }
+        }
+
+        return undefined;
     }
 
     /** Execute bino command and return stdout */

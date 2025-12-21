@@ -3,6 +3,7 @@
 package pathutil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,12 @@ import (
 	"strings"
 	"time"
 )
+
+// ProjectConfigFile is the filename that marks the root of a Bino reporting project.
+const ProjectConfigFile = "bino.toml"
+
+// ErrProjectRootNotFound is returned when no bino.toml is found in the directory hierarchy.
+var ErrProjectRootNotFound = errors.New("bino.toml not found: not inside a bino project (run 'bino init' to create one)")
 
 // DefaultHTTPTimeout is the default timeout for HTTP requests when loading remote content.
 const DefaultHTTPTimeout = 30 * time.Second
@@ -104,6 +111,40 @@ func ResolveInitDir(dir, defaultDir string) (string, error) {
 		return "", fmt.Errorf("resolve directory %s: %w", cleaned, err)
 	}
 	return abs, nil
+}
+
+// FindProjectRoot searches for a bino.toml file starting from the given directory
+// and walking up the directory hierarchy (like git finds .git).
+// Returns the absolute path to the directory containing bino.toml, or
+// ErrProjectRootNotFound if no bino.toml is found before reaching the filesystem root.
+func FindProjectRoot(startDir string) (string, error) {
+	if startDir == "" {
+		startDir = "."
+	}
+	abs, err := filepath.Abs(startDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve start directory %q: %w", startDir, err)
+	}
+
+	current := abs
+	for {
+		configPath := filepath.Join(current, ProjectConfigFile)
+		if _, err := os.Stat(configPath); err == nil {
+			return current, nil
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached filesystem root without finding bino.toml
+			return "", ErrProjectRootNotFound
+		}
+		current = parent
+	}
+}
+
+// ProjectConfigPath returns the full path to bino.toml within a project root directory.
+func ProjectConfigPath(projectRoot string) string {
+	return filepath.Join(projectRoot, ProjectConfigFile)
 }
 
 // EnsureDir creates the directory (and all parent directories) if it doesn't exist.

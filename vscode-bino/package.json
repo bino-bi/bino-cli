@@ -23,11 +23,7 @@
     "data"
   ],
   "activationEvents": [
-    "onLanguage:yaml",
-    "workspaceContains:**/*.yaml",
-    "workspaceContains:**/*.yml",
-    "onView:binoExplorer",
-    "onCommand:bino.refreshIndex"
+    "workspaceContains:**/bino.toml"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -36,7 +32,7 @@
         {
           "id": "binoExplorer",
           "name": "Bino Reports",
-          "when": "workspaceFolderCount > 0",
+          "when": "bino.projectDetected",
           "icon": "$(file-code)"
         }
       ]

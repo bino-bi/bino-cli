@@ -1,0 +1,116 @@
+---
+title: Project configuration (bino.toml)
+description: Learn about the bino.toml project configuration file that marks the root of a bino reporting project.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Every bino reporting project is defined by a `bino.toml` file at its root.
+This file marks the project boundary and stores project-level configuration.
+
+## Purpose
+
+The `bino.toml` file serves several important purposes:
+
+1. **Project root marker**: Commands like `bino build`, `bino preview`, `bino lint`, and the VS Code extension use this file to locate the project root. Similar to how Git uses `.git/`, bino searches upward from the current directory until it finds `bino.toml`.
+
+2. **Project identity**: The `report-id` field provides a stable, unique identifier for the project.
+
+3. **Future extensibility**: As bino evolves, additional project-level settings will be added to this file.
+
+## File format
+
+The `bino.toml` file uses [TOML](https://toml.io/) format. Here's the current structure:
+
+```toml
+# Bino project configuration
+# This file marks the root of a bino reporting project.
+
+report-id = "550e8400-e29b-41d4-a716-446655440000"
+```
+
+### Fields
+
+| Field       | Type   | Description                                                                         |
+| ----------- | ------ | ----------------------------------------------------------------------------------- |
+| `report-id` | string | A unique identifier for this reporting project. Generated as a UUID by `bino init`. |
+
+## Creating a project
+
+When you run `bino init`, a `bino.toml` file is automatically created in the target directory with a freshly generated UUID for the `report-id`:
+
+```bash
+bino init --directory my-reports
+```
+
+This creates `my-reports/bino.toml` along with the starter manifests.
+
+<Aside>
+If you're migrating an existing project that doesn't have a `bino.toml`, you can create one manually.
+Just create a file named `bino.toml` at your project root with a unique `report-id`:
+
+```toml
+report-id = "your-unique-id-here"
+```
+
+You can generate a UUID using online tools, `uuidgen` on macOS/Linux, or any UUID generator.
+
+</Aside>
+
+## Project root discovery
+
+When you run a bino command, the CLI searches for `bino.toml` starting from your current working directory and walking up the directory hierarchy:
+
+```
+/home/user/projects/my-reports/pages/
+  └── (no bino.toml, keep searching...)
+/home/user/projects/my-reports/
+  └── bino.toml  ← Project root found!
+/home/user/projects/
+/home/user/
+/home/
+/
+```
+
+This means you can run `bino build` or `bino preview` from any subdirectory within your project.
+
+## Nested projects
+
+Bino supports nested projects. If you have a parent project with its own `bino.toml` and a subdirectory that also contains a `bino.toml`, each is treated as a separate project:
+
+```
+/parent-project/
+  └── bino.toml           ← Parent project root
+  └── reports/
+      └── ...
+  └── nested-project/
+      └── bino.toml       ← Nested project root
+      └── reports/
+          └── ...
+```
+
+When you run bino commands from within `nested-project/`, they operate on the nested project, not the parent.
+
+## VS Code extension
+
+The VS Code extension for Bino Reports activates automatically when it detects a `bino.toml` file in any workspace folder. The extension:
+
+- Searches each workspace folder for `bino.toml` to identify project roots
+- Supports multi-root workspaces with multiple bino projects
+- Determines the active project based on the currently open file
+
+If no `bino.toml` is found, the extension's features remain disabled. Create a project with `bino init` to enable full extension functionality.
+
+## Error messages
+
+If you run a bino command outside of a project (no `bino.toml` found), you'll see:
+
+```
+bino.toml not found: not inside a bino project (run 'bino init' to create one)
+```
+
+This error indicates you need to either:
+
+- Navigate to a directory within an existing bino project
+- Create a new project with `bino init`
+- Manually create a `bino.toml` file

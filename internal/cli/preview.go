@@ -66,7 +66,9 @@ Use --debug for verbose watcher logs and CDN diagnostics.`),
 				return RuntimeError(err)
 			}
 			logger.Debugf("Using cache directory %s", cacheDir)
-			watchDir, err := pipeline.ResolveWorkdir(workdir)
+
+			// Find project root (directory containing bino.toml)
+			watchDir, err := pipeline.ResolveProjectRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
 			}
