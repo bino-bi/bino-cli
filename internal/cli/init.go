@@ -443,7 +443,9 @@ spec:
       welcome: %s
 `, d.LayoutName, d.ReportTitle, d.DataSourceName, d.DataSourceName, d.StyleName, d.I18nName, d.Locale, quoteYAML(fmt.Sprintf("Welcome to %s", d.ReportTitle)))
 
-	bnignore := "# Bino build output\ndist/\n./dist/\n./.bncache/\n"
+	bnignore := "# Bino build output\ndist/\n.bncache/\n"
+
+	gitignore := "# Bino build output\n.bncache/\ndist/\n"
 
 	// Generate a new UUID for the report-id
 	binoToml := fmt.Sprintf(`# Bino project configuration
@@ -459,6 +461,7 @@ report-id = "%s"
 		{Path: "data.yaml", Content: dataSource},
 		{Path: "pages.yaml", Content: pages},
 		{Path: ".bnignore", Content: bnignore},
+		{Path: ".gitignore", Content: gitignore},
 	}
 }
 
