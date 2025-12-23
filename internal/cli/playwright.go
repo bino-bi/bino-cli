@@ -37,7 +37,7 @@ func newPlaywrightInstallCommand() *cobra.Command {
 		Use:   "install",
 		Short: "Download or update the Playwright driver and browsers",
 		Long: strings.TrimSpace(`Ensure Playwright browsers and the driver binary are available locally.
-Use --debug to surface verbose installer logs.`),
+Use --verbose (-v) to surface verbose installer logs.`),
 		Example: strings.TrimSpace(`  bino playwright install --browser chromium --browser webkit
 	  bino playwright install --dry-run`),
 		RunE: func(cmd *cobra.Command, _ []string) error {

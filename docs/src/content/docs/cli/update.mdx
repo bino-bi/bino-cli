@@ -17,9 +17,11 @@ When you run `bino update`, the CLI will:
 
 1.  Check GitHub Releases for a newer version of `bino`.
 2.  Compare the latest version with your currently installed version.
-3.  If a newer version is available, it will download the appropriate binary for your operating system and architecture.
-4.  Verify the integrity of the download.
+3.  If a newer version is available, download the appropriate binary for your operating system and architecture.
+4.  Verify the download integrity by checking the SHA-256 checksum against `checksums.txt` published in the release.
 5.  Replace the current `bino` binary with the new version.
+
+If the checksum verification fails, the update is aborted and your current installation remains unchanged.
 
 If you are already on the latest version, the command will inform you and exit without making changes.
 
@@ -35,3 +37,12 @@ Run 'bino update' to upgrade.
 ```
 
 This check is non-blocking and will not delay your command execution.
+
+### Disabling Automatic Update Checks
+
+Automatic update checks are disabled when:
+
+- The `CI` environment variable is set (e.g., `CI=1` in GitHub Actions, GitLab CI, etc.).
+- The `BINO_DISABLE_UPDATE_CHECK` environment variable is set to any non-empty value.
+
+This is useful for CI/CD pipelines, air-gapped environments, or IDE integrations where network access should be avoided.

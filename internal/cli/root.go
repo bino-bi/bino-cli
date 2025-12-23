@@ -85,13 +85,16 @@ func newRootCommand() *cobra.Command {
 			ctx := cmd.Context()
 
 			// Run non-blocking update check in background
-			go func() {
-				if result, _ := updater.CheckForUpdate(ctx); result != nil {
-					// Print to stderr to avoid polluting stdout (e.g. json output)
-					fmt.Fprintf(os.Stderr, "\nUpdate available: %s -> %s\nRun 'bino update' to upgrade.\n\n",
-						version.Version, result.LatestVersion)
-				}
-			}()
+			// Skip if CI=1 or BINO_DISABLE_UPDATE_CHECK=1 (for CI/air-gapped/IDE usage)
+			if os.Getenv("CI") == "" && os.Getenv("BINO_DISABLE_UPDATE_CHECK") == "" {
+				go func() {
+					if result, _ := updater.CheckForUpdate(ctx); result != nil {
+						// Print to stderr to avoid polluting stdout (e.g. json output)
+						fmt.Fprintf(os.Stderr, "\nUpdate available: %s -> %s\nRun 'bino update' to upgrade.\n\n",
+							version.Version, result.LatestVersion)
+					}
+				}()
+			}
 
 			ctx = logx.WithDebug(ctx, verbose)
 
@@ -123,6 +126,8 @@ func newRootCommand() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging and show run ID")
+	cmd.PersistentFlags().BoolVar(&verbose, "debug", false, "Enable verbose logging (alias for --verbose)")
+	_ = cmd.PersistentFlags().MarkHidden("debug") // Keep --debug working but prefer --verbose in docs
 	cmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	cmd.AddCommand(newVersionCommand())
