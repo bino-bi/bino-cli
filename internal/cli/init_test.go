@@ -80,7 +80,7 @@ func TestWriteInitBundleCreatesFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeInitBundle error: %v", err)
 	}
-	want := []string{".bnignore", "bino.toml", "data.yaml", "pages.yaml", "report.yaml"}
+	want := []string{".bnignore", ".gitignore", "bino.toml", "data.yaml", "pages.yaml", "report.yaml"}
 	slices.Sort(created)
 	if !slices.Equal(created, want) {
 		t.Fatalf("created files %v, want %v", created, want)
