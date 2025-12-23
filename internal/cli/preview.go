@@ -51,7 +51,7 @@ and serve the rendered report locally. Preview honors runtime env knobs:
   - BNR_CDN_MAX_BYTES (default 50 MB)
   - BNR_CDN_TIMEOUT_MS (default 10s)
 
-Use --debug for verbose watcher logs and CDN diagnostics.`),
+Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 		Example: strings.TrimSpace(`  bino preview
   bino preview --work-dir examples/coffee-report
   BNR_MAX_QUERY_ROWS=10000 bino preview --port 9000`),
