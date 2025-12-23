@@ -58,8 +58,6 @@ Use --debug for verbose watcher logs and CDN diagnostics.`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("preview")
-			addr := fmt.Sprintf("127.0.0.1:%d", port)
-			logger.Infof("Starting preview server on %s", addr)
 
 			cacheDir, err := previewCacheDir()
 			if err != nil {
@@ -72,6 +70,30 @@ Use --debug for verbose watcher logs and CDN diagnostics.`),
 			if err != nil {
 				return ConfigError(err)
 			}
+
+			// Load project config for defaults
+			projectCfg, cfgErr := pathutil.LoadProjectConfig(watchDir)
+			if cfgErr != nil {
+				logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
+				projectCfg = &pathutil.ProjectConfig{}
+			}
+
+			// Apply environment variables from TOML (actual env vars take precedence)
+			projectCfg.Preview.Env.Apply(func(key, tomlVal, envVal string) {
+				logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
+			})
+
+			// Resolve arguments with TOML defaults
+			resolver := pathutil.NewArgResolver(cmd, projectCfg.Preview.Args, func(format string, args ...any) {
+				logger.Infof(format, args...)
+			})
+
+			port = resolver.ResolveInt("port", "port", port)
+			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			enableLint = resolver.ResolveBool("lint", "lint", enableLint)
+
+			addr := fmt.Sprintf("127.0.0.1:%d", port)
+			logger.Infof("Starting preview server on %s", addr)
 			logger.Infof("Watching workdir %s", watchDir)
 
 			// Set up SQL query logger if --log-sql is enabled
