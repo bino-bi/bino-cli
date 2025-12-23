@@ -31,6 +31,47 @@ Build log flags:
 
 See [Build Logs](/cli/build-logs/) for full documentation on JSON logs, CSV embedding, and execution plan tracking.
 
+## Default Arguments via bino.toml
+
+You can set default values for build flags in your project's `bino.toml` file. These defaults are applied automatically and can be overridden by explicit command-line flags:
+
+```toml
+[build.args]
+out-dir = "output"
+browser = "firefox"
+log-sql = true
+no-lint = false
+artefact = ["monthly", "weekly"]
+exclude-artefact = ["draft"]
+```
+
+When you override a TOML default, the CLI logs an info message:
+
+```bash
+$ bino build --browser webkit
+Overriding browser from bino.toml ("firefox" -> "webkit")
+```
+
+## Environment Variables via bino.toml
+
+You can also set environment variables for builds in your `bino.toml`. This is useful for configuring query limits or connection strings:
+
+```toml
+[build.env]
+BNR_MAX_QUERY_ROWS = "100000"
+BNR_MAX_QUERY_DURATION_MS = "120000"
+DATABASE_URL = "postgres://prod-server/reports"
+```
+
+Actual environment variables always take precedence over TOML values. When an env var overrides a TOML value, the CLI logs a message:
+
+```bash
+$ BNR_MAX_QUERY_ROWS=200000 bino build
+Environment variable BNR_MAX_QUERY_ROWS overrides bino.toml ("100000" -> "200000")
+```
+
+See [bino init](/cli/init/#the-binotoml-configuration-file) for the full configuration reference.
+
 ## Examples
 
 Build all reports in the current directory:
@@ -56,3 +97,4 @@ bino build --out-dir dist/reports --log-sql
 - Use `--work-dir` to point at the repository checkout.
 - Fail builds early by ensuring environment variables for secrets are set.
 - Archive the `dist/` directory as a build artefact.
+- Set consistent build options in `bino.toml` to ensure reproducible CI builds.

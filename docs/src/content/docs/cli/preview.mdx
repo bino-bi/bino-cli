@@ -19,6 +19,44 @@ Common flags:
 - `--log-sql` – log executed SQL queries.
 - `--lint` – run lint rules on each refresh (disabled by default).
 
+## Default Arguments via bino.toml
+
+You can set default values for preview flags in your project's `bino.toml` file. These defaults are applied automatically and can be overridden by explicit command-line flags:
+
+```toml
+[preview.args]
+port = 9000
+log-sql = true
+lint = true
+```
+
+When you override a TOML default, the CLI logs an info message:
+
+```bash
+$ bino preview --port 8080
+Overriding port from bino.toml (9000 -> 8080)
+```
+
+## Environment Variables via bino.toml
+
+You can also set environment variables for preview in your `bino.toml`. This is useful for configuring query limits during development:
+
+```toml
+[preview.env]
+BNR_MAX_QUERY_ROWS = "10000"
+BNR_CDN_MAX_BYTES = "10485760"
+DATABASE_URL = "postgres://localhost/dev"
+```
+
+Actual environment variables always take precedence over TOML values. When an env var overrides a TOML value, the CLI logs a message:
+
+```bash
+$ BNR_MAX_QUERY_ROWS=5000 bino preview
+Environment variable BNR_MAX_QUERY_ROWS overrides bino.toml ("10000" -> "5000")
+```
+
+See [bino init](/cli/init/#the-binotoml-configuration-file) for the full configuration reference.
+
 ## Examples
 
 Preview the bundle in the current directory:
