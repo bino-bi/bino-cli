@@ -102,6 +102,39 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return ConfigError(err)
 			}
 
+			// Load project config for defaults
+			projectCfg, cfgErr := pathutil.LoadProjectConfig(absDir)
+			if cfgErr != nil {
+				logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
+				projectCfg = &pathutil.ProjectConfig{}
+			}
+
+			// Apply environment variables from TOML (actual env vars take precedence)
+			projectCfg.Build.Env.Apply(func(key, tomlVal, envVal string) {
+				out.Info(fmt.Sprintf("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal))
+			})
+
+			// Resolve arguments with TOML defaults
+			resolver := pathutil.NewArgResolver(cmd, projectCfg.Build.Args, func(format string, args ...any) {
+				out.Info(fmt.Sprintf(format, args...))
+			})
+
+			outDir = resolver.ResolveString("out-dir", "out-dir", outDir)
+			browser = resolver.ResolveString("browser", "browser", browser)
+			driverDir = resolver.ResolveString("driver-dir", "driver-dir", driverDir)
+			logFormat = resolver.ResolveString("log-format", "log-format", logFormat)
+			noGraph = resolver.ResolveBool("no-graph", "no-graph", noGraph)
+			noLint = resolver.ResolveBool("no-lint", "no-lint", noLint)
+			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			embedDataCSV = resolver.ResolveBool("embed-data-csv", "embed-data-csv", embedDataCSV)
+			embedDataMaxRows = resolver.ResolveInt("embed-data-max-rows", "embed-data-max-rows", embedDataMaxRows)
+			embedDataMaxBytes = resolver.ResolveInt("embed-data-max-bytes", "embed-data-max-bytes", embedDataMaxBytes)
+			embedDataBase64 = resolver.ResolveBool("embed-data-base64", "embed-data-base64", embedDataBase64)
+			embedDataRedact = resolver.ResolveBool("embed-data-redact", "embed-data-redact", embedDataRedact)
+			detailedExecutionPlan = resolver.ResolveBool("detailed-execution-plan", "detailed-execution-plan", detailedExecutionPlan)
+			include = resolver.ResolveStringSlice("artefact", "artefact", include)
+			exclude = resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
+
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
 				return err
