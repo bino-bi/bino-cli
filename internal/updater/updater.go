@@ -2,8 +2,11 @@ package updater
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -182,8 +185,8 @@ func Update(ctx context.Context) (*UpdateResult, error) {
 		return nil, nil // Already up to date
 	}
 
-	// Download and apply the update
-	if err := downloadAndApply(ctx, downloadURL); err != nil {
+	// Download and apply the update with checksum verification
+	if err := downloadAndApply(ctx, latestVersionStr, downloadURL); err != nil {
 		return nil, fmt.Errorf("applying update: %w", err)
 	}
 
@@ -193,9 +196,17 @@ func Update(ctx context.Context) (*UpdateResult, error) {
 	}, nil
 }
 
-// downloadAndApply downloads the tarball from the given URL and replaces
-// the current executable with the new one.
-func downloadAndApply(ctx context.Context, downloadURL string) error {
+// downloadAndApplbny downloads the tarball from the given URL, verifies its
+// SHA-256 checksum against checksums.txt, and replaces the current executable.
+func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error {
+	assetName := getAssetName()
+
+	// Fetch and parse checksums.txt for this release
+	expectedChecksum, err := fetchExpectedChecksum(ctx, versionTag, assetName)
+	if err != nil {
+		return fmt.Errorf("fetching checksums: %w", err)
+	}
+
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
 	}
@@ -215,6 +226,34 @@ func downloadAndApply(ctx context.Context, downloadURL string) error {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	// Download archive to temp file and compute checksum
+	archiveFile, err := os.CreateTemp("", "bino-archive-*")
+	if err != nil {
+		return fmt.Errorf("creating temp archive file: %w", err)
+	}
+	archivePath := archiveFile.Name()
+	defer os.Remove(archivePath)
+
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(archiveFile, hasher), resp.Body); err != nil {
+		archiveFile.Close()
+		return fmt.Errorf("downloading archive: %w", err)
+	}
+	archiveFile.Close()
+
+	// Verify checksum
+	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(actualChecksum, expectedChecksum) {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
+	}
+
+	// Re-open archive for extraction
+	archiveFile, err = os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("reopening archive: %w", err)
+	}
+	defer archiveFile.Close()
+
 	// Get current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -230,7 +269,7 @@ func downloadAndApply(ctx context.Context, downloadURL string) error {
 	defer os.Remove(tmpPath)
 
 	// Extract the binary from the tarball
-	if err := extractBinaryFromTarGz(resp.Body, tmpFile); err != nil {
+	if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("extracting binary: %w", err)
 	}
@@ -259,6 +298,79 @@ func downloadAndApply(ctx context.Context, downloadURL string) error {
 	_ = os.Remove(backupPath)
 
 	return nil
+}
+
+// fetchExpectedChecksum downloads checksums.txt for the given release tag
+// and returns the expected SHA-256 checksum for the specified asset.
+func fetchExpectedChecksum(ctx context.Context, versionTag, assetName string) (string, error) {
+	checksumsURL := fmt.Sprintf("%s/download/%s/checksums.txt", baseURL, versionTag)
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetching checksums.txt: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("checksums.txt not found (status %d)", resp.StatusCode)
+	}
+
+	checksums, err := parseChecksums(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("parsing checksums.txt: %w", err)
+	}
+
+	checksum, ok := checksums[assetName]
+	if !ok {
+		return "", fmt.Errorf("no checksum found for %s in checksums.txt", assetName)
+	}
+
+	return checksum, nil
+}
+
+// parseChecksums parses a sha256sum-style checksums file and returns
+// a map of filename to hex-encoded checksum.
+func parseChecksums(r io.Reader) (map[string]string, error) {
+	checksums := make(map[string]string)
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Format: "<hex>  <filename>" or "<hex> <filename>"
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+
+		checksum := parts[0]
+		filename := parts[1]
+
+		// Validate checksum is a valid hex string (64 chars for SHA-256)
+		if len(checksum) != 64 {
+			continue
+		}
+
+		checksums[filename] = checksum
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return checksums, nil
 }
 
 // extractBinaryFromTarGz extracts the "bino" binary from a tar.gz archive.
