@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
@@ -122,11 +123,6 @@ Environment knobs:
 				return ConfigError(err)
 			}
 
-			// Check for missing env vars - in serve mode this is an error
-			if err := config.CheckMissingEnvVars(docs); err != nil {
-				return ConfigError(err)
-			}
-
 			// Collect live artefacts and find the requested one
 			liveArtefacts, err := config.CollectLiveArtefacts(docs)
 			if err != nil {
@@ -143,6 +139,19 @@ Environment knobs:
 					return ConfigErrorf("LiveReportArtefact %q not found; no LiveReportArtefact documents exist", live)
 				}
 				return ConfigErrorf("LiveReportArtefact %q not found; available: %s", live, strings.Join(available, ", "))
+			}
+
+			// Collect all query param names from the live artefact to exclude from env var check
+			queryParamNames := make(map[string]struct{})
+			for _, route := range liveArtefact.Spec.Routes {
+				for _, p := range route.QueryParams {
+					queryParamNames[p.Name] = struct{}{}
+				}
+			}
+
+			// Check for missing env vars - exclude query params which will be provided at runtime
+			if err := config.CheckMissingEnvVarsExcluding(docs, queryParamNames); err != nil {
+				return ConfigError(err)
 			}
 
 			// Collect report artefacts for validation
@@ -320,7 +329,7 @@ func serveRenderHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return buildServeHTML(entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery), "text/html; charset=utf-8", nil
+		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
 	}
 
 	// If we have query params, reload documents with query params as variables
@@ -382,7 +391,7 @@ func serveRenderHandler(
 		assets:      renderResult.LocalAssets,
 	})
 
-	return buildServeHTML(frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery), "text/html; charset=utf-8", nil
+	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs), "text/html; charset=utf-8", nil
 }
 
 // validateAndMergeQueryParams validates query parameters against route spec.
@@ -452,20 +461,23 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 // buildServeHTML combines frame and context HTML with seamless navigation support.
 // Instead of replacing the placeholder, it keeps the loading state and embeds context
 // as data to be injected after the template engine is ready.
-func buildServeHTML(frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery string) []byte {
+func buildServeHTML(ctx context.Context, frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, workdir string, docs []config.Document) []byte {
 	frameStr := string(frameHTML)
 
 	// Encode context HTML as base64 for safe embedding
 	contextBase64 := base64.StdEncoding.EncodeToString(contextHTML)
 
+	// Resolve dataset options for select parameters
+	datasetOptions := resolveDatasetOptions(ctx, workdir, docs, routeSpec)
+
 	// Inject the navigation script and embedded context before </head>
-	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64)
+	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions)
 }
 
 // injectServeScript adds the navigation script and embedded context before </head>.
-func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string) []byte {
+func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem) []byte {
 	htmlStr := string(htmlBytes)
-	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64)
+	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions)
 
 	// Find </head> and inject the script
 	headClose := strings.Index(htmlStr, "</head>")
@@ -482,14 +494,104 @@ func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, curre
 
 // queryParamInfo holds info about a query parameter for JSON serialization.
 type queryParamInfo struct {
-	Name        string  `json:"name"`
-	Default     *string `json:"default,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Required    bool    `json:"required"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"` // string, number, number_range, select, date, date_time
+	Default     *string            `json:"default,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Required    bool               `json:"required"`
+	Options     *queryParamOptions `json:"options,omitempty"`
+}
+
+// queryParamOptions holds options for select, number, and number_range type parameters.
+type queryParamOptions struct {
+	Items []queryParamOptionItem `json:"items,omitempty"`
+	Min   *float64               `json:"min,omitempty"`
+	Max   *float64               `json:"max,omitempty"`
+	Step  *float64               `json:"step,omitempty"`
+}
+
+// queryParamOptionItem holds a single option for select type parameters.
+type queryParamOptionItem struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// resolveDatasetOptions resolves select options from datasets for a route's query parameters.
+// Returns a map from parameter name to resolved options.
+func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Document, routeSpec config.LiveRouteSpec) map[string][]queryParamOptionItem {
+	result := make(map[string][]queryParamOptionItem)
+
+	// Find parameters that need dataset resolution
+	datasetsNeeded := make(map[string]config.LiveQueryParamSpec)
+	for _, p := range routeSpec.QueryParams {
+		if p.Options != nil && p.Options.Dataset != "" {
+			datasetsNeeded[p.Options.Dataset] = p
+		}
+	}
+
+	if len(datasetsNeeded) == 0 {
+		return result
+	}
+
+	// Execute datasets
+	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		// Log error but continue - options will be empty
+		return result
+	}
+
+	// Build lookup of dataset results
+	datasetResultMap := make(map[string]json.RawMessage)
+	for _, r := range datasetResults {
+		datasetResultMap[r.Name] = r.Data
+	}
+
+	// Resolve options for each parameter
+	for datasetName, paramSpec := range datasetsNeeded {
+		data, ok := datasetResultMap[datasetName]
+		if !ok {
+			continue
+		}
+
+		// Parse dataset result as array of objects
+		var rows []map[string]any
+		if err := json.Unmarshal(data, &rows); err != nil {
+			continue
+		}
+
+		valueCol := paramSpec.Options.ValueColumn
+		labelCol := paramSpec.Options.LabelColumn
+		if labelCol == "" {
+			labelCol = valueCol
+		}
+
+		items := make([]queryParamOptionItem, 0, len(rows))
+		for _, row := range rows {
+			valueRaw, ok := row[valueCol]
+			if !ok {
+				continue
+			}
+			value := fmt.Sprintf("%v", valueRaw)
+
+			label := value
+			if labelRaw, ok := row[labelCol]; ok {
+				label = fmt.Sprintf("%v", labelRaw)
+			}
+
+			items = append(items, queryParamOptionItem{
+				Value: value,
+				Label: label,
+			})
+		}
+
+		result[paramSpec.Name] = items
+	}
+
+	return result
 }
 
 // buildServeScript generates the JavaScript for seamless navigation, content injection, and control panel.
-func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string) string {
+func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem) string {
 	// Build routes JSON for the navigation script
 	routes := make(map[string]string)
 	for path, route := range liveArtefact.Spec.Routes {
@@ -504,12 +606,47 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 	// Build queryParams JSON for the control panel
 	queryParams := make([]queryParamInfo, 0, len(routeSpec.QueryParams))
 	for _, p := range routeSpec.QueryParams {
-		queryParams = append(queryParams, queryParamInfo{
+		paramType := p.Type
+		if paramType == "" {
+			paramType = "string"
+		}
+
+		info := queryParamInfo{
 			Name:        p.Name,
+			Type:        paramType,
 			Default:     p.Default,
 			Description: p.Description,
-			Required:    p.Default == nil,
-		})
+			Required:    p.Default == nil && !p.Optional,
+		}
+
+		// Add options if present
+		if p.Options != nil {
+			opts := &queryParamOptions{
+				Min:  p.Options.Min,
+				Max:  p.Options.Max,
+				Step: p.Options.Step,
+			}
+			// Use dataset options if available, otherwise use static items
+			if dsItems, ok := datasetOptions[p.Name]; ok && len(dsItems) > 0 {
+				opts.Items = dsItems
+			} else if len(p.Options.Items) > 0 {
+				// Convert static items
+				opts.Items = make([]queryParamOptionItem, 0, len(p.Options.Items))
+				for _, item := range p.Options.Items {
+					label := item.Label
+					if label == "" {
+						label = item.Value
+					}
+					opts.Items = append(opts.Items, queryParamOptionItem{
+						Value: item.Value,
+						Label: label,
+					})
+				}
+			}
+			info.Options = opts
+		}
+
+		queryParams = append(queryParams, info)
 	}
 	queryParamsJSON, _ := json.Marshal(queryParams)
 
@@ -592,10 +729,18 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     var html = '<h3>Parameters</h3>';
     queryParams.forEach(function(param) {
       var value = urlParams.get(param.name);
+      var value2 = null; // For number_range (max value)
+      
+      // Handle number_range which uses param_name and param_name_max
+      if (param.type === 'number_range') {
+        value2 = urlParams.get(param.name + '_max');
+      }
+      
       if (value === null && param.default !== undefined && param.default !== null) {
         value = param.default;
       }
       value = value || '';
+      value2 = value2 || '';
 
       html += '<div class="bino-param-group">';
       html += '<label class="bino-param-label" for="bino-param-' + param.name + '">' + 
@@ -605,11 +750,10 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
       if (param.description) {
         html += '<p class="bino-param-desc">' + escapeHtml(param.description) + '</p>';
       }
-      html += '<input type="text" class="bino-param-input" id="bino-param-' + param.name + '" ' +
-              'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
-              'data-required="' + param.required + '" ' +
-              (param.default !== undefined && param.default !== null ? 'placeholder="' + escapeHtml(param.default) + '"' : '') +
-              '>';
+      
+      // Render input based on type
+      html += buildInputForType(param, value, value2);
+      
       html += '</div>';
     });
 
@@ -629,12 +773,122 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
         input.classList.remove('invalid');
       });
     });
+
+    // Setup range slider interactions
+    setupRangeSliders(panel);
+  }
+
+  function setupRangeSliders(panel) {
+    var dualRanges = panel.querySelectorAll('.bino-dual-range');
+    dualRanges.forEach(function(container) {
+      var minSlider = container.querySelector('.bino-range-min-slider');
+      var maxSlider = container.querySelector('.bino-range-max-slider');
+      if (!minSlider || !maxSlider) return;
+      
+      var minDisplay = document.getElementById('bino-range-display-' + minSlider.name);
+      var maxDisplay = document.getElementById('bino-range-display-' + maxSlider.name);
+      
+      function updateDisplay() {
+        var minVal = parseFloat(minSlider.value);
+        var maxVal = parseFloat(maxSlider.value);
+        
+        // Ensure min doesn't exceed max
+        if (minVal > maxVal) {
+          if (this === minSlider) {
+            minSlider.value = maxVal;
+            minVal = maxVal;
+          } else {
+            maxSlider.value = minVal;
+            maxVal = minVal;
+          }
+        }
+        
+        if (minDisplay) minDisplay.textContent = minSlider.value;
+        if (maxDisplay) maxDisplay.textContent = maxSlider.value;
+      }
+      
+      minSlider.addEventListener('input', updateDisplay);
+      maxSlider.addEventListener('input', updateDisplay);
+    });
   }
 
   function escapeHtml(text) {
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function buildInputForType(param, value, value2) {
+    var type = param.type || 'string';
+    var opts = param.options || {};
+    var placeholder = param.default !== undefined && param.default !== null ? 'placeholder="' + escapeHtml(param.default) + '"' : '';
+    var required = 'data-required="' + param.required + '"';
+    var minAttr = opts.min !== undefined ? ' min="' + opts.min + '"' : '';
+    var maxAttr = opts.max !== undefined ? ' max="' + opts.max + '"' : '';
+    var stepAttr = opts.step !== undefined ? ' step="' + opts.step + '"' : '';
+    
+    switch (type) {
+      case 'number':
+        return '<input type="number" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+               'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
+               required + ' ' + placeholder + minAttr + maxAttr + stepAttr + '>';
+      
+      case 'number_range':
+        var minVal = opts.min !== undefined ? opts.min : 0;
+        var maxVal = opts.max !== undefined ? opts.max : 100;
+        var stepVal = opts.step !== undefined ? opts.step : 1;
+        var currentMin = value !== '' ? parseFloat(value) : minVal;
+        var currentMax = value2 !== '' ? parseFloat(value2) : maxVal;
+        return '<div class="bino-range-slider-container">' +
+               '<div class="bino-range-values">' +
+               '<span class="bino-range-value-min" id="bino-range-display-' + param.name + '">' + currentMin + '</span>' +
+               '<span class="bino-range-sep">–</span>' +
+               '<span class="bino-range-value-max" id="bino-range-display-' + param.name + '_max">' + currentMax + '</span>' +
+               '</div>' +
+               '<div class="bino-dual-range">' +
+               '<input type="range" class="bino-param-input bino-range-slider bino-range-min-slider" ' +
+               'id="bino-param-' + param.name + '" name="' + param.name + '" ' +
+               'value="' + currentMin + '" min="' + minVal + '" max="' + maxVal + '" step="' + stepVal + '" ' +
+               required + '>' +
+               '<input type="range" class="bino-param-input bino-range-slider bino-range-max-slider" ' +
+               'id="bino-param-' + param.name + '_max" name="' + param.name + '_max" ' +
+               'value="' + currentMax + '" min="' + minVal + '" max="' + maxVal + '" step="' + stepVal + '" ' +
+               'data-required="false">' +
+               '</div>' +
+               '</div>';
+      
+      case 'select':
+        var html = '<select class="bino-param-input bino-param-select" id="bino-param-' + param.name + '" ' +
+                   'name="' + param.name + '" ' + required + '>';
+        if (!param.required) {
+          html += '<option value="">-- Select --</option>';
+        }
+        if (opts.items && opts.items.length > 0) {
+          opts.items.forEach(function(item) {
+            var selected = value === item.value ? ' selected' : '';
+            html += '<option value="' + escapeHtml(item.value) + '"' + selected + '>' + 
+                    escapeHtml(item.label || item.value) + '</option>';
+          });
+        }
+        html += '</select>';
+        return html;
+      
+      case 'date':
+        return '<input type="date" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+               'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
+               required + ' ' + placeholder + '>';
+      
+      case 'date_time':
+        return '<input type="datetime-local" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+               'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
+               required + ' ' + placeholder + '>';
+      
+      case 'string':
+      default:
+        return '<input type="text" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+               'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
+               required + ' ' + placeholder + '>';
+    }
   }
 
   function applyParams() {
@@ -725,10 +979,27 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     })
     .then(function(html) {
       var doc = parser.parseFromString(html, 'text/html');
-      var newContext = doc.querySelector('bn-context');
-
-      if (newContext && context) {
-        context.replaceWith(newContext);
+      
+      // Extract the base64-encoded context from the script
+      // The context is embedded as initialContextBase64 in the script
+      var scriptEl = doc.getElementById('bino-serve-runtime');
+      var newContextHtml = null;
+      
+      if (scriptEl) {
+        var scriptText = scriptEl.textContent;
+        // Find initialContextBase64 = "..." pattern
+        var match = scriptText.match(/var initialContextBase64 = "([^"]*)"/);
+        if (match && match[1]) {
+          newContextHtml = decodeBase64(match[1]);
+        }
+      }
+      
+      if (newContextHtml && context) {
+        var contextDoc = parser.parseFromString(newContextHtml, 'text/html');
+        var newContext = contextDoc.querySelector('bn-context');
+        if (newContext) {
+          context.replaceWith(newContext);
+        }
       } else {
         window.location.href = url;
         return;
@@ -877,6 +1148,128 @@ func withServeStyles(frameHTML []byte) []byte {
 	}
 	.bino-param-input.invalid {
 		border-color: #dc2626;
+	}
+	.bino-param-select {
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.75rem center;
+		padding-right: 2rem;
+		cursor: pointer;
+	}
+	.bino-range-inputs {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.bino-range-inputs .bino-param-input {
+		flex: 1;
+		min-width: 0;
+	}
+	.bino-range-sep {
+		color: #6b7280;
+		font-size: 0.875rem;
+	}
+	.bino-range-slider-container {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.bino-range-values {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 0.8125rem;
+		color: #374151;
+		font-weight: 500;
+	}
+	.bino-range-value-min,
+	.bino-range-value-max {
+		background: #f3f4f6;
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		min-width: 3rem;
+		text-align: center;
+	}
+	.bino-dual-range {
+		position: relative;
+		height: 1.5rem;
+	}
+	.bino-range-slider {
+		position: absolute;
+		width: 100%;
+		height: 6px;
+		top: 50%;
+		transform: translateY(-50%);
+		-webkit-appearance: none;
+		appearance: none;
+		background: transparent;
+		pointer-events: none;
+		padding: 0;
+		border: none;
+		margin: 0;
+	}
+	.bino-range-min-slider {
+		z-index: 1;
+	}
+	.bino-range-max-slider {
+		z-index: 2;
+	}
+	.bino-range-slider::-webkit-slider-runnable-track {
+		width: 100%;
+		height: 6px;
+		background: #e5e7eb;
+		border-radius: 3px;
+	}
+	.bino-range-min-slider::-webkit-slider-runnable-track {
+		background: linear-gradient(to right, #e5e7eb 0%, #3b82f6 0%, #3b82f6 100%, #e5e7eb 100%);
+	}
+	.bino-range-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 18px;
+		height: 18px;
+		background: #ffffff;
+		border: 2px solid #3b82f6;
+		border-radius: 50%;
+		cursor: pointer;
+		pointer-events: auto;
+		margin-top: -6px;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+	.bino-range-slider::-webkit-slider-thumb:hover {
+		background: #eff6ff;
+	}
+	.bino-range-slider::-moz-range-track {
+		width: 100%;
+		height: 6px;
+		background: #e5e7eb;
+		border-radius: 3px;
+	}
+	.bino-range-slider::-moz-range-thumb {
+		width: 14px;
+		height: 14px;
+		background: #ffffff;
+		border: 2px solid #3b82f6;
+		border-radius: 50%;
+		cursor: pointer;
+		pointer-events: auto;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+	.bino-range-slider::-moz-range-thumb:hover {
+		background: #eff6ff;
+	}
+	input[type="date"].bino-param-input,
+	input[type="datetime-local"].bino-param-input {
+		cursor: pointer;
+	}
+	input[type="number"].bino-param-input {
+		-moz-appearance: textfield;
+	}
+	input[type="number"].bino-param-input::-webkit-outer-spin-button,
+	input[type="number"].bino-param-input::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
 	}
 	#bino-apply-btn {
 		padding: 0.625rem 1rem;

@@ -114,9 +114,29 @@ type LiveRouteSpec struct {
 
 // LiveQueryParamSpec defines an allowed query parameter for live serving.
 type LiveQueryParamSpec struct {
-	Name        string  `json:"name"`
-	Default     *string `json:"default,omitempty"` // nil means required (HTTP 400 if missing)
-	Description string  `json:"description,omitempty"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type,omitempty"`     // string, number, number_range, select, date, date_time (default: string)
+	Default     *string                `json:"default,omitempty"`  // nil means required (HTTP 400 if missing), unless optional is true
+	Optional    bool                   `json:"optional,omitempty"` // if true, parameter is optional even without default
+	Description string                 `json:"description,omitempty"`
+	Options     *LiveQueryParamOptions `json:"options,omitempty"` // options for select, number, number_range types
+}
+
+// LiveQueryParamOptions defines options for select, number, and number_range type parameters.
+type LiveQueryParamOptions struct {
+	Items       []LiveQueryParamOptionItem `json:"items,omitempty"`       // static options for select
+	Dataset     string                     `json:"dataset,omitempty"`     // dataset name for dynamic options
+	ValueColumn string                     `json:"valueColumn,omitempty"` // column to use as value
+	LabelColumn string                     `json:"labelColumn,omitempty"` // column to use as label (defaults to valueColumn)
+	Min         *float64                   `json:"min,omitempty"`         // min for number/number_range
+	Max         *float64                   `json:"max,omitempty"`         // max for number/number_range
+	Step        *float64                   `json:"step,omitempty"`        // step for number/number_range
+}
+
+// LiveQueryParamOptionItem defines a single option for select type parameters.
+type LiveQueryParamOptionItem struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"` // defaults to value if empty
 }
 
 // LiveArtefactByName filters and orders LiveReportArtefact manifests.
@@ -178,11 +198,11 @@ func (r *LiveRouteSpec) GetQueryParamDefaults() map[string]string {
 	return defaults
 }
 
-// GetRequiredQueryParams returns a list of query param names that have no default.
+// GetRequiredQueryParams returns a list of query param names that have no default and are not optional.
 func (r *LiveRouteSpec) GetRequiredQueryParams() []string {
 	var required []string
 	for _, p := range r.QueryParams {
-		if p.Default == nil {
+		if p.Default == nil && !p.Optional {
 			required = append(required, p.Name)
 		}
 	}

@@ -62,10 +62,80 @@ Array of query parameters allowed for this specific route.
 Each parameter has:
 
 - `name` (required) – parameter name, used as `${name}` in documents.
+- `type` – input type for the serve UI. One of: `string` (default), `number`, `number_range`, `select`, `date`, `date_time`.
 - `default` – default value if parameter is not provided.
+- `optional` – if `true`, the parameter is optional even without a default value. The parameter will be empty if not provided.
 - `description` – human-readable description.
+- `options` – configuration for `select`, `number`, and `number_range` types.
 
-**Important:** If a parameter has no default and is not provided in the request, the server returns HTTP 400 with a JSON error listing the missing parameters.
+**Important:** If a parameter has no `default` and `optional` is not `true`, the server returns HTTP 400 with a JSON error listing the missing parameters.
+
+### Parameter types
+
+| Type           | Input control     | Description                                                                     |
+| -------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `string`       | Text input        | Default type. Free-text input.                                                  |
+| `number`       | Number input      | Numeric input with optional min/max/step.                                       |
+| `number_range` | Dual range slider | For min/max range filtering. Creates two parameters: `{name}` and `{name}_max`. |
+| `select`       | Dropdown          | Selection from predefined options (static or from a DataSet).                   |
+| `date`         | Date picker       | Date selection (YYYY-MM-DD format).                                             |
+| `date_time`    | DateTime picker   | Date and time selection (ISO 8601 format).                                      |
+
+### Options configuration
+
+The `options` object supports different settings depending on the parameter type:
+
+**For `select` type:**
+
+```yaml
+queryParams:
+  - name: REGION
+    type: select
+    description: "Select region"
+    options:
+      items:
+        - value: "EU"
+          label: "Europe"
+        - value: "US"
+          label: "United States"
+        - value: "APAC"
+          label: "Asia Pacific"
+```
+
+**For `select` with DataSet:**
+
+```yaml
+queryParams:
+  - name: CATEGORY
+    type: select
+    description: "Select category"
+    options:
+      dataset: category_list
+      valueColumn: category_id
+      labelColumn: category_name
+```
+
+The referenced DataSet should return rows with the specified columns. If `labelColumn` is omitted, `valueColumn` is used for both.
+
+**For `number` and `number_range` types:**
+
+```yaml
+queryParams:
+  - name: YEAR
+    type: number
+    default: "2024"
+    options:
+      min: 2000
+      max: 2030
+      step: 1
+  - name: PRICE
+    type: number_range
+    description: "Price range filter"
+    options:
+      min: 0
+      max: 10000
+      step: 100
+```
 
 ## Query parameter substitution
 
@@ -187,6 +257,15 @@ spec:
     WHERE extract(year from sale_date) = ${YEAR:2024}
 ---
 apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: department_list
+spec:
+  type: query
+  query: |
+    SELECT DISTINCT department_id, department_name FROM departments ORDER BY department_name
+---
+apiVersion: bino.bi/v1alpha1
 kind: LiveReportArtefact
 metadata:
   name: dynamic-report
@@ -197,10 +276,28 @@ spec:
       artefact: main-report
       queryParams:
         - name: YEAR
+          type: number
           default: "2024"
           description: "Year for analysis"
+          options:
+            min: 2000
+            max: 2030
         - name: DEPARTMENT
-          description: "Department code (required)"
+          type: select
+          description: "Department (required)"
+          options:
+            dataset: department_list
+            valueColumn: department_id
+            labelColumn: department_name
+        - name: START_DATE
+          type: date
+          description: "Start date for report period"
+        - name: AMOUNT_RANGE
+          type: number_range
+          description: "Filter by amount"
+          options:
+            min: 0
+            step: 100
 ```
 
 Access patterns:
