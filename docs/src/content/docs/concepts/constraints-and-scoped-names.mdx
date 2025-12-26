@@ -64,9 +64,17 @@ The right side is a literal value. Boolean values use `true` or `false` as strin
 
 Constraints are evaluated against the target `ReportArtefact`:
 
-- **`mode`**: The current execution mode, either `build` or `preview`
+- **`mode`**: The current execution mode: `build`, `preview`, or `serve`
 - **`labels`**: The artefact's `metadata.labels` map
 - **`spec`**: The artefact's `spec` fields (e.g., `format`, `orientation`, `language`)
+
+### Execution modes
+
+| Mode      | Description                                         | Command        |
+| --------- | --------------------------------------------------- | -------------- |
+| `build`   | Building artefacts for production output (PDF/HTML) | `bino build`   |
+| `preview` | Live preview during development with hot reload     | `bino preview` |
+| `serve`   | Production serving via LiveReportArtefact           | `bino serve`   |
 
 ### Example artefact with labels
 
@@ -318,7 +326,7 @@ artefact "weeklyReport": duplicate LayoutPage name "mainPage" - defined in repor
 
 ## Error handling
 
-Constraints are validated at build/preview time. Errors are reported immediately with helpful hints:
+Constraints are validated at build/preview/serve time. Errors are reported immediately with helpful hints:
 
 ### Invalid syntax
 

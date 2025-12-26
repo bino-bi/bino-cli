@@ -17,6 +17,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
+	"bino.bi/bino/internal/report/spec"
 )
 
 const defaultServePort = 8080
@@ -231,7 +232,7 @@ Environment knobs:
 			allAssets := make([]previewhttp.LocalAsset, 0)
 			for _, route := range liveArtefact.Spec.Routes {
 				art := artefactMap[route.Artefact]
-				renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, nil)
+				renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe)
 				if err != nil {
 					logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
 					continue
@@ -319,7 +320,7 @@ func serveRenderHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return buildServeHTML(entry.frameHTML, entry.contextHTML, liveArtefact, routePath, reqInfo.RawQuery), "text/html; charset=utf-8", nil
+		return buildServeHTML(entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery), "text/html; charset=utf-8", nil
 	}
 
 	// If we have query params, reload documents with query params as variables
@@ -361,8 +362,8 @@ func serveRenderHandler(
 		}
 	}
 
-	// Render the artefact
-	renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, workdir, docs, currentArtefact, queryLogger)
+	// Render the artefact with serve mode for constraint evaluation
+	renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, currentArtefact, queryLogger, spec.ModeServe)
 	if err != nil {
 		logger.Errorf("Render failed for %s: %v", artefact.Document.Name, err)
 		return nil, "", err
@@ -381,7 +382,7 @@ func serveRenderHandler(
 		assets:      renderResult.LocalAssets,
 	})
 
-	return buildServeHTML(frameHTML, contextHTML, liveArtefact, routePath, reqInfo.RawQuery), "text/html; charset=utf-8", nil
+	return buildServeHTML(frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery), "text/html; charset=utf-8", nil
 }
 
 // validateAndMergeQueryParams validates query parameters against route spec.
@@ -451,20 +452,20 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 // buildServeHTML combines frame and context HTML with seamless navigation support.
 // Instead of replacing the placeholder, it keeps the loading state and embeds context
 // as data to be injected after the template engine is ready.
-func buildServeHTML(frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath, rawQuery string) []byte {
+func buildServeHTML(frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery string) []byte {
 	frameStr := string(frameHTML)
 
 	// Encode context HTML as base64 for safe embedding
 	contextBase64 := base64.StdEncoding.EncodeToString(contextHTML)
 
 	// Inject the navigation script and embedded context before </head>
-	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, rawQuery, contextBase64)
+	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64)
 }
 
 // injectServeScript adds the navigation script and embedded context before </head>.
-func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath, rawQuery, contextBase64 string) []byte {
+func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string) []byte {
 	htmlStr := string(htmlBytes)
-	script := buildServeScript(liveArtefact, currentPath, rawQuery, contextBase64)
+	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64)
 
 	// Find </head> and inject the script
 	headClose := strings.Index(htmlStr, "</head>")
@@ -479,8 +480,16 @@ func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, curre
 	return htmlBytes
 }
 
-// buildServeScript generates the JavaScript for seamless navigation and content injection.
-func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, contextBase64 string) string {
+// queryParamInfo holds info about a query parameter for JSON serialization.
+type queryParamInfo struct {
+	Name        string  `json:"name"`
+	Default     *string `json:"default,omitempty"`
+	Description string  `json:"description,omitempty"`
+	Required    bool    `json:"required"`
+}
+
+// buildServeScript generates the JavaScript for seamless navigation, content injection, and control panel.
+func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string) string {
 	// Build routes JSON for the navigation script
 	routes := make(map[string]string)
 	for path, route := range liveArtefact.Spec.Routes {
@@ -492,6 +501,18 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
 	}
 	routesJSON, _ := json.Marshal(routes)
 
+	// Build queryParams JSON for the control panel
+	queryParams := make([]queryParamInfo, 0, len(routeSpec.QueryParams))
+	for _, p := range routeSpec.QueryParams {
+		queryParams = append(queryParams, queryParamInfo{
+			Name:        p.Name,
+			Default:     p.Default,
+			Description: p.Description,
+			Required:    p.Default == nil,
+		})
+	}
+	queryParamsJSON, _ := json.Marshal(queryParams)
+
 	// Build full URL with query string for initial state
 	currentURL := currentPath
 	if rawQuery != "" {
@@ -502,6 +523,8 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
 <script id="bino-serve-runtime">
 (function() {
   var routes = %s;
+  var queryParams = %s;
+  var currentPath = %q;
   var currentURL = %q;
   var initialContextBase64 = %q;
 
@@ -525,21 +548,24 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
   function waitForEngine() {
     if (customElements.get('bn-context')) {
       engineReady = true;
-      injectInitialContent();
+      onEngineReady();
       return;
     }
-    // Wait until bn-context custom element is defined
     customElements.whenDefined('bn-context').then(function() {
       engineReady = true;
-      injectInitialContent();
+      onEngineReady();
     });
+  }
+
+  function onEngineReady() {
+    injectInitialContent();
+    buildControlPanel();
   }
 
   function injectInitialContent() {
     if (!initialContextBase64) return;
     var html = decodeBase64(initialContextBase64);
     swapContext(html);
-    // Clear the initial context to free memory
     initialContextBase64 = null;
   }
 
@@ -553,6 +579,97 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
     }
   }
 
+  // Build control panel for query parameters
+  function buildControlPanel() {
+    if (queryParams.length === 0) return;
+
+    var panel = document.getElementById('bino-control-panel');
+    if (!panel) return;
+
+    // Parse current URL params
+    var urlParams = new URLSearchParams(window.location.search);
+
+    var html = '<h3>Parameters</h3>';
+    queryParams.forEach(function(param) {
+      var value = urlParams.get(param.name);
+      if (value === null && param.default !== undefined && param.default !== null) {
+        value = param.default;
+      }
+      value = value || '';
+
+      html += '<div class="bino-param-group">';
+      html += '<label class="bino-param-label" for="bino-param-' + param.name + '">' + 
+              escapeHtml(param.name) + 
+              (param.required ? '<span class="required">*</span>' : '') + 
+              '</label>';
+      if (param.description) {
+        html += '<p class="bino-param-desc">' + escapeHtml(param.description) + '</p>';
+      }
+      html += '<input type="text" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+              'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
+              'data-required="' + param.required + '" ' +
+              (param.default !== undefined && param.default !== null ? 'placeholder="' + escapeHtml(param.default) + '"' : '') +
+              '>';
+      html += '</div>';
+    });
+
+    html += '<button type="button" id="bino-apply-btn">Apply</button>';
+    panel.innerHTML = html;
+
+    // Add event listeners
+    var applyBtn = document.getElementById('bino-apply-btn');
+    applyBtn.addEventListener('click', applyParams);
+
+    // Allow Enter key to apply
+    panel.querySelectorAll('.bino-param-input').forEach(function(input) {
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') applyParams();
+      });
+      input.addEventListener('input', function() {
+        input.classList.remove('invalid');
+      });
+    });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function applyParams() {
+    var panel = document.getElementById('bino-control-panel');
+    var inputs = panel.querySelectorAll('.bino-param-input');
+    var params = new URLSearchParams();
+    var valid = true;
+
+    inputs.forEach(function(input) {
+      var name = input.name;
+      var value = input.value.trim();
+      var required = input.dataset.required === 'true';
+
+      if (required && !value) {
+        input.classList.add('invalid');
+        valid = false;
+      } else {
+        input.classList.remove('invalid');
+        if (value) {
+          params.set(name, value);
+        }
+      }
+    });
+
+    if (!valid) return;
+
+    var newURL = currentPath;
+    var queryString = params.toString();
+    if (queryString) {
+      newURL += '?' + queryString;
+    }
+
+    navigateTo(newURL);
+  }
+
   // Start waiting for engine immediately
   waitForEngine();
 
@@ -564,7 +681,6 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
     var href = link.getAttribute('href');
     if (!href || href.startsWith('http') || href.startsWith('//') || href.startsWith('#')) return;
 
-    // Check if this is an internal route
     var url = new URL(href, window.location.origin);
     var path = url.pathname;
 
@@ -587,47 +703,85 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath, rawQuery, c
   }
 
   function loadContent(url) {
-    // Show loading state
     var context = document.querySelector('bn-context');
     if (context) {
       context.style.opacity = '0.5';
     }
 
+    var applyBtn = document.getElementById('bino-apply-btn');
+    if (applyBtn) {
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Loading...';
+    }
+
     fetch(url, {
       headers: { 'X-Requested-With': 'bino-serve' }
     })
-    .then(function(response) { return response.text(); })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+      }
+      return response.text();
+    })
     .then(function(html) {
-      // Parse the response and extract bn-context content
       var doc = parser.parseFromString(html, 'text/html');
       var newContext = doc.querySelector('bn-context');
 
       if (newContext && context) {
         context.replaceWith(newContext);
       } else {
-        // Fallback: reload the page
         window.location.href = url;
+        return;
       }
 
-      // Update document title
       var newTitle = doc.querySelector('title');
       if (newTitle) {
         document.title = newTitle.textContent;
       }
+
+      // Update control panel with new URL params
+      updateControlPanelFromURL(url);
+
+      if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply';
+      }
     })
     .catch(function(err) {
       console.error('bino: navigation failed', err);
-      window.location.href = url;
+      if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply';
+      }
+      // Show error to user
+      if (context) {
+        context.style.opacity = '1';
+      }
+      alert('Failed to load: ' + err.message);
     });
   }
 
-  // Set initial state with full URL (including query string)
+  function updateControlPanelFromURL(url) {
+    var urlObj = new URL(url, window.location.origin);
+    var urlParams = urlObj.searchParams;
+    var panel = document.getElementById('bino-control-panel');
+    if (!panel) return;
+
+    panel.querySelectorAll('.bino-param-input').forEach(function(input) {
+      var value = urlParams.get(input.name);
+      if (value !== null) {
+        input.value = value;
+      }
+    });
+  }
+
+  // Set initial state with full URL
   if (!history.state) {
     history.replaceState({ url: currentURL }, '', currentURL);
   }
 })();
 </script>
-`, string(routesJSON), html.EscapeString(currentURL), contextBase64)
+`, string(routesJSON), string(queryParamsJSON), html.EscapeString(currentPath), html.EscapeString(currentURL), contextBase64)
 }
 
 // withServeStyles applies production-appropriate styles to the frame HTML.
@@ -657,14 +811,96 @@ func withServeStyles(frameHTML []byte) []byte {
 		overflow-x: auto;
 	}
 	body {
-		display: block !important;
+		display: flex !important;
 		margin: 0;
 		min-height: 100vh;
-		min-width: fit-content;
 		background: #f5f6fb;
 		font-family: inherit;
 		color: #111827;
+	}
+	#bino-control-panel {
+		width: 280px;
+		min-width: 280px;
+		background: #ffffff;
+		border-right: 1px solid #e5e7eb;
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		overflow-y: auto;
+		max-height: 100vh;
+		position: sticky;
+		top: 0;
+	}
+	#bino-control-panel:empty {
+		display: none;
+	}
+	#bino-control-panel h3 {
+		margin: 0;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #6b7280;
+	}
+	.bino-param-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+	.bino-param-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #374151;
+	}
+	.bino-param-label .required {
+		color: #dc2626;
+		margin-left: 2px;
+	}
+	.bino-param-desc {
+		font-size: 0.75rem;
+		color: #6b7280;
+		margin: 0;
+	}
+	.bino-param-input {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-family: inherit;
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+	.bino-param-input:focus {
+		outline: none;
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+	.bino-param-input.invalid {
+		border-color: #dc2626;
+	}
+	#bino-apply-btn {
+		padding: 0.625rem 1rem;
+		background: #3b82f6;
+		color: #ffffff;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+	#bino-apply-btn:hover {
+		background: #2563eb;
+	}
+	#bino-apply-btn:disabled {
+		background: #9ca3af;
+		cursor: not-allowed;
+	}
+	#bino-content-area {
+		flex: 1;
 		padding: 1.5rem;
+		overflow-x: auto;
+		min-width: 0;
 	}
 	bn-context {
 		display: flex;
@@ -696,5 +932,37 @@ func withServeStyles(frameHTML []byte) []byte {
 	result = append(result, frameHTML[:headClose]...)
 	result = append(result, styleBlock...)
 	result = append(result, frameHTML[headClose:]...)
-	return result
+
+	// Inject control panel and content wrapper after <body>
+	resultStr := string(result)
+	bodyOpen := strings.Index(resultStr, "<body")
+	if bodyOpen == -1 {
+		return result
+	}
+	// Find the closing > of the body tag
+	bodyClose := strings.Index(resultStr[bodyOpen:], ">")
+	if bodyClose == -1 {
+		return result
+	}
+	bodyEnd := bodyOpen + bodyClose + 1
+
+	// Inject the layout wrapper: control panel + content area
+	// Find </body> to wrap content
+	bodyCloseTag := strings.Index(resultStr, "</body>")
+	if bodyCloseTag == -1 {
+		return result
+	}
+
+	// Extract original body content
+	originalBodyContent := resultStr[bodyEnd:bodyCloseTag]
+
+	// Build new body structure
+	var sb strings.Builder
+	sb.WriteString(resultStr[:bodyEnd])
+	sb.WriteString(`<div id="bino-control-panel"></div><div id="bino-content-area">`)
+	sb.WriteString(originalBodyContent)
+	sb.WriteString(`</div>`)
+	sb.WriteString(resultStr[bodyCloseTag:])
+
+	return []byte(sb.String())
 }

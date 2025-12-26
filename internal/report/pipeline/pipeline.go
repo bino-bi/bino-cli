@@ -1,4 +1,4 @@
-// Package pipeline provides shared build/preview logic for manifest loading,
+// Package pipeline provides shared build/preview/serve logic for manifest loading,
 // artefact selection, and HTML rendering. Both CLI build and preview commands
 // use these helpers to ensure consistent behavior and options.
 package pipeline
@@ -380,8 +380,17 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
 func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string)) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artefact, queryLogger, spec.ModePreview)
+}
+
+// RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artefact with a specified mode.
+// It returns a lightweight frame HTML and context HTML for SSE delivery.
+// The workdir parameter is required for dataset execution.
+// The queryLogger parameter is optional and can be used to log SQL queries.
+// The mode parameter controls constraint evaluation (preview, serve, or build).
+func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode) (FrameRenderResult, error) {
 	// Build constraint context from artefact
-	constraintCtx, err := buildConstraintContext(artefact, spec.ModePreview)
+	constraintCtx, err := buildConstraintContext(artefact, mode)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
@@ -397,11 +406,22 @@ func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []c
 		return FrameRenderResult{}, err
 	}
 
+	// Map spec.Mode to RenderMode
+	var renderMode RenderMode
+	switch mode {
+	case spec.ModeBuild:
+		renderMode = RenderModeBuild
+	case spec.ModeServe:
+		renderMode = RenderModeServe
+	default:
+		renderMode = RenderModePreview
+	}
+
 	return RenderHTMLFrameAndContext(ctx, filtered, RenderOptions{
 		Workdir:           workdir,
 		Language:          artefact.Spec.Language,
 		Format:            artefact.Spec.Format,
-		Mode:              RenderModePreview,
+		Mode:              renderMode,
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
 	})
@@ -488,6 +508,8 @@ const (
 	RenderModeBuild RenderMode = render.RenderModeBuild
 	// RenderModePreview indicates a live preview (HTTP server) context.
 	RenderModePreview RenderMode = render.RenderModePreview
+	// RenderModeServe indicates a production serve (bino serve) context.
+	RenderModeServe RenderMode = render.RenderModeServe
 )
 
 // InvalidLayoutPolicy describes how callers should react to an invalid layout error.
