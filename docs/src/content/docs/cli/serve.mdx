@@ -34,7 +34,20 @@ Common flags:
 
 Each route in a `LiveReportArtefact` can define its own query parameters that are substituted into report documents using `${VAR}` syntax. This allows dynamic filtering and customization of reports on a per-route basis.
 
-If a query parameter is missing and has no default value, the server returns HTTP 400 with a JSON error listing the missing parameters.
+Query parameters support different input types in the serve UI sidebar:
+
+- `string` (default) – text input
+- `number` – numeric input with optional min/max/step
+- `number_range` – dual range slider for range filtering
+- `select` – dropdown with static items or options from a DataSet
+- `date` – date picker
+- `date_time` – date and time picker
+
+Parameters are **required** by default. To make a parameter optional, either:
+- Set a `default` value, or
+- Set `optional: true` (the parameter will be empty if not provided)
+
+If a required parameter is missing, the server returns HTTP 400 with a JSON error listing the missing parameters.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -51,13 +64,31 @@ spec:
       title: "Regional Sales"
       queryParams:
         - name: REGION
+          type: select
           default: "all"
-          description: "Filter by region code"
+          description: "Filter by region (has default)"
+          options:
+            items:
+              - value: "all"
+                label: "All Regions"
+              - value: "EU"
+                label: "Europe"
+              - value: "US"
+                label: "United States"
         - name: YEAR
+          type: number
           description: "Year to display (required)"
+          options:
+            min: 2000
+            max: 2030
+        - name: NOTES
+          optional: true
+          description: "Optional notes filter"
 ```
 
 Access with: `http://localhost:8080/region?REGION=EU&YEAR=2024`
+
+See [LiveReportArtefact reference](/reference/live-report-artefact#parameter-types) for full documentation of parameter types and options.
 
 ## Default Arguments via bino.toml
 
@@ -108,7 +139,7 @@ bino serve --live sales-dashboard --addr 0.0.0.0:8080
 | Hot reload               | ✓ Yes          | ✗ No         |
 | Query param substitution | ✗ No           | ✓ Yes        |
 | Production-ready         | ✗ No           | ✓ Yes        |
-| Navigation          | ✗ No           | ✓ Yes        |
+| Navigation               | ✗ No           | ✓ Yes        |
 | Default port             | 45678          | 8080         |
 
 Use `preview` during development for fast iteration. Use `serve` for production deployments.
