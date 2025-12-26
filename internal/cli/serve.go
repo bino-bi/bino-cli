@@ -380,11 +380,16 @@ func serveRenderHandler(
 	reqInfo := previewhttp.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
-	queryParams, err := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
-	if err != nil {
-		// Return 400 Bad Request for missing required params
-		return nil, "", previewhttp.NewHTTPError(400, err.Error())
+	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+
+	// If there are missing required params, show the sidebar with error indicators
+	if !validation.IsValid() {
+		// Resolve dataset options for select parameters (needed for sidebar)
+		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
+		return buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
+
+	queryParams := validation.Params
 
 	// Build cache key from artefact name + sorted query params
 	cacheKey := buildCacheKey(artefact.Document.Name, queryParams)
@@ -473,11 +478,16 @@ func serveLayoutPagesHandler(
 	reqInfo := previewhttp.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
-	queryParams, err := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
-	if err != nil {
-		// Return 400 Bad Request for missing required params
-		return nil, "", previewhttp.NewHTTPError(400, err.Error())
+	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+
+	// If there are missing required params, show the sidebar with error indicators
+	if !validation.IsValid() {
+		// Resolve dataset options for select parameters (needed for sidebar)
+		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
+		return buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
+
+	queryParams := validation.Params
 
 	// Build cache key from layout pages + sorted query params
 	cacheKey := buildLayoutPagesCacheKey(layoutPages, queryParams)
@@ -586,15 +596,30 @@ func buildLayoutPagesCacheKey(layoutPages config.StringOrSlice, params map[strin
 	return key + "?" + strings.Join(parts, "&")
 }
 
+// queryParamValidationResult holds the result of query parameter validation.
+type queryParamValidationResult struct {
+	Params       map[string]string // Merged parameters (request values + defaults)
+	MissingNames []string          // Names of missing required parameters
+}
+
+// IsValid returns true if there are no missing required parameters.
+func (r queryParamValidationResult) IsValid() bool {
+	return len(r.MissingNames) == 0
+}
+
 // validateAndMergeQueryParams validates query parameters against route spec.
-// Returns merged params (request values + defaults) or error if required param is missing.
-func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) (map[string]string, error) {
-	result := make(map[string]string)
+// Returns merged params (request values + defaults) and list of missing required params.
+// Unlike before, this does NOT return an error - missing params are reported in the result.
+func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) queryParamValidationResult {
+	result := queryParamValidationResult{
+		Params:       make(map[string]string),
+		MissingNames: nil,
+	}
 
 	// Apply defaults first
 	defaults := routeSpec.GetQueryParamDefaults()
 	for name, defaultVal := range defaults {
-		result[name] = defaultVal
+		result.Params[name] = defaultVal
 	}
 
 	// Override with request values (only for declared params)
@@ -605,18 +630,18 @@ func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 
 	for name := range declaredParams {
 		if values, ok := requestQuery[name]; ok && len(values) > 0 {
-			result[name] = values[0]
+			result.Params[name] = values[0]
 		}
 	}
 
 	// Check for missing required params (params with no default)
 	for _, requiredName := range routeSpec.GetRequiredQueryParams() {
-		if _, ok := result[requiredName]; !ok {
-			return nil, fmt.Errorf("missing required query parameter: %s", requiredName)
+		if _, ok := result.Params[requiredName]; !ok {
+			result.MissingNames = append(result.MissingNames, requiredName)
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 // buildCacheKey creates a cache key from artefact name and sorted query params.
@@ -663,13 +688,49 @@ func buildServeHTML(ctx context.Context, frameHTML, contextHTML []byte, liveArte
 	datasetOptions := resolveDatasetOptions(ctx, workdir, docs, routeSpec)
 
 	// Inject the navigation script and embedded context before </head>
-	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions)
+	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, nil)
+}
+
+// buildMissingParamsHTML generates a full HTML page with sidebar showing error indicators
+// for missing required parameters and a message instead of the report content.
+func buildMissingParamsHTML(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery string, missingParams []string, datasetOptions map[string][]queryParamOptionItem) []byte {
+	// Build a minimal HTML frame with the serve styles and the control panel
+	// Context is empty since we don't render the report
+	contextBase64 := ""
+
+	// Create a set of missing params for quick lookup
+	missingSet := make(map[string]struct{}, len(missingParams))
+	for _, name := range missingParams {
+		missingSet[name] = struct{}{}
+	}
+
+	// Apply serve styles to the frame HTML first, then inject script
+	frameHTML := withServeStyles([]byte(buildMissingParamsFrameHTML()))
+	return injectServeScript(frameHTML, liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, missingSet)
+}
+
+// buildMissingParamsFrameHTML generates a minimal HTML frame for the missing params page.
+// It includes the template engine so that navigation to other routes works properly.
+func buildMissingParamsFrameHTML() string {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parameters Required</title>
+<script type="module" src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
+<script nomodule src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
+</head>
+<body>
+</body>
+</html>`
 }
 
 // injectServeScript adds the navigation script and embedded context before </head>.
-func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem) []byte {
+// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
+func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) []byte {
 	htmlStr := string(htmlBytes)
-	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions)
+	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, missingParams)
 
 	// Find </head> and inject the script
 	headClose := strings.Index(htmlStr, "</head>")
@@ -783,7 +844,8 @@ func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Do
 }
 
 // buildServeScript generates the JavaScript for seamless navigation, content injection, and control panel.
-func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem) string {
+// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
+func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) string {
 	// Build routes JSON for the navigation script
 	routes := make(map[string]string)
 	for path, route := range liveArtefact.Spec.Routes {
@@ -794,6 +856,14 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 		routes[path] = title
 	}
 	routesJSON, _ := json.Marshal(routes)
+
+	// Build missing params JSON
+	missingList := make([]string, 0, len(missingParams))
+	for name := range missingParams {
+		missingList = append(missingList, name)
+	}
+	sort.Strings(missingList) // for consistent output
+	missingParamsJSON, _ := json.Marshal(missingList)
 
 	// Build queryParams JSON for the control panel
 	queryParams := make([]queryParamInfo, 0, len(routeSpec.QueryParams))
@@ -853,6 +923,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 (function() {
   var routes = %s;
   var queryParams = %s;
+  var missingParams = %s;
   var currentPath = %q;
   var currentURL = %q;
   var initialContextBase64 = %q;
@@ -875,6 +946,16 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
   var engineReady = false;
 
   function waitForEngine() {
+    // If we have missing params, build control panel once DOM is ready (no report to render)
+    if (missingParams && missingParams.length > 0) {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildControlPanel);
+      } else {
+        buildControlPanel();
+      }
+      return;
+    }
+    
     if (customElements.get('bn-context')) {
       engineReady = true;
       onEngineReady();
@@ -908,53 +989,115 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     }
   }
 
+  // Check if a param is missing
+  function isParamMissing(paramName) {
+    return missingParams && missingParams.indexOf(paramName) !== -1;
+  }
+
+  // Build sitemap for navigation
+  function buildSitemap() {
+    var panel = document.getElementById('bino-control-panel');
+    if (!panel) return '';
+    
+    var routeKeys = Object.keys(routes).sort();
+    if (routeKeys.length <= 1) return '';
+    
+    var html = '<div class="bino-sitemap">';
+    html += '<h3>Navigation</h3>';
+    html += '<ul class="bino-route-list">';
+    routeKeys.forEach(function(path) {
+      var title = routes[path] || path;
+      var isActive = path === currentPath;
+      var activeClass = isActive ? ' class="active"' : '';
+      html += '<li' + activeClass + '><a href="' + escapeHtml(path) + '">' + escapeHtml(title) + '</a></li>';
+    });
+    html += '</ul>';
+    html += '</div>';
+    return html;
+  }
+
+  // Build missing params message
+  function buildMissingParamsMessage() {
+    if (!missingParams || missingParams.length === 0) return '';
+    
+    var html = '<div class="bino-missing-params-banner">';
+    html += '<div class="bino-missing-icon">⚠</div>';
+    html += '<div class="bino-missing-text">';
+    html += '<strong>Required parameters missing</strong>';
+    html += '<p>Please fill in the required fields marked with <span class="required">*</span> to view the report.</p>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
   // Build control panel for query parameters
   function buildControlPanel() {
-    if (queryParams.length === 0) return;
-
     var panel = document.getElementById('bino-control-panel');
     if (!panel) return;
 
-    // Parse current URL params
-    var urlParams = new URLSearchParams(window.location.search);
+    var html = '';
+    
+    // Add sitemap first
+    html += buildSitemap();
+    
+    // Add parameters section if there are any
+    if (queryParams.length > 0) {
+      // Parse current URL params
+      var urlParams = new URLSearchParams(window.location.search);
 
-    var html = '<h3>Parameters</h3>';
-    queryParams.forEach(function(param) {
-      var value = urlParams.get(param.name);
-      var value2 = null; // For number_range (max value)
-      
-      // Handle number_range which uses param_name and param_name_max
-      if (param.type === 'number_range') {
-        value2 = urlParams.get(param.name + '_max');
-      }
-      
-      if (value === null && param.default !== undefined && param.default !== null) {
-        value = param.default;
-      }
-      value = value || '';
-      value2 = value2 || '';
+      html += '<h3>Parameters</h3>';
+      queryParams.forEach(function(param) {
+        var value = urlParams.get(param.name);
+        var value2 = null; // For number_range (max value)
+        
+        // Handle number_range which uses param_name and param_name_max
+        if (param.type === 'number_range') {
+          value2 = urlParams.get(param.name + '_max');
+        }
+        
+        if (value === null && param.default !== undefined && param.default !== null) {
+          value = param.default;
+        }
+        value = value || '';
+        value2 = value2 || '';
 
-      html += '<div class="bino-param-group">';
-      html += '<label class="bino-param-label" for="bino-param-' + param.name + '">' + 
-              escapeHtml(param.name) + 
-              (param.required ? '<span class="required">*</span>' : '') + 
-              '</label>';
-      if (param.description) {
-        html += '<p class="bino-param-desc">' + escapeHtml(param.description) + '</p>';
-      }
-      
-      // Render input based on type
-      html += buildInputForType(param, value, value2);
-      
-      html += '</div>';
-    });
+        // Check if this param is in the missing list
+        var isMissing = isParamMissing(param.name);
+        var groupClass = isMissing ? ' bino-param-missing' : '';
 
-    html += '<button type="button" id="bino-apply-btn">Apply</button>';
+        html += '<div class="bino-param-group' + groupClass + '">';
+        html += '<label class="bino-param-label" for="bino-param-' + param.name + '">' + 
+                escapeHtml(param.name) + 
+                (param.required ? '<span class="required">*</span>' : '') + 
+                '</label>';
+        if (param.description) {
+          html += '<p class="bino-param-desc">' + escapeHtml(param.description) + '</p>';
+        }
+      
+        // Render input based on type
+        html += buildInputForType(param, value, value2, isMissing);
+        
+        html += '</div>';
+      });
+
+      html += '<button type="button" id="bino-apply-btn">Apply</button>';
+    }
+    
     panel.innerHTML = html;
+
+    // Show missing params message in content area
+    if (missingParams && missingParams.length > 0) {
+      var contentArea = document.getElementById('bino-content-area');
+      if (contentArea) {
+        contentArea.innerHTML = buildMissingParamsMessage();
+      }
+    }
 
     // Add event listeners
     var applyBtn = document.getElementById('bino-apply-btn');
-    applyBtn.addEventListener('click', applyParams);
+    if (applyBtn) {
+      applyBtn.addEventListener('click', applyParams);
+    }
 
     // Allow Enter key to apply
     panel.querySelectorAll('.bino-param-input').forEach(function(input) {
@@ -963,6 +1106,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
       });
       input.addEventListener('input', function() {
         input.classList.remove('invalid');
+        input.closest('.bino-param-group').classList.remove('bino-param-missing');
       });
     });
 
@@ -1010,7 +1154,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     return div.innerHTML;
   }
 
-  function buildInputForType(param, value, value2) {
+  function buildInputForType(param, value, value2, isMissing) {
     var type = param.type || 'string';
     var opts = param.options || {};
     var placeholder = param.default !== undefined && param.default !== null ? 'placeholder="' + escapeHtml(param.default) + '"' : '';
@@ -1018,10 +1162,11 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     var minAttr = opts.min !== undefined ? ' min="' + opts.min + '"' : '';
     var maxAttr = opts.max !== undefined ? ' max="' + opts.max + '"' : '';
     var stepAttr = opts.step !== undefined ? ' step="' + opts.step + '"' : '';
+    var invalidClass = isMissing ? ' invalid' : '';
     
     switch (type) {
       case 'number':
-        return '<input type="number" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+        return '<input type="number" class="bino-param-input' + invalidClass + '" id="bino-param-' + param.name + '" ' +
                'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
                required + ' ' + placeholder + minAttr + maxAttr + stepAttr + '>';
       
@@ -1038,7 +1183,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
                '<span class="bino-range-value-max" id="bino-range-display-' + param.name + '_max">' + currentMax + '</span>' +
                '</div>' +
                '<div class="bino-dual-range">' +
-               '<input type="range" class="bino-param-input bino-range-slider bino-range-min-slider" ' +
+               '<input type="range" class="bino-param-input bino-range-slider bino-range-min-slider' + invalidClass + '" ' +
                'id="bino-param-' + param.name + '" name="' + param.name + '" ' +
                'value="' + currentMin + '" min="' + minVal + '" max="' + maxVal + '" step="' + stepVal + '" ' +
                required + '>' +
@@ -1050,7 +1195,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
                '</div>';
       
       case 'select':
-        var html = '<select class="bino-param-input bino-param-select" id="bino-param-' + param.name + '" ' +
+        var html = '<select class="bino-param-input bino-param-select' + invalidClass + '" id="bino-param-' + param.name + '" ' +
                    'name="' + param.name + '" ' + required + '>';
         if (!param.required) {
           html += '<option value="">-- Select --</option>';
@@ -1066,18 +1211,18 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
         return html;
       
       case 'date':
-        return '<input type="date" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+        return '<input type="date" class="bino-param-input' + invalidClass + '" id="bino-param-' + param.name + '" ' +
                'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
                required + ' ' + placeholder + '>';
       
       case 'date_time':
-        return '<input type="datetime-local" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+        return '<input type="datetime-local" class="bino-param-input' + invalidClass + '" id="bino-param-' + param.name + '" ' +
                'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
                required + ' ' + placeholder + '>';
       
       case 'string':
       default:
-        return '<input type="text" class="bino-param-input" id="bino-param-' + param.name + '" ' +
+        return '<input type="text" class="bino-param-input' + invalidClass + '" id="bino-param-' + param.name + '" ' +
                'name="' + param.name + '" value="' + escapeHtml(value) + '" ' +
                required + ' ' + placeholder + '>';
     }
@@ -1130,7 +1275,8 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     var url = new URL(href, window.location.origin);
     var path = url.pathname;
 
-    if (routes[path]) {
+    // Check if this path is in our routes (use hasOwnProperty to handle empty string values)
+    if (routes.hasOwnProperty(path)) {
       e.preventDefault();
       navigateTo(path + url.search);
     }
@@ -1172,29 +1318,77 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
     .then(function(html) {
       var doc = parser.parseFromString(html, 'text/html');
       
-      // Extract the base64-encoded context from the script
-      // The context is embedded as initialContextBase64 in the script
+      // Extract the script data from the new page
       var scriptEl = doc.getElementById('bino-serve-runtime');
-      var newContextHtml = null;
-      
-      if (scriptEl) {
-        var scriptText = scriptEl.textContent;
-        // Find initialContextBase64 = "..." pattern
-        var match = scriptText.match(/var initialContextBase64 = "([^"]*)"/);
-        if (match && match[1]) {
-          newContextHtml = decodeBase64(match[1]);
+      if (!scriptEl) {
+        console.error('bino: no runtime script found in response');
+        var applyBtn = document.getElementById('bino-apply-btn');
+        if (applyBtn) {
+          applyBtn.disabled = false;
+          applyBtn.textContent = 'Apply';
         }
+        return;
       }
       
-      if (newContextHtml && context) {
+      var scriptText = scriptEl.textContent;
+      
+      // Extract missingParams from new page
+      var newMissingParams = [];
+      var missingMatch = scriptText.match(/var missingParams = (\[[^\]]*\])/);
+      if (missingMatch && missingMatch[1]) {
+        try {
+          newMissingParams = JSON.parse(missingMatch[1]);
+        } catch (e) {}
+      }
+      
+      // Extract queryParams from new page
+      var newQueryParams = [];
+      var queryParamsMatch = scriptText.match(/var queryParams = (\[[\s\S]*?\]);[\s\n]*var missingParams/);
+      if (queryParamsMatch && queryParamsMatch[1]) {
+        try {
+          newQueryParams = JSON.parse(queryParamsMatch[1]);
+        } catch (e) {}
+      }
+      
+      // Extract currentPath from new page
+      var pathMatch = scriptText.match(/var currentPath = "([^"]*)"/);
+      if (pathMatch && pathMatch[1]) {
+        currentPath = pathMatch[1];
+      }
+      
+      // Update missingParams and queryParams
+      missingParams = newMissingParams;
+      queryParams = newQueryParams;
+      
+      // Extract context HTML
+      var newContextHtml = null;
+      var contextMatch = scriptText.match(/var initialContextBase64 = "([^"]*)"/);
+      if (contextMatch && contextMatch[1]) {
+        newContextHtml = decodeBase64(contextMatch[1]);
+      }
+      
+      // Update content area
+      var contentArea = document.getElementById('bino-content-area');
+      // Re-query context as it may have changed since function start
+      var currentContext = document.querySelector('bn-context');
+      
+      if (newContextHtml) {
         var contextDoc = parser.parseFromString(newContextHtml, 'text/html');
         var newContext = contextDoc.querySelector('bn-context');
         if (newContext) {
-          context.replaceWith(newContext);
+          if (currentContext) {
+            currentContext.replaceWith(newContext);
+          } else if (contentArea) {
+            contentArea.innerHTML = '';
+            contentArea.appendChild(newContext);
+          }
         }
-      } else {
-        window.location.href = url;
-        return;
+      } else if (missingParams.length > 0 && contentArea) {
+        // Show missing params message - also remove any existing bn-context
+        if (currentContext) {
+          currentContext.remove();
+        }
+        contentArea.innerHTML = buildMissingParamsMessage();
       }
 
       var newTitle = doc.querySelector('title');
@@ -1202,13 +1396,8 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
         document.title = newTitle.textContent;
       }
 
-      // Update control panel with new URL params
-      updateControlPanelFromURL(url);
-
-      if (applyBtn) {
-        applyBtn.disabled = false;
-        applyBtn.textContent = 'Apply';
-      }
+      // Rebuild control panel with new route's params
+      buildControlPanel();
     })
     .catch(function(err) {
       console.error('bino: navigation failed', err);
@@ -1244,7 +1433,7 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
   }
 })();
 </script>
-`, string(routesJSON), string(queryParamsJSON), html.EscapeString(currentPath), html.EscapeString(currentURL), contextBase64)
+`, string(routesJSON), string(queryParamsJSON), string(missingParamsJSON), html.EscapeString(currentPath), html.EscapeString(currentURL), contextBase64)
 }
 
 // withServeStyles applies production-appropriate styles to the frame HTML.
@@ -1340,6 +1529,76 @@ func withServeStyles(frameHTML []byte) []byte {
 	}
 	.bino-param-input.invalid {
 		border-color: #dc2626;
+	}
+	.bino-param-group.bino-param-missing {
+		background: #fef2f2;
+		border: 1px solid #fecaca;
+		border-radius: 8px;
+		padding: 0.75rem;
+		margin: -0.25rem;
+	}
+	.bino-param-group.bino-param-missing .bino-param-label {
+		color: #dc2626;
+	}
+	.bino-sitemap {
+		border-bottom: 1px solid #e5e7eb;
+		padding-bottom: 1rem;
+		margin-bottom: 0.5rem;
+	}
+	.bino-route-list {
+		list-style: none;
+		margin: 0.5rem 0 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.bino-route-list li a {
+		display: block;
+		padding: 0.5rem 0.75rem;
+		border-radius: 6px;
+		text-decoration: none;
+		color: #374151;
+		font-size: 0.875rem;
+		transition: background 0.15s;
+	}
+	.bino-route-list li a:hover {
+		background: #f3f4f6;
+	}
+	.bino-route-list li.active a {
+		background: #eff6ff;
+		color: #1d4ed8;
+		font-weight: 500;
+	}
+	.bino-missing-params-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		background: #fef3c7;
+		border: 1px solid #fcd34d;
+		border-radius: 8px;
+		padding: 1.5rem;
+		max-width: 480px;
+		margin: 2rem auto;
+	}
+	.bino-missing-icon {
+		font-size: 1.5rem;
+		flex-shrink: 0;
+	}
+	.bino-missing-text strong {
+		display: block;
+		color: #92400e;
+		margin-bottom: 0.5rem;
+	}
+	.bino-missing-text p {
+		margin: 0;
+		color: #78350f;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+	.bino-missing-text .required {
+		color: #dc2626;
+		font-weight: bold;
 	}
 	.bino-param-select {
 		appearance: none;
