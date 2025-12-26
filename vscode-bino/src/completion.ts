@@ -313,6 +313,7 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             { name: 'ComponentStyle', description: 'Design tokens/CSS variables' },
             { name: 'Internationalization', description: 'Locale-specific translations' },
             { name: 'ReportArtefact', description: 'Output PDF definition' },
+            { name: 'LiveReportArtefact', description: 'Interactive web report with routes' },
             { name: 'SigningProfile', description: 'PDF digital signing config' }
         ];
 

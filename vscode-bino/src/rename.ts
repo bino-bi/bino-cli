@@ -45,6 +45,11 @@ const REFERENCE_PATTERNS: ReferencePattern[] = [
     {
         keyPattern: /^\s*report:\s*/,
         kinds: ['ReportArtefact']
+    },
+    // LiveReportArtefact route artefact references
+    {
+        keyPattern: /^\s*artefact:\s*/,
+        kinds: ['ReportArtefact']
     }
 ];
 
@@ -439,8 +444,9 @@ export class BinoRenameProvider implements vscode.RenameProvider {
                 break;
 
             case 'ReportArtefact':
-                // report: <name>
+                // report: <name> or artefact: <name> (in LiveReportArtefact routes)
                 this.findFieldValueReference(line, lineNum, 'report', name, ranges);
+                this.findFieldValueReference(line, lineNum, 'artefact', name, ranges);
                 break;
 
             case 'Asset':

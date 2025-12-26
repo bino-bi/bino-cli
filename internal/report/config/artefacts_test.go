@@ -87,3 +87,122 @@ func TestApplyReportArtefactDefaults(t *testing.T) {
 		t.Fatalf("expected no warnings when fields are set, got %d", len(warns))
 	}
 }
+
+func TestCollectLiveArtefacts(t *testing.T) {
+	defaultVal := "all"
+	payload := map[string]any{
+		"spec": map[string]any{
+			"title": "Dashboard",
+			"routes": map[string]any{
+				"/": map[string]any{
+					"artefact": "main-report",
+					"queryParams": []any{
+						map[string]any{
+							"name":        "REGION",
+							"default":     defaultVal,
+							"description": "Filter region",
+						},
+						map[string]any{
+							"name":        "YEAR",
+							"description": "Year filter",
+						},
+					},
+				},
+				"/sales": map[string]any{
+					"artefact": "sales-report",
+					"title":    "Sales",
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	doc := Document{
+		File:     "live.yaml",
+		Position: 1,
+		Kind:     "LiveReportArtefact",
+		Name:     "dashboard",
+		Raw:      raw,
+	}
+
+	liveArtefacts, err := CollectLiveArtefacts([]Document{doc})
+	if err != nil {
+		t.Fatalf("CollectLiveArtefacts returned error: %v", err)
+	}
+	if len(liveArtefacts) != 1 {
+		t.Fatalf("expected 1 live artefact, got %d", len(liveArtefacts))
+	}
+	live := liveArtefacts[0]
+	if live.Document.Name != "dashboard" {
+		t.Fatalf("unexpected name %q", live.Document.Name)
+	}
+	if live.Spec.Title != "Dashboard" {
+		t.Fatalf("unexpected title %q", live.Spec.Title)
+	}
+	if len(live.Spec.Routes) != 2 {
+		t.Fatalf("expected 2 routes, got %d", len(live.Spec.Routes))
+	}
+	if live.Spec.Routes["/"].Artefact != "main-report" {
+		t.Fatalf("unexpected root artefact %q", live.Spec.Routes["/"].Artefact)
+	}
+	if len(live.Spec.Routes["/"].QueryParams) != 2 {
+		t.Fatalf("expected 2 query params on root route, got %d", len(live.Spec.Routes["/"].QueryParams))
+	}
+}
+
+func TestLiveRouteSpec_GetQueryParamDefaults(t *testing.T) {
+	defaultVal := "2024"
+	route := LiveRouteSpec{
+		Artefact: "test-report",
+		QueryParams: []LiveQueryParamSpec{
+			{Name: "YEAR", Default: &defaultVal},
+			{Name: "REGION"}, // no default
+		},
+	}
+	defaults := route.GetQueryParamDefaults()
+	if len(defaults) != 1 {
+		t.Fatalf("expected 1 default, got %d", len(defaults))
+	}
+	if defaults["YEAR"] != "2024" {
+		t.Fatalf("unexpected default for YEAR: %q", defaults["YEAR"])
+	}
+}
+
+func TestLiveRouteSpec_GetRequiredQueryParams(t *testing.T) {
+	defaultVal := "2024"
+	route := LiveRouteSpec{
+		Artefact: "test-report",
+		QueryParams: []LiveQueryParamSpec{
+			{Name: "YEAR", Default: &defaultVal},
+			{Name: "REGION"}, // no default = required
+		},
+	}
+	required := route.GetRequiredQueryParams()
+	if len(required) != 1 {
+		t.Fatalf("expected 1 required, got %d", len(required))
+	}
+	if required[0] != "REGION" {
+		t.Fatalf("expected REGION to be required, got %q", required[0])
+	}
+}
+
+func TestFindLiveArtefact(t *testing.T) {
+	artefacts := []LiveArtefact{
+		{Document: Document{Name: "alpha"}},
+		{Document: Document{Name: "beta"}},
+	}
+	found := FindLiveArtefact(artefacts, "beta")
+	if found == nil {
+		t.Fatalf("expected to find beta")
+	}
+	if found.Document.Name != "beta" {
+		t.Fatalf("unexpected name %q", found.Document.Name)
+	}
+
+	notFound := FindLiveArtefact(artefacts, "gamma")
+	if notFound != nil {
+		t.Fatalf("expected nil for non-existent artefact")
+	}
+}

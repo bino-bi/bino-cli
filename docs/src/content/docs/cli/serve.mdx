@@ -1,0 +1,114 @@
+---
+title: bino serve
+description: Serve a live report application for production use.
+---
+
+`bino serve` starts a production HTTP server that serves a `LiveReportArtefact` as an interactive web application.
+Unlike `preview`, serve does not watch for file changes and renders on-demand per request.
+
+## Usage
+
+```bash
+bino serve --live <name> [flags]
+```
+
+Required flags:
+
+- `--live` – name of the `LiveReportArtefact` to serve (required).
+
+Common flags:
+
+- `--work-dir` – report bundle directory (default: `.`).
+- `--port` – HTTP port (default: `8080`).
+- `--addr` – full listen address (overrides `--port`, e.g. `0.0.0.0:8080`).
+- `--log-sql` – log executed SQL queries.
+
+## How it works
+
+1. **Loads configuration** – reads all manifests from the work directory.
+2. **Validates routes** – ensures the selected `LiveReportArtefact` has a root route and all referenced `ReportArtefact`s exist.
+3. **Serves on-demand** – renders reports when requested, using caches for efficiency.
+4. **Nvigation** – enables smooth client-side navigation without full page reloads.
+
+## Query parameters
+
+Each route in a `LiveReportArtefact` can define its own query parameters that are substituted into report documents using `${VAR}` syntax. This allows dynamic filtering and customization of reports on a per-route basis.
+
+If a query parameter is missing and has no default value, the server returns HTTP 400 with a JSON error listing the missing parameters.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  title: "Sales Dashboard"
+  routes:
+    "/":
+      artefact: overview-report
+    "/region":
+      artefact: region-report
+      title: "Regional Sales"
+      queryParams:
+        - name: REGION
+          default: "all"
+          description: "Filter by region code"
+        - name: YEAR
+          description: "Year to display (required)"
+```
+
+Access with: `http://localhost:8080/region?REGION=EU&YEAR=2024`
+
+## Default Arguments via bino.toml
+
+Set default values for serve flags in your project's `bino.toml`:
+
+```toml
+[serve.args]
+port = 8080
+live = "sales-dashboard"
+log-sql = true
+```
+
+## Environment Variables via bino.toml
+
+Set environment variables for serve in `bino.toml`:
+
+```toml
+[serve.env]
+BNR_MAX_QUERY_ROWS = "100000"
+DATABASE_URL = "postgres://localhost/prod"
+```
+
+## Examples
+
+Serve a live report artefact:
+
+```bash
+bino serve --live sales-dashboard
+```
+
+Serve on a specific port with SQL logging:
+
+```bash
+bino serve --live sales-dashboard --port 3000 --log-sql
+```
+
+Serve bound to all interfaces (for Docker/Kubernetes):
+
+```bash
+bino serve --live sales-dashboard --addr 0.0.0.0:8080
+```
+
+## Comparison with preview
+
+| Feature                  | `bino preview` | `bino serve` |
+| ------------------------ | -------------- | ------------ |
+| File watching            | ✓ Yes          | ✗ No         |
+| Hot reload               | ✓ Yes          | ✗ No         |
+| Query param substitution | ✗ No           | ✓ Yes        |
+| Production-ready         | ✗ No           | ✓ Yes        |
+| Navigation          | ✗ No           | ✓ Yes        |
+| Default port             | 45678          | 8080         |
+
+Use `preview` during development for fast iteration. Use `serve` for production deployments.

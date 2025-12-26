@@ -27,6 +27,7 @@
         "ComponentStyle",
         "Internationalization",
         "ReportArtefact",
+        "LiveReportArtefact",
         "SigningProfile"
       ],
       "description": "Type of document in the report bundle (e.g. DataSource, DataSet, LayoutPage). Determines which spec block is expected."
@@ -182,6 +183,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/reportArtefactSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "LiveReportArtefact" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/liveReportArtefactSpec" }
         }
       }
     },
@@ -927,6 +940,74 @@
           "type": "string",
           "minLength": 1,
           "description": "Name of a SigningProfile manifest that should be used to digitally sign the generated PDF. If omitted, the artefact is not signed."
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveReportArtefactSpec": {
+      "type": "object",
+      "required": ["title", "routes"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable title of the live report application."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the live report application."
+        },
+        "routes": {
+          "type": "object",
+          "required": ["/"],
+          "additionalProperties": {
+            "$ref": "#/$defs/liveRouteSpec"
+          },
+          "description": "Map of URL paths to route configurations. The root route '/' is mandatory and serves as the index page. Other routes map to ReportArtefact documents by name."
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveRouteSpec": {
+      "type": "object",
+      "required": ["artefact"],
+      "properties": {
+        "artefact": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the ReportArtefact document to render for this route (metadata.name)."
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional page title override for this route."
+        },
+        "queryParams": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/liveQueryParamSpec"
+          },
+          "description": "Query parameters allowed for this route. These are substituted like ${VAR} environment variables in the report documents."
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveQueryParamSpec": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Name of the query parameter. Must be a valid identifier (used as ${name} in documents)."
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value if the query parameter is not provided. If omitted and the parameter is not provided, the request returns HTTP 400."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this parameter controls."
         }
       },
       "additionalProperties": false
