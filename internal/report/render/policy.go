@@ -13,6 +13,8 @@ const (
 	RenderModeBuild RenderMode = "build"
 	// RenderModePreview indicates a live preview (HTTP server) context.
 	RenderModePreview RenderMode = "preview"
+	// RenderModeServe indicates a production serve (bino serve) context.
+	RenderModeServe RenderMode = "serve"
 )
 
 // InvalidLayoutPolicy describes how callers should react to an invalid layout error.

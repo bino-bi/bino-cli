@@ -269,7 +269,7 @@
             "type": "string",
             "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=)\\s*.+$"
           },
-          "description": "Constraint expressions that determine if this document is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'. Not applicable to ReportArtefact documents."
+          "description": "Constraint expressions that determine if this document is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'. Not applicable to ReportArtefact documents."
         }
       }
     },
@@ -1519,7 +1519,7 @@
             "type": "string",
             "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=)\\s*.+$"
           },
-          "description": "Constraint expressions that determine if this child is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'."
+          "description": "Constraint expressions that determine if this child is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'."
         }
       }
     },
