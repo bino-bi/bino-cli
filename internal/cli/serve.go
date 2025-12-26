@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"sort"
 	"strings"
 	"sync"
 
@@ -160,8 +161,16 @@ Environment knobs:
 				return ConfigError(err)
 			}
 
+			// Collect LayoutPage names for validation
+			layoutPageNames := make(map[string]struct{})
+			for _, doc := range docs {
+				if doc.Kind == "LayoutPage" {
+					layoutPageNames[doc.Name] = struct{}{}
+				}
+			}
+
 			// Validate the live artefact
-			if err := config.ValidateLiveArtefact(*liveArtefact, artefacts); err != nil {
+			if err := config.ValidateLiveArtefact(*liveArtefact, artefacts, layoutPageNames); err != nil {
 				return ConfigError(err)
 			}
 
@@ -187,30 +196,51 @@ Environment knobs:
 			// Set up routes based on LiveReportArtefact spec
 			routeMap := make(map[string]previewhttp.ContentFunc)
 			for path, route := range liveArtefact.Spec.Routes {
-				art, ok := artefactMap[route.Artefact]
-				if !ok {
-					// This should have been caught by validation, but be safe
-					return ConfigErrorf("route %q references unknown artefact %q", path, route.Artefact)
-				}
-
 				// Capture variables for closure
 				routePath := path
-				routeArt := art
-				routeSpec := route // Capture route spec for query param validation
+				routeSpec := route
 
-				routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
-					return serveRenderHandler(
-						reqCtx,
-						logger,
-						renderCache,
-						watchDir,
-						docs,
-						routeArt,
-						*liveArtefact,
-						routePath,
-						routeSpec,
-						queryLogger,
-					)
+				if route.Artefact != "" {
+					// Route references an artefact
+					art, ok := artefactMap[route.Artefact]
+					if !ok {
+						// This should have been caught by validation, but be safe
+						return ConfigErrorf("route %q references unknown artefact %q", path, route.Artefact)
+					}
+					routeArt := art
+
+					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+						return serveRenderHandler(
+							reqCtx,
+							logger,
+							renderCache,
+							watchDir,
+							docs,
+							routeArt,
+							*liveArtefact,
+							routePath,
+							routeSpec,
+							queryLogger,
+						)
+					}
+				} else {
+					// Route references layoutPages directly
+					routeLayoutPages := route.LayoutPages
+
+					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+						return serveLayoutPagesHandler(
+							reqCtx,
+							logger,
+							renderCache,
+							watchDir,
+							docs,
+							routeLayoutPages,
+							*liveArtefact,
+							routePath,
+							routeSpec,
+							queryLogger,
+						)
+					}
 				}
 			}
 
@@ -219,34 +249,66 @@ Environment knobs:
 
 			// Set default content function for root if "/" is in routes
 			if rootRoute, ok := liveArtefact.Spec.Routes["/"]; ok {
-				rootArt := artefactMap[rootRoute.Artefact]
 				rootSpec := rootRoute // Capture route spec
-				server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
-					return serveRenderHandler(
-						reqCtx,
-						logger,
-						renderCache,
-						watchDir,
-						docs,
-						rootArt,
-						*liveArtefact,
-						"/",
-						rootSpec,
-						queryLogger,
-					)
-				})
+				if rootRoute.Artefact != "" {
+					rootArt := artefactMap[rootRoute.Artefact]
+					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
+						return serveRenderHandler(
+							reqCtx,
+							logger,
+							renderCache,
+							watchDir,
+							docs,
+							rootArt,
+							*liveArtefact,
+							"/",
+							rootSpec,
+							queryLogger,
+						)
+					})
+				} else {
+					rootLayoutPages := rootRoute.LayoutPages
+					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
+						return serveLayoutPagesHandler(
+							reqCtx,
+							logger,
+							renderCache,
+							watchDir,
+							docs,
+							rootLayoutPages,
+							*liveArtefact,
+							"/",
+							rootSpec,
+							queryLogger,
+						)
+					})
+				}
 			}
 
-			// Collect all assets from all referenced artefacts
+			// Collect all assets from all referenced routes
 			allAssets := make([]previewhttp.LocalAsset, 0)
 			for _, route := range liveArtefact.Spec.Routes {
-				art := artefactMap[route.Artefact]
-				renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe)
-				if err != nil {
-					logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
-					continue
+				if route.Artefact != "" {
+					art := artefactMap[route.Artefact]
+					renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe)
+					if err != nil {
+						logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
+						continue
+					}
+					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+				} else {
+					// For layoutPages routes, render with default settings to collect assets
+					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+						Workdir:     watchDir,
+						Mode:        pipeline.RenderModeServe,
+						QueryLogger: nil,
+					})
+					if err != nil {
+						logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
+						continue
+					}
+					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 				}
-				allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 			}
 			server.SetLocalAssets(allAssets)
 
@@ -392,6 +454,136 @@ func serveRenderHandler(
 	})
 
 	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs), "text/html; charset=utf-8", nil
+}
+
+// serveLayoutPagesHandler handles on-demand rendering for a route with layoutPages.
+func serveLayoutPagesHandler(
+	ctx context.Context,
+	logger logx.Logger,
+	cache *serveRenderCache,
+	workdir string,
+	baseDocs []config.Document,
+	layoutPages config.StringOrSlice,
+	liveArtefact config.LiveArtefact,
+	routePath string,
+	routeSpec config.LiveRouteSpec,
+	queryLogger func(string),
+) ([]byte, string, error) {
+	// Extract query parameters from request context
+	reqInfo := previewhttp.GetRequestInfo(ctx)
+
+	// Validate and merge query parameters
+	queryParams, err := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+	if err != nil {
+		// Return 400 Bad Request for missing required params
+		return nil, "", previewhttp.NewHTTPError(400, err.Error())
+	}
+
+	// Build cache key from layout pages + sorted query params
+	cacheKey := buildLayoutPagesCacheKey(layoutPages, queryParams)
+
+	// Try cache first
+	if entry, ok := cache.Get(cacheKey); ok {
+		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
+	}
+
+	// If we have query params, reload documents with query params as variables
+	docs := baseDocs
+	if len(queryParams) > 0 {
+		// Create a lookup that checks query params first, then falls back to env vars
+		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+
+		// Reload documents with the custom lookup
+		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
+			Lookup: lookup,
+		})
+		if err != nil {
+			logger.Errorf("Reload failed for layoutPages with query params: %v", err)
+			return nil, "", err
+		}
+		docs = reloadedDocs
+	}
+
+	// Filter documents to include only the specified LayoutPages (plus dependencies)
+	filteredDocs := filterDocsForLayoutPages(docs, layoutPages)
+
+	// Render the layout pages directly
+	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
+		Workdir:     workdir,
+		Mode:        pipeline.RenderModeServe,
+		QueryLogger: queryLogger,
+	})
+	if err != nil {
+		logger.Errorf("Render failed for layoutPages: %v", err)
+		return nil, "", err
+	}
+
+	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
+
+	// Apply serve styles
+	frameHTML := withServeStyles(renderResult.FrameHTML)
+	contextHTML := renderResult.ContextHTML
+
+	// Cache the result
+	cache.Set(cacheKey, &serveRenderEntry{
+		frameHTML:   frameHTML,
+		contextHTML: contextHTML,
+		assets:      renderResult.LocalAssets,
+	})
+
+	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs), "text/html; charset=utf-8", nil
+}
+
+// filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
+// and all other document types (DataSets, DataSources, etc.) needed for rendering.
+func filterDocsForLayoutPages(docs []config.Document, layoutPages config.StringOrSlice) []config.Document {
+	// Build a set of requested layout page names
+	requestedPages := make(map[string]struct{})
+	for _, name := range layoutPages {
+		requestedPages[name] = struct{}{}
+	}
+
+	// Filter documents: keep all non-LayoutPage docs, and only matching LayoutPages
+	filtered := make([]config.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" {
+			if _, ok := requestedPages[doc.Name]; ok {
+				filtered = append(filtered, doc)
+			}
+		} else {
+			// Keep all other document types (DataSets, DataSources, ThemeStyle, etc.)
+			filtered = append(filtered, doc)
+		}
+	}
+
+	return filtered
+}
+
+// buildLayoutPagesCacheKey creates a cache key from layout page names and sorted query params.
+func buildLayoutPagesCacheKey(layoutPages config.StringOrSlice, params map[string]string) string {
+	// Sort layout pages for consistent key
+	pages := make([]string, len(layoutPages))
+	copy(pages, layoutPages)
+	sort.Strings(pages)
+	key := "layoutPages:" + strings.Join(pages, ",")
+
+	if len(params) == 0 {
+		return key
+	}
+
+	// Sort keys for consistent cache key
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
+
+	return key + "?" + strings.Join(parts, "&")
 }
 
 // validateAndMergeQueryParams validates query parameters against route spec.

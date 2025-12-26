@@ -97,6 +97,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 		{Document: Document{Name: "main-report"}},
 		{Document: Document{Name: "sales-report"}},
 	}
+	layoutPageNames := make(map[string]struct{})
 
 	t.Run("valid live artefact", func(t *testing.T) {
 		live := LiveArtefact{
@@ -109,7 +110,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateLiveArtefact(live, artefacts); err != nil {
+		if err := ValidateLiveArtefact(live, artefacts, layoutPageNames); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
@@ -124,7 +125,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts)
+		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for missing root route")
 		}
@@ -144,7 +145,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts)
+		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for route without leading slash")
 		}
@@ -163,7 +164,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts)
+		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for unknown artefact")
 		}
@@ -188,11 +189,93 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts)
+		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for duplicate query param names")
 		}
 		if !strings.Contains(err.Error(), "duplicate query param") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("valid layoutPages route", func(t *testing.T) {
+		lpNames := map[string]struct{}{
+			"page1": {},
+			"page2": {},
+		}
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {LayoutPages: []string{"page1", "page2"}},
+				},
+			},
+		}
+		if err := ValidateLiveArtefact(live, artefacts, lpNames); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("unknown layoutPage reference", func(t *testing.T) {
+		lpNames := map[string]struct{}{
+			"page1": {},
+		}
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {LayoutPages: []string{"page1", "unknown-page"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts, lpNames)
+		if err == nil {
+			t.Fatal("expected error for unknown layoutPage")
+		}
+		if !strings.Contains(err.Error(), "unknown LayoutPage") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("route with both artefact and layoutPages", func(t *testing.T) {
+		lpNames := map[string]struct{}{
+			"page1": {},
+		}
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artefact: "main-report", LayoutPages: []string{"page1"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts, lpNames)
+		if err == nil {
+			t.Fatal("expected error for route with both artefact and layoutPages")
+		}
+		if !strings.Contains(err.Error(), "both artefact and layoutPages") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("route with neither artefact nor layoutPages", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		if err == nil {
+			t.Fatal("expected error for route with neither artefact nor layoutPages")
+		}
+		if !strings.Contains(err.Error(), "must have either artefact or layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
