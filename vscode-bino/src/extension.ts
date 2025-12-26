@@ -754,6 +754,8 @@ function getIconForKind(kind: string): string {
             return 'table';
         case 'ReportArtefact':
             return 'file-pdf';
+        case 'LiveReportArtefact':
+            return 'browser';
         case 'LayoutPage':
             return 'layout';
         case 'LayoutCard':

@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,6 +37,45 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/runtimecfg"
 )
+
+// requestInfoKey is the context key for storing request info.
+type requestInfoKey struct{}
+
+// RequestInfo holds request information accessible from ContentFunc via context.
+type RequestInfo struct {
+	Path     string
+	RawQuery string
+	Query    url.Values
+}
+
+// WithRequestInfo returns a new context with the request info attached.
+func WithRequestInfo(ctx context.Context, info RequestInfo) context.Context {
+	return context.WithValue(ctx, requestInfoKey{}, info)
+}
+
+// GetRequestInfo extracts request info from context, returning zero value if not present.
+func GetRequestInfo(ctx context.Context) RequestInfo {
+	if info, ok := ctx.Value(requestInfoKey{}).(RequestInfo); ok {
+		return info
+	}
+	return RequestInfo{}
+}
+
+// HTTPError is an error that carries an HTTP status code.
+// ContentFunc implementations can return this to signal a specific HTTP response code.
+type HTTPError struct {
+	Code    int
+	Message string
+}
+
+func (e *HTTPError) Error() string {
+	return e.Message
+}
+
+// NewHTTPError creates an HTTPError with the given status code and message.
+func NewHTTPError(code int, message string) *HTTPError {
+	return &HTTPError{Code: code, Message: message}
+}
 
 // ContentFunc returns dynamic content bytes and its MIME type per request.
 // The context parameter carries the request context, which is canceled when:
@@ -271,8 +311,26 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	body, contentType, err := fn(r.Context())
+
+	// Inject request info into context for ContentFunc to access query params
+	reqInfo := RequestInfo{
+		Path:     r.URL.Path,
+		RawQuery: r.URL.RawQuery,
+		Query:    r.URL.Query(),
+	}
+	ctx := WithRequestInfo(r.Context(), reqInfo)
+
+	body, contentType, err := fn(ctx)
 	if err != nil {
+		// Check if it's an HTTPError with a specific status code
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) {
+			http.Error(w, httpErr.Message, httpErr.Code)
+			if httpErr.Code >= 500 {
+				s.cfg.Logger.Errorf("content function failed: %v", err)
+			}
+			return
+		}
 		http.Error(w, "failed to render content", http.StatusInternalServerError)
 		s.cfg.Logger.Errorf("content function failed: %v", err)
 		return

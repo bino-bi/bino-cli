@@ -1,0 +1,232 @@
+---
+title: LiveReportArtefact
+description: Define interactive web applications with multiple routes and dynamic query parameters.
+---
+
+`LiveReportArtefact` manifests define production-ready web applications that serve multiple `ReportArtefact`s as navigable pages with support for dynamic query parameter substitution.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  title: "Sales Dashboard"
+  description: "Interactive sales reporting application"
+  routes:
+    "/":
+      artefact: overview-report
+      queryParams:
+        - name: YEAR
+          default: "2024"
+          description: "Year to display"
+    "/sales":
+      artefact: sales-report
+      title: "Sales Analysis"
+      queryParams:
+        - name: REGION
+          description: "Region filter (required)"
+    "/regions":
+      artefact: region-report
+      title: "Regional Breakdown"
+```
+
+## Fields
+
+### spec.title (required)
+
+Human-readable title of the live report application.
+
+### spec.description
+
+Optional description of the application.
+
+### spec.routes (required)
+
+Map of URL paths to route configurations. The root route `/` is **mandatory**.
+
+Each route has:
+
+- `artefact` (required) – name of a `ReportArtefact` to render for this route.
+- `title` – optional page title override.
+- `queryParams` – array of query parameters allowed for this route.
+
+Routes are accessible at their defined paths, e.g., `/sales` renders `sales-report`.
+
+### spec.routes[path].queryParams
+
+Array of query parameters allowed for this specific route.
+
+Each parameter has:
+
+- `name` (required) – parameter name, used as `${name}` in documents.
+- `default` – default value if parameter is not provided.
+- `description` – human-readable description.
+
+**Important:** If a parameter has no default and is not provided in the request, the server returns HTTP 400 with a JSON error listing the missing parameters.
+
+## Query parameter substitution
+
+Query parameters are substituted into your report documents using the same `${VAR}` syntax as environment variables. This allows dynamic filtering of data.
+
+Example DataSet using a query parameter:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: filtered_sales
+spec:
+  type: query
+  query: |
+    SELECT * FROM sales
+    WHERE year = ${YEAR}
+    AND region = '${REGION}'
+```
+
+When accessed with `?YEAR=2024&REGION=EU`, the query becomes:
+
+```sql
+SELECT * FROM sales
+WHERE year = 2024
+AND region = 'EU'
+```
+
+## Minimal example
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: main-report
+spec:
+  filename: main.pdf
+  title: "Main Report"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: dashboard
+spec:
+  title: "Dashboard"
+  routes:
+    "/":
+      artefact: main-report
+```
+
+Serve with:
+
+```bash
+bino serve --live dashboard
+```
+
+## Multi-page application
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: overview
+spec:
+  filename: overview.pdf
+  title: "Overview"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: sales
+spec:
+  filename: sales.pdf
+  title: "Sales Detail"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: regions
+spec:
+  filename: regions.pdf
+  title: "Regional Analysis"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-app
+spec:
+  title: "Sales Application"
+  routes:
+    "/":
+      artefact: overview
+      queryParams:
+        - name: YEAR
+          default: "2024"
+          description: "Reporting year"
+    "/sales":
+      artefact: sales
+      title: "Sales Details"
+    "/regions":
+      artefact: regions
+      title: "Regions"
+```
+
+## Dynamic reports with query params
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: year_sales
+spec:
+  type: query
+  query: |
+    SELECT * FROM raw_sales
+    WHERE extract(year from sale_date) = ${YEAR:2024}
+---
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: dynamic-report
+spec:
+  title: "Dynamic Report"
+  routes:
+    "/":
+      artefact: main-report
+      queryParams:
+        - name: YEAR
+          default: "2024"
+          description: "Year for analysis"
+        - name: DEPARTMENT
+          description: "Department code (required)"
+```
+
+Access patterns:
+
+- `/` – uses default YEAR=2024, but requires DEPARTMENT
+- `/?DEPARTMENT=sales` – works, uses default YEAR
+- `/?YEAR=2023&DEPARTMENT=marketing` – overrides YEAR
+- `/?YEAR=2023` – returns HTTP 400: missing DEPARTMENT
+
+## Navigation
+
+LiveReportArtefact applications include built-in navigation. When navigating between routes:
+
+1. The browser URL updates via History API.
+2. Only the report content is fetched and swapped.
+3. Assets (CSS, fonts, scripts) are not reloaded.
+
+This provides a smooth single-page application experience while maintaining proper URL routing.
+
+## Validation
+
+The CLI validates LiveReportArtefact manifests at load time:
+
+- Root route `/` must be present.
+- All route paths must start with `/`.
+- All referenced `artefact` names must correspond to existing `ReportArtefact` manifests.
+- Query parameter names must be unique within each route.
+
+Validation errors are reported before the server starts.

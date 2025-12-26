@@ -96,6 +96,8 @@ export class BinoTreeItem extends vscode.TreeItem {
                 return new vscode.ThemeIcon('table');
             case 'ReportArtefact':
                 return new vscode.ThemeIcon('file-pdf');
+            case 'LiveReportArtefact':
+                return new vscode.ThemeIcon('browser');
             case 'SigningProfile':
                 return new vscode.ThemeIcon('key');
             case 'Asset':
@@ -221,6 +223,7 @@ export class BinoTreeProvider implements vscode.TreeDataProvider<BinoTreeItem> {
         // Sort kinds by priority order for better UX
         const kindOrder = [
             'ReportArtefact',
+            'LiveReportArtefact',
             'DataSource',
             'DataSet',
             'LayoutPage',

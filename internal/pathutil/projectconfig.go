@@ -19,6 +19,9 @@ type ProjectConfig struct {
 
 	// Preview contains default arguments and environment variables for the 'bino preview' command.
 	Preview CommandConfig `toml:"preview,omitempty"`
+
+	// Serve contains default arguments and environment variables for the 'bino serve' command.
+	Serve CommandConfig `toml:"serve,omitempty"`
 }
 
 // CommandConfig holds default arguments and environment variables for a CLI command.
