@@ -84,3 +84,56 @@ func ValidateArtefactNames(artefactName string, docs []Document) error {
 
 	return nil
 }
+
+// ValidateLiveArtefact validates a LiveReportArtefact spec.
+// It checks:
+//   - Root route "/" is present
+//   - All route paths are unique and valid
+//   - All referenced artefacts exist
+func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact) error {
+	spec := live.Spec
+
+	// Check for mandatory root route
+	if _, ok := spec.Routes["/"]; !ok {
+		return fmt.Errorf("LiveReportArtefact %q: missing mandatory root route \"/\"", live.Document.Name)
+	}
+
+	// Build set of valid artefact names
+	artefactNames := make(map[string]struct{}, len(artefacts))
+	for _, a := range artefacts {
+		artefactNames[a.Document.Name] = struct{}{}
+	}
+
+	// Validate each route
+	for path, route := range spec.Routes {
+		// Validate route path format
+		if path == "" {
+			return fmt.Errorf("LiveReportArtefact %q: empty route path", live.Document.Name)
+		}
+		if path[0] != '/' {
+			return fmt.Errorf("LiveReportArtefact %q: route path %q must start with \"/\"", live.Document.Name, path)
+		}
+
+		// Validate referenced artefact exists
+		if route.Artefact == "" {
+			return fmt.Errorf("LiveReportArtefact %q: route %q has empty artefact reference", live.Document.Name, path)
+		}
+		if _, ok := artefactNames[route.Artefact]; !ok {
+			return fmt.Errorf("LiveReportArtefact %q: route %q references unknown ReportArtefact %q", live.Document.Name, path, route.Artefact)
+		}
+
+		// Validate query param names are unique within this route
+		paramNames := make(map[string]struct{}, len(route.QueryParams))
+		for _, p := range route.QueryParams {
+			if p.Name == "" {
+				return fmt.Errorf("LiveReportArtefact %q: route %q has query param with empty name", live.Document.Name, path)
+			}
+			if _, ok := paramNames[p.Name]; ok {
+				return fmt.Errorf("LiveReportArtefact %q: route %q has duplicate query param name %q", live.Document.Name, path, p.Name)
+			}
+			paramNames[p.Name] = struct{}{}
+		}
+	}
+
+	return nil
+}

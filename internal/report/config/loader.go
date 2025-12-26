@@ -44,6 +44,10 @@ type LoadOptions struct {
 	// Documents that fail to parse are skipped rather than aborting the entire load.
 	// This is useful for IDE/LSP integrations that need partial results.
 	Lenient bool
+
+	// Lookup is an optional custom variable lookup function for ${VAR} expansion.
+	// If nil, os.LookupEnv is used. Use ChainLookup to combine multiple lookups.
+	Lookup LookupFunc
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -57,6 +61,12 @@ func LoadDir(ctx context.Context, dir string) ([]Document, error) {
 func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Document, error) {
 	dir = filepath.Clean(dir)
 	cfg := runtimecfg.Current()
+
+	// Default to env lookup if no custom lookup provided
+	lookup := opts.Lookup
+	if lookup == nil {
+		lookup = EnvLookup()
+	}
 
 	var (
 		docs       []Document
@@ -96,7 +106,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFile(ctx, path, cfg.MaxManifestDocs, opts.Lenient)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
@@ -123,13 +133,17 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 }
 
 func loadFile(ctx context.Context, path string, maxDocs int, lenient bool) ([]Document, error) {
+	return loadFileWithLookup(ctx, path, maxDocs, lenient, EnvLookup())
+}
+
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc) ([]Document, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	// Expand environment variables before YAML parsing
-	expanded, missingVars := ExpandEnvVars(string(content))
+	// Expand variables before YAML parsing using the provided lookup
+	expanded, missingVars := ExpandVars(string(content), lookup)
 
 	decoder := yaml.NewDecoder(strings.NewReader(expanded))
 	var (

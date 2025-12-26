@@ -44,6 +44,11 @@ const REFERENCE_PATTERNS: ReferencePattern[] = [
     {
         keyPattern: /^\s*report:\s*/,
         kinds: ['ReportArtefact']
+    },
+    // LiveReportArtefact route artefact references
+    {
+        keyPattern: /^\s*artefact:\s*/,
+        kinds: ['ReportArtefact']
     }
     // Note: ref: is handled specially in provideDefinition to use child's kind field
 ];

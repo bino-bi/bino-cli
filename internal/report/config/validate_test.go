@@ -91,3 +91,109 @@ func TestValidateArtefactNamesAllowsDifferentKinds(t *testing.T) {
 		t.Fatalf("expected no error for same name across kinds, got %v", err)
 	}
 }
+
+func TestValidateLiveArtefact(t *testing.T) {
+	artefacts := []Artefact{
+		{Document: Document{Name: "main-report"}},
+		{Document: Document{Name: "sales-report"}},
+	}
+
+	t.Run("valid live artefact", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/":      {Artefact: "main-report"},
+					"/sales": {Artefact: "sales-report"},
+				},
+			},
+		}
+		if err := ValidateLiveArtefact(live, artefacts); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("missing root route", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/sales": {Artefact: "sales-report"},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts)
+		if err == nil {
+			t.Fatal("expected error for missing root route")
+		}
+		if !strings.Contains(err.Error(), "missing mandatory root route") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("route missing leading slash", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/":     {Artefact: "main-report"},
+					"sales": {Artefact: "sales-report"},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts)
+		if err == nil {
+			t.Fatal("expected error for route without leading slash")
+		}
+		if !strings.Contains(err.Error(), "must start with") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("unknown artefact reference", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artefact: "unknown-report"},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts)
+		if err == nil {
+			t.Fatal("expected error for unknown artefact")
+		}
+		if !strings.Contains(err.Error(), "unknown ReportArtefact") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("duplicate query param names", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {
+						Artefact: "main-report",
+						QueryParams: []LiveQueryParamSpec{
+							{Name: "YEAR"},
+							{Name: "YEAR"},
+						},
+					},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artefacts)
+		if err == nil {
+			t.Fatal("expected error for duplicate query param names")
+		}
+		if !strings.Contains(err.Error(), "duplicate query param") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
