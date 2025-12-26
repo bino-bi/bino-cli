@@ -14,6 +14,8 @@ const (
 	ModeBuild Mode = "build"
 	// ModePreview is used when previewing artefacts during development.
 	ModePreview Mode = "preview"
+	// ModeServe is used when serving artefacts via bino serve.
+	ModeServe Mode = "serve"
 )
 
 // ConstraintContext holds the context against which constraints are evaluated.
