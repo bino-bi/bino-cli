@@ -1001,13 +1001,80 @@
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
           "description": "Name of the query parameter. Must be a valid identifier (used as ${name} in documents)."
         },
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "number_range", "select", "date", "date_time"],
+          "default": "string",
+          "description": "Type of the parameter. Determines the input control in the serve UI. Default is 'string'."
+        },
         "default": {
           "type": "string",
-          "description": "Default value if the query parameter is not provided. If omitted and the parameter is not provided, the request returns HTTP 400."
+          "description": "Default value if the query parameter is not provided. If omitted and optional is false, the request returns HTTP 400."
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the parameter is optional even without a default value. The parameter will be empty/undefined if not provided."
         },
         "description": {
           "type": "string",
           "description": "Human-readable description of what this parameter controls."
+        },
+        "options": {
+          "$ref": "#/$defs/liveQueryParamOptions",
+          "description": "Options for select type parameters. Either static items or a dataset reference."
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveQueryParamOptions": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/liveQueryParamOptionItem"
+          },
+          "description": "Static list of options for select type."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Name of a DataSet to load options from."
+        },
+        "valueColumn": {
+          "type": "string",
+          "description": "Column name in the dataset to use as the option value."
+        },
+        "labelColumn": {
+          "type": "string",
+          "description": "Column name in the dataset to use as the option label. If omitted, valueColumn is used."
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value for number or number_range types."
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value for number or number_range types."
+        },
+        "step": {
+          "type": "number",
+          "description": "Step increment for number or number_range types."
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveQueryParamOptionItem": {
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The value to submit when this option is selected."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for this option. If omitted, value is used."
         }
       },
       "additionalProperties": false
