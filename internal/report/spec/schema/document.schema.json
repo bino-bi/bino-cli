@@ -970,12 +970,40 @@
     },
     "liveRouteSpec": {
       "type": "object",
-      "required": ["artefact"],
+      "oneOf": [
+        {
+          "required": ["artefact"],
+          "not": { "required": ["layoutPages"] }
+        },
+        {
+          "required": ["layoutPages"],
+          "not": { "required": ["artefact"] }
+        }
+      ],
       "properties": {
         "artefact": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the ReportArtefact document to render for this route (metadata.name)."
+          "description": "Name of the ReportArtefact document to render for this route (metadata.name). Cannot be used together with layoutPages."
+        },
+        "layoutPages": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of a single LayoutPage document to render."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "description": "Array of LayoutPage document names to render in order."
+            }
+          ],
+          "description": "One or more LayoutPage documents to render for this route. Cannot be used together with artefact."
         },
         "title": {
           "type": "string",

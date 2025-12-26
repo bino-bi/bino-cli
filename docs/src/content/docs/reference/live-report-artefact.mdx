@@ -31,6 +31,11 @@ spec:
     "/regions":
       artefact: region-report
       title: "Regional Breakdown"
+    "/quick-view":
+      # Alternative: use layoutPages instead of artefact
+      layoutPages:
+        - summary-page
+        - charts-page
 ```
 
 ## Fields
@@ -47,13 +52,43 @@ Optional description of the application.
 
 Map of URL paths to route configurations. The root route `/` is **mandatory**.
 
-Each route has:
+Each route must specify **either** `artefact` **or** `layoutPages` (but not both):
 
-- `artefact` (required) – name of a `ReportArtefact` to render for this route.
+- `artefact` – name of a `ReportArtefact` to render for this route.
+- `layoutPages` – name of a `LayoutPage` or an array of `LayoutPage` names to render directly (without a ReportArtefact wrapper).
 - `title` – optional page title override.
 - `queryParams` – array of query parameters allowed for this route.
 
 Routes are accessible at their defined paths, e.g., `/sales` renders `sales-report`.
+
+**Using artefact:**
+
+```yaml
+routes:
+  "/":
+    artefact: overview-report
+```
+
+**Using layoutPages (single page):**
+
+```yaml
+routes:
+  "/":
+    layoutPages: overview-page
+```
+
+**Using layoutPages (multiple pages):**
+
+```yaml
+routes:
+  "/":
+    layoutPages:
+      - page-1
+      - page-2
+      - page-3
+```
+
+The `layoutPages` option is useful when you want to serve individual LayoutPage documents directly without defining a full ReportArtefact.
 
 ### spec.routes[path].queryParams
 

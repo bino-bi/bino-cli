@@ -89,8 +89,9 @@ func ValidateArtefactNames(artefactName string, docs []Document) error {
 // It checks:
 //   - Root route "/" is present
 //   - All route paths are unique and valid
-//   - All referenced artefacts exist
-func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact) error {
+//   - Each route has either artefact or layoutPages (not both, not neither)
+//   - All referenced artefacts and layoutPages exist
+func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact, layoutPageNames map[string]struct{}) error {
 	spec := live.Spec
 
 	// Check for mandatory root route
@@ -114,12 +115,34 @@ func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact) error {
 			return fmt.Errorf("LiveReportArtefact %q: route path %q must start with \"/\"", live.Document.Name, path)
 		}
 
-		// Validate referenced artefact exists
-		if route.Artefact == "" {
-			return fmt.Errorf("LiveReportArtefact %q: route %q has empty artefact reference", live.Document.Name, path)
+		// Check that exactly one of artefact or layoutPages is set
+		hasArtefact := route.Artefact != ""
+		hasLayoutPages := len(route.LayoutPages) > 0
+
+		if hasArtefact && hasLayoutPages {
+			return fmt.Errorf("LiveReportArtefact %q: route %q has both artefact and layoutPages; only one is allowed", live.Document.Name, path)
 		}
-		if _, ok := artefactNames[route.Artefact]; !ok {
-			return fmt.Errorf("LiveReportArtefact %q: route %q references unknown ReportArtefact %q", live.Document.Name, path, route.Artefact)
+		if !hasArtefact && !hasLayoutPages {
+			return fmt.Errorf("LiveReportArtefact %q: route %q must have either artefact or layoutPages", live.Document.Name, path)
+		}
+
+		// Validate referenced artefact exists
+		if hasArtefact {
+			if _, ok := artefactNames[route.Artefact]; !ok {
+				return fmt.Errorf("LiveReportArtefact %q: route %q references unknown ReportArtefact %q", live.Document.Name, path, route.Artefact)
+			}
+		}
+
+		// Validate referenced layoutPages exist
+		if hasLayoutPages && layoutPageNames != nil {
+			for _, lpName := range route.LayoutPages {
+				if lpName == "" {
+					return fmt.Errorf("LiveReportArtefact %q: route %q has empty layoutPages entry", live.Document.Name, path)
+				}
+				if _, ok := layoutPageNames[lpName]; !ok {
+					return fmt.Errorf("LiveReportArtefact %q: route %q references unknown LayoutPage %q", live.Document.Name, path, lpName)
+				}
+			}
 		}
 
 		// Validate query param names are unique within this route
