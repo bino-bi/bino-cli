@@ -166,11 +166,11 @@ func New(cfg Config) (*Server, error) {
 		sse:         newSSEHub(),
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", srv.handleRoot)
-	mux.Handle("/assets/", http.HandlerFunc(srv.handleAsset))
-	mux.Handle("/cdn/", http.HandlerFunc(srv.handleCDN))
-	mux.HandleFunc("/__preview/events", srv.handleEvents)
-	mux.HandleFunc("/__preview/context", srv.handleContext)
+	mux.HandleFunc("/", compressionHandlerFunc(srv.handleRoot))
+	mux.Handle("/assets/", compressionHandlerFunc(srv.handleAsset))
+	mux.Handle("/cdn/", compressionHandlerFunc(srv.handleCDN))
+	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
+	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
 
 	srv.httpServer = &http.Server{Handler: mux}
 	srv.contentFn = StaticContent([]byte("Hello world"), "text/plain; charset=utf-8")
@@ -369,20 +369,39 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "stream unsupported", http.StatusInternalServerError)
-		return
-	}
+
+	// Set SSE headers before creating the compressed writer
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Create a compressed response writer for SSE
+	compType := selectCompression(r.Header.Get("Accept-Encoding"))
+	var writer http.ResponseWriter = w
+	var cleanup func() error
+
+	if compType != compressionNone {
+		cw := newSSECompressedWriter(w, compType)
+		writer = cw
+		cleanup = cw.Close
+		defer func() {
+			if cleanup != nil {
+				_ = cleanup()
+			}
+		}()
+	}
+
+	flusher, ok := writer.(http.Flusher)
+	if !ok {
+		http.Error(w, "stream unsupported", http.StatusInternalServerError)
+		return
+	}
+
 	clientCh := s.sse.Subscribe()
 	defer s.sse.Unsubscribe(clientCh)
 
-	if _, err := w.Write(formatSSE("ready", []byte(`{}`))); err != nil {
+	if _, err := writer.Write(formatSSE("ready", []byte(`{}`))); err != nil {
 		return
 	}
 	flusher.Flush()
@@ -398,12 +417,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if _, err := w.Write(msg); err != nil {
+			if _, err := writer.Write(msg); err != nil {
 				return
 			}
 			flusher.Flush()
 		case <-keepAlive.C:
-			if _, err := w.Write(keepAliveFrame); err != nil {
+			if _, err := writer.Write(keepAliveFrame); err != nil {
 				return
 			}
 			flusher.Flush()
