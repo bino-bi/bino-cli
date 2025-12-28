@@ -512,7 +512,7 @@ Validate manifests, run datasets, and build PDFs.
   - `--out-dir` – output directory relative to work-dir (default: `dist`).
   - `--include` – build only specified report names (can be repeated).
   - `--exclude` – skip specified report names (can be repeated).
-  - `--browser` – browser engine to use for Playwright (e.g. `chromium`, `firefox`, `webkit`).
+  - `--browser` – browser engine to use for PDF rendering (e.g. `chromium`, `firefox`, `webkit`).
   - `--no-graph` – skip writing dependency graph files (`.bngraph`).
   - `--log-sql` – log executed SQL to terminal and build log.
 - Example:
@@ -536,19 +536,19 @@ Inspect dependencies between artefacts, datasets, and datasources.
   bino graph --work-dir my-report --mode tree
   ```
 
-### `bino playwright install`
+### `bino setup`
 
 Install or update the headless browser runtimes used for PDF rendering.
 
 - Common flags:
   - `--browser` – browser(s) to install (can be repeated).
-  - `--driver-dir` – custom directory for Playwright driver/cache.
+  - `--driver-dir` – custom directory for browser driver/cache.
   - `--dry-run` – show what would be installed without downloading.
   - `--quiet` – reduce output noise.
 - Example:
 
   ```bash
-  bino playwright install --browser chromium
+  bino setup --browser chromium
   ```
 
 ### `bino cache clean`
@@ -571,16 +571,16 @@ Clean bino's caches.
 
 ---
 
-## Playwright & PDF Rendering
+## Browser Runtimes & PDF Rendering
 
-bino uses a real browser, via [Playwright](https://playwright.dev/), to render HTML into high-quality PDFs. This ensures your reports look consistent across platforms, including fonts, layout, and complex components.
+bino uses a real browser to render HTML into high-quality PDFs. This ensures your reports look consistent across platforms, including fonts, layout, and complex components.
 
 ### Installing browsers
 
 Typically you run this once per machine or environment:
 
 ```bash
-bino playwright install --browser chromium
+bino setup --browser chromium
 ```
 
 You can install multiple browsers if you want to test across engines.
@@ -589,7 +589,7 @@ You can install multiple browsers if you want to test across engines.
 
 When building reports, you can choose the browser engine with a flag (depending on your configuration). Using a single engine (e.g. `chromium`) can make troubleshooting easier.
 
-If bino reports that Playwright or a browser is missing, re-run `bino playwright install` and check that your environment has necessary network and disk access.
+If bino reports that a browser is missing, re-run `bino setup` and check that your environment has necessary network and disk access.
 
 ---
 
@@ -731,15 +731,15 @@ This section maps common symptoms to likely causes and fixes.
   - Required fields are present and have the right type (string, number, array, etc.).
 - Use completion to discover valid field names and values.
 
-### “Playwright / browser not found”
+### "Browser not found"
 
 - Run:
 
   ```bash
-  bino playwright install --browser chromium
+  bino setup --browser chromium
   ```
 
-- Ensure that the install command has network access and can write to its cache directory.
+- Ensure that the setup command has network access and can write to its cache directory.
 - If you set a custom driver directory, verify that the same directory is used during builds.
 
 ### “Queries are slow or fail with timeouts”
