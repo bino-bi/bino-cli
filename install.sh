@@ -229,6 +229,7 @@ else
 fi
 
 BIN_PATH="$(find "$WORKDIR" -type f \( -name bino -o -name bino.exe \) | head -n 1 || true)"
+BIN_NAME="$(basename "${BIN_PATH:-bino}")"
 if [ -z "$BIN_PATH" ]; then
   echo "ERROR: could not find bino binary inside the archive." >&2
   exit 4
@@ -237,7 +238,7 @@ fi
 echo "Found binary: $BIN_PATH"
 echo "Installing to $INSTALL_DIR"
 if [ "$DRY_RUN" -eq 1 ]; then
-  printf "[dry-run] mkdir -p '%s' && cp '%s' '%s/' && chmod +x '%s/%s'\n" "$INSTALL_DIR" "$BIN_PATH" "$INSTALL_DIR" "$INSTALL_DIR" "$(basename "$BIN_PATH")"
+  printf "[dry-run] mkdir -p '%s' && cp '%s' '%s/' && chmod +x '%s/%s'\n" "$INSTALL_DIR" "$BIN_PATH" "$INSTALL_DIR" "$INSTALL_DIR" "$BIN_NAME"
   exit 0
 fi
 
@@ -246,20 +247,26 @@ if [ ! -w "$INSTALL_DIR" ]; then
   if [ "$ASSUME_YES" -eq 0 ]; then
     if confirm "Install requires sudo to write to $INSTALL_DIR. Continue?"; then
       sudo cp "$BIN_PATH" "$INSTALL_DIR/"
-      sudo chmod +x "$INSTALL_DIR/$(basename "$BIN_PATH")"
+      sudo chmod +x "$INSTALL_DIR/$BIN_NAME"
     else
       echo "Aborted by user."
       exit 5
     fi
   else
     sudo cp "$BIN_PATH" "$INSTALL_DIR/"
-    sudo chmod +x "$INSTALL_DIR/$(basename "$BIN_PATH")"
+    sudo chmod +x "$INSTALL_DIR/$BIN_NAME"
   fi
 else
   cp "$BIN_PATH" "$INSTALL_DIR/"
-  chmod +x "$INSTALL_DIR/$(basename "$BIN_PATH")"
+  chmod +x "$INSTALL_DIR/$BIN_NAME"
 fi
 
 echo "Installation complete."
-echo "Installed: $INSTALL_DIR/$(basename "$BIN_PATH")"
-echo "Run: $(basename "$BIN_PATH") version"
+echo "Installed: $INSTALL_DIR/$BIN_NAME"
+echo "Run: $BIN_NAME version"
+
+INSTALLED_BIN="$INSTALL_DIR/$BIN_NAME"
+echo "Running post-install setup: $INSTALLED_BIN setup"
+if ! "$INSTALLED_BIN" setup; then
+  echo "Warning: post-install setup failed. Please run '$BIN_NAME setup' manually." >&2
+fi
