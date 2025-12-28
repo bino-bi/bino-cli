@@ -9,23 +9,7 @@ import (
 	"bino.bi/bino/internal/playwright"
 )
 
-func newPlaywrightCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "playwright",
-		Short: "Manage Playwright runtime dependencies",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmd.Help()
-		},
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-
-	cmd.AddCommand(newPlaywrightInstallCommand())
-
-	return cmd
-}
-
-func newPlaywrightInstallCommand() *cobra.Command {
+func newSetupCommand() *cobra.Command {
 	var (
 		browsers  []string
 		driverDir string
@@ -34,12 +18,12 @@ func newPlaywrightInstallCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "install",
-		Short: "Download or update the Playwright driver and browsers",
-		Long: strings.TrimSpace(`Ensure Playwright browsers and the driver binary are available locally.
+		Use:   "setup",
+		Short: "Download or update browser runtimes for PDF rendering",
+		Long: strings.TrimSpace(`Ensure browser runtimes and the rendering driver are available locally.
 Use --verbose (-v) to surface verbose installer logs.`),
-		Example: strings.TrimSpace(`  bino playwright install --browser chromium --browser webkit
-	  bino playwright install --dry-run`),
+		Example: strings.TrimSpace(`  bino setup --browser chromium --browser webkit
+  bino setup --dry-run`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := playwright.InstallOptions{
 				Browsers:        browsers,
@@ -54,15 +38,17 @@ Use --verbose (-v) to surface verbose installer logs.`),
 				return ExternalError(err)
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), "Playwright assets are up to date.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Browser runtimes are up to date.")
 			return nil
 		},
 	}
 
 	cmd.Flags().StringSliceVar(&browsers, "browser", nil, "Browsers to install (default: chromium). Repeat to add firefox, webkit, etc.")
-	cmd.Flags().StringVar(&driverDir, "driver-dir", "", "Override the Playwright driver cache directory")
+	cmd.Flags().StringVar(&driverDir, "driver-dir", "", "Override the browser driver cache directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the actions without downloading artifacts")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress verbose installer output")
 
 	return cmd
 }
+
+
