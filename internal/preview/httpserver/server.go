@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -111,6 +112,16 @@ type Config struct {
 	HTTPClient *http.Client
 }
 
+// maxContextCacheEntries limits the number of cached context entries to prevent
+// unbounded memory growth during long-running preview sessions.
+const maxContextCacheEntries = 100
+
+// contextCacheEntry holds cached HTML content with access tracking for LRU eviction.
+type contextCacheEntry struct {
+	html       []byte
+	lastAccess time.Time
+}
+
 // Server hosts the preview HTTP experience with CDN proxying support.
 type Server struct {
 	cfg         Config
@@ -126,7 +137,8 @@ type Server struct {
 
 	// contextCache stores the latest context HTML per path for initial client fetch.
 	// This enables two-phase rendering where clients request context after SSE connects.
-	contextCache map[string][]byte
+	// Uses LRU eviction when maxContextCacheEntries is exceeded.
+	contextCache map[string]*contextCacheEntry
 
 	assetMu     sync.RWMutex
 	localAssets map[string]LocalAsset
@@ -249,9 +261,17 @@ func (s *Server) BroadcastContent(path string, html []byte) {
 	// Store in context cache for initial client fetch
 	s.contentMu.Lock()
 	if s.contextCache == nil {
-		s.contextCache = make(map[string][]byte)
+		s.contextCache = make(map[string]*contextCacheEntry)
 	}
-	s.contextCache[path] = append([]byte(nil), html...)
+	now := time.Now()
+	s.contextCache[path] = &contextCacheEntry{
+		html:       append([]byte(nil), html...),
+		lastAccess: now,
+	}
+	// Evict oldest entries if cache exceeds limit
+	if len(s.contextCache) > maxContextCacheEntries {
+		s.evictOldestCacheEntries()
+	}
 	s.contentMu.Unlock()
 
 	// Broadcast to connected SSE clients
@@ -268,6 +288,37 @@ func (s *Server) BroadcastContent(path string, html []byte) {
 		return
 	}
 	s.sse.Broadcast(formatSSE("content", data))
+}
+
+// evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
+// Must be called with contentMu held.
+func (s *Server) evictOldestCacheEntries() {
+	// Find entries to evict (keep newest maxContextCacheEntries entries)
+	targetSize := maxContextCacheEntries - maxContextCacheEntries/10 // Evict ~10% to avoid frequent eviction
+	if targetSize < 1 {
+		targetSize = 1
+	}
+
+	// Collect paths with their access times
+	type pathTime struct {
+		path string
+		time time.Time
+	}
+	entries := make([]pathTime, 0, len(s.contextCache))
+	for p, entry := range s.contextCache {
+		entries = append(entries, pathTime{path: p, time: entry.lastAccess})
+	}
+
+	// Sort by access time (oldest first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].time.Before(entries[j].time)
+	})
+
+	// Delete oldest entries until we reach target size
+	toDelete := len(entries) - targetSize
+	for i := 0; i < toDelete && i < len(entries); i++ {
+		delete(s.contextCache, entries[i].path)
+	}
 }
 
 // Start begins serving requests until the context is done or an error occurs.
@@ -447,18 +498,21 @@ func (s *Server) handleContext(w http.ResponseWriter, r *http.Request) {
 		path = "/" + path
 	}
 
-	s.contentMu.RLock()
-	html, ok := s.contextCache[path]
-	s.contentMu.RUnlock()
+	s.contentMu.Lock()
+	entry, ok := s.contextCache[path]
+	if ok && entry != nil {
+		entry.lastAccess = time.Now() // Update access time for LRU
+	}
+	s.contentMu.Unlock()
 
-	if !ok || len(html) == 0 {
+	if !ok || entry == nil || len(entry.html) == 0 {
 		http.Error(w, "context not available", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	_, _ = w.Write(html)
+	_, _ = w.Write(entry.html)
 }
 
 func (s *Server) lookupContentFunc(path string) (ContentFunc, bool) {

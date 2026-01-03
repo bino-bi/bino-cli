@@ -332,6 +332,60 @@ Environment knobs:
 	return cmd
 }
 
+// serveRequestContext holds the result of processing query parameters for a serve request.
+type serveRequestContext struct {
+	ReqInfo     previewhttp.RequestInfo
+	QueryParams map[string]string
+	Docs        []config.Document // Documents reloaded with query params (or baseDocs if no params)
+}
+
+// prepareServeRequest processes query parameters for a serve request.
+// Returns nil and missing params HTML if validation fails.
+// Returns the request context with reloaded documents if successful.
+func prepareServeRequest(
+	ctx context.Context,
+	logger logx.Logger,
+	workdir string,
+	baseDocs []config.Document,
+	routeSpec config.LiveRouteSpec,
+	liveArtefact config.LiveArtefact,
+	routePath string,
+) (*serveRequestContext, []byte, error) {
+	reqInfo := previewhttp.GetRequestInfo(ctx)
+
+	// Validate and merge query parameters
+	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+
+	// If there are missing required params, return missing params HTML
+	if !validation.IsValid() {
+		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
+		html := buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
+		return nil, html, nil
+	}
+
+	queryParams := validation.Params
+	docs := baseDocs
+
+	// If we have query params, reload documents with query params as variables
+	if len(queryParams) > 0 {
+		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
+			Lookup: lookup,
+		})
+		if err != nil {
+			logger.Errorf("Reload failed with query params: %v", err)
+			return nil, nil, err
+		}
+		docs = reloadedDocs
+	}
+
+	return &serveRequestContext{
+		ReqInfo:     reqInfo,
+		QueryParams: queryParams,
+		Docs:        docs,
+	}, nil, nil
+}
+
 // serveRenderCache provides thread-safe caching for rendered content.
 type serveRenderCache struct {
 	mu    sync.RWMutex
@@ -474,48 +528,25 @@ func serveLayoutPagesHandler(
 	routeSpec config.LiveRouteSpec,
 	queryLogger func(string),
 ) ([]byte, string, error) {
-	// Extract query parameters from request context
-	reqInfo := previewhttp.GetRequestInfo(ctx)
-
-	// Validate and merge query parameters
-	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
-
-	// If there are missing required params, show the sidebar with error indicators
-	if !validation.IsValid() {
-		// Resolve dataset options for select parameters (needed for sidebar)
-		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
-		return buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
+	// Process query parameters and reload documents if needed
+	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath)
+	if err != nil {
+		return nil, "", err
+	}
+	if missingParamsHTML != nil {
+		return missingParamsHTML, "text/html; charset=utf-8", nil
 	}
 
-	queryParams := validation.Params
-
 	// Build cache key from layout pages + sorted query params
-	cacheKey := buildLayoutPagesCacheKey(layoutPages, queryParams)
+	cacheKey := buildLayoutPagesCacheKey(layoutPages, reqCtx.QueryParams)
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
-	}
-
-	// If we have query params, reload documents with query params as variables
-	docs := baseDocs
-	if len(queryParams) > 0 {
-		// Create a lookup that checks query params first, then falls back to env vars
-		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
-
-		// Reload documents with the custom lookup
-		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup: lookup,
-		})
-		if err != nil {
-			logger.Errorf("Reload failed for layoutPages with query params: %v", err)
-			return nil, "", err
-		}
-		docs = reloadedDocs
+		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
 	}
 
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
-	filteredDocs := filterDocsForLayoutPages(docs, layoutPages)
+	filteredDocs := filterDocsForLayoutPages(reqCtx.Docs, layoutPages)
 
 	// Render the layout pages directly
 	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
@@ -541,7 +572,7 @@ func serveLayoutPagesHandler(
 		assets:      renderResult.LocalAssets,
 	})
 
-	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs), "text/html; charset=utf-8", nil
+	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs), "text/html; charset=utf-8", nil
 }
 
 // filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
@@ -655,14 +686,7 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 	for k := range params {
 		keys = append(keys, k)
 	}
-	// Simple sort
-	for i := 0; i < len(keys)-1; i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[i] > keys[j] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Strings(keys)
 
 	var sb strings.Builder
 	sb.WriteString(artefactName)
@@ -843,10 +867,8 @@ func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Do
 	return result
 }
 
-// buildServeScript generates the JavaScript for seamless navigation, content injection, and control panel.
-// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
-func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) string {
-	// Build routes JSON for the navigation script
+// buildRoutesJSON builds the routes map for navigation and returns JSON.
+func buildRoutesJSON(liveArtefact config.LiveArtefact) []byte {
 	routes := make(map[string]string)
 	for path, route := range liveArtefact.Spec.Routes {
 		title := route.Title
@@ -856,16 +878,22 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 		routes[path] = title
 	}
 	routesJSON, _ := json.Marshal(routes)
+	return routesJSON
+}
 
-	// Build missing params JSON
+// buildMissingParamsJSON builds a sorted list of missing parameter names and returns JSON.
+func buildMissingParamsJSON(missingParams map[string]struct{}) []byte {
 	missingList := make([]string, 0, len(missingParams))
 	for name := range missingParams {
 		missingList = append(missingList, name)
 	}
 	sort.Strings(missingList) // for consistent output
 	missingParamsJSON, _ := json.Marshal(missingList)
+	return missingParamsJSON
+}
 
-	// Build queryParams JSON for the control panel
+// buildQueryParamsJSON builds the query params array for the control panel and returns JSON.
+func buildQueryParamsJSON(routeSpec config.LiveRouteSpec, datasetOptions map[string][]queryParamOptionItem) []byte {
 	queryParams := make([]queryParamInfo, 0, len(routeSpec.QueryParams))
 	for _, p := range routeSpec.QueryParams {
 		paramType := p.Type
@@ -911,6 +939,15 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 		queryParams = append(queryParams, info)
 	}
 	queryParamsJSON, _ := json.Marshal(queryParams)
+	return queryParamsJSON
+}
+
+// buildServeScript generates the JavaScript for seamless navigation, content injection, and control panel.
+// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
+func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) string {
+	routesJSON := buildRoutesJSON(liveArtefact)
+	missingParamsJSON := buildMissingParamsJSON(missingParams)
+	queryParamsJSON := buildQueryParamsJSON(routeSpec, datasetOptions)
 
 	// Build full URL with query string for initial state
 	currentURL := currentPath

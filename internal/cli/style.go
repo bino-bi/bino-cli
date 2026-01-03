@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"sync"
 
 	"github.com/fatih/color"
 )
+
+// styleKey is the context key for storing Style.
+type styleKey struct{}
 
 // Style provides a centralized styling palette for terminal output.
 // It handles NO_COLOR environment variable and --no-color flag uniformly.
@@ -65,6 +69,10 @@ func InitStyle(noColor bool) {
 // GetStyle returns the global Style instance.
 // If InitStyle has not been called, it initializes with default settings
 // (checking only the NO_COLOR environment variable).
+//
+// Deprecated: Prefer StyleFromContext(ctx) when context is available.
+// This function remains for backward compatibility and for utility functions
+// that don't have access to context.
 func GetStyle() *Style {
 	styleMu.RLock()
 	if defaultStyle != nil {
@@ -116,4 +124,20 @@ func NewStyle(noColor bool) *Style {
 		color.NoColor = true
 	}
 	return newStyle(noColor)
+}
+
+// WithStyle returns a new context with the Style attached.
+// Use this to pass style through the command execution chain.
+func WithStyle(ctx context.Context, s *Style) context.Context {
+	return context.WithValue(ctx, styleKey{}, s)
+}
+
+// StyleFromContext extracts the Style from context.
+// Returns a default style (with color enabled) if not present.
+func StyleFromContext(ctx context.Context) *Style {
+	if s, ok := ctx.Value(styleKey{}).(*Style); ok && s != nil {
+		return s
+	}
+	// Fallback to global style for backward compatibility
+	return GetStyle()
 }

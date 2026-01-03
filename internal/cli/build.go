@@ -405,7 +405,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Print results with relative paths
 			out.Blank()
 			resultItems := make([]string, 0, len(results))
-			style := GetStyle()
+			style := StyleFromContext(ctx)
 			for _, res := range results {
 				// Make PDF path relative to workdir for cleaner output
 				relPDFPath := pathutil.RelPath(absDir, res.PDFPath)
