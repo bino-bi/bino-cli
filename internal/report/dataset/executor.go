@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"bino.bi/bino/internal/report/buildlog"
@@ -105,59 +106,99 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 		return nil, nil, nil
 	}
 
+	// cacheCheckResult holds the result of checking cache for a single dataset
+	type cacheCheckResult struct {
+		doc       config.Document
+		spec      dataSetSpec
+		cached    bool
+		data      json.RawMessage
+		cachePath string
+		warnings  []Warning
+	}
+
+	// Check cache for each dataset in parallel
+	resultCh := make(chan cacheCheckResult, len(dataSetDocs))
+	var wg sync.WaitGroup
+
+	for _, doc := range dataSetDocs {
+		wg.Go(func() {
+			result := cacheCheckResult{doc: doc}
+
+			spec, err := parseDataSetSpec(doc.Raw)
+			if err != nil {
+				result.warnings = append(result.warnings, Warning{DataSet: doc.Name, Message: fmt.Sprintf("parse spec: %v", err)})
+				resultCh <- result
+				return
+			}
+			result.spec = spec
+
+			// Check if any dependency is ephemeral - if so, skip cache entirely
+			hasEphemeralDep := false
+			for _, depName := range spec.Dependencies {
+				depDoc, ok := dataSourceIndex[depName]
+				if !ok {
+					continue
+				}
+				if filehash.IsEphemeralSource(depDoc, workdir) {
+					hasEphemeralDep = true
+					break
+				}
+			}
+
+			if hasEphemeralDep {
+				// Skip cache for datasets with ephemeral dependencies
+				result.cachePath = "" // No caching for ephemeral sources
+				resultCh <- result
+				return
+			}
+
+			// Compute cache key including datasource file hashes
+			digest, depWarnings := computeDigestWithDeps(doc, spec, dataSourceIndex)
+			result.warnings = append(result.warnings, depWarnings...)
+
+			cachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%s.json", doc.Name, digest[:16]))
+			result.cachePath = cachePath
+
+			// Try reading from cache
+			if data, err := os.ReadFile(cachePath); err == nil {
+				result.cached = true
+				result.data = data
+			}
+
+			resultCh <- result
+		})
+	}
+
+	// Wait for all cache checks to complete and close the channel
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	// Collect results
 	var (
 		results  []Result
 		warnings []Warning
 		toRun    []dataSetJob
 	)
 
-	// Check cache for each dataset
-	for _, doc := range dataSetDocs {
-		spec, err := parseDataSetSpec(doc.Raw)
-		if err != nil {
-			warnings = append(warnings, Warning{DataSet: doc.Name, Message: fmt.Sprintf("parse spec: %v", err)})
+	for result := range resultCh {
+		warnings = append(warnings, result.warnings...)
+
+		if result.spec.Query == "" && result.spec.Prql == "" {
+			// No spec parsed (error case)
 			continue
 		}
 
-		// Check if any dependency is ephemeral - if so, skip cache entirely
-		hasEphemeralDep := false
-		for _, depName := range spec.Dependencies {
-			depDoc, ok := dataSourceIndex[depName]
-			if !ok {
-				continue
-			}
-			if filehash.IsEphemeralSource(depDoc, workdir) {
-				hasEphemeralDep = true
-				break
-			}
-		}
-
-		if hasEphemeralDep {
-			// Skip cache for datasets with ephemeral dependencies
-			toRun = append(toRun, dataSetJob{
-				doc:       doc,
-				spec:      spec,
-				cachePath: "", // No caching for ephemeral sources
-			})
-			continue
-		}
-
-		// Compute cache key including datasource file hashes
-		digest, depWarnings := computeDigestWithDeps(doc, spec, dataSourceIndex)
-		warnings = append(warnings, depWarnings...)
-
-		cachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%s.json", doc.Name, digest[:16]))
-
-		// Try reading from cache
-		if data, err := os.ReadFile(cachePath); err == nil {
-			results = append(results, Result{Name: doc.Name, Data: data})
+		if result.cached {
+			results = append(results, Result{Name: result.doc.Name, Data: result.data})
 			continue
 		}
 
 		toRun = append(toRun, dataSetJob{
-			doc:       doc,
-			spec:      spec,
-			cachePath: cachePath,
+			doc:       result.doc,
+			spec:      result.spec,
+			cachePath: result.cachePath,
 		})
 	}
 

@@ -102,6 +102,7 @@ func newRootCommand() *cobra.Command {
 			// This sets color.NoColor globally and initializes the style palette
 			effectiveNoColor := noColor || os.Getenv("NO_COLOR") != ""
 			InitStyle(effectiveNoColor)
+			ctx = WithStyle(ctx, GetStyle())
 			ctx = logx.WithNoColor(ctx, effectiveNoColor)
 
 			// Create terminal logger with the same noColor setting

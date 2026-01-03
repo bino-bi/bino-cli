@@ -1,13 +1,16 @@
 package runtimecfg
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
+// Config holds runtime configuration limits loaded from environment variables.
 type Config struct {
 	MaxManifestFiles int
 	MaxManifestDocs  int
@@ -17,6 +20,12 @@ type Config struct {
 	MaxCDNBytes      int64
 	CDNTimeout       time.Duration
 }
+
+// configWarnings stores warnings from the last config load.
+var (
+	configWarnings   []string
+	configWarningsMu sync.RWMutex
+)
 
 const (
 	envMaxManifestFiles = "BNR_MAX_MANIFEST_FILES"
@@ -65,68 +74,102 @@ func SetForTests(cfg Config) func() {
 	}
 }
 
-func load() Config {
-	return Config{
-		MaxManifestFiles: readIntEnv(envMaxManifestFiles, defaultMaxManifestFiles, 1, 100_000),
-		MaxManifestDocs:  readIntEnv(envMaxManifestDocs, defaultMaxManifestDocs, 0, 10_000),
-		MaxManifestBytes: readInt64Env(envMaxManifestBytes, defaultMaxManifestBytes, 1, 1_000_000_000),
-		MaxQueryRows:     readIntEnv(envMaxQueryRows, defaultMaxQueryRows, 0, 10_000_000),
-		MaxQueryDuration: readDurationMsEnv(envMaxQueryDuration, defaultMaxQueryDuration, 0, 24*time.Hour),
-		MaxCDNBytes:      readInt64Env(envMaxCDNBytes, defaultMaxCDNBytes, 1, 1_000_000_000),
-		CDNTimeout:       readDurationMsEnv(envCDNTimeout, defaultCDNTimeout, time.Second, time.Hour),
+// Warnings returns any warnings generated during the last config load.
+// These indicate environment variables with invalid values (using defaults)
+// or values that were clamped to min/max bounds.
+func Warnings() []string {
+	configWarningsMu.RLock()
+	defer configWarningsMu.RUnlock()
+	if len(configWarnings) == 0 {
+		return nil
 	}
+	result := make([]string, len(configWarnings))
+	copy(result, configWarnings)
+	return result
 }
 
-func readIntEnv(name string, def, min, max int) int {
+func load() Config {
+	var warnings []string
+	addWarning := func(msg string) {
+		warnings = append(warnings, msg)
+	}
+
+	cfg := Config{
+		MaxManifestFiles: readIntEnv(envMaxManifestFiles, defaultMaxManifestFiles, 1, 100_000, addWarning),
+		MaxManifestDocs:  readIntEnv(envMaxManifestDocs, defaultMaxManifestDocs, 0, 10_000, addWarning),
+		MaxManifestBytes: readInt64Env(envMaxManifestBytes, defaultMaxManifestBytes, 1, 1_000_000_000, addWarning),
+		MaxQueryRows:     readIntEnv(envMaxQueryRows, defaultMaxQueryRows, 0, 10_000_000, addWarning),
+		MaxQueryDuration: readDurationMsEnv(envMaxQueryDuration, defaultMaxQueryDuration, 0, 24*time.Hour, addWarning),
+		MaxCDNBytes:      readInt64Env(envMaxCDNBytes, defaultMaxCDNBytes, 1, 1_000_000_000, addWarning),
+		CDNTimeout:       readDurationMsEnv(envCDNTimeout, defaultCDNTimeout, time.Second, time.Hour, addWarning),
+	}
+
+	configWarningsMu.Lock()
+	configWarnings = warnings
+	configWarningsMu.Unlock()
+
+	return cfg
+}
+
+func readIntEnv(name string, def, min, max int, warn func(string)) int {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
+		warn(fmt.Sprintf("%s: invalid integer %q, using default %d", name, raw, def))
 		return def
 	}
 	if max > 0 && value > max {
+		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, max))
 		return max
 	}
 	if value < min {
+		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, min))
 		return min
 	}
 	return value
 }
 
-func readInt64Env(name string, def, min, max int64) int64 {
+func readInt64Env(name string, def, min, max int64, warn func(string)) int64 {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
+		warn(fmt.Sprintf("%s: invalid integer %q, using default %d", name, raw, def))
 		return def
 	}
 	if max > 0 && value > max {
+		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, max))
 		return max
 	}
 	if value < min {
+		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, min))
 		return min
 	}
 	return value
 }
 
-func readDurationMsEnv(name string, def, min, max time.Duration) time.Duration {
+func readDurationMsEnv(name string, def, min, max time.Duration, warn func(string)) time.Duration {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
+		warn(fmt.Sprintf("%s: invalid integer %q, using default %dms", name, raw, def.Milliseconds()))
 		return def
 	}
 	duration := time.Duration(value) * time.Millisecond
 	if max > 0 && duration > max {
+		warn(fmt.Sprintf("%s: value %dms exceeds maximum %dms, clamped", name, duration.Milliseconds(), max.Milliseconds()))
 		return max
 	}
 	if duration < min {
+		warn(fmt.Sprintf("%s: value %dms below minimum %dms, clamped", name, duration.Milliseconds(), min.Milliseconds()))
 		return min
 	}
 	return duration
