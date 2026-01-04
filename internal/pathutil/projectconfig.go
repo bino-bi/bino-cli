@@ -14,6 +14,10 @@ type ProjectConfig struct {
 	// Defaults to a UUID when created by 'bino init'.
 	ReportID string `toml:"report-id"`
 
+	// EngineVersion specifies the template engine version to use (e.g., "v1.2.3").
+	// If not specified, the latest locally installed version is used.
+	EngineVersion string `toml:"engine-version,omitempty"`
+
 	// Build contains default arguments and environment variables for the 'bino build' command.
 	Build CommandConfig `toml:"build,omitempty"`
 
@@ -151,13 +155,15 @@ func LoadProjectConfig(projectRoot string) (*ProjectConfig, error) {
 
 // WriteProjectConfig writes a bino.toml file to the given directory.
 // If reportID is empty, a new UUID is generated.
-func WriteProjectConfig(dir, reportID string) error {
+// If engineVersion is provided, it is included in the config.
+func WriteProjectConfig(dir, reportID, engineVersion string) error {
 	if reportID == "" {
 		reportID = uuid.NewString()
 	}
 
 	cfg := ProjectConfig{
-		ReportID: reportID,
+		ReportID:      reportID,
+		EngineVersion: engineVersion,
 	}
 
 	data, err := toml.Marshal(cfg)

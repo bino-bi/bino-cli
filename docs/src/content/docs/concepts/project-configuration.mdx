@@ -27,13 +27,31 @@ The `bino.toml` file uses [TOML](https://toml.io/) format. Here's the current st
 # This file marks the root of a bino reporting project.
 
 report-id = "550e8400-e29b-41d4-a716-446655440000"
+engine-version = "v0.37.0"
 ```
 
 ### Fields
 
-| Field       | Type   | Description                                                                         |
-| ----------- | ------ | ----------------------------------------------------------------------------------- |
-| `report-id` | string | A unique identifier for this reporting project. Generated as a UUID by `bino init`. |
+| Field            | Type   | Description                                                                                                                     |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `report-id`      | string | A unique identifier for this reporting project. Generated as a UUID by `bino init`.                                            |
+| `engine-version` | string | Optional. The template engine version to use (e.g., `v0.37.0`). If not specified, the latest locally installed version is used. |
+
+## Template engine versioning
+
+The `engine-version` field allows you to pin a specific template engine version for your project. This is useful for:
+
+- **Reproducible builds**: Ensure all team members and CI/CD pipelines use the same template engine version.
+- **Gradual upgrades**: Test new engine versions on a project-by-project basis before rolling out globally.
+- **Stability**: Prevent unexpected behavior changes from automatic engine updates.
+
+When `engine-version` is set, bino will use that specific version for rendering. If the version is not installed locally, you can download it with:
+
+```bash
+bino setup --template-engine --engine-version v0.37.0
+```
+
+If `engine-version` is omitted, bino uses the latest locally installed version. Run `bino update` to download the latest version.
 
 ## Creating a project
 

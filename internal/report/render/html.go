@@ -18,14 +18,15 @@ const (
 	defaultLayoutPageFormat = "xga"
 )
 
+// baseTemplate format args: locale, engineVersion, engineVersion, fontMarkup, orientationAttr, locale, body
 var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
 <html dir="ltr" lang="%s">
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
-  <script type="module" src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
-  <script nomodule src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
+  <script type="module" src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
+  <script nomodule src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
   <style>
     html,
     body {
@@ -49,14 +50,15 @@ var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
 // frameTemplate is a lightweight HTML shell that loads the template engine
 // and contains an empty bn-context placeholder. Content is loaded asynchronously
 // via SSE to reduce initial page load time.
+// Format args: locale, engineVersion, engineVersion, fontMarkup, locale
 var frameTemplate = strings.TrimSpace(`<!DOCTYPE html>
 <html dir="ltr" lang="%s">
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
-  <script type="module" src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
-  <script nomodule src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
+  <script type="module" src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
+  <script nomodule src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
   <style>
     html,
     body {
@@ -143,7 +145,8 @@ type LocalAsset struct {
 
 // GenerateHTML walks the workdir manifests and renders HTML markup that can be served to the preview browser.
 // Datasource diagnostics and local assets that need HTTP proxying are returned alongside the rendered markup.
-func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrientation string, renderFormat string, mode RenderMode) (Result, []datasource.Diagnostic, error) {
+// The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
+func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrientation string, renderFormat string, mode RenderMode, engineVersion string) (Result, []datasource.Diagnostic, error) {
 	docs, err := config.LoadDir(ctx, workdir)
 	if err != nil {
 		return Result{}, nil, fmt.Errorf("render: load manifests: %w", err)
@@ -165,18 +168,20 @@ func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrie
 		})
 	}
 
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion)
 }
 
 // GenerateHTMLFromDocuments renders HTML using an already loaded set of manifests.
 // The mode parameter determines whether build-specific attributes like render-orientation are included.
-func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode RenderMode) (Result, []datasource.Diagnostic, error) {
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil)
+// The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
+func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode RenderMode, engineVersion string) (Result, []datasource.Diagnostic, error) {
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion)
 }
 
 // GenerateHTMLFromDocumentsWithDatasets renders HTML using loaded manifests and pre-executed dataset results.
 // The constraintCtx parameter is optional and used for filtering inline layout children by constraints.
-func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode RenderMode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext) (Result, []datasource.Diagnostic, error) {
+// The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
+func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode RenderMode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -258,7 +263,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			orientationAttr = fmt.Sprintf(" render-orientation=\"%s\"", html.EscapeString(trimmed))
 		}
 	}
-	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), fontMarkup, orientationAttr, html.EscapeString(locale), body.String())
+	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, fontMarkup, orientationAttr, html.EscapeString(locale), body.String())
 	return Result{HTML: []byte(markup), LocalAssets: localAssets}, diags, nil
 }
 
@@ -267,7 +272,8 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 // HTML contains the full report content and is delivered asynchronously via SSE.
 // This reduces perceived latency because the browser can start loading the template
 // engine JS while the server is still rendering the report content.
-func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext) (FrameResult, []datasource.Diagnostic, error) {
+// The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
+func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string) (FrameResult, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -343,7 +349,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	fontMarkup := renderFontLinks(fontAssets)
 
 	// Frame: lightweight shell with template engine and loading placeholder
-	frameMarkup := fmt.Sprintf(frameTemplate, html.EscapeString(locale), fontMarkup, html.EscapeString(locale))
+	frameMarkup := fmt.Sprintf(frameTemplate, html.EscapeString(locale), engineVersion, engineVersion, fontMarkup, html.EscapeString(locale))
 
 	// Context: standalone <bn-context> block for SSE delivery
 	// No render-orientation in preview mode

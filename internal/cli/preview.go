@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
@@ -92,6 +93,19 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			enableLint = resolver.ResolveBool("lint", "lint", enableLint)
 
+			// Resolve template engine version
+			engineVersion := projectCfg.EngineVersion
+			engineMgr, err := engine.NewManager()
+			if err != nil {
+				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
+			}
+			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
+			if err != nil {
+				return ConfigError(fmt.Errorf("template engine: %w", err))
+			}
+			engineVersion = engineInfo.Version
+			logger.Infof("Using template engine %s", engineVersion)
+
 			addr := fmt.Sprintf("127.0.0.1:%d", port)
 			logger.Infof("Starting preview server on %s", addr)
 			logger.Infof("Watching workdir %s", watchDir)
@@ -166,7 +180,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				pipeline.LogArtefactWarnings(logger, artefacts)
 
 				if len(artefacts) == 0 {
-					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{Language: "de", Mode: pipeline.RenderModePreview, QueryLogger: queryLogger})
+					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{Language: "de", Mode: pipeline.RenderModePreview, EngineVersion: engineVersion, QueryLogger: queryLogger})
 					if err != nil {
 						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
 						if policy.IsInvalidRoot {
@@ -190,7 +204,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 				if len(artefacts) == 1 {
 					art := artefacts[0]
-					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger)
+					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger, engineVersion)
 					if err != nil {
 						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
 						if policy.IsInvalidRoot {
@@ -221,7 +235,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				payloads := make([]artefactPayload, 0, len(artefacts))
 				for _, art := range artefacts {
-					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger)
+					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger, engineVersion)
 					if err != nil {
 						if pipeline.IsInvalidRootError(err) {
 							logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)

@@ -156,7 +156,7 @@ func TestRenderOrientationOnlyInBuildMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
-			result, _, err := GenerateHTMLFromDocuments(ctx, nil, "de", tt.orientation, "", tt.mode)
+			result, _, err := GenerateHTMLFromDocuments(ctx, nil, "de", tt.orientation, "", tt.mode, "v1.0.0")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
