@@ -7,6 +7,19 @@ import (
 	"testing"
 )
 
+// createMockVersion creates a mock version directory with the entry point file.
+func createMockVersion(t *testing.T, cacheDir, version string) {
+	t.Helper()
+	versionDir := filepath.Join(cacheDir, version)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatalf("Failed to create version dir: %v", err)
+	}
+	entryPath := filepath.Join(versionDir, EntryPoint)
+	if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
+		t.Fatalf("Failed to create entry point: %v", err)
+	}
+}
+
 func TestNewManager(t *testing.T) {
 	mgr, err := NewManager()
 	if err != nil {
@@ -34,16 +47,8 @@ func TestListLocalVersions_WithVersions(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create mock version directories with entry points
-	versions := []string{"v1.0.0", "v1.2.3", "v2.0.0"}
-	for _, v := range versions {
-		versionDir := filepath.Join(tmpDir, v)
-		if err := os.MkdirAll(versionDir, 0o755); err != nil {
-			t.Fatalf("Failed to create version dir: %v", err)
-		}
-		entryPath := filepath.Join(versionDir, EntryPoint)
-		if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-			t.Fatalf("Failed to create entry point: %v", err)
-		}
+	for _, v := range []string{"v1.0.0", "v1.2.3", "v2.0.0"} {
+		createMockVersion(t, tmpDir, v)
 	}
 
 	// Create an incomplete version (no entry point)
@@ -90,14 +95,7 @@ func TestLatestLocalVersion_WithVersions(t *testing.T) {
 
 	// Create mock version directories
 	for _, v := range []string{"v1.0.0", "v2.0.0"} {
-		versionDir := filepath.Join(tmpDir, v)
-		if err := os.MkdirAll(versionDir, 0o755); err != nil {
-			t.Fatalf("Failed to create version dir: %v", err)
-		}
-		entryPath := filepath.Join(versionDir, EntryPoint)
-		if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-			t.Fatalf("Failed to create entry point: %v", err)
-		}
+		createMockVersion(t, tmpDir, v)
 	}
 
 	mgr := NewManagerWithClient(tmpDir, nil)
@@ -115,14 +113,7 @@ func TestResolveVersion_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create one version
-	versionDir := filepath.Join(tmpDir, "v1.0.0")
-	if err := os.MkdirAll(versionDir, 0o755); err != nil {
-		t.Fatalf("Failed to create version dir: %v", err)
-	}
-	entryPath := filepath.Join(versionDir, EntryPoint)
-	if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-		t.Fatalf("Failed to create entry point: %v", err)
-	}
+	createMockVersion(t, tmpDir, "v1.0.0")
 
 	mgr := NewManagerWithClient(tmpDir, nil)
 
@@ -141,14 +132,7 @@ func TestResolveVersion_Specific(t *testing.T) {
 
 	// Create two versions
 	for _, v := range []string{"v1.0.0", "v2.0.0"} {
-		versionDir := filepath.Join(tmpDir, v)
-		if err := os.MkdirAll(versionDir, 0o755); err != nil {
-			t.Fatalf("Failed to create version dir: %v", err)
-		}
-		entryPath := filepath.Join(versionDir, EntryPoint)
-		if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-			t.Fatalf("Failed to create entry point: %v", err)
-		}
+		createMockVersion(t, tmpDir, v)
 	}
 
 	mgr := NewManagerWithClient(tmpDir, nil)
@@ -167,14 +151,7 @@ func TestResolveVersion_WithoutPrefix(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a version
-	versionDir := filepath.Join(tmpDir, "v1.0.0")
-	if err := os.MkdirAll(versionDir, 0o755); err != nil {
-		t.Fatalf("Failed to create version dir: %v", err)
-	}
-	entryPath := filepath.Join(versionDir, EntryPoint)
-	if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-		t.Fatalf("Failed to create entry point: %v", err)
-	}
+	createMockVersion(t, tmpDir, "v1.0.0")
 
 	mgr := NewManagerWithClient(tmpDir, nil)
 
@@ -212,14 +189,7 @@ func TestEnsureVersion_AlreadyCached(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a cached version
-	versionDir := filepath.Join(tmpDir, "v1.0.0")
-	if err := os.MkdirAll(versionDir, 0o755); err != nil {
-		t.Fatalf("Failed to create version dir: %v", err)
-	}
-	entryPath := filepath.Join(versionDir, EntryPoint)
-	if err := os.WriteFile(entryPath, []byte("// mock"), 0o644); err != nil {
-		t.Fatalf("Failed to create entry point: %v", err)
-	}
+	createMockVersion(t, tmpDir, "v1.0.0")
 
 	mgr := NewManagerWithClient(tmpDir, nil)
 
