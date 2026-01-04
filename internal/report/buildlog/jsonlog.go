@@ -12,6 +12,8 @@ import (
 // JSONBuildLog represents the complete JSON build log structure.
 type JSONBuildLog struct {
 	RunID         string          `json:"run_id"`
+	ReportID      string          `json:"report_id,omitempty"`
+	EngineVersion string          `json:"engine_version,omitempty"`
 	Started       time.Time       `json:"started"`
 	Completed     time.Time       `json:"completed"`
 	DurationMs    int64           `json:"duration_ms"`
@@ -21,6 +23,7 @@ type JSONBuildLog struct {
 	Queries       []QueryEntry    `json:"queries"`
 	ExecutionPlan []ExecutionStep `json:"execution_plan,omitempty"`
 	Lint          []LintEntry     `json:"lint,omitempty"`
+	Warnings      []string        `json:"warnings,omitempty"`
 }
 
 // LintEntry represents a lint finding in the build log.

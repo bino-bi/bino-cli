@@ -95,6 +95,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			// Resolve template engine version
 			engineVersion := projectCfg.EngineVersion
+			engineVersionPinned := engineVersion != ""
 			engineMgr, err := engine.NewManager()
 			if err != nil {
 				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
@@ -105,6 +106,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 			engineVersion = engineInfo.Version
 			logger.Infof("Using template engine %s", engineVersion)
+			if !engineVersionPinned {
+				logger.Warnf("No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds.")
+			}
 
 			addr := fmt.Sprintf("127.0.0.1:%d", port)
 			logger.Infof("Starting preview server on %s", addr)
