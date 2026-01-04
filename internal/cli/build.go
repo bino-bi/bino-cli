@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/playwright"
@@ -226,6 +227,19 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return RuntimeError(err)
 			}
 
+			// Resolve template engine version
+			engineVersion := projectCfg.EngineVersion
+			engineMgr, err := engine.NewManager()
+			if err != nil {
+				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
+			}
+			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
+			if err != nil {
+				return ConfigError(fmt.Errorf("template engine: %w", err))
+			}
+			engineVersion = engineInfo.Version
+			out.Info(fmt.Sprintf("Using template engine %s", engineVersion))
+
 			// Set up SQL query logger if --log-sql is enabled
 			var executedQueries []string
 			var queryLoggerMu sync.Mutex
@@ -313,6 +327,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					Logger:          logger.Channel(artefact.Document.Name),
 					Workdir:         absDir,
 					CacheDir:        cacheDir,
+					EngineVersion:   engineVersion,
 					Docs:            documents,
 					Artefact:        artefact,
 					SigningProfiles: signingProfiles,
@@ -477,6 +492,7 @@ type buildArtefactConfig struct {
 	Logger          logx.Logger
 	Workdir         string
 	CacheDir        string
+	EngineVersion   string
 	Docs            []config.Document
 	Artefact        config.Artefact
 	SigningProfiles map[string]config.SigningProfile
@@ -521,6 +537,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	logger.Debugf("Rendering HTML for %s", artefactName)
 
 	renderResult, err := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, cfg.Docs, cfg.Artefact, pipeline.RenderArtefactOptions{
+		EngineVersion:   cfg.EngineVersion,
 		QueryLogger:     cfg.QueryLogger,
 		QueryExecLogger: cfg.QueryExecLogger,
 		EmbedOptions:    cfg.EmbedOptions,

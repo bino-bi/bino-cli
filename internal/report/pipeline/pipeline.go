@@ -158,6 +158,8 @@ type RenderOptions struct {
 	Format string
 	// Mode indicates whether this is a build or preview render.
 	Mode RenderMode
+	// EngineVersion specifies the template engine version to use (e.g., "v1.2.3").
+	EngineVersion string
 	// QueryLogger is called for each SQL query executed. May be nil.
 	QueryLogger func(query string)
 	// QueryExecLogger is called for each query execution with detailed metadata. May be nil.
@@ -238,7 +240,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion)
 
 	// End render step
 	if opts.ExecutionPlan != nil {
@@ -257,6 +259,8 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 
 // RenderArtefactOptions configures HTML rendering for a specific artefact.
 type RenderArtefactOptions struct {
+	// EngineVersion specifies the template engine version to use (e.g., "v1.2.3").
+	EngineVersion string
 	// QueryLogger is called for each SQL query executed. May be nil.
 	QueryLogger func(query string)
 	// QueryExecLogger is called for each query execution with detailed metadata. May be nil.
@@ -295,6 +299,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		Orientation:       artefact.Spec.Orientation,
 		Format:            artefact.Spec.Format,
 		Mode:              RenderModeBuild,
+		EngineVersion:     opts.EngineVersion,
 		QueryLogger:       opts.QueryLogger,
 		QueryExecLogger:   opts.QueryExecLogger,
 		EmbedOptions:      opts.EmbedOptions,
@@ -307,7 +312,8 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 // Unlike RenderArtefactHTML, this does not include build-specific attributes like render-orientation.
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
-func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string)) (RenderResult, error) {
+// The engineVersion parameter specifies which template engine version to use.
+func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (RenderResult, error) {
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, spec.ModePreview)
 	if err != nil {
@@ -331,6 +337,7 @@ func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []co
 		Orientation:       artefact.Spec.Orientation,
 		Format:            artefact.Spec.Format,
 		Mode:              RenderModePreview,
+		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
 	})
@@ -363,7 +370,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
@@ -379,8 +386,9 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
-func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string)) (FrameRenderResult, error) {
-	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artefact, queryLogger, spec.ModePreview)
+// The engineVersion parameter specifies which template engine version to use.
+func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artefact, queryLogger, spec.ModePreview, engineVersion)
 }
 
 // RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artefact with a specified mode.
@@ -388,7 +396,8 @@ func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []c
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
-func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode) (FrameRenderResult, error) {
+// The engineVersion parameter specifies which template engine version to use.
+func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, mode)
 	if err != nil {
@@ -422,6 +431,7 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 		Language:          artefact.Spec.Language,
 		Format:            artefact.Spec.Format,
 		Mode:              renderMode,
+		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
 	})

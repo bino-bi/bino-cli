@@ -1,9 +1,9 @@
 ---
 title: bino update
-description: Update the bino CLI to the latest version.
+description: Update the bino CLI and template engine to the latest versions.
 ---
 
-The `bino update` command allows you to easily upgrade your bino CLI installation to the latest available version from GitHub Releases.
+The `bino update` command allows you to easily upgrade both your bino CLI installation and the template engine to the latest available versions from GitHub Releases.
 
 ## Usage
 
@@ -13,7 +13,9 @@ bino update
 
 ## Description
 
-When you run `bino update`, the CLI will:
+When you run `bino update`, the CLI will update two components:
+
+### CLI update
 
 1.  Check GitHub Releases for a newer version of `bino`.
 2.  Compare the latest version with your currently installed version.
@@ -23,7 +25,36 @@ When you run `bino update`, the CLI will:
 
 If the checksum verification fails, the update is aborted and your current installation remains unchanged.
 
-If you are already on the latest version, the command will inform you and exit without making changes.
+### Template engine update
+
+After updating the CLI, `bino update` also checks for template engine updates:
+
+1.  Query GitHub Releases for the latest template engine version.
+2.  Compare with the latest locally installed version (if any).
+3.  If a newer version is available (or no version is installed), download it.
+
+The template engine is cached in `~/.bn/cdn/bn-template-engine/` and multiple versions can coexist. By default, bino uses the latest installed version unless a specific version is pinned in `bino.toml`.
+
+### Example output
+
+```text
+Checking for CLI updates (current: v0.36.0)...
+CLI is already up to date.
+
+Checking for template engine updates (current: v0.36.0)...
+Downloading template engine v0.37.0...
+Successfully updated template engine from v0.36.0 to v0.37.0
+```
+
+If both components are already up to date:
+
+```text
+Checking for CLI updates (current: v0.37.0)...
+CLI is already up to date.
+
+Checking for template engine updates (current: v0.37.0)...
+Template engine is already up to date.
+```
 
 ## Automatic Update Checks
 

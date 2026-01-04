@@ -1,9 +1,9 @@
 ---
 title: bino setup
-description: Install browser runtimes used for PDF rendering.
+description: Install browser runtimes and template engine used for PDF rendering.
 ---
 
-bino relies on a browser runtime to render PDFs.
+bino relies on a browser runtime and template engine to render PDFs.
 Use `bino setup` to download and configure these dependencies.
 
 ## Usage
@@ -12,12 +12,22 @@ Use `bino setup` to download and configure these dependencies.
 bino setup [flags]
 ```
 
-Common flags:
+## Flags
 
-- `--browser` – one or more browsers to install (for example `chromium`).
-- `--driver-dir` – custom directory for the rendering driver and cache.
+### Browser runtime flags
+
+- `--browser` – one or more browsers to install (default: `chromium`). Repeat to add `firefox`, `webkit`, etc.
+- `--driver-dir` – custom directory for the browser driver cache.
+
+### Template engine flags
+
+- `--template-engine` – download or update the bn-template-engine.
+- `--engine-version` – specific template engine version to download (default: latest). For example `v0.37.0`.
+
+### General flags
+
 - `--dry-run` – show what would be installed without actually downloading.
-- `--quiet` – reduce output noise.
+- `--quiet` – suppress verbose installer output.
 
 ## Examples
 
@@ -32,5 +42,31 @@ Install multiple browsers:
 ```bash
 bino setup --browser chromium --browser firefox
 ```
+
+Install the template engine (latest version):
+
+```bash
+bino setup --template-engine
+```
+
+Install a specific template engine version:
+
+```bash
+bino setup --template-engine --engine-version v0.37.0
+```
+
+Preview what would be installed without downloading:
+
+```bash
+bino setup --dry-run
+```
+
+## Template engine
+
+The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from the browser runtimes and cached in `~/.bn/cdn/bn-template-engine/`.
+
+Multiple versions can be installed side by side. By default, bino uses the latest locally installed version unless a specific version is pinned in `bino.toml` via the `engine-version` field. See [Project configuration](/concepts/project-configuration) for more details.
+
+## Troubleshooting
 
 If builds fail with rendering or browser errors, rerun this command and verify that your environment has network and disk access.

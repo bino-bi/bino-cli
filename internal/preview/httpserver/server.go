@@ -574,19 +574,19 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	// bn-template-engine is served from local cache only (no remote CDN proxy)
+	if strings.HasPrefix(relPath, "bn-template-engine/") {
+		return s.serveLocalEngineFile(w, r, relPath)
+	}
+
 	disableCache := cacheBypassed(r)
 	localPath := ""
 	if s.cfg.CacheDir != "" {
 		localPath = filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
 	}
 
-	// Determine fetch strategy based on file type:
-	// - bn-template-engine.esm.js: remote-first with cache fallback (always get latest)
-	// - all other files: cache-first (performance optimization)
-	remoteFirst := isRemoteFirstFile(relPath)
-
-	// For cache-first files, try serving from cache
-	if !remoteFirst && localPath != "" && !disableCache {
+	// For other CDN files, use cache-first strategy
+	if localPath != "" && !disableCache {
 		_, statErr := os.Stat(localPath)
 		if statErr == nil {
 			http.ServeFile(w, r, localPath)
@@ -601,23 +601,7 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 	// Attempt to fetch from remote CDN
 	body, headers, statusCode, fetchErr := s.fetchFromCDN(r.Context(), relPath)
 
-	// For remote-first files, fallback to cache if remote fetch failed or returned non-2xx
-	shouldFallback := fetchErr != nil || (statusCode < 200 || statusCode >= 300)
-	if shouldFallback && remoteFirst && localPath != "" && !disableCache {
-		_, statErr := os.Stat(localPath)
-		if statErr == nil {
-			if fetchErr != nil {
-				s.cfg.Logger.Warnf("cdn fetch failed, serving from cache: %v", fetchErr)
-			} else {
-				s.cfg.Logger.Warnf("cdn returned status %d, serving from cache", statusCode)
-			}
-			http.ServeFile(w, r, localPath)
-			return nil
-		}
-		// Cache miss as well, report the original fetch error or status
-	}
-
-	// If fetch failed and we have no fallback, report error
+	// If fetch failed, report error
 	if fetchErr != nil {
 		http.Error(w, "upstream request failed", http.StatusBadGateway)
 		return fetchErr
@@ -645,12 +629,25 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// isRemoteFirstFile returns true for files that should be fetched from remote CDN first
-// with cache as a fallback. This ensures we always get the latest version of critical files.
-func isRemoteFirstFile(relPath string) bool {
-	// bn-template-engine.esm.js should always try remote first to get latest version
-	return strings.HasSuffix(relPath, "bn-template-engine.esm.js")
+// serveLocalEngineFile serves template engine files from local cache only.
+// The relPath is expected to be like "bn-template-engine/v1.2.3/bn-template-engine.esm.js".
+func (s *Server) serveLocalEngineFile(w http.ResponseWriter, r *http.Request, relPath string) error {
+	if s.cfg.CacheDir == "" {
+		http.Error(w, "template engine not available - cache directory not configured", http.StatusInternalServerError)
+		return fmt.Errorf("preview: cache directory not configured")
+	}
+
+	localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
+
+	if _, err := os.Stat(localPath); os.IsNotExist(err) {
+		http.Error(w, "template engine not found - run 'bino setup --template-engine' to install", http.StatusNotFound)
+		return fmt.Errorf("preview: template engine file not found: %s", localPath)
+	}
+
+	http.ServeFile(w, r, localPath)
+	return nil
 }
+
 
 // fetchFromCDN attempts to fetch a file from the remote CDN.
 // Returns the body, headers, status code, and any error.

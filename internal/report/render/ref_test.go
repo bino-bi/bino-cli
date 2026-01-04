@@ -49,7 +49,7 @@ func TestRenderLayoutChildWithRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview)
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestRenderLayoutChildWithRefAndOverride(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview)
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestRenderLayoutChildWithMissingRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutPageDoc}
-	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview)
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocuments should not error on missing ref: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestRenderLayoutChildWithLayoutCardRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutCardDoc, layoutPageDoc}
-	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview)
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestRenderLayoutChildWithLayoutCardRefAndOverride(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutCardDoc, layoutPageDoc}
-	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview)
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
 	}
