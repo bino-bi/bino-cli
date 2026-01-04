@@ -229,6 +229,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Resolve template engine version
 			engineVersion := projectCfg.EngineVersion
+			engineVersionPinned := engineVersion != ""
 			engineMgr, err := engine.NewManager()
 			if err != nil {
 				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
@@ -239,6 +240,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 			engineVersion = engineInfo.Version
 			out.Info(fmt.Sprintf("Using template engine %s", engineVersion))
+
+			// Track build warnings for logs
+			var buildWarnings []string
+			if !engineVersionPinned {
+				warnMsg := "No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds."
+				out.Warning(warnMsg)
+				buildWarnings = append(buildWarnings, warnMsg)
+			}
 
 			// Set up SQL query logger if --log-sql is enabled
 			var executedQueries []string
@@ -356,7 +365,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
-			if err := writeBuildLog(logPath, runID, startTime, absDir, documents, results, executedQueries); err != nil {
+			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, executedQueries, buildWarnings); err != nil {
 				logger.Warnf("failed to write build log: %v", err)
 			}
 
@@ -401,6 +410,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 				jsonLog := &buildlog.JSONBuildLog{
 					RunID:         runID,
+					ReportID:      projectCfg.ReportID,
+					EngineVersion: engineVersion,
 					Started:       startTime,
 					Completed:     completedTime,
 					DurationMs:    completedTime.Sub(startTime).Milliseconds(),
@@ -410,6 +421,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					Queries:       queryEntries,
 					ExecutionPlan: planSteps,
 					Lint:          findingsToLintEntries(lintFindings),
+					Warnings:      buildWarnings,
 				}
 
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
@@ -731,7 +743,7 @@ func (s *ephemeralServer) Close() error {
 }
 
 // writeBuildLog writes a detailed build log file with run information.
-func writeBuildLog(path, runID string, startTime time.Time, workdir string, docs []config.Document, results []artefactResult, sqlQueries []string) error {
+func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.Time, workdir string, docs []config.Document, results []artefactResult, sqlQueries []string, warnings []string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create build log: %w", err)
@@ -740,11 +752,22 @@ func writeBuildLog(path, runID string, startTime time.Time, workdir string, docs
 
 	fmt.Fprintf(file, "BINO BUILD LOG\n")
 	fmt.Fprintf(file, "==============\n\n")
-	fmt.Fprintf(file, "Run ID:     %s\n", runID)
-	fmt.Fprintf(file, "Started:    %s\n", startTime.Format(time.RFC3339))
-	fmt.Fprintf(file, "Completed:  %s\n", time.Now().Format(time.RFC3339))
-	fmt.Fprintf(file, "Duration:   %s\n", time.Since(startTime).Round(time.Millisecond))
-	fmt.Fprintf(file, "Workdir:    %s\n\n", workdir)
+	fmt.Fprintf(file, "Run ID:         %s\n", runID)
+	fmt.Fprintf(file, "Report ID:      %s\n", reportID)
+	fmt.Fprintf(file, "Engine Version: %s\n", engineVersion)
+	fmt.Fprintf(file, "Started:        %s\n", startTime.Format(time.RFC3339))
+	fmt.Fprintf(file, "Completed:      %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(file, "Duration:       %s\n", time.Since(startTime).Round(time.Millisecond))
+	fmt.Fprintf(file, "Workdir:        %s\n", workdir)
+
+	if len(warnings) > 0 {
+		fmt.Fprintf(file, "\nWARNINGS (%d)\n", len(warnings))
+		fmt.Fprintf(file, "-------------\n")
+		for _, w := range warnings {
+			fmt.Fprintf(file, "  - %s\n", w)
+		}
+	}
+	fmt.Fprintln(file)
 
 	fmt.Fprintf(file, "DOCUMENTS (%d)\n", len(docs))
 	fmt.Fprintf(file, "--------------\n")
