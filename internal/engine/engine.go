@@ -273,7 +273,7 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 
 // extractZip extracts a zip file to the destination directory.
 // The zip is expected to contain a bn-template-engine/ folder; contents are extracted
-// directly to destDir (stripping the top-level folder).
+// directly to destDir (stripping the bn-template-engine/ prefix).
 func (m *Manager) extractZip(zipPath, destDir string) error {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -286,27 +286,14 @@ func (m *Manager) extractZip(zipPath, destDir string) error {
 		return fmt.Errorf("create destination directory: %w", err)
 	}
 
-	// Find common prefix to strip (e.g., "bn-template-engine/")
-	var prefix string
-	for _, f := range r.File {
-		name := f.Name
-		if idx := strings.Index(name, "/"); idx > 0 {
-			candidate := name[:idx+1]
-			if prefix == "" {
-				prefix = candidate
-			} else if prefix != candidate {
-				// Multiple top-level directories, don't strip
-				prefix = ""
-				break
-			}
-		}
-	}
+	// The zip contains a bn-template-engine/ folder - strip this prefix
+	const prefix = "bn-template-engine/"
 
 	for _, f := range r.File {
 		name := f.Name
 
-		// Strip common prefix
-		if prefix != "" && strings.HasPrefix(name, prefix) {
+		// Strip the bn-template-engine/ prefix
+		if strings.HasPrefix(name, prefix) {
 			name = strings.TrimPrefix(name, prefix)
 		}
 

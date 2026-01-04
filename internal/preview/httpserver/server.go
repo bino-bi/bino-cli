@@ -629,22 +629,76 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// serveLocalEngineFile serves template engine files from local cache only.
+// serveLocalEngineFile serves template engine files from local cache or CDN.
 // The relPath is expected to be like "bn-template-engine/v1.2.3/bn-template-engine.esm.js".
+//
+// For SNAPSHOT versions:
+//   - The main ESM file (bn-template-engine.esm.js) is always fetched from the remote CDN
+//   - Other bundle artifacts are served from local cache if available, otherwise fetched from CDN
+//
+// For regular versions:
+//   - All files are served from local cache only (no CDN fallback)
 func (s *Server) serveLocalEngineFile(w http.ResponseWriter, r *http.Request, relPath string) error {
-	if s.cfg.CacheDir == "" {
-		http.Error(w, "template engine not available - cache directory not configured", http.StatusInternalServerError)
-		return fmt.Errorf("preview: cache directory not configured")
+	// Parse version from path: bn-template-engine/{version}/...
+	parts := strings.SplitN(relPath, "/", 3)
+	if len(parts) < 2 {
+		http.Error(w, "invalid template engine path", http.StatusBadRequest)
+		return fmt.Errorf("preview: invalid template engine path: %s", relPath)
+	}
+	version := parts[1]
+	isSnapshot := version == "SNAPSHOT"
+	isMainESM := len(parts) >= 3 && parts[2] == "bn-template-engine.esm.js"
+
+	// For SNAPSHOT's main ESM file, always fetch from remote CDN (don't cache)
+	if isSnapshot && isMainESM {
+		return s.proxyFromCDN(w, r, relPath, false) // don't cache the main ESM
 	}
 
-	localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
-
-	if _, err := os.Stat(localPath); os.IsNotExist(err) {
-		http.Error(w, "template engine not found - run 'bino setup --template-engine' to install", http.StatusNotFound)
-		return fmt.Errorf("preview: template engine file not found: %s", localPath)
+	// For all other files, try local cache first
+	if s.cfg.CacheDir != "" {
+		localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
+		if _, err := os.Stat(localPath); err == nil {
+			http.ServeFile(w, r, localPath)
+			return nil
+		}
 	}
 
-	http.ServeFile(w, r, localPath)
+	// For SNAPSHOT, fetch other files from CDN and cache them
+	if isSnapshot {
+		return s.proxyFromCDN(w, r, relPath, true) // cache other bundle artifacts
+	}
+
+	// For regular versions, require local cache (no CDN fallback)
+	http.Error(w, "template engine not found - run 'bino setup --template-engine' to install", http.StatusNotFound)
+	return fmt.Errorf("preview: template engine file not found: %s", relPath)
+}
+
+// proxyFromCDN fetches a file from the remote CDN and optionally caches it locally.
+func (s *Server) proxyFromCDN(w http.ResponseWriter, r *http.Request, relPath string, cacheLocally bool) error {
+	body, headers, statusCode, err := s.fetchFromCDN(r.Context(), relPath)
+	if err != nil {
+		http.Error(w, "upstream request failed", http.StatusBadGateway)
+		return err
+	}
+
+	copyHeaders(w.Header(), headers, "Content-Type", "Content-Length")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.WriteHeader(statusCode)
+	if _, err := w.Write(body); err != nil {
+		return fmt.Errorf("preview: write response body: %w", err)
+	}
+
+	// Cache the file locally if requested
+	if cacheLocally && statusCode == http.StatusOK && s.cfg.CacheDir != "" {
+		localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
+		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+			return fmt.Errorf("preview: ensure cache dir: %w", err)
+		}
+		if err := os.WriteFile(localPath, body, 0o644); err != nil {
+			return fmt.Errorf("preview: write cache file: %w", err)
+		}
+	}
+
 	return nil
 }
 
