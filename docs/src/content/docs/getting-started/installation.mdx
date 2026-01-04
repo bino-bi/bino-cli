@@ -18,12 +18,9 @@ bino provides pre-built binaries for:
 
 ## Install using the bundled installer script (recommended)
 
-<Aside type="note">
-  The installer script currently supports **Linux** and **macOS**. Windows users
-  should download the binary manually or use WSL.
-</Aside>
+Installer scripts are published with each release. They automatically detect your OS/architecture, download the appropriate archive, verify the SHA-256 checksum (if present), and install the `bino` binary.
 
-An `install.sh` asset is published with releases. It automatically detects your OS/architecture, downloads the appropriate archive, verifies the SHA-256 checksum (if present), and installs the `bino` binary.
+### Linux and macOS
 
 Run directly (one-liner that executes the installer):
 
@@ -36,7 +33,7 @@ Run directly (one-liner that executes the installer):
 Safer (download then inspect):
 
 ```sh
-curl -sL https://github.com/bino-bi/bino-cli/releases/latest/download/install.sh -o install.sh
+curl -sL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh -o install.sh
 less install.sh
 sh install.sh
 ```
@@ -44,6 +41,30 @@ sh install.sh
 Installer flags: `--repo`, `--tag`, `--install-dir`, `--dry-run`, `--yes`.
 
 Prefer the two-step flow if you want to review the script before execution.
+
+### Windows (PowerShell)
+
+<Aside type="note">
+  Requires Windows 10 or later with PowerShell 5.1+.
+</Aside>
+
+Run directly in PowerShell (one-liner):
+
+```powershell
+irm https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.ps1 | iex
+```
+
+Safer (download then inspect):
+
+```powershell
+Invoke-WebRequest -Uri https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.ps1 -OutFile install.ps1
+Get-Content install.ps1 | Out-Host -Paging
+.\install.ps1
+```
+
+Installer parameters: `-Repo`, `-Tag`, `-InstallDir`, `-DryRun`, `-Yes`.
+
+The installer places `bino.exe` in `%LOCALAPPDATA%\bino` and adds it to your user PATH. You may need to restart your terminal for PATH changes to take effect.
 
 ## Install from GitHub Releases
 
@@ -83,13 +104,13 @@ Prefer the two-step flow if you want to review the script before execution.
 
 ## Updating bino
 
-To update bino to the latest version, simply run:
+To update bino to the latest version, run:
 
-```bash
+```sh
 bino update
 ```
 
-This command checks for the latest release on GitHub and performs an in-place update if a newer version is available.
+This command checks for the latest release on GitHub and performs an in-place update if a newer version is available. It works on all platforms (macOS, Linux, and Windows).
 
 bino also performs a background check for updates once every 24 hours and will notify you if a new version is available.
 
