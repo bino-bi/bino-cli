@@ -224,9 +224,35 @@ A **workdir** is the root directory of a report bundle. It typically contains:
 - YAML manifests defining reports, data, layouts, etc.
 - Data files such as CSV or Excel.
 - The build output directory (e.g. `dist/`).
-- Bino’s local cache (e.g. `.bncache`).
+- Bino's local cache (e.g. `.bncache`).
+- A `bino.toml` project configuration file.
 
 Most commands accept `--work-dir` to point bino at the correct directory. If omitted, bino uses the current directory.
+
+### Project Configuration (`bino.toml`)
+
+The `bino.toml` file marks the root of a bino project and contains project-level settings. It is automatically created when you run `bino init`.
+
+Example `bino.toml`:
+
+```toml
+# Unique identifier for this report bundle
+report-id = "abc12345-6789-0def-ghij-klmnopqrstuv"
+
+# Template engine version to use (optional)
+engine-version = "v1.2.3"
+```
+
+**Fields:**
+
+- `report-id` – A unique identifier for the report bundle. Generated automatically by `bino init`.
+- `engine-version` – The version of the template engine to use for rendering. If not specified, bino uses the latest version available locally. Versions are downloaded from GitHub releases and cached in `~/.bn/cdn/bn-template-engine/<version>/`.
+
+**Template Engine Behavior:**
+
+- When `engine-version` is specified and the version is not cached locally, bino automatically downloads it.
+- When `engine-version` is not specified, bino uses the latest locally cached version.
+- If no template engine is installed, run `bino setup --template-engine` to download the latest version.
 
 ### Manifests
 
@@ -538,17 +564,26 @@ Inspect dependencies between artefacts, datasets, and datasources.
 
 ### `bino setup`
 
-Install or update the headless browser runtimes used for PDF rendering.
+Install or update the headless browser runtimes and template engine used for PDF rendering.
 
 - Common flags:
   - `--browser` – browser(s) to install (can be repeated).
+  - `--template-engine` – download or update the template engine.
+  - `--engine-version` – specific template engine version to download (default: latest).
   - `--driver-dir` – custom directory for browser driver/cache.
   - `--dry-run` – show what would be installed without downloading.
   - `--quiet` – reduce output noise.
-- Example:
+- Examples:
 
   ```bash
+  # Install browser runtime
   bino setup --browser chromium
+
+  # Download latest template engine
+  bino setup --template-engine
+
+  # Download specific template engine version
+  bino setup --template-engine --engine-version v1.2.3
   ```
 
 ### `bino cache clean`
@@ -742,7 +777,25 @@ This section maps common symptoms to likely causes and fixes.
 - Ensure that the setup command has network access and can write to its cache directory.
 - If you set a custom driver directory, verify that the same directory is used during builds.
 
-### “Queries are slow or fail with timeouts”
+### "No template engine versions installed"
+
+- Run:
+
+  ```bash
+  bino setup --template-engine
+  ```
+
+- This downloads the latest template engine version from GitHub releases.
+- If you need a specific version, use `--engine-version v1.2.3`.
+- Ensure network access to `github.com`.
+
+### "Template engine version not available"
+
+- If `engine-version` in `bino.toml` specifies a version that doesn't exist or can't be downloaded:
+  - Remove or update the `engine-version` field to use the latest local version.
+  - Or run `bino setup --template-engine --engine-version <version>` to download the specified version.
+
+### "Queries are slow or fail with timeouts"
 
 - Check your SQL queries:
   - Avoid unnecessary cross joins or unbounded scans.

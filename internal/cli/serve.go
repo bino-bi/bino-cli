@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
@@ -101,6 +102,19 @@ Environment knobs:
 			if live == "" {
 				return ConfigErrorf("--live flag is required: specify the name of a LiveReportArtefact to serve")
 			}
+
+			// Resolve template engine version
+			engineVersion := projectCfg.EngineVersion
+			engineMgr, err := engine.NewManager()
+			if err != nil {
+				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
+			}
+			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
+			if err != nil {
+				return ConfigError(fmt.Errorf("template engine: %w", err))
+			}
+			engineVersion = engineInfo.Version
+			logger.Infof("Using template engine %s", engineVersion)
 
 			logger.Infof("Starting serve on %s", addr)
 			logger.Infof("Project directory %s", watchDir)
@@ -221,6 +235,7 @@ Environment knobs:
 							routePath,
 							routeSpec,
 							queryLogger,
+							engineVersion,
 						)
 					}
 				} else {
@@ -239,6 +254,7 @@ Environment knobs:
 							routePath,
 							routeSpec,
 							queryLogger,
+							engineVersion,
 						)
 					}
 				}
@@ -264,6 +280,7 @@ Environment knobs:
 							"/",
 							rootSpec,
 							queryLogger,
+							engineVersion,
 						)
 					})
 				} else {
@@ -280,6 +297,7 @@ Environment knobs:
 							"/",
 							rootSpec,
 							queryLogger,
+							engineVersion,
 						)
 					})
 				}
@@ -290,7 +308,7 @@ Environment knobs:
 			for _, route := range liveArtefact.Spec.Routes {
 				if route.Artefact != "" {
 					art := artefactMap[route.Artefact]
-					renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe)
+					renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe, engineVersion)
 					if err != nil {
 						logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
 						continue
@@ -299,9 +317,10 @@ Environment knobs:
 				} else {
 					// For layoutPages routes, render with default settings to collect assets
 					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
-						Workdir:     watchDir,
-						Mode:        pipeline.RenderModeServe,
-						QueryLogger: nil,
+						Workdir:       watchDir,
+						Mode:          pipeline.RenderModeServe,
+						EngineVersion: engineVersion,
+						QueryLogger:   nil,
 					})
 					if err != nil {
 						logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
@@ -429,6 +448,7 @@ func serveRenderHandler(
 	routePath string,
 	routeSpec config.LiveRouteSpec,
 	queryLogger func(string),
+	engineVersion string,
 ) ([]byte, string, error) {
 	// Extract query parameters from request context
 	reqInfo := previewhttp.GetRequestInfo(ctx)
@@ -493,7 +513,7 @@ func serveRenderHandler(
 	}
 
 	// Render the artefact with serve mode for constraint evaluation
-	renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, currentArtefact, queryLogger, spec.ModeServe)
+	renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, currentArtefact, queryLogger, spec.ModeServe, engineVersion)
 	if err != nil {
 		logger.Errorf("Render failed for %s: %v", artefact.Document.Name, err)
 		return nil, "", err
@@ -527,6 +547,7 @@ func serveLayoutPagesHandler(
 	routePath string,
 	routeSpec config.LiveRouteSpec,
 	queryLogger func(string),
+	engineVersion string,
 ) ([]byte, string, error) {
 	// Process query parameters and reload documents if needed
 	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath)
@@ -550,9 +571,10 @@ func serveLayoutPagesHandler(
 
 	// Render the layout pages directly
 	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
-		Workdir:     workdir,
-		Mode:        pipeline.RenderModeServe,
-		QueryLogger: queryLogger,
+		Workdir:       workdir,
+		Mode:          pipeline.RenderModeServe,
+		EngineVersion: engineVersion,
+		QueryLogger:   queryLogger,
 	})
 	if err != nil {
 		logger.Errorf("Render failed for layoutPages: %v", err)

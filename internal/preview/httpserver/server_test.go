@@ -1269,44 +1269,24 @@ func TestHandleCDN_ContentLengthHeaderExceedsLimit(t *testing.T) {
 	}
 }
 
-func TestIsRemoteFirstFile(t *testing.T) {
-	tests := []struct {
-		path string
-		want bool
-	}{
-		{"bn-template-engine/SNAPSHOT/bn-template-engine.esm.js", true},
-		{"bn-template-engine/1.0.0/bn-template-engine.esm.js", true},
-		{"some/other/file.js", false},
-		{"bn-template-engine.esm.js", true},
-		{"file.css", false},
-		{"bn-template-engine/style.css", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			if got := isRemoteFirstFile(tt.path); got != tt.want {
-				t.Errorf("isRemoteFirstFile(%q) = %v, want %v", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHandleCDN_RemoteFirst_UsesCacheAsFallback(t *testing.T) {
+func TestHandleCDN_TemplateEngine_ServesFromLocalCache(t *testing.T) {
 	cacheDir := t.TempDir()
 
 	// Pre-populate cache with content for the template engine
-	cachedFile := filepath.Join(cacheDir, "bn-template-engine", "SNAPSHOT", "bn-template-engine.esm.js")
+	cachedFile := filepath.Join(cacheDir, "bn-template-engine", "v1.0.0", "bn-template-engine.esm.js")
 	if err := os.MkdirAll(filepath.Dir(cachedFile), 0o755); err != nil {
 		t.Fatalf("failed to create cache dir: %v", err)
 	}
-	if err := os.WriteFile(cachedFile, []byte("cached template engine"), 0o644); err != nil {
+	if err := os.WriteFile(cachedFile, []byte("local template engine"), 0o644); err != nil {
 		t.Fatalf("failed to create cached file: %v", err)
 	}
 
-	// Mock CDN that returns errors (simulating network failure)
+	// Mock CDN that would return different content (should NOT be called for template engine)
+	cdnCalled := false
 	mockCDN := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte("cdn unavailable"))
+		cdnCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("cdn content"))
 	}))
 	defer mockCDN.Close()
 
@@ -1318,63 +1298,51 @@ func TestHandleCDN_RemoteFirst_UsesCacheAsFallback(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js", nil)
+	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	// Should fallback to cache and return 200
+	// Should serve from local cache
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want %d (should fallback to cache)", resp.StatusCode, http.StatusOK)
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "cached template engine" {
-		t.Errorf("body = %q, want %q", string(body), "cached template engine")
+	if string(body) != "local template engine" {
+		t.Errorf("body = %q, want %q", string(body), "local template engine")
+	}
+
+	// CDN should NOT be called for template engine files
+	if cdnCalled {
+		t.Error("CDN was called for template engine file, but should serve from local cache only")
 	}
 }
 
-func TestHandleCDN_RemoteFirst_PrefersFreshContent(t *testing.T) {
+func TestHandleCDN_TemplateEngine_NotFoundLocally(t *testing.T) {
 	cacheDir := t.TempDir()
 
-	// Pre-populate cache with stale content
-	cachedFile := filepath.Join(cacheDir, "bn-template-engine", "SNAPSHOT", "bn-template-engine.esm.js")
-	if err := os.MkdirAll(filepath.Dir(cachedFile), 0o755); err != nil {
-		t.Fatalf("failed to create cache dir: %v", err)
-	}
-	if err := os.WriteFile(cachedFile, []byte("stale cached content"), 0o644); err != nil {
-		t.Fatalf("failed to create cached file: %v", err)
-	}
-
-	// Mock CDN returns fresh content
-	mockCDN := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("fresh from cdn"))
-	}))
-	defer mockCDN.Close()
-
+	// No template engine in cache
 	srv, err := New(Config{
 		CacheDir:   cacheDir,
-		CDNBaseURL: mockCDN.URL + "/",
+		CDNBaseURL: "https://example.com/",
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js", nil)
+	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	// For remote-first files, should get fresh content from CDN, not cache
-	if string(body) != "fresh from cdn" {
-		t.Errorf("body = %q, want %q (should prefer remote over cache)", string(body), "fresh from cdn")
+	// Should return 404 when not found locally
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }
 
