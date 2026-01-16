@@ -490,7 +490,7 @@ func filterDocsByConstraintsWithContext(docs []config.Document, constraintCtx *s
 		}
 
 		// Evaluate constraints
-		match, err := spec.EvaluateConstraintsWithContext(doc.Constraints, constraintCtx, doc.Kind, doc.Name)
+		match, err := spec.EvaluateParsedConstraintsWithContext(doc.Constraints, constraintCtx, doc.Kind, doc.Name)
 		if err != nil {
 			return nil, err
 		}

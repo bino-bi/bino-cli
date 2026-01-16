@@ -38,8 +38,8 @@ var renderableChildKinds = map[string]bool{
 type layoutChildSpec struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
-		Name        string   `json:"name"`
-		Constraints []string `json:"constraints"`
+		Name        string `json:"name"`
+		Constraints []any  `json:"constraints"` // Supports string or object format
 	} `json:"metadata"`
 	Ref      string          `json:"ref,omitempty"`
 	Optional bool            `json:"optional,omitempty"`
@@ -389,7 +389,11 @@ func countEffectiveChildren(
 
 		// Check constraints
 		if len(child.Metadata.Constraints) > 0 {
-			match, err := spec.EvaluateConstraints(child.Metadata.Constraints, ctx)
+			constraints, parseErr := spec.ParseMixedConstraints(child.Metadata.Constraints)
+			if parseErr != nil {
+				continue // Invalid constraint, skip this child
+			}
+			match, err := spec.EvaluateParsedConstraints(constraints, ctx)
 			if err != nil || !match {
 				continue // Constraint doesn't match, skip this child
 			}

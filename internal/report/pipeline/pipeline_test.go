@@ -8,6 +8,24 @@ import (
 	"bino.bi/bino/internal/report/spec"
 )
 
+// parseConstraints is a test helper that parses constraint strings.
+// It panics on parse errors since test data should always be valid.
+func parseConstraints(t *testing.T, strs ...string) []*spec.Constraint {
+	t.Helper()
+	if len(strs) == 0 {
+		return nil
+	}
+	constraints := make([]*spec.Constraint, 0, len(strs))
+	for _, s := range strs {
+		c, err := spec.ParseConstraint(s)
+		if err != nil {
+			t.Fatalf("failed to parse constraint %q: %v", s, err)
+		}
+		constraints = append(constraints, c)
+	}
+	return constraints
+}
+
 func TestFilterDocsByConstraints(t *testing.T) {
 	// Create an artefact document
 	artefactRaw, _ := json.Marshal(map[string]any{
@@ -29,7 +47,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 	t.Run("no constraints includes all", func(t *testing.T) {
 		docs := []config.Document{
 			{Kind: "Asset", Name: "logo", Constraints: nil},
-			{Kind: "DataSource", Name: "data", Constraints: []string{}},
+			{Kind: "DataSource", Name: "data", Constraints: nil},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
@@ -43,8 +61,8 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("mode constraint filters by build", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "Asset", Name: "logo_preview", Constraints: []string{"mode==preview"}},
-			{Kind: "Asset", Name: "logo_build", Constraints: []string{"mode==build"}},
+			{Kind: "Asset", Name: "logo_preview", Constraints: parseConstraints(t, "mode==preview")},
+			{Kind: "Asset", Name: "logo_build", Constraints: parseConstraints(t, "mode==build")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
@@ -61,8 +79,8 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("mode constraint filters by preview", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "Asset", Name: "logo_preview", Constraints: []string{"mode==preview"}},
-			{Kind: "Asset", Name: "logo_build", Constraints: []string{"mode==build"}},
+			{Kind: "Asset", Name: "logo_preview", Constraints: parseConstraints(t, "mode==preview")},
+			{Kind: "Asset", Name: "logo_build", Constraints: parseConstraints(t, "mode==build")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModePreview)
@@ -79,8 +97,8 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("labels constraint matches", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "Asset", Name: "logo_prod", Constraints: []string{"labels.env==prod"}},
-			{Kind: "Asset", Name: "logo_dev", Constraints: []string{"labels.env==dev"}},
+			{Kind: "Asset", Name: "logo_prod", Constraints: parseConstraints(t, "labels.env==prod")},
+			{Kind: "Asset", Name: "logo_dev", Constraints: parseConstraints(t, "labels.env==dev")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
@@ -97,8 +115,8 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("spec constraint matches", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "LayoutPage", Name: "page_a4", Constraints: []string{"spec.format==a4"}},
-			{Kind: "LayoutPage", Name: "page_xga", Constraints: []string{"spec.format==xga"}},
+			{Kind: "LayoutPage", Name: "page_a4", Constraints: parseConstraints(t, "spec.format==a4")},
+			{Kind: "LayoutPage", Name: "page_xga", Constraints: parseConstraints(t, "spec.format==xga")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
@@ -115,7 +133,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("ReportArtefact never filtered", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "ReportArtefact", Name: "artefact1", Constraints: []string{"mode==preview"}},
+			{Kind: "ReportArtefact", Name: "artefact1", Constraints: parseConstraints(t, "mode==preview")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
@@ -129,8 +147,8 @@ func TestFilterDocsByConstraints(t *testing.T) {
 
 	t.Run("multiple constraints all must match", func(t *testing.T) {
 		docs := []config.Document{
-			{Kind: "Asset", Name: "logo1", Constraints: []string{"mode==build", "labels.env==prod"}},
-			{Kind: "Asset", Name: "logo2", Constraints: []string{"mode==preview", "labels.env==prod"}},
+			{Kind: "Asset", Name: "logo1", Constraints: parseConstraints(t, "mode==build", "labels.env==prod")},
+			{Kind: "Asset", Name: "logo2", Constraints: parseConstraints(t, "mode==preview", "labels.env==prod")},
 		}
 
 		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)

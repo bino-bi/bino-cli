@@ -4,10 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"bino.bi/bino/internal/report/spec"
 )
 
+// parseConstraints is a test helper that parses constraint strings.
+func parseConstraints(t *testing.T, strs ...string) []*spec.Constraint {
+	t.Helper()
+	if len(strs) == 0 {
+		return nil
+	}
+	constraints := make([]*spec.Constraint, 0, len(strs))
+	for _, s := range strs {
+		c, err := spec.ParseConstraint(s)
+		if err != nil {
+			t.Fatalf("failed to parse constraint %q: %v", s, err)
+		}
+		constraints = append(constraints, c)
+	}
+	return constraints
+}
+
 // Helper to create a raw JSON document.
-func rawDoc(kind, name string, spec map[string]any) json.RawMessage {
+func rawDoc(kind, name string, specData map[string]any) json.RawMessage {
 	doc := map[string]any{
 		"apiVersion": "bino.bi/v1",
 		"kind":       kind,
@@ -15,15 +34,15 @@ func rawDoc(kind, name string, spec map[string]any) json.RawMessage {
 			"name": name,
 		},
 	}
-	if spec != nil {
-		doc["spec"] = spec
+	if specData != nil {
+		doc["spec"] = specData
 	}
 	data, _ := json.Marshal(doc)
 	return data
 }
 
 // Helper to create a raw JSON document with labels and constraints.
-func rawDocWithMeta(kind, name string, labels map[string]string, constraints []string, spec map[string]any) json.RawMessage {
+func rawDocWithMeta(kind, name string, labels map[string]string, constraints []string, specData map[string]any) json.RawMessage {
 	metadata := map[string]any{
 		"name": name,
 	}
@@ -38,8 +57,8 @@ func rawDocWithMeta(kind, name string, labels map[string]string, constraints []s
 		"kind":       kind,
 		"metadata":   metadata,
 	}
-	if spec != nil {
-		doc["spec"] = spec
+	if specData != nil {
+		doc["spec"] = specData
 	}
 	data, _ := json.Marshal(doc)
 	return data
@@ -97,7 +116,7 @@ func TestArtefactLayoutPageRequired_NoMatchingPage(t *testing.T) {
 			Position:    1,
 			Kind:        "LayoutPage",
 			Name:        "page1",
-			Constraints: []string{"labels.env==dev"}, // Won't match prod
+			Constraints: parseConstraints(t, "labels.env==dev"), // Won't match prod
 			Raw:         rawDoc("LayoutPage", "page1", nil),
 		},
 	}
@@ -127,7 +146,7 @@ func TestArtefactLayoutPageRequired_HasMatchingPage(t *testing.T) {
 			Position:    1,
 			Kind:        "LayoutPage",
 			Name:        "page1",
-			Constraints: []string{"labels.env==prod"},
+			Constraints: parseConstraints(t, "labels.env==prod"),
 			Raw:         rawDoc("LayoutPage", "page1", map[string]any{"pageFormat": "xga"}),
 		},
 	}
@@ -205,7 +224,7 @@ func TestArtefactLayoutPageRequired_ModeConstraintEitherPasses(t *testing.T) {
 			Position:    1,
 			Kind:        "LayoutPage",
 			Name:        "page1",
-			Constraints: []string{"mode==preview"}, // Only matches preview mode
+			Constraints: parseConstraints(t, "mode==preview"), // Only matches preview mode
 			Raw:         rawDoc("LayoutPage", "page1", nil),
 		},
 	}

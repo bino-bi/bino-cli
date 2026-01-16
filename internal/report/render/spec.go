@@ -125,8 +125,8 @@ type layoutChild struct {
 
 // layoutChildMeta holds metadata for inline layout children.
 type layoutChildMeta struct {
-	Name        string   `json:"name"`
-	Constraints []string `json:"constraints"`
+	Name        string `json:"name"`
+	Constraints []any  `json:"constraints"` // Supports string or object format
 }
 
 // textSpec defines the structure for Text components.

@@ -266,10 +266,42 @@
         "constraints": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=)\\s*.+$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=|in|not-in)\\s*.+$",
+                "description": "String format constraint: 'field operator value', e.g., 'mode==preview', 'labels.env in [dev,staging]'"
+              },
+              {
+                "type": "object",
+                "required": ["field", "operator", "value"],
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)$",
+                    "description": "Field path to evaluate: 'mode', 'labels.<key>', or 'spec.<field>'",
+                    "examples": ["mode", "labels.env", "labels.region", "spec.format", "spec.output.format"]
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": ["==", "!=", "in", "not-in"],
+                    "description": "Comparison operator: '==' (equals), '!=' (not equals), 'in' (value in array), 'not-in' (value not in array)"
+                  },
+                  "value": {
+                    "oneOf": [
+                      { "type": "string" },
+                      { "type": "boolean" },
+                      { "type": "array", "items": { "type": "string" } }
+                    ],
+                    "description": "Value to compare: string or boolean for ==, !=; string array for in, not-in"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Structured format constraint with field, operator, and value"
+              }
+            ]
           },
-          "description": "Constraint expressions that determine if this document is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'. Not applicable to ReportArtefact documents."
+          "description": "Constraint expressions that determine if this document is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Supports both string format ('mode==preview', 'labels.env in [dev,staging]') and structured format ({field: 'mode', operator: '==', value: 'preview'}). Not applicable to ReportArtefact documents."
         }
       }
     },
@@ -1642,10 +1674,42 @@
         "constraints": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=)\\s*.+$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)\\s*(==|!=|in|not-in)\\s*.+$",
+                "description": "String format constraint: 'field operator value', e.g., 'mode==preview', 'labels.env in [dev,staging]'"
+              },
+              {
+                "type": "object",
+                "required": ["field", "operator", "value"],
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "pattern": "^(spec\\.[a-zA-Z0-9_.]+|labels\\.[a-zA-Z0-9_.-]+|mode)$",
+                    "description": "Field path to evaluate: 'mode', 'labels.<key>', or 'spec.<field>'",
+                    "examples": ["mode", "labels.env", "labels.region", "spec.format", "spec.output.format"]
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": ["==", "!=", "in", "not-in"],
+                    "description": "Comparison operator: '==' (equals), '!=' (not equals), 'in' (value in array), 'not-in' (value not in array)"
+                  },
+                  "value": {
+                    "oneOf": [
+                      { "type": "string" },
+                      { "type": "boolean" },
+                      { "type": "array", "items": { "type": "string" } }
+                    ],
+                    "description": "Value to compare: string or boolean for ==, !=; string array for in, not-in"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Structured format constraint with field, operator, and value"
+              }
+            ]
           },
-          "description": "Constraint expressions that determine if this child is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Syntax: 'spec.<field>==<value>', 'labels.<key>!=<value>', or 'mode==preview'."
+          "description": "Constraint expressions that determine if this child is included for a specific ReportArtefact. Each constraint is evaluated against the target artefact's labels, spec, and the current mode (build/preview/serve). All constraints must match for inclusion. Supports both string format ('mode==preview', 'labels.env in [dev,staging]') and structured format ({field: 'mode', operator: '==', value: 'preview'})."
         }
       }
     },

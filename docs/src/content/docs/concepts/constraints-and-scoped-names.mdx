@@ -33,32 +33,76 @@ spec:
 
 ## Constraint syntax
 
-Each constraint is a string with the format:
+Constraints can be written in two equivalent formats. Both are fully supported and maintained.
 
+### String format (concise)
+
+Quick and readable for simple constraints:
+
+```yaml
+metadata:
+  constraints:
+    - mode==preview
+    - labels.env==prod
+    - spec.format in [pdf,png]
 ```
-<left> <operator> <value>
+
+Each constraint is a string with the format: `<field> <operator> <value>`
+
+### Structured format (IDE-friendly)
+
+Better IDE support with autocomplete and validation:
+
+```yaml
+metadata:
+  constraints:
+    - field: mode
+      operator: "=="
+      value: preview
+    - field: labels.env
+      operator: in
+      value: [dev, staging, prod]
 ```
 
-### Left operand
+### Mixed format
 
-The left side determines what is being checked:
+You can mix both formats in the same document:
 
-| Prefix         | Description                        | Example            |
-| -------------- | ---------------------------------- | ------------------ |
-| `mode`         | Current execution mode             | `mode==preview`    |
-| `labels.<key>` | Artefact's `metadata.labels.<key>` | `labels.env==prod` |
-| `spec.<field>` | Artefact's `spec.<field>`          | `spec.format==a4`  |
+```yaml
+metadata:
+  constraints:
+    - mode==preview                    # String format (quick)
+    - field: spec.output.format        # Structured format (IDE autocomplete)
+      operator: in
+      value: [pdf, png]
+```
 
-### Operators
+Both formats have identical evaluation behavior and performance.
 
-| Operator | Description                |
-| -------- | -------------------------- |
-| `==`     | Equals (string comparison) |
-| `!=`     | Not equals                 |
+## Field reference
 
-### Value
+The left side (or `field` property) determines what is being checked:
 
-The right side is a literal value. Boolean values use `true` or `false` as strings.
+| Field Path     | Description                        | Example Values           |
+| -------------- | ---------------------------------- | ------------------------ |
+| `mode`         | Current execution mode             | `build`, `preview`, `serve` |
+| `labels.<key>` | Artefact's `metadata.labels.<key>` | Any string value         |
+| `spec.<field>` | Artefact's `spec.<field>`          | Format, orientation, etc. |
+
+## Operators
+
+| Operator | Description        | Value Type    | String Example              | Structured Example                                      |
+| -------- | ------------------ | ------------- | --------------------------- | ------------------------------------------------------- |
+| `==`     | Equals             | string, bool  | `labels.env==prod`          | `{field: "labels.env", operator: "==", value: "prod"}`  |
+| `!=`     | Not equals         | string, bool  | `mode!=preview`             | `{field: "mode", operator: "!=", value: "preview"}`     |
+| `in`     | Value in array     | array         | `labels.env in [dev,prod]`  | `{field: "labels.env", operator: "in", value: ["dev", "prod"]}` |
+| `not-in` | Value not in array | array         | `mode not-in [serve]`       | `{field: "mode", operator: "not-in", value: ["serve"]}` |
+
+### Value types
+
+- **String**: For `==` and `!=` operators
+- **Boolean**: Use `true` or `false` (in string format, write them without quotes)
+- **Array**: For `in` and `not-in` operators (in string format: `[value1,value2]`)
 
 ## Constraint context
 
@@ -130,12 +174,32 @@ This page is included only when:
 Show debug information or work-in-progress pages only during development:
 
 ```yaml
+# String format
 apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
   name: dataDebugPage
   constraints:
     - mode==preview
+spec:
+  children:
+    - kind: Table
+      spec:
+        dataset: raw_data
+```
+
+Or using structured format:
+
+```yaml
+# Structured format
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dataDebugPage
+  constraints:
+    - field: mode
+      operator: "=="
+      value: preview
 spec:
   children:
     - kind: Table
@@ -174,6 +238,55 @@ spec:
     # ...
 ```
 
+### Multiple environments with `in` operator
+
+Match multiple environments at once:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: staging_data
+  constraints:
+    - labels.env in [dev,staging,qa]   # Matches any non-production environment
+spec:
+  type: postgres_query
+  connection:
+    host: staging-db.example.com
+```
+
+Or using structured format:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: staging_data
+  constraints:
+    - field: labels.env
+      operator: in
+      value: [dev, staging, qa]
+spec:
+  type: postgres_query
+  connection:
+    host: staging-db.example.com
+```
+
+### Exclude specific modes with `not-in`
+
+Include a document in all modes except specific ones:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: mainPage
+  constraints:
+    - mode not-in [serve]   # Included in build and preview, but not serve
+spec:
+  # ...
+```
+
 ### Format-specific layouts
 
 Create different layouts for different output formats:
@@ -198,6 +311,19 @@ metadata:
 spec:
   pageFormat: xga
   # Screen-optimized layout
+```
+
+Or using `in` for multiple formats:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: printPage
+  constraints:
+    - spec.format in [a4,letter,legal]   # Any print format
+spec:
+  # Print-optimized layout
 ```
 
 ### Inline child constraints
@@ -244,7 +370,7 @@ spec:
         dataset: summary_data
 ```
 
-Inline child constraints support the same syntax as document-level constraints:
+Inline child constraints support the same syntax as document-level constraints, including structured format:
 
 ```yaml
 children:
@@ -252,7 +378,9 @@ children:
     metadata:
       name: europeChart
       constraints:
-        - labels.region==europe
+        - field: labels.region
+          operator: in
+          value: [europe, emea]
     spec:
       dataset: regional_data
 ```
@@ -260,6 +388,17 @@ children:
 :::note
 The `metadata` block on inline children is optional. If omitted, the child has no constraints and is always included.
 :::
+
+## Choosing a format
+
+| Use Case                          | Recommended Format | Why                                        |
+| --------------------------------- | ------------------ | ------------------------------------------ |
+| Simple equality check             | String             | More concise: `labels.env==prod`           |
+| Multiple values (`in` operator)   | Either             | Both work well; structured has clearer array syntax |
+| Want IDE autocomplete             | Structured         | JSON Schema provides field/operator suggestions |
+| Quick prototyping                 | String             | Faster to type                             |
+| Team prefers YAML validation      | Structured         | Better schema enforcement                  |
+| Mixed team (devs + analysts)      | Both               | Let each choose their preference           |
 
 ## Name scoping
 
@@ -333,7 +472,7 @@ Constraints are validated at build/preview/serve time. Errors are reported immed
 ```
 constraint error in DataSet "sales_ds": missing operator
   constraint: labels.env prod
-  hint: use '==' or '!=' to compare values, e.g., 'mode==preview'
+  hint: use '==', '!=', 'in', or 'not-in' to compare values, e.g., 'mode==preview'
 ```
 
 ### Missing label
@@ -352,17 +491,26 @@ constraint error in DataSource "sales": spec field "unknown" not found
   hint: check that the spec field exists on the ReportArtefact
 ```
 
+### Invalid array format (string format)
+
+```
+constraint error in LayoutPage "page1": expected array format [value1,value2,...], got "pdf"
+  constraint: spec.format in pdf
+  hint: use array syntax like [value1,value2] for 'in' and 'not-in' operators
+```
+
 ## Limitations
 
 - `ReportArtefact` documents cannot have constraints (they define the context, not consume it)
 - Only top-level and nested `spec` fields are accessible; arrays are not traversable
-- Constraint expressions support only string comparison (`==`, `!=`)
 - All constraints in a list must pass (AND logic); OR logic requires multiple documents
 
 ## Best practices
 
 1. **Use labels for logical groupings**: Define labels like `env`, `region`, or `variant` on artefacts rather than relying solely on spec fields
 2. **Keep constraints simple**: Complex filtering logic is hard to debug; prefer clear, single-purpose constraints
-3. **Document your constraints**: Add comments explaining why a constraint exists, especially for non-obvious cases
-4. **Test with preview first**: Use `bino preview` to verify constraint behavior before building
-5. **Avoid duplicate names when possible**: Even though scoped names are supported, unique names reduce confusion
+3. **Use `in` for multiple values**: Instead of multiple documents, use `labels.env in [dev,staging]` to match multiple values
+4. **Document your constraints**: Add comments explaining why a constraint exists, especially for non-obvious cases
+5. **Test with preview first**: Use `bino preview` to verify constraint behavior before building
+6. **Avoid duplicate names when possible**: Even though scoped names are supported, unique names reduce confusion
+7. **Choose format consistently**: Pick string or structured format for your project and use it consistently

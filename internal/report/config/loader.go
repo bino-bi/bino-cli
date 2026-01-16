@@ -197,13 +197,17 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			if !strings.HasPrefix(header.APIVersion, "bino.bi/") {
 				continue
 			}
+			constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
+			if err != nil {
+				continue // Skip documents with invalid constraints in lenient mode
+			}
 			docs = append(docs, Document{
 				File:           path,
 				Position:       index,
 				Kind:           header.Kind,
 				Name:           header.Metadata.Name,
 				Labels:         header.Metadata.Labels,
-				Constraints:    header.Metadata.Constraints,
+				Constraints:    constraints,
 				Raw:            rawJSON,
 				MissingEnvVars: missingVars,
 			})
@@ -219,13 +223,18 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			return nil, fmt.Errorf("header %s document %d: %w", path, index+1, err)
 		}
 
+		constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
+		if err != nil {
+			return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index+1, err)
+		}
+
 		docs = append(docs, Document{
 			File:           path,
 			Position:       index,
 			Kind:           header.Kind,
 			Name:           header.Metadata.Name,
 			Labels:         header.Metadata.Labels,
-			Constraints:    header.Metadata.Constraints,
+			Constraints:    constraints,
 			Raw:            rawJSON,
 			MissingEnvVars: missingVars,
 		})
