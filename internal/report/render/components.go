@@ -19,23 +19,41 @@ type renderCtx struct {
 	ctx           context.Context
 	docs          []config.Document
 	constraintCtx *spec.ConstraintContext
-	// docIndex maps kind+name to the document for ref resolution.
+	// docIndex maps kind+name to the document for ref resolution (from filtered docs).
 	docIndex map[string]config.Document
+	// globalIndex maps kind+name to the document from the unfiltered set.
+	// Used to distinguish refs filtered by constraints from refs that don't exist at all.
+	globalIndex map[string]config.Document
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
-func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext) *renderCtx {
+// The allDocs parameter is the unfiltered document set used to distinguish constraint-filtered
+// refs from genuinely missing refs. If nil, docs is used (treating all missing refs as errors).
+func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext, allDocs []config.Document) *renderCtx {
 	rc := &renderCtx{
 		ctx:           ctx,
 		docs:          docs,
 		constraintCtx: constraintCtx,
 		docIndex:      make(map[string]config.Document, len(docs)),
+		globalIndex:   make(map[string]config.Document),
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
+		}
+	}
+	// Build globalIndex from allDocs (or fall back to docs if allDocs is nil)
+	globalDocs := allDocs
+	if globalDocs == nil {
+		globalDocs = docs
+	}
+	for _, doc := range globalDocs {
+		switch doc.Kind {
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+			key := doc.Kind + ":" + doc.Name
+			rc.globalIndex[key] = doc
 		}
 	}
 	return rc
@@ -345,7 +363,9 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
 // resolveChildSpec resolves a layout child's effective spec.
 // For inline children (no ref), it returns child.Spec directly.
 // For ref children, it looks up the referenced document and merges any spec overrides.
-// Returns nil if the ref is missing (skip with warning).
+// Returns nil without error if the ref is filtered by constraints (skip gracefully).
+// Returns nil without error if optional=true and ref is missing (skip gracefully).
+// Returns an error if a required ref is genuinely missing (not in unfiltered set).
 // Returns an error if the ref points to LayoutPage (disallowed) or has a kind mismatch.
 func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error) {
 	// Inline child: no ref, just return spec directly.
@@ -353,7 +373,9 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		return child.Spec, nil
 	}
 
-	// Ref child: look up the referenced document.
+	log := logx.FromContext(rc.ctx).Channel("render")
+
+	// Ref child: look up the referenced document in the filtered set.
 	key := child.Kind + ":" + child.Ref
 	refDoc, found := rc.docIndex[key]
 	if !found {
@@ -363,10 +385,24 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced", child.Ref)
 			}
 		}
-		// Missing ref: warn and skip.
-		log := logx.FromContext(rc.ctx).Channel("render")
-		log.Warnf("ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
-		return nil, nil
+
+		// Check if the ref exists in the global (unfiltered) set.
+		_, existsGlobally := rc.globalIndex[key]
+		if existsGlobally {
+			// Ref exists but was filtered by constraints - skip gracefully.
+			log.Infof("ref %q of kind %q filtered by constraints, skipping child", child.Ref, child.Kind)
+			return nil, nil
+		}
+
+		// Ref doesn't exist at all.
+		if child.Optional {
+			// Optional ref: skip gracefully.
+			log.Infof("optional ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
+			return nil, nil
+		}
+
+		// Required ref is genuinely missing - error.
+		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
 	}
 
 	// Extract the spec from the referenced document.

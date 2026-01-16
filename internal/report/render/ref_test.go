@@ -119,7 +119,7 @@ func TestRenderLayoutChildWithRefAndOverride(t *testing.T) {
 func TestRenderLayoutChildWithMissingRef(t *testing.T) {
 	ctx := context.Background()
 
-	// LayoutPage that references a non-existent ChartTime.
+	// LayoutPage that references a non-existent ChartTime (required ref).
 	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
 		"kind": "LayoutPage",
@@ -135,16 +135,92 @@ func TestRenderLayoutChildWithMissingRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutPageDoc}
+	_, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
+	if err == nil {
+		t.Fatalf("GenerateHTMLFromDocuments should error on missing required ref")
+	}
+	if !strings.Contains(err.Error(), "required reference") {
+		t.Fatalf("error message should mention 'required reference', got: %v", err)
+	}
+}
+
+func TestRenderLayoutChildWithOptionalMissingRef(t *testing.T) {
+	ctx := context.Background()
+
+	// LayoutPage that references a non-existent ChartTime with optional: true.
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "nonExistentChart",
+					"optional": true
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{layoutPageDoc}
 	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", RenderModePreview, "v1.0.0")
 	if err != nil {
-		t.Fatalf("GenerateHTMLFromDocuments should not error on missing ref: %v", err)
+		t.Fatalf("GenerateHTMLFromDocuments should not error on optional missing ref: %v", err)
 	}
 
 	html := string(result.HTML)
 
-	// The missing ref child should be skipped, so no chart element.
+	// The missing optional ref child should be skipped, so no chart element.
 	if strings.Contains(html, `<bn-chart-time`) {
-		t.Fatalf("expected no bn-chart-time element when ref is missing, got:\n%s", html)
+		t.Fatalf("expected no bn-chart-time element when optional ref is missing, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutChildWithConstraintFilteredRef(t *testing.T) {
+	ctx := context.Background()
+
+	// ChartTime document that exists but will be "filtered out" by simulating allDocs vs docs difference.
+	chartTimeDoc := makeTestDoc("ChartTime", "constraintFilteredChart", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "ChartTime",
+		"metadata": {"name": "constraintFilteredChart"},
+		"spec": {
+			"dataset": "sales_data",
+			"chartTitle": "Filtered Chart"
+		}
+	}`))
+
+	// LayoutPage that references the ChartTime.
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "constraintFilteredChart"
+				}
+			]
+		}
+	}`))
+
+	// Simulate constraint filtering: allDocs contains the chart, but docs (filtered) does not.
+	allDocs := []config.Document{chartTimeDoc, layoutPageDoc}
+	docs := []config.Document{layoutPageDoc} // Chart is filtered out
+
+	// Use the full function to pass allDocs
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, "de", "", "", RenderModePreview, nil, nil, "v1.0.0", allDocs)
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocumentsWithDatasets should not error on constraint-filtered ref: %v", err)
+	}
+
+	html := string(result.HTML)
+
+	// The constraint-filtered ref child should be skipped gracefully, so no chart element.
+	if strings.Contains(html, `<bn-chart-time`) {
+		t.Fatalf("expected no bn-chart-time element when ref is constraint-filtered, got:\n%s", html)
 	}
 }
 

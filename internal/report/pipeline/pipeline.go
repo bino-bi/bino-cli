@@ -171,6 +171,11 @@ type RenderOptions struct {
 	// ConstraintContext provides the context for evaluating inline child constraints.
 	// May be nil if no constraint filtering is needed for inline children.
 	ConstraintContext *spec.ConstraintContext
+	// AllDocs is the complete unfiltered document set. Used to distinguish between
+	// refs that don't exist vs refs that were filtered by constraints. When provided,
+	// refs that exist in AllDocs but not in the filtered docs are silently skipped.
+	// Refs that don't exist in AllDocs at all will error unless marked optional.
+	AllDocs []config.Document
 }
 
 // RenderResult captures the outcome of rendering HTML from documents.
@@ -240,7 +245,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs)
 
 	// End render step
 	if opts.ExecutionPlan != nil {
@@ -305,6 +310,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		EmbedOptions:      opts.EmbedOptions,
 		ExecutionPlan:     opts.ExecutionPlan,
 		ConstraintContext: constraintCtx,
+		AllDocs:           docs,
 	})
 }
 
@@ -340,6 +346,7 @@ func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []co
 		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
+		AllDocs:           docs,
 	})
 }
 
@@ -370,7 +377,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
@@ -434,6 +441,7 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
+		AllDocs:           docs,
 	})
 }
 

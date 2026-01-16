@@ -115,10 +115,12 @@ type layoutSpec struct {
 // It can be either an inline child (with spec) or a reference to a standalone document (with ref).
 // When ref is set, the referenced document's spec is used as the base,
 // and any spec fields provided here act as overrides.
+// When optional is true and the ref is missing, the child is skipped gracefully instead of erroring.
 type layoutChild struct {
-	Kind string          `json:"kind"`
-	Ref  string          `json:"ref,omitempty"`
-	Spec json.RawMessage `json:"spec,omitempty"`
+	Kind     string          `json:"kind"`
+	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 
 // parseDataSourceSpec extracts the spec from a DataSource manifest.

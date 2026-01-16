@@ -130,3 +130,18 @@ spec:
 ```
 
 See the [LayoutPage reference](/reference/layout-page/#referencing-standalone-components) for more details on ref syntax and override behavior.
+
+### Optional references
+
+LayoutCard children support the same `optional` field as LayoutPage children. Use it for references that may legitimately be missing:
+
+```yaml
+children:
+  - kind: ChartTime
+    ref: mainChart           # Required: fails if missing
+  - kind: Text
+    ref: debugInfo
+    optional: true           # Optional: skips gracefully if missing
+```
+
+See the [LayoutPage optional references](/reference/layout-page/#optional-references) section for details on when to use this field.
