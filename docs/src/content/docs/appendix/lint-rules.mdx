@@ -6,18 +6,19 @@ description: Reference of all available lint rules for bino report validation.
 This appendix lists all lint rules that `bino lint` and `bino build` apply to your report manifests.
 Lint rules check the **content** of your documents (semantic/business rules), while schema validation checks the **structure**.
 
-All lint findings are currently treated as **warnings** and do not block builds.
+Most lint findings are treated as **warnings** and do not block builds. However, some rules produce **errors** that will cause the build to fail (marked with severity below).
 
 ## Rules
 
-| ID                             | Name                         | Description                                                                                    |
-| ------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `report-artefact-required`     | Report Artefact Required     | At least one ReportArtefact document must be defined.                                          |
-| `artefact-layoutpage-required` | Artefact LayoutPage Required | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
-| `text-content-required`        | Text Content Required        | Text components must have a non-empty `spec.value` field.                                      |
-| `dataset-required`             | Dataset Required             | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
-| `page-layout-slots-used`       | Page Layout Slots Used       | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
-| `card-layout-slots-used`       | Card Layout Slots Used       | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
+| ID                             | Name                         | Severity | Description                                                                                    |
+| ------------------------------ | ---------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `report-artefact-required`     | Report Artefact Required     | Warning  | At least one ReportArtefact document must be defined.                                          |
+| `artefact-layoutpage-required` | Artefact LayoutPage Required | Warning  | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
+| `text-content-required`        | Text Content Required        | Warning  | Text components must have a non-empty `spec.value` field.                                      |
+| `dataset-required`             | Dataset Required             | Warning  | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
+| `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
+| `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
+| `card-layout-slots-used`       | Card Layout Slots Used       | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
 
 ## Rule details
 
@@ -110,12 +111,56 @@ spec:
     - costs
 ```
 
+### missing-required-reference
+
+Child references (`ref`) in LayoutPage and LayoutCard must point to documents that exist. This rule catches typos, missing files, and broken references early.
+
+**Severity:** Error (blocks build)
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: 2x2
+  children:
+    - kind: ChartTime
+      ref: revnue_chart  # Typo! Should be "revenue_chart"
+```
+
+**Error message:**
+
+```
+required reference "revnue_chart" of kind "ChartTime" not found (use optional: true to allow missing refs)
+```
+
+**Fixes:**
+
+1. **Correct the typo** — Fix the reference name to match the target document's `metadata.name`.
+
+2. **Create the missing document** — Add the referenced manifest to your project.
+
+3. **Mark as optional** — If the reference is legitimately optional (e.g., debug-only component), add `optional: true`:
+
+```yaml
+children:
+  - kind: ChartTime
+    ref: debug_chart
+    optional: true  # Won't error if missing
+```
+
+**Note:** References that exist but are filtered out by constraints (e.g., `mode == "preview"`) do **not** trigger this error. Only genuinely missing references cause failures.
+
+See also: [Optional references](/reference/layout-page/#optional-references)
+
 ### page-layout-slots-used
 
 Each `LayoutPage` must have exactly the number of children that match its `pageLayout` slot count. This rule is evaluated **per artefact**, counting only children that:
 
 1. **Pass constraints** — Children with `metadata.constraints` must match the artefact's context.
-2. **Have valid refs** — Children with `ref` must point to an existing document. Missing refs emit a warning and don't count as slots.
+2. **Have valid refs** — Children with `ref` must point to an existing document (or be marked `optional: true`). Missing required refs trigger the `missing-required-reference` error. Optional refs that are missing don't count as slots.
 3. **Are renderable** — Children must have either a `ref` or inline `spec`.
 
 **Slot counts for predefined layouts:**

@@ -317,13 +317,15 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 // resolveChildSpec resolves a layout child's effective spec.
 // For inline children (no ref), it returns child.Spec directly.
 // For ref children, it looks up the referenced document and merges any spec overrides.
-// Returns (nil, "", nil) if the ref is missing (skip with warning).
-// Returns an error if the ref points to LayoutPage (disallowed) or has a kind mismatch.
+// Returns (nil, "", nil) if optional=true and ref is missing (skip gracefully).
+// Returns an error if a required ref is missing or points to LayoutPage (disallowed).
 func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.RawMessage, string, error) {
 	// Inline child: no ref, just return spec directly.
 	if child.Ref == "" {
 		return child.Spec, "", nil
 	}
+
+	log := logx.FromContext(b.ctx).Channel("graph")
 
 	// Ref child: look up the referenced document.
 	key := child.Kind + ":" + child.Ref
@@ -334,10 +336,16 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced",
 				parentName, child.Ref, lpDoc.Name)
 		}
-		// Missing ref: warn and skip.
-		log := logx.FromContext(b.ctx).Channel("graph")
-		log.Warnf("layout child in %q: ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
-		return nil, "", nil
+
+		// Ref not found.
+		if child.Optional {
+			// Optional ref: skip gracefully.
+			log.Infof("layout child in %q: optional ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
+			return nil, "", nil
+		}
+
+		// Required ref is missing - error.
+		return nil, "", fmt.Errorf("layout child in %q: required reference %q of kind %q not found (use optional: true to allow missing refs)", parentName, child.Ref, child.Kind)
 	}
 
 	// Extract the spec from the referenced document.
