@@ -56,9 +56,74 @@ type ExecuteOptions struct {
 
 // dataSetSpec mirrors the new minimal DataSet spec structure.
 type dataSetSpec struct {
-	Query        string   `json:"query"`
-	Prql         string   `json:"prql"`
-	Dependencies []string `json:"dependencies"`
+	Query        queryField `json:"query"`
+	Prql         queryField `json:"prql"`
+	Dependencies []string   `json:"dependencies"`
+}
+
+// queryField represents a query that can be either an inline string or a file reference.
+// It supports both formats:
+//   - Inline: "SELECT * FROM table"
+//   - File reference: { "$file": "./queries/sales.sql" }
+type queryField struct {
+	Inline string // Inline query string
+	File   string // Path to external file (from $file)
+}
+
+// UnmarshalJSON implements custom unmarshaling for queryField.
+// It handles both string values and object values with $file key.
+func (q *queryField) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		q.Inline = str
+		return nil
+	}
+
+	// Try to unmarshal as an object with $file
+	var obj struct {
+		File string `json:"$file"`
+	}
+	if err := json.Unmarshal(data, &obj); err == nil {
+		q.File = obj.File
+		return nil
+	}
+
+	return fmt.Errorf("query must be a string or an object with $file key")
+}
+
+// IsEmpty returns true if the query field has no value.
+func (q queryField) IsEmpty() bool {
+	return q.Inline == "" && q.File == ""
+}
+
+// HasFile returns true if the query references an external file.
+func (q queryField) HasFile() bool {
+	return q.File != ""
+}
+
+// ResolveQuery resolves the query content, loading from file if necessary.
+// The baseDir parameter is used to resolve relative file paths.
+func (q queryField) ResolveQuery(baseDir string) (string, error) {
+	if q.Inline != "" {
+		return q.Inline, nil
+	}
+	if q.File == "" {
+		return "", nil
+	}
+
+	// Resolve the file path relative to the manifest
+	filePath := q.File
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(baseDir, filePath)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read query file %s: %w", q.File, err)
+	}
+
+	return string(content), nil
 }
 
 // Execute evaluates all DataSet documents, using cached results when available.
@@ -185,7 +250,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 	for result := range resultCh {
 		warnings = append(warnings, result.warnings...)
 
-		if result.spec.Query == "" && result.spec.Prql == "" {
+		if result.spec.Query.IsEmpty() && result.spec.Prql.IsEmpty() {
 			// No spec parsed (error case)
 			continue
 		}
@@ -243,12 +308,46 @@ func computeDigest(data []byte) string {
 // computeDigestWithDeps computes a cache key that includes both the dataset
 // definition and the content hashes of all dependent datasource files.
 // This ensures the cache is invalidated when source data files change.
+// It also includes hashes of external query files referenced via $file.
 func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceIndex map[string]config.Document) (string, []Warning) {
 	var warnings []Warning
 
 	h := sha256.New()
 	// Include dataset definition in hash
 	h.Write(doc.Raw)
+
+	// Include external query file hashes if using $file reference
+	baseDir := filepath.Dir(doc.File)
+	if spec.Query.HasFile() {
+		queryFilePath := spec.Query.File
+		if !filepath.IsAbs(queryFilePath) {
+			queryFilePath = filepath.Join(baseDir, queryFilePath)
+		}
+		fileHash, err := filehash.HashFile(queryFilePath)
+		if err != nil {
+			warnings = append(warnings, Warning{
+				DataSet: doc.Name,
+				Message: fmt.Sprintf("hash query file %s: %v", spec.Query.File, err),
+			})
+		} else {
+			h.Write([]byte(fileHash))
+		}
+	}
+	if spec.Prql.HasFile() {
+		prqlFilePath := spec.Prql.File
+		if !filepath.IsAbs(prqlFilePath) {
+			prqlFilePath = filepath.Join(baseDir, prqlFilePath)
+		}
+		fileHash, err := filehash.HashFile(prqlFilePath)
+		if err != nil {
+			warnings = append(warnings, Warning{
+				DataSet: doc.Name,
+				Message: fmt.Sprintf("hash prql file %s: %v", spec.Prql.File, err),
+			})
+		} else {
+			h.Write([]byte(fileHash))
+		}
+	}
 
 	// Collect and hash dependent datasource files
 	var depHashes []string
@@ -341,7 +440,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 	// Load PRQL extension if any dataset uses PRQL queries
 	hasPrql := false
 	for _, job := range jobs {
-		if job.spec.Prql != "" {
+		if !job.spec.Prql.IsEmpty() {
 			hasPrql = true
 			break
 		}
@@ -383,9 +482,27 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Execute the query directly - DataSources are already registered as views
 	// Use PRQL if provided, otherwise use SQL query.
 	// PRQL is sent directly to DuckDB which compiles it via the prql extension.
-	query := job.spec.Query
-	if job.spec.Prql != "" {
-		query = job.spec.Prql
+	//
+	// Resolve query content from $file reference if needed.
+	baseDir := filepath.Dir(job.doc.File)
+
+	var query string
+	var err error
+
+	if !job.spec.Prql.IsEmpty() {
+		query, err = job.spec.Prql.ResolveQuery(baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolve prql: %w", err)
+		}
+	} else {
+		query, err = job.spec.Query.ResolveQuery(baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolve query: %w", err)
+		}
+	}
+
+	if query == "" {
+		return nil, fmt.Errorf("no query or prql specified")
 	}
 
 	// Log the query before execution
