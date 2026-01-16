@@ -71,6 +71,7 @@ func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) ([]by
 // hashDataSet computes the digest for a DataSet manifest.
 // Dependencies are resolved to DataSource nodes; missing ones are tracked
 // in attributes for warning output but do not cause errors.
+// External query files referenced via $file are included in the digest.
 func (b *builder) hashDataSet(doc config.Document, spec dataSetSpec) ([]byte, map[string]string, []string, error) {
 	attrs := make(map[string]string)
 	var depIDs []string
@@ -93,6 +94,33 @@ func (b *builder) hashDataSet(doc config.Document, spec dataSetSpec) ([]byte, ma
 
 	digest := sha256.New()
 	digest.Write(doc.Raw)
+
+	// Include external query file content in digest if using $file reference
+	baseDir := filepath.Dir(doc.File)
+	var queryFiles []string
+
+	if spec.Query.HasFile() {
+		queryFiles = append(queryFiles, spec.Query.File)
+	}
+	if spec.Prql.HasFile() {
+		queryFiles = append(queryFiles, spec.Prql.File)
+	}
+
+	for _, queryFile := range queryFiles {
+		fileDigest, err := b.digestPath(baseDir, queryFile)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("hash query file %s: %w", queryFile, err)
+		}
+		digest.Write([]byte(fileDigest.Hash))
+
+		// Track the query file in attributes for visibility
+		if attrs["queryFile"] == "" {
+			attrs["queryFile"] = queryFile
+		} else {
+			attrs["queryFile"] += ", " + queryFile
+		}
+	}
+
 	return digest.Sum(nil), attrs, depIDs, nil
 }
 
