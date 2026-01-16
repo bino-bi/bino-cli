@@ -114,10 +114,12 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 // It can be either an inline child (with spec) or a reference to a standalone document (with ref).
 // When ref is set, the referenced document's spec is used as the base,
 // and any spec fields provided here act as overrides.
+// When optional is true and the ref is missing, the child is skipped gracefully instead of erroring.
 type layoutChild struct {
 	Kind     string          `json:"kind"`
 	Metadata layoutChildMeta `json:"metadata"`
 	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
 	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 

@@ -41,8 +41,9 @@ type layoutChildSpec struct {
 		Name        string   `json:"name"`
 		Constraints []string `json:"constraints"`
 	} `json:"metadata"`
-	Ref  string          `json:"ref,omitempty"`
-	Spec json.RawMessage `json:"spec,omitempty"`
+	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 
 // layoutPageSpecForLint extracts layout-related fields from a LayoutPage.
@@ -370,7 +371,7 @@ var cardLayoutSlotsUsed = Rule{
 
 // countEffectiveChildren counts children that would actually render after
 // applying constraints and checking ref resolution.
-// It returns the count and any warnings for missing/invalid refs.
+// It returns the count and any errors/warnings for missing/invalid refs.
 func countEffectiveChildren(
 	children []layoutChildSpec,
 	ctx *spec.ConstraintContext,
@@ -421,13 +422,19 @@ func countEffectiveChildren(
 			}
 
 			if !found {
-				findings = append(findings, Finding{
-					RuleID:  "page-layout-slots-used",
-					Message: fmt.Sprintf("child ref %q not found; slot will be empty", refName),
-					File:    parentDoc.File,
-					DocIdx:  parentDoc.Position,
-					Path:    childPath + ".ref",
-				})
+				if child.Optional {
+					// Optional ref missing - this is OK, just don't count it
+					// No finding needed for optional refs that are gracefully skipped
+				} else {
+					// Required ref missing - this is an error
+					findings = append(findings, Finding{
+						RuleID:  "missing-required-reference",
+						Message: fmt.Sprintf("required reference %q not found (use optional: true to allow missing refs)", refName),
+						File:    parentDoc.File,
+						DocIdx:  parentDoc.Position,
+						Path:    childPath + ".ref",
+					})
+				}
 				// Don't count - missing ref doesn't consume a slot
 				continue
 			}

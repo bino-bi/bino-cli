@@ -167,4 +167,33 @@ You can reference documents of these kinds:
 
 ### Missing references
 
-If a referenced document is not found (e.g., filtered out by constraints or simply doesn't exist), the child is silently skipped and a warning is logged. This allows constraint-based filtering to work naturally with referenced components.
+By default, if a referenced document doesn't exist, the build **fails with an error**. This fail-fast behavior helps catch typos, missing files, and broken references early.
+
+```
+Error: required reference "revenue_chart" of kind "ChartTime" not found
+```
+
+**Constraint-filtered refs** are handled differently: if a referenced document exists but was filtered out by constraints for the current artefact, the child is silently skipped. This allows constraint-based filtering to work naturally with referenced components.
+
+### Optional references
+
+For references that may legitimately be missing (e.g., debug-only components, environment-specific features), use the `optional` field:
+
+```yaml
+children:
+  - kind: ChartTime
+    ref: salesTrendChart      # Required: fails if missing
+  - kind: Text
+    ref: debugPanel
+    optional: true            # Optional: skips gracefully if missing
+```
+
+When `optional: true` and the ref is missing, the child is skipped with an info log instead of failing the build.
+
+**When to use `optional: true`:**
+
+- Preview/debug-only components (filtered by mode constraints)
+- Environment-specific features (filtered by env labels)
+- Format-specific components (may not exist for all output formats)
+
+**Do not use `optional: true` to work around typos or missing files.** Always fix the actual issue instead.

@@ -119,7 +119,7 @@ func TestBuildLayoutChildWithRefAndOverride(t *testing.T) {
 func TestBuildLayoutChildWithMissingRef(t *testing.T) {
 	ctx := context.Background()
 
-	// LayoutPage that references a non-existent ChartTime.
+	// LayoutPage that references a non-existent ChartTime (required ref).
 	layoutPageDoc := makeDoc("LayoutPage", "mainPage", json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
 		"kind": "LayoutPage",
@@ -135,9 +135,38 @@ func TestBuildLayoutChildWithMissingRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutPageDoc}
+	_, err := Build(ctx, docs)
+	if err == nil {
+		t.Fatalf("Build should error on missing required ref")
+	}
+	if !contains(err.Error(), "required reference") {
+		t.Fatalf("error message should mention 'required reference', got: %v", err)
+	}
+}
+
+func TestBuildLayoutChildWithOptionalMissingRef(t *testing.T) {
+	ctx := context.Background()
+
+	// LayoutPage that references a non-existent ChartTime with optional: true.
+	layoutPageDoc := makeDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "nonExistentChart",
+					"optional": true
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{layoutPageDoc}
 	g, err := Build(ctx, docs)
 	if err != nil {
-		t.Fatalf("Build should not error on missing ref (skip with warning): %v", err)
+		t.Fatalf("Build should not error on optional missing ref: %v", err)
 	}
 
 	// Verify layout page node exists.
@@ -147,9 +176,9 @@ func TestBuildLayoutChildWithMissingRef(t *testing.T) {
 		t.Fatalf("expected layout page node %s", pageID)
 	}
 
-	// The missing ref child should be skipped, so no dependencies.
+	// The missing optional ref child should be skipped, so no dependencies.
 	if len(pageNode.DependsOn) != 0 {
-		t.Fatalf("expected layout page to have no dependencies when ref is missing, got %v", pageNode.DependsOn)
+		t.Fatalf("expected layout page to have no dependencies when optional ref is missing, got %v", pageNode.DependsOn)
 	}
 }
 

@@ -168,20 +168,22 @@ func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrie
 		})
 	}
 
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion, nil)
 }
 
 // GenerateHTMLFromDocuments renders HTML using an already loaded set of manifests.
 // The mode parameter determines whether build-specific attributes like render-orientation are included.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode RenderMode, engineVersion string) (Result, []datasource.Diagnostic, error) {
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil)
 }
 
 // GenerateHTMLFromDocumentsWithDatasets renders HTML using loaded manifests and pre-executed dataset results.
 // The constraintCtx parameter is optional and used for filtering inline layout children by constraints.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
-func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode RenderMode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string) (Result, []datasource.Diagnostic, error) {
+// The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
+// constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
+func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode RenderMode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -225,7 +227,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs)
 
 	for _, doc := range docs {
 		switch doc.Kind {
@@ -273,7 +275,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 // This reduces perceived latency because the browser can start loading the template
 // engine JS while the server is still rendering the report content.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
-func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string) (FrameResult, []datasource.Diagnostic, error) {
+// The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
+// constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
+func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (FrameResult, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -316,7 +320,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	}
 
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs)
 
 	for _, doc := range docs {
 		switch doc.Kind {
