@@ -213,7 +213,7 @@ func pageMatchesArtefact(page, artefact Document, artefactFormat string) bool {
 			break
 		}
 
-		match, err := spec.EvaluateConstraints(page.Constraints, ctx)
+		match, err := spec.EvaluateParsedConstraints(page.Constraints, ctx)
 		if err == nil && match {
 			constraintMatch = true
 			break

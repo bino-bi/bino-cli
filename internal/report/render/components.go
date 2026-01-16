@@ -284,8 +284,14 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 			continue
 		}
 
+		// Parse constraints (supports both string and structured formats)
+		constraints, parseErr := spec.ParseMixedConstraints(child.Metadata.Constraints)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid constraint in child %q: %w", child.Metadata.Name, parseErr)
+		}
+
 		// Evaluate constraints
-		match, err := spec.EvaluateConstraintsWithContext(child.Metadata.Constraints, rc.constraintCtx, child.Kind, child.Metadata.Name)
+		match, err := spec.EvaluateParsedConstraintsWithContext(constraints, rc.constraintCtx, child.Kind, child.Metadata.Name)
 		if err != nil {
 			return nil, err
 		}
