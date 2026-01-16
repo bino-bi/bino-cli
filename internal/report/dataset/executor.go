@@ -58,6 +58,7 @@ type ExecuteOptions struct {
 type dataSetSpec struct {
 	Query        queryField `json:"query"`
 	Prql         queryField `json:"prql"`
+	Source       string     `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
 	Dependencies []string   `json:"dependencies"`
 }
 
@@ -250,8 +251,8 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 	for result := range resultCh {
 		warnings = append(warnings, result.warnings...)
 
-		if result.spec.Query.IsEmpty() && result.spec.Prql.IsEmpty() {
-			// No spec parsed (error case)
+		if result.spec.Query.IsEmpty() && result.spec.Prql.IsEmpty() && result.spec.Source == "" {
+			// No spec parsed (error case) - must have query, prql, or source
 			continue
 		}
 
@@ -489,7 +490,11 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	var query string
 	var err error
 
-	if !job.spec.Prql.IsEmpty() {
+	// Check for source pass-through first - this creates a simple SELECT * FROM
+	if job.spec.Source != "" {
+		// Source pass-through: SELECT * FROM the referenced DataSource
+		query = fmt.Sprintf(`SELECT * FROM "%s"`, job.spec.Source)
+	} else if !job.spec.Prql.IsEmpty() {
 		query, err = job.spec.Prql.ResolveQuery(baseDir)
 		if err != nil {
 			return nil, fmt.Errorf("resolve prql: %w", err)
@@ -502,7 +507,15 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	}
 
 	if query == "" {
-		return nil, fmt.Errorf("no query or prql specified")
+		return nil, fmt.Errorf("no query, prql, or source specified")
+	}
+
+	// Rewrite @inline(N) references to generated datasource names
+	if HasInlineRefs(query) {
+		query, err = RewriteInlineRefs(query, job.spec.Dependencies)
+		if err != nil {
+			return nil, fmt.Errorf("rewrite inline refs: %w", err)
+		}
 	}
 
 	// Log the query before execution

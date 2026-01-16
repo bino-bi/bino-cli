@@ -909,7 +909,7 @@
               "description": "Reference to an external SQL file containing the query."
             }
           ],
-          "description": "SQL query executed against DuckDB to produce this dataset. Refer to DataSource names (their metadata.name) as tables or views, for example 'SELECT * FROM coffee_datasource'. Can be an inline string or a file reference using $file syntax. Required if 'prql' is not set."
+          "description": "SQL query executed against DuckDB to produce this dataset. Refer to DataSource names (their metadata.name) as tables or views, for example 'SELECT * FROM coffee_datasource'. Inline dependencies can be referenced via @inline(N) syntax where N is the zero-based index. Can be an inline string or a file reference using $file syntax. Mutually exclusive with 'prql' and 'source'."
         },
         "prql": {
           "oneOf": [
@@ -922,17 +922,22 @@
               "description": "Reference to an external PRQL file containing the query."
             }
           ],
-          "description": "PRQL query (Pipelined Relational Query Language) executed against DuckDB. When set, takes precedence over 'query'. Can be an inline string or a file reference using $file syntax. The PRQL is compiled to SQL by DuckDB's prql extension. See https://prql-lang.org for syntax."
+          "description": "PRQL query (Pipelined Relational Query Language) executed against DuckDB. Can be an inline string or a file reference using $file syntax. The PRQL is compiled to SQL by DuckDB's prql extension. See https://prql-lang.org for syntax. Mutually exclusive with 'query' and 'source'."
+        },
+        "source": {
+          "$ref": "#/$defs/dataSourceRefUnion",
+          "description": "Direct DataSource pass-through. When set, the DataSet becomes an alias for the referenced DataSource without transformation. Can be a string reference to a named DataSource or an inline DataSource definition. Mutually exclusive with 'query' and 'prql'."
         },
         "dependencies": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Optional list of DataSource names that must be materialized as tables before running the query. Use this when the query depends on multiple datasources or to make dependencies explicit."
+          "items": { "$ref": "#/$defs/dataSourceRefUnion" },
+          "description": "List of DataSource dependencies. Each item can be a string reference to a named DataSource or an inline DataSource definition. Inline DataSources are referenced in queries via @inline(N) syntax where N is the zero-based index."
         }
       },
       "anyOf": [
         { "required": ["query"] },
-        { "required": ["prql"] }
+        { "required": ["prql"] },
+        { "required": ["source"] }
       ],
       "additionalProperties": false
     },
@@ -948,6 +953,126 @@
       },
       "additionalProperties": false,
       "description": "Reference to an external file using the $file syntax. Supports SQL (.sql) and PRQL (.prql) files for queries."
+    },
+    "dataSourceRefUnion": {
+      "description": "Reference to a DataSource by name OR an inline DataSource definition.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a DataSource document (metadata.name)."
+        },
+        {
+          "$ref": "#/$defs/inlineDataSourceSpec",
+          "description": "Inline DataSource definition."
+        }
+      ]
+    },
+    "inlineDataSourceSpec": {
+      "type": "object",
+      "required": ["type"],
+      "description": "Inline DataSource definition embedded directly in a DataSet or component. Same structure as dataSourceSpec but without requiring a separate document.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["inline", "excel", "csv", "parquet", "postgres_query", "mysql_query"],
+          "description": "How this datasource loads data."
+        },
+        "inline": { "$ref": "#/$defs/inlineSource" },
+        "content": { "$ref": "#/$defs/inlineContent" },
+        "path": {
+          "type": "string",
+          "description": "File path, directory, glob pattern or URL for file-based datasources."
+        },
+        "connection": { "$ref": "#/$defs/sqlConnection" },
+        "query": {
+          "type": "string",
+          "description": "SQL query for postgres_query and mysql_query types."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "Controls caching behavior."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "inline" } } },
+          "then": {
+            "anyOf": [
+              { "required": ["inline"] },
+              { "required": ["content"] }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "excel" } } },
+          "then": { "required": ["path"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "csv" } } },
+          "then": { "required": ["path"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "parquet" } } },
+          "then": { "required": ["path"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "postgres_query" } } },
+          "then": { "required": ["connection", "query"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "mysql_query" } } },
+          "then": { "required": ["connection", "query"] }
+        }
+      ]
+    },
+    "datasetRefUnion": {
+      "description": "Reference to a DataSet by name OR an inline DataSet definition.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a DataSet document (metadata.name)."
+        },
+        {
+          "$ref": "#/$defs/inlineDataSetSpec",
+          "description": "Inline DataSet definition."
+        }
+      ]
+    },
+    "inlineDataSetSpec": {
+      "type": "object",
+      "description": "Inline DataSet definition embedded directly in a component. Supports query, prql, or source fields.",
+      "properties": {
+        "query": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/$defs/fileReference" }
+          ],
+          "description": "SQL query. Inline dependencies can be referenced via @inline(N) syntax. Mutually exclusive with 'prql' and 'source'."
+        },
+        "prql": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/$defs/fileReference" }
+          ],
+          "description": "PRQL query. Mutually exclusive with 'query' and 'source'."
+        },
+        "source": {
+          "$ref": "#/$defs/dataSourceRefUnion",
+          "description": "Direct DataSource pass-through. Mutually exclusive with 'query' and 'prql'."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataSourceRefUnion" },
+          "description": "DataSource dependencies. Inline DataSources are referenced via @inline(N) syntax."
+        }
+      },
+      "anyOf": [
+        { "required": ["query"] },
+        { "required": ["prql"] },
+        { "required": ["source"] }
+      ]
     },
     "reportArtefactSpec": {
       "type": "object",
@@ -1242,13 +1367,22 @@
       }
     },
     "datasetRef": {
-      "description": "Single or multiple dataset references.",
+      "description": "Single or multiple dataset references. Each reference can be a string name or an inline DataSet definition.",
       "oneOf": [
-        { "type": "string", "minLength": 1 },
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a DataSet document (metadata.name)."
+        },
+        {
+          "$ref": "#/$defs/inlineDataSetSpec",
+          "description": "Inline DataSet definition."
+        },
         {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "minItems": 1
+          "items": { "$ref": "#/$defs/datasetRefUnion" },
+          "minItems": 1,
+          "description": "Array of DataSet references (string names or inline definitions)."
         }
       ]
     },

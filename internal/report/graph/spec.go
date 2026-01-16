@@ -59,9 +59,11 @@ type sqlConnection struct {
 // dataSetSpec represents the parsed specification for a DataSet manifest.
 // A DataSet executes a SQL query against DuckDB, optionally depending on
 // one or more DataSource manifests which are materialized as tables.
+// The Source field allows direct pass-through to a DataSource without a query.
 type dataSetSpec struct {
 	Query        queryField `json:"query"`
 	Prql         queryField `json:"prql"`
+	Source       string     `json:"source"`
 	Dependencies []string   `json:"dependencies"`
 }
 

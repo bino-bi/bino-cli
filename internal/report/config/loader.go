@@ -123,6 +123,14 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 		return nil, walkErr
 	}
 
+	// Materialize inline definitions before validation.
+	// This converts inline DataSet/DataSource definitions into synthetic documents
+	// and rewrites references to use generated names.
+	docs, err := MaterializeInlineDefinitions(docs)
+	if err != nil {
+		return nil, fmt.Errorf("materialize inline definitions: %w", err)
+	}
+
 	if !opts.Lenient {
 		if err := ValidateDocuments(docs); err != nil {
 			return nil, err
