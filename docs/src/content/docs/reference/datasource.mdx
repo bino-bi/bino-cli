@@ -146,3 +146,74 @@ spec:
 ```
 
 For more on secrets and object storage, see [ConnectionSecret](/reference/connection-secret/).
+
+## Conditional inclusion with constraints
+
+DataSource documents support `metadata.constraints` to conditionally include them for specific artefacts, modes, or environments.
+
+### Environment-specific data sources
+
+Use different data sources for development vs production:
+
+```yaml
+# Mock data for development
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales
+  constraints:
+    - labels.env==dev
+spec:
+  type: inline
+  content:
+    - { region: "Test", amount: 100 }
+
+---
+# Production database
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales
+  constraints:
+    - labels.env==prod
+spec:
+  type: postgres_query
+  connection:
+    host: prod-db.example.com
+    # ...
+```
+
+### Multiple environments with `in` operator
+
+Match multiple environments at once using either format:
+
+```yaml
+# String format
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: staging_data
+  constraints:
+    - labels.env in [dev,staging,qa]
+spec:
+  type: postgres_query
+  connection:
+    host: staging-db.example.com
+
+---
+# Structured format (IDE-friendly)
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: staging_data
+  constraints:
+    - field: labels.env
+      operator: in
+      value: [dev, staging, qa]
+spec:
+  type: postgres_query
+  connection:
+    host: staging-db.example.com
+```
+
+For the full constraint syntax and operators, see [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).

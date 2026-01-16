@@ -197,3 +197,92 @@ When `optional: true` and the ref is missing, the child is skipped with an info 
 - Format-specific components (may not exist for all output formats)
 
 **Do not use `optional: true` to work around typos or missing files.** Always fix the actual issue instead.
+
+## Inline child constraints
+
+Inline children can have `metadata.constraints` to conditionally include them based on the target artefact's context. This allows different components to appear for different artefacts, modes, or environments.
+
+### Basic syntax
+
+Constraints support two formats: string (concise) and structured (IDE-friendly).
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: 2x2
+  children:
+    # String format - quick and readable
+    - kind: Table
+      metadata:
+        name: prodTable
+        constraints:
+          - mode==build
+          - labels.env==prod
+      spec:
+        dataset: production_data
+
+    # Structured format - better IDE support
+    - kind: Text
+      metadata:
+        name: debugInfo
+        constraints:
+          - field: mode
+            operator: "=="
+            value: preview
+      spec:
+        value: "Debug information - only visible in preview"
+
+    # No constraints - always included
+    - kind: ChartStructure
+      spec:
+        dataset: summary_data
+```
+
+### Operators
+
+| Operator | Description        | String Example           | Structured Example                                     |
+| -------- | ------------------ | ------------------------ | ------------------------------------------------------ |
+| `==`     | Equals             | `labels.env==prod`       | `{field: "labels.env", operator: "==", value: "prod"}` |
+| `!=`     | Not equals         | `mode!=preview`          | `{field: "mode", operator: "!=", value: "preview"}`    |
+| `in`     | Value in array     | `labels.env in [dev,qa]` | `{field: "labels.env", operator: "in", value: ["dev", "qa"]}` |
+| `not-in` | Value not in array | `mode not-in [serve]`    | `{field: "mode", operator: "not-in", value: ["serve"]}` |
+
+### Field reference
+
+| Field Path     | Description                        | Example Values              |
+| -------------- | ---------------------------------- | --------------------------- |
+| `mode`         | Current execution mode             | `build`, `preview`, `serve` |
+| `labels.<key>` | Artefact's `metadata.labels.<key>` | Any string value            |
+| `spec.<field>` | Artefact's `spec.<field>`          | Format, orientation, etc.   |
+
+### Example: Mode-specific children
+
+```yaml
+spec:
+  pageLayout: split-vertical
+  children:
+    # Only in build mode
+    - kind: Table
+      metadata:
+        constraints:
+          - mode==build
+      spec:
+        dataset: final_data
+
+    # Only in preview mode
+    - kind: Text
+      metadata:
+        constraints:
+          - mode==preview
+      spec:
+        value: "Preview placeholder - data will appear in build"
+```
+
+:::note
+The `metadata` block on inline children is optional. If omitted, the child has no constraints and is always included.
+:::
+
+For comprehensive constraint documentation, see [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).

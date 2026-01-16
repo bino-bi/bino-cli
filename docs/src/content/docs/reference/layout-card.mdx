@@ -145,3 +145,45 @@ children:
 ```
 
 See the [LayoutPage optional references](/reference/layout-page/#optional-references) section for details on when to use this field.
+
+## Inline child constraints
+
+LayoutCard children support `metadata.constraints` just like LayoutPage. Use constraints to conditionally include components based on the artefact's context.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: summary_card
+spec:
+  cardLayout: split-horizontal
+  children:
+    # Only in production builds
+    - kind: Table
+      metadata:
+        constraints:
+          - labels.env==prod
+          - mode==build
+      spec:
+        dataset: production_metrics
+
+    # Only in preview mode (string format)
+    - kind: Text
+      metadata:
+        constraints:
+          - mode==preview
+      spec:
+        value: "Preview placeholder"
+
+    # Using in operator for multiple environments
+    - kind: ChartStructure
+      metadata:
+        constraints:
+          - field: labels.env
+            operator: in
+            value: [staging, prod]
+      spec:
+        dataset: metrics
+```
+
+For the full constraint syntax and operators, see [Inline child constraints](/reference/layout-page/#inline-child-constraints) and [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).
