@@ -60,8 +60,50 @@ type sqlConnection struct {
 // A DataSet executes a SQL query against DuckDB, optionally depending on
 // one or more DataSource manifests which are materialized as tables.
 type dataSetSpec struct {
-	Query        string   `json:"query"`
-	Dependencies []string `json:"dependencies"`
+	Query        queryField `json:"query"`
+	Prql         queryField `json:"prql"`
+	Dependencies []string   `json:"dependencies"`
+}
+
+// queryField represents a query that can be either an inline string or a file reference.
+// It supports both formats:
+//   - Inline: "SELECT * FROM table"
+//   - File reference: { "$file": "./queries/sales.sql" }
+type queryField struct {
+	Inline string // Inline query string
+	File   string // Path to external file (from $file)
+}
+
+// UnmarshalJSON implements custom unmarshaling for queryField.
+// It handles both string values and object values with $file key.
+func (q *queryField) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		q.Inline = str
+		return nil
+	}
+
+	// Try to unmarshal as an object with $file
+	var obj struct {
+		File string `json:"$file"`
+	}
+	if err := json.Unmarshal(data, &obj); err == nil {
+		q.File = obj.File
+		return nil
+	}
+
+	return fmt.Errorf("query must be a string or an object with $file key")
+}
+
+// IsEmpty returns true if the query field has no value.
+func (q queryField) IsEmpty() bool {
+	return q.Inline == "" && q.File == ""
+}
+
+// HasFile returns true if the query references an external file.
+func (q queryField) HasFile() bool {
+	return q.File != ""
 }
 
 // layoutSpec represents the layout structure containing children.

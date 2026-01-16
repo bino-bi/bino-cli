@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 
 /**
@@ -75,6 +77,13 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
         }
 
         const line = document.lineAt(position.line).text;
+
+        // Check for $file reference - extract the file path and navigate to it
+        const fileRefLocation = this.getFileReferenceLocation(document, line, position);
+        if (fileRefLocation) {
+            return fileRefLocation;
+        }
+
         const wordRange = document.getWordRangeAtPosition(position, /[\w$-]+/);
 
         if (!wordRange) {
@@ -269,6 +278,53 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
             return 0;
         } catch {
             return 0;
+        }
+    }
+
+    /**
+     * Check if the cursor is on a $file reference and return a Location to the file.
+     * Handles patterns like: $file: ./queries/sales.sql
+     */
+    private getFileReferenceLocation(
+        document: vscode.TextDocument,
+        line: string,
+        position: vscode.Position
+    ): vscode.Location | undefined {
+        // Match $file: pattern
+        const fileMatch = line.match(/\$file:\s*(.+)$/);
+        if (!fileMatch) {
+            return undefined;
+        }
+
+        const filePath = fileMatch[1].trim();
+        if (!filePath) {
+            return undefined;
+        }
+
+        // Check if cursor is on the file path portion
+        const filePathStart = line.indexOf(filePath);
+        const filePathEnd = filePathStart + filePath.length;
+
+        if (position.character < filePathStart || position.character > filePathEnd) {
+            return undefined;
+        }
+
+        // Resolve the file path relative to the document
+        const documentDir = path.dirname(document.uri.fsPath);
+        const resolvedPath = path.isAbsolute(filePath)
+            ? filePath
+            : path.resolve(documentDir, filePath);
+
+        // Check if the file exists
+        try {
+            if (!fs.existsSync(resolvedPath)) {
+                return undefined;
+            }
+
+            const uri = vscode.Uri.file(resolvedPath);
+            return new vscode.Location(uri, new vscode.Position(0, 0));
+        } catch {
+            return undefined;
         }
     }
 }

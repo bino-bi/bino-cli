@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { WorkspaceIndexer } from './indexer';
 
 /**
@@ -39,6 +41,16 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
         position: vscode.Position,
         linePrefix: string
     ): Promise<vscode.CompletionItem[] | undefined> {
+        // Check for $file field completion (external query files)
+        if (this.isFileReferenceField(linePrefix)) {
+            return this.getFileReferenceCompletions(document, linePrefix);
+        }
+
+        // Check for query/prql field completion to suggest $file syntax
+        if (this.isQueryField(linePrefix)) {
+            return this.getQueryFieldCompletions();
+        }
+
         // Check for dataset field completion
         if (this.isDatasetField(linePrefix)) {
             return this.getDatasetCompletions();
@@ -323,5 +335,168 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             item.documentation = new vscode.MarkdownString(`**${k.name}**\n\n${k.description}`);
             return item;
         });
+    }
+
+    /**
+     * Check if we're in the $file field of a query/prql block.
+     */
+    private isFileReferenceField(linePrefix: string): boolean {
+        const trimmed = linePrefix.trim();
+        return trimmed === '$file:' || trimmed.startsWith('$file: ');
+    }
+
+    /**
+     * Check if we're at a query or prql field that could use $file syntax.
+     */
+    private isQueryField(linePrefix: string): boolean {
+        const trimmed = linePrefix.trim();
+        return trimmed === 'query:' || trimmed === 'prql:';
+    }
+
+    /**
+     * Get completions for the $file field - suggests SQL and PRQL files.
+     */
+    private getFileReferenceCompletions(
+        document: vscode.TextDocument,
+        linePrefix: string
+    ): vscode.CompletionItem[] {
+        const items: vscode.CompletionItem[] = [];
+        const documentDir = path.dirname(document.uri.fsPath);
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+
+        if (!workspaceFolder) {
+            return items;
+        }
+
+        // Determine which file types to suggest based on context
+        const trimmed = linePrefix.trim();
+        const isPrqlContext = this.isInPrqlContext(document, document.positionAt(document.getText().indexOf(trimmed)));
+
+        // Get the partial path the user has typed
+        const currentValue = trimmed.replace(/^\$file:\s*/, '');
+
+        // Find SQL and PRQL files in the workspace
+        const extensions = isPrqlContext ? ['.prql'] : ['.sql', '.prql'];
+
+        try {
+            const files = this.findQueryFiles(workspaceFolder.uri.fsPath, extensions);
+
+            for (const file of files) {
+                // Calculate relative path from the document's directory
+                let relativePath = path.relative(documentDir, file);
+
+                // Normalize to forward slashes and add ./ prefix if needed
+                relativePath = relativePath.replace(/\\/g, '/');
+                if (!relativePath.startsWith('.') && !relativePath.startsWith('/')) {
+                    relativePath = './' + relativePath;
+                }
+
+                // Filter by current input
+                if (currentValue && !relativePath.toLowerCase().includes(currentValue.toLowerCase())) {
+                    continue;
+                }
+
+                const ext = path.extname(file).toLowerCase();
+                const item = new vscode.CompletionItem(relativePath, vscode.CompletionItemKind.File);
+                item.detail = ext === '.sql' ? 'SQL query file' : 'PRQL query file';
+                item.documentation = new vscode.MarkdownString(
+                    `External query file.\n\nFull path: \`${file}\``
+                );
+                item.sortText = `0_${relativePath}`; // Sort files before directories
+
+                items.push(item);
+            }
+        } catch {
+            // Ignore errors when searching for files
+        }
+
+        return items;
+    }
+
+    /**
+     * Check if we're in a PRQL context (inside a prql: block).
+     */
+    private isInPrqlContext(document: vscode.TextDocument, position: vscode.Position): boolean {
+        // Look backwards to find if we're under a prql: key
+        for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 10; lineNum--) {
+            const line = document.lineAt(lineNum).text.trim();
+            if (line.startsWith('prql:')) {
+                return true;
+            }
+            if (line.startsWith('query:')) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Find SQL and PRQL files in a directory recursively.
+     */
+    private findQueryFiles(dir: string, extensions: string[]): string[] {
+        const files: string[] = [];
+        const maxDepth = 5; // Limit search depth
+
+        const search = (currentDir: string, depth: number) => {
+            if (depth > maxDepth) {
+                return;
+            }
+
+            try {
+                const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+                for (const entry of entries) {
+                    const fullPath = path.join(currentDir, entry.name);
+
+                    // Skip hidden directories and common non-project directories
+                    if (entry.isDirectory()) {
+                        if (entry.name.startsWith('.') ||
+                            entry.name === 'node_modules' ||
+                            entry.name === 'vendor' ||
+                            entry.name === 'dist' ||
+                            entry.name === 'build') {
+                            continue;
+                        }
+                        search(fullPath, depth + 1);
+                    } else if (entry.isFile()) {
+                        const ext = path.extname(entry.name).toLowerCase();
+                        if (extensions.includes(ext)) {
+                            files.push(fullPath);
+                        }
+                    }
+                }
+            } catch {
+                // Ignore permission errors
+            }
+        };
+
+        search(dir, 0);
+        return files;
+    }
+
+    /**
+     * Get completions for query/prql fields - suggests $file syntax.
+     */
+    private getQueryFieldCompletions(): vscode.CompletionItem[] {
+        const items: vscode.CompletionItem[] = [];
+
+        // Suggest $file object syntax as a snippet
+        const fileRefItem = new vscode.CompletionItem('$file', vscode.CompletionItemKind.Snippet);
+        fileRefItem.insertText = new vscode.SnippetString('\n  $file: ${1:./queries/query.sql}');
+        fileRefItem.detail = 'Reference external SQL/PRQL file';
+        fileRefItem.documentation = new vscode.MarkdownString(
+            `Load query from an external file.\n\n` +
+            `**Example:**\n` +
+            `\`\`\`yaml\n` +
+            `query:\n` +
+            `  $file: ./queries/sales.sql\n` +
+            `\`\`\`\n\n` +
+            `The file path is relative to the manifest file. ` +
+            `Changes to the referenced file automatically trigger cache invalidation and hot-reload.`
+        );
+        fileRefItem.sortText = '0_$file'; // Sort first
+        items.push(fileRefItem);
+
+        return items;
     }
 }

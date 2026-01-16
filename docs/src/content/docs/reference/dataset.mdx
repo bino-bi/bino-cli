@@ -23,9 +23,74 @@ spec:
 
 Fields:
 
-- `spec.query` – SQL query. Required if `spec.prql` is not set.
-- `spec.prql` – [PRQL](https://prql-lang.org) query. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
+- `spec.query` – SQL query, either inline or loaded from an external file. Required if `spec.prql` is not set.
+- `spec.prql` – [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
 - `spec.dependencies` – optional list of datasource names that must be materialized before the query runs.
+
+## External query files
+
+For complex queries, you can store them in separate `.sql` or `.prql` files and reference them using the `$file` syntax. This keeps your YAML manifests clean and enables syntax highlighting in your editor.
+
+### Loading SQL from an external file
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_summary
+spec:
+  query:
+    $file: ./queries/sales_summary.sql
+  dependencies:
+    - sales_csv
+```
+
+### Loading PRQL from an external file
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: customer_orders
+spec:
+  prql:
+    $file: ./queries/customer_orders.prql
+  dependencies:
+    - orders
+    - customers
+```
+
+### File path resolution
+
+- Paths are resolved relative to the manifest file containing the `$file` reference
+- Both `./relative/path.sql` and `relative/path.sql` formats are supported
+- Absolute paths are also supported but not recommended for portability
+
+### Auto-reload and caching
+
+External query files are fully integrated with bino's caching and hot-reload system:
+
+- **Cache invalidation**: When an external SQL or PRQL file changes, the dataset cache is automatically invalidated
+- **Hot-reload in preview**: Changes to external query files trigger automatic refresh in `bino preview` mode
+- **Dependency graph**: External files appear in `bino graph` output for visibility
+
+### Organizing query files
+
+A recommended project structure for external queries:
+
+```
+my-report/
+├── bino.toml
+├── manifests/
+│   ├── datasources.yaml
+│   └── datasets.yaml
+├── queries/
+│   ├── sales_by_region.sql
+│   ├── monthly_revenue.sql
+│   └── customer_analysis.prql
+└── data/
+    └── sales.csv
+```
 
 ## Simple aggregation
 

@@ -867,12 +867,30 @@
       "type": "object",
       "properties": {
         "query": {
-          "type": "string",
-          "description": "SQL query executed against DuckDB to produce this dataset. Refer to DataSource names (their metadata.name) as tables or views, for example 'SELECT * FROM coffee_datasource'. Required if 'prql' is not set."
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Inline SQL query executed against DuckDB to produce this dataset."
+            },
+            {
+              "$ref": "#/$defs/fileReference",
+              "description": "Reference to an external SQL file containing the query."
+            }
+          ],
+          "description": "SQL query executed against DuckDB to produce this dataset. Refer to DataSource names (their metadata.name) as tables or views, for example 'SELECT * FROM coffee_datasource'. Can be an inline string or a file reference using $file syntax. Required if 'prql' is not set."
         },
         "prql": {
-          "type": "string",
-          "description": "PRQL query (Pipelined Relational Query Language) executed against DuckDB. When set, takes precedence over 'query'. The PRQL is compiled to SQL by DuckDB's prql extension. See https://prql-lang.org for syntax."
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Inline PRQL query (Pipelined Relational Query Language) executed against DuckDB."
+            },
+            {
+              "$ref": "#/$defs/fileReference",
+              "description": "Reference to an external PRQL file containing the query."
+            }
+          ],
+          "description": "PRQL query (Pipelined Relational Query Language) executed against DuckDB. When set, takes precedence over 'query'. Can be an inline string or a file reference using $file syntax. The PRQL is compiled to SQL by DuckDB's prql extension. See https://prql-lang.org for syntax."
         },
         "dependencies": {
           "type": "array",
@@ -885,6 +903,19 @@
         { "required": ["prql"] }
       ],
       "additionalProperties": false
+    },
+    "fileReference": {
+      "type": "object",
+      "required": ["$file"],
+      "properties": {
+        "$file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path to an external file. The path is resolved relative to the manifest file containing this reference. Changes to the referenced file trigger cache invalidation and auto-reload in preview mode."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Reference to an external file using the $file syntax. Supports SQL (.sql) and PRQL (.prql) files for queries."
     },
     "reportArtefactSpec": {
       "type": "object",
