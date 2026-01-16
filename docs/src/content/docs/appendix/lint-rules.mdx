@@ -19,6 +19,9 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
 | `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
 | `card-layout-slots-used`       | Card Layout Slots Used       | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
+| `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
+| `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
+| `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
 
 ## Rule details
 
@@ -230,6 +233,88 @@ spec:
 ```
 
 **Fix:** Add a second child or change `cardLayout: full`.
+
+### inline-ref-bounds
+
+When using inline DataSource definitions in a DataSet's `dependencies`, the `@inline(N)` references in queries must point to valid indices.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: my_dataset
+spec:
+  dependencies:
+    - type: csv
+      path: ./data/sales.csv
+  query: |
+    SELECT * FROM @inline(5)  # Index 5 doesn't exist!
+```
+
+**Error message:**
+
+```
+@inline(5) out of bounds (have 1 inline dependencies)
+```
+
+**Fix:** Use `@inline(0)` to reference the first (and only) inline dependency.
+
+See also: [Inline DataSet definitions](/reference/dataset/#inline-dataset-definitions)
+
+### dataset-source-exclusive
+
+The `source` field in DataSet provides direct pass-through to a DataSource without transformation. It cannot be used together with `query` or `prql`.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: conflicting_dataset
+spec:
+  source: sales_csv
+  query: |  # Can't have both source and query!
+    SELECT * FROM sales_csv
+```
+
+**Fix:** Choose one approach:
+
+```yaml
+# Option 1: Use source for pass-through
+spec:
+  source: sales_csv
+
+# Option 2: Use query for transformation
+spec:
+  query: SELECT * FROM sales_csv
+  dependencies:
+    - sales_csv
+```
+
+See also: [Direct source pass-through](/reference/dataset/#direct-source-pass-through)
+
+### inline-naming-conflict
+
+Document names starting with `_inline_` are reserved for generated inline definitions. User-defined documents must not use this prefix.
+
+**Example problem:**
+
+```yaml
+kind: DataSource
+metadata:
+  name: _inline_my_data  # Reserved prefix!
+spec:
+  type: csv
+  path: ./data.csv
+```
+
+**Fix:** Choose a different name that doesn't start with `_inline_`:
+
+```yaml
+metadata:
+  name: my_data
+```
 
 ## Adding custom rules
 

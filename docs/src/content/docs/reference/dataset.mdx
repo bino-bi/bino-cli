@@ -23,9 +23,10 @@ spec:
 
 Fields:
 
-- `spec.query` – SQL query, either inline or loaded from an external file. Required if `spec.prql` is not set.
+- `spec.query` – SQL query, either inline or loaded from an external file. Required if `spec.prql` and `spec.source` are not set.
 - `spec.prql` – [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
-- `spec.dependencies` – optional list of datasource names that must be materialized before the query runs.
+- `spec.source` – direct pass-through to a DataSource without transformation. Mutually exclusive with `query` and `prql`.
+- `spec.dependencies` – optional list of datasource references. Can be string names or [inline DataSource definitions](#inline-dataset-definitions). Inline definitions are referenced via `@inline(N)` syntax in queries.
 
 ## External query files
 
@@ -299,3 +300,133 @@ spec:
 ```
 
 For the full constraint syntax and operators, see [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).
+
+## Inline DataSet definitions
+
+Instead of defining DataSets as separate documents, you can define them **inline** directly within components. This is useful for simple, component-specific data transformations.
+
+### Inline DataSet in a Chart
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: sales_chart
+spec:
+  dataset:
+    query: |
+      SELECT region, SUM(amount) as total
+      FROM sales_csv
+      GROUP BY region
+    dependencies:
+      - sales_csv
+  chartTitle: Sales by Region
+  chartType: bar
+  # ... chart configuration
+```
+
+### Inline DataSet with inline DataSource
+
+You can nest inline DataSource definitions within an inline DataSet. Use the `@inline(N)` syntax to reference them by index:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: quick_chart
+spec:
+  dataset:
+    dependencies:
+      - type: csv
+        path: ./data/sales.csv
+    query: |
+      SELECT region, SUM(amount) as total
+      FROM @inline(0)
+      GROUP BY region
+  chartTitle: Sales Overview
+  # ... chart configuration
+```
+
+The `@inline(0)` reference points to the first item in the `dependencies` array (0-indexed). When you have multiple inline DataSources:
+
+```yaml
+spec:
+  dataset:
+    dependencies:
+      - type: csv
+        path: ./data/orders.csv
+      - type: csv
+        path: ./data/customers.csv
+    query: |
+      SELECT c.name, COUNT(*) as order_count
+      FROM @inline(0) o
+      JOIN @inline(1) c ON o.customer_id = c.id
+      GROUP BY c.name
+```
+
+### Mixing inline and named references
+
+You can mix inline DataSource definitions with named references:
+
+```yaml
+spec:
+  dataset:
+    dependencies:
+      - sales_csv              # Named reference to existing DataSource
+      - type: csv              # Inline definition
+        path: ./data/rates.csv
+    query: |
+      SELECT s.*, r.rate
+      FROM sales_csv s
+      JOIN @inline(1) r ON s.currency = r.code
+```
+
+Note: Named references use their document name directly in SQL, while inline definitions use `@inline(N)`.
+
+## Direct source pass-through
+
+For simple cases where you want to use a DataSource directly without transformation, use the `source` field:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_passthrough
+spec:
+  source: sales_csv
+```
+
+This is equivalent to `SELECT * FROM sales_csv` but more explicit and efficient. The `source` field is **mutually exclusive** with `query` and `prql`.
+
+### Inline source pass-through
+
+You can also use inline DataSource definitions with `source`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: raw_data_table
+spec:
+  dataset:
+    source:
+      type: csv
+      path: ./data/report.csv
+  tableTitle: Raw Data
+  # ... table configuration
+```
+
+## How inline definitions work
+
+When bino processes inline definitions:
+
+1. **Materialization**: Inline definitions are converted to synthetic documents during YAML loading
+2. **Hash-based naming**: Generated documents get unique names like `_inline_datasource_a1b2c3d4`
+3. **Deduplication**: Identical inline definitions share the same generated document
+4. **Labels**: Generated documents have `bino.bi/generated: "true"` and `bino.bi/inline: "true"` labels
+
+This means inline definitions are fully compatible with caching, the dependency graph, and all other bino features.
+
+### Naming restrictions
+
+User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this.

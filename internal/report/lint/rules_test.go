@@ -442,6 +442,10 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"dataset-required",
 		"page-layout-slots-used",
 		"card-layout-slots-used",
+		// Inline definition rules
+		"inline-ref-bounds",
+		"dataset-source-exclusive",
+		"inline-naming-conflict",
 	}
 
 	if len(rules) != len(expectedIDs) {

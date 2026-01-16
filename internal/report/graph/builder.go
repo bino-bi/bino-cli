@@ -139,6 +139,9 @@ func (b *builder) buildDataSources() error {
 		if err != nil {
 			return fmt.Errorf("datasource %s: %w", doc.Name, err)
 		}
+		// Mark inline-generated nodes with special attributes for visualization.
+		addInlineAttributes(doc, attrs)
+
 		id := makeNodeID(NodeDataSource, doc.Name)
 		node := &Node{
 			ID:         id,
@@ -169,6 +172,15 @@ func (b *builder) buildDataSets() error {
 		if err != nil {
 			return fmt.Errorf("dataset %s: %w", doc.Name, err)
 		}
+		// Mark inline-generated nodes with special attributes for visualization.
+		addInlineAttributes(doc, attrs)
+
+		// Mark datasets that use source pass-through (alias to DataSource).
+		if spec.Source != "" {
+			attrs["source"] = spec.Source
+			attrs["edgeType"] = "alias"
+		}
+
 		id := makeNodeID(NodeDataSet, doc.Name)
 		node := &Node{
 			ID:         id,
@@ -576,4 +588,20 @@ func pathKey(parts []int) string {
 		sections[i] = fmt.Sprintf("%d", p)
 	}
 	return strings.Join(sections, ".")
+}
+
+// addInlineAttributes marks nodes generated from inline definitions with
+// special attributes for visualization. These nodes have the labels:
+// - "bino.bi/generated": "true" - indicates a synthetic document
+// - "bino.bi/inline": "true" - indicates it was materialized from an inline definition
+func addInlineAttributes(doc config.Document, attrs map[string]string) {
+	if doc.Labels == nil {
+		return
+	}
+	if doc.Labels["bino.bi/generated"] == "true" {
+		attrs["generated"] = "true"
+	}
+	if doc.Labels["bino.bi/inline"] == "true" {
+		attrs["inline"] = "true"
+	}
 }
