@@ -143,6 +143,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newLSPCommand())
 	cmd.AddCommand(newCacheCommand())
 	cmd.AddCommand(newUpdateCommand())
+	cmd.AddCommand(newAddCommand())
 
 	return cmd
 }

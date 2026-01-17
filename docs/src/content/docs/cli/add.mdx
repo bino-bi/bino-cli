@@ -1,0 +1,256 @@
+---
+title: bino add
+description: Interactively create DataSet and DataSource manifests.
+---
+
+`bino add` provides interactive wizards for creating new manifest documents.
+It supports three interaction modes: fully interactive, semi-interactive (with partial flags), and non-interactive for CI/scripting.
+
+## Subcommands
+
+- `bino add dataset` – create a DataSet manifest
+- `bino add datasource` – create a DataSource manifest
+
+## Usage
+
+```bash
+bino add dataset [name] [flags]
+bino add datasource [name] [flags]
+```
+
+## Interaction Modes
+
+### Fully Interactive
+
+Run without arguments to use the step-by-step wizard:
+
+```bash
+bino add dataset
+```
+
+The wizard guides you through:
+1. Name and description
+2. Query type selection (SQL, PRQL, or pass-through)
+3. Dependencies (DataSets and DataSources)
+4. Constraints
+5. Output file location
+6. YAML preview and confirmation
+
+### Semi-Interactive
+
+Provide some flags and the wizard prompts only for missing values:
+
+```bash
+bino add dataset sales_summary --sql-file queries/sales.sql
+```
+
+### Non-Interactive
+
+Use `--no-prompt` for CI pipelines or scripting. All required values must be provided via flags:
+
+```bash
+bino add dataset sales_summary \
+  --sql "SELECT * FROM sales" \
+  --output datasets/sales.yaml \
+  --no-prompt
+```
+
+---
+
+## bino add dataset
+
+Create a new DataSet manifest with SQL or PRQL queries.
+
+### Flags
+
+Query source (one required in non-interactive mode):
+
+- `--sql` – inline SQL query
+- `--sql-file` – path to external SQL file (uses `$file()` syntax)
+- `--prql` – inline PRQL query
+- `--prql-file` – path to external PRQL file (uses `$file()` syntax)
+- `--source` – pass-through from another DataSet
+
+Configuration:
+
+- `--deps` – dependencies (DataSet or DataSource names), repeatable
+- `--constraint` – constraints in `field:operator:value` format, repeatable
+- `--description` – optional description
+
+Output:
+
+- `--output`, `-o` – output file path (creates new file)
+- `--append-to` – append to existing multi-document YAML file
+
+Behavior:
+
+- `--no-prompt` – disable interactive prompts (fail if required values missing)
+- `--open-editor` – open `$EDITOR` for query input
+
+### Examples
+
+Create a dataset interactively:
+
+```bash
+bino add dataset
+```
+
+Create with inline SQL:
+
+```bash
+bino add dataset monthly_sales \
+  --sql "SELECT month, SUM(amount) FROM orders GROUP BY month" \
+  --deps orders_source \
+  --output datasets/monthly_sales.yaml \
+  --no-prompt
+```
+
+Create with external SQL file:
+
+```bash
+bino add dataset quarterly_report \
+  --sql-file queries/quarterly.sql \
+  --deps sales_data \
+  --constraint "quarter:in:Q1,Q2,Q3,Q4" \
+  --output datasets/quarterly.yaml \
+  --no-prompt
+```
+
+Create a pass-through dataset:
+
+```bash
+bino add dataset filtered_orders \
+  --source orders \
+  --constraint "status:eq:completed" \
+  --output datasets/filtered.yaml \
+  --no-prompt
+```
+
+---
+
+## bino add datasource
+
+Create a new DataSource manifest for databases or files.
+
+### Flags
+
+Type (required in non-interactive mode):
+
+- `--type` – source type: `postgres`, `mysql`, `csv`, `parquet`, `excel`, `json`
+
+Database connection (for `postgres` and `mysql` types):
+
+- `--db-host` – database host
+- `--db-port` – database port
+- `--db-database` – database name
+- `--db-schema` – database schema (optional, PostgreSQL only)
+- `--db-user` – database username
+- `--db-secret` – ConnectionSecret name for credentials
+- `--db-query` – SQL query to execute
+
+File source (for file types):
+
+- `--file` – path to source file
+
+CSV options:
+
+- `--csv-delimiter` – field delimiter (default: `,`)
+- `--csv-header` – file has header row (default: `true`)
+- `--csv-skip-rows` – rows to skip before data
+
+Configuration:
+
+- `--constraint` – constraints in `field:operator:value` format, repeatable
+- `--description` – optional description
+
+Output:
+
+- `--output`, `-o` – output file path (creates new file)
+- `--append-to` – append to existing multi-document YAML file
+
+Behavior:
+
+- `--no-prompt` – disable interactive prompts
+
+### Examples
+
+Create a PostgreSQL datasource with structured connection:
+
+```bash
+bino add datasource sales_db \
+  --type postgres \
+  --db-host localhost \
+  --db-port 5432 \
+  --db-database analytics \
+  --db-user reporting \
+  --db-secret postgresCredentials \
+  --db-query "SELECT * FROM sales" \
+  --output datasources/sales_db.yaml \
+  --no-prompt
+```
+
+Create a CSV datasource:
+
+```bash
+bino add datasource sales_csv \
+  --type csv \
+  --file data/sales.csv \
+  --csv-delimiter ";" \
+  --output datasources/sales.yaml \
+  --no-prompt
+```
+
+Create a Parquet datasource:
+
+```bash
+bino add datasource events \
+  --type parquet \
+  --file data/events.parquet \
+  --output datasources/events.yaml \
+  --no-prompt
+```
+
+---
+
+## Name Validation
+
+DataSet and DataSource names must follow these rules:
+
+- Start with a lowercase letter
+- Contain only lowercase letters, numbers, and underscores
+- Maximum 64 characters
+- Must not start with `_inline_` (reserved prefix)
+- Must be unique within the project for that kind
+
+Valid examples: `sales_data`, `orders2024`, `monthly_report`
+
+Invalid examples: `SalesData` (uppercase), `2024_orders` (starts with number), `sales-data` (hyphen)
+
+The wizard suggests corrections for invalid names.
+
+## File Organization
+
+The wizard detects your project's file organization pattern:
+
+- **Separate files** – each manifest in its own file (e.g., `datasets/sales.yaml`)
+- **Multi-document** – multiple manifests in one file separated by `---`
+
+Your preference is saved to `.bino/config.json` for future use.
+
+## Editor Integration
+
+When using `--open-editor` or when the wizard needs query input, bino opens your preferred editor:
+
+1. `$VISUAL` environment variable
+2. `$EDITOR` environment variable
+3. `vim` (fallback)
+4. `nano` (final fallback)
+
+For GUI editors like VS Code, bino automatically adds the `--wait` flag.
+
+## See also
+
+- [DataSet reference](/manifests/dataset/)
+- [DataSource reference](/manifests/datasource/)
+- [bino init](/cli/init/)
+- [bino lint](/cli/lint/)
