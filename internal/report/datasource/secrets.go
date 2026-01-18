@@ -22,6 +22,7 @@ import (
 //   - azure: Azure Blob Storage (requires azure extension)
 //   - postgres: PostgreSQL credentials only (requires postgres extension)
 //   - mysql: MySQL credentials only (requires mysql extension)
+//   - webdav: WebDAV servers (requires webdavfs community extension)
 //
 // Database secrets (postgres, mysql) contain only credentials.
 // Connection details (host, port, database, user) are defined in the DataSource connection block.
@@ -46,6 +47,7 @@ type SecretSpec struct {
 	R2          *R2AuthSpec          `json:"r2,omitempty"`
 	Azure       *AzureAuthSpec       `json:"azure,omitempty"`
 	Huggingface *HuggingfaceAuthSpec `json:"huggingface,omitempty"`
+	WebDAV      *WebDAVAuthSpec      `json:"webdav,omitempty"`
 }
 
 // PostgresAuthSpec holds PostgreSQL credentials.
@@ -123,6 +125,14 @@ type AzureAuthSpec struct {
 type HuggingfaceAuthSpec struct {
 	Token        string `json:"token,omitempty"`
 	TokenFromEnv string `json:"tokenFromEnv,omitempty"`
+}
+
+// WebDAVAuthSpec holds WebDAV credentials.
+type WebDAVAuthSpec struct {
+	Username        string `json:"username,omitempty"`
+	UsernameFromEnv string `json:"usernameFromEnv,omitempty"`
+	Password        string `json:"password,omitempty"`
+	PasswordFromEnv string `json:"passwordFromEnv,omitempty"`
 }
 
 // LoadSecrets creates in-memory DuckDB secrets from ConnectionSecret manifests.
@@ -228,6 +238,8 @@ func buildCreateSecret(name string, spec SecretSpec) (string, error) {
 		err = addAzureParams(&parts, spec.Azure)
 	case "huggingface":
 		err = addHuggingfaceParams(&parts, spec.Huggingface)
+	case "webdav":
+		err = addWebDAVParams(&parts, spec.WebDAV)
 	default:
 		return "", fmt.Errorf("unsupported secret type: %s", spec.Type)
 	}
@@ -407,6 +419,22 @@ func addHuggingfaceParams(parts *[]string, auth *HuggingfaceAuthSpec) error {
 	return nil
 }
 
+func addWebDAVParams(parts *[]string, auth *WebDAVAuthSpec) error {
+	if auth == nil {
+		return fmt.Errorf("webdav secret requires webdav credentials")
+	}
+
+	if username, err := resolveCredential(auth.Username, auth.UsernameFromEnv); err == nil && username != "" {
+		*parts = append(*parts, fmt.Sprintf("USERNAME '%s'", escapeSQLString(username)))
+	}
+
+	if password, err := resolveCredential(auth.Password, auth.PasswordFromEnv); err == nil && password != "" {
+		*parts = append(*parts, fmt.Sprintf("PASSWORD '%s'", escapeSQLString(password)))
+	}
+
+	return nil
+}
+
 // resolveCredential returns the inline value or resolves from environment variable.
 // Returns an error only if both are empty or if env var is missing.
 func resolveCredential(inline, envName string) (string, error) {
@@ -430,8 +458,21 @@ func extensionForSecretType(secretType string) string {
 		return "postgres"
 	case "mysql":
 		return "mysql"
+	case "webdav":
+		return "webdavfs"
 	default:
 		return ""
+	}
+}
+
+// IsCommunityExtension returns true if the extension is a DuckDB community extension
+// (installed via "FROM community" syntax rather than the standard repository).
+func IsCommunityExtension(name string) bool {
+	switch name {
+	case "webdavfs", "prql":
+		return true
+	default:
+		return false
 	}
 }
 

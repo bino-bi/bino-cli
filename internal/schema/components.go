@@ -12,6 +12,7 @@ const (
 	ConnectionSecretTypeR2       ConnectionSecretType = "r2"
 	ConnectionSecretTypeHTTP     ConnectionSecretType = "http"
 	ConnectionSecretTypeAzure    ConnectionSecretType = "azure"
+	ConnectionSecretTypeWebDAV   ConnectionSecretType = "webdav"
 )
 
 // ConnectionSecretSpec represents the spec section of a ConnectionSecret manifest.
@@ -19,7 +20,7 @@ type ConnectionSecretSpec struct {
 	// Type is the connection secret type (required).
 	Type ConnectionSecretType `yaml:"type" json:"type"`
 
-	// PasswordFromEnv is the environment variable containing the password (postgres, mysql).
+	// PasswordFromEnv is the environment variable containing the password (postgres, mysql, webdav).
 	PasswordFromEnv string `yaml:"passwordFromEnv,omitempty" json:"passwordFromEnv,omitempty"`
 
 	// KeyID is the access key ID (s3, gcs, r2).
@@ -28,7 +29,7 @@ type ConnectionSecretSpec struct {
 	// SecretFromEnv is the environment variable containing the secret key (s3, gcs, r2).
 	SecretFromEnv string `yaml:"secretFromEnv,omitempty" json:"secretFromEnv,omitempty"`
 
-	// Username is the HTTP basic auth username.
+	// Username is the HTTP basic auth username (http, webdav).
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 
 	// BearerTokenFromEnv is the environment variable containing the bearer token (http).

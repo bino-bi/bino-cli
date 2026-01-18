@@ -156,6 +156,62 @@ func TestParseSecretSpec(t *testing.T) {
 			},
 		},
 		{
+			name: "webdav with credentials",
+			raw: `{
+				"spec": {
+					"type": "webdav",
+					"scope": "webdav://server.example.com/",
+					"webdav": {
+						"username": "user123",
+						"password": "pass456"
+					}
+				}
+			}`,
+			wantErr: false,
+			check: func(t *testing.T, spec SecretSpec) {
+				if spec.Type != "webdav" {
+					t.Errorf("expected type webdav, got %s", spec.Type)
+				}
+				if spec.Scope != "webdav://server.example.com/" {
+					t.Errorf("expected scope webdav://server.example.com/, got %s", spec.Scope)
+				}
+				if spec.WebDAV == nil {
+					t.Fatal("expected webdav auth spec")
+				}
+				if spec.WebDAV.Username != "user123" {
+					t.Errorf("unexpected username: %s", spec.WebDAV.Username)
+				}
+				if spec.WebDAV.Password != "pass456" {
+					t.Errorf("unexpected password: %s", spec.WebDAV.Password)
+				}
+			},
+		},
+		{
+			name: "webdav with credentials from env",
+			raw: `{
+				"spec": {
+					"type": "webdav",
+					"scope": "storagebox://u123456",
+					"webdav": {
+						"usernameFromEnv": "WEBDAV_USER",
+						"passwordFromEnv": "WEBDAV_PASS"
+					}
+				}
+			}`,
+			wantErr: false,
+			check: func(t *testing.T, spec SecretSpec) {
+				if spec.WebDAV == nil {
+					t.Fatal("expected webdav auth spec")
+				}
+				if spec.WebDAV.UsernameFromEnv != "WEBDAV_USER" {
+					t.Errorf("unexpected usernameFromEnv: %s", spec.WebDAV.UsernameFromEnv)
+				}
+				if spec.WebDAV.PasswordFromEnv != "WEBDAV_PASS" {
+					t.Errorf("unexpected passwordFromEnv: %s", spec.WebDAV.PasswordFromEnv)
+				}
+			},
+		},
+		{
 			name: "missing type",
 			raw: `{
 				"spec": {}
@@ -299,6 +355,54 @@ func TestBuildCreateSecret(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "webdav with full config",
+			specName: "test-webdav",
+			spec: SecretSpec{
+				Type:  "webdav",
+				Scope: "webdav://server.example.com/",
+				WebDAV: &WebDAVAuthSpec{
+					Username: "user123",
+					Password: "pass456",
+				},
+			},
+			wantErr: false,
+			contains: []string{
+				`CREATE SECRET "test-webdav"`,
+				"TYPE webdav",
+				"SCOPE 'webdav://server.example.com/'",
+				"USERNAME 'user123'",
+				"PASSWORD 'pass456'",
+			},
+		},
+		{
+			name:     "webdav for hetzner storagebox",
+			specName: "my-storagebox",
+			spec: SecretSpec{
+				Type:  "webdav",
+				Scope: "storagebox://u123456",
+				WebDAV: &WebDAVAuthSpec{
+					Username: "u123456",
+					Password: "secret",
+				},
+			},
+			wantErr: false,
+			contains: []string{
+				`CREATE SECRET "my-storagebox"`,
+				"TYPE webdav",
+				"SCOPE 'storagebox://u123456'",
+				"USERNAME 'u123456'",
+				"PASSWORD 'secret'",
+			},
+		},
+		{
+			name:     "webdav missing auth spec",
+			specName: "test-webdav-missing",
+			spec: SecretSpec{
+				Type: "webdav",
+			},
+			wantErr: true,
+		},
+		{
 			name:     "unsupported type",
 			specName: "test-unknown",
 			spec: SecretSpec{
@@ -400,4 +504,56 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestExtensionForSecretType(t *testing.T) {
+	tests := []struct {
+		secretType string
+		want       string
+	}{
+		{"s3", "httpfs"},
+		{"gcs", "httpfs"},
+		{"http", "httpfs"},
+		{"r2", "httpfs"},
+		{"huggingface", "httpfs"},
+		{"azure", "azure"},
+		{"postgres", "postgres"},
+		{"mysql", "mysql"},
+		{"webdav", "webdavfs"},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.secretType, func(t *testing.T) {
+			got := extensionForSecretType(tt.secretType)
+			if got != tt.want {
+				t.Errorf("extensionForSecretType(%q) = %q, want %q", tt.secretType, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsCommunityExtension(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"webdavfs", true},
+		{"prql", true},
+		{"httpfs", false},
+		{"postgres", false},
+		{"mysql", false},
+		{"azure", false},
+		{"excel", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsCommunityExtension(tt.name)
+			if got != tt.want {
+				t.Errorf("IsCommunityExtension(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
 }
