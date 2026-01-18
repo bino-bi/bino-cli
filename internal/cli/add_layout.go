@@ -518,7 +518,7 @@ func writeLayoutCardManifest(cmd *cobra.Command, workdir string, data LayoutCard
 func buildLayoutPageDocument(data LayoutPageManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindLayoutPage, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	// Add $ prefix to children for reference syntax
 	children := make([]string, len(data.Children))
@@ -541,7 +541,7 @@ func renderLayoutPageManifest(doc *schema.Document) ([]byte, error) {
 func buildLayoutCardDocument(data LayoutCardManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindLayoutCard, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	// Add $ prefix to children for reference syntax
 	children := make([]string, len(data.Children))

@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-)
 
-// Measure represents a single measure with a name and unit.
-type Measure struct {
-	Name string `json:"name"`
-	Unit string `json:"unit"`
-}
+	"bino.bi/bino/internal/schema"
+)
 
 // MeasureList captures one or more measures declared in component specs.
 // It supports unmarshaling from either a JSON string or a YAML/JSON array.
-type MeasureList []Measure
+type MeasureList []schema.Measure
 
 // UnmarshalJSON supports both string and array inputs for measure bindings.
 func (m *MeasureList) UnmarshalJSON(data []byte) error {
@@ -33,7 +29,7 @@ func (m *MeasureList) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 		// Parse the string content as an array of measures.
-		var measures []Measure
+		var measures []schema.Measure
 		if err := json.Unmarshal([]byte(jsonStr), &measures); err != nil {
 			return fmt.Errorf("invalid measure JSON string: %w", err)
 		}
@@ -42,7 +38,7 @@ func (m *MeasureList) UnmarshalJSON(data []byte) error {
 	}
 
 	// Try parsing as a direct array of measure objects.
-	var measures []Measure
+	var measures []schema.Measure
 	if err := json.Unmarshal(data, &measures); err == nil {
 		*m = measures
 		return nil

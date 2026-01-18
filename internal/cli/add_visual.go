@@ -787,7 +787,7 @@ func writeChartTimeManifest(cmd *cobra.Command, workdir string, data ChartTimeMa
 func buildTableDocument(data TableManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindTable, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.TableSpec{
 		Dataset:    "$" + data.Dataset,
@@ -805,7 +805,7 @@ func renderTableManifest(doc *schema.Document) ([]byte, error) {
 func buildChartStructureDocument(data ChartStructureManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindChartStructure, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartStructureSpec{
 		Dataset:    "$" + data.Dataset,
@@ -824,7 +824,7 @@ func renderChartStructureManifest(doc *schema.Document) ([]byte, error) {
 func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindChartTime, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartTimeSpec{
 		Dataset:    "$" + data.Dataset,

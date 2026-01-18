@@ -481,7 +481,7 @@ func writeConnectionSecretManifest(cmd *cobra.Command, workdir string, data Conn
 func buildConnectionSecretDocument(data ConnectionSecretManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindConnectionSecret, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ConnectionSecretSpec{
 		Type: convertConnectionSecretType(data.Type),

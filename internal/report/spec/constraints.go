@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"bino.bi/bino/internal/schema"
 )
 
 // Mode represents the execution mode for constraint evaluation.
@@ -71,14 +73,6 @@ type Constraint struct {
 	Operator string   // "==", "!=", "in", or "not-in"
 	Right    string   // Right operand value for == and != operators
 	Values   []string // Right operand values for in and not-in operators
-}
-
-// StructuredConstraint is the Go representation of a structured constraint object.
-// Used for JSON/YAML unmarshaling.
-type StructuredConstraint struct {
-	Field    string `json:"field" yaml:"field"`
-	Operator string `json:"operator" yaml:"operator"`
-	Value    any    `json:"value" yaml:"value"` // string, bool, or []string
 }
 
 // ParseConstraint parses a constraint expression string into its components.
@@ -245,7 +239,7 @@ func parseArrayValue(s string) ([]string, error) {
 }
 
 // ParseStructuredConstraint parses a structured constraint object into a Constraint.
-func ParseStructuredConstraint(sc *StructuredConstraint) (*Constraint, error) {
+func ParseStructuredConstraint(sc *schema.StructuredConstraint) (*Constraint, error) {
 	if sc.Field == "" {
 		return nil, &ConstraintError{
 			Reason: "missing 'field' in structured constraint",
@@ -627,7 +621,7 @@ func ParseConstraintFromAny(v any) (*Constraint, error) {
 	case string:
 		return ParseConstraint(val)
 	case map[string]any:
-		sc := &StructuredConstraint{}
+		sc := &schema.StructuredConstraint{}
 		if f, ok := val["field"].(string); ok {
 			sc.Field = f
 		}

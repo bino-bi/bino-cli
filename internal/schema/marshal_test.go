@@ -380,7 +380,7 @@ func TestDocument_MarshalYAML(t *testing.T) {
 		Metadata: Metadata{
 			Name:        "test_dataset",
 			Description: "A test dataset",
-			Constraints: []string{"env == production"},
+			Constraints: ConstraintListFromStrings([]string{"env == production"}),
 		},
 		Spec: &DataSetSpec{
 			Query: &QueryField{Inline: "SELECT 1"},
