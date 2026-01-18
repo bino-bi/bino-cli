@@ -783,7 +783,7 @@ func writeSigningProfileManifest(cmd *cobra.Command, workdir string, data Signin
 func buildReportArtefactDocument(data ReportArtefactManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindReportArtefact, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	// Add $ prefix to layout page names for YAML reference syntax
 	layoutPages := make([]string, len(data.LayoutPages))
@@ -813,7 +813,7 @@ func renderReportArtefactManifest(doc *schema.Document) ([]byte, error) {
 func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindLiveReportArtefact, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	routes := make(map[string]schema.LiveRouteSpec)
 	for path, route := range data.Routes {
@@ -849,7 +849,7 @@ func renderLiveReportArtefactManifest(doc *schema.Document) ([]byte, error) {
 func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindSigningProfile, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.SigningProfileSpec{
 		SignerName: data.SignerName,

@@ -2,6 +2,8 @@ package spec
 
 import (
 	"testing"
+
+	"bino.bi/bino/internal/schema"
 )
 
 func TestParseConstraint(t *testing.T) {
@@ -551,68 +553,68 @@ func TestConstraintEvaluate_InOperator(t *testing.T) {
 func TestParseStructuredConstraint(t *testing.T) {
 	tests := []struct {
 		name    string
-		sc      *StructuredConstraint
+		sc      *schema.StructuredConstraint
 		want    *Constraint
 		wantErr bool
 	}{
 		{
 			name: "equals operator",
-			sc:   &StructuredConstraint{Field: "labels.env", Operator: "==", Value: "prod"},
+			sc:   &schema.StructuredConstraint{Field: "labels.env", Operator: "==", Value: "prod"},
 			want: &Constraint{Left: "labels.env", Operator: OpEquals, Right: "prod"},
 		},
 		{
 			name: "not equals operator",
-			sc:   &StructuredConstraint{Field: "mode", Operator: "!=", Value: "serve"},
+			sc:   &schema.StructuredConstraint{Field: "mode", Operator: "!=", Value: "serve"},
 			want: &Constraint{Left: "mode", Operator: OpNotEquals, Right: "serve"},
 		},
 		{
 			name: "in operator with array",
-			sc:   &StructuredConstraint{Field: "spec.format", Operator: "in", Value: []any{"pdf", "png"}},
+			sc:   &schema.StructuredConstraint{Field: "spec.format", Operator: "in", Value: []any{"pdf", "png"}},
 			want: &Constraint{Left: "spec.format", Operator: OpIn, Values: []string{"pdf", "png"}},
 		},
 		{
 			name: "not-in operator with array",
-			sc:   &StructuredConstraint{Field: "labels.region", Operator: "not-in", Value: []any{"asia"}},
+			sc:   &schema.StructuredConstraint{Field: "labels.region", Operator: "not-in", Value: []any{"asia"}},
 			want: &Constraint{Left: "labels.region", Operator: OpNotIn, Values: []string{"asia"}},
 		},
 		{
 			name: "boolean value true",
-			sc:   &StructuredConstraint{Field: "spec.enabled", Operator: "==", Value: true},
+			sc:   &schema.StructuredConstraint{Field: "spec.enabled", Operator: "==", Value: true},
 			want: &Constraint{Left: "spec.enabled", Operator: OpEquals, Right: "true"},
 		},
 		{
 			name: "boolean value false",
-			sc:   &StructuredConstraint{Field: "spec.enabled", Operator: "==", Value: false},
+			sc:   &schema.StructuredConstraint{Field: "spec.enabled", Operator: "==", Value: false},
 			want: &Constraint{Left: "spec.enabled", Operator: OpEquals, Right: "false"},
 		},
 		{
 			name:    "missing field",
-			sc:      &StructuredConstraint{Field: "", Operator: "==", Value: "prod"},
+			sc:      &schema.StructuredConstraint{Field: "", Operator: "==", Value: "prod"},
 			wantErr: true,
 		},
 		{
 			name:    "missing operator",
-			sc:      &StructuredConstraint{Field: "labels.env", Operator: "", Value: "prod"},
+			sc:      &schema.StructuredConstraint{Field: "labels.env", Operator: "", Value: "prod"},
 			wantErr: true,
 		},
 		{
 			name:    "invalid operator",
-			sc:      &StructuredConstraint{Field: "labels.env", Operator: "equals", Value: "prod"},
+			sc:      &schema.StructuredConstraint{Field: "labels.env", Operator: "equals", Value: "prod"},
 			wantErr: true,
 		},
 		{
 			name:    "invalid field (unknown root)",
-			sc:      &StructuredConstraint{Field: "foo.bar", Operator: "==", Value: "prod"},
+			sc:      &schema.StructuredConstraint{Field: "foo.bar", Operator: "==", Value: "prod"},
 			wantErr: true,
 		},
 		{
 			name:    "in operator with non-array value",
-			sc:      &StructuredConstraint{Field: "labels.env", Operator: "in", Value: "prod"},
+			sc:      &schema.StructuredConstraint{Field: "labels.env", Operator: "in", Value: "prod"},
 			wantErr: true,
 		},
 		{
 			name:    "in operator with empty array",
-			sc:      &StructuredConstraint{Field: "labels.env", Operator: "in", Value: []any{}},
+			sc:      &schema.StructuredConstraint{Field: "labels.env", Operator: "in", Value: []any{}},
 			wantErr: true,
 		},
 	}
@@ -809,32 +811,32 @@ func TestStringAndStructuredFormatEquivalence(t *testing.T) {
 	tests := []struct {
 		name       string
 		strExpr    string
-		structured *StructuredConstraint
+		structured *schema.StructuredConstraint
 	}{
 		{
 			name:       "mode equals",
 			strExpr:    "mode==preview",
-			structured: &StructuredConstraint{Field: "mode", Operator: "==", Value: "preview"},
+			structured: &schema.StructuredConstraint{Field: "mode", Operator: "==", Value: "preview"},
 		},
 		{
 			name:       "labels equals",
 			strExpr:    "labels.env==prod",
-			structured: &StructuredConstraint{Field: "labels.env", Operator: "==", Value: "prod"},
+			structured: &schema.StructuredConstraint{Field: "labels.env", Operator: "==", Value: "prod"},
 		},
 		{
 			name:       "spec not equals",
 			strExpr:    "spec.format!=png",
-			structured: &StructuredConstraint{Field: "spec.format", Operator: "!=", Value: "png"},
+			structured: &schema.StructuredConstraint{Field: "spec.format", Operator: "!=", Value: "png"},
 		},
 		{
 			name:       "mode in array",
 			strExpr:    "mode in [build,preview]",
-			structured: &StructuredConstraint{Field: "mode", Operator: "in", Value: []any{"build", "preview"}},
+			structured: &schema.StructuredConstraint{Field: "mode", Operator: "in", Value: []any{"build", "preview"}},
 		},
 		{
 			name:       "labels not-in array",
 			strExpr:    "labels.env not-in [dev,staging]",
-			structured: &StructuredConstraint{Field: "labels.env", Operator: "not-in", Value: []any{"dev", "staging"}},
+			structured: &schema.StructuredConstraint{Field: "labels.env", Operator: "not-in", Value: []any{"dev", "staging"}},
 		},
 	}
 

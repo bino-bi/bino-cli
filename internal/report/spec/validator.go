@@ -1,23 +1,12 @@
 package spec
 
 import (
-	_ "embed"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 
-	"github.com/xeipuuv/gojsonschema"
-)
-
-//go:embed schema/document.schema.json
-var documentSchema []byte
-
-var (
-	schemaOnce sync.Once
-	schemaObj  *gojsonschema.Schema
-	schemaErr  error
+	"bino.bi/bino/internal/schema"
 )
 
 // SchemaError represents a structured schema validation error with improved formatting.
@@ -132,39 +121,28 @@ func getSuggestion(err SchemaError) string {
 }
 
 // ValidateDocument verifies that the provided JSON manifest matches the report
-// bundle schema. The schema is compiled once and cached for subsequent calls.
+// bundle schema. Delegates to schema.ValidateJSON for actual validation.
 func ValidateDocument(doc []byte) error {
-	schemaOnce.Do(func() {
-		loader := gojsonschema.NewBytesLoader(documentSchema)
-		schemaObj, schemaErr = gojsonschema.NewSchema(loader)
-	})
-
-	if schemaErr != nil {
-		return fmt.Errorf("load schema: %w", schemaErr)
-	}
-
-	result, err := schemaObj.Validate(gojsonschema.NewBytesLoader(doc))
-	if err != nil {
-		return fmt.Errorf("validate: %w", err)
-	}
-
-	if result.Valid() {
+	err := schema.ValidateJSON(doc)
+	if err == nil {
 		return nil
 	}
 
-	// Convert to structured errors
-	errors := make([]SchemaError, 0, len(result.Errors()))
-	for _, desc := range result.Errors() {
-		field := desc.Field()
-		if field == "" {
-			field = "(root)"
-		}
+	// Convert schema.ValidationError to spec.SchemaValidationError for
+	// backwards compatibility and enhanced error formatting with suggestions.
+	issues := schema.GetValidationIssues(err)
+	if issues == nil {
+		// Not a validation error, return as-is
+		return err
+	}
 
+	errors := make([]SchemaError, 0, len(issues))
+	for _, issue := range issues {
 		errors = append(errors, SchemaError{
-			Field:       field,
-			Description: desc.Description(),
-			Value:       desc.Value(),
-			Context:     desc.Context().String(),
+			Field:       issue.Path,
+			Description: issue.Message,
+			Value:       issue.Value,
+			Context:     issue.Path,
 		})
 	}
 

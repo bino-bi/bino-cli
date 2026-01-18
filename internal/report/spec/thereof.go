@@ -3,18 +3,13 @@ package spec
 import (
 	"bytes"
 	"encoding/json"
-)
 
-// ThereofItem represents a single drilldown object with rowGroup, category, and subCategory.
-type ThereofItem struct {
-	RowGroup    string `json:"rowGroup,omitempty"`
-	Category    string `json:"category,omitempty"`
-	SubCategory string `json:"subCategory,omitempty"`
-}
+	"bino.bi/bino/internal/schema"
+)
 
 // ThereofList captures a list of thereof drilldown items that may be specified
 // as either a JSON string or an array of objects in YAML/JSON.
-type ThereofList []ThereofItem
+type ThereofList []schema.ThereofItem
 
 // UnmarshalJSON supports both string (JSON-encoded) and array inputs.
 func (t *ThereofList) UnmarshalJSON(data []byte) error {
@@ -25,7 +20,7 @@ func (t *ThereofList) UnmarshalJSON(data []byte) error {
 	}
 
 	// Try to unmarshal as an array of objects first.
-	var items []ThereofItem
+	var items []schema.ThereofItem
 	if err := json.Unmarshal(data, &items); err == nil {
 		*t = items
 		return nil
@@ -39,7 +34,7 @@ func (t *ThereofList) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 		// Parse the string as JSON array.
-		var parsed []ThereofItem
+		var parsed []schema.ThereofItem
 		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
 			*t = parsed
 			return nil
@@ -65,15 +60,9 @@ func (t ThereofList) String() string {
 	return string(data)
 }
 
-// PartofItem represents a single part-of object with rowGroup and category.
-type PartofItem struct {
-	RowGroup string `json:"rowGroup,omitempty"`
-	Category string `json:"category,omitempty"`
-}
-
 // PartofList captures a list of partof items that may be specified
 // as either a JSON string or an array of objects in YAML/JSON.
-type PartofList []PartofItem
+type PartofList []schema.PartofItem
 
 // UnmarshalJSON supports both string (JSON-encoded) and array inputs.
 func (p *PartofList) UnmarshalJSON(data []byte) error {
@@ -84,7 +73,7 @@ func (p *PartofList) UnmarshalJSON(data []byte) error {
 	}
 
 	// Try to unmarshal as an array of objects first.
-	var items []PartofItem
+	var items []schema.PartofItem
 	if err := json.Unmarshal(data, &items); err == nil {
 		*p = items
 		return nil
@@ -98,7 +87,7 @@ func (p *PartofList) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 		// Parse the string as JSON array.
-		var parsed []PartofItem
+		var parsed []schema.PartofItem
 		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
 			*p = parsed
 			return nil
@@ -123,16 +112,9 @@ func (p PartofList) String() string {
 	return string(data)
 }
 
-// ColumnthereofItem represents a single column-thereof object.
-type ColumnthereofItem struct {
-	Scenario  string   `json:"scenario,omitempty"`
-	Name      string   `json:"name,omitempty"`
-	SubGroups []string `json:"subGroups,omitempty"`
-}
-
 // ColumnthereofList captures a list of columnthereof items that may be specified
 // as either a JSON string or an array of objects in YAML/JSON.
-type ColumnthereofList []ColumnthereofItem
+type ColumnthereofList []schema.ColumnthereofItem
 
 // UnmarshalJSON supports both string (JSON-encoded) and array inputs.
 func (c *ColumnthereofList) UnmarshalJSON(data []byte) error {
@@ -143,7 +125,7 @@ func (c *ColumnthereofList) UnmarshalJSON(data []byte) error {
 	}
 
 	// Try to unmarshal as an array of objects first.
-	var items []ColumnthereofItem
+	var items []schema.ColumnthereofItem
 	if err := json.Unmarshal(data, &items); err == nil {
 		*c = items
 		return nil
@@ -157,7 +139,7 @@ func (c *ColumnthereofList) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 		// Parse the string as JSON array.
-		var parsed []ColumnthereofItem
+		var parsed []schema.ColumnthereofItem
 		if err := json.Unmarshal([]byte(str), &parsed); err == nil {
 			*c = parsed
 			return nil
