@@ -3,13 +3,17 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/schema"
 )
 
 // ManifestInfo holds metadata about a manifest document.
@@ -267,6 +271,56 @@ func AppendToManifest(path, content string) error {
 	return nil
 }
 
+// WriteSchemaDocument validates and writes a schema.Document to a file.
+// It handles both creating new files and appending to existing multi-document files.
+// The out writer is used to print success messages.
+func WriteSchemaDocument(doc *schema.Document, workdir, outputPath string, appendMode bool, out io.Writer) error {
+	// Validate the document name
+	if err := ValidateName(doc.Metadata.Name); err != nil {
+		return ConfigError(err)
+	}
+
+	// Marshal to YAML
+	manifestBytes, err := yaml.Marshal(doc)
+	if err != nil {
+		return RuntimeError(fmt.Errorf("render manifest: %w", err))
+	}
+
+	// Validate against JSON schema
+	if err := schema.Validate(manifestBytes); err != nil {
+		return ConfigError(fmt.Errorf("generated manifest is invalid: %w", err))
+	}
+
+	manifest := string(manifestBytes)
+
+	// Resolve absolute path
+	absPath := outputPath
+	if !filepath.IsAbs(outputPath) {
+		absPath = filepath.Join(workdir, outputPath)
+	}
+
+	// Write to file
+	if appendMode {
+		if err := AppendToManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Appended to %s\n", outputPath)
+	} else {
+		if err := WriteManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Created %s\n", outputPath)
+	}
+
+	return nil
+}
+
+// RenderSchemaDocument renders a schema.Document to YAML bytes.
+// Useful for previewing before writing.
+func RenderSchemaDocument(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
+
 // DataSetManifestData holds data for rendering a DataSet manifest.
 type DataSetManifestData struct {
 	Name         string
@@ -278,58 +332,6 @@ type DataSetManifestData struct {
 	PRQL         string   // PRQL query content (inline)
 	PRQLFile     string   // PRQL file path (external)
 	Source       string   // DataSource name (pass-through)
-}
-
-// RenderDataSetManifest renders a DataSet manifest from the given data.
-func RenderDataSetManifest(data DataSetManifestData) string {
-	var b strings.Builder
-
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: DataSet\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
-	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-
-	if len(data.Dependencies) > 0 {
-		b.WriteString("  dependencies:\n")
-		for _, d := range data.Dependencies {
-			b.WriteString(fmt.Sprintf("    - %s\n", d))
-		}
-	}
-
-	// Query or source
-	switch {
-	case data.Query != "":
-		b.WriteString("  query: |\n")
-		for _, line := range strings.Split(data.Query, "\n") {
-			b.WriteString(fmt.Sprintf("    %s\n", line))
-		}
-	case data.QueryFile != "":
-		b.WriteString(fmt.Sprintf("  query: $file(%s)\n", data.QueryFile))
-	case data.PRQL != "":
-		b.WriteString("  prql: |\n")
-		for _, line := range strings.Split(data.PRQL, "\n") {
-			b.WriteString(fmt.Sprintf("    %s\n", line))
-		}
-	case data.PRQLFile != "":
-		b.WriteString(fmt.Sprintf("  prql: $file(%s)\n", data.PRQLFile))
-	case data.Source != "":
-		b.WriteString(fmt.Sprintf("  source: $%s\n", data.Source))
-	}
-
-	return b.String()
 }
 
 // DataSourceManifestData holds data for rendering a DataSource manifest.
@@ -355,76 +357,6 @@ type DataSourceManifestData struct {
 	CSVDelimiter string
 	CSVHeader    *bool
 	CSVSkipRows  int
-}
-
-// RenderDataSourceManifest renders a DataSource manifest from the given data.
-func RenderDataSourceManifest(data DataSourceManifestData) string {
-	var b strings.Builder
-
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: DataSource\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
-	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  type: %s\n", data.Type.TypeString()))
-
-	switch data.Type {
-	case DataSourceTypePostgres, DataSourceTypeMySQL:
-		// Database connection as structured object
-		b.WriteString("  connection:\n")
-		if data.DBHost != "" {
-			b.WriteString(fmt.Sprintf("    host: %s\n", quoteYAMLIfNeeded(data.DBHost)))
-		}
-		if data.DBPort > 0 {
-			b.WriteString(fmt.Sprintf("    port: %d\n", data.DBPort))
-		}
-		if data.DBDatabase != "" {
-			b.WriteString(fmt.Sprintf("    database: %s\n", quoteYAMLIfNeeded(data.DBDatabase)))
-		}
-		if data.DBSchema != "" {
-			b.WriteString(fmt.Sprintf("    schema: %s\n", quoteYAMLIfNeeded(data.DBSchema)))
-		}
-		if data.DBUser != "" {
-			b.WriteString(fmt.Sprintf("    user: %s\n", quoteYAMLIfNeeded(data.DBUser)))
-		}
-		if data.DBSecret != "" {
-			b.WriteString(fmt.Sprintf("    secret: %s\n", data.DBSecret))
-		}
-		// Query is required for database sources
-		if data.DBQuery != "" {
-			b.WriteString("  query: |\n")
-			for _, line := range strings.Split(data.DBQuery, "\n") {
-				b.WriteString(fmt.Sprintf("    %s\n", line))
-			}
-		}
-	case DataSourceTypeCSV:
-		b.WriteString(fmt.Sprintf("  path: %s\n", data.Path))
-		if data.CSVDelimiter != "" && data.CSVDelimiter != "," {
-			b.WriteString(fmt.Sprintf("  delimiter: %s\n", quoteYAMLIfNeeded(data.CSVDelimiter)))
-		}
-		if data.CSVHeader != nil && !*data.CSVHeader {
-			b.WriteString("  header: false\n")
-		}
-		if data.CSVSkipRows > 0 {
-			b.WriteString(fmt.Sprintf("  skipRows: %d\n", data.CSVSkipRows))
-		}
-	case DataSourceTypeParquet, DataSourceTypeExcel, DataSourceTypeJSON:
-		b.WriteString(fmt.Sprintf("  path: %s\n", data.Path))
-	}
-
-	return b.String()
 }
 
 // quoteYAMLIfNeeded adds quotes to a string if it contains special characters.

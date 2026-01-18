@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // TableManifestData holds data for rendering a Table manifest.
@@ -197,10 +199,14 @@ A Table component displays data from a DataSet in a formatted table.
 			}
 
 			// Preview
-			manifest := RenderTableManifest(data)
+			doc := buildTableDocument(data)
+			manifestBytes, err := renderTableManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -429,10 +435,14 @@ ChartStructure displays data from a DataSet as a structural chart:
 			}
 
 			// Preview
-			manifest := RenderChartStructureManifest(data)
+			doc := buildChartStructureDocument(data)
+			manifestBytes, err := renderChartStructureManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -661,10 +671,14 @@ ChartTime displays time-series data from a DataSet:
 			}
 
 			// Preview
-			manifest := RenderChartTimeManifest(data)
+			doc := buildChartTimeDocument(data)
+			manifestBytes, err := renderChartTimeManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -754,188 +768,74 @@ func completeChartTimeTypes(_ *cobra.Command, _ []string, _ string) ([]string, c
 // Write functions
 
 func writeTableManifest(cmd *cobra.Command, workdir string, data TableManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderTableManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildTableDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeChartStructureManifest(cmd *cobra.Command, workdir string, data ChartStructureManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderChartStructureManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildChartStructureDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeChartTimeManifest(cmd *cobra.Command, workdir string, data ChartTimeManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderChartTimeManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildChartTimeDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// Render functions
+// Build and render functions
 
-// RenderTableManifest renders a Table manifest from the given data.
-func RenderTableManifest(data TableManifestData) string {
-	var b strings.Builder
+func buildTableDocument(data TableManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindTable, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: Table\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.TableSpec{
+		Dataset:    "$" + data.Dataset,
+		TableTitle: data.Title,
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  dataset: $%s\n", data.Dataset))
-
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  tableTitle: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	return b.String()
+	doc.Spec = spec
+	return doc
 }
 
-// RenderChartStructureManifest renders a ChartStructure manifest from the given data.
-func RenderChartStructureManifest(data ChartStructureManifestData) string {
-	var b strings.Builder
-
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: ChartStructure\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
-	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  dataset: $%s\n", data.Dataset))
-
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  chartTitle: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	if data.ChartType != "" {
-		b.WriteString(fmt.Sprintf("  type: %s\n", data.ChartType))
-	}
-
-	return b.String()
+func renderTableManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }
 
-// RenderChartTimeManifest renders a ChartTime manifest from the given data.
-func RenderChartTimeManifest(data ChartTimeManifestData) string {
-	var b strings.Builder
+func buildChartStructureDocument(data ChartStructureManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindChartStructure, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: ChartTime\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.ChartStructureSpec{
+		Dataset:    "$" + data.Dataset,
+		ChartTitle: data.Title,
+		Type:       data.ChartType,
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
+	doc.Spec = spec
+	return doc
+}
+
+func renderChartStructureManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
+
+func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindChartTime, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
+
+	spec := &schema.ChartTimeSpec{
+		Dataset:    "$" + data.Dataset,
+		ChartTitle: data.Title,
+		Type:       data.ChartType,
 	}
 
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  dataset: $%s\n", data.Dataset))
+	doc.Spec = spec
+	return doc
+}
 
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  chartTitle: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	if data.ChartType != "" {
-		b.WriteString(fmt.Sprintf("  type: %s\n", data.ChartType))
-	}
-
-	return b.String()
+func renderChartTimeManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }

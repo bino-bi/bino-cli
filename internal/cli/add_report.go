@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // ReportArtefactManifestData holds data for rendering a ReportArtefact manifest.
@@ -265,10 +267,14 @@ including the filename, format, orientation, and which LayoutPages to include.
 			}
 
 			// Preview
-			manifest := RenderReportArtefactManifest(data)
+			doc := buildReportArtefactDocument(data)
+			manifestBytes, err := renderReportArtefactManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -508,10 +514,14 @@ IMPORTANT: A root route "/" is required.
 			}
 
 			// Preview
-			manifest := RenderLiveReportArtefactManifest(data)
+			doc := buildLiveReportArtefactDocument(data)
+			manifestBytes, err := renderLiveReportArtefactManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 			fmt.Fprintln(out, "\nNote: Add additional routes by editing the manifest file.")
 
@@ -688,10 +698,14 @@ digitally sign PDF reports.
 			}
 
 			// Preview
-			manifest := RenderSigningProfileManifest(data)
+			doc := buildSigningProfileDocument(data)
+			manifestBytes, err := renderSigningProfileManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -749,222 +763,110 @@ func completeLayoutPages(cmd *cobra.Command, _ []string, _ string) ([]string, co
 // Write functions
 
 func writeReportArtefactManifest(cmd *cobra.Command, workdir string, data ReportArtefactManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderReportArtefactManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildReportArtefactDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeLiveReportArtefactManifest(cmd *cobra.Command, workdir string, data LiveReportArtefactManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderLiveReportArtefactManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildLiveReportArtefactDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeSigningProfileManifest(cmd *cobra.Command, workdir string, data SigningProfileManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderSigningProfileManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildSigningProfileDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// Render functions
+// Build and render functions
 
-// RenderReportArtefactManifest renders a ReportArtefact manifest from the given data.
-func RenderReportArtefactManifest(data ReportArtefactManifestData) string {
-	var b strings.Builder
+// buildReportArtefactDocument creates a schema.Document from ReportArtefactManifestData.
+func buildReportArtefactDocument(data ReportArtefactManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindReportArtefact, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: ReportArtefact\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	// Add $ prefix to layout page names for YAML reference syntax
+	layoutPages := make([]string, len(data.LayoutPages))
+	for i, page := range data.LayoutPages {
+		layoutPages[i] = "$" + page
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
+	spec := &schema.ReportArtefactSpec{
+		Filename:    data.Filename,
+		Title:       data.Title,
+		Format:      data.Format,
+		Orientation: data.Orientation,
+		Language:    data.Language,
+		LayoutPages: layoutPages,
 	}
 
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  filename: %s\n", quoteYAMLIfNeeded(data.Filename)))
-
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  title: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	if data.Format != "" {
-		b.WriteString(fmt.Sprintf("  format: %s\n", data.Format))
-	}
-
-	if data.Orientation != "" {
-		b.WriteString(fmt.Sprintf("  orientation: %s\n", data.Orientation))
-	}
-
-	if data.Language != "" {
-		b.WriteString(fmt.Sprintf("  language: %s\n", data.Language))
-	}
-
-	if len(data.LayoutPages) > 0 {
-		b.WriteString("  layoutPages:\n")
-		for _, page := range data.LayoutPages {
-			b.WriteString(fmt.Sprintf("    - $%s\n", page))
-		}
-	}
-
-	return b.String()
+	doc.Spec = spec
+	return doc
 }
 
-// RenderLiveReportArtefactManifest renders a LiveReportArtefact manifest from the given data.
-func RenderLiveReportArtefactManifest(data LiveReportArtefactManifestData) string {
-	var b strings.Builder
+// renderReportArtefactManifest renders a schema.Document to YAML bytes.
+func renderReportArtefactManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: LiveReportArtefact\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
+// buildLiveReportArtefactDocument creates a schema.Document from LiveReportArtefactManifestData.
+func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindLiveReportArtefact, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
-	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  title: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	b.WriteString("  routes:\n")
+	routes := make(map[string]schema.LiveRouteSpec)
 	for path, route := range data.Routes {
-		b.WriteString(fmt.Sprintf("    %s:\n", quoteYAMLIfNeeded(path)))
+		routeSpec := schema.LiveRouteSpec{}
 		if route.Artefact != "" {
-			b.WriteString(fmt.Sprintf("      artefact: $%s\n", route.Artefact))
-		} else if len(route.LayoutPages) > 0 {
-			b.WriteString("      layoutPages:\n")
-			for _, page := range route.LayoutPages {
-				b.WriteString(fmt.Sprintf("        - $%s\n", page))
-			}
-		} else {
-			b.WriteString("      # Configure artefact or layoutPages\n")
+			routeSpec.Artefact = "$" + route.Artefact
 		}
+		if len(route.LayoutPages) > 0 {
+			layoutPages := make([]string, len(route.LayoutPages))
+			for i, page := range route.LayoutPages {
+				layoutPages[i] = "$" + page
+			}
+			routeSpec.LayoutPages = layoutPages
+		}
+		routes[path] = routeSpec
 	}
 
-	return b.String()
+	spec := &schema.LiveReportArtefactSpec{
+		Title:  data.Title,
+		Routes: routes,
+	}
+
+	doc.Spec = spec
+	return doc
 }
 
-// RenderSigningProfileManifest renders a SigningProfile manifest from the given data.
-func RenderSigningProfileManifest(data SigningProfileManifestData) string {
-	var b strings.Builder
+// renderLiveReportArtefactManifest renders a schema.Document to YAML bytes.
+func renderLiveReportArtefactManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: SigningProfile\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
+// buildSigningProfileDocument creates a schema.Document from SigningProfileManifestData.
+func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindSigningProfile, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.SigningProfileSpec{
+		SignerName: data.SignerName,
 	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
 
 	if data.CertificatePath != "" {
-		b.WriteString("  certificate:\n")
-		b.WriteString(fmt.Sprintf("    localPath: %s\n", data.CertificatePath))
+		spec.Certificate = &schema.FileRef{LocalPath: data.CertificatePath}
 	}
-
 	if data.PrivateKeyPath != "" {
-		b.WriteString("  privateKey:\n")
-		b.WriteString(fmt.Sprintf("    localPath: %s\n", data.PrivateKeyPath))
+		spec.PrivateKey = &schema.FileRef{LocalPath: data.PrivateKeyPath}
 	}
 
-	if data.SignerName != "" {
-		b.WriteString(fmt.Sprintf("  signerName: %s\n", quoteYAMLIfNeeded(data.SignerName)))
-	}
+	doc.Spec = spec
+	return doc
+}
 
-	return b.String()
+// renderSigningProfileManifest renders a schema.Document to YAML bytes.
+func renderSigningProfileManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }
