@@ -685,7 +685,7 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 func buildDataSetDocument(data DataSetManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindDataSet, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.DataSetSpec{}
 

@@ -688,7 +688,7 @@ func writeInternationalizationManifest(cmd *cobra.Command, workdir string, data 
 func buildTextDocument(data TextManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindText, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.TextSpec{
 		Value: data.Value,
@@ -710,7 +710,7 @@ func renderTextManifest(doc *schema.Document) ([]byte, error) {
 func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindComponentStyle, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ComponentStyleSpec{}
 
@@ -751,7 +751,7 @@ func renderComponentStyleManifest(doc *schema.Document) ([]byte, error) {
 func buildInternationalizationDocument(data InternationalizationManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindInternationalization, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.InternationalizationSpec{
 		Code:    data.Code,

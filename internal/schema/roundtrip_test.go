@@ -20,7 +20,7 @@ func TestDocumentRoundTrip(t *testing.T) {
 				Metadata: Metadata{
 					Name:        "sales_summary",
 					Description: "Aggregated sales data",
-					Constraints: []string{"env == production", "region != test"},
+					Constraints: ConstraintListFromStrings([]string{"env == production", "region != test"}),
 				},
 				Spec: &DataSetSpec{
 					Query:        &QueryField{Inline: "SELECT * FROM sales"},

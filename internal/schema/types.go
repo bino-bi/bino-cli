@@ -20,7 +20,7 @@ type Metadata struct {
 	Name        string            `yaml:"name" json:"name"`
 	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
 	Labels      map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
-	Constraints []string          `yaml:"constraints,omitempty" json:"constraints,omitempty"`
+	Constraints ConstraintList    `yaml:"constraints,omitempty" json:"constraints,omitempty"`
 }
 
 // Kind constants for all supported manifest types.

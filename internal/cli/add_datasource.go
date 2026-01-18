@@ -712,7 +712,7 @@ func promptDataSourcePostActions(reader *bufio.Reader, out io.Writer) error {
 func buildDataSourceDocument(data DataSourceManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindDataSource, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.DataSourceSpec{
 		Type: convertDataSourceType(data.Type),

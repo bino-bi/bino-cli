@@ -566,7 +566,7 @@ func writeAssetManifest(cmd *cobra.Command, workdir string, data AssetManifestDa
 func buildAssetDocument(data AssetManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindAsset, data.Name)
 	doc.Metadata.Description = data.Description
-	doc.Metadata.Constraints = data.Constraints
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.AssetSpec{
 		Type:      convertAssetType(data.Type),
