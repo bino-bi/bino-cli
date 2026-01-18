@@ -15,7 +15,7 @@ import (
 )
 
 var standardExtensions = []string{"excel", "postgres", "mysql", "httpfs"}
-var communityExtensions = []string{"prql"}
+var communityExtensions = []string{"prql", "webdavfs"}
 
 // DefaultExtensions returns the built-in set of DuckDB extensions required by the CLI.
 func DefaultExtensions() []string {

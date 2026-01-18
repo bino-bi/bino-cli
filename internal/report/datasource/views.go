@@ -127,14 +127,23 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 
 	// Install extensions required by secrets (if any weren't already loaded)
 	if len(secretExts) > 0 {
-		var additionalExts []string
+		var standardExts, communityExts []string
 		for _, ext := range secretExts {
 			if _, loaded := extensions[ext]; !loaded {
-				additionalExts = append(additionalExts, ext)
+				if IsCommunityExtension(ext) {
+					communityExts = append(communityExts, ext)
+				} else {
+					standardExts = append(standardExts, ext)
+				}
 			}
 		}
-		if len(additionalExts) > 0 {
-			if err := session.InstallAndLoadExtensions(ctx, additionalExts); err != nil {
+		if len(standardExts) > 0 {
+			if err := session.InstallAndLoadExtensions(ctx, standardExts); err != nil {
+				return diags, err
+			}
+		}
+		if len(communityExts) > 0 {
+			if err := session.InstallAndLoadCommunityExtensions(ctx, communityExts); err != nil {
 				return diags, err
 			}
 		}
