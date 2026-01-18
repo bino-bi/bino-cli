@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 func newAddDataSetCommand() *cobra.Command {
@@ -263,7 +265,12 @@ Modes:
 			}
 
 			// Step 6: Preview & Confirmation
-			manifest := RenderDataSetManifest(data)
+			doc := buildDataSetDocument(data)
+			manifestBytes, err := renderDataSetManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render manifest: %w", err))
+			}
+			manifest := string(manifestBytes)
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
 			fmt.Fprintln(out, manifest)
@@ -674,38 +681,46 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 	}
 }
 
+// buildDataSetDocument converts DataSetManifestData to a schema.Document.
+func buildDataSetDocument(data DataSetManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindDataSet, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
+
+	spec := &schema.DataSetSpec{}
+
+	// Set query/prql/source
+	switch {
+	case data.Query != "":
+		spec.Query = &schema.QueryField{Inline: data.Query}
+	case data.QueryFile != "":
+		spec.Query = &schema.QueryField{File: data.QueryFile}
+	case data.PRQL != "":
+		spec.Prql = &schema.QueryField{Inline: data.PRQL}
+	case data.PRQLFile != "":
+		spec.Prql = &schema.QueryField{File: data.PRQLFile}
+	case data.Source != "":
+		spec.Source = &schema.DataSourceRef{Ref: data.Source}
+	}
+
+	// Set dependencies
+	for _, dep := range data.Dependencies {
+		spec.Dependencies = append(spec.Dependencies, schema.DataSourceRef{Ref: dep})
+	}
+
+	doc.Spec = spec
+	return doc
+}
+
+// renderDataSetManifest marshals a schema.Document to YAML bytes.
+func renderDataSetManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
+
 // writeDataSetManifest writes the DataSet manifest to the specified path.
 func writeDataSetManifest(cmd *cobra.Command, workdir string, data DataSetManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	// Validate name one more time
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	// Render manifest
-	manifest := RenderDataSetManifest(data)
-
-	// Resolve absolute path
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	// Write or append
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildDataSetDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 // promptPostActions shows post-creation action menu.

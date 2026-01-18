@@ -12,8 +12,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 func newAddDataSourceCommand() *cobra.Command {
@@ -273,10 +275,14 @@ Modes:
 			}
 
 			// Step 6: Preview & Confirmation
-			manifest := RenderDataSourceManifest(data)
+			doc := buildDataSourceDocument(data)
+			manifestBytes, err := renderDataSourceManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 			fmt.Fprintln(out)
 
@@ -667,36 +673,8 @@ func searchDataFiles(dir string, ext string) ([]string, error) {
 
 // writeDataSourceManifest writes the DataSource manifest to the specified path.
 func writeDataSourceManifest(cmd *cobra.Command, workdir string, data DataSourceManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	// Validate name one more time
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	// Render manifest
-	manifest := RenderDataSourceManifest(data)
-
-	// Resolve absolute path
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	// Write or append
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildDataSourceDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 // promptDataSourcePostActions shows post-creation action menu.
@@ -728,4 +706,75 @@ func promptDataSourcePostActions(reader *bufio.Reader, out io.Writer) error {
 	}
 
 	return nil
+}
+
+// buildDataSourceDocument creates a schema.Document from DataSourceManifestData.
+func buildDataSourceDocument(data DataSourceManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindDataSource, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
+
+	spec := &schema.DataSourceSpec{
+		Type: convertDataSourceType(data.Type),
+	}
+
+	// Configure based on type
+	switch data.Type {
+	case DataSourceTypePostgres, DataSourceTypeMySQL:
+		// Database connection
+		spec.Connection = &schema.ConnectionSpec{
+			Host:     data.DBHost,
+			Port:     data.DBPort,
+			Database: data.DBDatabase,
+			Schema:   data.DBSchema,
+			User:     data.DBUser,
+			Secret:   data.DBSecret,
+		}
+		spec.Query = data.DBQuery
+
+	case DataSourceTypeCSV:
+		spec.Path = data.Path
+		if data.CSVDelimiter != "" && data.CSVDelimiter != "," {
+			spec.Delimiter = data.CSVDelimiter
+		}
+		if data.CSVHeader != nil && !*data.CSVHeader {
+			spec.Header = data.CSVHeader
+		}
+		if data.CSVSkipRows > 0 {
+			spec.SkipRows = data.CSVSkipRows
+		}
+
+	case DataSourceTypeParquet, DataSourceTypeExcel, DataSourceTypeJSON:
+		spec.Path = data.Path
+	}
+
+	doc.Spec = spec
+	return doc
+}
+
+// convertDataSourceType converts CLI DataSourceType to schema.DataSourceType.
+func convertDataSourceType(t DataSourceType) schema.DataSourceType {
+	switch t {
+	case DataSourceTypePostgres:
+		return schema.DataSourceTypePostgresQuery
+	case DataSourceTypeMySQL:
+		return schema.DataSourceTypeMySQLQuery
+	case DataSourceTypeCSV:
+		return schema.DataSourceTypeCSV
+	case DataSourceTypeParquet:
+		return schema.DataSourceTypeParquet
+	case DataSourceTypeExcel:
+		return schema.DataSourceTypeExcel
+	case DataSourceTypeJSON:
+		return schema.DataSourceTypeJSON
+	case DataSourceTypeInline:
+		return schema.DataSourceTypeInline
+	default:
+		return ""
+	}
+}
+
+// renderDataSourceManifest renders a schema.Document to YAML bytes.
+func renderDataSourceManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }

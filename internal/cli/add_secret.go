@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // ConnectionSecretType represents the type of connection secret.
@@ -316,10 +318,14 @@ to avoid hardcoding sensitive values in manifest files.
 			}
 
 			// Preview
-			manifest := RenderConnectionSecretManifest(data)
+			doc := buildConnectionSecretDocument(data)
+			manifestBytes, err := renderConnectionSecretManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -467,90 +473,65 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 }
 
 func writeConnectionSecretManifest(cmd *cobra.Command, workdir string, data ConnectionSecretManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderConnectionSecretManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildConnectionSecretDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// RenderConnectionSecretManifest renders a ConnectionSecret manifest from the given data.
-func RenderConnectionSecretManifest(data ConnectionSecretManifestData) string {
-	var b strings.Builder
+// buildConnectionSecretDocument creates a schema.Document from ConnectionSecretManifestData.
+func buildConnectionSecretDocument(data ConnectionSecretManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindConnectionSecret, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: ConnectionSecret\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.ConnectionSecretSpec{
+		Type: convertConnectionSecretType(data.Type),
 	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  type: %s\n", data.Type.TypeString()))
 
 	switch data.Type {
 	case ConnectionSecretTypePostgres, ConnectionSecretTypeMySQL:
-		if data.PasswordFromEnv != "" {
-			b.WriteString(fmt.Sprintf("  passwordFromEnv: %s\n", data.PasswordFromEnv))
-		}
+		spec.PasswordFromEnv = data.PasswordFromEnv
 
 	case ConnectionSecretTypeS3, ConnectionSecretTypeGCS, ConnectionSecretTypeR2:
-		if data.KeyID != "" {
-			b.WriteString(fmt.Sprintf("  keyId: %s\n", data.KeyID))
-		}
-		if data.SecretEnv != "" {
-			b.WriteString(fmt.Sprintf("  secretFromEnv: %s\n", data.SecretEnv))
-		}
+		spec.KeyID = data.KeyID
+		spec.SecretFromEnv = data.SecretEnv
 
 	case ConnectionSecretTypeHTTP:
-		if data.Username != "" {
-			b.WriteString(fmt.Sprintf("  username: %s\n", quoteYAMLIfNeeded(data.Username)))
-		}
-		if data.Password != "" {
-			b.WriteString(fmt.Sprintf("  passwordFromEnv: %s\n", data.Password))
-		}
-		if data.BearerToken != "" {
-			b.WriteString(fmt.Sprintf("  bearerTokenFromEnv: %s\n", data.BearerToken))
-		}
+		spec.Username = data.Username
+		spec.PasswordFromEnv = data.Password
+		spec.BearerTokenFromEnv = data.BearerToken
 
 	case ConnectionSecretTypeAzure:
-		if data.ConnectionString != "" {
-			b.WriteString(fmt.Sprintf("  connectionStringFromEnv: %s\n", data.ConnectionString))
-		}
-		if data.AccountKey != "" {
-			b.WriteString(fmt.Sprintf("  accountKeyFromEnv: %s\n", data.AccountKey))
-		}
+		spec.ConnectionStringFromEnv = data.ConnectionString
+		spec.AccountKeyFromEnv = data.AccountKey
 	}
 
-	return b.String()
+	doc.Spec = spec
+	return doc
+}
+
+// convertConnectionSecretType converts CLI ConnectionSecretType to schema.ConnectionSecretType.
+func convertConnectionSecretType(t ConnectionSecretType) schema.ConnectionSecretType {
+	switch t {
+	case ConnectionSecretTypePostgres:
+		return schema.ConnectionSecretTypePostgres
+	case ConnectionSecretTypeMySQL:
+		return schema.ConnectionSecretTypeMySQL
+	case ConnectionSecretTypeS3:
+		return schema.ConnectionSecretTypeS3
+	case ConnectionSecretTypeGCS:
+		return schema.ConnectionSecretTypeGCS
+	case ConnectionSecretTypeR2:
+		return schema.ConnectionSecretTypeR2
+	case ConnectionSecretTypeHTTP:
+		return schema.ConnectionSecretTypeHTTP
+	case ConnectionSecretTypeAzure:
+		return schema.ConnectionSecretTypeAzure
+	default:
+		return ""
+	}
+}
+
+// renderConnectionSecretManifest renders a schema.Document to YAML bytes.
+func renderConnectionSecretManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }

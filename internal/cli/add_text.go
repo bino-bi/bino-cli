@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // TextManifestData holds data for rendering a Text manifest.
@@ -228,10 +230,14 @@ Text components can display:
 			}
 
 			// Preview
-			manifest := RenderTextManifest(data)
+			doc := buildTextDocument(data)
+			manifestBytes, err := renderTextManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -406,10 +412,14 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				}
 			}
 
-			manifest := RenderComponentStyleManifest(data)
+			doc := buildComponentStyleDocument(data)
+			manifestBytes, err := renderComponentStyleManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -581,10 +591,14 @@ Internationalization manifests define translations for a specific locale.
 				}
 			}
 
-			manifest := RenderInternationalizationManifest(data)
+			doc := buildInternationalizationDocument(data)
+			manifestBytes, err := renderInternationalizationManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
@@ -655,164 +669,59 @@ func promptGenericName(reader *bufio.Reader, out io.Writer, manifests []Manifest
 }
 
 func writeTextManifest(cmd *cobra.Command, workdir string, data TextManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderTextManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildTextDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeComponentStyleManifest(cmd *cobra.Command, workdir string, data ComponentStyleManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderComponentStyleManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildComponentStyleDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeInternationalizationManifest(cmd *cobra.Command, workdir string, data InternationalizationManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderInternationalizationManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildInternationalizationDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// Render functions
+// Build and render functions
 
-// RenderTextManifest renders a Text manifest from the given data.
-func RenderTextManifest(data TextManifestData) string {
-	var b strings.Builder
+func buildTextDocument(data TextManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindText, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: Text\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.TextSpec{
+		Value: data.Value,
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
-
+	// Add $ prefix to dataset for reference syntax
 	if data.Dataset != "" {
-		b.WriteString(fmt.Sprintf("  dataset: $%s\n", data.Dataset))
+		spec.Dataset = "$" + data.Dataset
 	}
 
-	if data.Value != "" {
-		if strings.Contains(data.Value, "\n") {
-			b.WriteString("  value: |\n")
-			for _, line := range strings.Split(data.Value, "\n") {
-				b.WriteString(fmt.Sprintf("    %s\n", line))
-			}
-		} else {
-			b.WriteString(fmt.Sprintf("  value: %s\n", quoteYAMLIfNeeded(data.Value)))
-		}
-	}
-
-	return b.String()
+	doc.Spec = spec
+	return doc
 }
 
-// RenderComponentStyleManifest renders a ComponentStyle manifest from the given data.
-func RenderComponentStyleManifest(data ComponentStyleManifestData) string {
-	var b strings.Builder
+func renderTextManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: ComponentStyle\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
+func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindComponentStyle, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
-	}
-
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
-
-	b.WriteString("spec:\n")
+	spec := &schema.ComponentStyleSpec{}
 
 	// Parse content as JSON or use as-is
 	if data.Content != "" {
 		if strings.HasPrefix(strings.TrimSpace(data.Content), "{") {
-			b.WriteString("  content:\n")
-			// Simple JSON to YAML conversion for single-level objects
+			// Simple JSON to map conversion for single-level objects
 			content := strings.TrimSpace(data.Content)
 			content = strings.TrimPrefix(content, "{")
 			content = strings.TrimSuffix(content, "}")
+			contentMap := make(map[string]string)
 			for _, line := range strings.Split(content, ",") {
 				line = strings.TrimSpace(line)
 				if line == "" {
@@ -822,46 +731,37 @@ func RenderComponentStyleManifest(data ComponentStyleManifestData) string {
 				if len(parts) == 2 {
 					key := strings.Trim(strings.TrimSpace(parts[0]), "\"")
 					val := strings.Trim(strings.TrimSpace(parts[1]), "\"")
-					b.WriteString(fmt.Sprintf("    %s: %s\n", key, quoteYAMLIfNeeded(val)))
+					contentMap[key] = val
 				}
 			}
+			spec.Content = contentMap
 		} else {
-			b.WriteString(fmt.Sprintf("  content: %s\n", quoteYAMLIfNeeded(data.Content)))
+			spec.Content = data.Content
 		}
 	}
 
-	return b.String()
+	doc.Spec = spec
+	return doc
 }
 
-// RenderInternationalizationManifest renders an Internationalization manifest from the given data.
-func RenderInternationalizationManifest(data InternationalizationManifestData) string {
-	var b strings.Builder
+func renderComponentStyleManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: Internationalization\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
+func buildInternationalizationDocument(data InternationalizationManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindInternationalization, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.InternationalizationSpec{
+		Code:    data.Code,
+		Content: data.Content,
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
-	}
+	doc.Spec = spec
+	return doc
+}
 
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  code: %s\n", data.Code))
-
-	if len(data.Content) > 0 {
-		b.WriteString("  content:\n")
-		for key, val := range data.Content {
-			b.WriteString(fmt.Sprintf("    %s: %s\n", quoteYAMLIfNeeded(key), quoteYAMLIfNeeded(val)))
-		}
-	}
-
-	return b.String()
+func renderInternationalizationManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }
