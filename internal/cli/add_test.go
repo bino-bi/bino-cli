@@ -230,22 +230,27 @@ func TestDetectFilePattern(t *testing.T) {
 	})
 }
 
-func TestRenderDataSetManifest(t *testing.T) {
+func TestBuildDataSetDocument(t *testing.T) {
 	t.Run("basic SQL query", func(t *testing.T) {
 		data := DataSetManifestData{
 			Name:  "test_dataset",
 			Query: "SELECT * FROM table",
 		}
-		got := RenderDataSetManifest(data)
+		doc := buildDataSetDocument(data)
+		got, err := renderDataSetManifest(doc)
+		if err != nil {
+			t.Fatalf("render error: %v", err)
+		}
+		yamlStr := string(got)
 
-		if !contains(got, "kind: DataSet") {
+		if !contains(yamlStr, "kind: DataSet") {
 			t.Error("expected 'kind: DataSet' in output")
 		}
-		if !contains(got, "name: test_dataset") {
+		if !contains(yamlStr, "name: test_dataset") {
 			t.Error("expected 'name: test_dataset' in output")
 		}
-		if !contains(got, "query: |") {
-			t.Error("expected 'query: |' in output")
+		if !contains(yamlStr, "query:") {
+			t.Error("expected 'query:' in output")
 		}
 	})
 
@@ -256,12 +261,17 @@ func TestRenderDataSetManifest(t *testing.T) {
 			Dependencies: []string{"source1", "source2"},
 			Query:        "SELECT *",
 		}
-		got := RenderDataSetManifest(data)
+		doc := buildDataSetDocument(data)
+		got, err := renderDataSetManifest(doc)
+		if err != nil {
+			t.Fatalf("render error: %v", err)
+		}
+		yamlStr := string(got)
 
-		if !contains(got, "description:") {
+		if !contains(yamlStr, "description:") {
 			t.Error("expected description in output")
 		}
-		if !contains(got, "dependencies:") {
+		if !contains(yamlStr, "dependencies:") {
 			t.Error("expected dependencies in output")
 		}
 	})
@@ -271,10 +281,16 @@ func TestRenderDataSetManifest(t *testing.T) {
 			Name:      "test_dataset",
 			QueryFile: "queries/test.sql",
 		}
-		got := RenderDataSetManifest(data)
+		doc := buildDataSetDocument(data)
+		got, err := renderDataSetManifest(doc)
+		if err != nil {
+			t.Fatalf("render error: %v", err)
+		}
+		yamlStr := string(got)
 
-		if !contains(got, "$file(queries/test.sql)") {
-			t.Error("expected $file reference in output")
+		// New format uses YAML map syntax: $file: path
+		if !contains(yamlStr, "$file:") {
+			t.Error("expected $file: reference in output, got:\n" + yamlStr)
 		}
 	})
 
@@ -283,22 +299,35 @@ func TestRenderDataSetManifest(t *testing.T) {
 			Name:   "test_dataset",
 			Source: "my_source",
 		}
-		got := RenderDataSetManifest(data)
+		doc := buildDataSetDocument(data)
+		got, err := renderDataSetManifest(doc)
+		if err != nil {
+			t.Fatalf("render error: %v", err)
+		}
+		yamlStr := string(got)
 
-		if !contains(got, "source: $my_source") {
-			t.Error("expected source reference in output")
+		if !contains(yamlStr, "source:") {
+			t.Error("expected source in output")
+		}
+		if !contains(yamlStr, "my_source") {
+			t.Error("expected source reference value in output")
 		}
 	})
 }
 
-func TestRenderDataSourceManifest(t *testing.T) {
+func TestBuildDataSourceDocument(t *testing.T) {
 	t.Run("CSV file", func(t *testing.T) {
 		data := DataSourceManifestData{
 			Name: "test_csv",
 			Type: DataSourceTypeCSV,
 			Path: "data/test.csv",
 		}
-		got := RenderDataSourceManifest(data)
+		doc := buildDataSourceDocument(data)
+		gotBytes, err := renderDataSourceManifest(doc)
+		if err != nil {
+			t.Fatalf("renderDataSourceManifest failed: %v", err)
+		}
+		got := string(gotBytes)
 
 		if !contains(got, "kind: DataSource") {
 			t.Error("expected 'kind: DataSource' in output")
@@ -322,7 +351,12 @@ func TestRenderDataSourceManifest(t *testing.T) {
 			DBSecret:   "postgresCredentials",
 			DBQuery:    "SELECT * FROM sales",
 		}
-		got := RenderDataSourceManifest(data)
+		doc := buildDataSourceDocument(data)
+		gotBytes, err := renderDataSourceManifest(doc)
+		if err != nil {
+			t.Fatalf("renderDataSourceManifest failed: %v", err)
+		}
+		got := string(gotBytes)
 
 		if !contains(got, "type: postgres_query") {
 			t.Error("expected 'type: postgres_query' in output")
@@ -345,8 +379,8 @@ func TestRenderDataSourceManifest(t *testing.T) {
 		if !contains(got, "secret: postgresCredentials") {
 			t.Error("expected secret in output")
 		}
-		if !contains(got, "query: |") {
-			t.Error("expected query block in output")
+		if !contains(got, "query:") {
+			t.Error("expected query in output")
 		}
 	})
 
@@ -360,7 +394,12 @@ func TestRenderDataSourceManifest(t *testing.T) {
 			CSVHeader:    &csvHeader,
 			CSVSkipRows:  2,
 		}
-		got := RenderDataSourceManifest(data)
+		doc := buildDataSourceDocument(data)
+		gotBytes, err := renderDataSourceManifest(doc)
+		if err != nil {
+			t.Fatalf("renderDataSourceManifest failed: %v", err)
+		}
+		got := string(gotBytes)
 
 		if !contains(got, "delimiter:") {
 			t.Error("expected delimiter in output")

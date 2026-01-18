@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // LayoutPageManifestData holds data for rendering a LayoutPage manifest.
@@ -189,10 +191,14 @@ populate with component references later.
 			}
 
 			// Preview
-			manifest := RenderLayoutPageManifest(data)
+			doc := buildLayoutPageDocument(data)
+			manifestBytes, err := renderLayoutPageManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			if len(data.Children) == 0 {
@@ -403,10 +409,14 @@ related content.
 			}
 
 			// Preview
-			manifest := RenderLayoutCardManifest(data)
+			doc := buildLayoutCardDocument(data)
+			manifestBytes, err := renderLayoutCardManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
 			if len(data.Children) == 0 {
@@ -494,137 +504,60 @@ func completeLayoutComponents(cmd *cobra.Command, _ []string, _ string) ([]strin
 // Write functions
 
 func writeLayoutPageManifest(cmd *cobra.Command, workdir string, data LayoutPageManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderLayoutPageManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildLayoutPageDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeLayoutCardManifest(cmd *cobra.Command, workdir string, data LayoutCardManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderLayoutCardManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildLayoutCardDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// Render functions
+// Build and render functions
 
-// RenderLayoutPageManifest renders a LayoutPage manifest from the given data.
-func RenderLayoutPageManifest(data LayoutPageManifestData) string {
-	var b strings.Builder
+func buildLayoutPageDocument(data LayoutPageManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindLayoutPage, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: LayoutPage\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	// Add $ prefix to children for reference syntax
+	children := make([]string, len(data.Children))
+	for i, child := range data.Children {
+		children[i] = "$" + child
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
+	spec := &schema.LayoutPageSpec{
+		Children: children,
 	}
 
-	b.WriteString("spec:\n")
-	b.WriteString("  children:\n")
-
-	if len(data.Children) > 0 {
-		for _, child := range data.Children {
-			b.WriteString(fmt.Sprintf("    - $%s\n", child))
-		}
-	} else {
-		b.WriteString("    # Add component references here, e.g.:\n")
-		b.WriteString("    # - $header_text\n")
-		b.WriteString("    # - $sales_table\n")
-	}
-
-	return b.String()
+	doc.Spec = spec
+	return doc
 }
 
-// RenderLayoutCardManifest renders a LayoutCard manifest from the given data.
-func RenderLayoutCardManifest(data LayoutCardManifestData) string {
-	var b strings.Builder
+func renderLayoutPageManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: LayoutCard\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
+func buildLayoutCardDocument(data LayoutCardManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindLayoutCard, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	// Add $ prefix to children for reference syntax
+	children := make([]string, len(data.Children))
+	for i, child := range data.Children {
+		children[i] = "$" + child
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
-		}
+	spec := &schema.LayoutCardSpec{
+		Title:    data.Title,
+		Children: children,
 	}
 
-	b.WriteString("spec:\n")
+	doc.Spec = spec
+	return doc
+}
 
-	if data.Title != "" {
-		b.WriteString(fmt.Sprintf("  title: %s\n", quoteYAMLIfNeeded(data.Title)))
-	}
-
-	b.WriteString("  children:\n")
-
-	if len(data.Children) > 0 {
-		for _, child := range data.Children {
-			b.WriteString(fmt.Sprintf("    - $%s\n", child))
-		}
-	} else {
-		b.WriteString("    # Add component references here, e.g.:\n")
-		b.WriteString("    # - $metric_text\n")
-	}
-
-	return b.String()
+func renderLayoutCardManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }

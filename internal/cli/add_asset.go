@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/schema"
 )
 
 // AssetType represents the type of asset.
@@ -304,12 +306,15 @@ Common asset types:
 			}
 
 			// Step 7: Preview & Confirmation
-			manifest := RenderAssetManifest(data)
+			doc := buildAssetDocument(data)
+			manifestBytes, err := renderAssetManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
+			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
-			fmt.Fprintln(out)
 
 			if appendMode {
 				fmt.Fprintf(out, "Will append to: %s\n", outputPath)
@@ -553,69 +558,49 @@ func detectMediaType(data AssetManifestData) string {
 }
 
 func writeAssetManifest(cmd *cobra.Command, workdir string, data AssetManifestData, outputPath string, appendMode bool) error {
-	out := cmd.OutOrStdout()
-
-	if err := ValidateName(data.Name); err != nil {
-		return ConfigError(err)
-	}
-
-	manifest := RenderAssetManifest(data)
-
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	doc := buildAssetDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
-// RenderAssetManifest renders an Asset manifest from the given data.
-func RenderAssetManifest(data AssetManifestData) string {
-	var b strings.Builder
+// buildAssetDocument creates a schema.Document from AssetManifestData.
+func buildAssetDocument(data AssetManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindAsset, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = data.Constraints
 
-	b.WriteString("apiVersion: bino.bi/v1alpha1\n")
-	b.WriteString("kind: Asset\n")
-	b.WriteString("metadata:\n")
-	b.WriteString(fmt.Sprintf("  name: %s\n", data.Name))
-
-	if data.Description != "" {
-		b.WriteString(fmt.Sprintf("  description: %s\n", quoteYAMLIfNeeded(data.Description)))
+	spec := &schema.AssetSpec{
+		Type:      convertAssetType(data.Type),
+		MediaType: data.MediaType,
 	}
 
-	if len(data.Constraints) > 0 {
-		b.WriteString("  constraints:\n")
-		for _, c := range data.Constraints {
-			b.WriteString(fmt.Sprintf("    - %s\n", quoteYAMLIfNeeded(c)))
+	// Build source if any source field is set
+	if data.LocalPath != "" || data.RemoteURL != "" || data.InlineData != "" {
+		spec.Source = &schema.AssetSource{
+			LocalPath:    data.LocalPath,
+			RemoteURL:    data.RemoteURL,
+			InlineBase64: data.InlineData,
 		}
 	}
 
-	b.WriteString("spec:\n")
-	b.WriteString(fmt.Sprintf("  type: %s\n", data.Type.TypeString()))
+	doc.Spec = spec
+	return doc
+}
 
-	if data.MediaType != "" {
-		b.WriteString(fmt.Sprintf("  mediaType: %s\n", data.MediaType))
+// convertAssetType converts CLI AssetType to schema.AssetType.
+func convertAssetType(t AssetType) schema.AssetType {
+	switch t {
+	case AssetTypeImage:
+		return schema.AssetTypeImage
+	case AssetTypeFont:
+		return schema.AssetTypeFont
+	case AssetTypeFile:
+		return schema.AssetTypeFile
+	default:
+		return ""
 	}
+}
 
-	switch {
-	case data.LocalPath != "":
-		b.WriteString(fmt.Sprintf("  source:\n    localPath: %s\n", data.LocalPath))
-	case data.RemoteURL != "":
-		b.WriteString(fmt.Sprintf("  source:\n    remoteURL: %s\n", data.RemoteURL))
-	case data.InlineData != "":
-		b.WriteString(fmt.Sprintf("  source:\n    inlineBase64: %s\n", data.InlineData))
-	}
-
-	return b.String()
+// renderAssetManifest renders a schema.Document to YAML bytes.
+func renderAssetManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
 }
