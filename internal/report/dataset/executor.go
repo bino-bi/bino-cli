@@ -52,6 +52,12 @@ type ExecuteOptions struct {
 	QueryExecLogger duckdb.QueryExecLogger
 	// EmbedOptions configures CSV embedding for build logs.
 	EmbedOptions buildlog.EmbedOptions
+	// DataValidation controls how data validation errors are handled.
+	// Default is DataValidationOff for backwards compatibility.
+	DataValidation DataValidationMode
+	// DataValidationSampleSize limits how many rows are validated.
+	// Default (0) uses GetDataValidationSampleSize() which reads from env.
+	DataValidationSampleSize int
 }
 
 // dataSetSpec mirrors the new minimal DataSet spec structure.
@@ -452,6 +458,16 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		}
 	}
 
+	// Determine validation sample size
+	validationSampleSize := 0
+	if opts != nil && opts.DataValidation != DataValidationOff && opts.DataValidation != "" {
+		if opts.DataValidationSampleSize > 0 {
+			validationSampleSize = opts.DataValidationSampleSize
+		} else {
+			validationSampleSize = GetDataValidationSampleSize()
+		}
+	}
+
 	// Execute each dataset query directly (views are already available)
 	for _, job := range jobs {
 		if err := ctx.Err(); err != nil {
@@ -462,6 +478,15 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		if err != nil {
 			warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
 			continue
+		}
+
+		// Validate data if enabled
+		if validationSampleSize > 0 {
+			validationResult := ValidateRows(job.doc.Name, data, validationSampleSize)
+			if !validationResult.Valid {
+				validationWarnings := DataValidationResultToWarnings(validationResult)
+				warnings = append(warnings, validationWarnings...)
+			}
 		}
 
 		// Write to cache (skip for ephemeral sources where cachePath is empty)

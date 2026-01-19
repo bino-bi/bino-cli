@@ -16,6 +16,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/watchers"
@@ -36,10 +37,11 @@ const defaultPreviewPort = 45678
 //   - The refresh goroutine exits
 func newPreviewCommand() *cobra.Command {
 	var (
-		port       int
-		workdir    string
-		logSQL     bool
-		enableLint bool
+		port           int
+		workdir        string
+		logSQL         bool
+		enableLint     bool
+		dataValidation string
 	)
 
 	cmd := &cobra.Command{
@@ -128,6 +130,21 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 			}
 
+			// Resolve data validation mode
+			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
+			dataValidationMode := dataset.DataValidationWarn // default
+			switch dataValidation {
+			case "fail":
+				dataValidationMode = dataset.DataValidationFail
+			case "warn":
+				dataValidationMode = dataset.DataValidationWarn
+			case "off":
+				dataValidationMode = dataset.DataValidationOff
+			default:
+				return ConfigErrorf("invalid --data-validation value %q, expected 'fail', 'warn', or 'off'", dataValidation)
+			}
+			dataValidationSampleSize := dataset.GetDataValidationSampleSize()
+
 			refreshMu := &sync.Mutex{}
 			var server *previewhttp.Server
 
@@ -184,7 +201,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				pipeline.LogArtefactWarnings(logger, artefacts)
 
 				if len(artefacts) == 0 {
-					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{Language: "de", Mode: pipeline.RenderModePreview, EngineVersion: engineVersion, QueryLogger: queryLogger})
+					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+						Language:                 "de",
+						Mode:                     pipeline.RenderModePreview,
+						EngineVersion:            engineVersion,
+						QueryLogger:              queryLogger,
+						DataValidation:           dataValidationMode,
+						DataValidationSampleSize: dataValidationSampleSize,
+					})
 					if err != nil {
 						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
 						if policy.IsInvalidRoot {
@@ -208,7 +232,12 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 				if len(artefacts) == 1 {
 					art := artefacts[0]
-					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger, engineVersion)
+					renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
+						QueryLogger:              queryLogger,
+						EngineVersion:            engineVersion,
+						DataValidation:           dataValidationMode,
+						DataValidationSampleSize: dataValidationSampleSize,
+					})
 					if err != nil {
 						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
 						if policy.IsInvalidRoot {
@@ -239,7 +268,12 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				payloads := make([]artefactPayload, 0, len(artefacts))
 				for _, art := range artefacts {
-					renderResult, err := pipeline.RenderArtefactFrameAndContext(ctx, watchDir, docs, art, queryLogger, engineVersion)
+					renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
+						QueryLogger:              queryLogger,
+						EngineVersion:            engineVersion,
+						DataValidation:           dataValidationMode,
+						DataValidationSampleSize: dataValidationSampleSize,
+					})
 					if err != nil {
 						if pipeline.IsInvalidRootError(err) {
 							logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)
@@ -342,6 +376,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory to watch for changes")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().BoolVar(&enableLint, "lint", false, "Run lint rules on each refresh")
+	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
+		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
 
 	return cmd
 }

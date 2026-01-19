@@ -141,7 +141,7 @@ func TestLSPValidateCommand(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = runLSPValidate(context.Background(), minimalDir, &buf)
+	err = runLSPValidate(context.Background(), minimalDir, false, &buf)
 	if err != nil {
 		t.Fatalf("runLSPValidate failed: %v", err)
 	}
