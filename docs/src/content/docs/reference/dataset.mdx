@@ -242,6 +242,59 @@ spec:
 
 For more PRQL syntax and examples, see the [PRQL documentation](https://prql-lang.org/book/).
 
+## Standard Dataset Schema
+
+To work correctly with visualization components like [Charts](/reference/chart-structure/) and [Tables](/reference/table/), your dataset queries should return rows that conform to the standard schema. While not all fields are required for every component, following this structure ensures proper aggregation, drill-down, and filtering behavior.
+
+### Measure Values (Scenarios)
+
+The schema supports four parallel sets of scenario columns for comparative analysis (e.g., Actual vs Plan).
+
+| Column          | Description                                                   |
+| :-------------- | :------------------------------------------------------------ |
+| `ac1` ... `ac4` | **Actual** values (current measurements)                      |
+| `pp1` ... `pp4` | **Previous Period** values (Year-over-Year, Month-over-Month) |
+| `fc1` ... `fc4` | **Forecast** values (predictions)                             |
+| `pl1` ... `pl4` | **Plan/Budget** values (targets)                              |
+
+### Grouping Dimensions
+
+These fields determine how data is hierarchically organized and sorted.
+
+| Dimension     | Index Column       | Description                                                 |
+| :------------ | :----------------- | :---------------------------------------------------------- |
+| `rowGroup`    | `rowGroupIndex`    | Top-level row grouping (e.g., "Revenue", "Costs").          |
+| `category`    | `categoryIndex`    | Primary data dimension (e.g., "Product A", "Region North"). |
+| `subCategory` | `subCategoryIndex` | Detail dimension for drill-down (creates "thereOf" rows).   |
+| `columnGroup` | `columnGroupIndex` | Column-level grouping for breaking down measures.           |
+
+**Note**: When providing a grouping dimension string (e.g., `rowGroup`), you should likewise provide the corresponding index (e.g., `rowGroupIndex`) to ensure consistent sort ordering.
+
+### Metadata & Control Fields
+
+| Column      | Type     | Description                                                                                                                       |
+| :---------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `date`      | `string` | **Required for TimeCharts**. ISO 8601 date (e.g., `2024-01-15`). Used for time-series axes and normalization.                     |
+| `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals. |
+| `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results.                                                    |
+
+### Example Query
+
+Here is an example SQL query producing a compliant dataset:
+
+```sql
+SELECT
+  'Revenue' as rowGroup,
+  1 as rowGroupIndex,
+  product_name as category,
+  product_rank as categoryIndex,
+  '2024-01-15' as date,
+  sum(sales_amount) as ac1,
+  sum(budget_amount) as pl1
+FROM sales_data
+GROUP BY product_name, product_rank
+```
+
 ## Conditional inclusion with constraints
 
 DataSet documents support `metadata.constraints` to conditionally include them for specific artefacts, modes, or environments.
@@ -372,8 +425,8 @@ You can mix inline DataSource definitions with named references:
 spec:
   dataset:
     dependencies:
-      - sales_csv              # Named reference to existing DataSource
-      - type: csv              # Inline definition
+      - sales_csv # Named reference to existing DataSource
+      - type: csv # Inline definition
         path: ./data/rates.csv
     query: |
       SELECT s.*, r.rate

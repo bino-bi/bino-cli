@@ -25,6 +25,12 @@ export interface LSPValidateResult {
     error?: string;
 }
 
+/** Options for workspace validation */
+export interface ValidationOptions {
+    /** Execute dataset queries and validate data (slower but catches data issues) */
+    executeQueries?: boolean;
+}
+
 /**
  * BinoValidator manages validation of bino documents and provides
  * diagnostics to VS Code's Problems panel.
@@ -234,7 +240,7 @@ export class BinoValidator {
     }
 
     /** Validate workspace and update diagnostics */
-    async validateWorkspace(): Promise<boolean> {
+    async validateWorkspace(options: ValidationOptions = {}): Promise<boolean> {
         if (this._validating) {
             this.outputChannel.appendLine('[Validate] Validation already in progress');
             return false;
@@ -251,7 +257,11 @@ export class BinoValidator {
         this.diagnosticCollection.clear();
 
         try {
-            const output = await this.execBino(['lsp-helper', 'validate', workDir]);
+            const args = ['lsp-helper', 'validate', workDir];
+            if (options.executeQueries) {
+                args.push('--execute-queries');
+            }
+            const output = await this.execBino(args);
             const result: LSPValidateResult = JSON.parse(output);
 
             if (result.error) {

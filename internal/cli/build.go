@@ -19,6 +19,7 @@ import (
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
@@ -61,6 +62,9 @@ func newBuildCommand() *cobra.Command {
 
 		// Detailed execution plan
 		detailedExecutionPlan bool
+
+		// Data validation
+		dataValidation string
 	)
 
 	cmd := &cobra.Command{
@@ -307,6 +311,20 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			_ = queryExecMetas
 			_ = logFormat
 
+			// Resolve data validation mode
+			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
+			dataValidationMode := dataset.DataValidationWarn // default
+			switch dataValidation {
+			case "fail":
+				dataValidationMode = dataset.DataValidationFail
+			case "warn":
+				dataValidationMode = dataset.DataValidationWarn
+			case "off":
+				dataValidationMode = dataset.DataValidationOff
+			default:
+				return ConfigErrorf("invalid --data-validation value %q, expected 'fail', 'warn', or 'off'", dataValidation)
+			}
+
 			// Step 2: Build artefacts
 			out.Step(fmt.Sprintf("Building %d artefact(s)...", len(selected)))
 
@@ -333,25 +351,27 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				})
 
 				entry, err := buildArtefact(ctx, buildArtefactConfig{
-					Logger:          logger.Channel(artefact.Document.Name),
-					Workdir:         absDir,
-					CacheDir:        cacheDir,
-					EngineVersion:   engineVersion,
-					Docs:            documents,
-					Artefact:        artefact,
-					SigningProfiles: signingProfiles,
-					OutputDir:       outputDir,
-					Browser:         browser,
-					DriverDir:       driverDir,
-					Debug:           logx.DebugEnabled(ctx),
-					Graph:           graph,
-					GraphRoot:       root,
-					GraphBase:       absDir,
-					Spinner:         spinner,
-					QueryLogger:     queryLogger,
-					QueryExecLogger: queryExecLogger,
-					EmbedOptions:    embedOpts,
-					ExecutionPlan:   execPlan,
+					Logger:                   logger.Channel(artefact.Document.Name),
+					Workdir:                  absDir,
+					CacheDir:                 cacheDir,
+					EngineVersion:            engineVersion,
+					Docs:                     documents,
+					Artefact:                 artefact,
+					SigningProfiles:          signingProfiles,
+					OutputDir:                outputDir,
+					Browser:                  browser,
+					DriverDir:                driverDir,
+					Debug:                    logx.DebugEnabled(ctx),
+					Graph:                    graph,
+					GraphRoot:                root,
+					GraphBase:                absDir,
+					Spinner:                  spinner,
+					QueryLogger:              queryLogger,
+					QueryExecLogger:          queryExecLogger,
+					EmbedOptions:             embedOpts,
+					ExecutionPlan:            execPlan,
+					DataValidation:           dataValidationMode,
+					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
 				})
 				if err != nil {
 					policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
@@ -491,6 +511,10 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 	cmd.Flags().BoolVar(&detailedExecutionPlan, "detailed-execution-plan", false,
 		"Enable detailed step-by-step timing in build log for performance analysis")
 
+	// Data validation
+	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
+		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
+
 	return cmd
 }
 
@@ -501,25 +525,27 @@ type artefactResult struct {
 }
 
 type buildArtefactConfig struct {
-	Logger          logx.Logger
-	Workdir         string
-	CacheDir        string
-	EngineVersion   string
-	Docs            []config.Document
-	Artefact        config.Artefact
-	SigningProfiles map[string]config.SigningProfile
-	OutputDir       string
-	Browser         string
-	DriverDir       string
-	Debug           bool
-	Graph           *reportgraph.Graph
-	GraphRoot       *reportgraph.Node
-	GraphBase       string
-	Spinner         *Spinner
-	QueryLogger     func(string)
-	QueryExecLogger duckdb.QueryExecLogger
-	EmbedOptions    buildlog.EmbedOptions
-	ExecutionPlan   *buildlog.ExecutionPlan
+	Logger                   logx.Logger
+	Workdir                  string
+	CacheDir                 string
+	EngineVersion            string
+	Docs                     []config.Document
+	Artefact                 config.Artefact
+	SigningProfiles          map[string]config.SigningProfile
+	OutputDir                string
+	Browser                  string
+	DriverDir                string
+	Debug                    bool
+	Graph                    *reportgraph.Graph
+	GraphRoot                *reportgraph.Node
+	GraphBase                string
+	Spinner                  *Spinner
+	QueryLogger              func(string)
+	QueryExecLogger          duckdb.QueryExecLogger
+	EmbedOptions             buildlog.EmbedOptions
+	ExecutionPlan            *buildlog.ExecutionPlan
+	DataValidation           dataset.DataValidationMode
+	DataValidationSampleSize int
 }
 
 // buildArtefact renders a single report artefact to PDF.
@@ -549,11 +575,13 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	logger.Debugf("Rendering HTML for %s", artefactName)
 
 	renderResult, err := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, cfg.Docs, cfg.Artefact, pipeline.RenderArtefactOptions{
-		EngineVersion:   cfg.EngineVersion,
-		QueryLogger:     cfg.QueryLogger,
-		QueryExecLogger: cfg.QueryExecLogger,
-		EmbedOptions:    cfg.EmbedOptions,
-		ExecutionPlan:   cfg.ExecutionPlan,
+		EngineVersion:            cfg.EngineVersion,
+		QueryLogger:              cfg.QueryLogger,
+		QueryExecLogger:          cfg.QueryExecLogger,
+		EmbedOptions:             cfg.EmbedOptions,
+		ExecutionPlan:            cfg.ExecutionPlan,
+		DataValidation:           cfg.DataValidation,
+		DataValidationSampleSize: cfg.DataValidationSampleSize,
 	})
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
 	if err != nil {

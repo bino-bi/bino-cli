@@ -14,6 +14,7 @@ import (
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
@@ -222,6 +223,8 @@ func resolveProjectRootForLSP(dir string) (string, error) {
 }
 
 func newLSPValidateCommand() *cobra.Command {
+	var executeQueries bool
+
 	cmd := &cobra.Command{
 		Use:   "validate <directory>",
 		Short: "Validate all bino documents in a directory",
@@ -229,13 +232,17 @@ func newLSPValidateCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
-			return runLSPValidate(cmd.Context(), dir, cmd.OutOrStdout())
+			return runLSPValidate(cmd.Context(), dir, executeQueries, cmd.OutOrStdout())
 		},
 	}
+
+	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false,
+		"Execute dataset queries and validate data (slower but catches data issues)")
+
 	return cmd
 }
 
-func runLSPValidate(ctx context.Context, dir string, out io.Writer) error {
+func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io.Writer) error {
 	result := LSPValidateResult{
 		Valid:       true,
 		Diagnostics: []LSPDiagnostic{},
@@ -250,7 +257,7 @@ func runLSPValidate(ctx context.Context, dir string, out io.Writer) error {
 	}
 
 	// First pass: use lenient mode to gather documents but track validation errors
-	diagnostics, err := validateDirectory(ctx, absDir)
+	diagnostics, err := validateDirectory(ctx, absDir, executeQueries)
 	if err != nil {
 		result.Error = fmt.Sprintf("validation failed: %v", err)
 		result.Valid = false
@@ -265,7 +272,8 @@ func runLSPValidate(ctx context.Context, dir string, out io.Writer) error {
 
 // validateDirectory performs validation on all bino documents in a directory
 // and returns structured diagnostics for any issues found.
-func validateDirectory(ctx context.Context, dir string) ([]LSPDiagnostic, error) {
+// If executeQueries is true, datasets are executed and data is validated.
+func validateDirectory(ctx context.Context, dir string, executeQueries bool) ([]LSPDiagnostic, error) {
 	var diagnostics []LSPDiagnostic
 
 	// Load documents in strict mode first to catch schema errors
@@ -312,6 +320,43 @@ func validateDirectory(ctx context.Context, dir string) ([]LSPDiagnostic, error)
 			Code:     f.RuleID,
 			Field:    f.Path,
 		})
+	}
+
+	// Execute queries and validate data if requested
+	if executeQueries && len(docs) > 0 {
+		execOpts := &dataset.ExecuteOptions{
+			DataValidation:           dataset.DataValidationWarn,
+			DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+		}
+		_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
+		if err != nil {
+			diagnostics = append(diagnostics, LSPDiagnostic{
+				Severity: "warning",
+				Message:  fmt.Sprintf("Query execution failed: %v", err),
+				Code:     "data-validation-error",
+			})
+		}
+		// Add data validation warnings as diagnostics
+		for _, w := range warnings {
+			// Find the dataset document to get file location
+			var file string
+			var position int
+			for _, doc := range docs {
+				if doc.Kind == "DataSet" && doc.Name == w.DataSet {
+					file = doc.File
+					position = doc.Position
+					break
+				}
+			}
+			diagnostics = append(diagnostics, LSPDiagnostic{
+				File:     file,
+				Position: position,
+				Severity: "warning",
+				Message:  w.Message,
+				Code:     "data-validation",
+				Field:    w.DataSet,
+			})
+		}
 	}
 
 	return diagnostics, nil
