@@ -36,16 +36,15 @@ type CommandConfig struct {
 
 // CommandArgs holds default arguments for a CLI command.
 // These can be overridden by explicit command-line flags.
-type CommandArgs struct {
-	Values map[string]any `toml:"values,omitempty"`
-}
+// Users can write [serve.args] port = 8080 directly without nesting.
+type CommandArgs map[string]any
 
 // GetString returns the string value for a key, or empty string if not found or not a string.
 func (c CommandArgs) GetString(key string) (string, bool) {
-	if c.Values == nil {
+	if c == nil {
 		return "", false
 	}
-	v, ok := c.Values[key]
+	v, ok := c[key]
 	if !ok {
 		return "", false
 	}
@@ -55,10 +54,10 @@ func (c CommandArgs) GetString(key string) (string, bool) {
 
 // GetInt returns the int value for a key, or 0 if not found or not an int.
 func (c CommandArgs) GetInt(key string) (int, bool) {
-	if c.Values == nil {
+	if c == nil {
 		return 0, false
 	}
-	v, ok := c.Values[key]
+	v, ok := c[key]
 	if !ok {
 		return 0, false
 	}
@@ -76,10 +75,10 @@ func (c CommandArgs) GetInt(key string) (int, bool) {
 
 // GetBool returns the bool value for a key, or false if not found or not a bool.
 func (c CommandArgs) GetBool(key string) (bool, bool) {
-	if c.Values == nil {
+	if c == nil {
 		return false, false
 	}
-	v, ok := c.Values[key]
+	v, ok := c[key]
 	if !ok {
 		return false, false
 	}
@@ -89,10 +88,10 @@ func (c CommandArgs) GetBool(key string) (bool, bool) {
 
 // GetStringSlice returns the []string value for a key, or nil if not found.
 func (c CommandArgs) GetStringSlice(key string) ([]string, bool) {
-	if c.Values == nil {
+	if c == nil {
 		return nil, false
 	}
-	v, ok := c.Values[key]
+	v, ok := c[key]
 	if !ok {
 		return nil, false
 	}

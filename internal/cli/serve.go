@@ -1821,6 +1821,44 @@ func withServeStyles(frameHTML []byte) []byte {
 		box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
 		flex-shrink: 0;
 	}
+	/* Print media optimizations */
+	@media print {
+		html {
+			*, *::before, *::after { 
+				box-sizing: border-box; 
+				print-color-adjust: exact;
+            	-webkit-print-color-adjust: exact;
+			}
+		}
+		@page {
+			margin: 0.5cm;
+		}
+		body {
+			margin 0;
+			display: block !important;
+			background: #ffffff !important;
+		}
+		#bino-control-panel {
+			display: none !important;
+		}
+		#bino-content-area {
+			padding: 0 !important;
+			overflow: visible !important;
+		}
+		bn-context {
+			gap: 0 !important;
+		}
+		bn-layout-page {
+			box-shadow: none !important;
+			brake-after: page;
+			page-break-after: always;
+			page-break-inside: avoid;
+			brake-inside: avoid;
+		}
+		bn-layout-page:last-child {
+			page-break-after: auto;
+		}
+	}
 </style>
 `)
 
