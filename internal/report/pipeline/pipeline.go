@@ -176,6 +176,10 @@ type RenderOptions struct {
 	// refs that exist in AllDocs but not in the filtered docs are silently skipped.
 	// Refs that don't exist in AllDocs at all will error unless marked optional.
 	AllDocs []config.Document
+	// DataValidation controls how data validation errors are handled.
+	DataValidation dataset.DataValidationMode
+	// DataValidationSampleSize limits how many rows are validated.
+	DataValidationSampleSize int
 }
 
 // RenderResult captures the outcome of rendering HTML from documents.
@@ -214,9 +218,11 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		}
 
 		execOpts := &dataset.ExecuteOptions{
-			QueryLogger:     opts.QueryLogger,
-			QueryExecLogger: opts.QueryExecLogger,
-			EmbedOptions:    opts.EmbedOptions,
+			QueryLogger:              opts.QueryLogger,
+			QueryExecLogger:          opts.QueryExecLogger,
+			EmbedOptions:             opts.EmbedOptions,
+			DataValidation:           opts.DataValidation,
+			DataValidationSampleSize: opts.DataValidationSampleSize,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
 
@@ -274,6 +280,10 @@ type RenderArtefactOptions struct {
 	EmbedOptions buildlog.EmbedOptions
 	// ExecutionPlan tracks build execution steps. May be nil.
 	ExecutionPlan *buildlog.ExecutionPlan
+	// DataValidation controls how data validation errors are handled.
+	DataValidation dataset.DataValidationMode
+	// DataValidationSampleSize limits how many rows are validated.
+	DataValidationSampleSize int
 }
 
 // RenderArtefactHTML generates HTML for a specific artefact using its spec settings.
@@ -299,18 +309,20 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	}
 
 	return RenderHTML(ctx, filtered, RenderOptions{
-		Workdir:           workdir,
-		Language:          artefact.Spec.Language,
-		Orientation:       artefact.Spec.Orientation,
-		Format:            artefact.Spec.Format,
-		Mode:              RenderModeBuild,
-		EngineVersion:     opts.EngineVersion,
-		QueryLogger:       opts.QueryLogger,
-		QueryExecLogger:   opts.QueryExecLogger,
-		EmbedOptions:      opts.EmbedOptions,
-		ExecutionPlan:     opts.ExecutionPlan,
-		ConstraintContext: constraintCtx,
-		AllDocs:           docs,
+		Workdir:                  workdir,
+		Language:                 artefact.Spec.Language,
+		Orientation:              artefact.Spec.Orientation,
+		Format:                   artefact.Spec.Format,
+		Mode:                     RenderModeBuild,
+		EngineVersion:            opts.EngineVersion,
+		QueryLogger:              opts.QueryLogger,
+		QueryExecLogger:          opts.QueryExecLogger,
+		EmbedOptions:             opts.EmbedOptions,
+		ExecutionPlan:            opts.ExecutionPlan,
+		ConstraintContext:        constraintCtx,
+		AllDocs:                  docs,
+		DataValidation:           opts.DataValidation,
+		DataValidationSampleSize: opts.DataValidationSampleSize,
 	})
 }
 
@@ -361,7 +373,9 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 	// Execute datasets if workdir is provided
 	if opts.Workdir != "" {
 		execOpts := &dataset.ExecuteOptions{
-			QueryLogger: opts.QueryLogger,
+			QueryLogger:              opts.QueryLogger,
+			DataValidation:           opts.DataValidation,
+			DataValidationSampleSize: opts.DataValidationSampleSize,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
 		if err != nil {
@@ -389,6 +403,18 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 	}, nil
 }
 
+// FrameRenderOptions configures frame rendering for preview mode.
+type FrameRenderOptions struct {
+	// QueryLogger is called for each SQL query executed. May be nil.
+	QueryLogger func(string)
+	// EngineVersion specifies the template engine version to use.
+	EngineVersion string
+	// DataValidation controls how data validation errors are handled.
+	DataValidation dataset.DataValidationMode
+	// DataValidationSampleSize limits how many rows are validated.
+	DataValidationSampleSize int
+}
+
 // RenderArtefactFrameAndContext generates a two-phase render for a specific artefact in preview mode.
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
@@ -396,6 +422,13 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 // The engineVersion parameter specifies which template engine version to use.
 func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (FrameRenderResult, error) {
 	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artefact, queryLogger, spec.ModePreview, engineVersion)
+}
+
+// RenderArtefactFrameAndContextWithOptions generates a two-phase render for a specific artefact in preview mode with options.
+// It returns a lightweight frame HTML and context HTML for SSE delivery.
+// The workdir parameter is required for dataset execution.
+func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, opts FrameRenderOptions) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, artefact, spec.ModePreview, opts)
 }
 
 // RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artefact with a specified mode.
@@ -442,6 +475,53 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 		QueryLogger:       queryLogger,
 		ConstraintContext: constraintCtx,
 		AllDocs:           docs,
+	})
+}
+
+// RenderArtefactFrameAndContextWithModeAndOptions generates a two-phase render for a specific artefact with a specified mode and options.
+// It returns a lightweight frame HTML and context HTML for SSE delivery.
+// The workdir parameter is required for dataset execution.
+// The mode parameter controls constraint evaluation (preview, serve, or build).
+func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
+	// Build constraint context from artefact
+	constraintCtx, err := buildConstraintContext(artefact, mode)
+	if err != nil {
+		return FrameRenderResult{}, err
+	}
+
+	// Filter documents by constraints for this artefact
+	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	if err != nil {
+		return FrameRenderResult{}, err
+	}
+
+	// Validate name uniqueness after filtering
+	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+		return FrameRenderResult{}, err
+	}
+
+	// Map spec.Mode to RenderMode
+	var renderMode RenderMode
+	switch mode {
+	case spec.ModeBuild:
+		renderMode = RenderModeBuild
+	case spec.ModeServe:
+		renderMode = RenderModeServe
+	default:
+		renderMode = RenderModePreview
+	}
+
+	return RenderHTMLFrameAndContext(ctx, filtered, RenderOptions{
+		Workdir:                  workdir,
+		Language:                 artefact.Spec.Language,
+		Format:                   artefact.Spec.Format,
+		Mode:                     renderMode,
+		EngineVersion:            opts.EngineVersion,
+		QueryLogger:              opts.QueryLogger,
+		ConstraintContext:        constraintCtx,
+		AllDocs:                  docs,
+		DataValidation:           opts.DataValidation,
+		DataValidationSampleSize: opts.DataValidationSampleSize,
 	})
 }
 

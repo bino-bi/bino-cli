@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/version"
@@ -24,9 +25,10 @@ import (
 // It loads and validates manifests, then runs lint rules and reports findings.
 func newLintCommand() *cobra.Command {
 	var (
-		workdir   string
-		outDir    string
-		logFormat string
+		workdir        string
+		outDir         string
+		logFormat      string
+		executeQueries bool
 	)
 
 	cmd := &cobra.Command{
@@ -96,7 +98,27 @@ there is a fatal error loading manifests.`),
 			findings := runner.Run(ctx, lintDocs)
 			out.StepDone(fmt.Sprintf("Checked %d rule(s)", len(runner.Rules())), time.Since(lintStart))
 
-			// Print findings
+			// Step 3: Execute queries and validate data (optional)
+			var dataValidationWarnings []dataset.Warning
+			if executeQueries {
+				out.Step("Executing dataset queries...")
+				queryStart := time.Now()
+
+				execOpts := &dataset.ExecuteOptions{
+					DataValidation:           dataset.DataValidationWarn,
+					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+				}
+				results, warnings, err := dataset.Execute(ctx, absDir, documents, execOpts)
+				if err != nil {
+					out.StepDone("Query execution failed", time.Since(queryStart))
+					out.Warning(fmt.Sprintf("Query execution error: %v", err))
+				} else {
+					out.StepDone(fmt.Sprintf("Executed %d dataset(s)", len(results)), time.Since(queryStart))
+					dataValidationWarnings = warnings
+				}
+			}
+
+			// Print lint findings
 			if len(findings) > 0 {
 				out.Blank()
 				out.Warning(fmt.Sprintf("Found %d lint warning(s):", len(findings)))
@@ -114,6 +136,15 @@ there is a fatal error loading manifests.`),
 			} else {
 				out.Blank()
 				out.Done("No lint warnings found")
+			}
+
+			// Print data validation warnings
+			if len(dataValidationWarnings) > 0 {
+				out.Blank()
+				out.Warning(fmt.Sprintf("Found %d data validation warning(s):", len(dataValidationWarnings)))
+				for _, w := range dataValidationWarnings {
+					out.List(fmt.Sprintf("[data-validation] %s: %s", w.DataSet, w.Message))
+				}
 			}
 
 			// Build output directory
@@ -148,6 +179,8 @@ there is a fatal error loading manifests.`),
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
 	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for lint logs")
 	cmd.Flags().StringVar(&logFormat, "log-format", "text", "Lint log format: 'text' for human-readable or 'json' for machine-parseable")
+	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false,
+		"Execute dataset queries and validate data (slower but catches data issues)")
 
 	return cmd
 }
