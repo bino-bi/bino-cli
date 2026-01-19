@@ -1,0 +1,140 @@
+{
+    "$id": "https://bino.bi/schemas/dataset.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Dataset Row",
+    "description": "A dataset row representing a data point with dimensional attributes (groupings) and measure values (scenarios). Supports hierarchical row/column groupings for drill-down, multiple scenario values for comparative analysis, temporal dimensions for time-series, and signed operations for additive/subtractive contributions.",
+    "type": "object",
+    "properties": {
+        "setname": {
+            "type": "string",
+            "description": "Dataset identifier or name. Used in StructureChart components for metadata identification. Can distinguish between different datasets when multiple are loaded."
+        },
+        "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Temporal dimension for time-series data in ISO 8601 format (e.g., '2024-01-15'). Required for TimeChart components. Forms the X-axis in time-series visualizations, normalized to configurable intervals (DAY, WEEK, MONTH, QUARTER, YEAR). Multiple data points on the same normalized date are aggregated via SUM."
+        },
+        "operation": {
+            "type": "string",
+            "enum": ["+", "-"],
+            "default": "+",
+            "description": "Mathematical sign applied to scenario values during aggregation. '+' multiplies values by 1, '-' multiplies by -1. Enables hierarchical structures where some rows contribute positively (revenue, income) and others negatively (costs, expenses). Example: In a P&L statement, revenue rows use '+' while cost rows use '-'."
+        },
+        "rowGroup": {
+            "type": "string",
+            "description": "Primary row-level grouping dimension. Organizes rows into major sections (e.g., 'Revenue', 'Operating Costs', 'EBIT'). Groups multiple categories under a common header, creates GROUP_SUM rows when aggregating, and is used in SQL GROUP BY clauses. Must be paired with rowGroupIndex."
+        },
+        "rowGroupIndex": {
+            "type": "number",
+            "description": "Sort order for row groups. Lower values appear first. Required when rowGroup is set to ensure consistent ordering of group sections."
+        },
+        "category": {
+            "type": "string",
+            "description": "Primary data dimension within a row group. The main axis for data organization (e.g., 'Product A', 'Region North', 'Q1 2024'). Used as the primary grouping level in SQL queries, forms labels for chart elements and table row headers, and enables drill-down queries for 'thereOf' functionality. Must be paired with categoryIndex."
+        },
+        "categoryIndex": {
+            "type": "number",
+            "description": "Sort order for categories within their row group. Lower values appear first. Required when category is set to ensure consistent ordering of category rows."
+        },
+        "subCategory": {
+            "type": "string",
+            "description": "Detail dimension for drill-down below the main category. Creates 'thereOf' drill rows (detail breakdown beneath main categories). When displaying subcategory data, the row type becomes DRILLELEMENT. Must be paired with subCategoryIndex."
+        },
+        "subCategoryIndex": {
+            "type": "number",
+            "description": "Sort order for subcategories within their parent category. Lower values appear first. Required when subCategory is set to ensure consistent ordering of drill-down rows."
+        },
+        "columnGroup": {
+            "type": "string",
+            "description": "Column-level grouping dimension for breaking down measures. Enables column drilling via 'categoryThereOf' configuration. Groups measurement data by columns and is used in drill column queries. Must be paired with columnGroupIndex."
+        },
+        "columnGroupIndex": {
+            "type": "number",
+            "description": "Sort order for column groups. Lower values appear first. Required when columnGroup is set to ensure consistent column ordering."
+        },
+        "columnSubGroup": {
+            "type": "string",
+            "description": "Sub-grouping level for detailed column breakdown within a column group. Provides additional granularity for column-based drill-down. Must be paired with columnSubGroupIndex."
+        },
+        "columnSubGroupIndex": {
+            "type": "number",
+            "description": "Sort order for column sub-groups within their parent column group. Lower values appear first. Required when columnSubGroup is set."
+        },
+        "ac1": {
+            "type": "number",
+            "description": "Actual value (scenario set 1). Current/actual measured values. Aggregated using the operation field: SUM(ac1 * operation_multiplier). Use for primary actual measurements."
+        },
+        "pp1": {
+            "type": "number",
+            "description": "Previous period value (scenario set 1). Values from the prior time period for comparison (YoY, MoM, etc.). Enables period-over-period variance analysis."
+        },
+        "fc1": {
+            "type": "number",
+            "description": "Forecast value (scenario set 1). Predicted/forecasted values. Used for comparing actual performance against projections."
+        },
+        "pl1": {
+            "type": "number",
+            "description": "Plan/Budget value (scenario set 1). Planned or budgeted target values. Used for actual-vs-plan variance analysis."
+        },
+        "ac2": {
+            "type": "number",
+            "description": "Actual value (scenario set 2). Secondary actual measurement for parallel analysis. Useful when comparing multiple metrics or dimensions simultaneously."
+        },
+        "pp2": {
+            "type": "number",
+            "description": "Previous period value (scenario set 2). Secondary previous period measurement for parallel period-over-period analysis."
+        },
+        "fc2": {
+            "type": "number",
+            "description": "Forecast value (scenario set 2). Secondary forecast measurement for parallel projection analysis."
+        },
+        "pl2": {
+            "type": "number",
+            "description": "Plan/Budget value (scenario set 2). Secondary planned/budgeted value for parallel variance analysis."
+        },
+        "ac3": {
+            "type": "number",
+            "description": "Actual value (scenario set 3). Tertiary actual measurement for additional parallel analysis dimensions."
+        },
+        "pp3": {
+            "type": "number",
+            "description": "Previous period value (scenario set 3). Tertiary previous period measurement."
+        },
+        "fc3": {
+            "type": "number",
+            "description": "Forecast value (scenario set 3). Tertiary forecast measurement."
+        },
+        "pl3": {
+            "type": "number",
+            "description": "Plan/Budget value (scenario set 3). Tertiary planned/budgeted value."
+        },
+        "ac4": {
+            "type": "number",
+            "description": "Actual value (scenario set 4). Fourth actual measurement for extended parallel analysis."
+        },
+        "pp4": {
+            "type": "number",
+            "description": "Previous period value (scenario set 4). Fourth previous period measurement."
+        },
+        "fc4": {
+            "type": "number",
+            "description": "Forecast value (scenario set 4). Fourth forecast measurement."
+        },
+        "pl4": {
+            "type": "number",
+            "description": "Plan/Budget value (scenario set 4). Fourth planned/budgeted value."
+        }
+    },
+    "dependentRequired": {
+        "rowGroup": ["rowGroupIndex"],
+        "rowGroupIndex": ["rowGroup"],
+        "category": ["categoryIndex"],
+        "categoryIndex": ["category"],
+        "subCategory": ["subCategoryIndex"],
+        "subCategoryIndex": ["subCategory"],
+        "columnGroup": ["columnGroupIndex"],
+        "columnGroupIndex": ["columnGroup"],
+        "columnSubGroup": ["columnSubGroupIndex"],
+        "columnSubGroupIndex": ["columnSubGroup"]
+    }
+}
