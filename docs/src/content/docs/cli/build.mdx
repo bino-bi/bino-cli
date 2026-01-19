@@ -22,6 +22,7 @@ Common flags:
 - `--no-graph` – skip writing dependency graph files.
 - `--no-lint` – skip running lint rules (lint runs by default).
 - `--log-sql` – log executed SQL queries.
+- `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
 
 Build log flags:
 
@@ -92,9 +93,31 @@ Change the output directory and log SQL:
 bino build --out-dir dist/reports --log-sql
 ```
 
+## Data Validation
+
+bino can validate query results against the [DataSet schema](/reference/dataset/#standard-dataset-schema) to catch data structure issues early. Validation checks include:
+
+- **Type validation**: Ensures fields like `category` are strings and `ac1` are numbers.
+- **Enum validation**: Verifies `operation` is `"+"` or `"-"`.
+- **Date format**: Checks `date` fields are ISO 8601 format (`YYYY-MM-DD`).
+- **Dependent required**: Ensures paired fields are present (e.g., `rowGroup` requires `rowGroupIndex`).
+
+Validation modes:
+
+- `--data-validation=warn` (default) – log validation warnings and continue building.
+- `--data-validation=fail` – treat validation errors as fatal and exit with code 1.
+- `--data-validation=off` – skip data validation entirely.
+
+For efficiency, only the first rows are validated (default: 10). Configure via `BNR_DATA_VALIDATION_SAMPLE_SIZE`:
+
+```bash
+BNR_DATA_VALIDATION_SAMPLE_SIZE=100 bino build
+```
+
 ## CI tips
 
 - Use `--work-dir` to point at the repository checkout.
 - Fail builds early by ensuring environment variables for secrets are set.
 - Archive the `dist/` directory as a build artefact.
 - Set consistent build options in `bino.toml` to ensure reproducible CI builds.
+- Use `--data-validation=fail` in CI to catch data issues before reports reach production.
