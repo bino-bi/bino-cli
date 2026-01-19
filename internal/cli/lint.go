@@ -29,6 +29,7 @@ func newLintCommand() *cobra.Command {
 		outDir         string
 		logFormat      string
 		executeQueries bool
+		failOnWarnings bool
 	)
 
 	cmd := &cobra.Command{
@@ -170,6 +171,12 @@ there is a fatal error loading manifests.`),
 			out.Blank()
 			out.Done("Lint complete")
 
+			// Exit with error if --fail-on-warnings and there are warnings
+			totalWarnings := len(findings) + len(dataValidationWarnings)
+			if failOnWarnings && totalWarnings > 0 {
+				return RuntimeErrorf("lint found %d warning(s)", totalWarnings)
+			}
+
 			return nil
 		},
 		SilenceUsage:  true,
@@ -181,6 +188,8 @@ there is a fatal error loading manifests.`),
 	cmd.Flags().StringVar(&logFormat, "log-format", "text", "Lint log format: 'text' for human-readable or 'json' for machine-parseable")
 	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false,
 		"Execute dataset queries and validate data (slower but catches data issues)")
+	cmd.Flags().BoolVar(&failOnWarnings, "fail-on-warnings", false,
+		"Exit with non-zero code if any warnings are found (useful for CI)")
 
 	return cmd
 }
