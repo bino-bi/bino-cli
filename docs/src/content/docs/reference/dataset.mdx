@@ -295,6 +295,51 @@ FROM sales_data
 GROUP BY product_name, product_rank
 ```
 
+## Data Validation
+
+bino can validate query results against the standard schema at build time. This catches common data issues early:
+
+### Validation checks
+
+| Check                     | Description                                                         |
+| :------------------------ | :------------------------------------------------------------------ |
+| Type validation           | String fields (`category`, `rowGroup`, etc.) must be strings        |
+| Type validation           | Number fields (`ac1`, `categoryIndex`, etc.) must be numbers        |
+| Enum validation           | `operation` must be `"+"` or `"-"`                                  |
+| Date format               | `date` must be ISO 8601 format (`YYYY-MM-DD`)                       |
+| Dependent required        | `rowGroup` requires `rowGroupIndex`, `category` requires `categoryIndex`, etc. |
+
+### Enabling validation
+
+Data validation is enabled by default in `warn` mode. Configure via CLI flags:
+
+```bash
+# Log warnings and continue (default)
+bino build --data-validation=warn
+
+# Treat validation errors as fatal
+bino build --data-validation=fail
+
+# Skip validation entirely
+bino build --data-validation=off
+```
+
+For lint-only validation (without building), use `--execute-queries`:
+
+```bash
+bino lint --execute-queries
+```
+
+### Sample size
+
+For efficiency, bino validates only the first N rows per dataset. Configure via environment variable:
+
+```bash
+BNR_DATA_VALIDATION_SAMPLE_SIZE=100 bino build
+```
+
+Default sample size is 10 rows.
+
 ## Conditional inclusion with constraints
 
 DataSet documents support `metadata.constraints` to conditionally include them for specific artefacts, modes, or environments.

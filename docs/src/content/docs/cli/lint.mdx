@@ -17,6 +17,7 @@ Common flags:
 - `--work-dir` – report bundle directory (default: `.`).
 - `--out-dir` – output directory for lint logs (default: `dist`).
 - `--log-format` – log format: `text` (default) or `json`.
+- `--execute-queries` – execute dataset queries and validate data (slower but catches data issues).
 
 ## Examples
 
@@ -37,6 +38,35 @@ Output JSON log for CI integration:
 ```bash
 bino lint --log-format json
 ```
+
+Execute queries and validate data:
+
+```bash
+bino lint --execute-queries
+```
+
+## Deep validation with --execute-queries
+
+By default, `bino lint` only validates manifest structure without executing queries. When you need to validate actual data, use the `--execute-queries` flag:
+
+```bash
+bino lint --execute-queries
+```
+
+This will:
+
+1. Execute all DataSet queries
+2. Validate query results against the [DataSet schema](/reference/dataset/#standard-dataset-schema)
+3. Report data validation warnings alongside lint findings
+
+Data validation checks include:
+
+- Type validation (strings vs numbers)
+- Enum validation (`operation` must be `"+"` or `"-"`)
+- Date format validation (ISO 8601)
+- Dependent required fields (e.g., `rowGroup` requires `rowGroupIndex`)
+
+**Note**: `--execute-queries` is slower than regular lint because it runs actual queries. Use it when you need to verify data correctness, not just manifest structure.
 
 ## Exit code
 
