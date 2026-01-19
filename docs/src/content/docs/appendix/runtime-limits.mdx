@@ -46,3 +46,19 @@ To protect your environment, bino applies limits to queries and data:
 
 Raise these limits carefully when running large monthly or quarterly reports.
 Document any overrides in your project README and CI configuration.
+
+## Data validation limits
+
+bino validates query results against the DataSet schema to catch data issues early. For efficiency, only a sample of rows is validated.
+
+| Variable                        | Default | Description                                          |
+| :------------------------------ | :------ | :--------------------------------------------------- |
+| `BNR_DATA_VALIDATION_SAMPLE_SIZE` | `10`    | Number of rows to validate per dataset               |
+
+Example:
+
+```bash
+BNR_DATA_VALIDATION_SAMPLE_SIZE=100 bino build
+```
+
+See [bino build](/cli/build/#data-validation) for more information on data validation modes.
