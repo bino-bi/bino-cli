@@ -18,6 +18,7 @@ Common flags:
 - `--out-dir` – output directory for lint logs (default: `dist`).
 - `--log-format` – log format: `text` (default) or `json`.
 - `--execute-queries` – execute dataset queries and validate data (slower but catches data issues).
+- `--fail-on-warnings` – exit with non-zero code if any warnings are found (useful for CI).
 
 ## Examples
 
@@ -70,8 +71,15 @@ Data validation checks include:
 
 ## Exit code
 
-`bino lint` always exits with code 0 unless there is a fatal error loading manifests.
+By default, `bino lint` exits with code 0 unless there is a fatal error loading manifests.
 All lint findings are treated as warnings and do not cause a non-zero exit.
+
+Use `--fail-on-warnings` to exit with code 1 if any warnings are found:
+
+```bash
+# CI-friendly: fail if there are any lint or data validation warnings
+bino lint --execute-queries --fail-on-warnings
+```
 
 ## Integration with build and preview
 

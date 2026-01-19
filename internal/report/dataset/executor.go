@@ -254,6 +254,16 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 		toRun    []dataSetJob
 	)
 
+	// Determine validation sample size for cached results
+	validationSampleSize := 0
+	if opts != nil && opts.DataValidation != DataValidationOff && opts.DataValidation != "" {
+		if opts.DataValidationSampleSize > 0 {
+			validationSampleSize = opts.DataValidationSampleSize
+		} else {
+			validationSampleSize = GetDataValidationSampleSize()
+		}
+	}
+
 	for result := range resultCh {
 		warnings = append(warnings, result.warnings...)
 
@@ -263,6 +273,19 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 		}
 
 		if result.cached {
+			// Validate cached data if validation is enabled
+			if validationSampleSize > 0 {
+				validationResult := ValidateRows(result.doc.Name, result.data, validationSampleSize)
+				if !validationResult.Valid {
+					validationWarnings := DataValidationResultToWarnings(validationResult)
+					warnings = append(warnings, validationWarnings...)
+
+					// In fail mode, return error immediately
+					if opts != nil && opts.DataValidation == DataValidationFail {
+						return nil, warnings, fmt.Errorf("data validation failed for %s: %d error(s)", result.doc.Name, len(validationResult.Errors))
+					}
+				}
+			}
 			results = append(results, Result{Name: result.doc.Name, Data: result.data})
 			continue
 		}
@@ -486,6 +509,11 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			if !validationResult.Valid {
 				validationWarnings := DataValidationResultToWarnings(validationResult)
 				warnings = append(warnings, validationWarnings...)
+
+				// In fail mode, return error immediately
+				if opts != nil && opts.DataValidation == DataValidationFail {
+					return results, warnings, fmt.Errorf("data validation failed for %s: %d error(s)", job.doc.Name, len(validationResult.Errors))
+				}
 			}
 		}
 
@@ -502,7 +530,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 	return results, warnings, nil
 }
 
-func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, opts *ExecuteOptions) (json.RawMessage, error) {
+func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, error) {
 	db := session.DB()
 
 	// Execute the query directly - DataSources are already registered as views
