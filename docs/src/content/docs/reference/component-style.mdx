@@ -22,9 +22,205 @@ spec:
 - A YAML object
 - A JSON string (useful when copying from front-end configuration)
 
-The exact shape of the content is interpreted by the front-end renderer.
+## Style structure
 
-## YAML object style
+The style object has the following top-level sections:
+
+| Section | Description |
+|---------|-------------|
+| `global` | Global typography and color settings applied to all components |
+| `bn-text` | Style settings for text components (extensible) |
+| `bn-chart-time` | Style settings for time/column charts |
+| `bn-chart-structure` | Style settings for structure/bar charts |
+| `bn-chart-tree` | Style settings for hierarchical tree diagrams |
+
+---
+
+## Global style
+
+Global settings are inherited by all components.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `fontSizePx` | number | `13.3333` | Base font size in pixels. Scale factors multiply this value. |
+| `fontFamily` | string | `'Noto Sans', sans-serif` | CSS font-family value |
+| `fontColor` | string | `#000000` | Primary text color (CSS color) |
+| `fontBackgroundColor` | string | `#ffffff` | Background color for text elements (CSS color) |
+
+```yaml
+global:
+  fontSizePx: 14
+  fontFamily: "'Inter', sans-serif"
+  fontColor: "#1a1a1a"
+  fontBackgroundColor: "#ffffff"
+```
+
+---
+
+## Text style (`bn-text`)
+
+Reserved for future text component styling. Currently accepts any properties.
+
+---
+
+## Time chart style (`bn-chart-time`)
+
+Style settings for vertical column charts (time series visualizations).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `scaleFactors` | object | Scale factors for element sizing |
+| `axisStyles` | object | SVG styles for axis elements by scenario |
+| `barStyles` | object | SVG styles for bar/column elements by scenario |
+| `varianceStyles` | object | SVG styles for variance indicators |
+| `padding` | object | Padding around the chart area |
+
+### Scale factors (time chart)
+
+All scale factors are multiplied by `global.fontSizePx` to calculate pixel values.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `scenarioOffset` | `0.3` | Horizontal offset between scenario bars |
+| `scenarioLabelToColumn` | `0.3` | Gap between scenario label and column |
+| `labelToColumn` | `0.3` | Gap between category label and column |
+| `labelToAxis` | `0.3` | Gap between label and axis |
+| `needleWidth` | `0.3` | Width of needle indicators |
+| `needleHeadWidth` | `0.6` | Width of needle head (arrow) |
+| `columnWidth` | `2.0` | Width of data columns |
+| `varianceAxisLineWidth` | `0.3` | Width of variance axis lines |
+| `axisLineWidth` | `0.1` | Width of main axis lines |
+| `auxiliaryLineWidth` | `0.1` | Width of auxiliary/grid lines |
+| `scenarioLineWidth` | `0.2` | Width of scenario indicator lines |
+| `markerWidth` | `0.7` | Width of data point markers |
+| `markerOffset` | `0.0` | Offset of markers from data points |
+| `categoryWidth` | `3.0` | Width allocated per category |
+| `axisTickLength` | `0.3` | Length of axis tick marks |
+
+---
+
+## Structure chart style (`bn-chart-structure`)
+
+Style settings for horizontal bar charts (structure visualizations).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `scaleFactors` | object | Scale factors for element sizing |
+| `axisStyles` | object | SVG styles for axis elements by scenario |
+| `barStyles` | object | SVG styles for bar elements by scenario |
+| `varianceStyles` | object | SVG styles for variance indicators |
+| `padding` | object | Padding around the chart area |
+
+### Scale factors (structure chart)
+
+All scale factors are multiplied by `global.fontSizePx` to calculate pixel values.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `scenarioOffset` | `0.3` | Vertical offset between scenario bars |
+| `scenarioLabelToBar` | `0.1` | Gap between scenario label and bar |
+| `labelToBar` | `0.3` | Gap between category label and bar |
+| `labelToAxis` | `0.3` | Gap between label and axis |
+| `needleWidth` | `0.3` | Width of needle indicators |
+| `needleHeadWidth` | `0.6` | Width of needle head (arrow) |
+| `barWidth` | `1.2` | Height of horizontal bars |
+| `varianceAxisLineWidth` | `0.3` | Width of variance axis lines |
+| `axisLineWidth` | `0.1` | Width of main axis lines |
+| `auxiliaryLineWidth` | `0.1` | Width of auxiliary/grid lines |
+| `scenarioLineWidth` | `0.2` | Width of scenario indicator lines |
+| `markerWidth` | `0.7` | Width of data point markers |
+| `markerOffset` | `0.0` | Offset of markers from data points |
+| `categoryWidth` | `1.9` | Height allocated per category row |
+| `axisTickLength` | `0.3` | Length of axis tick marks |
+
+---
+
+## Tree chart style (`bn-chart-tree`)
+
+Style settings for hierarchical tree diagrams.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `edgeColor` | string | `#404040` | Color for tree edges/connections (CSS color) |
+| `edgeWidth` | number | `1` | Width of tree edges in pixels |
+| `operatorCircleRadius` | number | `10` | Radius of operator node circles in pixels |
+| `operatorFontSizeScale` | number | `0.9` | Scale factor for operator font size relative to `global.fontSizePx` |
+| `operatorColor` | string | `#404040` | Color for operator nodes (CSS color) |
+
+```yaml
+bn-chart-tree:
+  edgeColor: "#606060"
+  edgeWidth: 2
+  operatorCircleRadius: 12
+  operatorFontSizeScale: 0.85
+  operatorColor: "#333333"
+```
+
+---
+
+## SVG style group
+
+Both `axisStyles` and `barStyles` use scenario-based grouping following IBCS notation:
+
+| Key | Description |
+|-----|-------------|
+| `ac` | Style for **Actual** values |
+| `fc` | Style for **Forecast** values |
+| `pp` | Style for **Prior Period** values |
+| `pl` | Style for **Plan** values |
+
+Each scenario key contains an SVG style object.
+
+---
+
+## SVG variance style group
+
+The `varianceStyles` property groups styles by variance direction:
+
+| Key | Description |
+|-----|-------------|
+| `pos` | Style for **positive** variances (favorable) |
+| `neg` | Style for **negative** variances (unfavorable) |
+| `neu` | Style for **neutral/zero** variances |
+
+---
+
+## SVG style object
+
+Individual SVG style properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `stroke` | string | SVG stroke color (CSS color) |
+| `fill` | string | SVG fill color (CSS color) |
+| `width` | number | Stroke width in pixels |
+| `dasharray` | string | SVG stroke-dasharray pattern (e.g., `"10 5 5 5"` for dashed lines) |
+| `fillpattern` | string | Reference to a fill pattern (e.g., `"fc"` for forecast hatching) |
+
+```yaml
+axisStyles:
+  ac: { stroke: "#121212", fill: "#121212", width: 0.1 }
+  fc: { stroke: "#121212", fill: "#ffffff", width: 0.1, dasharray: "10 5 5 5" }
+  pp: { stroke: "#606060", fill: "#606060", width: 0.1 }
+  pl: { stroke: "#121212", fill: "#ffffff", width: 0.1 }
+```
+
+---
+
+## Padding
+
+Padding configuration for chart areas:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `top` | number | `10` | Top padding in pixels |
+| `left` | number | `10` | Left padding in pixels |
+| `right` | number | `10` | Right padding in pixels |
+| `bottom` | number | `10` | Bottom padding in pixels |
+
+---
+
+## Complete example
 
 ```yaml
 ---
@@ -34,27 +230,74 @@ metadata:
   name: corporateTheme
 spec:
   content:
-    fontFamily: "Inter, system-ui, sans-serif"
-    headingColor: "#111827"
-    textColor: "#374151"
-    accentColor: "#1D4ED8"
-    table:
-      headerBackground: "#F3F4F6"
-      rowStripeBackground: "#F9FAFB"
+    global:
+      fontSizePx: 14
+      fontFamily: "'Inter', sans-serif"
+      fontColor: "#1a1a1a"
+      fontBackgroundColor: "#ffffff"
+
+    bn-chart-time:
+      scaleFactors:
+        columnWidth: 2.5
+        categoryWidth: 3.5
+      axisStyles:
+        ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
+        fc: { stroke: "#000000", fill: "#ffffff", width: 0.1, dasharray: "10 5 5 5" }
+        pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
+        pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
+      barStyles:
+        ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
+        fc: { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
+        pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
+      varianceStyles:
+        pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
+        neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
+        neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+      padding:
+        top: 15
+        left: 15
+        right: 15
+        bottom: 15
+
+    bn-chart-structure:
+      scaleFactors:
+        barWidth: 1.5
+        categoryWidth: 2.0
+      axisStyles:
+        ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
+        fc: { stroke: "#000000", fill: "#ffffff", width: 0.1, dasharray: "10 5 5 5" }
+        pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
+        pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
+      barStyles:
+        ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
+        fc: { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
+        pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
+      varianceStyles:
+        pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
+        neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
+        neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+
+    bn-chart-tree:
+      edgeColor: "#505050"
+      edgeWidth: 1.5
+      operatorCircleRadius: 12
+      operatorFontSizeScale: 0.85
+      operatorColor: "#404040"
 ```
 
 ## JSON string style
+
+You can also provide the content as a JSON string:
 
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
 kind: ComponentStyle
 metadata:
-  name: kpiCardStyle
+  name: compactStyle
 spec:
   content: >-
-    {"fontFamily":"Inter,system-ui,sans-serif","accentColor":"#22C55E","borderRadius":"8px"}
+    {"global":{"fontSizePx":12,"fontFamily":"'Roboto', sans-serif"}}
 ```
-
-You typically reference styles from layout or component configuration according to your front-end conventions.
-Use placeholder screenshots in your docs to compare layouts with and without shared styles.
