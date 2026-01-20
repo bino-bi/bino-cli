@@ -383,6 +383,49 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				results = append(results, entry)
 			}
 
+			// Step 3: Build screenshot artefacts
+			screenshotArtefacts, err := config.CollectScreenshotArtefacts(documents)
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			var screenshotResults []screenshotArtefactResult
+			if len(screenshotArtefacts) > 0 {
+				out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(screenshotArtefacts)))
+
+				for _, ssArtefact := range screenshotArtefacts {
+					// Check for cancellation before starting each screenshot artefact
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+
+					// Create spinner for this screenshot artefact
+					spinner := NewSpinner(SpinnerConfig{
+						Stdout:  cmd.OutOrStdout(),
+						NoColor: logx.NoColorEnabled(ctx),
+					})
+
+					ssResults, err := buildScreenshotArtefact(ctx, buildScreenshotArtefactConfig{
+						Logger:        logger.Channel(ssArtefact.Document.Name),
+						Workdir:       absDir,
+						CacheDir:      cacheDir,
+						EngineVersion: engineVersion,
+						Docs:          documents,
+						Artefact:      ssArtefact,
+						OutputDir:     outputDir,
+						Browser:       browser,
+						DriverDir:     driverDir,
+						Debug:         logx.DebugEnabled(ctx),
+						Spinner:       spinner,
+						QueryLogger:   queryLogger,
+					})
+					if err != nil {
+						return RuntimeError(err)
+					}
+					screenshotResults = append(screenshotResults, ssResults...)
+				}
+			}
+
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
 			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, executedQueries, buildWarnings); err != nil {
@@ -463,6 +506,28 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				resultItems = append(resultItems, item)
 			}
 			out.Summary(fmt.Sprintf("Generated %d artefact(s):", len(results)), resultItems)
+
+			// Print screenshot results if any
+			if len(screenshotResults) > 0 {
+				out.Blank()
+				ssItems := make([]string, 0, len(screenshotResults))
+				var ssErrors []string
+				for _, res := range screenshotResults {
+					if res.Error != nil {
+						ssErrors = append(ssErrors, fmt.Sprintf("%s/%s: %v", res.RefKind, res.RefName, res.Error))
+						continue
+					}
+					relPath := pathutil.RelPath(absDir, res.FilePath)
+					item := fmt.Sprintf("%s/%s %s %s", res.RefKind, res.RefName, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
+					ssItems = append(ssItems, item)
+				}
+				out.Summary(fmt.Sprintf("Generated %d screenshot(s):", len(ssItems)), ssItems)
+				if len(ssErrors) > 0 {
+					for _, errMsg := range ssErrors {
+						out.Warning(fmt.Sprintf("Screenshot error: %s", errMsg))
+					}
+				}
+			}
 
 			// Print final success
 			out.Done("Build complete")
@@ -825,4 +890,148 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 	}
 
 	return nil
+}
+
+type screenshotArtefactResult struct {
+	ArtefactName string
+	RefKind      string
+	RefName      string
+	FilePath     string
+	Error        error
+}
+
+type buildScreenshotArtefactConfig struct {
+	Logger        logx.Logger
+	Workdir       string
+	CacheDir      string
+	EngineVersion string
+	Docs          []config.Document
+	Artefact      config.ScreenshotArtefact
+	OutputDir     string
+	Browser       string
+	DriverDir     string
+	Debug         bool
+	Spinner       *Spinner
+	QueryLogger   func(string)
+}
+
+// buildScreenshotArtefact captures screenshots of specific components.
+// It renders the HTML containing the specified layout pages, starts an ephemeral
+// server, and uses Playwright to capture screenshots of individual elements.
+func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactConfig) ([]screenshotArtefactResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	logger := cfg.Logger
+	if logger == nil {
+		logger = logx.Nop()
+	}
+
+	spinner := cfg.Spinner
+	artefactName := cfg.Artefact.Document.Name
+
+	// Start spinner for HTML rendering
+	if spinner != nil {
+		spinner.Start(fmt.Sprintf("Rendering %s", artefactName))
+	}
+	logger.Debugf("Rendering HTML for screenshot artefact %s", artefactName)
+
+	renderResult, err := pipeline.RenderScreenshotArtefactHTML(ctx, cfg.Workdir, cfg.Docs, cfg.Artefact, pipeline.RenderScreenshotArtefactOptions{
+		EngineVersion: cfg.EngineVersion,
+		QueryLogger:   cfg.QueryLogger,
+	})
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
+		}
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
+	}
+
+	// Check for cancellation before starting the ephemeral server
+	if err := ctx.Err(); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Cancelled %s", artefactName))
+		}
+		return nil, err
+	}
+
+	server, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, pipeline.ConvertLocalAssets(renderResult.LocalAssets))
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
+		}
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
+	}
+
+	// Update spinner for screenshot capture
+	if spinner != nil {
+		spinner.Update(fmt.Sprintf("Capturing screenshots for %s", artefactName))
+	}
+	logger.Debugf("Capturing screenshots for %s", artefactName)
+
+	// Convert config refs to playwright refs
+	pwRefs := make([]playwright.ScreenshotRef, len(cfg.Artefact.Spec.Refs))
+	for i, ref := range cfg.Artefact.Spec.Refs {
+		pwRefs[i] = playwright.ScreenshotRef{
+			Kind: ref.Kind,
+			Name: ref.Name,
+		}
+	}
+
+	screenshotOpts := playwright.ScreenshotOptions{
+		URL:                   server.URL(),
+		OutputDir:             cfg.OutputDir,
+		Browser:               cfg.Browser,
+		DriverDirectory:       cfg.DriverDir,
+		Format:                cfg.Artefact.Spec.Format,
+		Orientation:           cfg.Artefact.Spec.Orientation,
+		Timeout:               2 * time.Minute,
+		Debug:                 cfg.Debug,
+		WaitForComponentReady: true,
+		ReadyConsolePrefix:    componentReadyConsolePrefix,
+		Refs:                  pwRefs,
+		FilenamePrefix:        cfg.Artefact.Spec.FilenamePrefix,
+		FilenamePattern:       cfg.Artefact.Spec.FilenamePattern,
+		ImageFormat:           cfg.Artefact.Spec.ImageFormat,
+		Quality:               cfg.Artefact.Spec.Quality,
+		OmitBackground:        cfg.Artefact.Spec.OmitBackground,
+		Scale:                 cfg.Artefact.Spec.Scale,
+	}
+
+	pwResults, screenshotErr := playwright.RenderScreenshots(ctx, screenshotOpts)
+	closeErr := server.Close()
+
+	if screenshotErr != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to capture screenshots for %s", artefactName))
+		}
+		if closeErr != nil {
+			logger.Warnf("server shutdown error: %v", closeErr)
+		}
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, screenshotErr)
+	}
+	if closeErr != nil && !errors.Is(closeErr, context.Canceled) {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Server error for %s", artefactName))
+		}
+		return nil, fmt.Errorf("screenshot artefact %s: stop server: %w", artefactName, closeErr)
+	}
+
+	// Convert playwright results to our result type
+	results := make([]screenshotArtefactResult, len(pwResults))
+	for i, r := range pwResults {
+		results[i] = screenshotArtefactResult{
+			ArtefactName: artefactName,
+			RefKind:      r.Ref.Kind,
+			RefName:      r.Ref.Name,
+			FilePath:     r.FilePath,
+			Error:        r.Error,
+		}
+	}
+
+	// Success
+	if spinner != nil {
+		spinner.Stop()
+	}
+	return results, nil
 }

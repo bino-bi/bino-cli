@@ -1,0 +1,278 @@
+---
+title: ScreenshotArtefact
+description: Capture PNG or JPEG screenshots of specific components for embedding in presentations or dashboards.
+---
+
+`ScreenshotArtefact` manifests define screenshot outputs that capture individual components from your report pages.
+Unlike `ReportArtefact` which generates full-page PDFs, `ScreenshotArtefact` extracts specific charts, tables, or other components as image files.
+
+## Use Cases
+
+- Export charts for PowerPoint presentations
+- Generate thumbnail previews for dashboards
+- Create image assets for documentation
+- Capture specific visualizations for email reports
+
+## Spec Outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: chart_exports
+spec:
+  layoutPages:
+    - dashboard_page
+  filenamePrefix: quarterly-report
+  filenamePattern: ref          # "index" or "ref"
+  imageFormat: png              # "png" or "jpeg"
+  format: full_hd               # viewport size
+  orientation: landscape
+  language: de
+  refs:
+    - kind: ChartStructure
+      name: sales_by_region
+    - kind: ChartTime
+      name: revenue_trend
+    - kind: Table
+      name: summary_table
+```
+
+## Fields
+
+### Required Fields
+
+- `spec.layoutPages` – One or more `LayoutPage` names to render. Components in `refs` must be present in these pages.
+- `spec.filenamePrefix` – Prefix for all generated screenshot filenames.
+- `spec.refs` – List of component references to capture:
+  - `kind` – Component type: `ChartStructure`, `ChartTime`, `ChartTree`, `Table`, `LayoutCard`, or `Text`
+  - `name` – The component's `metadata.name`
+
+### Optional Fields
+
+- `spec.filenamePattern` – Filename pattern:
+  - `"ref"` (default): `{prefix}-{component_name}.{ext}` (e.g., `report-sales_chart.png`)
+  - `"index"`: `{prefix}-001.{ext}`, `{prefix}-002.{ext}`, etc.
+- `spec.imageFormat` – Image format: `"png"` (default) or `"jpeg"`
+- `spec.quality` – JPEG quality (1-100). Only used when `imageFormat: jpeg`
+- `spec.omitBackground` – If `true`, capture with transparent background (PNG only)
+- `spec.scale` – Screenshot scale: `"css"` (CSS pixels) or `"device"` (device pixels)
+- `spec.format` – Viewport size: `xga`, `hd`, `full_hd`, `4k`, `4k2k`, or standard paper sizes
+- `spec.orientation` – Viewport orientation: `portrait` or `landscape` (default: `landscape`)
+- `spec.language` – Language for rendering: `de` or `en` (default: `de`)
+
+## Component Targeting
+
+Screenshots target components by their `metadata.name`. The component must have a name defined:
+
+```yaml
+# In your LayoutPage
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: sales_chart    # This name is used in refs
+      spec:
+        dataset: sales_data
+        title: "Sales by Region"
+```
+
+Then reference it in the ScreenshotArtefact:
+
+```yaml
+refs:
+  - kind: ChartStructure
+    name: sales_chart
+```
+
+## Examples
+
+### Basic Screenshot Export
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: chart_screenshots
+spec:
+  layoutPages: main_dashboard
+  filenamePrefix: dashboard
+  refs:
+    - kind: ChartStructure
+      name: revenue_chart
+```
+
+Output: `dashboard-revenue_chart.png`
+
+### Multiple Components with JPEG
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: presentation_assets
+spec:
+  layoutPages:
+    - page1
+    - page2
+  filenamePrefix: q4-presentation
+  filenamePattern: ref
+  imageFormat: jpeg
+  quality: 90
+  format: full_hd
+  orientation: landscape
+  refs:
+    - kind: ChartStructure
+      name: sales_overview
+    - kind: ChartTime
+      name: monthly_trend
+    - kind: Table
+      name: kpi_summary
+```
+
+Output:
+- `q4-presentation-sales_overview.jpeg`
+- `q4-presentation-monthly_trend.jpeg`
+- `q4-presentation-kpi_summary.jpeg`
+
+### Indexed Filenames
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: numbered_exports
+spec:
+  layoutPages: report_page
+  filenamePrefix: export
+  filenamePattern: index
+  refs:
+    - kind: ChartStructure
+      name: chart1
+    - kind: ChartStructure
+      name: chart2
+    - kind: Table
+      name: table1
+```
+
+Output:
+- `export-001.png`
+- `export-002.png`
+- `export-003.png`
+
+### High-Resolution Screenshots
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: hires_charts
+spec:
+  layoutPages: dashboard
+  filenamePrefix: hires
+  format: 4k
+  scale: device
+  refs:
+    - kind: ChartStructure
+      name: main_chart
+```
+
+### Transparent Background (PNG)
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: transparent_charts
+spec:
+  layoutPages: dashboard
+  filenamePrefix: transparent
+  imageFormat: png
+  omitBackground: true
+  refs:
+    - kind: ChartStructure
+      name: overlay_chart
+```
+
+## Complete Example
+
+Here's a full example showing a LayoutPage with named components and a ScreenshotArtefact that captures them:
+
+```yaml
+# pages.yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: quarterly_dashboard
+spec:
+  pageLayout: split-vertical
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: sales_by_region
+      spec:
+        dataset: regional_sales
+        title: "Sales by Region"
+        scenarios:
+          - ac1
+        showCategories: true
+    - kind: Table
+      metadata:
+        name: top_products
+      spec:
+        dataset: product_performance
+        limit: 10
+        scenarios:
+          - ac1
+          - pp1
+        variances:
+          - dac1_pp1_pos
+---
+# report.yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: quarterly_charts
+spec:
+  layoutPages:
+    - quarterly_dashboard
+  filenamePrefix: q4-2024
+  filenamePattern: ref
+  imageFormat: png
+  format: full_hd
+  orientation: landscape
+  language: en
+  refs:
+    - kind: ChartStructure
+      name: sales_by_region
+    - kind: Table
+      name: top_products
+```
+
+Running `bino build` will generate:
+- `q4-2024-sales_by_region.png`
+- `q4-2024-top_products.png`
+
+## Supported Component Kinds
+
+The following component kinds can be captured as screenshots:
+
+| Kind | Description |
+|------|-------------|
+| `ChartStructure` | Structural/categorical charts (bar, waterfall, etc.) |
+| `ChartTime` | Time-series charts |
+| `ChartTree` | Hierarchical tree diagrams |
+| `Table` | Data tables |
+| `LayoutCard` | Card containers |
+| `Text` | Text components |
+
+## Notes
+
+- Components must have `metadata.name` defined to be targetable
+- The specified `layoutPages` must contain all referenced components
+- Screenshots are captured after the page has fully rendered (including async data loading)
+- Multiple ScreenshotArtefacts can target the same components with different settings

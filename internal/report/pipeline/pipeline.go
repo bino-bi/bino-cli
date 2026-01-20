@@ -362,6 +362,110 @@ func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []co
 	})
 }
 
+// RenderScreenshotArtefactOptions configures screenshot artefact HTML rendering.
+type RenderScreenshotArtefactOptions struct {
+	EngineVersion            string
+	QueryLogger              func(string)
+	QueryExecLogger          duckdb.QueryExecLogger
+	EmbedOptions             buildlog.EmbedOptions
+	ExecutionPlan            *buildlog.ExecutionPlan
+	DataValidation           dataset.DataValidationMode
+	DataValidationSampleSize int
+}
+
+// RenderScreenshotArtefactHTML generates HTML for capturing screenshots.
+// It renders the specified layout pages and their dependencies.
+// The workdir parameter is required for dataset execution.
+func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.ScreenshotArtefact, opts RenderScreenshotArtefactOptions) (RenderResult, error) {
+	// Build constraint context from screenshot artefact
+	constraintCtx, err := buildScreenshotConstraintContext(artefact, spec.ModeBuild)
+	if err != nil {
+		return RenderResult{}, err
+	}
+
+	// Filter documents by constraints for this artefact
+	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	if err != nil {
+		return RenderResult{}, err
+	}
+
+	// Further filter to only include specified layout pages and their dependencies
+	filtered, err = filterDocsForLayoutPages(filtered, artefact.Spec.LayoutPages)
+	if err != nil {
+		return RenderResult{}, err
+	}
+
+	return RenderHTML(ctx, filtered, RenderOptions{
+		Workdir:                  workdir,
+		Language:                 artefact.Spec.Language,
+		Orientation:              artefact.Spec.Orientation,
+		Format:                   artefact.Spec.Format,
+		Mode:                     RenderModeBuild,
+		EngineVersion:            opts.EngineVersion,
+		QueryLogger:              opts.QueryLogger,
+		QueryExecLogger:          opts.QueryExecLogger,
+		EmbedOptions:             opts.EmbedOptions,
+		ExecutionPlan:            opts.ExecutionPlan,
+		ConstraintContext:        constraintCtx,
+		AllDocs:                  docs,
+		DataValidation:           opts.DataValidation,
+		DataValidationSampleSize: opts.DataValidationSampleSize,
+	})
+}
+
+// buildScreenshotConstraintContext creates a constraint context from a screenshot artefact.
+func buildScreenshotConstraintContext(artefact config.ScreenshotArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("screenshot artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
+	}
+
+	return &spec.ConstraintContext{
+		Labels: artefact.Labels,
+		Spec:   specMap,
+		Mode:   mode,
+	}, nil
+}
+
+// filterDocsForLayoutPages filters documents to include only the specified layout pages
+// and all documents they depend on (datasources, datasets, components, etc.).
+func filterDocsForLayoutPages(docs []config.Document, layoutPageNames []string) ([]config.Document, error) {
+	if len(layoutPageNames) == 0 {
+		return nil, fmt.Errorf("no layout pages specified")
+	}
+
+	// Build a set of required layout page names
+	requiredPages := make(map[string]bool)
+	for _, name := range layoutPageNames {
+		requiredPages[name] = true
+	}
+
+	// Filter documents: keep all non-LayoutPage docs (they might be dependencies)
+	// and only the specified LayoutPage docs
+	result := make([]config.Document, 0, len(docs))
+	foundPages := make(map[string]bool)
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" {
+			if requiredPages[doc.Name] {
+				result = append(result, doc)
+				foundPages[doc.Name] = true
+			}
+		} else {
+			// Keep all other documents (dependencies will be resolved by the renderer)
+			result = append(result, doc)
+		}
+	}
+
+	// Verify all requested pages were found
+	for name := range requiredPages {
+		if !foundPages[name] {
+			return nil, fmt.Errorf("layout page %q not found", name)
+		}
+	}
+
+	return result, nil
+}
+
 // RenderHTMLFrameAndContext generates a two-phase render output for preview mode.
 // It returns a lightweight frame HTML that loads quickly, and context HTML that
 // contains the full report content for SSE delivery.
