@@ -39,7 +39,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
 		}
@@ -51,7 +51,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range globalDocs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.globalIndex[key] = doc
 		}
@@ -343,6 +343,16 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
 			return "", false, fmt.Errorf("render chart time child: %w", err)
 		}
 		component = renderChartTimeComponent(s)
+	case "ChartTree":
+		var s chartTreeSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render chart tree child: %w", err)
+		}
+		html, err := renderChartTreeComponent(s, rc)
+		if err != nil {
+			return "", false, fmt.Errorf("render chart tree child: %w", err)
+		}
+		component = html
 	case "LayoutCard":
 		var s layoutCardSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -388,7 +398,7 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		for _, doc := range rc.docs {
 			if doc.Kind == "LayoutPage" && doc.Name == child.Ref {
-				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced", child.Ref)
+				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartTree, LayoutCard, and Image can be referenced", child.Ref)
 			}
 		}
 
@@ -506,6 +516,144 @@ func renderChartTimeComponent(spec chartTimeSpec) string {
 	b.WriteString("<bn-chart-time")
 	spec.writeAttrs(&b)
 	b.WriteString("></bn-chart-time>")
+	return b.String()
+}
+
+// renderChartTreeComponent renders a ChartTree component as HTML.
+// Tree charts use slotted content for nodes, so we render node slots inside the element.
+// Each node can contain a Label, Table, ChartStructure, or ChartTime component.
+func renderChartTreeComponent(spec chartTreeSpec, rc *renderCtx) (string, error) {
+	var b strings.Builder
+	b.WriteString("<bn-chart-tree")
+	spec.writeAttrs(&b)
+	b.WriteString(">")
+
+	// Render node content as slotted elements
+	for _, node := range spec.Nodes {
+		nodeContent, err := renderChartTreeNode(node, rc)
+		if err != nil {
+			return "", fmt.Errorf("render tree node %q: %w", node.ID, err)
+		}
+		if nodeContent == "" {
+			continue // Skip nodes that couldn't be rendered (e.g., filtered refs)
+		}
+		b.WriteString("\n  <div slot=\"")
+		b.WriteString(html.EscapeString(node.ID))
+		b.WriteString("\">")
+		b.WriteString(nodeContent)
+		b.WriteString("</div>")
+	}
+	if len(spec.Nodes) > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString("</bn-chart-tree>")
+	return b.String(), nil
+}
+
+// renderChartTreeNode renders a single node in a tree chart.
+// It handles Label, Table, ChartStructure, ChartTime, and Image kinds with ref or inline spec.
+func renderChartTreeNode(node chartTreeNode, rc *renderCtx) (string, error) {
+	// Resolve spec (handle ref if present)
+	effectiveSpec, err := resolveTreeNodeSpec(node, rc)
+	if err != nil {
+		return "", err
+	}
+	if effectiveSpec == nil {
+		return "", nil // Ref was filtered, skip this node
+	}
+
+	switch node.Kind {
+	case "Label":
+		var s chartTreeLabelSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal label spec: %w", err)
+		}
+		return renderChartTreeLabelComponent(s), nil
+	case "Table":
+		var s tableSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal table spec: %w", err)
+		}
+		return renderTableComponent(s), nil
+	case "ChartStructure":
+		var s chartStructureSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart structure spec: %w", err)
+		}
+		return renderChartStructureComponent(s), nil
+	case "ChartTime":
+		var s chartTimeSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart time spec: %w", err)
+		}
+		return renderChartTimeComponent(s), nil
+	case "Image":
+		var s imageSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal image spec: %w", err)
+		}
+		return renderImageComponent(s), nil
+	default:
+		return "", fmt.Errorf("unsupported tree node kind %q", node.Kind)
+	}
+}
+
+// resolveTreeNodeSpec resolves the effective spec for a tree node.
+// For inline nodes (no ref), returns node.Spec directly.
+// For ref nodes, looks up the referenced document and merges any spec overrides.
+func resolveTreeNodeSpec(node chartTreeNode, rc *renderCtx) (json.RawMessage, error) {
+	// Label kind doesn't support refs (inline only)
+	if node.Kind == "Label" {
+		return node.Spec, nil
+	}
+
+	// Inline node: no ref, just return spec directly
+	if node.Ref == "" {
+		return node.Spec, nil
+	}
+
+	// Ref node: look up the referenced document
+	if rc == nil {
+		return nil, fmt.Errorf("ref %q cannot be resolved without render context", node.Ref)
+	}
+
+	key := node.Kind + ":" + node.Ref
+	refDoc, found := rc.docIndex[key]
+	if !found {
+		// Check if ref exists in global set (filtered by constraints)
+		_, existsGlobally := rc.globalIndex[key]
+		if existsGlobally {
+			return nil, nil // Filtered by constraints, skip
+		}
+		return nil, fmt.Errorf("reference %q of kind %q not found", node.Ref, node.Kind)
+	}
+
+	// Extract spec from referenced document
+	var refPayload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+		return nil, fmt.Errorf("parse ref %q spec: %w", node.Ref, err)
+	}
+
+	// If no overrides, return referenced spec directly
+	if len(node.Spec) == 0 || string(node.Spec) == "null" {
+		return refPayload.Spec, nil
+	}
+
+	// Merge: referenced spec as base, node.Spec as overrides
+	return mergeJSONObjects(refPayload.Spec, node.Spec)
+}
+
+// renderChartTreeLabelComponent renders a Label component for tree nodes.
+func renderChartTreeLabelComponent(spec chartTreeLabelSpec) string {
+	var b strings.Builder
+	b.WriteString("<bn-text")
+	writeAttr(&b, "value", spec.Value)
+	if value := spec.Dataset.Join(","); value != "" {
+		writeAttr(&b, "datasets", value)
+	}
+	b.WriteString("></bn-text>")
 	return b.String()
 }
 

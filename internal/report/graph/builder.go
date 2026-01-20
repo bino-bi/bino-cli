@@ -312,7 +312,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 		node.DependsOn = append(node.DependsOn, children...)
 		b.nodes[id] = node
 		return id, nil
-	case "Text", "Table", "ChartStructure", "ChartTime", "Image":
+	case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
 		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(path))
 		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(path)))
 		if err != nil {
@@ -345,7 +345,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 	if !found {
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		if lpDoc, lpFound := b.docIndex["LayoutPage:"+child.Ref]; lpFound {
-			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, LayoutCard, and Image can be referenced",
+			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartTree, LayoutCard, and Image can be referenced",
 				parentName, child.Ref, lpDoc.Name)
 		}
 
