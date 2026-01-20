@@ -240,3 +240,99 @@ func (r *LiveRouteSpec) GetRequiredQueryParams() []string {
 	}
 	return required
 }
+
+// ScreenshotArtefact captures a validated ScreenshotArtefact manifest.
+type ScreenshotArtefact struct {
+	Document Document
+	Spec     ScreenshotArtefactSpec
+	Labels   map[string]string
+	Warnings []string
+}
+
+const (
+	DefaultScreenshotFilenamePattern = "ref"
+	DefaultScreenshotImageFormat     = "png"
+)
+
+// ScreenshotArtefactSpec mirrors the ScreenshotArtefact manifest spec section.
+type ScreenshotArtefactSpec struct {
+	Refs            []ScreenshotRef `json:"refs"`
+	LayoutPages     StringOrSlice   `json:"layoutPages"`               // one or more LayoutPage names to render
+	Format          string          `json:"format"`
+	Orientation     string          `json:"orientation"`
+	Language        string          `json:"language"`
+	FilenamePrefix  string          `json:"filenamePrefix"`
+	FilenamePattern string          `json:"filenamePattern,omitempty"` // "index" or "ref"
+	ImageFormat     string          `json:"imageFormat,omitempty"`     // "png" or "jpeg"
+	Quality         *int            `json:"quality,omitempty"`         // JPEG quality 1-100
+	OmitBackground  bool            `json:"omitBackground,omitempty"`
+	Scale           string          `json:"scale,omitempty"` // "css" or "device"
+}
+
+// ScreenshotRef identifies a component to capture a screenshot of.
+type ScreenshotRef struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// ScreenshotArtefactByName filters and orders ScreenshotArtefact manifests.
+type ScreenshotArtefactByName []ScreenshotArtefact
+
+func (a ScreenshotArtefactByName) Len() int           { return len(a) }
+func (a ScreenshotArtefactByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ScreenshotArtefactByName) Less(i, j int) bool { return a[i].Document.Name < a[j].Document.Name }
+
+// CollectScreenshotArtefacts inspects the provided documents for ScreenshotArtefacts and ensures
+// metadata.name uniqueness.
+func CollectScreenshotArtefacts(docs []Document) ([]ScreenshotArtefact, error) {
+	artefacts := make([]ScreenshotArtefact, 0, len(docs))
+	seen := make(map[string]struct{})
+	for _, doc := range docs {
+		if doc.Kind != "ScreenshotArtefact" {
+			continue
+		}
+		var payload struct {
+			Spec ScreenshotArtefactSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, fmt.Errorf("parse ScreenshotArtefact %s: %w", doc.Name, err)
+		}
+		if doc.Name == "" {
+			return nil, fmt.Errorf("screenshot artefact missing metadata.name")
+		}
+		if _, ok := seen[doc.Name]; ok {
+			return nil, fmt.Errorf("multiple ScreenshotArtefact documents share metadata.name %q", doc.Name)
+		}
+		seen[doc.Name] = struct{}{}
+		warnings := applyScreenshotArtefactDefaults(doc.Name, &payload.Spec)
+		artefacts = append(artefacts, ScreenshotArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
+	}
+	sort.Sort(ScreenshotArtefactByName(artefacts))
+	return artefacts, nil
+}
+
+func applyScreenshotArtefactDefaults(name string, spec *ScreenshotArtefactSpec) []string {
+	var warnings []string
+	if spec == nil {
+		return nil
+	}
+	if strings.TrimSpace(spec.Format) == "" {
+		spec.Format = DefaultArtefactFormat
+		warnings = append(warnings, fmt.Sprintf("ScreenshotArtefact %s: spec.format not set; defaulting to %s", name, DefaultArtefactFormat))
+	}
+	if strings.TrimSpace(spec.Orientation) == "" {
+		spec.Orientation = DefaultArtefactOrientation
+		warnings = append(warnings, fmt.Sprintf("ScreenshotArtefact %s: spec.orientation not set; defaulting to %s", name, DefaultArtefactOrientation))
+	}
+	if strings.TrimSpace(spec.Language) == "" {
+		spec.Language = DefaultArtefactLanguage
+		warnings = append(warnings, fmt.Sprintf("ScreenshotArtefact %s: spec.language not set; defaulting to %s", name, DefaultArtefactLanguage))
+	}
+	if strings.TrimSpace(spec.FilenamePattern) == "" {
+		spec.FilenamePattern = DefaultScreenshotFilenamePattern
+	}
+	if strings.TrimSpace(spec.ImageFormat) == "" {
+		spec.ImageFormat = DefaultScreenshotImageFormat
+	}
+	return warnings
+}
