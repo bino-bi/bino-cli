@@ -253,6 +253,46 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeCSVAttr(b, "variances", s.Variances)
 }
 
+// chartTreeSpec defines the structure for ChartTree components.
+// Tree charts display hierarchical structures with nodes connected by edges,
+// commonly used for driver trees and decomposition diagrams.
+type chartTreeSpec struct {
+	Edges         json.RawMessage `json:"edges"`
+	Direction     string          `json:"direction"`
+	LevelSpacing  *float64        `json:"levelSpacing"`
+	NodeSpacing   *float64        `json:"nodeSpacing"`
+	EdgeStyle     string          `json:"edgeStyle"`
+	ShowOperators *bool           `json:"showOperators"`
+	Nodes         []chartTreeNode `json:"nodes"`
+}
+
+// chartTreeNode defines a node in the tree chart.
+// Each node can contain a Label, Table, ChartStructure, or ChartTime component.
+type chartTreeNode struct {
+	ID   string          `json:"id"`
+	Kind string          `json:"kind"`
+	Ref  string          `json:"ref,omitempty"`
+	Spec json.RawMessage `json:"spec,omitempty"`
+}
+
+// chartTreeLabelSpec defines a simple label component for tree nodes.
+type chartTreeLabelSpec struct {
+	Value   string                 `json:"value"`
+	Dataset reportspec.DatasetList `json:"dataset"`
+}
+
+func (s chartTreeSpec) writeAttrs(b *strings.Builder) {
+	// Write edges as JSON string attribute
+	if len(s.Edges) > 0 {
+		writeAttr(b, "edges", string(s.Edges))
+	}
+	writeAttr(b, "direction", s.Direction)
+	writeFloatAttr(b, "level-spacing", s.LevelSpacing)
+	writeFloatAttr(b, "node-spacing", s.NodeSpacing)
+	writeAttr(b, "edge-style", s.EdgeStyle)
+	writeBoolAttr(b, "show-operators", s.ShowOperators)
+}
+
 // tableSpec defines the structure for Table components.
 type tableSpec struct {
 	Dataset                  reportspec.DatasetList       `json:"dataset"`

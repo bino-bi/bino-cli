@@ -1,0 +1,387 @@
+---
+title: ChartTree
+description: Configure tree diagrams for driver trees and decomposition charts.
+---
+
+`ChartTree` manifests describe hierarchical tree diagrams where nodes are connected by edges.
+They are commonly used for driver trees, decomposition diagrams, and organizational charts.
+
+Unlike `ChartStructure` and `ChartTime`, tree charts are **structure-driven** rather than data-driven.
+The tree layout is defined by edges connecting node IDs, and the node content is specified separately.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartTree
+metadata:
+  name: roi_driver_tree
+spec:
+  edges:
+    - { from: "roi", to: "ros", operator: "x" }
+    - { from: "roi", to: "capital-turnover" }
+    - { from: "ros", to: "profit", operator: "/" }
+    - { from: "ros", to: "revenue" }
+  direction: ltr              # ltr | rtl | ttb | btt
+  levelSpacing: 60            # pixels between levels
+  nodeSpacing: 20             # pixels between siblings
+  edgeStyle: orthogonal       # straight | orthogonal | curved
+  showOperators: true
+  nodes:
+    - id: roi
+      kind: Label
+      spec:
+        value: "<strong>ROI</strong><br/>12.5%"
+    - id: ros
+      kind: Label
+      spec:
+        value: "<strong>ROS</strong><br/>8.3%"
+    - id: capital-turnover
+      kind: Label
+      spec:
+        value: "<strong>Capital Turnover</strong><br/>1.5x"
+```
+
+## Fields
+
+### edges (required)
+
+Array of edge objects defining connections between nodes. Each edge requires:
+
+- `from` – source node ID (string, required)
+- `to` – target node ID (string, required)
+- `operator` – mathematical operator displayed between siblings: `*`, `/`, `+`, `-`, `x`, `÷`, or `none`
+- `label` – custom label to display instead of operator symbol
+- `style` – custom edge styling object:
+  - `color` – edge color (string)
+  - `width` – edge width in pixels (number)
+  - `dasharray` – SVG dash pattern (string)
+
+The tree must have exactly one root node (a node that appears only as a `from` value, never as a `to` value).
+
+### direction
+
+Layout direction of the tree:
+
+- `ltr` (default) – left to right, root on left
+- `rtl` – right to left, root on right
+- `ttb` – top to bottom, root on top
+- `btt` – bottom to top, root on bottom
+
+### levelSpacing
+
+Spacing between hierarchy levels in pixels. Default: `60`.
+
+### nodeSpacing
+
+Spacing between sibling nodes in pixels. Default: `20`.
+
+### edgeStyle
+
+Style of connection lines between nodes:
+
+- `straight` – direct lines between nodes
+- `orthogonal` (default) – right-angle lines
+- `curved` – smooth bezier curves
+
+### showOperators
+
+Whether to display operator symbols between sibling nodes. Default: `true`.
+
+### nodes
+
+Array of node definitions. Each node specifies what component to render at that position in the tree.
+
+#### Node properties
+
+- `id` (required) – unique identifier matching `from`/`to` values in edges
+- `kind` (required) – type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, or `Image`
+- `ref` – reference to a standalone document by name (not supported for Label)
+- `spec` – inline component specification (required if no ref)
+
+## Node kinds
+
+Tree nodes can contain different types of components:
+
+### Label
+
+Simple text or HTML content. Labels are defined inline only (no ref support).
+
+```yaml
+nodes:
+  - id: roi
+    kind: Label
+    spec:
+      value: "<strong>ROI</strong><br/>12.5%"
+      dataset: metrics_dataset  # optional for template interpolation
+```
+
+### Table
+
+Embed a Table component in a tree node. Can be defined inline or by reference.
+
+```yaml
+nodes:
+  # Inline table
+  - id: details
+    kind: Table
+    spec:
+      dataset: revenue_breakdown
+      scenarios: ["ac1", "py1"]
+
+  # Reference to standalone Table document
+  - id: summary
+    kind: Table
+    ref: revenue_summary_table
+```
+
+### ChartStructure
+
+Embed a structure chart (bar, pie, etc.) in a tree node.
+
+```yaml
+nodes:
+  # Inline chart
+  - id: breakdown
+    kind: ChartStructure
+    spec:
+      dataset: cost_breakdown
+      scenarios: ["ac1"]
+      level: category
+
+  # Reference with overrides
+  - id: revenue_chart
+    kind: ChartStructure
+    ref: base_revenue_chart
+    spec:
+      filter: "region = 'EMEA'"  # Override filter
+```
+
+### ChartTime
+
+Embed a time series chart in a tree node.
+
+```yaml
+nodes:
+  - id: trend
+    kind: ChartTime
+    spec:
+      dataset: monthly_revenue
+      type: line
+      dateInterval: month
+```
+
+### Image
+
+Embed an image in a tree node. Can be defined inline or by reference.
+
+```yaml
+nodes:
+  # Inline image
+  - id: logo
+    kind: Image
+    spec:
+      source: "./assets/company-logo.png"
+
+  # Reference to standalone Image document
+  - id: icon
+    kind: Image
+    ref: status_icon
+```
+
+## Example: ROI Driver Tree with Labels
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTree
+metadata:
+  name: roi_driver_tree
+  description: Return on Investment decomposition
+spec:
+  edges:
+    - { from: "roi", to: "ros", operator: "x" }
+    - { from: "roi", to: "capital-turnover" }
+    - { from: "ros", to: "profit", operator: "/" }
+    - { from: "ros", to: "revenue" }
+    - { from: "capital-turnover", to: "revenue", operator: "/" }
+    - { from: "capital-turnover", to: "capital" }
+  direction: ltr
+  edgeStyle: orthogonal
+  levelSpacing: 80
+  nodeSpacing: 30
+  showOperators: true
+  nodes:
+    - id: roi
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>ROI</span><span class='value'>12.5%</span></div>"
+    - id: ros
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>ROS</span><span class='value'>8.3%</span></div>"
+    - id: capital-turnover
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>Capital Turnover</span><span class='value'>1.5x</span></div>"
+    - id: profit
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>Profit</span><span class='value'>50M EUR</span></div>"
+    - id: revenue
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>Revenue</span><span class='value'>600M EUR</span></div>"
+    - id: capital
+      kind: Label
+      spec:
+        value: "<div class='kpi-box'><span class='label'>Capital</span><span class='value'>400M EUR</span></div>"
+```
+
+## Example: Mixed content with charts and tables
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTree
+metadata:
+  name: sales_analysis_tree
+spec:
+  edges:
+    - { from: "total", to: "by-region", operator: "=" }
+    - { from: "total", to: "by-product" }
+    - { from: "by-region", to: "trend" }
+  direction: ttb
+  levelSpacing: 100
+  nodeSpacing: 40
+  nodes:
+    # Root: simple label
+    - id: total
+      kind: Label
+      spec:
+        value: "<h3>Total Sales</h3><p>$12.5M</p>"
+
+    # Child: structure chart showing regional breakdown
+    - id: by-region
+      kind: ChartStructure
+      spec:
+        dataset: sales_by_region
+        scenarios: ["ac1"]
+        level: category
+        limit: 5
+
+    # Child: table with product details
+    - id: by-product
+      kind: Table
+      ref: product_sales_table
+
+    # Grandchild: time series trend
+    - id: trend
+      kind: ChartTime
+      spec:
+        dataset: monthly_sales
+        type: line
+        dateInterval: month
+```
+
+## Example: Inline in LayoutPage
+
+Tree charts can be embedded directly in a LayoutPage:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: driver_analysis_page
+spec:
+  pageLayout: full
+  children:
+    - kind: ChartTree
+      spec:
+        edges:
+          - { from: "sales", to: "price", operator: "x" }
+          - { from: "sales", to: "volume" }
+        direction: ttb
+        nodes:
+          - id: sales
+            kind: Label
+            spec:
+              value: "<strong>Sales</strong>"
+          - id: price
+            kind: Label
+            spec:
+              value: "Price"
+          - id: volume
+            kind: Label
+            spec:
+              value: "Volume"
+```
+
+## Edge Styling
+
+Individual edges can have custom styling:
+
+```yaml
+edges:
+  - from: "root"
+    to: "child1"
+    operator: "+"
+    style:
+      color: "#ff0000"
+      width: 2
+      dasharray: "5,5"  # dashed line
+  - from: "root"
+    to: "child2"
+    style:
+      color: "#00ff00"
+```
+
+## DAG Support
+
+The tree chart supports directed acyclic graphs (DAGs), where a node can have multiple parents:
+
+```yaml
+edges:
+  - { from: "a", to: "c" }
+  - { from: "b", to: "c" }  # 'c' has two parents
+  - { from: "c", to: "d" }
+```
+
+This is useful for showing shared dependencies or converging flows.
+
+## Using references
+
+For reusable components, define them as standalone documents and reference them in nodes:
+
+```yaml
+---
+# Standalone table definition
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: cost_breakdown_table
+spec:
+  dataset: cost_data
+  scenarios: ["ac1", "py1"]
+  variances: ["dpy1_ac1_neg"]
+---
+# Tree using the reference
+apiVersion: bino.bi/v1alpha1
+kind: ChartTree
+metadata:
+  name: cost_tree
+spec:
+  edges:
+    - { from: "total", to: "breakdown" }
+  nodes:
+    - id: total
+      kind: Label
+      spec:
+        value: "Total Costs"
+    - id: breakdown
+      kind: Table
+      ref: cost_breakdown_table
+      spec:
+        limit: 5  # Override: show only top 5
+```
