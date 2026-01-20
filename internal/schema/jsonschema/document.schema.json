@@ -1415,11 +1415,371 @@
           "description": "Component style configuration expressed as an object or JSON string.",
           "oneOf": [
             { "type": "string", "minLength": 2 },
-            { "type": "object" }
+            { "$ref": "#/$defs/styleContent" }
           ]
         }
       },
       "additionalProperties": false
+    },
+    "styleContent": {
+      "type": "object",
+      "description": "Style configuration object for components.",
+      "properties": {
+        "global": { "$ref": "#/$defs/globalStyle" },
+        "bn-text": { "$ref": "#/$defs/textStyle" },
+        "bn-chart-time": { "$ref": "#/$defs/timeChartStyle" },
+        "bn-chart-structure": { "$ref": "#/$defs/structureChartStyle" },
+        "bn-chart-tree": { "$ref": "#/$defs/treeChartStyle" }
+      },
+      "additionalProperties": true
+    },
+    "globalStyle": {
+      "type": "object",
+      "description": "Global typography and color settings applied to all components.",
+      "properties": {
+        "fontSizePx": {
+          "type": "number",
+          "description": "Base font size in pixels. Default: 13.3333",
+          "default": 13.3333
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "CSS font-family value. Default: 'Noto Sans', sans-serif",
+          "default": "'Noto Sans', sans-serif"
+        },
+        "fontColor": {
+          "type": "string",
+          "description": "Primary text color (CSS color). Default: #000000",
+          "default": "#000000"
+        },
+        "fontBackgroundColor": {
+          "type": "string",
+          "description": "Background color for text elements (CSS color). Default: #ffffff",
+          "default": "#ffffff"
+        }
+      },
+      "additionalProperties": true
+    },
+    "textStyle": {
+      "type": "object",
+      "description": "Style settings for bn-text components. Currently extensible for future use.",
+      "additionalProperties": true
+    },
+    "timeChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-time (column/time series charts).",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsTimeChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "structureChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-structure (horizontal bar charts).",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsStructureChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "treeChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-tree (hierarchical tree diagrams).",
+      "properties": {
+        "edgeColor": {
+          "type": "string",
+          "description": "Color for tree edges/connections (CSS color). Default: #404040",
+          "default": "#404040"
+        },
+        "edgeWidth": {
+          "type": "number",
+          "description": "Width of tree edges in pixels. Default: 1",
+          "default": 1
+        },
+        "operatorCircleRadius": {
+          "type": "number",
+          "description": "Radius of operator node circles in pixels. Default: 10",
+          "default": 10
+        },
+        "operatorFontSizeScale": {
+          "type": "number",
+          "description": "Scale factor for operator font size relative to global.fontSizePx. Default: 0.9",
+          "default": 0.9
+        },
+        "operatorColor": {
+          "type": "string",
+          "description": "Color for operator nodes (CSS color). Default: #404040",
+          "default": "#404040"
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsTimeChart": {
+      "type": "object",
+      "description": "Scale factors for time chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "scenarioOffset": {
+          "type": "number",
+          "description": "Horizontal offset between scenario bars. Default: 0.3",
+          "default": 0.3
+        },
+        "scenarioLabelToColumn": {
+          "type": "number",
+          "description": "Gap between scenario label and column. Default: 0.3",
+          "default": 0.3
+        },
+        "labelToColumn": {
+          "type": "number",
+          "description": "Gap between category label and column. Default: 0.3",
+          "default": 0.3
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between label and axis. Default: 0.3",
+          "default": 0.3
+        },
+        "needleWidth": {
+          "type": "number",
+          "description": "Width of needle indicators. Default: 0.3",
+          "default": 0.3
+        },
+        "needleHeadWidth": {
+          "type": "number",
+          "description": "Width of needle head (arrow). Default: 0.6",
+          "default": 0.6
+        },
+        "columnWidth": {
+          "type": "number",
+          "description": "Width of data columns. Default: 2.0",
+          "default": 2.0
+        },
+        "varianceAxisLineWidth": {
+          "type": "number",
+          "description": "Width of variance axis lines. Default: 0.3",
+          "default": 0.3
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Width of main axis lines. Default: 0.1",
+          "default": 0.1
+        },
+        "auxiliaryLineWidth": {
+          "type": "number",
+          "description": "Width of auxiliary/grid lines. Default: 0.1",
+          "default": 0.1
+        },
+        "scenarioLineWidth": {
+          "type": "number",
+          "description": "Width of scenario indicator lines. Default: 0.2",
+          "default": 0.2
+        },
+        "markerWidth": {
+          "type": "number",
+          "description": "Width of data point markers. Default: 0.7",
+          "default": 0.7
+        },
+        "markerOffset": {
+          "type": "number",
+          "description": "Offset of markers from data points. Default: 0.0",
+          "default": 0.0
+        },
+        "categoryWidth": {
+          "type": "number",
+          "description": "Width allocated per category. Default: 3.0",
+          "default": 3.0
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.3",
+          "default": 0.3
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsStructureChart": {
+      "type": "object",
+      "description": "Scale factors for structure chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "scenarioOffset": {
+          "type": "number",
+          "description": "Vertical offset between scenario bars. Default: 0.3",
+          "default": 0.3
+        },
+        "scenarioLabelToBar": {
+          "type": "number",
+          "description": "Gap between scenario label and bar. Default: 0.1",
+          "default": 0.1
+        },
+        "labelToBar": {
+          "type": "number",
+          "description": "Gap between category label and bar. Default: 0.3",
+          "default": 0.3
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between label and axis. Default: 0.3",
+          "default": 0.3
+        },
+        "needleWidth": {
+          "type": "number",
+          "description": "Width of needle indicators. Default: 0.3",
+          "default": 0.3
+        },
+        "needleHeadWidth": {
+          "type": "number",
+          "description": "Width of needle head (arrow). Default: 0.6",
+          "default": 0.6
+        },
+        "barWidth": {
+          "type": "number",
+          "description": "Height of horizontal bars. Default: 1.2",
+          "default": 1.2
+        },
+        "varianceAxisLineWidth": {
+          "type": "number",
+          "description": "Width of variance axis lines. Default: 0.3",
+          "default": 0.3
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Width of main axis lines. Default: 0.1",
+          "default": 0.1
+        },
+        "auxiliaryLineWidth": {
+          "type": "number",
+          "description": "Width of auxiliary/grid lines. Default: 0.1",
+          "default": 0.1
+        },
+        "scenarioLineWidth": {
+          "type": "number",
+          "description": "Width of scenario indicator lines. Default: 0.2",
+          "default": 0.2
+        },
+        "markerWidth": {
+          "type": "number",
+          "description": "Width of data point markers. Default: 0.7",
+          "default": 0.7
+        },
+        "markerOffset": {
+          "type": "number",
+          "description": "Offset of markers from data points. Default: 0.0",
+          "default": 0.0
+        },
+        "categoryWidth": {
+          "type": "number",
+          "description": "Height allocated per category row. Default: 1.9",
+          "default": 1.9
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.3",
+          "default": 0.3
+        }
+      },
+      "additionalProperties": true
+    },
+    "svgStyleGroup": {
+      "type": "object",
+      "description": "SVG styles grouped by scenario type (IBCS notation).",
+      "properties": {
+        "ac": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for Actual values."
+        },
+        "fc": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for Forecast values."
+        },
+        "pp": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for Prior Period values."
+        },
+        "pl": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for Plan values."
+        }
+      },
+      "additionalProperties": { "$ref": "#/$defs/svgStyle" }
+    },
+    "svgVariancesStyleGroup": {
+      "type": "object",
+      "description": "SVG styles for variance indicators.",
+      "properties": {
+        "pos": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for positive variances."
+        },
+        "neg": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for negative variances."
+        },
+        "neu": {
+          "$ref": "#/$defs/svgStyle",
+          "description": "Style for neutral/zero variances."
+        }
+      },
+      "additionalProperties": { "$ref": "#/$defs/svgStyle" }
+    },
+    "svgStyle": {
+      "type": "object",
+      "description": "SVG styling properties for chart elements.",
+      "properties": {
+        "stroke": {
+          "type": "string",
+          "description": "SVG stroke color (CSS color)."
+        },
+        "fill": {
+          "type": "string",
+          "description": "SVG fill color (CSS color)."
+        },
+        "width": {
+          "type": "number",
+          "description": "Stroke width in pixels."
+        },
+        "dasharray": {
+          "type": "string",
+          "description": "SVG stroke-dasharray pattern (e.g., '10 5 5 5' for dashed lines)."
+        },
+        "fillpattern": {
+          "type": "string",
+          "description": "Reference to a fill pattern (e.g., 'fc' for forecast hatching)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "paddingStyle": {
+      "type": "object",
+      "description": "Padding configuration for chart areas.",
+      "properties": {
+        "top": {
+          "type": "number",
+          "description": "Top padding in pixels. Default: 10",
+          "default": 10
+        },
+        "left": {
+          "type": "number",
+          "description": "Left padding in pixels. Default: 10",
+          "default": 10
+        },
+        "right": {
+          "type": "number",
+          "description": "Right padding in pixels. Default: 10",
+          "default": 10
+        },
+        "bottom": {
+          "type": "number",
+          "description": "Bottom padding in pixels. Default: 10",
+          "default": 10
+        }
+      },
+      "additionalProperties": true
     },
     "internationalizationSpec": {
       "type": "object",
