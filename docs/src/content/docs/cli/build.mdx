@@ -16,18 +16,26 @@ Common flags:
 
 - `--work-dir` – report bundle directory (default: `.`).
 - `--out-dir` – output directory relative to workdir (default: `dist`).
-- `--include` – build only specified report names (can be repeated).
-- `--exclude` – skip specified report names (can be repeated).
+- `--artefact` – build only specified artefact names (can be repeated).
+- `--exclude-artefact` – skip specified artefact names (can be repeated).
 - `--browser` – browser engine for the rendering runtime (for example `chromium`, `firefox`, `webkit`).
 - `--no-graph` – skip writing dependency graph files.
 - `--no-lint` – skip running lint rules (lint runs by default).
 - `--log-sql` – log executed SQL queries.
 - `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
 
+Advanced flags:
+
+- `--driver-dir` – override Playwright driver cache directory.
+
 Build log flags:
 
 - `--log-format` – log format: `text` (default) or `json`.
 - `--embed-data-csv` – embed CSV data previews in JSON log.
+- `--embed-data-max-rows` – maximum rows to embed per query (default: `10`).
+- `--embed-data-max-bytes` – maximum bytes per embedded CSV (default: `65536`).
+- `--embed-data-base64` – base64 encode embedded CSV data (default: `true`).
+- `--embed-data-redact` – redact sensitive columns in embedded data (default: `true`).
 - `--detailed-execution-plan` – include step-by-step timing.
 
 See [Build Logs](/cli/build-logs/) for full documentation on JSON logs, CSV embedding, and execution plan tracking.
@@ -84,7 +92,7 @@ bino build
 Build only selected artefacts:
 
 ```bash
-bino build --include monthly_sales --include annual_sales
+bino build --artefact monthly_sales --artefact annual_sales
 ```
 
 Change the output directory and log SQL:
