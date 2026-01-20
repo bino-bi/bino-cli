@@ -23,6 +23,7 @@
         "LayoutCard",
         "ChartStructure",
         "ChartTime",
+        "ChartTree",
         "Table",
         "ComponentStyle",
         "Internationalization",
@@ -135,6 +136,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/chartTimeSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ChartTree" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/chartTreeSpec" }
         }
       }
     },
@@ -1688,7 +1701,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "LayoutCard", "Image"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -1758,6 +1771,18 @@
           "then": {
             "properties": {
               "spec": { "$ref": "#/$defs/chartTimeSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "ChartTree" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/chartTreeSpec" }
             }
           }
         },
@@ -2045,6 +2070,203 @@
               "items": { "type": "string" }
             }
           ]
+        }
+      }
+    },
+    "chartTreeSpec": {
+      "type": "object",
+      "required": ["edges"],
+      "description": "Configuration for a ChartTree component. Tree charts display hierarchical structures with nodes connected by edges, commonly used for driver trees and decomposition diagrams.",
+      "properties": {
+        "edges": {
+          "description": "JSON array defining connections between nodes. Each edge specifies a source (from) and target (to) node ID, with optional operator and styling.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "JSON string containing array of edge objects."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to"],
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "Source node ID."
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "Target node ID."
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": ["*", "/", "+", "-", "x", "÷", "none"],
+                    "description": "Mathematical operator displayed between sibling nodes."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Custom label to display instead of operator symbol."
+                  },
+                  "style": {
+                    "type": "object",
+                    "properties": {
+                      "color": { "type": "string" },
+                      "width": { "type": "number" },
+                      "dasharray": { "type": "string" }
+                    },
+                    "description": "Custom edge styling."
+                  }
+                }
+              },
+              "description": "Array of edge objects defining the tree structure."
+            }
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["ltr", "rtl", "ttb", "btt"],
+          "default": "ltr",
+          "description": "Layout direction: 'ltr' (left-to-right), 'rtl' (right-to-left), 'ttb' (top-to-bottom), 'btt' (bottom-to-top)."
+        },
+        "levelSpacing": {
+          "type": "number",
+          "minimum": 0,
+          "default": 60,
+          "description": "Spacing between hierarchy levels in pixels."
+        },
+        "nodeSpacing": {
+          "type": "number",
+          "minimum": 0,
+          "default": 20,
+          "description": "Spacing between sibling nodes in pixels."
+        },
+        "edgeStyle": {
+          "type": "string",
+          "enum": ["straight", "orthogonal", "curved"],
+          "default": "orthogonal",
+          "description": "Edge line style: 'straight' (direct lines), 'orthogonal' (right-angle lines), 'curved' (bezier curves)."
+        },
+        "showOperators": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show operator symbols between sibling nodes."
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/chartTreeNode"
+          },
+          "description": "Array of node definitions with content for each node in the tree."
+        }
+      }
+    },
+    "chartTreeNode": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, or ChartTime component, either inline or by reference.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the node, matching 'from' or 'to' values in edges."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "Image"],
+          "description": "The type of component to render in this node."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, and Image kinds."
+        },
+        "spec": {
+          "type": "object",
+          "description": "Component specification. Required for Label kind and inline definitions. When ref is set, spec fields override the referenced document's spec values."
+        }
+      },
+      "if": {
+        "not": {
+          "required": ["ref"]
+        }
+      },
+      "then": {
+        "required": ["spec"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "Label" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/chartTreeLabelSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "Table" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/tableSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "ChartStructure" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/chartStructureSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "ChartTime" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/chartTimeSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "Image" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/imageSpec" }
+            }
+          }
+        }
+      ]
+    },
+    "chartTreeLabelSpec": {
+      "type": "object",
+      "required": ["value"],
+      "description": "Configuration for a Label component in a tree node. Labels display simple text or HTML content.",
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "Text or HTML content to display in the label."
+        },
+        "dataset": {
+          "$ref": "#/$defs/datasetRef",
+          "description": "Optional dataset binding for template interpolation in the value."
         }
       }
     },

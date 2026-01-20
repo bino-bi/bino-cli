@@ -18,8 +18,9 @@ import (
 //
 // Documents that may contain inline definitions:
 //   - ChartStructure, ChartTime, Table, Text: spec.dataset can be inline
+//   - ChartTree: spec.nodes[].spec.dataset can be inline (for Table, ChartStructure, ChartTime nodes)
 //   - DataSet: spec.dependencies can contain inline DataSources, spec.source can be inline
-//   - LayoutPage, LayoutCard: children[].spec.dataset can be inline
+//   - LayoutPage, LayoutCard: children[].spec.dataset can be inline, children[].spec.nodes[].spec.dataset for ChartTree
 func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 	registry := newInlineRegistry()
 
@@ -30,6 +31,10 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 		case "ChartStructure", "ChartTime", "Table", "Text":
 			if err := materializeComponentInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("%s %q: %w", doc.Kind, doc.Name, err)
+			}
+		case "ChartTree":
+			if err := materializeChartTreeDocInlines(doc, registry); err != nil {
+				return nil, fmt.Errorf("ChartTree %q: %w", doc.Name, err)
 			}
 		case "DataSet":
 			if err := materializeDataSetInlines(doc, registry); err != nil {
@@ -584,6 +589,13 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 				}
 				modified = true
 			}
+
+		case "ChartTree":
+			// Process ChartTree nodes that may contain inline datasets
+			if err := materializeChartTreeNodesInlines(doc, i, child.Spec, registry); err != nil {
+				return fmt.Errorf("child[%d] (ChartTree): %w", i, err)
+			}
+			modified = true
 		}
 	}
 
@@ -592,6 +604,291 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 		// Already modified in rewriteLayoutChildDataset
 	}
 
+	return nil
+}
+
+// chartTreeSpec is used to parse ChartTree spec for inline processing.
+type chartTreeSpec struct {
+	Nodes []chartTreeNode `json:"nodes"`
+}
+
+// chartTreeNode represents a node in a ChartTree.
+type chartTreeNode struct {
+	ID   string          `json:"id"`
+	Kind string          `json:"kind"`
+	Ref  string          `json:"ref,omitempty"`
+	Spec json.RawMessage `json:"spec,omitempty"`
+}
+
+// chartTreeDocSpec wraps the spec for parsing standalone ChartTree documents.
+type chartTreeDocSpec struct {
+	Spec chartTreeSpec `json:"spec"`
+}
+
+// materializeChartTreeDocInlines processes inline datasets in standalone ChartTree documents.
+func materializeChartTreeDocInlines(doc *Document, registry *inlineRegistry) error {
+	var treeDoc chartTreeDocSpec
+	if err := json.Unmarshal(doc.Raw, &treeDoc); err != nil {
+		return nil // Parse error, skip
+	}
+
+	if len(treeDoc.Spec.Nodes) == 0 {
+		return nil
+	}
+
+	// Process each node
+	for nodeIdx, node := range treeDoc.Spec.Nodes {
+		// Skip nodes that reference other documents (no inline spec)
+		if node.Ref != "" || len(node.Spec) == 0 {
+			continue
+		}
+
+		// Only process component kinds that can have datasets
+		switch node.Kind {
+		case "Table", "ChartStructure", "ChartTime":
+			// Parse the node's spec to check for inline datasets
+			var cs childSpec
+			if err := json.Unmarshal(node.Spec, &cs); err != nil {
+				continue
+			}
+
+			if !cs.Dataset.HasInline() {
+				continue
+			}
+
+			// Process inline datasets
+			entries := cs.Dataset.Entries()
+			resolvedNames := make([]string, 0, len(entries))
+
+			for j, entry := range entries {
+				if entry.IsRef() {
+					resolvedNames = append(resolvedNames, entry.Ref)
+					continue
+				}
+
+				if entry.Inline == nil {
+					continue
+				}
+
+				// Process inline DataSet
+				loc := spec.InlineLocation{
+					File:       doc.File,
+					Position:   doc.Position,
+					ParentKind: doc.Kind,
+					ParentName: doc.Name,
+					Path:       fmt.Sprintf("spec.nodes[%d].spec.dataset[%d]", nodeIdx, j),
+				}
+
+				// First, materialize any inline DataSources in the dependencies
+				if err := materializeInlineDataSources(entry.Inline, loc, registry); err != nil {
+					return fmt.Errorf("node[%d].dataset[%d]: %w", nodeIdx, j, err)
+				}
+
+				// Register the inline DataSet
+				name, err := registry.registerDataSet(entry.Inline, loc)
+				if err != nil {
+					return fmt.Errorf("node[%d].dataset[%d]: %w", nodeIdx, j, err)
+				}
+
+				resolvedNames = append(resolvedNames, name)
+			}
+
+			// Rewrite the node's dataset
+			if len(resolvedNames) > 0 {
+				if err := rewriteChartTreeDocNodeDataset(doc, nodeIdx, resolvedNames); err != nil {
+					return fmt.Errorf("node[%d]: %w", nodeIdx, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// rewriteChartTreeDocNodeDataset rewrites a standalone ChartTree node's dataset field.
+func rewriteChartTreeDocNodeDataset(doc *Document, nodeIndex int, resolvedNames []string) error {
+	var docMap map[string]any
+	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
+		return fmt.Errorf("unmarshal document: %w", err)
+	}
+
+	specMap, ok := docMap["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	nodes, ok := specMap["nodes"].([]any)
+	if !ok || nodeIndex >= len(nodes) {
+		return nil
+	}
+
+	node, ok := nodes[nodeIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	nodeSpecMap, ok := node["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// Replace dataset field with resolved names
+	if len(resolvedNames) == 1 {
+		nodeSpecMap["dataset"] = resolvedNames[0]
+	} else {
+		nodeSpecMap["dataset"] = resolvedNames
+	}
+
+	raw, err := json.Marshal(docMap)
+	if err != nil {
+		return fmt.Errorf("marshal document: %w", err)
+	}
+
+	doc.Raw = raw
+	return nil
+}
+
+// materializeChartTreeNodesInlines processes inline datasets in ChartTree nodes.
+// ChartTree nodes can contain Table, ChartStructure, ChartTime components with inline datasets.
+func materializeChartTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
+	var treeSpec chartTreeSpec
+	if err := json.Unmarshal(treeSpecRaw, &treeSpec); err != nil {
+		return nil // Parse error, skip
+	}
+
+	if len(treeSpec.Nodes) == 0 {
+		return nil
+	}
+
+	// Track if any modifications were made
+	modified := false
+
+	// Process each node
+	for nodeIdx, node := range treeSpec.Nodes {
+		// Skip nodes that reference other documents (no inline spec)
+		if node.Ref != "" || len(node.Spec) == 0 {
+			continue
+		}
+
+		// Only process component kinds that can have datasets
+		switch node.Kind {
+		case "Table", "ChartStructure", "ChartTime":
+			// Parse the node's spec to check for inline datasets
+			var cs childSpec
+			if err := json.Unmarshal(node.Spec, &cs); err != nil {
+				continue
+			}
+
+			if !cs.Dataset.HasInline() {
+				continue
+			}
+
+			// Process inline datasets
+			entries := cs.Dataset.Entries()
+			resolvedNames := make([]string, 0, len(entries))
+
+			for j, entry := range entries {
+				if entry.IsRef() {
+					resolvedNames = append(resolvedNames, entry.Ref)
+					continue
+				}
+
+				if entry.Inline == nil {
+					continue
+				}
+
+				// Process inline DataSet
+				loc := spec.InlineLocation{
+					File:       doc.File,
+					Position:   doc.Position,
+					ParentKind: doc.Kind,
+					ParentName: doc.Name,
+					Path:       fmt.Sprintf("spec.children[%d].spec.nodes[%d].spec.dataset[%d]", childIndex, nodeIdx, j),
+				}
+
+				// First, materialize any inline DataSources in the dependencies
+				if err := materializeInlineDataSources(entry.Inline, loc, registry); err != nil {
+					return fmt.Errorf("node[%d].dataset[%d]: %w", nodeIdx, j, err)
+				}
+
+				// Register the inline DataSet
+				name, err := registry.registerDataSet(entry.Inline, loc)
+				if err != nil {
+					return fmt.Errorf("node[%d].dataset[%d]: %w", nodeIdx, j, err)
+				}
+
+				resolvedNames = append(resolvedNames, name)
+			}
+
+			// Rewrite the node's dataset
+			if len(resolvedNames) > 0 {
+				if err := rewriteChartTreeNodeDataset(doc, childIndex, nodeIdx, resolvedNames); err != nil {
+					return fmt.Errorf("node[%d]: %w", nodeIdx, err)
+				}
+				modified = true
+			}
+		}
+	}
+
+	_ = modified // Prevent unused variable warning
+	return nil
+}
+
+// rewriteChartTreeNodeDataset rewrites a ChartTree node's dataset field to use resolved names.
+func rewriteChartTreeNodeDataset(doc *Document, childIndex, nodeIndex int, resolvedNames []string) error {
+	var docMap map[string]any
+	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
+		return fmt.Errorf("unmarshal document: %w", err)
+	}
+
+	specMap, ok := docMap["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	children, ok := specMap["children"].([]any)
+	if !ok || childIndex >= len(children) {
+		return nil
+	}
+
+	child, ok := children[childIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	childSpecMap, ok := child["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	nodes, ok := childSpecMap["nodes"].([]any)
+	if !ok || nodeIndex >= len(nodes) {
+		return nil
+	}
+
+	node, ok := nodes[nodeIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	nodeSpecMap, ok := node["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// Replace dataset field with resolved names
+	if len(resolvedNames) == 1 {
+		nodeSpecMap["dataset"] = resolvedNames[0]
+	} else {
+		nodeSpecMap["dataset"] = resolvedNames
+	}
+
+	raw, err := json.Marshal(docMap)
+	if err != nil {
+		return fmt.Errorf("marshal document: %w", err)
+	}
+
+	doc.Raw = raw
 	return nil
 }
 
