@@ -86,7 +86,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 
 	client, err := pw.Run(runOpts)
 	if err != nil {
-		return fmt.Errorf("launch playwright: %w (run 'bino playwright install' if this is the first run)", err)
+		return fmt.Errorf("launch playwright: %w (run 'bino setup' if this is the first run)", err)
 	}
 	defer client.Stop()
 
@@ -302,4 +302,218 @@ func customFormatDimensions(name string) (width, height int, ok bool) {
 	default:
 		return 0, 0, false
 	}
+}
+
+// ScreenshotOptions controls the HTML-to-screenshot export pipeline using Playwright.
+type ScreenshotOptions struct {
+	URL                   string
+	OutputDir             string
+	Browser               string
+	DriverDirectory       string
+	Format                string
+	Orientation           string
+	Timeout               time.Duration
+	Debug                 bool
+	WaitForComponentReady bool
+	ReadyConsolePrefix    string
+	Refs                  []ScreenshotRef
+	FilenamePrefix        string
+	FilenamePattern       string // "index" or "ref"
+	ImageFormat           string // "png" or "jpeg"
+	Quality               *int   // JPEG quality 1-100
+	OmitBackground        bool
+	Scale                 string // "css" or "device"
+}
+
+// ScreenshotRef identifies a component to capture a screenshot of.
+type ScreenshotRef struct {
+	Kind string
+	Name string
+}
+
+// ScreenshotResult contains the result of a single screenshot capture.
+type ScreenshotResult struct {
+	Ref      ScreenshotRef
+	FilePath string
+	Error    error
+}
+
+// RenderScreenshots loads the provided URL in a headless browser and captures screenshots of specified elements.
+// It checks ctx.Err() at entry and propagates context to waitForComponentReady.
+// Browser operations use timeout-based cancellation via ScreenshotOptions.Timeout.
+//
+// On context cancellation, resources are cleaned up but partial work may remain.
+func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]ScreenshotResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	logger := logx.FromContext(ctx).Channel("playwright")
+	if opts.URL == "" {
+		return nil, fmt.Errorf("render screenshots: url is required")
+	}
+	if opts.OutputDir == "" {
+		return nil, fmt.Errorf("render screenshots: output dir is required")
+	}
+	if len(opts.Refs) == 0 {
+		return nil, fmt.Errorf("render screenshots: at least one ref is required")
+	}
+
+	if err := os.MkdirAll(opts.OutputDir, 0o755); err != nil {
+		return nil, fmt.Errorf("render screenshots: create output dir: %w", err)
+	}
+
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+
+	browserName := opts.Browser
+	if browserName == "" {
+		browserName = "chromium"
+	}
+
+	runOpts := &pw.RunOptions{DriverDirectory: opts.DriverDirectory}
+	if opts.Debug {
+		runOpts.Verbose = true
+	}
+
+	client, err := pw.Run(runOpts)
+	if err != nil {
+		return nil, fmt.Errorf("launch playwright: %w (run 'bino setup' if this is the first run)", err)
+	}
+	defer client.Stop()
+
+	browser, err := launchBrowser(client, browserName)
+	if err != nil {
+		return nil, err
+	}
+	defer browser.Close()
+
+	// Set viewport size based on format and orientation
+	viewportWidth, viewportHeight := 1024, 768 // default XGA
+	if w, h, ok := customFormatDimensions(opts.Format); ok {
+		viewportWidth, viewportHeight = w, h
+	}
+	if strings.EqualFold(opts.Orientation, "portrait") {
+		viewportWidth, viewportHeight = viewportHeight, viewportWidth
+	}
+
+	contextHandle, err := browser.NewContext(pw.BrowserNewContextOptions{
+		Viewport: &pw.Size{
+			Width:  viewportWidth,
+			Height: viewportHeight,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create browser context: %w", err)
+	}
+	defer contextHandle.Close()
+
+	page, err := contextHandle.NewPage()
+	if err != nil {
+		return nil, fmt.Errorf("create page: %w", err)
+	}
+
+	var readyCh <-chan struct{}
+	if opts.WaitForComponentReady {
+		readyCh = observeComponentReady(page, opts.ReadyConsolePrefix, logger)
+	}
+
+	timeoutMs := float64(timeout.Milliseconds())
+	if timeoutMs <= 0 {
+		timeoutMs = 120000
+	}
+	gotoOpts := pw.PageGotoOptions{
+		WaitUntil: pw.WaitUntilStateNetworkidle,
+		Timeout:   &timeoutMs,
+	}
+	if _, err := page.Goto(opts.URL, gotoOpts); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("load %s: %w", opts.URL, err)
+	}
+
+	if readyCh != nil {
+		if err := waitForComponentReady(ctx, readyCh, timeout); err != nil {
+			return nil, err
+		}
+	}
+
+	// Capture screenshots for each ref
+	results := make([]ScreenshotResult, 0, len(opts.Refs))
+	for i, ref := range opts.Refs {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
+
+		result := ScreenshotResult{Ref: ref}
+
+		// Build element ID selector
+		elementID := "bino-" + strings.ToLower(ref.Kind) + "-" + ref.Name
+		selector := "#" + elementID
+
+		// Build output filename
+		var filename string
+		ext := opts.ImageFormat
+		if ext == "" {
+			ext = "png"
+		}
+		if opts.FilenamePattern == "index" {
+			filename = fmt.Sprintf("%s-%03d.%s", opts.FilenamePrefix, i+1, ext)
+		} else {
+			// Default to "ref" pattern
+			filename = fmt.Sprintf("%s-%s.%s", opts.FilenamePrefix, ref.Name, ext)
+		}
+		result.FilePath = filepath.Join(opts.OutputDir, filename)
+
+		// Locate the element
+		locator := page.Locator(selector)
+		count, err := locator.Count()
+		if err != nil {
+			result.Error = fmt.Errorf("locate element %s: %w", selector, err)
+			results = append(results, result)
+			continue
+		}
+		if count == 0 {
+			result.Error = fmt.Errorf("element %s not found", selector)
+			results = append(results, result)
+			continue
+		}
+
+		// Build screenshot options
+		screenshotOpts := pw.LocatorScreenshotOptions{
+			Path: pw.String(result.FilePath),
+		}
+		if strings.EqualFold(ext, "jpeg") || strings.EqualFold(ext, "jpg") {
+			screenshotOpts.Type = pw.ScreenshotTypeJpeg
+			if opts.Quality != nil {
+				screenshotOpts.Quality = opts.Quality
+			}
+		} else {
+			screenshotOpts.Type = pw.ScreenshotTypePng
+		}
+		if opts.OmitBackground {
+			screenshotOpts.OmitBackground = pw.Bool(true)
+		}
+		if opts.Scale != "" {
+			switch strings.ToLower(opts.Scale) {
+			case "css":
+				screenshotOpts.Scale = pw.ScreenshotScaleCss
+			case "device":
+				screenshotOpts.Scale = pw.ScreenshotScaleDevice
+			}
+		}
+
+		// Take the screenshot
+		if _, err := locator.Screenshot(screenshotOpts); err != nil {
+			result.Error = fmt.Errorf("capture screenshot of %s: %w", selector, err)
+			results = append(results, result)
+			continue
+		}
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }

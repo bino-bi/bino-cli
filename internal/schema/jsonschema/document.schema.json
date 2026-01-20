@@ -29,6 +29,7 @@
         "Internationalization",
         "ReportArtefact",
         "LiveReportArtefact",
+        "ScreenshotArtefact",
         "SigningProfile"
       ],
       "description": "Type of document in the report bundle (e.g. DataSource, DataSet, LayoutPage). Determines which spec block is expected."
@@ -208,6 +209,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/liveReportArtefactSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ScreenshotArtefact" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/screenshotArtefactSpec" }
         }
       }
     },
@@ -1304,6 +1317,108 @@
         "label": {
           "type": "string",
           "description": "Human-readable label for this option. If omitted, value is used."
+        }
+      },
+      "additionalProperties": false
+    },
+    "screenshotArtefactSpec": {
+      "type": "object",
+      "required": ["filenamePrefix", "refs", "layoutPages"],
+      "properties": {
+        "layoutPages": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of a single LayoutPage document to render."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "description": "Array of LayoutPage document names to render in order."
+            }
+          ],
+          "description": "One or more LayoutPage documents to render. Components referenced in 'refs' must be present in these pages."
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1,
+          "default": "xga",
+          "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full_hd', '4k')."
+        },
+        "orientation": {
+          "type": "string",
+          "enum": ["portrait", "landscape"],
+          "default": "landscape",
+          "description": "Viewport orientation, either 'portrait' or 'landscape'."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["de", "en"],
+          "default": "de",
+          "description": "Language code passed to the renderer (currently 'de' or 'en')."
+        },
+        "filenamePrefix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prefix for generated screenshot filenames (for example 'quarterly-report')."
+        },
+        "filenamePattern": {
+          "type": "string",
+          "enum": ["index", "ref"],
+          "default": "ref",
+          "description": "Pattern for screenshot filenames: 'index' generates prefix-001.png, 'ref' generates prefix-refname.png."
+        },
+        "imageFormat": {
+          "type": "string",
+          "enum": ["png", "jpeg"],
+          "default": "png",
+          "description": "Image format for screenshots, either 'png' or 'jpeg'."
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "JPEG quality (1-100). Only applicable when imageFormat is 'jpeg'."
+        },
+        "omitBackground": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, captures screenshots with transparent background (PNG only)."
+        },
+        "scale": {
+          "type": "string",
+          "enum": ["css", "device"],
+          "description": "Screenshot scale: 'css' uses CSS pixels, 'device' uses device pixels."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/screenshotRef"
+          },
+          "minItems": 1,
+          "description": "List of component references to capture screenshots of."
+        }
+      },
+      "additionalProperties": false
+    },
+    "screenshotRef": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ChartStructure", "ChartTime", "ChartTree", "Table", "LayoutCard", "Text"],
+          "description": "Kind of the component to capture (for example 'ChartStructure', 'ChartTime', 'Table')."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name (metadata.name) of the component to capture."
         }
       },
       "additionalProperties": false

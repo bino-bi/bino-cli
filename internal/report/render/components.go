@@ -690,15 +690,20 @@ func writeAttr(b *strings.Builder, name, value string) {
 // writeSourceAttrs writes data attributes for click-to-source functionality in preview.
 // These attributes allow the VS Code extension to navigate to the YAML source when
 // the user clicks on a component in the preview.
+// It also writes an id attribute for screenshot targeting via ScreenshotArtefact.
 func writeSourceAttrs(b *strings.Builder, child layoutChild) {
 	writeAttr(b, "data-bino-kind", child.Kind)
 	// For ref children, use the ref as the name (points to standalone document).
 	// For inline children, use the metadata name.
 	if child.Ref != "" {
 		writeAttr(b, "data-bino-ref", child.Ref)
+		writeAttr(b, "id", "bino-"+strings.ToLower(child.Kind)+"-"+child.Ref)
 	}
 	if child.Metadata.Name != "" {
 		writeAttr(b, "data-bino-name", child.Metadata.Name)
+		if child.Ref == "" {
+			writeAttr(b, "id", "bino-"+strings.ToLower(child.Kind)+"-"+child.Metadata.Name)
+		}
 	}
 }
 
