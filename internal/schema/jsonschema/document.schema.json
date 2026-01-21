@@ -2570,6 +2570,18 @@
               "items": { "type": "string" }
             }
           ]
+        },
+        "chartMode": {
+          "type": "string",
+          "enum": ["bar", "line", "auto"],
+          "default": "bar",
+          "description": "Controls how the chart is rendered. 'bar' for standard bar chart, 'line' for line chart with markers, 'auto' to switch to line mode when data points exceed maxBars."
+        },
+        "maxBars": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 28,
+          "description": "Threshold for auto-switching to line mode. Only applies when chartMode is 'auto'."
         }
       }
     },
@@ -3037,6 +3049,26 @@
               "items": { "type": "string" }
             }
           ]
+        },
+        "barColumns": {
+          "description": "List of column names to render as inline IBCS-compliant bar charts instead of numbers. Supports variance columns (d_ prefix for absolute, dr_ prefix for relative) and scenario columns (ac, pp, fc, pl).",
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          ]
+        },
+        "unitScaling": {
+          "type": "number",
+          "default": 0.01,
+          "description": "Pixels per unit for absolute variance bars (d_ prefix columns). Controls the width of the bars."
+        },
+        "percentageScaling": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Pixels per percentage point for relative variance pins (dr_ prefix columns). Controls the width of the pin charts."
         },
         "thereof": {
           "description": "Array of drilldown objects with rowGroup, category, and subCategory. Can be a YAML array or a JSON string. Example: [{\"rowGroup\":\"Umsatz\", \"category\": \"Applications\", \"subCategory\": \"Applications-A\"}]",
