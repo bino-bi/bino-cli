@@ -39,7 +39,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
 		}
@@ -51,7 +51,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range globalDocs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.globalIndex[key] = doc
 		}
@@ -361,6 +361,16 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
 		html, err := renderLayoutCardContainer(s, rc)
 		if err != nil {
 			return "", false, err
+		}
+		component = html
+	case "Grid":
+		var s gridSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render grid child: %w", err)
+		}
+		html, err := renderGridComponent(s, rc)
+		if err != nil {
+			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
 		component = html
 	case "Image":
@@ -673,6 +683,143 @@ func renderImageComponent(spec imageSpec) string {
 	spec.writeAttrs(&b)
 	b.WriteString("></bn-image>")
 	return b.String()
+}
+
+// renderGridComponent renders a Grid component as HTML.
+// Grid uses slotted content for children, with slot names following the pattern "{row-id}-{column-id}".
+func renderGridComponent(spec gridSpec, rc *renderCtx) (string, error) {
+	var b strings.Builder
+	b.WriteString("<bn-grid")
+	spec.writeAttrs(&b)
+	b.WriteString(">")
+
+	// Render child content as slotted elements
+	for _, child := range spec.Children {
+		childContent, err := renderGridChild(child, rc)
+		if err != nil {
+			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)
+		}
+		if childContent == "" {
+			continue // Skip children that couldn't be rendered (e.g., filtered refs)
+		}
+		slotName := child.Row.String() + "-" + child.Column.String()
+		b.WriteString("\n  <div slot=\"")
+		b.WriteString(html.EscapeString(slotName))
+		b.WriteString("\">")
+		b.WriteString(childContent)
+		b.WriteString("</div>")
+	}
+	if len(spec.Children) > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString("</bn-grid>")
+	return b.String(), nil
+}
+
+// renderGridChild renders a single child (cell) in a grid.
+// It handles Text, Table, ChartStructure, ChartTime, ChartTree, and Image kinds with ref or inline spec.
+func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
+	// Resolve spec (handle ref if present)
+	effectiveSpec, err := resolveGridChildSpec(child, rc)
+	if err != nil {
+		return "", err
+	}
+	if effectiveSpec == nil {
+		return "", nil // Ref was filtered or optional ref missing, skip this child
+	}
+
+	switch child.Kind {
+	case "Text":
+		var s textSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal text spec: %w", err)
+		}
+		return renderTextComponent(s), nil
+	case "Table":
+		var s tableSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal table spec: %w", err)
+		}
+		return renderTableComponent(s), nil
+	case "ChartStructure":
+		var s chartStructureSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart structure spec: %w", err)
+		}
+		return renderChartStructureComponent(s), nil
+	case "ChartTime":
+		var s chartTimeSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart time spec: %w", err)
+		}
+		return renderChartTimeComponent(s), nil
+	case "ChartTree":
+		var s chartTreeSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart tree spec: %w", err)
+		}
+		return renderChartTreeComponent(s, rc)
+	case "Image":
+		var s imageSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal image spec: %w", err)
+		}
+		return renderImageComponent(s), nil
+	default:
+		return "", fmt.Errorf("unsupported grid child kind %q", child.Kind)
+	}
+}
+
+// resolveGridChildSpec resolves the effective spec for a grid child.
+// For inline children (no ref), returns child.Spec directly.
+// For ref children, looks up the referenced document and merges any spec overrides.
+func resolveGridChildSpec(child gridChild, rc *renderCtx) (json.RawMessage, error) {
+	// Inline child: no ref, just return spec directly
+	if child.Ref == "" {
+		return child.Spec, nil
+	}
+
+	// Ref child: look up the referenced document
+	if rc == nil {
+		return nil, fmt.Errorf("ref %q cannot be resolved without render context", child.Ref)
+	}
+
+	log := logx.FromContext(rc.ctx).Channel("render")
+
+	key := child.Kind + ":" + child.Ref
+	refDoc, found := rc.docIndex[key]
+	if !found {
+		// Check if ref exists in global set (filtered by constraints)
+		_, existsGlobally := rc.globalIndex[key]
+		if existsGlobally {
+			log.Infof("ref %q of kind %q filtered by constraints, skipping grid child", child.Ref, child.Kind)
+			return nil, nil // Filtered by constraints, skip
+		}
+
+		// Ref doesn't exist at all
+		if child.Optional {
+			log.Infof("optional ref %q of kind %q not found, skipping grid child", child.Ref, child.Kind)
+			return nil, nil // Optional ref: skip gracefully
+		}
+
+		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
+	}
+
+	// Extract spec from referenced document
+	var refPayload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+		return nil, fmt.Errorf("parse ref %q spec: %w", child.Ref, err)
+	}
+
+	// If no overrides, return referenced spec directly
+	if len(child.Spec) == 0 || string(child.Spec) == "null" {
+		return refPayload.Spec, nil
+	}
+
+	// Merge: referenced spec as base, child.Spec as overrides
+	return mergeJSONObjects(refPayload.Spec, child.Spec)
 }
 
 // writeAttr writes an HTML attribute if the value is non-empty.

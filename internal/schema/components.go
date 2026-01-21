@@ -153,3 +153,38 @@ type ChartTimeSpec struct {
 	// Type is the chart type (line, bar, area).
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 }
+
+// GridSpec represents the spec section of a Grid manifest.
+// Grid creates a CSS grid-based layout with row and column headers
+// for organizing child components in a tabular structure.
+type GridSpec struct {
+	// ChartTitle is displayed at the top-left of the grid.
+	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
+
+	// RowHeaders defines the row headers as labels or objects with label and id.
+	// Can be a YAML array like ["Row 1", "Row 2"] or [{label: "Row 1", id: "r1"}].
+	RowHeaders any `yaml:"rowHeaders" json:"rowHeaders"`
+
+	// ColumnHeaders defines the column headers as labels or objects with label and id.
+	// Can be a YAML array like ["Col 1", "Col 2"] or [{label: "Col 1", id: "c1"}].
+	ColumnHeaders any `yaml:"columnHeaders" json:"columnHeaders"`
+
+	// ShowRowHeaders controls whether row headers are displayed.
+	ShowRowHeaders *bool `yaml:"showRowHeaders,omitempty" json:"showRowHeaders,omitempty"`
+
+	// ShowColumnHeaders controls whether column headers are displayed.
+	ShowColumnHeaders *bool `yaml:"showColumnHeaders,omitempty" json:"showColumnHeaders,omitempty"`
+
+	// ShowBorders controls whether borders/dividers are shown between cells.
+	ShowBorders *bool `yaml:"showBorders,omitempty" json:"showBorders,omitempty"`
+
+	// RowHeaderWidth is the CSS width of the row header column (e.g., "auto", "100px", "20%").
+	RowHeaderWidth string `yaml:"rowHeaderWidth,omitempty" json:"rowHeaderWidth,omitempty"`
+
+	// CellGap is the CSS gap between cells (e.g., "0px", "8px").
+	CellGap string `yaml:"cellGap,omitempty" json:"cellGap,omitempty"`
+
+	// Children defines the grid cell contents as an array of child objects.
+	// Each child has a row, column (string or int), and either a ref to an existing component or inline spec.
+	Children []any `yaml:"children" json:"children"`
+}

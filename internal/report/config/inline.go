@@ -36,6 +36,10 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 			if err := materializeChartTreeDocInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("ChartTree %q: %w", doc.Name, err)
 			}
+		case "Grid":
+			if err := materializeGridDocInlines(doc, registry); err != nil {
+				return nil, fmt.Errorf("Grid %q: %w", doc.Name, err)
+			}
 		case "DataSet":
 			if err := materializeDataSetInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("DataSet %q: %w", doc.Name, err)
@@ -596,6 +600,13 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 				return fmt.Errorf("child[%d] (ChartTree): %w", i, err)
 			}
 			modified = true
+
+		case "Grid":
+			// Process Grid cells that may contain inline datasets
+			if err := materializeGridCellsInlines(doc, i, child.Spec, registry); err != nil {
+				return fmt.Errorf("child[%d] (Grid): %w", i, err)
+			}
+			modified = true
 		}
 	}
 
@@ -748,6 +759,145 @@ func rewriteChartTreeDocNodeDataset(doc *Document, nodeIndex int, resolvedNames 
 	return nil
 }
 
+// gridDocSpec wraps the spec for parsing standalone Grid documents.
+type gridDocSpec struct {
+	Spec struct {
+		Children []gridChildSpec `json:"children"`
+	} `json:"spec"`
+}
+
+// gridChildSpec represents a child (cell) in a Grid.
+type gridChildSpec struct {
+	Row    any             `json:"row"` // string or int
+	Column any             `json:"column"` // string or int
+	Kind   string          `json:"kind"`
+	Ref    string          `json:"ref,omitempty"`
+	Spec   json.RawMessage `json:"spec,omitempty"`
+}
+
+// materializeGridDocInlines processes inline datasets in standalone Grid documents.
+func materializeGridDocInlines(doc *Document, registry *inlineRegistry) error {
+	var gridDoc gridDocSpec
+	if err := json.Unmarshal(doc.Raw, &gridDoc); err != nil {
+		return nil // Parse error, skip
+	}
+
+	if len(gridDoc.Spec.Children) == 0 {
+		return nil
+	}
+
+	// Process each child
+	for childIdx, child := range gridDoc.Spec.Children {
+		// Skip children that reference other documents (no inline spec)
+		if child.Ref != "" || len(child.Spec) == 0 {
+			continue
+		}
+
+		// Only process component kinds that can have datasets
+		switch child.Kind {
+		case "Table", "ChartStructure", "ChartTime", "Text":
+			// Parse the child's spec to check for inline datasets
+			var cs childSpec
+			if err := json.Unmarshal(child.Spec, &cs); err != nil {
+				continue
+			}
+
+			if !cs.Dataset.HasInline() {
+				continue
+			}
+
+			// Process inline datasets
+			entries := cs.Dataset.Entries()
+			resolvedNames := make([]string, 0, len(entries))
+
+			for j, entry := range entries {
+				if entry.IsRef() {
+					resolvedNames = append(resolvedNames, entry.Ref)
+					continue
+				}
+
+				if entry.Inline == nil {
+					continue
+				}
+
+				// Process inline DataSet
+				loc := spec.InlineLocation{
+					File:       doc.File,
+					Position:   doc.Position,
+					ParentKind: doc.Kind,
+					ParentName: doc.Name,
+					Path:       fmt.Sprintf("spec.children[%d].spec.dataset[%d]", childIdx, j),
+				}
+
+				// First, materialize any inline DataSources in the dependencies
+				if err := materializeInlineDataSources(entry.Inline, loc, registry); err != nil {
+					return fmt.Errorf("children[%d].dataset[%d]: %w", childIdx, j, err)
+				}
+
+				// Register the inline DataSet
+				name, err := registry.registerDataSet(entry.Inline, loc)
+				if err != nil {
+					return fmt.Errorf("children[%d].dataset[%d]: %w", childIdx, j, err)
+				}
+
+				resolvedNames = append(resolvedNames, name)
+			}
+
+			// Rewrite the child's dataset
+			if len(resolvedNames) > 0 {
+				if err := rewriteGridDocChildDataset(doc, childIdx, resolvedNames); err != nil {
+					return fmt.Errorf("children[%d]: %w", childIdx, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// rewriteGridDocChildDataset rewrites a standalone Grid child's dataset field.
+func rewriteGridDocChildDataset(doc *Document, childIndex int, resolvedNames []string) error {
+	var docMap map[string]any
+	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
+		return fmt.Errorf("unmarshal document: %w", err)
+	}
+
+	specMap, ok := docMap["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	children, ok := specMap["children"].([]any)
+	if !ok || childIndex >= len(children) {
+		return nil
+	}
+
+	child, ok := children[childIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	childSpecMap, ok := child["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// Replace dataset field with resolved names
+	if len(resolvedNames) == 1 {
+		childSpecMap["dataset"] = resolvedNames[0]
+	} else {
+		childSpecMap["dataset"] = resolvedNames
+	}
+
+	raw, err := json.Marshal(docMap)
+	if err != nil {
+		return fmt.Errorf("marshal document: %w", err)
+	}
+
+	doc.Raw = raw
+	return nil
+}
+
 // materializeChartTreeNodesInlines processes inline datasets in ChartTree nodes.
 // ChartTree nodes can contain Table, ChartStructure, ChartTime components with inline datasets.
 func materializeChartTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
@@ -881,6 +1031,152 @@ func rewriteChartTreeNodeDataset(doc *Document, childIndex, nodeIndex int, resol
 		nodeSpecMap["dataset"] = resolvedNames[0]
 	} else {
 		nodeSpecMap["dataset"] = resolvedNames
+	}
+
+	raw, err := json.Marshal(docMap)
+	if err != nil {
+		return fmt.Errorf("marshal document: %w", err)
+	}
+
+	doc.Raw = raw
+	return nil
+}
+
+// materializeGridChildrenInlines processes inline datasets in Grid children.
+// Grid children can contain Table, ChartStructure, ChartTime, Text components with inline datasets.
+func materializeGridCellsInlines(doc *Document, childIndex int, gridSpecRaw json.RawMessage, registry *inlineRegistry) error {
+	var gSpec struct {
+		Children []gridChildSpec `json:"children"`
+	}
+	if err := json.Unmarshal(gridSpecRaw, &gSpec); err != nil {
+		return nil // Parse error, skip
+	}
+
+	if len(gSpec.Children) == 0 {
+		return nil
+	}
+
+	// Track if any modifications were made
+	modified := false
+
+	// Process each grid child
+	for gridChildIdx, gridChild := range gSpec.Children {
+		// Skip children that reference other documents (no inline spec)
+		if gridChild.Ref != "" || len(gridChild.Spec) == 0 {
+			continue
+		}
+
+		// Only process component kinds that can have datasets
+		switch gridChild.Kind {
+		case "Table", "ChartStructure", "ChartTime", "Text":
+			// Parse the child's spec to check for inline datasets
+			var cs childSpec
+			if err := json.Unmarshal(gridChild.Spec, &cs); err != nil {
+				continue
+			}
+
+			if !cs.Dataset.HasInline() {
+				continue
+			}
+
+			// Process inline datasets
+			entries := cs.Dataset.Entries()
+			resolvedNames := make([]string, 0, len(entries))
+
+			for j, entry := range entries {
+				if entry.IsRef() {
+					resolvedNames = append(resolvedNames, entry.Ref)
+					continue
+				}
+
+				if entry.Inline == nil {
+					continue
+				}
+
+				// Process inline DataSet
+				loc := spec.InlineLocation{
+					File:       doc.File,
+					Position:   doc.Position,
+					ParentKind: doc.Kind,
+					ParentName: doc.Name,
+					Path:       fmt.Sprintf("spec.children[%d].spec.children[%d].spec.dataset[%d]", childIndex, gridChildIdx, j),
+				}
+
+				// First, materialize any inline DataSources in the dependencies
+				if err := materializeInlineDataSources(entry.Inline, loc, registry); err != nil {
+					return fmt.Errorf("children[%d].dataset[%d]: %w", gridChildIdx, j, err)
+				}
+
+				// Register the inline DataSet
+				name, err := registry.registerDataSet(entry.Inline, loc)
+				if err != nil {
+					return fmt.Errorf("children[%d].dataset[%d]: %w", gridChildIdx, j, err)
+				}
+
+				resolvedNames = append(resolvedNames, name)
+			}
+
+			// Rewrite the child's dataset
+			if len(resolvedNames) > 0 {
+				if err := rewriteGridChildDataset(doc, childIndex, gridChildIdx, resolvedNames); err != nil {
+					return fmt.Errorf("children[%d]: %w", gridChildIdx, err)
+				}
+				modified = true
+			}
+		}
+	}
+
+	_ = modified // Prevent unused variable warning
+	return nil
+}
+
+// rewriteGridChildDataset rewrites a Grid child's dataset field to use resolved names.
+func rewriteGridChildDataset(doc *Document, layoutChildIndex, gridChildIndex int, resolvedNames []string) error {
+	var docMap map[string]any
+	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
+		return fmt.Errorf("unmarshal document: %w", err)
+	}
+
+	specMap, ok := docMap["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	layoutChildren, ok := specMap["children"].([]any)
+	if !ok || layoutChildIndex >= len(layoutChildren) {
+		return nil
+	}
+
+	layoutChild, ok := layoutChildren[layoutChildIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	layoutChildSpecMap, ok := layoutChild["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	gridChildren, ok := layoutChildSpecMap["children"].([]any)
+	if !ok || gridChildIndex >= len(gridChildren) {
+		return nil
+	}
+
+	gridChild, ok := gridChildren[gridChildIndex].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	gridChildSpecMap, ok := gridChild["spec"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// Replace dataset field with resolved names
+	if len(resolvedNames) == 1 {
+		gridChildSpecMap["dataset"] = resolvedNames[0]
+	} else {
+		gridChildSpecMap["dataset"] = resolvedNames
 	}
 
 	raw, err := json.Marshal(docMap)

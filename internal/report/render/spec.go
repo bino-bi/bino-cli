@@ -394,3 +394,67 @@ type imageSpec struct {
 func (s imageSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "source", s.Source)
 }
+
+// gridSpec defines the structure for Grid components.
+// Grids create CSS grid-based layouts with row and column headers.
+type gridSpec struct {
+	ChartTitle        string          `json:"chartTitle"`
+	RowHeaders        json.RawMessage `json:"rowHeaders"`
+	ColumnHeaders     json.RawMessage `json:"columnHeaders"`
+	ShowRowHeaders    *bool           `json:"showRowHeaders"`
+	ShowColumnHeaders *bool           `json:"showColumnHeaders"`
+	ShowBorders       *bool           `json:"showBorders"`
+	RowHeaderWidth    string          `json:"rowHeaderWidth"`
+	CellGap           string          `json:"cellGap"`
+	Children          []gridChild     `json:"children"`
+}
+
+// gridChild defines a child (cell) in the grid.
+type gridChild struct {
+	Row      stringOrInt     `json:"row"`
+	Column   stringOrInt     `json:"column"`
+	Kind     string          `json:"kind"`
+	Metadata layoutChildMeta `json:"metadata"`
+	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
+}
+
+// stringOrInt is a type that can unmarshal from either a string or an integer,
+// converting integers to their string representation.
+type stringOrInt string
+
+func (s *stringOrInt) UnmarshalJSON(data []byte) error {
+	// Try string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*s = stringOrInt(str)
+		return nil
+	}
+	// Try integer
+	var num int
+	if err := json.Unmarshal(data, &num); err == nil {
+		*s = stringOrInt(strconv.Itoa(num))
+		return nil
+	}
+	return fmt.Errorf("row/column must be string or integer, got: %s", string(data))
+}
+
+func (s stringOrInt) String() string {
+	return string(s)
+}
+
+func (s gridSpec) writeAttrs(b *strings.Builder) {
+	writeAttr(b, "chart-title", s.ChartTitle)
+	if len(s.RowHeaders) > 0 {
+		writeAttr(b, "row-headers", string(s.RowHeaders))
+	}
+	if len(s.ColumnHeaders) > 0 {
+		writeAttr(b, "column-headers", string(s.ColumnHeaders))
+	}
+	writeBoolAttr(b, "show-row-headers", s.ShowRowHeaders)
+	writeBoolAttr(b, "show-column-headers", s.ShowColumnHeaders)
+	writeBoolAttr(b, "show-borders", s.ShowBorders)
+	writeAttr(b, "row-header-width", s.RowHeaderWidth)
+	writeAttr(b, "cell-gap", s.CellGap)
+}

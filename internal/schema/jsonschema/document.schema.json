@@ -24,6 +24,7 @@
         "ChartStructure",
         "ChartTime",
         "ChartTree",
+        "Grid",
         "Table",
         "ComponentStyle",
         "Internationalization",
@@ -149,6 +150,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/chartTreeSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "Grid" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/gridSpec" }
         }
       }
     },
@@ -2176,7 +2189,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "LayoutCard", "Image"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -2270,6 +2283,18 @@
           "then": {
             "properties": {
               "spec": { "$ref": "#/$defs/layoutCardSpec" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "Grid" }
+            }
+          },
+          "then": {
+            "properties": {
+              "spec": { "$ref": "#/$defs/gridSpec" }
             }
           }
         },
@@ -2744,6 +2769,174 @@
           "description": "Optional dataset binding for template interpolation in the value."
         }
       }
+    },
+    "gridSpec": {
+      "type": "object",
+      "required": ["rowHeaders", "columnHeaders", "cells"],
+      "description": "Configuration for a Grid component. Grids create CSS grid-based layouts with row and column headers for organizing child components in a tabular structure.",
+      "properties": {
+        "chartTitle": {
+          "type": "string",
+          "default": "",
+          "description": "Title displayed at the top-left of the grid. If empty, the title area is omitted."
+        },
+        "rowHeaders": {
+          "description": "Row header definitions. Can be an array of strings (auto-generated numeric IDs) or objects with label and id properties.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Simple array of row header labels. IDs are auto-generated as '0', '1', '2', etc."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "id"],
+                "properties": {
+                  "label": { "type": "string", "description": "Display text for the row header." },
+                  "id": { "type": "string", "description": "Unique identifier for the row, used in cell references." }
+                }
+              },
+              "minItems": 1,
+              "description": "Array of row header objects with explicit IDs."
+            }
+          ]
+        },
+        "columnHeaders": {
+          "description": "Column header definitions. Can be an array of strings (auto-generated numeric IDs) or objects with label and id properties.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Simple array of column header labels. IDs are auto-generated as '0', '1', '2', etc."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "id"],
+                "properties": {
+                  "label": { "type": "string", "description": "Display text for the column header." },
+                  "id": { "type": "string", "description": "Unique identifier for the column, used in cell references." }
+                }
+              },
+              "minItems": 1,
+              "description": "Array of column header objects with explicit IDs."
+            }
+          ]
+        },
+        "showRowHeaders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to display row headers."
+        },
+        "showColumnHeaders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to display column headers."
+        },
+        "showBorders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to display border/divider lines between cells."
+        },
+        "rowHeaderWidth": {
+          "type": "string",
+          "default": "auto",
+          "description": "CSS width of the row header column (e.g., 'auto', '100px', '20%')."
+        },
+        "cellGap": {
+          "type": "string",
+          "default": "0px",
+          "description": "CSS gap between grid cells (e.g., '0px', '8px')."
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/gridChild" },
+          "minItems": 1,
+          "description": "Array of child definitions. Each child specifies its grid position and content."
+        }
+      }
+    },
+    "gridChild": {
+      "type": "object",
+      "required": ["row", "column", "kind"],
+      "description": "A child (cell) in the grid. Each child specifies its position (row and column) and content, which can be a reference to an existing component or an inline definition.",
+      "properties": {
+        "row": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "integer" }
+          ],
+          "description": "Row identifier. Must match a row ID from rowHeaders (or auto-generated index like 0, 1). Can be string or integer."
+        },
+        "column": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "integer" }
+          ],
+          "description": "Column identifier. Must match a column ID from columnHeaders (or auto-generated index like 0, 1). Can be string or integer."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image"],
+          "description": "The type of component to render in this child."
+        },
+        "metadata": {
+          "$ref": "#/$defs/layoutChildMetadata",
+          "description": "Optional metadata for the child component, including name and constraints."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used as the base."
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true and the ref is missing, the child is skipped gracefully instead of erroring."
+        },
+        "spec": {
+          "type": "object",
+          "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
+        }
+      },
+      "if": {
+        "not": {
+          "required": ["ref"]
+        }
+      },
+      "then": {
+        "required": ["spec"]
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "Text" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/textSpec" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "Table" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpec" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartStructure" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpec" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartTime" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartTree" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/chartTreeSpec" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "Image" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
+        }
+      ]
     },
     "tableSpec": {
       "type": "object",

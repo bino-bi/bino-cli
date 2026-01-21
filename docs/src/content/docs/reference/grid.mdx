@@ -1,0 +1,387 @@
+---
+title: Grid
+description: Create tabular layouts with row and column headers for organizing child components.
+---
+
+`Grid` manifests define CSS grid-based layouts with row and column headers, allowing you to organize child components in a structured tabular format. Grids are useful for creating dashboards, comparison views, and data matrices where components need to be arranged in rows and columns.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: comparison-grid
+spec:
+  chartTitle: Regional Sales Overview
+  rowHeaders:
+    - label: Electronics
+      id: electronics
+    - label: Apparel
+      id: apparel
+    - label: Home & Garden
+      id: home
+  columnHeaders:
+    - label: Q1
+      id: q1
+    - label: Q2
+      id: q2
+    - label: Q3
+      id: q3
+  showRowHeaders: true      # default: true
+  showColumnHeaders: true   # default: true
+  showBorders: true         # default: true
+  rowHeaderWidth: auto      # CSS width (auto, 100px, 20%)
+  cellGap: 0px              # CSS gap between cells
+  children:
+    - row: electronics
+      column: q1
+      kind: ChartStructure
+      ref: electronics-q1-chart
+    - row: electronics
+      column: q2
+      kind: Table
+      spec:
+        dataset: electronics-q2-data
+        tableTitle: Q2 Sales
+```
+
+## Fields
+
+### Headers
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `chartTitle` | string | `""` | Title displayed at the top-left of the grid. |
+| `rowHeaders` | array | (required) | Row header definitions. Can be simple strings or objects with `label` and `id`. |
+| `columnHeaders` | array | (required) | Column header definitions. Can be simple strings or objects with `label` and `id`. |
+
+**Row and column headers** support two formats:
+
+**Simple format** - Labels only, IDs are auto-generated as `0`, `1`, `2`, etc.:
+```yaml
+rowHeaders:
+  - Electronics
+  - Apparel
+  - Home & Garden
+columnHeaders:
+  - Q1
+  - Q2
+  - Q3
+```
+
+**Explicit format** - Custom IDs for child references:
+```yaml
+rowHeaders:
+  - label: Electronics
+    id: electronics
+  - label: Apparel
+    id: apparel
+columnHeaders:
+  - label: Q1 2024
+    id: q1
+  - label: Q2 2024
+    id: q2
+```
+
+### Display options
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `showRowHeaders` | boolean | `true` | Whether to display the row headers column. |
+| `showColumnHeaders` | boolean | `true` | Whether to display the column headers row. |
+| `showBorders` | boolean | `true` | Whether to display border/divider lines between cells. |
+| `rowHeaderWidth` | string | `"auto"` | CSS width of the row header column (e.g., `"auto"`, `"100px"`, `"20%"`). |
+| `cellGap` | string | `"0px"` | CSS gap between grid cells (e.g., `"0px"`, `"8px"`). |
+
+### Children
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `children` | array | Array of child definitions. Each child specifies its grid position and content. |
+
+Each child object has these properties:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `row` | string or integer | Yes | Row identifier matching a row ID from `rowHeaders`. Can be string or integer. |
+| `column` | string or integer | Yes | Column identifier matching a column ID from `columnHeaders`. Can be string or integer. |
+| `kind` | string | Yes | Component type: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartTree`, or `Image`. |
+| `ref` | string | No | Reference to a standalone component document by name. |
+| `optional` | boolean | No | When `true`, skip gracefully if `ref` is missing (default: `false`). |
+| `spec` | object | Conditional | Component specification. Required for inline children, optional override for `ref` children. |
+| `metadata` | object | No | Optional metadata including `name` and `constraints`. |
+
+---
+
+## Child references and inline definitions
+
+Grid children can reference existing component documents or define components inline.
+
+### Reference to existing component
+
+```yaml
+children:
+  - row: electronics
+    column: q1
+    kind: ChartStructure
+    ref: electronics-q1-chart
+```
+
+### Inline component definition
+
+```yaml
+children:
+  - row: electronics
+    column: q2
+    kind: Table
+    spec:
+      dataset: sales-data
+      tableTitle: Electronics Q2
+      scenarios: ac,fc
+```
+
+### Reference with overrides
+
+Combine a reference with inline spec to override specific properties:
+
+```yaml
+children:
+  - row: electronics
+    column: q3
+    kind: ChartStructure
+    ref: electronics-base-chart
+    spec:
+      chartTitle: Q3 Electronics  # Override the base chart's title
+      filter: quarter == 'Q3'     # Add a filter
+```
+
+### Optional references
+
+Mark a reference as optional to skip the child gracefully if the referenced component doesn't exist:
+
+```yaml
+children:
+  - row: home
+    column: q3
+    kind: Table
+    ref: home-q3-table
+    optional: true  # Skip if not found instead of erroring
+```
+
+---
+
+## Constraint-based children
+
+Children can include constraints that determine if they appear based on artefact labels, spec fields, or execution mode:
+
+```yaml
+children:
+  - row: electronics
+    column: q1
+    kind: ChartStructure
+    ref: detailed-chart
+    metadata:
+      name: detailed-electronics-q1
+      constraints:
+        - mode == build
+        - labels.detail == high
+  - row: electronics
+    column: q1
+    kind: Text
+    spec:
+      value: "Summary view"
+    metadata:
+      name: summary-electronics-q1
+      constraints:
+        - mode == preview
+```
+
+---
+
+## Using Grid in layouts
+
+Grid can be used as a child component in `LayoutPage` or `LayoutCard`:
+
+### Standalone Grid document
+
+With simple headers, use integers for row/column references:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: sales-matrix
+spec:
+  rowHeaders: [North, South, East, West]
+  columnHeaders: [Revenue, Units, Margin]
+  children:
+    - row: 0
+      column: 0
+      kind: Text
+      spec:
+        dataset: north-revenue
+        value: "${revenue}"
+    - row: 0
+      column: 1
+      kind: Text
+      spec:
+        dataset: north-units
+        value: "${units}"
+    # ... more children
+```
+
+### Reference in LayoutPage
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: full
+  children:
+    - kind: Grid
+      ref: sales-matrix
+```
+
+### Inline Grid in LayoutPage
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: full
+  children:
+    - kind: Grid
+      metadata:
+        name: inline-grid
+      spec:
+        chartTitle: Inline Grid Example
+        rowHeaders: [A, B]
+        columnHeaders: [X, Y]
+        children:
+          - row: 0
+            column: 0
+            kind: Text
+            spec:
+              value: "Cell A-X"
+          - row: 1
+            column: 1
+            kind: Text
+            spec:
+              value: "Cell B-Y"
+```
+
+---
+
+## Complete example
+
+A product comparison grid with multiple component types:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: product-comparison
+  description: Quarterly product performance comparison
+spec:
+  chartTitle: Product Performance Matrix
+  rowHeaders:
+    - label: Laptops
+      id: laptops
+    - label: Tablets
+      id: tablets
+    - label: Phones
+      id: phones
+  columnHeaders:
+    - label: Revenue
+      id: rev
+    - label: Units Sold
+      id: units
+    - label: Trend
+      id: trend
+  showRowHeaders: true
+  showColumnHeaders: true
+  showBorders: true
+  rowHeaderWidth: 120px
+  cellGap: 4px
+  children:
+    # Laptop row
+    - row: laptops
+      column: rev
+      kind: Text
+      spec:
+        dataset: laptop-revenue
+        value: "${total_revenue} EUR"
+    - row: laptops
+      column: units
+      kind: Text
+      spec:
+        dataset: laptop-units
+        value: "${units_sold}"
+    - row: laptops
+      column: trend
+      kind: ChartTime
+      ref: laptop-trend-chart
+
+    # Tablet row
+    - row: tablets
+      column: rev
+      kind: Table
+      ref: tablet-revenue-table
+    - row: tablets
+      column: units
+      kind: Text
+      spec:
+        dataset: tablet-units
+        value: "${units_sold}"
+    - row: tablets
+      column: trend
+      kind: ChartTime
+      ref: tablet-trend-chart
+
+    # Phone row
+    - row: phones
+      column: rev
+      kind: ChartStructure
+      ref: phone-revenue-chart
+    - row: phones
+      column: units
+      kind: Text
+      spec:
+        dataset: phone-units
+        value: "${units_sold}"
+    - row: phones
+      column: trend
+      kind: ChartTime
+      ref: phone-trend-chart
+```
+
+---
+
+## Styling
+
+Grid appearance is controlled via [`ComponentStyle`](/reference/component-style/) under the `bn-grid` key:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: custom-style
+spec:
+  content:
+    bn-grid:
+      headerBackground: "#f5f5f5"
+      borderColor: "#cccccc"
+      borderWidth: 1
+      cellPadding: 8
+```
+
+See [ComponentStyle](/reference/component-style/) for all available grid styling options.

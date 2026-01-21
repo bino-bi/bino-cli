@@ -35,6 +35,7 @@ const (
 	KindChartStructure       = "ChartStructure"
 	KindChartTime            = "ChartTime"
 	KindChartTree            = "ChartTree"
+	KindGrid                 = "Grid"
 	KindAsset                = "Asset"
 	KindComponentStyle       = "ComponentStyle"
 	KindInternationalization = "Internationalization"

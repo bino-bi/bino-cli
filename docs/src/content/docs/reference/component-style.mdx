@@ -33,6 +33,7 @@ The style object has the following top-level sections:
 | `bn-chart-time` | Style settings for time/column charts |
 | `bn-chart-structure` | Style settings for structure/bar charts |
 | `bn-chart-tree` | Style settings for hierarchical tree diagrams |
+| `bn-grid` | Style settings for grid layouts with row/column headers |
 
 ---
 
@@ -154,6 +155,27 @@ bn-chart-tree:
   operatorCircleRadius: 12
   operatorFontSizeScale: 0.85
   operatorColor: "#333333"
+```
+
+---
+
+## Grid style (`bn-grid`)
+
+Style settings for grid layouts with row and column headers.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `headerBackground` | string | `"transparent"` | Background color for row and column headers (CSS color) |
+| `borderColor` | string | `"#A6A6A6"` | Color of cell border/divider lines (CSS color) |
+| `borderWidth` | number | `1` | Width of cell borders in pixels |
+| `cellPadding` | number | `4` | Padding inside cells in pixels |
+
+```yaml
+bn-grid:
+  headerBackground: "#f0f0f0"
+  borderColor: "#cccccc"
+  borderWidth: 1
+  cellPadding: 8
 ```
 
 ---
@@ -285,6 +307,12 @@ spec:
       operatorCircleRadius: 12
       operatorFontSizeScale: 0.85
       operatorColor: "#404040"
+
+    bn-grid:
+      headerBackground: "#f5f5f5"
+      borderColor: "#cccccc"
+      borderWidth: 1
+      cellPadding: 8
 ```
 
 ## JSON string style
