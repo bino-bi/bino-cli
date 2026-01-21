@@ -37,6 +37,9 @@ spec:
   type: list                         # list | sum | opt | sumnototal | optnototal
   scenarios: ["ac1", "py1"]
   variances: ["dpy1_ac1_pos"]
+  barColumns: []                     # columns to render as inline bar charts
+  unitScaling: 0.01                  # pixels per unit for absolute variance bars
+  percentageScaling: 0.5             # pixels per percentage for relative variance pins
   thereof: []
   partof: []
   columnthereof: null
@@ -56,6 +59,9 @@ spec:
 - `limit` – maximum rows per group; extra rows are cumulated as REST.
 - `type` – table type (`list`, `sum`, `opt`, `sumnototal`, `optnototal`).
 - `scenarios`, `variances` – scenario measures and variances, similar to charts.
+- `barColumns` – list of column names to render as inline IBCS-compliant bar charts instead of numbers.
+- `unitScaling` – pixels per unit for absolute variance bars (d_ prefix columns). Default: 0.01.
+- `percentageScaling` – pixels per percentage point for relative variance pins (dr_ prefix columns). Default: 0.5.
 - `thereof`, `partof`, `columnthereof` – drilldown configuration.
 
 ## Example: Grouped table with drilldown
@@ -92,8 +98,47 @@ spec:
       subGroups: ["Berlin", "Hamburg"]
 ```
 
-You can document the resulting layout using a placeholder image:
+## Inline bar chart columns
 
-```md
-![Table placeholder](https://via.placeholder.com/1200x600?text=Table)
+Render variance and scenario columns as inline IBCS-compliant bar charts using `barColumns`:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_with_bars
+spec:
+  dataset: revenue_by_segment
+  tableTitle: "Revenue variance analysis"
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  barColumns: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  unitScaling: 0.02
+  percentageScaling: 1
+```
+
+### Bar chart types
+
+| Column prefix | Visualization | Description |
+|---------------|--------------|-------------|
+| `d_` (absolute variance) | Horizontal bar | Bar extends left (negative) or right (positive) from center axis. Green for positive-good, red for negative-bad. |
+| `dr_` (relative variance) | Pin/dot chart | Thin colored line from axis with dot at end. Arrow for extreme values (>100%). Italic percentage label. |
+| `ac`, `pp`, `fc`, `pl` (scenarios) | IBCS grayscale bars | AC: dark gray solid, PP: light gray solid, FC: dark gray hatched, PL: dark gray outlined. |
+
+### Example: Scenario columns as bar charts
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: scenario_bars
+spec:
+  dataset: quarterly_data
+  tableTitle: "Quarterly comparison"
+  scenarios: ["ac1", "pp1", "fc1"]
+  barColumns: ["ac1", "pp1", "fc1"]
 ```

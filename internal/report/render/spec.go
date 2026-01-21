@@ -190,6 +190,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 type chartTimeSpec struct {
 	Dataset                         reportspec.DatasetList   `json:"dataset"`
 	ChartTitle                      string                   `json:"chartTitle"`
+	ChartMode                       string                   `json:"chartMode"`
 	AxisLabelsMode                  string                   `json:"axisLabelsMode"`
 	DateInterval                    string                   `json:"dateInterval"`
 	Filter                          string                   `json:"filter"`
@@ -209,6 +210,7 @@ type chartTimeSpec struct {
 	ShowOverlayAvg                  *bool                    `json:"showOverlayAvg"`
 	ShowOverlayMedian               *bool                    `json:"showOverlayMedian"`
 	Limit                           *int                     `json:"limit"`
+	MaxBars                         *int                     `json:"maxBars"`
 	IntervalSpanLimit               *int                     `json:"intervalSpanLimit"`
 	PercentageScaling               reportspec.StringOrFloat `json:"percentageScaling"`
 	UnitScaling                     reportspec.StringOrFloat `json:"unitScaling"`
@@ -223,6 +225,7 @@ type chartTimeSpec struct {
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "datasets", s.Dataset.Join(","))
 	writeAttr(b, "chart-title", s.ChartTitle)
+	writeAttr(b, "chart-mode", s.ChartMode)
 	writeAttr(b, "axis-labels-mode", s.AxisLabelsMode)
 	writeAttr(b, "date-interval", s.DateInterval)
 	writeAttr(b, "filter", s.Filter)
@@ -242,6 +245,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-overlay-avg", s.ShowOverlayAvg)
 	writeBoolAttr(b, "show-overlay-median", s.ShowOverlayMedian)
 	writeIntAttr(b, "limit", s.Limit)
+	writeIntAttr(b, "max-bars", s.MaxBars)
 	writeIntAttr(b, "interval-span-limit", s.IntervalSpanLimit)
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
@@ -319,6 +323,9 @@ type tableSpec struct {
 	Type                     string                       `json:"type"`
 	Scenarios                []string                     `json:"scenarios"`
 	Variances                []string                     `json:"variances"`
+	BarColumns               []string                     `json:"barColumns"`
+	UnitScaling              *float64                     `json:"unitScaling"`
+	PercentageScaling        *float64                     `json:"percentageScaling"`
 	Thereof                  reportspec.ThereofList       `json:"thereof"`
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
@@ -349,6 +356,9 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "type", s.Type)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
+	writeCSVAttr(b, "bar-columns", s.BarColumns)
+	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
+	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
