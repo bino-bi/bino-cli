@@ -32,6 +32,7 @@ var renderableChildKinds = map[string]bool{
 	"ChartStructure": true,
 	"ChartTime":      true,
 	"ChartTree":      true,
+	"Grid":           true,
 	"Image":          true,
 }
 
@@ -142,7 +143,7 @@ var pageLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "Image":
 				components[doc.Name] = doc
 			}
 		}
@@ -263,7 +264,7 @@ var cardLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "Image":
 				components[doc.Name] = doc
 			}
 		}
