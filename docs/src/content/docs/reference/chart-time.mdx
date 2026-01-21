@@ -16,6 +16,8 @@ metadata:
 spec:
   dataset: revenue_daily
   chartTitle: "Daily revenue"
+  chartMode: bar             # bar | line | auto
+  maxBars: 28                # threshold for auto mode
   axisLabelsMode: smart      # smart | long | short
   dateInterval: auto         # year | quarter | month | week | day | hour | minute | second | millisecond | auto
   filter: "region_group = 'EMEA'"
@@ -50,6 +52,8 @@ spec:
 
 - `dataset` – required dataset name or array.
 - `chartTitle` – optional title.
+- `chartMode` – rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
+- `maxBars` – threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose.
 - `filter`, `level`, `order`, `orderDirection`, `measureScale`, `measureUnit` – similar semantics to `ChartStructure`.
@@ -85,8 +89,57 @@ spec:
   scenarios: ["ac1"]
 ```
 
-Use a placeholder image when documenting expected output:
+## Example: Line chart mode
 
-```md
-![Time chart placeholder](https://via.placeholder.com/1200x600?text=Time+Chart)
+Force line chart rendering with square markers at each data point:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_line_chart
+spec:
+  dataset: revenue_daily
+  chartTitle: "Daily revenue trend"
+  chartMode: line
+  dateInterval: day
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
 ```
+
+## Example: Auto-switching mode
+
+Automatically switch to line chart when data points exceed the threshold:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_auto_chart
+spec:
+  dataset: revenue_weekly
+  chartTitle: "Weekly revenue"
+  chartMode: auto
+  maxBars: 15
+  dateInterval: week
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "fc1"]
+```
+
+### Line chart features
+
+When rendered in line mode:
+- Square markers (8×8px) at each data point
+- Data values displayed above each marker
+- Scenario labels positioned to the right of the last data point
+- Smart X-axis labels showing start, end, and year boundaries
+- Vertical dashed separator lines at year transitions
+- IBCS color schema:
+  - **AC (Actual)**: Black fill, black stroke, solid line
+  - **PP (Previous Period)**: Gray fill, gray stroke, solid line
+  - **FC (Forecast)**: White fill, black stroke, dashed line
+  - **PL (Plan)**: White fill, black stroke, solid line
