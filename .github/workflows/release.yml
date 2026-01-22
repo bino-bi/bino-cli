@@ -262,6 +262,71 @@ jobs:
           path: dist/
           retention-days: 30
 
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: [release, resolve-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/
+
+      - name: Extract checksums and update formula
+        id: formula
+        run: |
+          VERSION="${{ needs.resolve-tag.outputs.version }}"
+          CHECKSUMS_FILE="dist/checksums.txt"
+
+          # Extract SHA256 sums from checksums.txt
+          SHA256_DARWIN_ARM64=$(grep "bino-cli_Darwin_arm64.tar.gz" "$CHECKSUMS_FILE" | awk '{print $1}')
+          SHA256_DARWIN_X86_64=$(grep "bino-cli_Darwin_x86_64.tar.gz" "$CHECKSUMS_FILE" | awk '{print $1}')
+          SHA256_LINUX_X86_64=$(grep "bino-cli_Linux_x86_64.tar.gz" "$CHECKSUMS_FILE" | awk '{print $1}')
+
+          echo "Version: $VERSION"
+          echo "Darwin ARM64: $SHA256_DARWIN_ARM64"
+          echo "Darwin x86_64: $SHA256_DARWIN_X86_64"
+          echo "Linux x86_64: $SHA256_LINUX_X86_64"
+
+          # Update formula with actual values
+          cp homebrew/bino.rb homebrew/bino-updated.rb
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" homebrew/bino-updated.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" homebrew/bino-updated.rb
+          sed -i "s/SHA256_DARWIN_X86_64_PLACEHOLDER/$SHA256_DARWIN_X86_64/g" homebrew/bino-updated.rb
+          sed -i "s/SHA256_LINUX_X86_64_PLACEHOLDER/$SHA256_LINUX_X86_64/g" homebrew/bino-updated.rb
+
+          echo "=== Updated formula ==="
+          cat homebrew/bino-updated.rb
+
+      - name: Push to Homebrew Tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.BINO_CLI_RELEASES_TOKEN }}
+        run: |
+          VERSION="${{ needs.resolve-tag.outputs.version }}"
+
+          # Clone the tap repository
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bino-bi/homebrew-tap.git" tap-repo
+
+          # Create Formula directory if it doesn't exist
+          mkdir -p tap-repo/Formula
+
+          # Copy the updated formula
+          cp homebrew/bino-updated.rb tap-repo/Formula/bino.rb
+
+          # Commit and push
+          cd tap-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/bino.rb
+          git commit -m "Update bino to v${VERSION}" || echo "No changes to commit"
+          git push origin main
+
   build-docs:
     name: Build and Push Docs
     needs: [release, resolve-tag]
