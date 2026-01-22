@@ -295,14 +295,14 @@ jobs:
           echo "Linux x86_64: $SHA256_LINUX_X86_64"
 
           # Update formula with actual values
-          cp homebrew/bino.rb homebrew/bino-updated.rb
-          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" homebrew/bino-updated.rb
-          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" homebrew/bino-updated.rb
-          sed -i "s/SHA256_DARWIN_X86_64_PLACEHOLDER/$SHA256_DARWIN_X86_64/g" homebrew/bino-updated.rb
-          sed -i "s/SHA256_LINUX_X86_64_PLACEHOLDER/$SHA256_LINUX_X86_64/g" homebrew/bino-updated.rb
+          cp homebrew/bino-cli.rb homebrew/bino-cli-updated.rb
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" homebrew/bino-cli-updated.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" homebrew/bino-cli-updated.rb
+          sed -i "s/SHA256_DARWIN_X86_64_PLACEHOLDER/$SHA256_DARWIN_X86_64/g" homebrew/bino-cli-updated.rb
+          sed -i "s/SHA256_LINUX_X86_64_PLACEHOLDER/$SHA256_LINUX_X86_64/g" homebrew/bino-cli-updated.rb
 
           echo "=== Updated formula ==="
-          cat homebrew/bino-updated.rb
+          cat homebrew/bino-cli-updated.rb
 
       - name: Push to Homebrew Tap
         env:
@@ -317,14 +317,14 @@ jobs:
           mkdir -p tap-repo/Formula
 
           # Copy the updated formula
-          cp homebrew/bino-updated.rb tap-repo/Formula/bino.rb
+          cp homebrew/bino-cli-updated.rb tap-repo/Formula/bino-cli.rb
 
           # Commit and push
           cd tap-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/bino.rb
-          git commit -m "Update bino to v${VERSION}" || echo "No changes to commit"
+          git add Formula/bino-cli.rb
+          git commit -m "Update bino-cli to v${VERSION}" || echo "No changes to commit"
           git push origin main
 
   build-docs:
