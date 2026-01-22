@@ -71,20 +71,26 @@ The installer places `bino.exe` in `%LOCALAPPDATA%\bino` and adds it to your use
 If you use [Homebrew](https://brew.sh/), you can install bino from our tap:
 
 ```sh
-brew install bino-bi/tap/bino
+brew install bino-bi/tap/bino-cli
 ```
 
 Or add the tap first, then install:
 
 ```sh
 brew tap bino-bi/tap
-brew install bino
+brew install bino-cli
+```
+
+After installation, run the setup command to download the browser runtime required for PDF rendering:
+
+```sh
+bino setup
 ```
 
 To update bino via Homebrew:
 
 ```sh
-brew upgrade bino
+brew upgrade bino-cli
 ```
 
 <Aside type="tip">

@@ -7,7 +7,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/engine"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/playwright"
+	"bino.bi/bino/internal/updater"
 )
 
 func newSetupCommand() *cobra.Command {
@@ -31,9 +33,36 @@ Use --verbose (-v) to surface verbose installer logs.`),
   bino setup --dry-run`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
+			out := cmd.OutOrStdout()
+
+			if !quiet {
+				fmt.Fprintln(out, "")
+				fmt.Fprintln(out, "Setting up bino dependencies...")
+				fmt.Fprintln(out, strings.Repeat("─", 50))
+			}
+
+			// Determine which tasks to run
+			installTemplateEngine := templateEngine
+			installBrowsers := !templateEngine || len(browsers) > 0 || driverDir != ""
+
+			// Calculate total steps for progress display
+			totalSteps := 0
+			if installTemplateEngine {
+				totalSteps++
+			}
+			if installBrowsers {
+				totalSteps++
+			}
+			currentStep := 0
 
 			// Handle template engine download
-			if templateEngine {
+			if installTemplateEngine {
+				currentStep++
+				if !quiet {
+					fmt.Fprintln(out, "")
+					fmt.Fprintf(out, "[%d/%d] Template Engine\n", currentStep, totalSteps)
+				}
+
 				mgr, err := engine.NewManager()
 				if err != nil {
 					return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
@@ -42,36 +71,62 @@ Use --verbose (-v) to surface verbose installer logs.`),
 				version := engineVersion
 				if version == "" {
 					if !quiet {
-						fmt.Fprintln(cmd.OutOrStdout(), "Resolving latest template engine version...")
+						fmt.Fprintln(out, "      Resolving latest version from GitHub...")
 					}
 					version, err = mgr.FetchLatestRemoteVersion(ctx)
 					if err != nil {
 						return ExternalError(fmt.Errorf("fetch latest version: %w", err))
 					}
+					if !quiet {
+						fmt.Fprintf(out, "      Latest version: %s\n", version)
+					}
 				}
 
 				if dryRun {
-					fmt.Fprintf(cmd.OutOrStdout(), "Would download template engine %s\n", version)
+					fmt.Fprintf(out, "      [dry-run] Would download template engine %s\n", version)
 				} else {
 					if !quiet {
-						fmt.Fprintf(cmd.OutOrStdout(), "Downloading template engine %s...\n", version)
+						fmt.Fprintf(out, "      Downloading %s...\n", version)
 					}
 					info, err := mgr.Download(ctx, version)
 					if err != nil {
 						return ExternalError(fmt.Errorf("download template engine: %w", err))
 					}
-					fmt.Fprintf(cmd.OutOrStdout(), "Template engine %s installed at %s\n", info.Version, info.Path)
+					if !quiet {
+						fmt.Fprintf(out, "      Installed to: %s\n", info.Path)
+						fmt.Fprintln(out, "      ✓ Template engine ready")
+					}
 				}
 			}
 
 			// Handle browser runtime installation (default behavior when no flags specified)
-			if !templateEngine || len(browsers) > 0 || driverDir != "" {
+			if installBrowsers {
+				currentStep++
+				browserList := browsers
+				if len(browserList) == 0 {
+					browserList = []string{"chromium"}
+				}
+
+				if !quiet {
+					fmt.Fprintln(out, "")
+					fmt.Fprintf(out, "[%d/%d] Browser Runtimes\n", currentStep, totalSteps)
+					fmt.Fprintf(out, "      Browsers: %s\n", strings.Join(browserList, ", "))
+
+					// Show cache directory
+					cacheDir, err := pathutil.CacheDir("playwright")
+					if err == nil {
+						fmt.Fprintf(out, "      Cache: %s\n", cacheDir)
+					}
+					fmt.Fprintln(out, "      Installing Playwright driver and browsers...")
+					fmt.Fprintln(out, "")
+				}
+
 				opts := playwright.InstallOptions{
 					Browsers:        browsers,
 					DriverDirectory: driverDir,
 					DryRun:          dryRun,
 					Quiet:           quiet,
-					Stdout:          cmd.OutOrStdout(),
+					Stdout:          out,
 					Stderr:          cmd.ErrOrStderr(),
 				}
 
@@ -79,7 +134,29 @@ Use --verbose (-v) to surface verbose installer logs.`),
 					return ExternalError(err)
 				}
 
-				fmt.Fprintln(cmd.OutOrStdout(), "Browser runtimes are up to date.")
+				if !quiet {
+					fmt.Fprintln(out, "      ✓ Browser runtimes ready")
+				}
+			}
+
+			// Mark setup as completed in state (skip for dry-run)
+			if !dryRun {
+				state, err := updater.LoadState()
+				if err != nil {
+					state = &updater.State{}
+				}
+				state.SetupCompleted = true
+				if err := updater.SaveState(state); err != nil {
+					// Non-fatal: log warning but don't fail the setup
+					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not save setup state: %v\n", err)
+				}
+			}
+
+			if !quiet {
+				fmt.Fprintln(out, "")
+				fmt.Fprintln(out, strings.Repeat("─", 50))
+				fmt.Fprintln(out, "Setup complete! Run 'bino version' to verify.")
+				fmt.Fprintln(out, "")
 			}
 
 			return nil
