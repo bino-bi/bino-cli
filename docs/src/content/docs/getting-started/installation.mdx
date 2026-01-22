@@ -66,6 +66,31 @@ Installer parameters: `-Repo`, `-Tag`, `-InstallDir`, `-DryRun`, `-Yes`.
 
 The installer places `bino.exe` in `%LOCALAPPDATA%\bino` and adds it to your user PATH. You may need to restart your terminal for PATH changes to take effect.
 
+## Install via Homebrew (macOS and Linux)
+
+If you use [Homebrew](https://brew.sh/), you can install bino from our tap:
+
+```sh
+brew install bino-bi/tap/bino
+```
+
+Or add the tap first, then install:
+
+```sh
+brew tap bino-bi/tap
+brew install bino
+```
+
+To update bino via Homebrew:
+
+```sh
+brew upgrade bino
+```
+
+<Aside type="tip">
+  Using Homebrew is convenient because it handles updates alongside your other packages.
+</Aside>
+
 ## Install from GitHub Releases
 
 1. Open the [bino-cli](https://github.com/bino-bi/bino-cli/) GitHub repository in your browser and go to the [**Releases**](https://github.com/bino-bi/bino-cli-releases/releases) page.
