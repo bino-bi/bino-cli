@@ -73,6 +73,43 @@ confirm() {
   esac
 }
 
+# Check if a directory is in PATH
+is_in_path() {
+  local dir="$1"
+  # Normalize the directory (expand ~ and resolve symlinks where possible)
+  local normalized_dir
+  normalized_dir="$(cd "$dir" 2>/dev/null && pwd -P 2>/dev/null || echo "$dir")"
+
+  # Check each PATH component
+  IFS=':' read -ra path_entries <<< "$PATH"
+  for entry in "${path_entries[@]}"; do
+    local normalized_entry
+    normalized_entry="$(cd "$entry" 2>/dev/null && pwd -P 2>/dev/null || echo "$entry")"
+    if [ "$normalized_dir" = "$normalized_entry" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Get shell config file for PATH instructions
+get_shell_config() {
+  local shell_name
+  shell_name="$(basename "${SHELL:-/bin/bash}")"
+  case "$shell_name" in
+    zsh)  echo "$HOME/.zshrc" ;;
+    bash)
+      if [ -f "$HOME/.bash_profile" ]; then
+        echo "$HOME/.bash_profile"
+      else
+        echo "$HOME/.bashrc"
+      fi
+      ;;
+    fish) echo "$HOME/.config/fish/config.fish" ;;
+    *)    echo "$HOME/.profile" ;;
+  esac
+}
+
 UNAME_S="$(uname -s)"
 UNAME_M="$(uname -m)"
 
@@ -101,6 +138,50 @@ printf "Repo: %s\n" "$REPO"
 printf "Tag: %s\n" "$TAG"
 printf "OS: %s ARCH: %s\n" "$OS" "$ARCH"
 printf "Expecting asset: %s\n" "$ASSET_NAME"
+printf "Install directory: %s\n" "$INSTALL_DIR"
+echo ""
+
+# Check if install directory is in PATH
+if ! is_in_path "$INSTALL_DIR"; then
+  SHELL_CONFIG="$(get_shell_config)"
+
+  echo "============================================================" >&2
+  echo "WARNING: Install directory is not in your PATH" >&2
+  echo "============================================================" >&2
+  echo "" >&2
+  echo "The install directory '$INSTALL_DIR' is not in your PATH." >&2
+  echo "After installation, you won't be able to run 'bino' directly." >&2
+  echo "" >&2
+  echo "You have two options:" >&2
+  echo "" >&2
+  echo "  1. Add the directory to your PATH by running:" >&2
+  echo "" >&2
+  if [ "$(basename "${SHELL:-/bin/bash}")" = "fish" ]; then
+    echo "     fish_add_path $INSTALL_DIR" >&2
+  else
+    echo "     echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> $SHELL_CONFIG" >&2
+    echo "     source $SHELL_CONFIG" >&2
+  fi
+  echo "" >&2
+  echo "  2. Choose a different install directory that's already in your PATH:" >&2
+  echo "" >&2
+  # Show common directories that are in PATH
+  for common_dir in /usr/local/bin "$HOME/bin" "$HOME/.local/bin" /opt/homebrew/bin; do
+    if is_in_path "$common_dir" 2>/dev/null; then
+      echo "     ./install.sh --install-dir $common_dir" >&2
+    fi
+  done
+  echo "" >&2
+  echo "============================================================" >&2
+  echo "" >&2
+
+  if [ "$ASSUME_YES" -eq 0 ]; then
+    if ! confirm "Continue installation to '$INSTALL_DIR' anyway?"; then
+      echo "Installation aborted."
+      exit 0
+    fi
+  fi
+fi
 
 get_asset_url_via_gh() {
   if command -v gh >/dev/null 2>&1; then

@@ -112,6 +112,47 @@ function Get-FileHashSHA256 {
     return (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
 }
 
+function Test-InPath {
+    param([string]$Directory)
+
+    $normalizedDir = [System.IO.Path]::GetFullPath($Directory).TrimEnd('\')
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $systemPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
+    $fullPath = "$currentPath;$systemPath"
+
+    foreach ($entry in $fullPath -split ';') {
+        if ([string]::IsNullOrWhiteSpace($entry)) { continue }
+        try {
+            $normalizedEntry = [System.IO.Path]::GetFullPath($entry).TrimEnd('\')
+            if ($normalizedDir -eq $normalizedEntry) {
+                return $true
+            }
+        } catch {
+            # Skip invalid path entries
+        }
+    }
+    return $false
+}
+
+function Get-PathDirectoriesInPath {
+    # Return common directories that are already in PATH
+    $commonDirs = @(
+        "$env:LOCALAPPDATA\Microsoft\WindowsApps",
+        "$env:USERPROFILE\bin",
+        "$env:LOCALAPPDATA\Programs",
+        "C:\Tools",
+        "C:\bin"
+    )
+
+    $inPath = @()
+    foreach ($dir in $commonDirs) {
+        if (Test-InPath -Directory $dir) {
+            $inPath += $dir
+        }
+    }
+    return $inPath
+}
+
 function Add-ToPath {
     param([string]$Directory)
 
@@ -132,6 +173,48 @@ Write-Host "Tag: $Tag"
 Write-Host "Install directory: $InstallDir"
 Write-Host "Asset: $AssetName"
 Write-Host ""
+
+# Check if install directory is in PATH
+if (-not (Test-InPath -Directory $InstallDir)) {
+    Write-Host "============================================================" -ForegroundColor Red
+    Write-Host "WARNING: Install directory is not in your PATH" -ForegroundColor Red
+    Write-Host "============================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "The install directory '$InstallDir' is not in your PATH."
+    Write-Host "After installation, you won't be able to run 'bino' directly."
+    Write-Host ""
+    Write-Host "You have two options:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  1. Let the installer add the directory to your PATH automatically"
+    Write-Host "     (will be added to user PATH, requires terminal restart)"
+    Write-Host ""
+    Write-Host "  2. Choose a different install directory that's already in your PATH:" -ForegroundColor Yellow
+    Write-Host ""
+
+    $dirsInPath = Get-PathDirectoriesInPath
+    if ($dirsInPath.Count -gt 0) {
+        foreach ($dir in $dirsInPath) {
+            Write-Host "     .\install.ps1 -InstallDir `"$dir`""
+        }
+    } else {
+        Write-Host "     (No common directories found in PATH)"
+    }
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Red
+    Write-Host ""
+
+    if (-not $Yes) {
+        $response = Read-Host "Continue and add '$InstallDir' to PATH? [y/N]"
+        if ($response -notmatch '^[Yy]') {
+            Write-Host "Installation aborted."
+            exit 0
+        }
+    }
+    $addToPathAfterInstall = $true
+} else {
+    $addToPathAfterInstall = $false
+}
 
 # Get asset URL
 Write-Step "Fetching release information..."
@@ -200,7 +283,9 @@ try {
     if ($DryRun) {
         Write-Host "[dry-run] Would create directory: $InstallDir"
         Write-Host "[dry-run] Would copy binary to: $InstallDir\$BinaryName"
-        Write-Host "[dry-run] Would add to PATH: $InstallDir"
+        if ($addToPathAfterInstall) {
+            Write-Host "[dry-run] Would add to PATH: $InstallDir"
+        }
     } else {
         Write-Step "Installing to $InstallDir..."
 
@@ -211,10 +296,12 @@ try {
         $destPath = Join-Path $InstallDir $BinaryName
         Copy-Item -Path $binPath.FullName -Destination $destPath -Force
 
-        # Add to PATH if not already present
-        if (Add-ToPath -Directory $InstallDir) {
-            Write-Success "Added $InstallDir to user PATH."
-            Write-Host "Note: You may need to restart your terminal for PATH changes to take effect."
+        # Add to PATH if needed and user confirmed
+        if ($addToPathAfterInstall) {
+            if (Add-ToPath -Directory $InstallDir) {
+                Write-Success "Added $InstallDir to user PATH."
+                Write-Host "Note: You may need to restart your terminal for PATH changes to take effect."
+            }
         }
 
         Write-Success "Installation complete."
