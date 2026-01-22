@@ -84,6 +84,23 @@ func newRootCommand() *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
+			// Check if setup has been completed for commands that need it
+			// Skip for: setup, version, update, help, completion
+			cmdName := cmd.Name()
+			skipSetupCheck := cmdName == "setup" || cmdName == "version" || cmdName == "update" ||
+				cmdName == "help" || cmdName == "completion" || cmdName == "about"
+			if !skipSetupCheck {
+				state, err := updater.LoadState()
+				if err == nil && !state.SetupCompleted {
+					fmt.Fprintln(os.Stderr, "")
+					fmt.Fprintln(os.Stderr, "┌─────────────────────────────────────────────────────┐")
+					fmt.Fprintln(os.Stderr, "│  Setup required: run 'bino setup' to download      │")
+					fmt.Fprintln(os.Stderr, "│  browser runtimes needed for PDF rendering.        │")
+					fmt.Fprintln(os.Stderr, "└─────────────────────────────────────────────────────┘")
+					fmt.Fprintln(os.Stderr, "")
+				}
+			}
+
 			// Run non-blocking update check in background
 			// Skip if CI=1 or BINO_DISABLE_UPDATE_CHECK=1 (for CI/air-gapped/IDE usage)
 			if os.Getenv("CI") == "" && os.Getenv("BINO_DISABLE_UPDATE_CHECK") == "" {
