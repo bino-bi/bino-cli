@@ -20,6 +20,8 @@ require (
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.8.0
 	github.com/xeipuuv/gojsonschema v1.2.0
+	github.com/yuin/goldmark v1.7.16
+	go.abhg.dev/goldmark/toc v0.12.0
 	golang.org/x/mod v0.29.0
 	golang.org/x/term v0.37.0
 	gopkg.in/yaml.v3 v3.0.1

@@ -41,6 +41,7 @@ const (
 	KindInternationalization = "Internationalization"
 	KindReportArtefact       = "ReportArtefact"
 	KindLiveReportArtefact   = "LiveReportArtefact"
+	KindDocumentArtefact     = "DocumentArtefact"
 	KindSigningProfile       = "SigningProfile"
 )
 

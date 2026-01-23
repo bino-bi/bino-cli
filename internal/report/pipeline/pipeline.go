@@ -6,6 +6,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"bino.bi/bino/internal/logx"
@@ -13,6 +14,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/markdown"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
@@ -122,6 +124,58 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefac
 	return filtered
 }
 
+// FilterDocumentArtefacts selects document artefacts based on include/exclude rules.
+// If Include is non-empty, only those names are selected (in order).
+// Exclude names are always removed from the result.
+func FilterDocumentArtefacts(all []config.DocumentArtefact, opts FilterOptions) []config.DocumentArtefact {
+	excludeSet := make(map[string]struct{})
+	for _, name := range opts.Exclude {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		excludeSet[name] = struct{}{}
+	}
+
+	if len(opts.Include) > 0 {
+		index := make(map[string]config.DocumentArtefact, len(all))
+		for _, art := range all {
+			index[art.Document.Name] = art
+		}
+		seen := make(map[string]struct{})
+		var filtered []config.DocumentArtefact
+		for _, raw := range opts.Include {
+			name := strings.TrimSpace(raw)
+			if name == "" {
+				continue
+			}
+			if _, dup := seen[name]; dup {
+				continue
+			}
+			art, ok := index[name]
+			if !ok {
+				// Skip - may be another artefact type
+				continue
+			}
+			if _, blocked := excludeSet[name]; blocked {
+				continue
+			}
+			filtered = append(filtered, art)
+			seen[name] = struct{}{}
+		}
+		return filtered
+	}
+
+	filtered := make([]config.DocumentArtefact, 0, len(all))
+	for _, art := range all {
+		if _, blocked := excludeSet[art.Document.Name]; blocked {
+			continue
+		}
+		filtered = append(filtered, art)
+	}
+	return filtered
+}
+
 // FilterScreenshotArtefacts selects screenshot artefacts based on include/exclude rules.
 // If Include is non-empty, only those names are selected (in order).
 // Exclude names are always removed from the result.
@@ -179,6 +233,11 @@ func FilterScreenshotArtefacts(all []config.ScreenshotArtefact, opts FilterOptio
 // ValidateArtefactNames checks that all include names exist in either the ReportArtefact
 // or ScreenshotArtefact lists.
 func ValidateArtefactNames(artefacts []config.Artefact, screenshots []config.ScreenshotArtefact, include []string) error {
+	return ValidateAllArtefactNames(artefacts, screenshots, nil, include)
+}
+
+// ValidateAllArtefactNames checks that all include names exist in any of the artefact type lists.
+func ValidateAllArtefactNames(artefacts []config.Artefact, screenshots []config.ScreenshotArtefact, documents []config.DocumentArtefact, include []string) error {
 	if len(include) == 0 {
 		return nil
 	}
@@ -190,6 +249,9 @@ func ValidateArtefactNames(artefacts []config.Artefact, screenshots []config.Scr
 	}
 	for _, ss := range screenshots {
 		known[ss.Document.Name] = struct{}{}
+	}
+	for _, doc := range documents {
+		known[doc.Document.Name] = struct{}{}
 	}
 
 	// Check that all include names exist
@@ -806,4 +868,133 @@ type InvalidLayoutPolicy = render.InvalidLayoutPolicy
 // ClassifyInvalidLayout inspects err and returns policy info for handling invalid layouts.
 func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
 	return render.ClassifyInvalidLayout(err, mode)
+}
+
+// DocumentArtefactResult captures the outcome of rendering a document artefact.
+type DocumentArtefactResult struct {
+	HTML []byte
+}
+
+// DocumentArtefactRenderOptions configures document artefact rendering.
+type DocumentArtefactRenderOptions struct {
+	// EngineVersion is the template engine version to use (e.g., "v1.2.3").
+	// If empty, a default version is used.
+	EngineVersion string
+}
+
+// RenderDocumentArtefactHTML generates HTML from markdown files for a DocumentArtefact.
+// It reads the specified source markdown files, converts them to HTML using goldmark,
+// and wraps them in a full bino HTML document with template engine, bn-context, datasources, etc.
+func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
+	logger := logx.FromContext(ctx).Channel("document")
+	spec := artefact.Spec
+
+	// Load all documents from the workdir
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: load manifests: %w", artefact.Document.Name, err)
+	}
+
+	// Execute datasets and collect datasources
+	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: execute datasets: %w", artefact.Document.Name, err)
+	}
+
+	datasourceResults, _, err := datasource.Collect(ctx, docs)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: collect datasources: %w", artefact.Document.Name, err)
+	}
+
+	// Get the manifest file's directory to resolve relative paths
+	manifestDir := filepath.Dir(artefact.Document.File)
+	if manifestDir == "" {
+		manifestDir = workdir
+	}
+
+	logger.Debugf("Rendering DocumentArtefact %s with %d source(s)", artefact.Document.Name, len(spec.Sources))
+
+	// Extract file paths from sources
+	files := make([]string, len(spec.Sources))
+	for i, src := range spec.Sources {
+		files[i] = src.File
+	}
+
+	// Load custom stylesheet if specified
+	var customCSS string
+	if spec.Stylesheet != "" {
+		var err error
+		customCSS, err = markdown.LoadStylesheet(manifestDir, spec.Stylesheet)
+		if err != nil {
+			return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+		}
+	}
+
+	// Get template engine version (use provided or default)
+	engineVersion := opts.EngineVersion
+	if engineVersion == "" {
+		engineVersion = "latest"
+	}
+
+	// Create render context with documents, datasets, and datasources
+	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
+
+	// Render markdown files to HTML content with full context
+	content, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
+		RenderOptions: markdown.RenderOptions{
+			BaseDir:               manifestDir,
+			Stylesheet:            spec.Stylesheet,
+			TableOfContents:       spec.TableOfContents,
+			PageBreakBetweenFiles: spec.PageBreakBetweenSources,
+		},
+		RenderContext: renderCtx,
+		Locale:        spec.Locale,
+	})
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+	}
+
+	// Wrap in full bino HTML document with template engine, bn-context, etc.
+	html := markdown.WrapDocumentWithContext(content, markdown.FullDocumentOptions{
+		DocumentOptions: markdown.DocumentOptions{
+			Title:       spec.Title,
+			Author:      spec.Author,
+			Subject:     spec.Subject,
+			Keywords:    spec.Keywords,
+			Format:      spec.Format,
+			Orientation: spec.Orientation,
+			Stylesheet:  customCSS,
+		},
+		Locale:        spec.Locale,
+		RenderContext: renderCtx,
+	})
+
+	return DocumentArtefactResult{HTML: html}, nil
+}
+
+// LogDocumentArtefactWarnings logs any warnings collected during document artefact validation.
+func LogDocumentArtefactWarnings(logger logx.Logger, artefacts []config.DocumentArtefact) {
+	if logger == nil {
+		return
+	}
+	for _, art := range artefacts {
+		for _, warn := range art.Warnings {
+			logger.Warnf(warn)
+		}
+	}
+}
+
+// EnsureDocumentSigningProfiles verifies that all document artefacts referencing a signing profile
+// have that profile available in the provided map.
+func EnsureDocumentSigningProfiles(artefacts []config.DocumentArtefact, profiles map[string]config.SigningProfile) error {
+	for _, art := range artefacts {
+		ref := strings.TrimSpace(art.Spec.SigningProfile)
+		if ref == "" {
+			continue
+		}
+		if _, ok := profiles[ref]; !ok {
+			return fmt.Errorf("document artefact %s references unknown SigningProfile %q", art.Document.Name, ref)
+		}
+	}
+	return nil
 }

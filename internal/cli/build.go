@@ -194,8 +194,13 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return ConfigError(err)
 			}
 
-			if len(artefacts) == 0 && len(screenshotArtefacts) == 0 {
-				return ConfigErrorf("no ReportArtefact or ScreenshotArtefact manifests found in %s", absDir)
+			documentArtefacts, err := config.CollectDocumentArtefacts(documents)
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			if len(artefacts) == 0 && len(screenshotArtefacts) == 0 && len(documentArtefacts) == 0 {
+				return ConfigErrorf("no ReportArtefact, ScreenshotArtefact, or DocumentArtefact manifests found in %s", absDir)
 			}
 
 			signingProfiles, err := config.CollectSigningProfiles(documents)
@@ -203,8 +208,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return ConfigError(err)
 			}
 
-			// Validate that all include names exist in either artefact type
-			if err := pipeline.ValidateArtefactNames(artefacts, screenshotArtefacts, include); err != nil {
+			// Validate that all include names exist in any artefact type
+			if err := pipeline.ValidateAllArtefactNames(artefacts, screenshotArtefacts, documentArtefacts, include); err != nil {
 				return ConfigError(err)
 			}
 
@@ -214,13 +219,18 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 			selected := pipeline.FilterArtefacts(artefacts, filterOpts)
 			selectedScreenshots := pipeline.FilterScreenshotArtefacts(screenshotArtefacts, filterOpts)
+			selectedDocuments := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
 
-			if len(selected) == 0 && len(selectedScreenshots) == 0 {
+			if len(selected) == 0 && len(selectedScreenshots) == 0 && len(selectedDocuments) == 0 {
 				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
 			pipeline.LogArtefactWarnings(logger, selected)
+			pipeline.LogDocumentArtefactWarnings(logger, selectedDocuments)
 
 			if err := pipeline.EnsureSigningProfiles(selected, signingProfiles); err != nil {
+				return ConfigError(err)
+			}
+			if err := pipeline.EnsureDocumentSigningProfiles(selectedDocuments, signingProfiles); err != nil {
 				return ConfigError(err)
 			}
 
@@ -432,9 +442,46 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				}
 			}
 
+			// Step 4: Build document artefacts (using pre-filtered selectedDocuments)
+			var documentResults []documentArtefactResult
+			if len(selectedDocuments) > 0 {
+				out.Step(fmt.Sprintf("Building %d document artefact(s)...", len(selectedDocuments)))
+
+				for _, docArtefact := range selectedDocuments {
+					// Check for cancellation before starting each document artefact
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+
+					// Create spinner for this document artefact
+					spinner := NewSpinner(SpinnerConfig{
+						Stdout:  cmd.OutOrStdout(),
+						NoColor: logx.NoColorEnabled(ctx),
+					})
+
+					docResult, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
+						Logger:          logger.Channel(docArtefact.Document.Name),
+						Workdir:         absDir,
+						CacheDir:        cacheDir,
+						EngineVersion:   engineVersion,
+						Artefact:        docArtefact,
+						SigningProfiles: signingProfiles,
+						OutputDir:       outputDir,
+						Browser:         browser,
+						DriverDir:       driverDir,
+						Debug:           logx.DebugEnabled(ctx),
+						Spinner:         spinner,
+					})
+					if err != nil {
+						return RuntimeError(err)
+					}
+					documentResults = append(documentResults, docResult)
+				}
+			}
+
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
-			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, executedQueries, buildWarnings); err != nil {
+			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
 				logger.Warnf("failed to write build log: %v", err)
 			}
 
@@ -533,6 +580,18 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 						out.Warning(fmt.Sprintf("Screenshot error: %s", errMsg))
 					}
 				}
+			}
+
+			// Print document artefact results if any
+			if len(documentResults) > 0 {
+				out.Blank()
+				docItems := make([]string, 0, len(documentResults))
+				for _, res := range documentResults {
+					relPath := pathutil.RelPath(absDir, res.PDFPath)
+					item := fmt.Sprintf("%s %s %s", res.Name, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
+					docItems = append(docItems, item)
+				}
+				out.Summary(fmt.Sprintf("Generated %d document(s):", len(documentResults)), docItems)
 			}
 
 			// Print final success
@@ -785,6 +844,172 @@ func writeGraphReport(g *reportgraph.Graph, root *reportgraph.Node, pdfPath, bas
 	return graphPath, nil
 }
 
+type documentArtefactResult struct {
+	Name    string
+	PDFPath string
+}
+
+type buildDocumentArtefactConfig struct {
+	Logger          logx.Logger
+	Workdir         string
+	CacheDir        string
+	EngineVersion   string
+	Artefact        config.DocumentArtefact
+	SigningProfiles map[string]config.SigningProfile
+	OutputDir       string
+	Browser         string
+	DriverDir       string
+	Debug           bool
+	Spinner         *Spinner
+}
+
+// buildDocumentArtefact renders a DocumentArtefact (markdown to PDF) using Playwright.
+// It converts markdown files to HTML, serves them via an ephemeral server, and captures a PDF.
+func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig) (documentArtefactResult, error) {
+	if err := ctx.Err(); err != nil {
+		return documentArtefactResult{}, err
+	}
+
+	logger := cfg.Logger
+	artefact := cfg.Artefact
+	artefactName := artefact.Document.Name
+	spec := artefact.Spec
+	spinner := cfg.Spinner
+
+	if spinner != nil {
+		spinner.Start(fmt.Sprintf("Building document %s", artefactName))
+	}
+
+	// Render markdown to HTML
+	renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, artefact, pipeline.DocumentArtefactRenderOptions{
+		EngineVersion: cfg.EngineVersion,
+	})
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
+		}
+		return documentArtefactResult{}, err
+	}
+
+	// Determine output filename
+	filename := spec.Filename
+	if filename == "" {
+		filename = artefactName + ".pdf"
+	}
+	pdfPath := filepath.Join(cfg.OutputDir, filename)
+
+	// Start ephemeral server
+	ephem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, nil)
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
+		}
+		return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
+	}
+	defer ephem.Close()
+
+	// Check for cancellation before generating PDF
+	if err := ctx.Err(); err != nil {
+		return documentArtefactResult{}, err
+	}
+
+	if spinner != nil {
+		spinner.Update(fmt.Sprintf("Generating PDF for %s", artefactName))
+	}
+
+	// Generate PDF using Playwright
+	pdfOpts := playwright.PDFOptions{
+		URL:             ephem.URL(),
+		PDFPath:         pdfPath,
+		Format:          spec.Format,
+		Orientation:     spec.Orientation,
+		DriverDirectory: cfg.DriverDir,
+		Browser:         cfg.Browser,
+		Debug:           cfg.Debug,
+		Timeout:         2 * time.Minute,
+	}
+	// Header/footer support
+	if spec.DisplayHeaderFooter {
+		pdfOpts.DisplayHeaderFooter = true
+		pdfOpts.HeaderTemplate = spec.HeaderTemplate
+		pdfOpts.FooterTemplate = spec.FooterTemplate
+		pdfOpts.MarginTop = spec.MarginTop
+		pdfOpts.MarginBottom = spec.MarginBottom
+		// Use default templates if not specified
+		if pdfOpts.HeaderTemplate == "" {
+			pdfOpts.HeaderTemplate = buildDefaultDocumentHeader(spec.Title)
+		}
+		if pdfOpts.FooterTemplate == "" {
+			pdfOpts.FooterTemplate = buildDefaultDocumentFooter()
+		}
+	}
+	if err := playwright.RenderPDF(ctx, pdfOpts); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
+		}
+		return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
+	}
+
+	// Check for cancellation before signing
+	if err := ctx.Err(); err != nil {
+		return documentArtefactResult{}, err
+	}
+
+	// Apply digital signature if configured
+	ref := strings.TrimSpace(spec.SigningProfile)
+	if ref != "" {
+		if spinner != nil {
+			spinner.Update(fmt.Sprintf("Signing %s", artefactName))
+		}
+		profile, ok := cfg.SigningProfiles[ref]
+		if !ok {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Signing profile not found for %s", artefactName))
+			}
+			return documentArtefactResult{}, fmt.Errorf("document artefact %s: signing profile %s missing", artefactName, ref)
+		}
+		logger.Debugf("Signing PDF %s with profile %s", pdfPath, ref)
+		if err := signing.Apply(ctx, profile, pdfPath); err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
+			}
+			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
+		}
+	}
+
+	// Success
+	if spinner != nil {
+		spinner.Stop()
+	}
+	return documentArtefactResult{Name: artefactName, PDFPath: pdfPath}, nil
+}
+
+// buildDefaultDocumentHeader creates the default header template for DocumentArtefact PDFs.
+// The header displays the document title centered at the top.
+// Playwright header/footer templates use special CSS classes for dynamic content.
+func buildDefaultDocumentHeader(title string) string {
+	escapedTitle := title
+	// Basic HTML escaping for the title
+	escapedTitle = strings.ReplaceAll(escapedTitle, "&", "&amp;")
+	escapedTitle = strings.ReplaceAll(escapedTitle, "<", "&lt;")
+	escapedTitle = strings.ReplaceAll(escapedTitle, ">", "&gt;")
+	escapedTitle = strings.ReplaceAll(escapedTitle, "\"", "&quot;")
+	return `<div style="width: 100%; font-size: 10px; font-family: Arial, sans-serif; text-align: center; color: #333;">` + escapedTitle + `</div>`
+}
+
+// buildDefaultDocumentFooter creates the default footer template for DocumentArtefact PDFs.
+// The footer displays the date on the left and page number on the right.
+// Playwright footer templates use special CSS classes:
+// - "date" class shows the formatted print date
+// - "pageNumber" class shows the current page number
+// - "totalPages" class shows the total number of pages
+func buildDefaultDocumentFooter() string {
+	return `<div style="width: 100%; font-size: 9px; font-family: Arial, sans-serif; padding: 0 10mm; display: flex; justify-content: space-between; color: #666;">
+  <span class="date"></span>
+  <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+</div>`
+}
+
 // ephemeralServer wraps an HTTP server used for PDF rendering.
 // It manages a child context that can be canceled independently.
 type ephemeralServer struct {
@@ -842,7 +1067,7 @@ func (s *ephemeralServer) Close() error {
 }
 
 // writeBuildLog writes a detailed build log file with run information.
-func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.Time, workdir string, docs []config.Document, results []artefactResult, sqlQueries []string, warnings []string) error {
+func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.Time, workdir string, docs []config.Document, results []artefactResult, docResults []documentArtefactResult, sqlQueries []string, warnings []string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create build log: %w", err)
@@ -882,6 +1107,16 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 		fmt.Fprintf(file, "    PDF:   %s\n", res.PDFPath)
 		if res.GraphPath != "" {
 			fmt.Fprintf(file, "    Graph: %s\n", res.GraphPath)
+		}
+	}
+
+	if len(docResults) > 0 {
+		fmt.Fprintln(file)
+		fmt.Fprintf(file, "DOCUMENT ARTEFACTS (%d)\n", len(docResults))
+		fmt.Fprintf(file, "-----------------------\n")
+		for _, res := range docResults {
+			fmt.Fprintf(file, "  - %s\n", res.Name)
+			fmt.Fprintf(file, "    PDF: %s\n", res.PDFPath)
 		}
 	}
 

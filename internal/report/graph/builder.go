@@ -20,12 +20,13 @@ type builder struct {
 
 	nodes map[string]*Node
 
-	dataSourceDocs []config.Document
-	dataSetDocs    []config.Document
-	layoutPageDocs []config.Document
-	layoutCardDocs []config.Document
-	componentDocs  map[string][]config.Document
-	artefactDocs   []config.Document
+	dataSourceDocs       []config.Document
+	dataSetDocs          []config.Document
+	layoutPageDocs       []config.Document
+	layoutCardDocs       []config.Document
+	componentDocs        map[string][]config.Document
+	artefactDocs         []config.Document
+	documentArtefactDocs []config.Document
 
 	dataSourceIndex map[string]string
 	dataSetIndex    map[string]string
@@ -37,6 +38,7 @@ type builder struct {
 	layoutRootIDs          []string
 	standaloneComponentIDs []string
 	artefactIDs            []string
+	documentArtefactIDs    []string
 }
 
 func newBuilder(ctx context.Context, docs []config.Document, opts BuildOptions) *builder {
@@ -77,14 +79,19 @@ func (b *builder) Build() (*Graph, error) {
 	if err := b.buildReportArtefacts(); err != nil {
 		return nil, err
 	}
+	if err := b.buildDocumentArtefacts(); err != nil {
+		return nil, err
+	}
 	if err := b.computeHashes(); err != nil {
 		return nil, err
 	}
 
 	graph := &Graph{
-		Nodes:           b.nodes,
-		ReportArtefacts: make([]*Node, 0, len(b.artefactIDs)),
-		artefactIndex:   make(map[string]*Node),
+		Nodes:                 b.nodes,
+		ReportArtefacts:       make([]*Node, 0, len(b.artefactIDs)),
+		DocumentArtefacts:     make([]*Node, 0, len(b.documentArtefactIDs)),
+		artefactIndex:         make(map[string]*Node),
+		documentArtefactIndex: make(map[string]*Node),
 	}
 	for _, id := range b.artefactIDs {
 		node, ok := b.nodes[id]
@@ -96,6 +103,17 @@ func (b *builder) Build() (*Graph, error) {
 	}
 	sort.Slice(graph.ReportArtefacts, func(i, j int) bool {
 		return graph.ReportArtefacts[i].Name < graph.ReportArtefacts[j].Name
+	})
+	for _, id := range b.documentArtefactIDs {
+		node, ok := b.nodes[id]
+		if !ok {
+			continue
+		}
+		graph.DocumentArtefacts = append(graph.DocumentArtefacts, node)
+		graph.documentArtefactIndex[node.Name] = node
+	}
+	sort.Slice(graph.DocumentArtefacts, func(i, j int) bool {
+		return graph.DocumentArtefacts[i].Name < graph.DocumentArtefacts[j].Name
 	})
 	return graph, nil
 }
@@ -122,6 +140,8 @@ func (b *builder) categorize() {
 			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
+		case "DocumentArtefact":
+			b.documentArtefactDocs = append(b.documentArtefactDocs, doc)
 		}
 	}
 }
@@ -511,6 +531,78 @@ func (b *builder) buildReportArtefacts() error {
 		b.artefactIDs = append(b.artefactIDs, id)
 	}
 	return nil
+}
+
+func (b *builder) buildDocumentArtefacts() error {
+	for _, doc := range b.documentArtefactDocs {
+		if err := b.ctx.Err(); err != nil {
+			return err
+		}
+
+		// Parse the document spec to extract source files
+		spec, err := parseDocumentArtefactSpec(doc.Raw)
+		if err != nil {
+			return fmt.Errorf("document artefact %s: %w", doc.Name, err)
+		}
+
+		// Create markdown file nodes as dependencies
+		var deps []string
+		for _, src := range spec.Sources {
+			mdFileID := makeNodeID(NodeMarkdownFile, src.File)
+			if _, exists := b.nodes[mdFileID]; !exists {
+				b.nodes[mdFileID] = &Node{
+					ID:         mdFileID,
+					Kind:       NodeMarkdownFile,
+					Name:       src.File,
+					Label:      src.File,
+					File:       src.File,
+					DependsOn:  nil,
+					Attributes: map[string]string{},
+					baseDigest: hashBytes([]byte(src.File)),
+				}
+			}
+			deps = append(deps, mdFileID)
+		}
+
+		id := makeNodeID(NodeDocumentArtefact, doc.Name)
+		attrs := map[string]string{
+			"sources": fmt.Sprintf("%d files", len(spec.Sources)),
+		}
+		if spec.Format != "" {
+			attrs["format"] = spec.Format
+		}
+
+		node := &Node{
+			ID:         id,
+			Kind:       NodeDocumentArtefact,
+			Name:       doc.Name,
+			Label:      doc.Name,
+			File:       doc.File,
+			DependsOn:  deps,
+			Attributes: attrs,
+			baseDigest: hashBytes(doc.Raw),
+		}
+		b.nodes[id] = node
+		b.documentArtefactIDs = append(b.documentArtefactIDs, id)
+	}
+	return nil
+}
+
+type documentArtefactSpec struct {
+	Sources []struct {
+		File string `json:"file"`
+	} `json:"sources"`
+	Format string `json:"format"`
+}
+
+func parseDocumentArtefactSpec(raw json.RawMessage) (*documentArtefactSpec, error) {
+	var payload struct {
+		Spec documentArtefactSpec `json:"spec"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return &payload.Spec, nil
 }
 
 func (b *builder) computeHashes() error {

@@ -46,6 +46,12 @@ type PDFOptions struct {
 	Debug                 bool
 	WaitForComponentReady bool
 	ReadyConsolePrefix    string
+	// Header/footer options for document PDFs
+	DisplayHeaderFooter bool
+	HeaderTemplate      string
+	FooterTemplate      string
+	MarginTop           string
+	MarginBottom        string
 }
 
 // RenderPDF loads the provided URL in a headless browser and exports it to PDF.
@@ -147,15 +153,38 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 			pdfOpts.Format = &upper
 		}
 	}
+	// Set margins - use larger margins if header/footer is enabled
+	marginTop := "0"
+	marginBottom := "0"
+	if opts.DisplayHeaderFooter {
+		marginTop = "20mm"
+		marginBottom = "15mm"
+		if opts.MarginTop != "" {
+			marginTop = opts.MarginTop
+		}
+		if opts.MarginBottom != "" {
+			marginBottom = opts.MarginBottom
+		}
+	}
 	pdfOpts.Margin = &pw.Margin{
-		Top:    pw.String("0"),
+		Top:    pw.String(marginTop),
 		Right:  pw.String("0"),
-		Bottom: pw.String("0"),
+		Bottom: pw.String(marginBottom),
 		Left:   pw.String("0"),
 	}
 	if opts.Orientation != "" {
 		landscape := strings.EqualFold(opts.Orientation, "landscape")
 		pdfOpts.Landscape = pw.Bool(landscape)
+	}
+	// Header/footer support
+	if opts.DisplayHeaderFooter {
+		pdfOpts.DisplayHeaderFooter = pw.Bool(true)
+		if opts.HeaderTemplate != "" {
+			pdfOpts.HeaderTemplate = pw.String(opts.HeaderTemplate)
+		}
+		if opts.FooterTemplate != "" {
+			pdfOpts.FooterTemplate = pw.String(opts.FooterTemplate)
+		}
 	}
 
 	if _, err := page.PDF(pdfOpts); err != nil {

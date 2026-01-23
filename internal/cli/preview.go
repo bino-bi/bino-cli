@@ -200,7 +200,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				pipeline.LogArtefactWarnings(logger, artefacts)
 
-				if len(artefacts) == 0 {
+				documentArtefacts, err := config.CollectDocumentArtefacts(docs)
+				if err != nil {
+					logger.Errorf("DocumentArtefact scan failed (%s): %v", reason, err)
+					return RuntimeError(err)
+				}
+				pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
+
+				if len(artefacts) == 0 && len(documentArtefacts) == 0 {
 					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
 						Language:                 "de",
 						Mode:                     pipeline.RenderModePreview,
@@ -226,6 +233,34 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					server.SetContentRoutes(nil)
 					server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8"))
 					server.BroadcastContent("/", contextHTML)
+					logger.Successf("Content refreshed (%s)", reason)
+					return nil
+				}
+
+				// Handle DocumentArtefact-only case
+				if len(artefacts) == 0 && len(documentArtefacts) > 0 {
+					routeMap := make(map[string]previewhttp.ContentFunc, len(documentArtefacts))
+					entries := make([]previewIndexEntry, 0, len(documentArtefacts))
+
+					for _, docArt := range documentArtefacts {
+						renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{})
+						if err != nil {
+							logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
+							continue
+						}
+						path := "/doc/" + docArt.Document.Name
+						routeMap[path] = previewhttp.StaticContent(append([]byte(nil), renderResult.HTML...), "text/html; charset=utf-8")
+						entries = append(entries, previewIndexEntry{
+							Name:        "doc/" + docArt.Document.Name,
+							Title:       docArt.Spec.Title,
+							Description: "Document: " + docArt.Document.Name,
+							Author:      docArt.Spec.Author,
+						})
+					}
+
+					server.SetLocalAssets(nil)
+					server.SetContentRoutes(routeMap)
+					server.SetContentFunc(previewhttp.StaticContent(buildPreviewIndex(entries), "text/html; charset=utf-8"))
 					logger.Successf("Content refreshed (%s)", reason)
 					return nil
 				}
@@ -295,6 +330,25 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 						Description: art.Spec.Description,
 						Language:    art.Spec.Language,
 						Author:      art.Spec.Author,
+					})
+				}
+
+				// Add DocumentArtefacts to routes
+				for _, docArt := range documentArtefacts {
+					renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
+						EngineVersion: engineVersion,
+					})
+					if err != nil {
+						logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
+						continue
+					}
+					path := "/doc/" + docArt.Document.Name
+					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), renderResult.HTML...), "text/html; charset=utf-8")
+					entries = append(entries, previewIndexEntry{
+						Name:        "doc/" + docArt.Document.Name,
+						Title:       docArt.Spec.Title,
+						Description: "Document: " + docArt.Document.Name,
+						Author:      docArt.Spec.Author,
 					})
 				}
 

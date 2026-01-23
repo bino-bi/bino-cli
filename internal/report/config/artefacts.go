@@ -336,3 +336,105 @@ func applyScreenshotArtefactDefaults(name string, spec *ScreenshotArtefactSpec) 
 	}
 	return warnings
 }
+
+// DocumentArtefact captures a validated DocumentArtefact manifest.
+type DocumentArtefact struct {
+	Document Document
+	Spec     DocumentArtefactSpec
+	Labels   map[string]string
+	Warnings []string
+}
+
+const (
+	DefaultDocumentFormat      = "a4"
+	DefaultDocumentOrientation = "portrait"
+	DefaultDocumentLocale      = "de"
+)
+
+// DocumentArtefactSpec mirrors the DocumentArtefact manifest spec section.
+type DocumentArtefactSpec struct {
+	Format                  string           `json:"format"`
+	Orientation             string           `json:"orientation"`
+	Locale                  string           `json:"locale"`
+	Filename                string           `json:"filename"`
+	Title                   string           `json:"title"`
+	Author                  string           `json:"author"`
+	Subject                 string           `json:"subject"`
+	Keywords                []string         `json:"keywords"`
+	Sources                 []DocumentSource `json:"sources"`
+	Stylesheet              string           `json:"stylesheet"`
+	TableOfContents         bool             `json:"tableOfContents"`
+	PageBreakBetweenSources bool             `json:"pageBreakBetweenSources"`
+	SigningProfile          string           `json:"signingProfile,omitempty"`
+	// Header/footer options for PDF output
+	DisplayHeaderFooter bool   `json:"displayHeaderFooter"`
+	HeaderTemplate      string `json:"headerTemplate,omitempty"`
+	FooterTemplate      string `json:"footerTemplate,omitempty"`
+	MarginTop           string `json:"marginTop,omitempty"`
+	MarginBottom        string `json:"marginBottom,omitempty"`
+}
+
+// DocumentSource specifies a markdown file to include in the document.
+type DocumentSource struct {
+	File string `json:"file"`
+}
+
+// DocumentArtefactByName filters and orders DocumentArtefact manifests.
+type DocumentArtefactByName []DocumentArtefact
+
+func (a DocumentArtefactByName) Len() int           { return len(a) }
+func (a DocumentArtefactByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a DocumentArtefactByName) Less(i, j int) bool { return a[i].Document.Name < a[j].Document.Name }
+
+// CollectDocumentArtefacts inspects the provided documents for DocumentArtefacts and ensures
+// metadata.name uniqueness.
+func CollectDocumentArtefacts(docs []Document) ([]DocumentArtefact, error) {
+	artefacts := make([]DocumentArtefact, 0, len(docs))
+	seen := make(map[string]struct{})
+	for _, doc := range docs {
+		if doc.Kind != "DocumentArtefact" {
+			continue
+		}
+		var payload struct {
+			Spec DocumentArtefactSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, fmt.Errorf("parse DocumentArtefact %s: %w", doc.Name, err)
+		}
+		if doc.Name == "" {
+			return nil, fmt.Errorf("document artefact missing metadata.name")
+		}
+		if _, ok := seen[doc.Name]; ok {
+			return nil, fmt.Errorf("multiple DocumentArtefact documents share metadata.name %q", doc.Name)
+		}
+		seen[doc.Name] = struct{}{}
+		warnings := applyDocumentArtefactDefaults(doc.Name, &payload.Spec)
+		artefacts = append(artefacts, DocumentArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
+	}
+	sort.Sort(DocumentArtefactByName(artefacts))
+	return artefacts, nil
+}
+
+func applyDocumentArtefactDefaults(name string, spec *DocumentArtefactSpec) []string {
+	var warnings []string
+	if spec == nil {
+		return nil
+	}
+	if strings.TrimSpace(spec.Format) == "" {
+		spec.Format = DefaultDocumentFormat
+		warnings = append(warnings, fmt.Sprintf("DocumentArtefact %s: spec.format not set; defaulting to %s", name, DefaultDocumentFormat))
+	}
+	if strings.TrimSpace(spec.Orientation) == "" {
+		spec.Orientation = DefaultDocumentOrientation
+		warnings = append(warnings, fmt.Sprintf("DocumentArtefact %s: spec.orientation not set; defaulting to %s", name, DefaultDocumentOrientation))
+	}
+	if strings.TrimSpace(spec.Locale) == "" {
+		spec.Locale = DefaultDocumentLocale
+		warnings = append(warnings, fmt.Sprintf("DocumentArtefact %s: spec.locale not set; defaulting to %s", name, DefaultDocumentLocale))
+	}
+	// Default to page breaks between sources
+	if !spec.PageBreakBetweenSources && len(spec.Sources) > 1 {
+		spec.PageBreakBetweenSources = true
+	}
+	return warnings
+}

@@ -51,15 +51,24 @@ a tree or flat table view.`),
 			if err != nil {
 				return ConfigError(err)
 			}
-			if len(artefacts) == 0 {
-				return ConfigErrorf("no ReportArtefact manifests found in %s", absDir)
+
+			documentArtefacts, err := config.CollectDocumentArtefacts(docs)
+			if err != nil {
+				return ConfigError(err)
 			}
 
-			selected := pipeline.FilterArtefacts(artefacts, pipeline.FilterOptions{
+			if len(artefacts) == 0 && len(documentArtefacts) == 0 {
+				return ConfigErrorf("no ReportArtefact or DocumentArtefact manifests found in %s", absDir)
+			}
+
+			filterOpts := pipeline.FilterOptions{
 				Include: include,
 				Exclude: exclude,
-			})
-			if len(selected) == 0 {
+			}
+			selected := pipeline.FilterArtefacts(artefacts, filterOpts)
+			selectedDocs := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
+
+			if len(selected) == 0 && len(selectedDocs) == 0 {
 				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
 
@@ -68,11 +77,18 @@ a tree or flat table view.`),
 				return RuntimeError(err)
 			}
 
-			roots := make([]*reportgraph.Node, 0, len(selected))
+			roots := make([]*reportgraph.Node, 0, len(selected)+len(selectedDocs))
 			for _, art := range selected {
 				node, ok := g.ReportArtefactByName(art.Document.Name)
 				if !ok {
 					return RuntimeErrorf("graph: artefact node %s not found", art.Document.Name)
+				}
+				roots = append(roots, node)
+			}
+			for _, docArt := range selectedDocs {
+				node, ok := g.DocumentArtefactByName(docArt.Document.Name)
+				if !ok {
+					return RuntimeErrorf("graph: document artefact node %s not found", docArt.Document.Name)
 				}
 				roots = append(roots, node)
 			}
