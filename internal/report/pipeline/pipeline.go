@@ -880,6 +880,9 @@ type DocumentArtefactRenderOptions struct {
 	// EngineVersion is the template engine version to use (e.g., "v1.2.3").
 	// If empty, a default version is used.
 	EngineVersion string
+	// TOCPageNumbers maps heading IDs to page numbers (from two-pass rendering).
+	// If provided and TableOfContents is enabled, page numbers are included in the TOC.
+	TOCPageNumbers map[string]int
 }
 
 // RenderDocumentArtefactHTML generates HTML from markdown files for a DocumentArtefact.
@@ -947,8 +950,9 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 			TableOfContents:       spec.TableOfContents,
 			PageBreakBetweenFiles: spec.PageBreakBetweenSources,
 		},
-		RenderContext: renderCtx,
-		Locale:        spec.Locale,
+		RenderContext:  renderCtx,
+		Locale:         spec.Locale,
+		TOCPageNumbers: opts.TOCPageNumbers,
 	})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
