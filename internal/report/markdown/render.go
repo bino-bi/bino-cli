@@ -135,6 +135,8 @@ type FullRenderOptions struct {
 	RenderContext *RenderContext
 	// Locale for the document (e.g., "en", "de").
 	Locale string
+	// TOCPageNumbers maps heading IDs to page numbers (from two-pass rendering).
+	TOCPageNumbers map[string]int
 }
 
 // RenderFilesWithContext converts multiple markdown files to HTML with full bino context.
@@ -207,15 +209,9 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 
 	// Render TOC if enabled and has items
 	if opts.TableOfContents && len(tocTree.Items) > 0 {
-		tocList := toc.RenderList(tocTree)
-		if tocList != nil {
-			tocBuf.WriteString(`<nav class="bn-toc"><h2>Table of Contents</h2>`)
-			if err := goldmark.DefaultRenderer().Render(&tocBuf, nil, tocList); err != nil {
-				logger.Warnf("TOC rendering failed: %v", err)
-			} else {
-				tocBuf.WriteString(`</nav>`)
-			}
-		}
+		tocBuf.WriteString(`<nav class="bn-toc"><h2>Table of Contents</h2>`)
+		renderTOCWithPageNumbers(&tocBuf, tocTree.Items, opts.TOCPageNumbers)
+		tocBuf.WriteString(`</nav>`)
 	}
 
 	// Combine TOC and content
@@ -227,6 +223,46 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 	finalBuf.Write(contentBuf.Bytes())
 
 	return finalBuf.Bytes(), nil
+}
+
+// renderTOCWithPageNumbers renders TOC items as HTML with optional page numbers.
+// If pageNumbers is nil or empty, page numbers are omitted.
+func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]int) {
+	if len(items) == 0 {
+		return
+	}
+	buf.WriteString("<ul>")
+	for _, item := range items {
+		buf.WriteString("<li>")
+		itemID := string(item.ID)
+
+		// Add page number first (floated right) if available
+		if pageNumbers != nil && len(item.ID) > 0 {
+			if pageNum, ok := pageNumbers[itemID]; ok && pageNum > 0 {
+				buf.WriteString(`<span class="bn-toc-page">`)
+				fmt.Fprintf(buf, "%d", pageNum)
+				buf.WriteString(`</span>`)
+			}
+		}
+
+		// Write the link with title
+		if len(item.ID) > 0 {
+			buf.WriteString(`<a href="#`)
+			buf.WriteString(html.EscapeString(itemID))
+			buf.WriteString(`">`)
+		}
+		buf.WriteString(html.EscapeString(string(item.Title)))
+		if len(item.ID) > 0 {
+			buf.WriteString("</a>")
+		}
+
+		// Recurse for children
+		if len(item.Items) > 0 {
+			renderTOCWithPageNumbers(buf, item.Items, pageNumbers)
+		}
+		buf.WriteString("</li>")
+	}
+	buf.WriteString("</ul>")
 }
 
 // FullDocumentOptions extends DocumentOptions for full rendering with bino context.
@@ -571,6 +607,12 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
 
     .bn-toc a {
       color: inherit;
+      text-decoration: none;
+    }
+
+    .bn-toc-page {
+      color: #666;
+      float: right;
     }
 
     /* Page breaks */
