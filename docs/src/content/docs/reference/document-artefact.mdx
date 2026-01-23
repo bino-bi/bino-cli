@@ -1,0 +1,244 @@
+---
+title: DocumentArtefact
+description: Generate PDF documents from Markdown files with table of contents, page numbers, headers, and footers.
+---
+
+`DocumentArtefact` manifests define standalone PDF documents rendered from Markdown source files.
+Unlike `ReportArtefact` which renders data-driven layouts, `DocumentArtefact` is designed for
+text-heavy documents like manuals, specifications, or narrative reports.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: technical_manual
+spec:
+  format: a4
+  orientation: portrait
+  locale: en
+  filename: technical-manual.pdf
+  title: "Technical Manual"
+  author: "Engineering Team"
+  subject: "Product Documentation"
+  keywords: ["manual", "technical", "documentation"]
+  sources:
+    - file: ./docs/introduction.md
+    - file: ./docs/installation.md
+    - file: ./docs/configuration.md
+  stylesheet: ./styles/manual.css
+  tableOfContents: true
+  pageBreakBetweenSources: true
+  displayHeaderFooter: true
+  marginTop: "20mm"
+  marginBottom: "15mm"
+  signingProfile: corporateSigner
+```
+
+## Fields
+
+### Basic settings
+
+- `spec.format` – Page size: `a4`, `a5`, `letter`, or `legal`. Default: `a4`.
+- `spec.orientation` – `portrait` or `landscape`. Default: `portrait`.
+- `spec.locale` – Document locale (e.g., `en`, `de`). Default: `en`.
+- `spec.filename` – Required output filename (relative to output directory).
+- `spec.title` – Required document title; used in PDF metadata and default header.
+
+### Metadata
+
+- `spec.author` – Optional author name for PDF metadata.
+- `spec.subject` – Optional subject for PDF metadata.
+- `spec.keywords` – Optional list of keywords for PDF metadata.
+
+### Content sources
+
+- `spec.sources` – List of Markdown files to include in the document. Files are processed in order.
+- `spec.stylesheet` – Optional path to a custom CSS file for styling.
+- `spec.pageBreakBetweenSources` – Insert page breaks between source files. Default: `false`.
+
+### Table of contents
+
+- `spec.tableOfContents` – Generate a table of contents from headings. Default: `false`.
+
+When enabled, the table of contents is automatically generated from all `h1`-`h6` headings
+that have an `id` attribute (standard Markdown headings get IDs automatically). The TOC
+includes page numbers for each heading, calculated during a two-pass rendering process.
+
+The TOC appears at the beginning of the document and includes a page break after it.
+
+### Header and footer
+
+- `spec.displayHeaderFooter` – Enable header and footer in the PDF. Default: `false`.
+- `spec.headerTemplate` – Custom HTML template for the header.
+- `spec.footerTemplate` – Custom HTML template for the footer.
+- `spec.marginTop` – Top margin (e.g., `20mm`). Required when using headers.
+- `spec.marginBottom` – Bottom margin (e.g., `15mm`). Required when using footers.
+
+When `displayHeaderFooter` is enabled without custom templates, default templates are used:
+- **Header**: Document title centered
+- **Footer**: Current date on the left, page number on the right
+
+#### Custom header/footer templates
+
+Templates use Chromium's PDF header/footer format. Available CSS classes:
+- `.title` – Document title
+- `.date` – Current date
+- `.pageNumber` – Current page number
+- `.totalPages` – Total page count
+
+Example custom footer:
+```yaml
+spec:
+  displayHeaderFooter: true
+  marginBottom: "15mm"
+  footerTemplate: |
+    <div style="font-size: 10px; width: 100%; text-align: center;">
+      <span class="pageNumber"></span> / <span class="totalPages"></span>
+    </div>
+```
+
+### Signing
+
+- `spec.signingProfile` – Optional reference to a `SigningProfile` manifest for digital signatures.
+
+## Markdown features
+
+DocumentArtefact supports standard Markdown plus:
+
+### Component references
+
+Use the `:ref[name]` syntax to embed report components (tables, charts) in your document:
+
+```markdown
+## Sales Overview
+
+The following table shows quarterly sales:
+
+:ref[quarterly_sales_table]
+
+And here's the trend chart:
+
+:ref[sales_trend_chart]
+```
+
+Referenced components must be defined as `Table`, `ChartTime`, `ChartTree`, etc. manifests
+in your project.
+
+### Syntax highlighting
+
+Code blocks with language hints are syntax-highlighted:
+
+````markdown
+```sql
+SELECT * FROM sales WHERE year = 2024;
+```
+````
+
+## Examples
+
+### Minimal document
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: readme
+spec:
+  filename: readme.pdf
+  title: "Project README"
+  sources:
+    - file: ./README.md
+```
+
+### Document with TOC and page numbers
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: user_guide
+spec:
+  format: a4
+  orientation: portrait
+  filename: user-guide.pdf
+  title: "User Guide"
+  author: "Documentation Team"
+  tableOfContents: true
+  displayHeaderFooter: true
+  marginTop: "20mm"
+  marginBottom: "15mm"
+  sources:
+    - file: ./docs/getting-started.md
+    - file: ./docs/features.md
+    - file: ./docs/troubleshooting.md
+  pageBreakBetweenSources: true
+```
+
+### Document with embedded report components
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: quarterly_report
+spec:
+  format: a4
+  filename: q4-report.pdf
+  title: "Q4 2024 Report"
+  tableOfContents: true
+  displayHeaderFooter: true
+  marginTop: "20mm"
+  marginBottom: "15mm"
+  sources:
+    - file: ./narrative/executive-summary.md
+    - file: ./narrative/financial-analysis.md
+    - file: ./narrative/outlook.md
+```
+
+Where `executive-summary.md` might contain:
+
+```markdown
+# Executive Summary
+
+This quarter showed strong growth across all regions.
+
+## Revenue by Region
+
+:ref[revenue_by_region_table]
+
+## Growth Trend
+
+:ref[quarterly_growth_chart]
+```
+
+### Document with custom styling
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: branded_manual
+spec:
+  filename: manual.pdf
+  title: "Product Manual"
+  stylesheet: ./styles/brand.css
+  tableOfContents: true
+  displayHeaderFooter: true
+  marginTop: "25mm"
+  marginBottom: "20mm"
+  headerTemplate: |
+    <div style="font-size: 10px; width: 100%; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+      <span style="float: left;">ACME Corp</span>
+      <span style="float: right;" class="title"></span>
+    </div>
+  footerTemplate: |
+    <div style="font-size: 9px; width: 100%; text-align: center; color: #666;">
+      Page <span class="pageNumber"></span> of <span class="totalPages"></span> | Confidential
+    </div>
+  sources:
+    - file: ./manual/introduction.md
+    - file: ./manual/usage.md
+    - file: ./manual/reference.md
+```
