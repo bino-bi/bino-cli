@@ -11,12 +11,14 @@ import (
 type NodeKind string
 
 const (
-	NodeReportArtefact NodeKind = "ReportArtefact"
-	NodeLayoutPage     NodeKind = "LayoutPage"
-	NodeLayoutCard     NodeKind = "LayoutCard"
-	NodeComponent      NodeKind = "Component"
-	NodeDataSet        NodeKind = "DataSet"
-	NodeDataSource     NodeKind = "DataSource"
+	NodeReportArtefact   NodeKind = "ReportArtefact"
+	NodeDocumentArtefact NodeKind = "DocumentArtefact"
+	NodeLayoutPage       NodeKind = "LayoutPage"
+	NodeLayoutCard       NodeKind = "LayoutCard"
+	NodeComponent        NodeKind = "Component"
+	NodeDataSet          NodeKind = "DataSet"
+	NodeDataSource       NodeKind = "DataSource"
+	NodeMarkdownFile     NodeKind = "MarkdownFile"
 )
 
 // Node captures a manifest object, its metadata, and hashed dependencies.
@@ -35,10 +37,12 @@ type Node struct {
 
 // Graph is the dependency graph produced from a manifest bundle.
 type Graph struct {
-	Nodes           map[string]*Node
-	ReportArtefacts []*Node
+	Nodes             map[string]*Node
+	ReportArtefacts   []*Node
+	DocumentArtefacts []*Node
 
-	artefactIndex map[string]*Node
+	artefactIndex         map[string]*Node
+	documentArtefactIndex map[string]*Node
 }
 
 // NodeByID returns the node for the given ID.
@@ -56,6 +60,15 @@ func (g *Graph) ReportArtefactByName(name string) (*Node, bool) {
 		return nil, false
 	}
 	node, ok := g.artefactIndex[name]
+	return node, ok
+}
+
+// DocumentArtefactByName resolves a DocumentArtefact node by metadata.name.
+func (g *Graph) DocumentArtefactByName(name string) (*Node, bool) {
+	if g == nil {
+		return nil, false
+	}
+	node, ok := g.documentArtefactIndex[name]
 	return node, ok
 }
 

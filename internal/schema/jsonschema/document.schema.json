@@ -31,6 +31,7 @@
         "ReportArtefact",
         "LiveReportArtefact",
         "ScreenshotArtefact",
+        "DocumentArtefact",
         "SigningProfile"
       ],
       "description": "Type of document in the report bundle (e.g. DataSource, DataSet, LayoutPage). Determines which spec block is expected."
@@ -234,6 +235,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/screenshotArtefactSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "DocumentArtefact" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/documentArtefactSpec" }
         }
       }
     },
@@ -1432,6 +1445,112 @@
           "type": "string",
           "minLength": 1,
           "description": "Name (metadata.name) of the component to capture."
+        }
+      },
+      "additionalProperties": false
+    },
+    "documentArtefactSpec": {
+      "type": "object",
+      "required": ["format", "sources"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["a4", "a5", "letter", "legal"],
+          "description": "Page format for the rendered document (for example 'a4', 'letter')."
+        },
+        "orientation": {
+          "type": "string",
+          "enum": ["portrait", "landscape"],
+          "default": "portrait",
+          "description": "Page orientation of the document, either 'portrait' or 'landscape'."
+        },
+        "locale": {
+          "type": "string",
+          "default": "de",
+          "description": "Locale for the document, used for i18n and the bn-context element (for example 'en', 'de', 'fr')."
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Output filename of the generated PDF (for example 'user-guide.pdf')."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the document, stored in PDF metadata."
+        },
+        "author": {
+          "type": "string",
+          "description": "Optional author name stored in the PDF metadata."
+        },
+        "subject": {
+          "type": "string",
+          "description": "Optional subject line stored in the PDF metadata."
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Optional list of keywords stored in PDF metadata."
+        },
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/documentSource" },
+          "minItems": 1,
+          "description": "Ordered list of markdown files to include in the document."
+        },
+        "stylesheet": {
+          "type": "string",
+          "description": "Path to a custom CSS stylesheet for styling the document (relative to manifest file)."
+        },
+        "tableOfContents": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, generates a table of contents from markdown headings."
+        },
+        "pageBreakBetweenSources": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, inserts a page break between each source file."
+        },
+        "signingProfile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a SigningProfile manifest that should be used to digitally sign the generated PDF."
+        },
+        "displayHeaderFooter": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, displays a header and footer on each page of the PDF. Uses default templates if headerTemplate/footerTemplate are not specified."
+        },
+        "headerTemplate": {
+          "type": "string",
+          "description": "Custom HTML template for the page header. Supports Playwright template classes: 'date', 'title', 'url', 'pageNumber', 'totalPages'. If not specified and displayHeaderFooter is true, shows the document title centered."
+        },
+        "footerTemplate": {
+          "type": "string",
+          "description": "Custom HTML template for the page footer. Supports Playwright template classes: 'date', 'title', 'url', 'pageNumber', 'totalPages'. If not specified and displayHeaderFooter is true, shows date on left and page number on right."
+        },
+        "marginTop": {
+          "type": "string",
+          "default": "20mm",
+          "description": "Top margin for header space (e.g., '20mm', '1in'). Only used when displayHeaderFooter is true."
+        },
+        "marginBottom": {
+          "type": "string",
+          "default": "15mm",
+          "description": "Bottom margin for footer space (e.g., '15mm', '0.5in'). Only used when displayHeaderFooter is true."
+        }
+      },
+      "additionalProperties": false
+    },
+    "documentSource": {
+      "type": "object",
+      "required": ["file"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to a markdown file (relative to the manifest file)."
         }
       },
       "additionalProperties": false

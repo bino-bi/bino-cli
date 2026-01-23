@@ -882,3 +882,44 @@ func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
 	}
 	return strings.EqualFold(format, targetFormat)
 }
+
+// RenderComponentFromSpec renders a component HTML from its kind and spec JSON.
+// This is an exported function that can be used by other packages (e.g., markdown)
+// to render components consistently without duplicating spec types.
+// Supported kinds: Text, Table, ChartStructure, ChartTime, Image.
+func RenderComponentFromSpec(kind string, specRaw json.RawMessage) (string, error) {
+	switch kind {
+	case "Text":
+		var s textSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse text spec: %w", err)
+		}
+		return renderTextComponent(s), nil
+	case "Table":
+		var s tableSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse table spec: %w", err)
+		}
+		return renderTableComponent(s), nil
+	case "ChartStructure":
+		var s chartStructureSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse chart structure spec: %w", err)
+		}
+		return renderChartStructureComponent(s), nil
+	case "ChartTime":
+		var s chartTimeSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse chart time spec: %w", err)
+		}
+		return renderChartTimeComponent(s), nil
+	case "Image":
+		var s imageSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse image spec: %w", err)
+		}
+		return renderImageComponent(s), nil
+	default:
+		return "", fmt.Errorf("unsupported component kind %q for inline rendering", kind)
+	}
+}
