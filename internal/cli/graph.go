@@ -55,13 +55,10 @@ a tree or flat table view.`),
 				return ConfigErrorf("no ReportArtefact manifests found in %s", absDir)
 			}
 
-			selected, err := pipeline.FilterArtefacts(artefacts, pipeline.FilterOptions{
+			selected := pipeline.FilterArtefacts(artefacts, pipeline.FilterOptions{
 				Include: include,
 				Exclude: exclude,
 			})
-			if err != nil {
-				return ConfigError(err)
-			}
 			if len(selected) == 0 {
 				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
