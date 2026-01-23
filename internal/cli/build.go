@@ -188,8 +188,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			if err != nil {
 				return ConfigError(err)
 			}
-			if len(artefacts) == 0 {
-				return ConfigErrorf("no ReportArtefact manifests found in %s", absDir)
+
+			screenshotArtefacts, err := config.CollectScreenshotArtefacts(documents)
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			if len(artefacts) == 0 && len(screenshotArtefacts) == 0 {
+				return ConfigErrorf("no ReportArtefact or ScreenshotArtefact manifests found in %s", absDir)
 			}
 
 			signingProfiles, err := config.CollectSigningProfiles(documents)
@@ -197,14 +203,19 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return ConfigError(err)
 			}
 
-			selected, err := pipeline.FilterArtefacts(artefacts, pipeline.FilterOptions{
-				Include: include,
-				Exclude: exclude,
-			})
-			if err != nil {
+			// Validate that all include names exist in either artefact type
+			if err := pipeline.ValidateArtefactNames(artefacts, screenshotArtefacts, include); err != nil {
 				return ConfigError(err)
 			}
-			if len(selected) == 0 {
+
+			filterOpts := pipeline.FilterOptions{
+				Include: include,
+				Exclude: exclude,
+			}
+			selected := pipeline.FilterArtefacts(artefacts, filterOpts)
+			selectedScreenshots := pipeline.FilterScreenshotArtefacts(screenshotArtefacts, filterOpts)
+
+			if len(selected) == 0 && len(selectedScreenshots) == 0 {
 				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
 			pipeline.LogArtefactWarnings(logger, selected)
@@ -383,17 +394,12 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				results = append(results, entry)
 			}
 
-			// Step 3: Build screenshot artefacts
-			screenshotArtefacts, err := config.CollectScreenshotArtefacts(documents)
-			if err != nil {
-				return ConfigError(err)
-			}
-
+			// Step 3: Build screenshot artefacts (using pre-filtered selectedScreenshots)
 			var screenshotResults []screenshotArtefactResult
-			if len(screenshotArtefacts) > 0 {
-				out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(screenshotArtefacts)))
+			if len(selectedScreenshots) > 0 {
+				out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(selectedScreenshots)))
 
-				for _, ssArtefact := range screenshotArtefacts {
+				for _, ssArtefact := range selectedScreenshots {
 					// Check for cancellation before starting each screenshot artefact
 					if err := ctx.Err(); err != nil {
 						return err
@@ -945,6 +951,11 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
 		}
 		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
+	}
+
+	// DEBUG: Write rendered HTML to file for inspection
+	if err := os.WriteFile("/tmp/screenshot-debug.html", []byte(renderResult.HTML), 0644); err != nil {
+		logger.Warnf("Failed to write debug HTML: %v", err)
 	}
 
 	// Check for cancellation before starting the ephemeral server

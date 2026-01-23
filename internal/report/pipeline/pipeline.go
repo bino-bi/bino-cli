@@ -71,7 +71,9 @@ type FilterOptions struct {
 // FilterArtefacts selects artefacts based on include/exclude rules.
 // If Include is non-empty, only those names are selected (in order).
 // Exclude names are always removed from the result.
-func FilterArtefacts(all []config.Artefact, opts FilterOptions) ([]config.Artefact, error) {
+// Names in Include that don't match any artefact are skipped (they may be ScreenshotArtefact names).
+// Use ValidateArtefactNames to check that all include names exist before calling this function.
+func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefact {
 	excludeSet := make(map[string]struct{})
 	for _, name := range opts.Exclude {
 		name = strings.TrimSpace(name)
@@ -98,7 +100,8 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) ([]config.Artefa
 			}
 			art, ok := index[name]
 			if !ok {
-				return nil, fmt.Errorf("artefact %q not found", name)
+				// Skip - may be a ScreenshotArtefact name
+				continue
 			}
 			if _, blocked := excludeSet[name]; blocked {
 				continue
@@ -106,7 +109,7 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) ([]config.Artefa
 			filtered = append(filtered, art)
 			seen[name] = struct{}{}
 		}
-		return filtered, nil
+		return filtered
 	}
 
 	filtered := make([]config.Artefact, 0, len(all))
@@ -116,7 +119,90 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) ([]config.Artefa
 		}
 		filtered = append(filtered, art)
 	}
-	return filtered, nil
+	return filtered
+}
+
+// FilterScreenshotArtefacts selects screenshot artefacts based on include/exclude rules.
+// If Include is non-empty, only those names are selected (in order).
+// Exclude names are always removed from the result.
+// Unlike FilterArtefacts, this function does not error when an include name is not found,
+// as it may be a ReportArtefact name instead.
+func FilterScreenshotArtefacts(all []config.ScreenshotArtefact, opts FilterOptions) []config.ScreenshotArtefact {
+	excludeSet := make(map[string]struct{})
+	for _, name := range opts.Exclude {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		excludeSet[name] = struct{}{}
+	}
+
+	if len(opts.Include) > 0 {
+		index := make(map[string]config.ScreenshotArtefact, len(all))
+		for _, art := range all {
+			index[art.Document.Name] = art
+		}
+		seen := make(map[string]struct{})
+		var filtered []config.ScreenshotArtefact
+		for _, raw := range opts.Include {
+			name := strings.TrimSpace(raw)
+			if name == "" {
+				continue
+			}
+			if _, dup := seen[name]; dup {
+				continue
+			}
+			art, ok := index[name]
+			if !ok {
+				// Skip - may be a ReportArtefact name
+				continue
+			}
+			if _, blocked := excludeSet[name]; blocked {
+				continue
+			}
+			filtered = append(filtered, art)
+			seen[name] = struct{}{}
+		}
+		return filtered
+	}
+
+	filtered := make([]config.ScreenshotArtefact, 0, len(all))
+	for _, art := range all {
+		if _, blocked := excludeSet[art.Document.Name]; blocked {
+			continue
+		}
+		filtered = append(filtered, art)
+	}
+	return filtered
+}
+
+// ValidateArtefactNames checks that all include names exist in either the ReportArtefact
+// or ScreenshotArtefact lists.
+func ValidateArtefactNames(artefacts []config.Artefact, screenshots []config.ScreenshotArtefact, include []string) error {
+	if len(include) == 0 {
+		return nil
+	}
+
+	// Build a set of all known artefact names
+	known := make(map[string]struct{})
+	for _, art := range artefacts {
+		known[art.Document.Name] = struct{}{}
+	}
+	for _, ss := range screenshots {
+		known[ss.Document.Name] = struct{}{}
+	}
+
+	// Check that all include names exist
+	for _, raw := range include {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if _, ok := known[name]; !ok {
+			return fmt.Errorf("artefact %q not found", name)
+		}
+	}
+	return nil
 }
 
 // EnsureSigningProfiles verifies that all artefacts referencing a signing profile
