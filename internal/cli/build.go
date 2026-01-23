@@ -880,9 +880,86 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		spinner.Start(fmt.Sprintf("Building document %s", artefactName))
 	}
 
-	// Render markdown to HTML
+	// Determine output filename
+	filename := spec.Filename
+	if filename == "" {
+		filename = artefactName + ".pdf"
+	}
+	pdfPath := filepath.Join(cfg.OutputDir, filename)
+
+	// Build PDF options (used for both passes)
+	basePDFOpts := playwright.PDFOptions{
+		Format:          spec.Format,
+		Orientation:     spec.Orientation,
+		DriverDirectory: cfg.DriverDir,
+		Browser:         cfg.Browser,
+		Debug:           cfg.Debug,
+		Timeout:         2 * time.Minute,
+	}
+	// Header/footer support
+	if spec.DisplayHeaderFooter {
+		basePDFOpts.DisplayHeaderFooter = true
+		basePDFOpts.HeaderTemplate = spec.HeaderTemplate
+		basePDFOpts.FooterTemplate = spec.FooterTemplate
+		basePDFOpts.MarginTop = spec.MarginTop
+		basePDFOpts.MarginBottom = spec.MarginBottom
+		// Use default templates if not specified
+		if basePDFOpts.HeaderTemplate == "" {
+			basePDFOpts.HeaderTemplate = buildDefaultDocumentHeader(spec.Title)
+		}
+		if basePDFOpts.FooterTemplate == "" {
+			basePDFOpts.FooterTemplate = buildDefaultDocumentFooter()
+		}
+	}
+
+	// Two-pass rendering for TOC with page numbers
+	var tocPageNumbers map[string]int
+	if spec.TableOfContents {
+		if spinner != nil {
+			spinner.Update(fmt.Sprintf("Collecting page numbers for %s", artefactName))
+		}
+
+		// First pass: render without page numbers to collect heading positions
+		firstPassResult, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, artefact, pipeline.DocumentArtefactRenderOptions{
+			EngineVersion: cfg.EngineVersion,
+		})
+		if err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
+			}
+			return documentArtefactResult{}, err
+		}
+
+		// Start ephemeral server for first pass
+		firstEphem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), firstPassResult.HTML, nil)
+		if err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
+			}
+			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
+		}
+
+		// Collect heading page numbers via Playwright
+		collectOpts := basePDFOpts
+		collectOpts.URL = firstEphem.URL()
+		headings, err := playwright.CollectHeadingPages(ctx, collectOpts)
+		firstEphem.Close() // Close first pass server
+
+		if err != nil {
+			logger.Warnf("Failed to collect heading pages for %s: %v (continuing without page numbers)", artefactName, err)
+		} else {
+			tocPageNumbers = make(map[string]int, len(headings))
+			for _, h := range headings {
+				tocPageNumbers[h.ID] = h.PageNum
+			}
+			logger.Debugf("Collected %d heading page numbers for %s", len(tocPageNumbers), artefactName)
+		}
+	}
+
+	// Final pass: render with page numbers (if collected)
 	renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, artefact, pipeline.DocumentArtefactRenderOptions{
-		EngineVersion: cfg.EngineVersion,
+		EngineVersion:  cfg.EngineVersion,
+		TOCPageNumbers: tocPageNumbers,
 	})
 	if err != nil {
 		if spinner != nil {
@@ -891,14 +968,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		return documentArtefactResult{}, err
 	}
 
-	// Determine output filename
-	filename := spec.Filename
-	if filename == "" {
-		filename = artefactName + ".pdf"
-	}
-	pdfPath := filepath.Join(cfg.OutputDir, filename)
-
-	// Start ephemeral server
+	// Start ephemeral server for final PDF generation
 	ephem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, nil)
 	if err != nil {
 		if spinner != nil {
@@ -917,32 +987,10 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		spinner.Update(fmt.Sprintf("Generating PDF for %s", artefactName))
 	}
 
-	// Generate PDF using Playwright
-	pdfOpts := playwright.PDFOptions{
-		URL:             ephem.URL(),
-		PDFPath:         pdfPath,
-		Format:          spec.Format,
-		Orientation:     spec.Orientation,
-		DriverDirectory: cfg.DriverDir,
-		Browser:         cfg.Browser,
-		Debug:           cfg.Debug,
-		Timeout:         2 * time.Minute,
-	}
-	// Header/footer support
-	if spec.DisplayHeaderFooter {
-		pdfOpts.DisplayHeaderFooter = true
-		pdfOpts.HeaderTemplate = spec.HeaderTemplate
-		pdfOpts.FooterTemplate = spec.FooterTemplate
-		pdfOpts.MarginTop = spec.MarginTop
-		pdfOpts.MarginBottom = spec.MarginBottom
-		// Use default templates if not specified
-		if pdfOpts.HeaderTemplate == "" {
-			pdfOpts.HeaderTemplate = buildDefaultDocumentHeader(spec.Title)
-		}
-		if pdfOpts.FooterTemplate == "" {
-			pdfOpts.FooterTemplate = buildDefaultDocumentFooter()
-		}
-	}
+	// Generate final PDF
+	pdfOpts := basePDFOpts
+	pdfOpts.URL = ephem.URL()
+	pdfOpts.PDFPath = pdfPath
 	if err := playwright.RenderPDF(ctx, pdfOpts); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))

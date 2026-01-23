@@ -194,6 +194,210 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	return nil
 }
 
+// HeadingPageInfo contains page number information for a heading.
+type HeadingPageInfo struct {
+	ID       string `json:"id"`
+	Text     string `json:"text"`
+	PageNum  int    `json:"pageNum"`
+}
+
+// CollectHeadingPages loads a page and calculates which page each heading appears on.
+// This is used for TOC page number generation in a two-pass rendering approach.
+func CollectHeadingPages(ctx context.Context, opts PDFOptions) ([]HeadingPageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if opts.URL == "" {
+		return nil, fmt.Errorf("collect heading pages: url is required")
+	}
+
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+
+	browserName := opts.Browser
+	if browserName == "" {
+		browserName = "chromium"
+	}
+
+	runOpts := &pw.RunOptions{DriverDirectory: opts.DriverDirectory}
+	if opts.Debug {
+		runOpts.Verbose = true
+	}
+
+	client, err := pw.Run(runOpts)
+	if err != nil {
+		return nil, fmt.Errorf("launch playwright: %w", err)
+	}
+	defer client.Stop()
+
+	browser, err := launchBrowser(client, browserName)
+	if err != nil {
+		return nil, err
+	}
+	defer browser.Close()
+
+	contextHandle, err := browser.NewContext()
+	if err != nil {
+		return nil, fmt.Errorf("create browser context: %w", err)
+	}
+	defer contextHandle.Close()
+
+	page, err := contextHandle.NewPage()
+	if err != nil {
+		return nil, fmt.Errorf("create page: %w", err)
+	}
+
+	// Emulate print media for accurate page calculations
+	if err := page.EmulateMedia(pw.PageEmulateMediaOptions{
+		Media: pw.MediaPrint,
+	}); err != nil {
+		return nil, fmt.Errorf("emulate print media: %w", err)
+	}
+
+	timeoutMs := float64(timeout.Milliseconds())
+	gotoOpts := pw.PageGotoOptions{
+		WaitUntil: pw.WaitUntilStateNetworkidle,
+		Timeout:   &timeoutMs,
+	}
+	if _, err := page.Goto(opts.URL, gotoOpts); err != nil {
+		return nil, fmt.Errorf("load %s: %w", opts.URL, err)
+	}
+
+	// Calculate page dimensions based on format
+	pageHeightPx := 1123.0 // A4 default at 96 DPI (297mm)
+	format := strings.ToLower(strings.TrimSpace(opts.Format))
+	switch format {
+	case "a4":
+		pageHeightPx = 1123.0 // 297mm at 96 DPI
+	case "a5":
+		pageHeightPx = 794.0 // 210mm at 96 DPI
+	case "letter":
+		pageHeightPx = 1056.0 // 11in at 96 DPI
+	case "legal":
+		pageHeightPx = 1344.0 // 14in at 96 DPI
+	}
+
+	// Swap for landscape
+	if strings.EqualFold(opts.Orientation, "landscape") {
+		// In landscape, height becomes the shorter dimension
+		switch format {
+		case "a4":
+			pageHeightPx = 794.0 // 210mm
+		case "a5":
+			pageHeightPx = 559.0 // 148mm
+		case "letter":
+			pageHeightPx = 816.0 // 8.5in
+		case "legal":
+			pageHeightPx = 816.0 // 8.5in
+		}
+	}
+
+	// Account for margins in header/footer mode
+	marginTopPx := 0.0
+	marginBottomPx := 0.0
+	if opts.DisplayHeaderFooter {
+		marginTopPx = 75.6   // 20mm default
+		marginBottomPx = 56.7 // 15mm default
+	}
+	effectivePageHeight := pageHeightPx - marginTopPx - marginBottomPx
+
+	// JavaScript to collect heading positions and account for CSS page breaks
+	jsCode := fmt.Sprintf(`
+		(() => {
+			const headings = document.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');
+			const pageHeight = %f;
+
+			// Collect elements that force page breaks (TOC, explicit page breaks)
+			const pageBreakElements = [];
+			document.querySelectorAll('.bn-toc, .bn-page-break').forEach(el => {
+				const rect = el.getBoundingClientRect();
+				const style = window.getComputedStyle(el);
+				// Check for page-break-after or break-after
+				if (style.pageBreakAfter === 'always' || style.breakAfter === 'page') {
+					pageBreakElements.push({
+						top: rect.top + window.scrollY,
+						bottom: rect.bottom + window.scrollY
+					});
+				}
+			});
+
+			const results = [];
+			for (const h of headings) {
+				const rect = h.getBoundingClientRect();
+				const absoluteTop = rect.top + window.scrollY;
+
+				// Find the last forced break before this heading
+				let lastBreakBottom = 0;
+				for (const pb of pageBreakElements) {
+					if (pb.bottom < absoluteTop) {
+						lastBreakBottom = Math.max(lastBreakBottom, pb.bottom);
+					}
+				}
+
+				let pageNum;
+				if (lastBreakBottom > 0) {
+					// Heading is after a forced page break
+					// Calculate pages the content before break takes
+					const pagesBeforeBreak = Math.ceil(lastBreakBottom / pageHeight);
+					// Position relative to the break
+					const relativePos = absoluteTop - lastBreakBottom;
+					// Pages from relative position (0-indexed)
+					const pagesAfterBreak = Math.floor(relativePos / pageHeight);
+					// Total: pages before + 1 (for the break) + pages after
+					pageNum = pagesBeforeBreak + 1 + pagesAfterBreak;
+				} else {
+					// No break before this heading, simple calculation
+					pageNum = Math.floor(absoluteTop / pageHeight) + 1;
+				}
+
+				results.push({
+					id: h.id,
+					text: h.textContent.trim(),
+					pageNum: pageNum
+				});
+			}
+			return results;
+		})()
+	`, effectivePageHeight)
+
+	result, err := page.Evaluate(jsCode)
+	if err != nil {
+		return nil, fmt.Errorf("evaluate heading positions: %w", err)
+	}
+
+	// Parse result
+	var headings []HeadingPageInfo
+	if arr, ok := result.([]any); ok {
+		for _, item := range arr {
+			if m, ok := item.(map[string]any); ok {
+				info := HeadingPageInfo{}
+				if id, ok := m["id"].(string); ok {
+					info.ID = id
+				}
+				if text, ok := m["text"].(string); ok {
+					info.Text = text
+				}
+				// Handle pageNum - could be float64 or int depending on JS engine
+				switch pn := m["pageNum"].(type) {
+				case float64:
+					info.PageNum = int(pn)
+				case int:
+					info.PageNum = pn
+				case int64:
+					info.PageNum = int(pn)
+				}
+				if info.ID != "" {
+					headings = append(headings, info)
+				}
+			}
+		}
+	}
+
+	return headings, nil
+}
+
 func launchBrowser(client *pw.Playwright, name string) (pw.Browser, error) {
 	headless := pw.Bool(true)
 	launchOpts := pw.BrowserTypeLaunchOptions{Headless: headless}
