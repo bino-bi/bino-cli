@@ -84,6 +84,12 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
             return fileRefLocation;
         }
 
+        // Check for sources array items (DocumentArtefact)
+        const sourcesLocation = this.getSourcesFileLocation(document, line, position);
+        if (sourcesLocation) {
+            return sourcesLocation;
+        }
+
         const wordRange = document.getWordRangeAtPosition(position, /[\w$-]+/);
 
         if (!wordRange) {
@@ -326,5 +332,104 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
         } catch {
             return undefined;
         }
+    }
+
+    /**
+     * Check if the cursor is in a sources array and return a Location to the markdown file.
+     * Handles both string format (- ./path.md) and object format (file: ./path.md).
+     * Skips glob patterns (paths containing *, ?, or [).
+     */
+    private getSourcesFileLocation(
+        document: vscode.TextDocument,
+        line: string,
+        position: vscode.Position
+    ): vscode.Location | undefined {
+        // Check if we're in a sources array context
+        if (!this.isInSourcesArray(document, position)) {
+            return undefined;
+        }
+
+        const trimmed = line.trim();
+        let filePath: string | undefined;
+        let pathStart: number;
+        let pathEnd: number;
+
+        // Try string format: - ./path.md or - path.md
+        const stringMatch = trimmed.match(/^-\s*(.+)$/);
+        if (stringMatch) {
+            filePath = stringMatch[1].trim();
+            pathStart = line.indexOf(filePath);
+            pathEnd = pathStart + filePath.length;
+        }
+
+        // Try object format: file: ./path.md
+        const objectMatch = trimmed.match(/^file:\s*(.+)$/);
+        if (!filePath && objectMatch) {
+            filePath = objectMatch[1].trim();
+            pathStart = line.indexOf(filePath);
+            pathEnd = pathStart + filePath.length;
+        }
+
+        if (!filePath) {
+            return undefined;
+        }
+
+        // Skip glob patterns (contain *, ?, or [)
+        if (/[*?\[]/.test(filePath)) {
+            return undefined;
+        }
+
+        // Check if cursor is on the file path
+        if (position.character < pathStart || position.character > pathEnd) {
+            return undefined;
+        }
+
+        // Resolve the file path relative to the document
+        const documentDir = path.dirname(document.uri.fsPath);
+        const resolvedPath = path.isAbsolute(filePath)
+            ? filePath
+            : path.resolve(documentDir, filePath);
+
+        // Check if the file exists
+        try {
+            if (!fs.existsSync(resolvedPath)) {
+                return undefined;
+            }
+
+            const uri = vscode.Uri.file(resolvedPath);
+            return new vscode.Location(uri, new vscode.Position(0, 0));
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * Check if the cursor is within a sources array.
+     */
+    private isInSourcesArray(document: vscode.TextDocument, position: vscode.Position): boolean {
+        // Look backwards to find if we're in a sources array
+        for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 20; lineNum--) {
+            const line = document.lineAt(lineNum).text;
+            const trimmed = line.trim();
+
+            if (trimmed.startsWith('sources:')) {
+                // Check if current line is indented more than this line (is a child)
+                const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                const parentIndent = this.getIndentation(line);
+                if (currentIndent > parentIndent) {
+                    return true;
+                }
+            }
+
+            // Stop if we hit a different top-level key at same or less indentation
+            if (trimmed.endsWith(':') && !trimmed.startsWith('-') && !trimmed.startsWith('#')) {
+                const thisIndent = this.getIndentation(line);
+                const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                if (thisIndent <= currentIndent && lineNum !== position.line) {
+                    break;
+                }
+            }
+        }
+        return false;
     }
 }

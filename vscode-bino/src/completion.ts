@@ -81,6 +81,11 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             return this.getRefCompletions(document, position);
         }
 
+        // Check for sources array in DocumentArtefact
+        if (this.isSourcesField(document, position, linePrefix)) {
+            return this.getSourcesCompletions(document);
+        }
+
         return undefined;
     }
 
@@ -498,5 +503,148 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
         items.push(fileRefItem);
 
         return items;
+    }
+
+    /**
+     * Check if we're in the sources array of a DocumentArtefact.
+     */
+    private isSourcesField(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        linePrefix: string
+    ): boolean {
+        const trimmed = linePrefix.trim();
+
+        // Check if we're at "sources:" or starting an array item under sources
+        if (trimmed === 'sources:' || trimmed.startsWith('sources: ')) {
+            return true;
+        }
+
+        // Check if we're in a sources array item (- ./path or just after -)
+        if (trimmed === '-' || trimmed.startsWith('- ')) {
+            // Look backwards to find if we're under sources:
+            for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 15; lineNum--) {
+                const line = document.lineAt(lineNum).text;
+                const lineTrimmed = line.trim();
+
+                if (lineTrimmed.startsWith('sources:')) {
+                    const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                    const parentIndent = this.getIndentation(line);
+                    if (currentIndent > parentIndent) {
+                        return true;
+                    }
+                }
+
+                // Stop if we hit a different top-level key
+                if (lineTrimmed.endsWith(':') && !lineTrimmed.startsWith('-') && !lineTrimmed.startsWith('#')) {
+                    const thisIndent = this.getIndentation(line);
+                    const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                    if (thisIndent <= currentIndent && lineNum !== position.line) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get completions for sources array - suggests markdown files and glob patterns.
+     */
+    private getSourcesCompletions(document: vscode.TextDocument): vscode.CompletionItem[] {
+        const items: vscode.CompletionItem[] = [];
+        const documentDir = path.dirname(document.uri.fsPath);
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+
+        // Suggest common glob patterns first
+        const globPatterns = [
+            { pattern: './docs/**/*.md', description: 'All markdown files in docs folder (recursive)' },
+            { pattern: './docs/*.md', description: 'Markdown files directly in docs folder' },
+            { pattern: './*.md', description: 'Markdown files in current folder' },
+        ];
+
+        for (const glob of globPatterns) {
+            const item = new vscode.CompletionItem(glob.pattern, vscode.CompletionItemKind.Snippet);
+            item.detail = 'Glob pattern';
+            item.documentation = new vscode.MarkdownString(glob.description);
+            item.sortText = `0_${glob.pattern}`; // Sort patterns first
+            items.push(item);
+        }
+
+        if (!workspaceFolder) {
+            return items;
+        }
+
+        // Find markdown files in the workspace
+        try {
+            const files = this.findMarkdownFiles(workspaceFolder.uri.fsPath);
+
+            for (const file of files) {
+                // Calculate relative path from the document's directory
+                let relativePath = path.relative(documentDir, file);
+
+                // Normalize to forward slashes and add ./ prefix if needed
+                relativePath = relativePath.replace(/\\/g, '/');
+                if (!relativePath.startsWith('.') && !relativePath.startsWith('/')) {
+                    relativePath = './' + relativePath;
+                }
+
+                const item = new vscode.CompletionItem(relativePath, vscode.CompletionItemKind.File);
+                item.detail = 'Markdown file';
+                item.documentation = new vscode.MarkdownString(`Full path: \`${file}\``);
+                item.sortText = `1_${relativePath}`; // Sort files after patterns
+
+                items.push(item);
+            }
+        } catch {
+            // Ignore errors when searching for files
+        }
+
+        return items;
+    }
+
+    /**
+     * Find markdown files in a directory recursively.
+     */
+    private findMarkdownFiles(dir: string): string[] {
+        const files: string[] = [];
+        const maxDepth = 5;
+
+        const search = (currentDir: string, depth: number) => {
+            if (depth > maxDepth) {
+                return;
+            }
+
+            try {
+                const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+                for (const entry of entries) {
+                    const fullPath = path.join(currentDir, entry.name);
+
+                    // Skip hidden directories and common non-project directories
+                    if (entry.isDirectory()) {
+                        if (entry.name.startsWith('.') ||
+                            entry.name === 'node_modules' ||
+                            entry.name === 'vendor' ||
+                            entry.name === 'dist' ||
+                            entry.name === 'build') {
+                            continue;
+                        }
+                        search(fullPath, depth + 1);
+                    } else if (entry.isFile()) {
+                        const ext = path.extname(entry.name).toLowerCase();
+                        if (ext === '.md') {
+                            files.push(fullPath);
+                        }
+                    }
+                }
+            } catch {
+                // Ignore permission errors
+            }
+        };
+
+        search(dir, 0);
+        return files;
     }
 }

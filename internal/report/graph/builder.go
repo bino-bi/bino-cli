@@ -546,19 +546,21 @@ func (b *builder) buildDocumentArtefacts() error {
 		}
 
 		// Create markdown file nodes as dependencies
+		// Note: For graph building, we use the raw source paths (including globs)
+		// since glob resolution requires filesystem access
 		var deps []string
 		for _, src := range spec.Sources {
-			mdFileID := makeNodeID(NodeMarkdownFile, src.File)
+			mdFileID := makeNodeID(NodeMarkdownFile, src)
 			if _, exists := b.nodes[mdFileID]; !exists {
 				b.nodes[mdFileID] = &Node{
 					ID:         mdFileID,
 					Kind:       NodeMarkdownFile,
-					Name:       src.File,
-					Label:      src.File,
-					File:       src.File,
+					Name:       src,
+					Label:      src,
+					File:       src,
 					DependsOn:  nil,
 					Attributes: map[string]string{},
-					baseDigest: hashBytes([]byte(src.File)),
+					baseDigest: hashBytes([]byte(src)),
 				}
 			}
 			deps = append(deps, mdFileID)
@@ -566,7 +568,7 @@ func (b *builder) buildDocumentArtefacts() error {
 
 		id := makeNodeID(NodeDocumentArtefact, doc.Name)
 		attrs := map[string]string{
-			"sources": fmt.Sprintf("%d files", len(spec.Sources)),
+			"sources": fmt.Sprintf("%d patterns", len(spec.Sources)),
 		}
 		if spec.Format != "" {
 			attrs["format"] = spec.Format
@@ -589,6 +591,12 @@ func (b *builder) buildDocumentArtefacts() error {
 }
 
 type documentArtefactSpec struct {
+	Sources []string `json:"sources"`
+	Format  string   `json:"format"`
+}
+
+// documentArtefactSpecLegacy supports the legacy object format for sources.
+type documentArtefactSpecLegacy struct {
 	Sources []struct {
 		File string `json:"file"`
 	} `json:"sources"`
@@ -596,13 +604,31 @@ type documentArtefactSpec struct {
 }
 
 func parseDocumentArtefactSpec(raw json.RawMessage) (*documentArtefactSpec, error) {
+	// Try new format first (string array)
 	var payload struct {
 		Spec documentArtefactSpec `json:"spec"`
 	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	if err := json.Unmarshal(raw, &payload); err == nil && len(payload.Spec.Sources) > 0 {
+		// Check if first element looks like a string (not empty)
+		return &payload.Spec, nil
+	}
+
+	// Try legacy format (object array)
+	var legacyPayload struct {
+		Spec documentArtefactSpecLegacy `json:"spec"`
+	}
+	if err := json.Unmarshal(raw, &legacyPayload); err != nil {
 		return nil, err
 	}
-	return &payload.Spec, nil
+
+	// Convert legacy format to new format
+	spec := &documentArtefactSpec{
+		Format: legacyPayload.Spec.Format,
+	}
+	for _, src := range legacyPayload.Spec.Sources {
+		spec.Sources = append(spec.Sources, src.File)
+	}
+	return spec, nil
 }
 
 func (b *builder) computeHashes() error {
