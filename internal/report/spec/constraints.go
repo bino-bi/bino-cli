@@ -29,6 +29,8 @@ type ConstraintContext struct {
 	Spec map[string]any
 	// Mode is the current execution mode (build or preview)
 	Mode Mode
+	// ArtefactKind is the kind of artefact being evaluated: "report", "screenshot", "document", or "livereport"
+	ArtefactKind string
 }
 
 // ConstraintError represents a constraint evaluation error with helpful details.
@@ -191,12 +193,12 @@ func validateLeftOperand(left string) *ConstraintError {
 	}
 
 	switch root {
-	case "spec", "labels", "mode":
+	case "spec", "labels", "mode", "artefactKind":
 		// valid roots
 	default:
 		return &ConstraintError{
 			Reason: fmt.Sprintf("unknown root %q in left operand", root),
-			Hint:   "left side must start with 'spec.', 'labels.', or be 'mode'",
+			Hint:   "left side must start with 'spec.', 'labels.', or be 'mode' or 'artefactKind'",
 		}
 	}
 
@@ -369,6 +371,9 @@ func (c *Constraint) Evaluate(ctx *ConstraintContext) (bool, error) {
 	switch {
 	case c.Left == "mode":
 		actual = string(ctx.Mode)
+
+	case c.Left == "artefactKind":
+		actual = ctx.ArtefactKind
 
 	case strings.HasPrefix(c.Left, "labels."):
 		key := strings.TrimPrefix(c.Left, "labels.")

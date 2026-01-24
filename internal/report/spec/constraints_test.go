@@ -88,6 +88,21 @@ func TestParseConstraint(t *testing.T) {
 			expr:    "labels==value",
 			wantErr: true,
 		},
+		{
+			name: "artefactKind equals",
+			expr: "artefactKind==report",
+			want: &Constraint{Raw: "artefactKind==report", Left: "artefactKind", Operator: "==", Right: "report"},
+		},
+		{
+			name: "artefactKind not equals",
+			expr: "artefactKind!=screenshot",
+			want: &Constraint{Raw: "artefactKind!=screenshot", Left: "artefactKind", Operator: "!=", Right: "screenshot"},
+		},
+		{
+			name: "artefactKind in",
+			expr: "artefactKind in [report,document]",
+			want: &Constraint{Raw: "artefactKind in [report,document]", Left: "artefactKind", Operator: "in", Values: []string{"report", "document"}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -219,6 +234,54 @@ func TestConstraintEvaluate(t *testing.T) {
 			expr:    "mode==preview",
 			ctx:     nil,
 			wantErr: true,
+		},
+		{
+			name: "artefactKind equals match",
+			expr: "artefactKind==report",
+			ctx:  &ConstraintContext{ArtefactKind: "report"},
+			want: true,
+		},
+		{
+			name: "artefactKind equals no match",
+			expr: "artefactKind==report",
+			ctx:  &ConstraintContext{ArtefactKind: "screenshot"},
+			want: false,
+		},
+		{
+			name: "artefactKind not equals match",
+			expr: "artefactKind!=screenshot",
+			ctx:  &ConstraintContext{ArtefactKind: "report"},
+			want: true,
+		},
+		{
+			name: "artefactKind not equals no match",
+			expr: "artefactKind!=report",
+			ctx:  &ConstraintContext{ArtefactKind: "report"},
+			want: false,
+		},
+		{
+			name: "artefactKind in match",
+			expr: "artefactKind in [report,document]",
+			ctx:  &ConstraintContext{ArtefactKind: "document"},
+			want: true,
+		},
+		{
+			name: "artefactKind in no match",
+			expr: "artefactKind in [report,document]",
+			ctx:  &ConstraintContext{ArtefactKind: "screenshot"},
+			want: false,
+		},
+		{
+			name: "artefactKind not-in match",
+			expr: "artefactKind not-in [screenshot]",
+			ctx:  &ConstraintContext{ArtefactKind: "report"},
+			want: true,
+		},
+		{
+			name: "artefactKind not-in no match",
+			expr: "artefactKind not-in [report,document]",
+			ctx:  &ConstraintContext{ArtefactKind: "report"},
+			want: false,
 		},
 	}
 

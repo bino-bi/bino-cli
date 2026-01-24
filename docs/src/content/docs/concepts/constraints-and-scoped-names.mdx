@@ -86,6 +86,7 @@ The left side (or `field` property) determines what is being checked:
 | Field Path     | Description                        | Example Values           |
 | -------------- | ---------------------------------- | ------------------------ |
 | `mode`         | Current execution mode             | `build`, `preview`, `serve` |
+| `artefactKind` | Type of artefact being built       | `report`, `screenshot`, `document`, `livereport` |
 | `labels.<key>` | Artefact's `metadata.labels.<key>` | Any string value         |
 | `spec.<field>` | Artefact's `spec.<field>`          | Format, orientation, etc. |
 
@@ -119,6 +120,15 @@ Constraints are evaluated against the target `ReportArtefact`:
 | `build`   | Building artefacts for production output (PDF/HTML) | `bino build`   |
 | `preview` | Live preview during development with hot reload     | `bino preview` |
 | `serve`   | Production serving via LiveReportArtefact           | `bino serve`   |
+
+### Artefact kinds
+
+| Kind         | Description                                    | Artefact Type        |
+| ------------ | ---------------------------------------------- | -------------------- |
+| `report`     | Standard data-driven PDF reports               | `ReportArtefact`     |
+| `screenshot` | Component screenshots for testing              | `ScreenshotArtefact` |
+| `document`   | Markdown-based documents                       | `DocumentArtefact`   |
+| `livereport` | Interactive web reports with routes            | `LiveReportArtefact` |
 
 ### Example artefact with labels
 
@@ -285,6 +295,37 @@ metadata:
     - mode not-in [serve]   # Included in build and preview, but not serve
 spec:
   # ...
+```
+
+### Artefact kind filtering
+
+Include components only for specific artefact types:
+
+```yaml
+# Include this data source only in ReportArtefacts (not DocumentArtefacts)
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: complex_dashboard_data
+  constraints:
+    - artefactKind==report
+spec:
+  type: postgres_query
+  # ... complex query for dashboard
+```
+
+Or exclude from specific artefact types:
+
+```yaml
+# Include everywhere except ScreenshotArtefacts
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: fullPage
+  constraints:
+    - artefactKind not-in [screenshot]
+spec:
+  # Full page layout
 ```
 
 ### Format-specific layouts

@@ -1493,10 +1493,21 @@
           "description": "Optional list of keywords stored in PDF metadata."
         },
         "sources": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/documentSource" },
-          "minItems": 1,
-          "description": "Ordered list of markdown files to include in the document."
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1,
+              "description": "String array of markdown file paths or glob patterns (e.g., ['./docs/*.md', './intro.md'])."
+            },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/documentSource" },
+              "minItems": 1,
+              "description": "Legacy object array format (deprecated, use string array instead)."
+            }
+          ],
+          "description": "Ordered list of markdown files to include in the document. Supports glob patterns (e.g., './docs/*.md')."
         },
         "stylesheet": {
           "type": "string",
@@ -1546,6 +1557,7 @@
     "documentSource": {
       "type": "object",
       "required": ["file"],
+      "deprecated": true,
       "properties": {
         "file": {
           "type": "string",
@@ -1553,7 +1565,8 @@
           "description": "Path to a markdown file (relative to the manifest file)."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Deprecated: Use string paths directly in the sources array instead of objects with file property."
     },
     "signingProfileSpec": {
       "type": "object",

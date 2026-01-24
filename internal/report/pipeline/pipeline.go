@@ -569,9 +569,40 @@ func buildScreenshotConstraintContext(artefact config.ScreenshotArtefact, mode s
 	}
 
 	return &spec.ConstraintContext{
-		Labels: artefact.Labels,
-		Spec:   specMap,
-		Mode:   mode,
+		Labels:       artefact.Labels,
+		Spec:         specMap,
+		Mode:         mode,
+		ArtefactKind: "screenshot",
+	}, nil
+}
+
+// buildDocumentConstraintContext creates a constraint context from a document artefact.
+func buildDocumentConstraintContext(artefact config.DocumentArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("document artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
+	}
+
+	return &spec.ConstraintContext{
+		Labels:       artefact.Labels,
+		Spec:         specMap,
+		Mode:         mode,
+		ArtefactKind: "document",
+	}, nil
+}
+
+// buildLiveConstraintContext creates a constraint context from a live artefact.
+func buildLiveConstraintContext(artefact config.LiveArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("live artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
+	}
+
+	return &spec.ConstraintContext{
+		Labels:       nil, // LiveArtefact doesn't have labels field
+		Spec:         specMap,
+		Mode:         mode,
+		ArtefactKind: "livereport",
 	}, nil
 }
 
@@ -785,9 +816,10 @@ func buildConstraintContext(artefact config.Artefact, mode spec.Mode) (*spec.Con
 	}
 
 	return &spec.ConstraintContext{
-		Labels: artefact.Labels,
-		Spec:   specMap,
-		Mode:   mode,
+		Labels:       artefact.Labels,
+		Spec:         specMap,
+		Mode:         mode,
+		ArtefactKind: "report",
 	}, nil
 }
 
@@ -915,13 +947,15 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 		manifestDir = workdir
 	}
 
-	logger.Debugf("Rendering DocumentArtefact %s with %d source(s)", artefact.Document.Name, len(spec.Sources))
+	logger.Debugf("Rendering DocumentArtefact %s with %d source pattern(s)", artefact.Document.Name, len(spec.Sources))
 
-	// Extract file paths from sources
-	files := make([]string, len(spec.Sources))
-	for i, src := range spec.Sources {
-		files[i] = src.File
+	// Resolve source files (expand globs, filter .md files, sort)
+	files, err := markdown.ResolveSourceFiles(manifestDir, spec.Sources)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
 	}
+
+	logger.Debugf("Resolved %d markdown file(s) from sources", len(files))
 
 	// Load custom stylesheet if specified
 	var customCSS string
