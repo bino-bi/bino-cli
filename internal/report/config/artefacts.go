@@ -361,7 +361,7 @@ type DocumentArtefactSpec struct {
 	Author                  string           `json:"author"`
 	Subject                 string           `json:"subject"`
 	Keywords                []string         `json:"keywords"`
-	Sources                 []DocumentSource `json:"sources"`
+	Sources                 SourcesOrStrings `json:"sources"`
 	Stylesheet              string           `json:"stylesheet"`
 	TableOfContents         bool             `json:"tableOfContents"`
 	PageBreakBetweenSources bool             `json:"pageBreakBetweenSources"`
@@ -374,7 +374,44 @@ type DocumentArtefactSpec struct {
 	MarginBottom        string `json:"marginBottom,omitempty"`
 }
 
+// SourcesOrStrings is a flexible type for document sources that supports both:
+// - New format: ["./docs/*.md", "./other.md"] (string array with glob support)
+// - Legacy format: [{file: "./path.md"}] (object array for backward compatibility)
+type SourcesOrStrings []string
+
+// UnmarshalJSON implements json.Unmarshaler for SourcesOrStrings.
+// It accepts both a string array and an array of DocumentSource objects.
+func (s *SourcesOrStrings) UnmarshalJSON(data []byte) error {
+	// Try string array first (new format)
+	var strings []string
+	if err := json.Unmarshal(data, &strings); err == nil {
+		*s = strings
+		return nil
+	}
+
+	// Try object array (legacy format)
+	var sources []DocumentSource
+	if err := json.Unmarshal(data, &sources); err != nil {
+		return fmt.Errorf("sources must be either a string array or array of {file: string} objects: %w", err)
+	}
+
+	// Convert to string array
+	result := make([]string, len(sources))
+	for i, src := range sources {
+		result[i] = src.File
+	}
+	*s = result
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler for SourcesOrStrings.
+// It always marshals as a string array (new format).
+func (s SourcesOrStrings) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(s))
+}
+
 // DocumentSource specifies a markdown file to include in the document.
+// Deprecated: Use string paths directly in the sources array instead.
 type DocumentSource struct {
 	File string `json:"file"`
 }

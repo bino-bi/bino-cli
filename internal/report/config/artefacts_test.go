@@ -206,3 +206,146 @@ func TestFindLiveArtefact(t *testing.T) {
 		t.Fatalf("expected nil for non-existent artefact")
 	}
 }
+
+func TestSourcesOrStrings_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+		wantErr  bool
+	}{
+		{
+			name:     "string array format",
+			input:    `["./docs/intro.md", "./docs/chapter1.md"]`,
+			expected: []string{"./docs/intro.md", "./docs/chapter1.md"},
+			wantErr:  false,
+		},
+		{
+			name:     "string array with glob pattern",
+			input:    `["./docs/*.md", "./appendix/a.md"]`,
+			expected: []string{"./docs/*.md", "./appendix/a.md"},
+			wantErr:  false,
+		},
+		{
+			name:     "legacy object array format",
+			input:    `[{"file": "./docs/intro.md"}, {"file": "./docs/chapter1.md"}]`,
+			expected: []string{"./docs/intro.md", "./docs/chapter1.md"},
+			wantErr:  false,
+		},
+		{
+			name:     "empty array",
+			input:    `[]`,
+			expected: []string{},
+			wantErr:  false,
+		},
+		{
+			name:    "invalid format - object",
+			input:   `{"file": "test.md"}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sources SourcesOrStrings
+			err := json.Unmarshal([]byte(tt.input), &sources)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if len(sources) != len(tt.expected) {
+					t.Errorf("UnmarshalJSON() got %d items, want %d", len(sources), len(tt.expected))
+					return
+				}
+				for i, v := range sources {
+					if v != tt.expected[i] {
+						t.Errorf("UnmarshalJSON()[%d] = %v, want %v", i, v, tt.expected[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSourcesOrStrings_MarshalJSON(t *testing.T) {
+	sources := SourcesOrStrings{"./docs/intro.md", "./docs/*.md"}
+	data, err := json.Marshal(sources)
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+
+	expected := `["./docs/intro.md","./docs/*.md"]`
+	if string(data) != expected {
+		t.Errorf("MarshalJSON() = %s, want %s", string(data), expected)
+	}
+}
+
+func TestCollectDocumentArtefacts(t *testing.T) {
+	tests := []struct {
+		name           string
+		sources        any
+		expectedCount  int
+		expectedSource string
+	}{
+		{
+			name:           "string array format",
+			sources:        []string{"./docs/intro.md", "./docs/chapter1.md"},
+			expectedCount:  2,
+			expectedSource: "./docs/intro.md",
+		},
+		{
+			name: "legacy object array format",
+			sources: []map[string]string{
+				{"file": "./docs/intro.md"},
+				{"file": "./docs/chapter1.md"},
+			},
+			expectedCount:  2,
+			expectedSource: "./docs/intro.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := map[string]any{
+				"spec": map[string]any{
+					"format":   "a4",
+					"filename": "test.pdf",
+					"title":    "Test",
+					"sources":  tt.sources,
+				},
+			}
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("marshal payload: %v", err)
+			}
+
+			doc := Document{
+				File:     "test.yaml",
+				Position: 1,
+				Kind:     "DocumentArtefact",
+				Name:     "test-doc",
+				Raw:      raw,
+			}
+
+			artefacts, err := CollectDocumentArtefacts([]Document{doc})
+			if err != nil {
+				t.Fatalf("CollectDocumentArtefacts() error = %v", err)
+			}
+
+			if len(artefacts) != 1 {
+				t.Fatalf("expected 1 artefact, got %d", len(artefacts))
+			}
+
+			if len(artefacts[0].Spec.Sources) != tt.expectedCount {
+				t.Errorf("expected %d sources, got %d", tt.expectedCount, len(artefacts[0].Spec.Sources))
+			}
+
+			if len(artefacts[0].Spec.Sources) > 0 && artefacts[0].Spec.Sources[0] != tt.expectedSource {
+				t.Errorf("first source = %q, want %q", artefacts[0].Spec.Sources[0], tt.expectedSource)
+			}
+		})
+	}
+}

@@ -24,9 +24,9 @@ spec:
   subject: "Product Documentation"
   keywords: ["manual", "technical", "documentation"]
   sources:
-    - file: ./docs/introduction.md
-    - file: ./docs/installation.md
-    - file: ./docs/configuration.md
+    - ./docs/introduction.md
+    - ./docs/installation.md
+    - ./docs/configuration.md
   stylesheet: ./styles/manual.css
   tableOfContents: true
   pageBreakBetweenSources: true
@@ -54,9 +54,24 @@ spec:
 
 ### Content sources
 
-- `spec.sources` – List of Markdown files to include in the document. Files are processed in order.
+- `spec.sources` – List of Markdown file paths or glob patterns to include in the document.
+  Files matching glob patterns are sorted alphabetically for deterministic ordering.
+  Supports patterns like `./docs/*.md` or `./docs/**/*.md`.
 - `spec.stylesheet` – Optional path to a custom CSS file for styling.
 - `spec.pageBreakBetweenSources` – Insert page breaks between source files. Default: `false`.
+
+#### Glob patterns
+
+You can use glob patterns to include multiple markdown files:
+
+```yaml
+sources:
+  - ./docs/**/*.md       # All .md files in docs folder (recursive)
+  - ./appendix/*.md      # All .md files directly in appendix folder
+  - ./README.md          # Single file
+```
+
+Files are deduplicated if patterns overlap, and sorted alphabetically within each pattern expansion.
 
 ### Table of contents
 
@@ -149,7 +164,7 @@ spec:
   filename: readme.pdf
   title: "Project README"
   sources:
-    - file: ./README.md
+    - ./README.md
 ```
 
 ### Document with TOC and page numbers
@@ -170,9 +185,9 @@ spec:
   marginTop: "20mm"
   marginBottom: "15mm"
   sources:
-    - file: ./docs/getting-started.md
-    - file: ./docs/features.md
-    - file: ./docs/troubleshooting.md
+    - ./docs/getting-started.md
+    - ./docs/features.md
+    - ./docs/troubleshooting.md
   pageBreakBetweenSources: true
 ```
 
@@ -192,9 +207,9 @@ spec:
   marginTop: "20mm"
   marginBottom: "15mm"
   sources:
-    - file: ./narrative/executive-summary.md
-    - file: ./narrative/financial-analysis.md
-    - file: ./narrative/outlook.md
+    - ./narrative/executive-summary.md
+    - ./narrative/financial-analysis.md
+    - ./narrative/outlook.md
 ```
 
 Where `executive-summary.md` might contain:
@@ -238,7 +253,23 @@ spec:
       Page <span class="pageNumber"></span> of <span class="totalPages"></span> | Confidential
     </div>
   sources:
-    - file: ./manual/introduction.md
-    - file: ./manual/usage.md
-    - file: ./manual/reference.md
+    - ./manual/introduction.md
+    - ./manual/usage.md
+    - ./manual/reference.md
+```
+
+### Document with glob patterns
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: complete_docs
+spec:
+  filename: complete-documentation.pdf
+  title: "Complete Documentation"
+  tableOfContents: true
+  pageBreakBetweenSources: true
+  sources:
+    - ./docs/**/*.md    # Include all markdown files recursively
 ```
