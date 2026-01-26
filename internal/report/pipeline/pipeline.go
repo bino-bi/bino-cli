@@ -977,16 +977,19 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
 
 	// Render markdown files to HTML content with full context
+	mathEnabled := spec.MathEnabled()
 	content, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
 		RenderOptions: markdown.RenderOptions{
 			BaseDir:               manifestDir,
 			Stylesheet:            spec.Stylesheet,
 			TableOfContents:       spec.TableOfContents,
 			PageBreakBetweenFiles: spec.PageBreakBetweenSources,
+			Math:                  mathEnabled,
 		},
 		RenderContext:  renderCtx,
 		Locale:         spec.Locale,
 		TOCPageNumbers: opts.TOCPageNumbers,
+		Math:           mathEnabled,
 	})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)

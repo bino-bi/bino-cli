@@ -101,8 +101,9 @@ var numberFields = map[string]bool{
 	"ac4":  true, "pp4": true, "fc4": true, "pl4": true,
 }
 
-// ISO 8601 date pattern (YYYY-MM-DD).
-var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+// datePattern matches ISO 8601 dates (YYYY-MM-DD) and datetimes
+// (YYYY-MM-DDThh:mm:ss with optional timezone offset or Z).
+var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})?)?$`)
 
 // ValidateRows validates dataset rows against the dataset schema.
 // It samples up to sampleSize rows for efficiency on large datasets.
@@ -156,8 +157,12 @@ func validateRow(rowIndex int, row map[string]any) []DataValidationError {
 	var errors []DataValidationError
 
 	for field, value := range row {
-		// Skip null values - they're always allowed
+		// Skip null values - they're always allowed.
+		// CSV sources may represent null as the literal string "null".
 		if value == nil {
+			continue
+		}
+		if s, ok := value.(string); ok && s == "null" {
 			continue
 		}
 
@@ -215,8 +220,8 @@ func validateRow(rowIndex int, row map[string]any) []DataValidationError {
 						RowIndex: rowIndex,
 						Field:    field,
 						Code:     "invalid-date-format",
-						Message:  fmt.Sprintf("Invalid date format %q. Expected ISO 8601 (YYYY-MM-DD)", str),
-						Expected: "YYYY-MM-DD",
+						Message:  fmt.Sprintf("Invalid date format %q. Expected ISO 8601 date or datetime", str),
+						Expected: "YYYY-MM-DD or YYYY-MM-DDThh:mm:ss with optional timezone",
 						Actual:   str,
 					})
 				}
@@ -241,20 +246,43 @@ func validateRow(rowIndex int, row map[string]any) []DataValidationError {
 	return errors
 }
 
-// isNumber checks if a value is a numeric type.
+// isNumber checks if a value is a numeric type or a string that represents a number.
+// Strings with comma decimal separators (e.g., "936,6667") are accepted since
+// CSV data loaded through DuckDB may preserve locale-specific number formatting.
 func isNumber(v any) bool {
 	switch v.(type) {
 	case float64, float32, int, int32, int64, uint, uint32, uint64, json.Number:
 		return true
+	case string:
+		s := v.(string)
+		// Try parsing directly (handles "123", "1.5", "-3.14")
+		if _, err := strconv.ParseFloat(s, 64); err == nil {
+			return true
+		}
+		// Try with comma decimal separator replaced (handles "936,6667")
+		if strings.ContainsRune(s, ',') {
+			normalized := strings.Replace(s, ",", ".", 1)
+			if _, err := strconv.ParseFloat(normalized, 64); err == nil {
+				return true
+			}
+		}
+		return false
 	default:
 		return false
 	}
 }
 
 // hasField checks if a row has a non-nil field.
+// The string "null" (from CSV sources) is treated as absent.
 func hasField(row map[string]any, field string) bool {
 	val, ok := row[field]
-	return ok && val != nil
+	if !ok || val == nil {
+		return false
+	}
+	if s, ok := val.(string); ok && s == "null" {
+		return false
+	}
+	return true
 }
 
 // DataValidationResultToWarnings converts validation results to Warning structs.
