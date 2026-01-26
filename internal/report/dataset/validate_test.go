@@ -57,7 +57,7 @@ func TestValidateRows_InvalidType_Number(t *testing.T) {
 	if result.Valid {
 		t.Error("expected invalid result for wrong type")
 	}
-	// Expect 2 errors: categoryIndex and ac1 both wrong type
+	// Expect 2 errors: categoryIndex and ac1 both wrong type (non-numeric strings)
 	if len(result.Errors) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(result.Errors), result.Errors)
 	}
@@ -65,6 +65,27 @@ func TestValidateRows_InvalidType_Number(t *testing.T) {
 		if err.Code != "invalid-type" {
 			t.Errorf("expected code 'invalid-type', got %q", err.Code)
 		}
+	}
+}
+
+func TestValidateRows_NumericStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		data json.RawMessage
+	}{
+		{"dot-decimal", json.RawMessage(`[{"ac1": "936.6667", "category": "Sales", "categoryIndex": "1"}]`)},
+		{"comma-decimal", json.RawMessage(`[{"ac1": "936,6667", "fc1": "37543,89"}]`)},
+		{"integer-string", json.RawMessage(`[{"ac1": "100", "pp1": "0"}]`)},
+		{"negative-string", json.RawMessage(`[{"ac1": "-50.5"}]`)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ValidateRows("test-dataset", tt.data, 10)
+			if !result.Valid {
+				t.Errorf("expected valid result for numeric strings, got errors: %v", result.Errors)
+			}
+		})
 	}
 }
 
@@ -138,12 +159,26 @@ func TestValidateRows_InvalidDateFormat(t *testing.T) {
 }
 
 func TestValidateRows_ValidDateFormat(t *testing.T) {
-	data := json.RawMessage(`[{"date": "2024-01-15"}]`)
+	tests := []struct {
+		name string
+		date string
+	}{
+		{"date-only", "2024-01-15"},
+		{"datetime-utc", "2019-12-30T23:00:00Z"},
+		{"datetime-offset", "2019-12-31T00:00:00+01:00"},
+		{"datetime-negative-offset", "2024-06-15T12:30:00-05:00"},
+		{"datetime-no-tz", "2024-01-15T10:30:00"},
+	}
 
-	result := ValidateRows("test-dataset", data, 10)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := json.RawMessage(`[{"date": "` + tt.date + `"}]`)
+			result := ValidateRows("test-dataset", data, 10)
 
-	if !result.Valid {
-		t.Errorf("expected valid result, got errors: %v", result.Errors)
+			if !result.Valid {
+				t.Errorf("expected valid result for date %q, got errors: %v", tt.date, result.Errors)
+			}
+		})
 	}
 }
 
@@ -205,6 +240,19 @@ func TestValidateRows_NullValues(t *testing.T) {
 
 	if !result.Valid {
 		t.Errorf("expected valid result (nulls allowed), got errors: %v", result.Errors)
+	}
+}
+
+func TestValidateRows_StringNullFromCSV(t *testing.T) {
+	// CSV sources represent null as the literal string "null"
+	data := json.RawMessage(`[
+		{"columnGroup": "null", "columnGroupIndex": "null", "columnSubGroup": "null", "columnSubGroupIndex": "null", "ac1": "null"}
+	]`)
+
+	result := ValidateRows("test-dataset", data, 10)
+
+	if !result.Valid {
+		t.Errorf("expected valid result (string 'null' treated as null), got errors: %v", result.Errors)
 	}
 }
 

@@ -258,3 +258,79 @@ func TestGetPageSize(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderFilesWithMath(t *testing.T) {
+	// Create temp directory with test markdown files
+	tmpDir := t.TempDir()
+
+	// Create test markdown file with math
+	mdMath := `# Math Example
+
+Inline math: $E = mc^2$
+
+Block math:
+
+$$\sum_{i=1}^n x_i = x_1 + x_2 + \cdots + x_n$$
+
+End of document.
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "math.md"), []byte(mdMath), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		mathEnabled bool
+		contains    []string
+		notContains []string
+	}{
+		{
+			name:        "math disabled - raw latex preserved",
+			mathEnabled: false,
+			contains: []string{
+				"$E = mc^2$",
+				"$$",
+			},
+			notContains: []string{
+				"katex",
+				`class="katex"`,
+			},
+		},
+		{
+			name:        "math enabled - katex rendered",
+			mathEnabled: true,
+			contains: []string{
+				"katex", // KaTeX output contains katex class
+			},
+			notContains: []string{
+				"$E = mc^2$", // raw LaTeX should be replaced
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := RenderFilesWithContext(context.Background(), []string{"math.md"}, FullRenderOptions{
+				RenderOptions: RenderOptions{
+					BaseDir: tmpDir,
+				},
+				Math: tt.mathEnabled,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			html := string(result)
+			for _, want := range tt.contains {
+				if !strings.Contains(html, want) {
+					t.Errorf("result should contain %q", want)
+				}
+			}
+			for _, notWant := range tt.notContains {
+				if strings.Contains(html, notWant) {
+					t.Errorf("result should NOT contain %q", notWant)
+				}
+			}
+		})
+	}
+}

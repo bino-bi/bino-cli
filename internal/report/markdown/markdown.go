@@ -30,6 +30,8 @@ type RenderOptions struct {
 	TableOfContents bool
 	// PageBreakBetweenFiles inserts page breaks between source files.
 	PageBreakBetweenFiles bool
+	// Math enables LaTeX math rendering via KaTeX ($...$, $$...$$).
+	Math bool
 }
 
 // DocumentOptions configures the HTML document wrapper.

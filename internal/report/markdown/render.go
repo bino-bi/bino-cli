@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	qjskatex "github.com/graemephi/goldmark-qjs-katex"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -137,6 +138,8 @@ type FullRenderOptions struct {
 	Locale string
 	// TOCPageNumbers maps heading IDs to page numbers (from two-pass rendering).
 	TOCPageNumbers map[string]int
+	// Math enables LaTeX math rendering via KaTeX ($...$, $$...$$).
+	Math bool
 }
 
 // RenderFilesWithContext converts multiple markdown files to HTML with full bino context.
@@ -145,15 +148,23 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 	logger := logx.FromContext(ctx).Channel("markdown")
 	rc := opts.RenderContext
 
+	// Build list of extensions
+	extensions := []goldmark.Extender{
+		extension.GFM,
+		extension.Typographer,
+		extension.Footnote,
+		extension.DefinitionList,
+		NewRefExtensionWithContext(rc), // Use context-aware ref extension
+	}
+
+	// Add KaTeX extension for math rendering if enabled
+	if opts.Math {
+		extensions = append(extensions, &qjskatex.Extension{})
+	}
+
 	// Create goldmark with extensions including context-aware ref rendering
 	md := goldmark.New(
-		goldmark.WithExtensions(
-			extension.GFM,
-			extension.Typographer,
-			extension.Footnote,
-			extension.DefinitionList,
-			NewRefExtensionWithContext(rc), // Use context-aware ref extension
-		),
+		goldmark.WithExtensions(extensions...),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),
@@ -643,6 +654,31 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
       break-inside: avoid;
     }
 
+    /* Figure and caption styles */
+    .bn-figure {
+      margin: 1.5em 0;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .bn-figure figcaption {
+      font-size: 0.9em;
+      color: #555;
+      text-align: center;
+      margin-top: 0.5em;
+      font-style: italic;
+    }
+
+    /* KaTeX math styles */
+    .katex {
+      font-size: 1.1em;
+    }
+
+    .katex-display {
+      margin: 1em 0;
+      text-align: center;
+    }
+
     /* Custom styles */
     {{.CustomCSS}}
   </style>
@@ -730,6 +766,12 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 	n := node.(*RefNode)
 	kind := n.RefKind
 	name := n.RefName
+	caption := n.Caption
+
+	// Wrap in figure if caption is present
+	if caption != "" {
+		_, _ = w.WriteString(`<figure class="bn-figure">`)
+	}
 
 	// Try to resolve the reference
 	if r.rc != nil {
@@ -745,6 +787,13 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 				_, _ = w.WriteString(`">`)
 				_, _ = w.WriteString(componentHTML)
 				_, _ = w.WriteString(`</div>`)
+
+				// Close figure and add caption
+				if caption != "" {
+					_, _ = w.WriteString(`<figcaption>`)
+					_, _ = w.WriteString(html.EscapeString(caption))
+					_, _ = w.WriteString(`</figcaption></figure>`)
+				}
 				return ast.WalkContinue, nil
 			}
 			// Fall through to placeholder if rendering fails
@@ -757,6 +806,13 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 	_, _ = w.WriteString(`" name="`)
 	_, _ = w.WriteString(html.EscapeString(name))
 	_, _ = w.WriteString(`"></bn-ref>`)
+
+	// Close figure and add caption for fallback case
+	if caption != "" {
+		_, _ = w.WriteString(`<figcaption>`)
+		_, _ = w.WriteString(html.EscapeString(caption))
+		_, _ = w.WriteString(`</figcaption></figure>`)
+	}
 
 	return ast.WalkContinue, nil
 }

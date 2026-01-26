@@ -29,6 +29,7 @@ spec:
     - ./docs/configuration.md
   stylesheet: ./styles/manual.css
   tableOfContents: true
+  math: true
   pageBreakBetweenSources: true
   displayHeaderFooter: true
   marginTop: "20mm"
@@ -83,6 +84,25 @@ includes page numbers for each heading, calculated during a two-pass rendering p
 
 The TOC appears at the beginning of the document and includes a page break after it.
 
+### Math rendering
+
+- `spec.math` – Enable LaTeX math rendering via KaTeX. Default: `true`.
+
+When enabled, you can include mathematical expressions in your Markdown:
+
+- **Inline math**: Use single dollar signs `$...$` for inline expressions like `$E = mc^2$`
+- **Block math**: Use double dollar signs `$$...$$` for display equations
+
+```markdown
+The quadratic formula is $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$.
+
+For summations, use display mode:
+
+$$\sum_{i=1}^n x_i = x_1 + x_2 + \cdots + x_n$$
+```
+
+Math is rendered server-side using KaTeX, so no JavaScript is required in the output PDF.
+
 ### Header and footer
 
 - `spec.displayHeaderFooter` – Enable header and footer in the PDF. Default: `false`.
@@ -124,22 +144,39 @@ DocumentArtefact supports standard Markdown plus:
 
 ### Component references
 
-Use the `:ref[name]` syntax to embed report components (tables, charts) in your document:
+Use the `:ref[Kind:name]` syntax to embed report components (tables, charts) in your document:
 
 ```markdown
 ## Sales Overview
 
 The following table shows quarterly sales:
 
-:ref[quarterly_sales_table]
+:ref[Table:quarterly_sales]
 
 And here's the trend chart:
 
-:ref[sales_trend_chart]
+:ref[ChartTime:sales_trend]
 ```
 
-Referenced components must be defined as `Table`, `ChartTime`, `ChartTree`, etc. manifests
-in your project.
+Referenced components must be defined as `Table`, `ChartTime`, `ChartTree`, `ChartStructure`,
+`Text`, `Image`, `LayoutCard`, or `Grid` manifests in your project.
+
+### Figure captions
+
+Add captions to referenced components using the `{caption="..."}` syntax:
+
+```markdown
+:ref[Table:quarterly_sales]{caption="Table 1: Quarterly Sales by Region"}
+
+:ref[ChartTime:revenue_trend]{caption="Figure 2: Revenue Growth 2020-2024"}
+```
+
+This wraps the component in an HTML `<figure>` element with a `<figcaption>`, which:
+- Centers the caption below the component
+- Prevents page breaks inside the figure
+- Uses italic styling for the caption text
+
+Refs without a caption are rendered as before, without the figure wrapper.
 
 ### Syntax highlighting
 
@@ -221,11 +258,11 @@ This quarter showed strong growth across all regions.
 
 ## Revenue by Region
 
-:ref[revenue_by_region_table]
+:ref[Table:revenue_by_region]{caption="Table 1: Revenue by Region (in millions)"}
 
 ## Growth Trend
 
-:ref[quarterly_growth_chart]
+:ref[ChartTime:quarterly_growth]{caption="Figure 1: Quarterly Growth Rate"}
 ```
 
 ### Document with custom styling
@@ -272,4 +309,39 @@ spec:
   pageBreakBetweenSources: true
   sources:
     - ./docs/**/*.md    # Include all markdown files recursively
+```
+
+### Document with math equations
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: research_paper
+spec:
+  format: a4
+  filename: research-paper.pdf
+  title: "Statistical Analysis Methods"
+  author: "Research Team"
+  tableOfContents: true
+  math: true
+  sources:
+    - ./paper/abstract.md
+    - ./paper/methodology.md
+    - ./paper/results.md
+    - ./paper/conclusion.md
+```
+
+Where `methodology.md` might contain:
+
+```markdown
+# Methodology
+
+We use the standard deviation formula:
+
+$$\sigma = \sqrt{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^2}$$
+
+The correlation coefficient $r$ is calculated as:
+
+$$r = \frac{\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_{i=1}^n (x_i - \bar{x})^2 \sum_{i=1}^n (y_i - \bar{y})^2}}$$
 ```
