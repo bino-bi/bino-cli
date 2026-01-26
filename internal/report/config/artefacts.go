@@ -372,6 +372,17 @@ type DocumentArtefactSpec struct {
 	FooterTemplate      string `json:"footerTemplate,omitempty"`
 	MarginTop           string `json:"marginTop,omitempty"`
 	MarginBottom        string `json:"marginBottom,omitempty"`
+	// Math enables LaTeX math rendering via KaTeX ($...$, $$...$$).
+	// Pointer to distinguish unset (nil -> default true) from explicit false.
+	Math *bool `json:"math,omitempty"`
+}
+
+// MathEnabled returns whether math rendering is enabled (defaults to true).
+func (s *DocumentArtefactSpec) MathEnabled() bool {
+	if s.Math == nil {
+		return true // default
+	}
+	return *s.Math
 }
 
 // SourcesOrStrings is a flexible type for document sources that supports both:

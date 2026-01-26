@@ -1518,6 +1518,11 @@
           "default": false,
           "description": "If true, generates a table of contents from markdown headings."
         },
+        "math": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, enables LaTeX math rendering via KaTeX. Use $...$ for inline math and $$...$$ for display math."
+        },
         "pageBreakBetweenSources": {
           "type": "boolean",
           "default": true,
