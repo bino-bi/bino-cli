@@ -11,11 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	gitignore "github.com/sabhiram/go-gitignore"
 	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 )
+
+const bnignoreFile = ".bnignore"
 
 var yamlExt = map[string]struct{}{
 	".yaml": {},
@@ -68,6 +71,8 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 		lookup = EnvLookup()
 	}
 
+	ignore := loadBnignore(dir)
+
 	var (
 		docs       []Document
 		fileCount  int
@@ -83,10 +88,17 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			if shouldSkipDir(dir, path, d) {
 				return filepath.SkipDir
 			}
+			if shouldIgnorePath(dir, path, true, ignore) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
 		if _, ok := yamlExt[strings.ToLower(filepath.Ext(path))]; !ok {
+			return nil
+		}
+
+		if shouldIgnorePath(dir, path, false, ignore) {
 			return nil
 		}
 
@@ -271,4 +283,38 @@ func entrySize(path string, entry fs.DirEntry) (int64, error) {
 		return 0, fmt.Errorf("stat %s: %w", path, err)
 	}
 	return info.Size(), nil
+}
+
+// loadBnignore reads the .bnignore file from the root directory and compiles
+// the gitignore-style patterns. Returns nil if the file does not exist.
+func loadBnignore(root string) *gitignore.GitIgnore {
+	path := filepath.Join(root, bnignoreFile)
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return nil
+	}
+	ignore, err := gitignore.CompileIgnoreFile(path)
+	if err != nil {
+		return nil
+	}
+	return ignore
+}
+
+// shouldIgnorePath checks whether a path matches the .bnignore patterns.
+func shouldIgnorePath(root, path string, isDir bool, ignore *gitignore.GitIgnore) bool {
+	if ignore == nil {
+		return false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if ignore.MatchesPath(rel) {
+		return true
+	}
+	if isDir {
+		return ignore.MatchesPath(rel + "/")
+	}
+	return false
 }
