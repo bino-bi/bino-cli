@@ -53,6 +53,29 @@ bino setup --template-engine --engine-version v0.37.0
 
 If `engine-version` is omitted, bino uses the latest locally installed version. Run `bino update` to download the latest version.
 
+## Lifecycle hooks
+
+You can define shell commands that run at specific pipeline checkpoints. Shared hooks apply to all commands, while per-command hooks override them for the same checkpoint:
+
+```toml
+[hooks]
+pre-datasource = ["python scripts/fetch_data.py"]
+
+[build.hooks]
+pre-build = ["./scripts/validate_env.sh"]
+post-build = ["./scripts/upload.sh"]
+
+[preview.hooks]
+pre-preview = ["python scripts/generate_fixtures.py"]
+
+[serve.hooks]
+pre-serve = ["./scripts/warmup.sh"]
+```
+
+Each checkpoint maps to an array of shell commands executed sequentially. Commands run through `sh -c` on Unix and `cmd /C` on Windows.
+
+See [Hooks](/concepts/hooks/) for the full reference of checkpoints, environment variables, and error handling.
+
 ## Creating a project
 
 When you run `bino init`, a `bino.toml` file is automatically created in the target directory with a freshly generated UUID for the `report-id`:

@@ -8,6 +8,9 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// HooksConfig maps checkpoint names to ordered lists of shell commands.
+type HooksConfig map[string][]string
+
 // ProjectConfig represents the configuration stored in bino.toml.
 type ProjectConfig struct {
 	// ReportID is a unique identifier for this reporting project.
@@ -17,6 +20,10 @@ type ProjectConfig struct {
 	// EngineVersion specifies the template engine version to use (e.g., "v1.2.3").
 	// If not specified, the latest locally installed version is used.
 	EngineVersion string `toml:"engine-version,omitempty"`
+
+	// Hooks contains shared lifecycle hooks that apply to all commands
+	// unless overridden per-command.
+	Hooks HooksConfig `toml:"hooks,omitempty"`
 
 	// Build contains default arguments and environment variables for the 'bino build' command.
 	Build CommandConfig `toml:"build,omitempty"`
@@ -30,8 +37,9 @@ type ProjectConfig struct {
 
 // CommandConfig holds default arguments and environment variables for a CLI command.
 type CommandConfig struct {
-	Args CommandArgs `toml:"args,omitempty"`
-	Env  CommandEnv  `toml:"env,omitempty"`
+	Args  CommandArgs `toml:"args,omitempty"`
+	Env   CommandEnv  `toml:"env,omitempty"`
+	Hooks HooksConfig `toml:"hooks,omitempty"`
 }
 
 // CommandArgs holds default arguments for a CLI command.

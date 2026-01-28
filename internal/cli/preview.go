@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/engine"
+	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
@@ -86,6 +87,12 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
 			})
 
+			// Create hook runner
+			hookRunner := hooks.NewRunner(
+				hooks.Resolve(projectCfg.Hooks, projectCfg.Preview.Hooks, logger.Channel("hooks")),
+				logger.Channel("hooks"), watchDir,
+			)
+
 			// Resolve arguments with TOML defaults
 			resolver := pathutil.NewArgResolver(cmd, projectCfg.Preview.Args, func(format string, args ...any) {
 				logger.Infof(format, args...)
@@ -145,6 +152,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 			dataValidationSampleSize := dataset.GetDataValidationSampleSize()
 
+			previewHookEnv := hooks.HookEnv{
+				Mode:     "preview",
+				Workdir:  watchDir,
+				ReportID: projectCfg.ReportID,
+				Verbose:  logx.DebugEnabled(ctx),
+			}
+
 			refreshMu := &sync.Mutex{}
 			var server *previewhttp.Server
 
@@ -164,6 +178,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// Check for cancellation after acquiring lock
 				if err := ctx.Err(); err != nil {
 					return err
+				}
+
+				// Run pre-refresh hook (on failure: log and continue)
+				refreshHookEnv := previewHookEnv
+				refreshHookEnv.RefreshReason = reason
+				if err := hookRunner.Run(ctx, "pre-refresh", refreshHookEnv); err != nil {
+					logger.Errorf("pre-refresh hook failed: %v", err)
+					return nil
 				}
 
 				logger.Infof("Rendering report (%s)", reason)
@@ -391,6 +413,12 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				Logger:     logger.Channel("server"),
 			})
 			if err != nil {
+				return RuntimeError(err)
+			}
+
+			// Run pre-preview hook (once, before initial refresh)
+			previewHookEnv.ListenAddr = addr
+			if err := hookRunner.Run(ctx, "pre-preview", previewHookEnv); err != nil {
 				return RuntimeError(err)
 			}
 
