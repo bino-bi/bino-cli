@@ -1,0 +1,211 @@
+---
+title: Hooks and ETL workflows
+description: Practical examples for using lifecycle hooks to run ETL scripts, validate data, and automate post-build tasks.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Hooks let you integrate external scripts into the bino pipeline. This guide covers common patterns for data preparation, validation, and post-build automation.
+
+## ETL before build
+
+Use `pre-datasource` to fetch or transform data before bino loads it:
+
+```toml
+[hooks]
+pre-datasource = ["python scripts/fetch_data.py"]
+```
+
+```python
+# scripts/fetch_data.py
+import os, requests, csv
+
+workdir = os.environ["BINO_WORKDIR"]
+resp = requests.get("https://api.example.com/sales")
+data = resp.json()
+
+with open(os.path.join(workdir, "data", "sales.csv"), "w") as f:
+    writer = csv.DictWriter(f, fieldnames=["date", "amount", "region"])
+    writer.writeheader()
+    writer.writerows(data)
+```
+
+The CSV is ready before bino's DuckDB engine loads it.
+
+## Run once on preview start
+
+Use `pre-preview` to prepare data once when the preview server starts, rather than on every refresh:
+
+```toml
+[preview.hooks]
+pre-preview = ["python scripts/seed_data.py"]
+```
+
+This is useful for slow operations like database snapshots or large API calls that don't need to re-run on every file change.
+
+## Conditional skip with exit 78
+
+Scripts can check conditions and skip with exit code `78`:
+
+```bash
+#!/bin/bash
+# scripts/fetch_if_stale.sh
+# Only fetch if CSV doesn't exist or is older than 1 hour
+
+CSV="$BINO_WORKDIR/data/sales.csv"
+
+if [ -f "$CSV" ] && [ $(($(date +%s) - $(stat -f %m "$CSV"))) -lt 3600 ]; then
+  echo "Data is fresh, skipping fetch"
+  exit 78
+fi
+
+curl -o "$CSV" https://api.example.com/data
+```
+
+```toml
+[hooks]
+pre-datasource = ["./scripts/fetch_if_stale.sh"]
+```
+
+Bino logs "skipped (exit 78)" and continues normally.
+
+## Post-build upload
+
+Use `post-build` to upload generated PDFs after a successful build:
+
+```toml
+[build.hooks]
+post-build = ["./scripts/upload.sh"]
+```
+
+```bash
+#!/bin/bash
+# scripts/upload.sh
+echo "Uploading from $BINO_OUTPUT_DIR..."
+aws s3 sync "$BINO_OUTPUT_DIR" "s3://reports-bucket/$BINO_REPORT_ID/" \
+  --exclude "*.log" --exclude "*.json"
+echo "Upload complete"
+```
+
+## Post-render per artefact
+
+Use `post-render` to process each PDF individually after it's generated:
+
+```toml
+[build.hooks]
+post-render = ["./scripts/notify.sh"]
+```
+
+```bash
+#!/bin/bash
+# scripts/notify.sh
+curl -X POST https://hooks.slack.com/services/... \
+  -d "{\"text\": \"PDF ready: $BINO_ARTEFACT_NAME at $BINO_PDF_PATH\"}"
+```
+
+## Validate data before rendering
+
+Use `pre-datasource` to check data quality before bino processes it:
+
+```toml
+[build.hooks]
+pre-datasource = ["python scripts/validate.py"]
+```
+
+```python
+# scripts/validate.py
+import os, sys, csv
+
+workdir = os.environ["BINO_WORKDIR"]
+csv_path = os.path.join(workdir, "data", "sales.csv")
+
+with open(csv_path) as f:
+    reader = csv.DictReader(f)
+    rows = list(reader)
+
+if len(rows) == 0:
+    print("ERROR: sales.csv is empty", file=sys.stderr)
+    sys.exit(1)
+
+required = {"date", "amount", "region"}
+if not required.issubset(reader.fieldnames):
+    print(f"ERROR: missing columns: {required - set(reader.fieldnames)}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"Validated {len(rows)} rows in sales.csv")
+```
+
+## Environment introspection
+
+Scripts can read `BINO_*` variables to adjust behaviour:
+
+```bash
+#!/bin/bash
+echo "Mode:     $BINO_MODE"
+echo "Hook:     $BINO_HOOK"
+echo "Artefact: $BINO_ARTEFACT_NAME"
+echo "Verbose:  $BINO_VERBOSE"
+
+if [ "$BINO_MODE" = "preview" ]; then
+  echo "Running in preview mode, using sample data"
+  cp data/sample.csv data/active.csv
+else
+  echo "Running in build mode, using production data"
+  cp data/production.csv data/active.csv
+fi
+```
+
+## Validate environment before build
+
+Use `pre-build` to ensure required tools and credentials are available:
+
+```toml
+[build.hooks]
+pre-build = ["./scripts/validate_env.sh"]
+```
+
+```bash
+#!/bin/bash
+# scripts/validate_env.sh
+errors=0
+
+if ! command -v aws &> /dev/null; then
+  echo "ERROR: aws CLI not found" >&2
+  errors=1
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: DATABASE_URL not set" >&2
+  errors=1
+fi
+
+exit $errors
+```
+
+## Sequential commands
+
+Each checkpoint accepts an array of commands that run in order. If any command fails, subsequent commands are skipped:
+
+```toml
+[build.hooks]
+pre-build = [
+  "./scripts/check_deps.sh",
+  "python scripts/fetch_data.py",
+  "./scripts/validate_data.sh"
+]
+```
+
+<Aside type="tip">
+Keep individual hook scripts focused on one task. Use the array to compose a pipeline of small, testable scripts rather than writing one large script.
+</Aside>
+
+## Windows compatibility
+
+On Windows, hooks run via `cmd /C`. Write platform-appropriate scripts or use cross-platform tools like Python:
+
+```toml
+[hooks]
+pre-datasource = ["python scripts/fetch_data.py"]
+```
+
+Python scripts work identically on all platforms. For platform-specific shell scripts, use conditional logic based on the OS.

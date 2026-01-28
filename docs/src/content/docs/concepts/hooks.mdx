@@ -1,0 +1,152 @@
+---
+title: Hooks
+description: Run shell commands at pipeline checkpoints during build, preview, and serve.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Hooks let you run shell commands at specific points in the bino pipeline. Define them in `bino.toml` and they execute automatically during `build`, `preview`, or `serve`.
+
+## Configuration
+
+Hooks are defined in `bino.toml` as arrays of shell commands mapped to checkpoint names.
+
+### Shared hooks
+
+Shared hooks apply to all commands unless overridden per-command:
+
+```toml
+[hooks]
+pre-datasource = ["python scripts/fetch_data.py"]
+```
+
+### Per-command hooks
+
+Per-command hooks override shared hooks for the same checkpoint name (they are not merged):
+
+```toml
+[build.hooks]
+pre-build = ["./scripts/validate_env.sh"]
+post-build = ["./scripts/upload.sh"]
+
+[preview.hooks]
+pre-preview = ["python scripts/generate_fixtures.py"]
+
+[serve.hooks]
+pre-serve = ["./scripts/warmup.sh"]
+```
+
+If both `[hooks]` and `[build.hooks]` define `pre-datasource`, only the `[build.hooks]` version runs during `bino build`.
+
+## Hook checkpoints
+
+| Checkpoint       | Fires when                                   | Available in        |
+| ---------------- | -------------------------------------------- | ------------------- |
+| `pre-build`      | After manifest loading, before building       | build               |
+| `pre-datasource` | Before rendering HTML per artefact            | build, preview, serve |
+| `pre-render`     | After HTML rendered, before PDF generation    | build               |
+| `post-render`    | After PDF generated and signed per artefact   | build               |
+| `post-build`     | After all artefacts built                     | build               |
+| `pre-preview`    | Once, after server created, before first load | preview             |
+| `pre-refresh`    | Before each hot-reload refresh cycle          | preview             |
+| `pre-serve`      | Once, after server created, before requests   | serve               |
+| `pre-request`    | Before each on-demand render request          | serve               |
+
+## Execution model
+
+- Commands in a checkpoint array run **sequentially** in order.
+- Each command runs through the platform shell: `sh -c` on Unix, `cmd /C` on Windows.
+- The working directory is set to the project root (the directory containing `bino.toml`).
+- Stdout is logged at info level; stderr at warn level.
+- Commands inherit the parent context and are cancelled if the CLI is interrupted.
+
+## Environment variables
+
+Every hook receives these environment variables:
+
+| Variable            | Description                        | Example                |
+| ------------------- | ---------------------------------- | ---------------------- |
+| `BINO_MODE`         | Current command                    | `build`, `preview`, `serve` |
+| `BINO_WORKDIR`      | Absolute path to project root      | `/home/user/reports`   |
+| `BINO_REPORT_ID`    | Report ID from `bino.toml`         | `550e8400-...`         |
+| `BINO_HOOK`         | Checkpoint name                    | `pre-build`            |
+| `BINO_VERBOSE`      | Whether verbose mode is active     | `0` or `1`             |
+
+### Artefact-scoped hooks
+
+`pre-datasource`, `pre-render`, and `post-render` also receive:
+
+| Variable             | Description                           |
+| -------------------- | ------------------------------------- |
+| `BINO_ARTEFACT_NAME` | Name of the current artefact          |
+| `BINO_ARTEFACT_KIND` | Kind of artefact (`report`, `screenshot`, `document`) |
+
+### Build-only variables
+
+| Variable         | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `BINO_OUTPUT_DIR` | Absolute path to the output directory        |
+| `BINO_INCLUDE`   | Comma-separated `--artefact` values          |
+| `BINO_EXCLUDE`   | Comma-separated `--exclude-artefact` values  |
+
+### post-render only
+
+| Variable       | Description                        |
+| -------------- | ---------------------------------- |
+| `BINO_PDF_PATH` | Absolute path to the generated PDF |
+
+### Preview variables
+
+| Variable             | Description                            |
+| -------------------- | -------------------------------------- |
+| `BINO_LISTEN_ADDR`   | Server listen address                  |
+| `BINO_REFRESH_REASON` | What triggered the refresh (pre-refresh only) |
+
+### Serve variables
+
+| Variable             | Description                      |
+| -------------------- | -------------------------------- |
+| `BINO_LISTEN_ADDR`   | Server listen address            |
+| `BINO_LIVE_ARTEFACT` | Name of the LiveReportArtefact   |
+
+## Exit codes
+
+| Code | Meaning | Behaviour                                        |
+| ---- | ------- | ------------------------------------------------ |
+| `0`  | Success | Continue normally                                |
+| `78` | Skip    | Logged at info level, treated as success         |
+| Other | Failure | Propagated as an error (see error handling below) |
+
+Exit code `78` is useful for scripts that conditionally opt out:
+
+```bash
+#!/bin/bash
+# Skip if data is fresh (less than 1 hour old)
+if [ -f data.csv ] && [ $(($(date +%s) - $(stat -f %m data.csv))) -lt 3600 ]; then
+  exit 78
+fi
+curl -o data.csv https://api.example.com/data
+```
+
+## Error handling
+
+How hook failures affect each command:
+
+| Command     | One-time hooks (`pre-build`, `pre-preview`, `pre-serve`) | Per-cycle hooks (`pre-refresh`, `pre-request`, etc.) |
+| ----------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| **build**   | Build fails                                              | Build fails                                          |
+| **preview** | Preview fails to start                                   | Refresh skipped, error logged, CLI continues          |
+| **serve**   | Server fails to start                                    | Request returns error, server continues               |
+
+<Aside>
+Per-cycle hooks in `preview` and `serve` are designed to be resilient. A failing `pre-refresh` hook logs the error but does not crash the preview server, allowing you to fix the issue and trigger another refresh.
+</Aside>
+
+## Cross-platform support
+
+Hooks run through the platform shell automatically:
+
+- **macOS / Linux**: `sh -c "<command>"`
+- **Windows**: `cmd /C "<command>"`
+
+No additional configuration is needed. Write scripts that work on your target platform.

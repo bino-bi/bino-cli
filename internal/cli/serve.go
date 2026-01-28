@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/engine"
+	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
@@ -83,6 +84,12 @@ Environment knobs:
 			projectCfg.Serve.Env.Apply(func(key, tomlVal, envVal string) {
 				logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
 			})
+
+			// Create hook runner
+			hookRunner := hooks.NewRunner(
+				hooks.Resolve(projectCfg.Hooks, projectCfg.Serve.Hooks, logger.Channel("hooks")),
+				logger.Channel("hooks"), watchDir,
+			)
 
 			// Resolve arguments with TOML defaults
 			resolver := pathutil.NewArgResolver(cmd, projectCfg.Serve.Args, func(format string, args ...any) {
@@ -204,6 +211,19 @@ Environment knobs:
 				return RuntimeError(err)
 			}
 
+			// Run pre-serve hook (once, before route setup)
+			serveHookEnv := hooks.HookEnv{
+				Mode:         "serve",
+				Workdir:      watchDir,
+				ReportID:     projectCfg.ReportID,
+				Verbose:      logx.DebugEnabled(ctx),
+				ListenAddr:   addr,
+				LiveArtefact: live,
+			}
+			if err := hookRunner.Run(ctx, "pre-serve", serveHookEnv); err != nil {
+				return RuntimeError(err)
+			}
+
 			// Create render cache for on-demand rendering
 			renderCache := newServeRenderCache()
 
@@ -224,6 +244,9 @@ Environment knobs:
 					routeArt := art
 
 					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
+							return nil, "", err
+						}
 						return serveRenderHandler(
 							reqCtx,
 							logger,
@@ -243,6 +266,9 @@ Environment knobs:
 					routeLayoutPages := route.LayoutPages
 
 					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
+							return nil, "", err
+						}
 						return serveLayoutPagesHandler(
 							reqCtx,
 							logger,
@@ -269,6 +295,9 @@ Environment knobs:
 				if rootRoute.Artefact != "" {
 					rootArt := artefactMap[rootRoute.Artefact]
 					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
+						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
+							return nil, "", err
+						}
 						return serveRenderHandler(
 							reqCtx,
 							logger,
@@ -286,6 +315,9 @@ Environment knobs:
 				} else {
 					rootLayoutPages := rootRoute.LayoutPages
 					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
+						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
+							return nil, "", err
+						}
 						return serveLayoutPagesHandler(
 							reqCtx,
 							logger,

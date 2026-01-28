@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/engine"
+	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/playwright"
@@ -118,6 +119,12 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			projectCfg.Build.Env.Apply(func(key, tomlVal, envVal string) {
 				out.Info(fmt.Sprintf("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal))
 			})
+
+			// Create hook runner
+			hookRunner := hooks.NewRunner(
+				hooks.Resolve(projectCfg.Hooks, projectCfg.Build.Hooks, logger.Channel("hooks")),
+				logger.Channel("hooks"), absDir,
+			)
 
 			// Resolve arguments with TOML defaults
 			resolver := pathutil.NewArgResolver(cmd, projectCfg.Build.Args, func(format string, args ...any) {
@@ -346,6 +353,20 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return ConfigErrorf("invalid --data-validation value %q, expected 'fail', 'warn', or 'off'", dataValidation)
 			}
 
+			// Run pre-build hooks
+			buildHookEnv := hooks.HookEnv{
+				Mode:      "build",
+				Workdir:   absDir,
+				ReportID:  projectCfg.ReportID,
+				Verbose:   logx.DebugEnabled(ctx),
+				OutputDir: outputDir,
+				Include:   strings.Join(include, ","),
+				Exclude:   strings.Join(exclude, ","),
+			}
+			if err := hookRunner.Run(ctx, "pre-build", buildHookEnv); err != nil {
+				return RuntimeError(err)
+			}
+
 			// Step 2: Build artefacts
 			out.Step(fmt.Sprintf("Building %d artefact(s)...", len(selected)))
 
@@ -371,6 +392,10 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					NoColor: logx.NoColorEnabled(ctx),
 				})
 
+				artefactHookEnv := buildHookEnv
+				artefactHookEnv.ArtefactName = artefact.Document.Name
+				artefactHookEnv.ArtefactKind = "report"
+
 				entry, err := buildArtefact(ctx, buildArtefactConfig{
 					Logger:                   logger.Channel(artefact.Document.Name),
 					Workdir:                  absDir,
@@ -393,6 +418,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					ExecutionPlan:            execPlan,
 					DataValidation:           dataValidationMode,
 					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+					HookRunner:               hookRunner,
+					HookEnv:                  artefactHookEnv,
 				})
 				if err != nil {
 					policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
@@ -477,6 +504,11 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					}
 					documentResults = append(documentResults, docResult)
 				}
+			}
+
+			// Run post-build hooks
+			if err := hookRunner.Run(ctx, "post-build", buildHookEnv); err != nil {
+				return RuntimeError(err)
 			}
 
 			// Write build log
@@ -676,6 +708,8 @@ type buildArtefactConfig struct {
 	ExecutionPlan            *buildlog.ExecutionPlan
 	DataValidation           dataset.DataValidationMode
 	DataValidationSampleSize int
+	HookRunner               *hooks.Runner
+	HookEnv                  hooks.HookEnv
 }
 
 // buildArtefact renders a single report artefact to PDF.
@@ -698,6 +732,16 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	spinner := cfg.Spinner
 	artefactName := cfg.Artefact.Document.Name
 
+	// Run pre-datasource hook
+	if cfg.HookRunner != nil {
+		if err := cfg.HookRunner.Run(ctx, "pre-datasource", cfg.HookEnv); err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
+			}
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
+		}
+	}
+
 	// Start spinner for HTML rendering
 	if spinner != nil {
 		spinner.Start(fmt.Sprintf("Rendering %s", artefactName))
@@ -719,6 +763,16 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
 		}
 		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
+	}
+
+	// Run pre-render hook (after HTML rendered, before PDF generation)
+	if cfg.HookRunner != nil {
+		if err := cfg.HookRunner.Run(ctx, "pre-render", cfg.HookEnv); err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
+			}
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
+		}
 	}
 
 	// Check for cancellation before starting the ephemeral server
@@ -816,6 +870,18 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		if err := signing.Apply(ctx, profile, pdfPath); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
+			}
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
+		}
+	}
+
+	// Run post-render hook
+	if cfg.HookRunner != nil {
+		postRenderEnv := cfg.HookEnv
+		postRenderEnv.PDFPath = pdfPath
+		if err := cfg.HookRunner.Run(ctx, "post-render", postRenderEnv); err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
 			}
 			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
