@@ -18,15 +18,16 @@ import (
 
 // ReportArtefactManifestData holds data for rendering a ReportArtefact manifest.
 type ReportArtefactManifestData struct {
-	Name        string
-	Description string
-	Constraints []string
-	Filename    string
-	Title       string
-	Format      string // pdf, xga
-	Orientation string // portrait, landscape
-	Language    string
-	LayoutPages []string
+	Name           string
+	Description    string
+	Constraints    []string
+	Filename       string
+	Title          string
+	Format         string // pdf, xga
+	Orientation    string // portrait, landscape
+	Language       string
+	LayoutPages    []string            // Simple page refs (backward compat)
+	LayoutPageRefs []LayoutPageRefData // Parameterized page refs
 }
 
 // LiveReportArtefactManifestData holds data for rendering a LiveReportArtefact manifest.
@@ -223,7 +224,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 			}
 
 			// LayoutPages
-			if len(data.LayoutPages) == 0 {
+			if len(data.LayoutPages) == 0 && len(data.LayoutPageRefs) == 0 {
 				pages := FilterByKind(manifests, "LayoutPage")
 				if len(pages) > 0 {
 					addPages, err := addPromptConfirm(reader, out, "Select LayoutPages to include?", true)
@@ -231,13 +232,53 @@ including the filename, format, orientation, and which LayoutPages to include.
 						return RuntimeError(err)
 					}
 					if addPages {
+						// Get params info for all pages
+						pageParams, _ := getPageParamsInfo(workdir, manifests)
+
 						items := ManifestsToFuzzyItems(pages)
 						selected, err := addPromptMultiFuzzySearch(reader, out, "Select LayoutPages", items)
 						if err != nil {
 							return RuntimeError(err)
 						}
+
 						for _, item := range selected {
-							data.LayoutPages = append(data.LayoutPages, item.Name)
+							params, hasParams := pageParams[item.Name]
+							if hasParams && len(params) > 0 {
+								// This page has params - ask if user wants to configure them
+								fmt.Fprintf(out, "\n%s has %d parameter(s).\n", item.Name, len(params))
+								configureParams, err := addPromptConfirm(reader, out, fmt.Sprintf("Configure parameters for %s?", item.Name), true)
+								if err != nil {
+									return RuntimeError(err)
+								}
+
+								if configureParams {
+									// Allow adding multiple instances with different params
+									for {
+										values, err := promptParamValues(item.Name, params)
+										if err != nil {
+											if errors.Is(err, errAddCanceled) {
+												break
+											}
+											return RuntimeError(err)
+										}
+										data.LayoutPageRefs = append(data.LayoutPageRefs, LayoutPageRefData{
+											Page:   item.Name,
+											Params: values,
+										})
+
+										addAnother, err := addPromptConfirm(reader, out, fmt.Sprintf("Add another instance of %s with different params?", item.Name), false)
+										if err != nil || !addAnother {
+											break
+										}
+									}
+								} else {
+									// Add without params (will use defaults)
+									data.LayoutPages = append(data.LayoutPages, item.Name)
+								}
+							} else {
+								// No params - just add the page name
+								data.LayoutPages = append(data.LayoutPages, item.Name)
+							}
 						}
 					}
 				}
@@ -267,8 +308,14 @@ including the filename, format, orientation, and which LayoutPages to include.
 			}
 
 			// Preview
-			doc := buildReportArtefactDocument(data)
-			manifestBytes, err := renderReportArtefactManifest(doc)
+			var manifestBytes []byte
+			if len(data.LayoutPageRefs) > 0 {
+				doc := buildReportArtefactDocumentWithParams(data)
+				manifestBytes, err = yaml.Marshal(doc)
+			} else {
+				doc := buildReportArtefactDocument(data)
+				manifestBytes, err = renderReportArtefactManifest(doc)
+			}
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
 			}
@@ -276,6 +323,10 @@ including the filename, format, orientation, and which LayoutPages to include.
 			fmt.Fprintln(out, "=== Preview ===")
 			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
+
+			if len(data.LayoutPageRefs) > 0 {
+				fmt.Fprintf(out, "\nNote: This artefact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
+			}
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
@@ -763,8 +814,46 @@ func completeLayoutPages(cmd *cobra.Command, _ []string, _ string) ([]string, co
 // Write functions
 
 func writeReportArtefactManifest(cmd *cobra.Command, workdir string, data ReportArtefactManifestData, outputPath string, appendMode bool) error {
+	// If there are parameterized refs, use the map-based builder
+	if len(data.LayoutPageRefs) > 0 {
+		return writeReportArtefactManifestWithParams(cmd, workdir, data, outputPath, appendMode)
+	}
 	doc := buildReportArtefactDocument(data)
 	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
+}
+
+func writeReportArtefactManifestWithParams(cmd *cobra.Command, workdir string, data ReportArtefactManifestData, outputPath string, appendMode bool) error {
+	doc := buildReportArtefactDocumentWithParams(data)
+
+	// Marshal to YAML
+	manifestBytes, err := yaml.Marshal(doc)
+	if err != nil {
+		return RuntimeError(fmt.Errorf("render manifest: %w", err))
+	}
+
+	manifest := string(manifestBytes)
+
+	// Resolve absolute path
+	absPath := outputPath
+	if !filepath.IsAbs(outputPath) {
+		absPath = filepath.Join(workdir, outputPath)
+	}
+
+	// Write to file
+	out := cmd.OutOrStdout()
+	if appendMode {
+		if err := AppendToManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Appended to %s\n", outputPath)
+	} else {
+		if err := WriteManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Created %s\n", outputPath)
+	}
+
+	return nil
 }
 
 func writeLiveReportArtefactManifest(cmd *cobra.Command, workdir string, data LiveReportArtefactManifestData, outputPath string, appendMode bool) error {
@@ -780,6 +869,7 @@ func writeSigningProfileManifest(cmd *cobra.Command, workdir string, data Signin
 // Build and render functions
 
 // buildReportArtefactDocument creates a schema.Document from ReportArtefactManifestData.
+// For simple string refs only - no parameterized pages.
 func buildReportArtefactDocument(data ReportArtefactManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindReportArtefact, data.Name)
 	doc.Metadata.Description = data.Description
@@ -801,6 +891,73 @@ func buildReportArtefactDocument(data ReportArtefactManifestData) *schema.Docume
 	}
 
 	doc.Spec = spec
+	return doc
+}
+
+// buildReportArtefactDocumentWithParams creates a map-based document that supports
+// both string refs and parameterized page refs in layoutPages.
+func buildReportArtefactDocumentWithParams(data ReportArtefactManifestData) map[string]any {
+	doc := map[string]any{
+		"apiVersion": schema.APIVersion,
+		"kind":       schema.KindReportArtefact,
+		"metadata": map[string]any{
+			"name": data.Name,
+		},
+		"spec": map[string]any{},
+	}
+
+	// Add description if present
+	if data.Description != "" {
+		doc["metadata"].(map[string]any)["description"] = data.Description
+	}
+
+	// Add constraints if present
+	if len(data.Constraints) > 0 {
+		doc["metadata"].(map[string]any)["constraints"] = data.Constraints
+	}
+
+	spec := doc["spec"].(map[string]any)
+
+	// Add spec fields
+	if data.Filename != "" {
+		spec["filename"] = data.Filename
+	}
+	if data.Title != "" {
+		spec["title"] = data.Title
+	}
+	if data.Format != "" {
+		spec["format"] = data.Format
+	}
+	if data.Orientation != "" {
+		spec["orientation"] = data.Orientation
+	}
+	if data.Language != "" {
+		spec["language"] = data.Language
+	}
+
+	// Build mixed layoutPages array
+	var layoutPages []any
+
+	// Add simple string refs first
+	for _, page := range data.LayoutPages {
+		layoutPages = append(layoutPages, "$"+page)
+	}
+
+	// Add parameterized refs
+	for _, ref := range data.LayoutPageRefs {
+		pageRef := map[string]any{
+			"page": ref.Page,
+		}
+		if len(ref.Params) > 0 {
+			pageRef["params"] = ref.Params
+		}
+		layoutPages = append(layoutPages, pageRef)
+	}
+
+	if len(layoutPages) > 0 {
+		spec["layoutPages"] = layoutPages
+	}
+
 	return doc
 }
 

@@ -162,8 +162,29 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	// Expand variables before YAML parsing using the provided lookup
-	expanded, missingVars := ExpandVars(string(content), lookup)
+	// First pass: parse WITHOUT expansion to find LayoutPage param definitions
+	// This allows us to preserve param references for later expansion
+	paramNames := collectLayoutPageParamNamesFromYAML(string(content))
+
+	// Create lookup that skips param names (preserves them as-is for later expansion)
+	paramPreservingLookup := func(name string) (string, bool) {
+		if _, isParam := paramNames[name]; isParam {
+			// Return a placeholder that will be preserved and expanded later
+			return "${" + name + "}", true
+		}
+		return lookup(name)
+	}
+
+	// Expand variables before YAML parsing, but preserve param references
+	expanded, missingVars := ExpandVars(string(content), paramPreservingLookup)
+
+	// Filter out param names from missingVars since they're intentionally preserved
+	filteredMissingVars := make([]string, 0, len(missingVars))
+	for _, v := range missingVars {
+		if _, isParam := paramNames[v]; !isParam {
+			filteredMissingVars = append(filteredMissingVars, v)
+		}
+	}
 
 	decoder := yaml.NewDecoder(strings.NewReader(expanded))
 	var (
@@ -228,8 +249,9 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 				Name:           header.Metadata.Name,
 				Labels:         header.Metadata.Labels,
 				Constraints:    constraints,
+				Params:         header.Metadata.Params,
 				Raw:            rawJSON,
-				MissingEnvVars: missingVars,
+				MissingEnvVars: filteredMissingVars,
 			})
 			continue
 		}
@@ -255,12 +277,61 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			Name:           header.Metadata.Name,
 			Labels:         header.Metadata.Labels,
 			Constraints:    constraints,
+			Params:         header.Metadata.Params,
 			Raw:            rawJSON,
-			MissingEnvVars: missingVars,
+			MissingEnvVars: filteredMissingVars,
 		})
 	}
 
 	return docs, nil
+}
+
+// collectLayoutPageParamNamesFromYAML does a quick parse of YAML content to find
+// all parameter names defined in LayoutPage metadata.params sections.
+// This is used to preserve param references during variable expansion.
+func collectLayoutPageParamNamesFromYAML(content string) map[string]struct{} {
+	paramNames := make(map[string]struct{})
+
+	decoder := yaml.NewDecoder(strings.NewReader(content))
+	for {
+		var doc map[string]any
+		if err := decoder.Decode(&doc); err != nil {
+			break
+		}
+		if doc == nil {
+			continue
+		}
+
+		// Check if this is a LayoutPage
+		kind, _ := doc["kind"].(string)
+		if kind != "LayoutPage" {
+			continue
+		}
+
+		// Extract metadata.params
+		metadata, ok := doc["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
+		params, ok := metadata["params"].([]any)
+		if !ok {
+			continue
+		}
+
+		// Collect param names
+		for _, p := range params {
+			param, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, ok := param["name"].(string)
+			if ok && name != "" {
+				paramNames[name] = struct{}{}
+			}
+		}
+	}
+
+	return paramNames
 }
 
 func shouldSkipDir(root, current string, entry fs.DirEntry) bool {

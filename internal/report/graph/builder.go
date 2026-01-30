@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -508,14 +509,98 @@ func (b *builder) resolveDataBinding(ref string) (string, NodeKind, bool) {
 }
 
 func (b *builder) buildReportArtefacts() error {
-	deps := append([]string(nil), b.layoutRootIDs...)
-	deps = append(deps, b.standaloneComponentIDs...)
-	deps = uniqueStrings(deps)
-	sort.Strings(deps)
+	// Build a map of layout page names to their node IDs
+	layoutPageIndex := make(map[string]string)
+	for _, id := range b.layoutRootIDs {
+		node := b.nodes[id]
+		if node != nil && node.Kind == NodeLayoutPage {
+			layoutPageIndex[node.Name] = id
+		}
+	}
+
 	for _, doc := range b.artefactDocs {
 		if err := b.ctx.Err(); err != nil {
 			return err
 		}
+
+		// Parse the artefact spec to get layoutPages
+		spec, err := parseReportArtefactSpec(doc.Raw)
+		if err != nil {
+			// Fall back to old behavior if parsing fails
+			spec = reportArtefactSpec{}
+		}
+
+		// Build dependencies from layoutPages
+		var deps []string
+		if len(spec.LayoutPages) == 0 {
+			// Default: depend on all layout pages
+			deps = append(deps, b.layoutRootIDs...)
+		} else {
+			// Select specific layout pages
+			for _, ref := range spec.LayoutPages {
+				if ref.Page == "" {
+					continue
+				}
+
+				// Check for glob patterns - if glob, add all matching
+				if strings.ContainsAny(ref.Page, "*?[") {
+					for name, nodeID := range layoutPageIndex {
+						matched, _ := matchGlob(ref.Page, name)
+						if matched {
+							deps = append(deps, nodeID)
+						}
+					}
+				} else {
+					// Explicit page name
+					if len(ref.Params) > 0 {
+						// Create a parameterized page node
+						paramNodeID := makeLayoutPageNodeID(ref.Page, ref.Params)
+						paramNodeLabel := makeLayoutPageNodeLabel(ref.Page, ref.Params)
+
+						// Create a new node for this parameterized instance if it doesn't exist
+						if _, exists := b.nodes[paramNodeID]; !exists {
+							// Find the base layout page node
+							baseNodeID, hasBase := layoutPageIndex[ref.Page]
+							var baseDigest []byte
+							var baseDeps []string
+							var file string
+							if hasBase {
+								baseNode := b.nodes[baseNodeID]
+								if baseNode != nil {
+									baseDigest = baseNode.baseDigest
+									baseDeps = baseNode.DependsOn
+									file = baseNode.File
+								}
+							}
+
+							// Create parameterized node
+							b.nodes[paramNodeID] = &Node{
+								ID:         paramNodeID,
+								Kind:       NodeLayoutPage,
+								Name:       ref.Page,
+								Label:      paramNodeLabel,
+								File:       file,
+								DependsOn:  baseDeps,
+								Attributes: buildParamAttributes(ref.Params),
+								baseDigest: baseDigest,
+							}
+						}
+						deps = append(deps, paramNodeID)
+					} else {
+						// No params - use the base page node
+						if nodeID, ok := layoutPageIndex[ref.Page]; ok {
+							deps = append(deps, nodeID)
+						}
+					}
+				}
+			}
+		}
+
+		// Add standalone components as dependencies
+		deps = append(deps, b.standaloneComponentIDs...)
+		deps = uniqueStrings(deps)
+		sort.Strings(deps)
+
 		id := makeNodeID(NodeReportArtefact, doc.Name)
 		node := &Node{
 			ID:         id,
@@ -523,7 +608,7 @@ func (b *builder) buildReportArtefacts() error {
 			Name:       doc.Name,
 			Label:      doc.Name,
 			File:       doc.File,
-			DependsOn:  append([]string(nil), deps...),
+			DependsOn:  deps,
 			Attributes: map[string]string{},
 			baseDigest: hashBytes(doc.Raw),
 		}
@@ -531,6 +616,60 @@ func (b *builder) buildReportArtefacts() error {
 		b.artefactIDs = append(b.artefactIDs, id)
 	}
 	return nil
+}
+
+// makeLayoutPageNodeID creates a unique node ID for a parameterized layout page.
+// Format: "LayoutPage:pageName#PARAM1=value1,PARAM2=value2"
+func makeLayoutPageNodeID(pageName string, params map[string]string) string {
+	if len(params) == 0 {
+		return makeNodeID(NodeLayoutPage, pageName)
+	}
+	// Sort keys for deterministic ID
+	keys := sortedKeys(params)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = k + "=" + params[k]
+	}
+	return makeNodeID(NodeLayoutPage, pageName+"#"+strings.Join(parts, ","))
+}
+
+// makeLayoutPageNodeLabel creates a human-readable label for a parameterized layout page.
+// Format: "pageName (PARAM1: value1, PARAM2: value2)"
+func makeLayoutPageNodeLabel(pageName string, params map[string]string) string {
+	if len(params) == 0 {
+		return pageName
+	}
+	keys := sortedKeys(params)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = k + ": " + params[k]
+	}
+	return fmt.Sprintf("%s (%s)", pageName, strings.Join(parts, ", "))
+}
+
+// sortedKeys returns the keys of a map in sorted order.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// buildParamAttributes creates node attributes from params.
+func buildParamAttributes(params map[string]string) map[string]string {
+	attrs := make(map[string]string)
+	attrs["parameterized"] = "true"
+	for k, v := range params {
+		attrs["param."+k] = v
+	}
+	return attrs
+}
+
+// matchGlob matches a pattern against a string using path.Match semantics.
+func matchGlob(pattern, name string) (bool, error) {
+	return path.Match(pattern, name)
 }
 
 func (b *builder) buildDocumentArtefacts() error {

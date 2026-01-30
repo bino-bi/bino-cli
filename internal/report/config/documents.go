@@ -17,7 +17,9 @@ type Document struct {
 	Name           string             // metadata.name value.
 	Labels         map[string]string  // metadata.labels for constraint evaluation.
 	Constraints    []*spec.Constraint // metadata.constraints for conditional inclusion (parsed).
+	Params         []LayoutPageParamSpec // metadata.params for LayoutPage parameter definitions.
 	Raw            json.RawMessage    // Validated JSON payload for downstream consumers.
+	OriginalRaw    json.RawMessage    // Original JSON before param expansion (for LayoutPages with params).
 	MissingEnvVars []string           // Environment variables referenced but not set (no default).
 }
 
@@ -25,9 +27,10 @@ type documentHeader struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
 	Metadata   struct {
-		Name        string            `json:"name"`
-		Labels      map[string]string `json:"labels"`
-		Constraints []any             `json:"constraints"` // Supports string or object format
+		Name        string                `json:"name"`
+		Labels      map[string]string     `json:"labels"`
+		Constraints []any                 `json:"constraints"` // Supports string or object format
+		Params      []LayoutPageParamSpec `json:"params"`      // Parameter definitions for LayoutPage
 	} `json:"metadata"`
 }
 
@@ -115,4 +118,21 @@ func CollectMissingEnvVars(docs []Document) []MissingEnvVar {
 		}
 	}
 	return missing
+}
+
+// CollectLayoutPageParamNames returns a set of all parameter names defined in LayoutPage documents.
+// These names can be used to exclude expected variables from the missing env var check.
+func CollectLayoutPageParamNames(docs []Document) map[string]struct{} {
+	paramNames := make(map[string]struct{})
+	for _, doc := range docs {
+		if doc.Kind != "LayoutPage" {
+			continue
+		}
+		for _, param := range doc.Params {
+			if param.Name != "" {
+				paramNames[param.Name] = struct{}{}
+			}
+		}
+	}
+	return paramNames
 }

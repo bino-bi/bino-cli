@@ -239,33 +239,39 @@ func TestBuildCacheKey(t *testing.T) {
 func TestBuildLayoutPagesCacheKey(t *testing.T) {
 	tests := []struct {
 		name        string
-		layoutPages config.StringOrSlice
+		layoutPages config.LayoutPagesOrRefs
 		params      map[string]string
 		want        string
 	}{
 		{
 			name:        "single page no params",
-			layoutPages: config.StringOrSlice{"page1"},
+			layoutPages: config.LayoutPagesOrRefs{{Page: "page1"}},
 			params:      nil,
 			want:        "layoutPages:page1",
 		},
 		{
 			name:        "multiple pages sorted",
-			layoutPages: config.StringOrSlice{"page3", "page1", "page2"},
+			layoutPages: config.LayoutPagesOrRefs{{Page: "page3"}, {Page: "page1"}, {Page: "page2"}},
 			params:      nil,
-			want:        "layoutPages:page1,page2,page3",
+			want:        "layoutPages:page1;page2;page3",
 		},
 		{
 			name:        "with params",
-			layoutPages: config.StringOrSlice{"page1"},
+			layoutPages: config.LayoutPagesOrRefs{{Page: "page1"}},
 			params:      map[string]string{"foo": "bar"},
 			want:        "layoutPages:page1?foo=bar",
 		},
 		{
 			name:        "multiple pages with multiple params",
-			layoutPages: config.StringOrSlice{"b", "a"},
+			layoutPages: config.LayoutPagesOrRefs{{Page: "b"}, {Page: "a"}},
 			params:      map[string]string{"z": "3", "a": "1"},
-			want:        "layoutPages:a,b?a=1&z=3",
+			want:        "layoutPages:a;b?a=1&z=3",
+		},
+		{
+			name:        "page ref with params",
+			layoutPages: config.LayoutPagesOrRefs{{Page: "sales", Params: map[string]string{"REGION": "EU"}}},
+			params:      nil,
+			want:        "layoutPages:sales#REGION=EU",
 		},
 	}
 

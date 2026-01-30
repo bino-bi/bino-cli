@@ -22,7 +22,8 @@ type LayoutPageManifestData struct {
 	Name        string
 	Description string
 	Constraints []string
-	Children    []string // Component names
+	Children    []string              // Component names
+	Params      []LayoutPageParamData // Parameter definitions
 }
 
 // LayoutCardManifestData holds data for rendering a LayoutCard manifest.
@@ -167,6 +168,24 @@ populate with component references later.
 				}
 			}
 
+			// Parameters
+			if len(data.Params) == 0 {
+				addParams, err := addPromptConfirm(reader, out, "Define parameters for this page?", false)
+				if err != nil {
+					return RuntimeError(err)
+				}
+				if addParams {
+					data.Params, err = promptParamDefinitions()
+					if err != nil {
+						if errors.Is(err, errAddCanceled) {
+							fmt.Fprintln(out, "\nCancelled.")
+							return nil
+						}
+						return RuntimeError(err)
+					}
+				}
+			}
+
 			// Constraints
 			if len(data.Constraints) == 0 {
 				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
@@ -191,8 +210,14 @@ populate with component references later.
 			}
 
 			// Preview
-			doc := buildLayoutPageDocument(data)
-			manifestBytes, err := renderLayoutPageManifest(doc)
+			var manifestBytes []byte
+			if len(data.Params) > 0 {
+				doc := buildLayoutPageDocumentWithParams(data)
+				manifestBytes, err = yaml.Marshal(doc)
+			} else {
+				doc := buildLayoutPageDocument(data)
+				manifestBytes, err = renderLayoutPageManifest(doc)
+			}
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
 			}
@@ -204,6 +229,9 @@ populate with component references later.
 			if len(data.Children) == 0 {
 				fmt.Fprintln(out, "\nNote: The children array is empty. Add components to the page after creation.")
 			}
+			if len(data.Params) > 0 {
+				fmt.Fprintf(out, "\nNote: This page defines %d parameter(s). Use the object form in layoutPages to pass values.\n", len(data.Params))
+			}
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
@@ -213,6 +241,13 @@ populate with component references later.
 
 			if err := writeLayoutPageManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
 				return err
+			}
+
+			// Offer to link to existing artefacts
+			if err := promptAddToArtefacts(workdir, data.Name, manifests, data.Params); err != nil {
+				if !errors.Is(err, errAddCanceled) {
+					fmt.Fprintf(out, "Warning: %v\n", err)
+				}
 			}
 
 			if flagOpenEditor {
@@ -504,8 +539,46 @@ func completeLayoutComponents(cmd *cobra.Command, _ []string, _ string) ([]strin
 // Write functions
 
 func writeLayoutPageManifest(cmd *cobra.Command, workdir string, data LayoutPageManifestData, outputPath string, appendMode bool) error {
+	// If params are defined, use the custom map-based builder for proper YAML serialization
+	if len(data.Params) > 0 {
+		return writeLayoutPageManifestWithParams(cmd, workdir, data, outputPath, appendMode)
+	}
 	doc := buildLayoutPageDocument(data)
 	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
+}
+
+func writeLayoutPageManifestWithParams(cmd *cobra.Command, workdir string, data LayoutPageManifestData, outputPath string, appendMode bool) error {
+	doc := buildLayoutPageDocumentWithParams(data)
+
+	// Marshal to YAML
+	manifestBytes, err := yaml.Marshal(doc)
+	if err != nil {
+		return RuntimeError(fmt.Errorf("render manifest: %w", err))
+	}
+
+	manifest := string(manifestBytes)
+
+	// Resolve absolute path
+	absPath := outputPath
+	if !filepath.IsAbs(outputPath) {
+		absPath = filepath.Join(workdir, outputPath)
+	}
+
+	// Write to file
+	out := cmd.OutOrStdout()
+	if appendMode {
+		if err := AppendToManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Appended to %s\n", outputPath)
+	} else {
+		if err := WriteManifest(absPath, manifest); err != nil {
+			return RuntimeError(err)
+		}
+		fmt.Fprintf(out, "Created %s\n", outputPath)
+	}
+
+	return nil
 }
 
 func writeLayoutCardManifest(cmd *cobra.Command, workdir string, data LayoutCardManifestData, outputPath string, appendMode bool) error {
@@ -531,6 +604,84 @@ func buildLayoutPageDocument(data LayoutPageManifestData) *schema.Document {
 	}
 
 	doc.Spec = spec
+	return doc
+}
+
+// buildLayoutPageDocumentWithParams creates a document with params in metadata.
+func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]any {
+	doc := map[string]any{
+		"apiVersion": schema.APIVersion,
+		"kind":       schema.KindLayoutPage,
+		"metadata": map[string]any{
+			"name": data.Name,
+		},
+		"spec": map[string]any{},
+	}
+
+	// Add description if present
+	if data.Description != "" {
+		doc["metadata"].(map[string]any)["description"] = data.Description
+	}
+
+	// Add constraints if present
+	if len(data.Constraints) > 0 {
+		doc["metadata"].(map[string]any)["constraints"] = data.Constraints
+	}
+
+	// Add params if present
+	if len(data.Params) > 0 {
+		var paramsData []map[string]any
+		for _, p := range data.Params {
+			paramMap := map[string]any{
+				"name": p.Name,
+			}
+			if p.Type != "" && p.Type != "string" {
+				paramMap["type"] = p.Type
+			}
+			if p.Description != "" {
+				paramMap["description"] = p.Description
+			}
+			if p.Required {
+				paramMap["required"] = true
+			}
+			if p.Default != "" {
+				paramMap["default"] = p.Default
+			}
+			if p.Options != nil {
+				options := map[string]any{}
+				if len(p.Options.Items) > 0 {
+					var items []map[string]any
+					for _, item := range p.Options.Items {
+						itemMap := map[string]any{"value": item.Value}
+						if item.Label != "" {
+							itemMap["label"] = item.Label
+						}
+						items = append(items, itemMap)
+					}
+					options["items"] = items
+				}
+				if p.Options.Min != nil {
+					options["min"] = *p.Options.Min
+				}
+				if p.Options.Max != nil {
+					options["max"] = *p.Options.Max
+				}
+				if len(options) > 0 {
+					paramMap["options"] = options
+				}
+			}
+			paramsData = append(paramsData, paramMap)
+		}
+		doc["metadata"].(map[string]any)["params"] = paramsData
+	}
+
+	// Add children with $ prefix
+	children := make([]string, len(data.Children))
+	for i, child := range data.Children {
+		children[i] = "$" + child
+	}
+	doc["spec"].(map[string]any)["children"] = children
+
 	return doc
 }
 

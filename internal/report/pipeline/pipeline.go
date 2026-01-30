@@ -441,8 +441,8 @@ type RenderArtefactOptions struct {
 // For preview rendering, use RenderArtefactHTMLForPreview instead.
 // The workdir parameter is required for dataset execution.
 func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, opts RenderArtefactOptions) (RenderResult, error) {
-	// Select LayoutPages by patterns (before constraint filtering)
-	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	// Select LayoutPages by refs (before constraint filtering)
+	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
 	if err != nil {
 		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
 	}
@@ -488,8 +488,8 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The engineVersion parameter specifies which template engine version to use.
 func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (RenderResult, error) {
-	// Select LayoutPages by patterns (before constraint filtering)
-	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	// Select LayoutPages by refs (before constraint filtering)
+	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
 	if err != nil {
 		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
 	}
@@ -659,15 +659,93 @@ func filterDocsForLayoutPages(docs []config.Document, layoutPageNames []string) 
 	return result, nil
 }
 
-// selectLayoutPagesByPatterns filters and orders LayoutPage documents by name patterns.
-// Patterns are matched against metadata.name using path.Match (glob syntax).
-// Returns pages in pattern order; within each pattern, pages are sorted alphabetically by name.
+// SelectedLayoutPage represents a LayoutPage selected for rendering,
+// along with any params that should be applied to it.
+type SelectedLayoutPage struct {
+	Doc    config.Document
+	Params map[string]string // Params to apply when rendering this page
+}
+
+// expandLayoutPageWithParams expands params into a LayoutPage document.
+// Returns a new document with:
+// - Params expanded into the Raw content using ${PARAM} substitution
+// - A unique name suffix based on the param values (e.g., "page#REGION=EU,YEAR=2024")
+// If params is empty, returns the original document unchanged.
+func expandLayoutPageWithParams(doc config.Document, params map[string]string) (config.Document, error) {
+	if len(params) == 0 {
+		return doc, nil
+	}
+
+	// Step 1: Expand param values themselves (they may contain ${VAR} from ENV)
+	expandedParams := make(map[string]string)
+	envLookup := config.EnvLookup()
+	for k, v := range params {
+		expanded, _ := config.ExpandVars(v, envLookup)
+		expandedParams[k] = expanded
+	}
+
+	// Step 2: Build effective params: explicit params > defaults from doc.Params
+	effectiveParams := make(map[string]string)
+	for _, def := range doc.Params {
+		if def.Default != nil {
+			effectiveParams[def.Name] = *def.Default
+		}
+	}
+	for k, v := range expandedParams {
+		effectiveParams[k] = v
+	}
+
+	// Step 3: Create lookup chain: params > ENV (fallback)
+	lookup := config.ChainLookup(
+		config.MapLookup(effectiveParams),
+		envLookup,
+	)
+
+	// Step 4: Expand document content
+	expandedContent, _ := config.ExpandVars(string(doc.Raw), lookup)
+
+	// Step 5: Generate unique name suffix
+	keys := make([]string, 0, len(expandedParams))
+	for k := range expandedParams {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, k+"="+expandedParams[k])
+	}
+	nameSuffix := "#" + strings.Join(parts, ",")
+
+	// Create new document with expanded content and unique name
+	return config.Document{
+		File:           doc.File,
+		Position:       doc.Position,
+		Kind:           doc.Kind,
+		Name:           doc.Name + nameSuffix,
+		Labels:         doc.Labels,
+		Constraints:    doc.Constraints,
+		Params:         doc.Params,
+		Raw:            []byte(expandedContent),
+		MissingEnvVars: nil, // Params should have resolved any missing vars
+	}, nil
+}
+
+// selectLayoutPagesByRefs filters and orders LayoutPage documents by LayoutPageRef entries.
+// Refs can be glob patterns (no params) or explicit page names with params.
+// Returns pages in ref order; within glob patterns, pages are sorted alphabetically by name.
 // Non-LayoutPage documents are preserved at the beginning of the result in their original order.
-// If patterns is empty or contains only "*", the function returns docs unchanged (default behavior).
-func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]config.Document, error) {
+// If refs is empty or contains only "*", the function returns docs unchanged (default behavior).
+func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRefs) ([]config.Document, []SelectedLayoutPage, error) {
 	// Check if using default pattern (select all)
-	if len(patterns) == 0 || (len(patterns) == 1 && patterns[0] == "*") {
-		return docs, nil
+	if len(refs) == 0 || (len(refs) == 1 && refs[0].Page == "*" && len(refs[0].Params) == 0) {
+		// Return all LayoutPages without params
+		var layoutPages []SelectedLayoutPage
+		for _, doc := range docs {
+			if doc.Kind == "LayoutPage" {
+				layoutPages = append(layoutPages, SelectedLayoutPage{Doc: doc})
+			}
+		}
+		return docs, layoutPages, nil
 	}
 
 	// Separate LayoutPage documents from others
@@ -687,51 +765,100 @@ func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]c
 		pagesByName[doc.Name] = doc
 	}
 
-	// Select pages in pattern order
-	seen := make(map[string]bool)
-	var selected []config.Document
+	// Select pages in ref order
+	// For globs: track seen to avoid duplicates
+	// For explicit refs with params: allow same page multiple times with different params
+	seenGlob := make(map[string]bool)
+	var selectedDocs []config.Document
+	var selectedPages []SelectedLayoutPage
 
-	for _, pattern := range patterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
+	for _, ref := range refs {
+		pageName := strings.TrimSpace(ref.Page)
+		if pageName == "" {
 			continue
 		}
 
-		// Validate pattern syntax
-		if _, err := path.Match(pattern, ""); err != nil {
-			return nil, fmt.Errorf("invalid layoutPages pattern %q: %w", pattern, err)
-		}
+		// Check if this is a glob pattern
+		if ref.IsGlob() {
+			// Validate pattern syntax
+			if _, err := path.Match(pageName, ""); err != nil {
+				return nil, nil, fmt.Errorf("invalid layoutPages pattern %q: %w", pageName, err)
+			}
 
-		// Find all matching pages
-		var matches []config.Document
-		for name, doc := range pagesByName {
-			if seen[name] {
+			// Find all matching pages
+			var matches []config.Document
+			for name, doc := range pagesByName {
+				if seenGlob[name] {
+					continue
+				}
+				matched, _ := path.Match(pageName, name)
+				if matched {
+					matches = append(matches, doc)
+				}
+			}
+
+			// Sort matches alphabetically by name for deterministic order
+			sort.Slice(matches, func(i, j int) bool {
+				return matches[i].Name < matches[j].Name
+			})
+
+			// Add to selected (mark as seen to avoid duplicates from globs)
+			for _, doc := range matches {
+				selectedDocs = append(selectedDocs, doc)
+				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+				seenGlob[doc.Name] = true
+			}
+		} else {
+			// Explicit page name with optional params
+			doc, found := pagesByName[pageName]
+			if !found {
+				// Page not found - will be caught during rendering
 				continue
 			}
-			matched, _ := path.Match(pattern, name)
-			if matched {
-				matches = append(matches, doc)
+
+			// For explicit refs with params, allow duplicates (same page, different params)
+			// For explicit refs without params, treat like globs (skip if already seen)
+			if len(ref.Params) == 0 {
+				if seenGlob[pageName] {
+					continue
+				}
+				seenGlob[pageName] = true
+				selectedDocs = append(selectedDocs, doc)
+				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+			} else {
+				// Expand params into document to create unique instance
+				expandedDoc, err := expandLayoutPageWithParams(doc, ref.Params)
+				if err != nil {
+					return nil, nil, fmt.Errorf("expand params for %q: %w", pageName, err)
+				}
+				selectedDocs = append(selectedDocs, expandedDoc)
+				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc, Params: ref.Params})
 			}
-		}
-
-		// Sort matches alphabetically by name for deterministic order
-		sort.Slice(matches, func(i, j int) bool {
-			return matches[i].Name < matches[j].Name
-		})
-
-		// Add to selected (mark as seen to avoid duplicates)
-		for _, doc := range matches {
-			selected = append(selected, doc)
-			seen[doc.Name] = true
 		}
 	}
 
 	// Combine: non-LayoutPage docs first, then selected LayoutPages
-	result := make([]config.Document, 0, len(others)+len(selected))
+	result := make([]config.Document, 0, len(others)+len(selectedDocs))
 	result = append(result, others...)
-	result = append(result, selected...)
+	result = append(result, selectedDocs...)
 
-	return result, nil
+	return result, selectedPages, nil
+}
+
+// selectLayoutPagesByPatterns filters and orders LayoutPage documents by name patterns.
+// Patterns are matched against metadata.name using path.Match (glob syntax).
+// Returns pages in pattern order; within each pattern, pages are sorted alphabetically by name.
+// Non-LayoutPage documents are preserved at the beginning of the result in their original order.
+// If patterns is empty or contains only "*", the function returns docs unchanged (default behavior).
+// Deprecated: Use selectLayoutPagesByRefs for full LayoutPagesOrRefs support.
+func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]config.Document, error) {
+	// Convert string patterns to LayoutPagesOrRefs
+	refs := make(config.LayoutPagesOrRefs, len(patterns))
+	for i, p := range patterns {
+		refs[i] = config.LayoutPageRef{Page: p}
+	}
+	result, _, err := selectLayoutPagesByRefs(docs, refs)
+	return result, err
 }
 
 // RenderHTMLFrameAndContext generates a two-phase render output for preview mode.
@@ -810,8 +937,8 @@ func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir strin
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 // The engineVersion parameter specifies which template engine version to use.
 func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
-	// Select LayoutPages by patterns (before constraint filtering)
-	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	// Select LayoutPages by refs (before constraint filtering)
+	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
 	if err != nil {
 		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
 	}
@@ -861,8 +988,8 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 // The workdir parameter is required for dataset execution.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
-	// Select LayoutPages by patterns (before constraint filtering)
-	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	// Select LayoutPages by refs (before constraint filtering)
+	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
 	if err != nil {
 		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
 	}

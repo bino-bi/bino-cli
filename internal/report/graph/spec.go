@@ -188,3 +188,49 @@ type chartTreeNodeSpec struct {
 	Ref  string          `json:"ref,omitempty"`
 	Spec json.RawMessage `json:"spec,omitempty"`
 }
+
+// reportArtefactSpec represents the parsed specification for a ReportArtefact manifest.
+type reportArtefactSpec struct {
+	LayoutPages []layoutPageRef `json:"layoutPages"`
+}
+
+// layoutPageRef represents a layout page reference with optional params.
+// Used for graph building to track parameterized page instances.
+type layoutPageRef struct {
+	Page   string            `json:"page,omitempty"`
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// UnmarshalJSON implements custom unmarshaling for layoutPageRef.
+// It handles both string values (just page name) and object values (page + params).
+func (r *layoutPageRef) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		r.Page = str
+		return nil
+	}
+
+	// Try to unmarshal as an object with page and params
+	var obj struct {
+		Page   string            `json:"page"`
+		Params map[string]string `json:"params"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("layoutPages item must be string or {page, params}: %w", err)
+	}
+	r.Page = obj.Page
+	r.Params = obj.Params
+	return nil
+}
+
+// parseReportArtefactSpec extracts the spec from a ReportArtefact manifest.
+func parseReportArtefactSpec(raw json.RawMessage) (reportArtefactSpec, error) {
+	var payload struct {
+		Spec reportArtefactSpec `json:"spec"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return reportArtefactSpec{}, err
+	}
+	return payload.Spec, nil
+}
