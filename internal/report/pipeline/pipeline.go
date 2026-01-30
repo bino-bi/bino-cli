@@ -6,7 +6,9 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"bino.bi/bino/internal/logx"
@@ -439,6 +441,12 @@ type RenderArtefactOptions struct {
 // For preview rendering, use RenderArtefactHTMLForPreview instead.
 // The workdir parameter is required for dataset execution.
 func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, opts RenderArtefactOptions) (RenderResult, error) {
+	// Select LayoutPages by patterns (before constraint filtering)
+	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	if err != nil {
+		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+	}
+
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, spec.ModeBuild)
 	if err != nil {
@@ -446,7 +454,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	}
 
 	// Filter documents by constraints for this artefact
-	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return RenderResult{}, err
 	}
@@ -480,6 +488,12 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The engineVersion parameter specifies which template engine version to use.
 func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (RenderResult, error) {
+	// Select LayoutPages by patterns (before constraint filtering)
+	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	if err != nil {
+		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+	}
+
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, spec.ModePreview)
 	if err != nil {
@@ -487,7 +501,7 @@ func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []co
 	}
 
 	// Filter documents by constraints for this artefact
-	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return RenderResult{}, err
 	}
@@ -645,6 +659,81 @@ func filterDocsForLayoutPages(docs []config.Document, layoutPageNames []string) 
 	return result, nil
 }
 
+// selectLayoutPagesByPatterns filters and orders LayoutPage documents by name patterns.
+// Patterns are matched against metadata.name using path.Match (glob syntax).
+// Returns pages in pattern order; within each pattern, pages are sorted alphabetically by name.
+// Non-LayoutPage documents are preserved at the beginning of the result in their original order.
+// If patterns is empty or contains only "*", the function returns docs unchanged (default behavior).
+func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]config.Document, error) {
+	// Check if using default pattern (select all)
+	if len(patterns) == 0 || (len(patterns) == 1 && patterns[0] == "*") {
+		return docs, nil
+	}
+
+	// Separate LayoutPage documents from others
+	var layoutPages []config.Document
+	var others []config.Document
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" {
+			layoutPages = append(layoutPages, doc)
+		} else {
+			others = append(others, doc)
+		}
+	}
+
+	// Build name-to-document map for LayoutPages
+	pagesByName := make(map[string]config.Document, len(layoutPages))
+	for _, doc := range layoutPages {
+		pagesByName[doc.Name] = doc
+	}
+
+	// Select pages in pattern order
+	seen := make(map[string]bool)
+	var selected []config.Document
+
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Validate pattern syntax
+		if _, err := path.Match(pattern, ""); err != nil {
+			return nil, fmt.Errorf("invalid layoutPages pattern %q: %w", pattern, err)
+		}
+
+		// Find all matching pages
+		var matches []config.Document
+		for name, doc := range pagesByName {
+			if seen[name] {
+				continue
+			}
+			matched, _ := path.Match(pattern, name)
+			if matched {
+				matches = append(matches, doc)
+			}
+		}
+
+		// Sort matches alphabetically by name for deterministic order
+		sort.Slice(matches, func(i, j int) bool {
+			return matches[i].Name < matches[j].Name
+		})
+
+		// Add to selected (mark as seen to avoid duplicates)
+		for _, doc := range matches {
+			selected = append(selected, doc)
+			seen[doc.Name] = true
+		}
+	}
+
+	// Combine: non-LayoutPage docs first, then selected LayoutPages
+	result := make([]config.Document, 0, len(others)+len(selected))
+	result = append(result, others...)
+	result = append(result, selected...)
+
+	return result, nil
+}
+
 // RenderHTMLFrameAndContext generates a two-phase render output for preview mode.
 // It returns a lightweight frame HTML that loads quickly, and context HTML that
 // contains the full report content for SSE delivery.
@@ -721,6 +810,12 @@ func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir strin
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 // The engineVersion parameter specifies which template engine version to use.
 func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
+	// Select LayoutPages by patterns (before constraint filtering)
+	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	if err != nil {
+		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+	}
+
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, mode)
 	if err != nil {
@@ -728,7 +823,7 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 	}
 
 	// Filter documents by constraints for this artefact
-	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
@@ -766,6 +861,12 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 // The workdir parameter is required for dataset execution.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
+	// Select LayoutPages by patterns (before constraint filtering)
+	filtered, err := selectLayoutPagesByPatterns(docs, artefact.Spec.LayoutPages)
+	if err != nil {
+		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+	}
+
 	// Build constraint context from artefact
 	constraintCtx, err := buildConstraintContext(artefact, mode)
 	if err != nil {
@@ -773,7 +874,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 	}
 
 	// Filter documents by constraints for this artefact
-	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}

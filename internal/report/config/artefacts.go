@@ -23,16 +23,17 @@ const (
 
 // ReportArtefactSpec mirrors the ReportArtefact manifest spec section.
 type ReportArtefactSpec struct {
-	Format         string   `json:"format"`
-	Orientation    string   `json:"orientation"`
-	Language       string   `json:"language"`
-	Filename       string   `json:"filename"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Subject        string   `json:"subject"`
-	Author         string   `json:"author"`
-	Keywords       []string `json:"keywords"`
-	SigningProfile string   `json:"signingProfile,omitempty"`
+	Format         string        `json:"format"`
+	Orientation    string        `json:"orientation"`
+	Language       string        `json:"language"`
+	LayoutPages    StringOrSlice `json:"layoutPages,omitempty"` // glob patterns matching LayoutPage metadata.name
+	Filename       string        `json:"filename"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	Subject        string        `json:"subject"`
+	Author         string        `json:"author"`
+	Keywords       []string      `json:"keywords"`
+	SigningProfile string        `json:"signingProfile,omitempty"`
 }
 
 // ArtefactByName filters and orders ReportArtefact manifests.
@@ -87,6 +88,10 @@ func applyReportArtefactDefaults(name string, spec *ReportArtefactSpec) []string
 	if strings.TrimSpace(spec.Language) == "" {
 		spec.Language = DefaultArtefactLanguage
 		warnings = append(warnings, fmt.Sprintf("ReportArtefact %s: spec.language not set; defaulting to %s", name, DefaultArtefactLanguage))
+	}
+	// Default layoutPages to ["*"] to select all pages (current behavior)
+	if len(spec.LayoutPages) == 0 {
+		spec.LayoutPages = StringOrSlice{"*"}
 	}
 	return warnings
 }

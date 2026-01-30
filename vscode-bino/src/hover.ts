@@ -24,6 +24,12 @@ export class BinoHoverProvider implements vscode.HoverProvider {
 
         const line = document.lineAt(position.line).text;
 
+        // Check for layoutPages pattern hover
+        const layoutPagesHover = this.getLayoutPagesHover(document, position, line);
+        if (layoutPagesHover) {
+            return layoutPagesHover;
+        }
+
         // Try to extract dataset name from different patterns
         let datasetName: string | undefined;
 
@@ -141,5 +147,130 @@ export class BinoHoverProvider implements vscode.HoverProvider {
     private getIndentation(line: string): number {
         const match = line.match(/^(\s*)/);
         return match ? match[1].length : 0;
+    }
+
+    /**
+     * Get hover information for layoutPages patterns.
+     * Shows which LayoutPages match the pattern.
+     */
+    private getLayoutPagesHover(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        line: string
+    ): vscode.Hover | undefined {
+        // Check if we're in a layoutPages context
+        if (!this.isInLayoutPagesContext(document, position)) {
+            return undefined;
+        }
+
+        // Get the word range
+        const wordRange = document.getWordRangeAtPosition(position, /[\w*?-]+/);
+        if (!wordRange) {
+            return undefined;
+        }
+
+        const pattern = document.getText(wordRange);
+
+        // Skip if hovering over "layoutPages" key itself
+        if (pattern === 'layoutPages') {
+            return undefined;
+        }
+
+        // Get all LayoutPage documents
+        const layoutPages = this.indexer.getDocuments(['LayoutPage']);
+
+        // Find matching pages using glob-like matching
+        const matchingPages = layoutPages.filter(page => this.matchPattern(pattern, page.name));
+
+        const md = new vscode.MarkdownString();
+        md.isTrusted = true;
+
+        if (pattern === '*') {
+            md.appendMarkdown(`**Pattern:** \`*\` (all pages)\n\n`);
+            md.appendMarkdown(`**Matches ${matchingPages.length} LayoutPage(s):**\n\n`);
+        } else if (/[*?\[\]]/.test(pattern)) {
+            md.appendMarkdown(`**Glob Pattern:** \`${pattern}\`\n\n`);
+            md.appendMarkdown(`**Matches ${matchingPages.length} LayoutPage(s):**\n\n`);
+        } else {
+            // Exact match
+            const found = matchingPages.length > 0;
+            md.appendMarkdown(`**LayoutPage:** \`${pattern}\`\n\n`);
+            if (!found) {
+                md.appendMarkdown(`⚠️ _No LayoutPage with this name found_`);
+                return new vscode.Hover(md, wordRange);
+            }
+        }
+
+        if (matchingPages.length > 0) {
+            // Show matching pages
+            const displayPages = matchingPages.slice(0, 15);
+            for (const page of displayPages) {
+                md.appendMarkdown(`- \`${page.name}\` _(${page.file.split('/').pop()})_\n`);
+            }
+            if (matchingPages.length > 15) {
+                md.appendMarkdown(`\n_...and ${matchingPages.length - 15} more_`);
+            }
+        } else if (/[*?\[\]]/.test(pattern)) {
+            md.appendMarkdown(`_No matching LayoutPages found_`);
+        }
+
+        return new vscode.Hover(md, wordRange);
+    }
+
+    /**
+     * Simple glob-like pattern matching.
+     * Supports: * (any chars), ? (single char), exact match
+     */
+    private matchPattern(pattern: string, name: string): boolean {
+        // Convert glob pattern to regex
+        const regexStr = pattern
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special regex chars (except * and ?)
+            .replace(/\*/g, '.*')                  // * -> .*
+            .replace(/\?/g, '.');                  // ? -> .
+
+        try {
+            const regex = new RegExp(`^${regexStr}$`);
+            return regex.test(name);
+        } catch {
+            return pattern === name; // Fallback to exact match
+        }
+    }
+
+    /**
+     * Check if the current position is in a layoutPages context.
+     */
+    private isInLayoutPagesContext(document: vscode.TextDocument, position: vscode.Position): boolean {
+        const line = document.lineAt(position.line).text;
+        const trimmed = line.trim();
+
+        // Direct layoutPages field
+        if (trimmed.startsWith('layoutPages:')) {
+            return true;
+        }
+
+        // Array item under layoutPages
+        if (trimmed.startsWith('-')) {
+            const currentIndent = this.getIndentation(line);
+
+            // Look backwards to find layoutPages:
+            for (let lineNum = position.line - 1; lineNum >= 0 && lineNum > position.line - 15; lineNum--) {
+                const prevLine = document.lineAt(lineNum).text;
+                const prevTrimmed = prevLine.trim();
+                const prevIndent = this.getIndentation(prevLine);
+
+                if (prevTrimmed.startsWith('layoutPages:') && prevIndent < currentIndent) {
+                    return true;
+                }
+
+                // Stop if we hit another key at same or lower indentation
+                if (prevTrimmed.endsWith(':') && !prevTrimmed.startsWith('-') && prevIndent <= currentIndent) {
+                    if (!prevTrimmed.startsWith('layoutPages:')) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }

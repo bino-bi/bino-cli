@@ -163,3 +163,157 @@ func TestFilterDocsByConstraints(t *testing.T) {
 		}
 	})
 }
+
+func TestSelectLayoutPagesByPatterns(t *testing.T) {
+	// Create test documents
+	docs := []config.Document{
+		{Kind: "DataSource", Name: "sales-data"},
+		{Kind: "DataSet", Name: "sales-query"},
+		{Kind: "LayoutPage", Name: "cover"},
+		{Kind: "LayoutPage", Name: "sales-summary"},
+		{Kind: "LayoutPage", Name: "sales-detail"},
+		{Kind: "LayoutPage", Name: "chapter-1"},
+		{Kind: "LayoutPage", Name: "chapter-2"},
+		{Kind: "LayoutPage", Name: "appendix-a"},
+		{Kind: "LayoutPage", Name: "appendix-b"},
+	}
+
+	t.Run("default pattern selects all", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"*"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != len(docs) {
+			t.Errorf("expected %d docs, got %d", len(docs), len(result))
+		}
+	})
+
+	t.Run("empty patterns selects all", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != len(docs) {
+			t.Errorf("expected %d docs, got %d", len(docs), len(result))
+		}
+	})
+
+	t.Run("explicit names selection", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"cover", "sales-summary"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should have 2 non-LayoutPage + 2 selected LayoutPages
+		if len(result) != 4 {
+			t.Errorf("expected 4 docs, got %d", len(result))
+		}
+		// Non-LayoutPage docs should be first
+		if result[0].Kind != "DataSource" || result[1].Kind != "DataSet" {
+			t.Errorf("non-LayoutPage docs should be first")
+		}
+		// LayoutPages should be in pattern order
+		if result[2].Name != "cover" {
+			t.Errorf("expected cover, got %s", result[2].Name)
+		}
+		if result[3].Name != "sales-summary" {
+			t.Errorf("expected sales-summary, got %s", result[3].Name)
+		}
+	})
+
+	t.Run("glob pattern selection", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"sales-*"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should have 2 non-LayoutPage + 2 sales-* pages (sorted alphabetically)
+		if len(result) != 4 {
+			t.Errorf("expected 4 docs, got %d", len(result))
+		}
+		// Matches should be sorted alphabetically: sales-detail, sales-summary
+		if result[2].Name != "sales-detail" {
+			t.Errorf("expected sales-detail, got %s", result[2].Name)
+		}
+		if result[3].Name != "sales-summary" {
+			t.Errorf("expected sales-summary, got %s", result[3].Name)
+		}
+	})
+
+	t.Run("multiple patterns with ordering", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"cover", "chapter-*", "appendix-*"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// 2 non-LayoutPage + cover + 2 chapter + 2 appendix = 7
+		if len(result) != 7 {
+			t.Errorf("expected 7 docs, got %d", len(result))
+		}
+		// Verify order: cover, chapter-1, chapter-2, appendix-a, appendix-b
+		expectedOrder := []string{"cover", "chapter-1", "chapter-2", "appendix-a", "appendix-b"}
+		for i, expected := range expectedOrder {
+			if result[i+2].Name != expected {
+				t.Errorf("expected %s at index %d, got %s", expected, i+2, result[i+2].Name)
+			}
+		}
+	})
+
+	t.Run("deduplication across patterns", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"sales-*", "sales-summary"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// sales-summary should only appear once (from first pattern)
+		// 2 non-LayoutPage + 2 sales pages = 4
+		if len(result) != 4 {
+			t.Errorf("expected 4 docs (no duplicates), got %d", len(result))
+		}
+	})
+
+	t.Run("question mark wildcard", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"chapter-?"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should match chapter-1, chapter-2
+		layoutPages := 0
+		for _, doc := range result {
+			if doc.Kind == "LayoutPage" {
+				layoutPages++
+			}
+		}
+		if layoutPages != 2 {
+			t.Errorf("expected 2 chapter pages, got %d", layoutPages)
+		}
+	})
+
+	t.Run("invalid pattern syntax", func(t *testing.T) {
+		_, err := selectLayoutPagesByPatterns(docs, []string{"[invalid"})
+		if err == nil {
+			t.Errorf("expected error for invalid pattern syntax")
+		}
+	})
+
+	t.Run("no matches for pattern", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"nonexistent-*"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should have only non-LayoutPage docs
+		if len(result) != 2 {
+			t.Errorf("expected 2 docs (no matching LayoutPages), got %d", len(result))
+		}
+	})
+
+	t.Run("preserves non-LayoutPage document order", func(t *testing.T) {
+		result, err := selectLayoutPagesByPatterns(docs, []string{"cover"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// First two should be DataSource, DataSet in original order
+		if result[0].Name != "sales-data" || result[0].Kind != "DataSource" {
+			t.Errorf("expected DataSource sales-data first")
+		}
+		if result[1].Name != "sales-query" || result[1].Kind != "DataSet" {
+			t.Errorf("expected DataSet sales-query second")
+		}
+	})
+}
