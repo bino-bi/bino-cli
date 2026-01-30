@@ -53,6 +53,7 @@ const REFERENCE_PATTERNS: ReferencePattern[] = [
         kinds: ['ReportArtefact']
     }
     // Note: ref: is handled specially in provideDefinition to use child's kind field
+    // Note: layoutPages is handled specially to skip glob patterns
 ];
 
 /**
@@ -101,6 +102,15 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
         // Check if we're in a dependencies array
         if (this.isInDependenciesArray(document, position)) {
             return this.findDefinition(word, ['DataSource', 'DataSet']);
+        }
+
+        // Check if we're in a layoutPages array (skip glob patterns)
+        if (this.isInLayoutPagesArray(document, position)) {
+            // Skip if it looks like a glob pattern
+            if (!/[*?\[]/.test(word)) {
+                return this.findDefinition(word, ['LayoutPage']);
+            }
+            return undefined;
         }
 
         // Special handling for ref: field - determine kinds from layout child's kind field
@@ -181,6 +191,36 @@ export class BinoDefinitionProvider implements vscode.DefinitionProvider {
             const trimmed = line.trim();
 
             if (trimmed.startsWith('dependencies:')) {
+                // Check if current line is indented more than this line (is a child)
+                const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                const parentIndent = this.getIndentation(line);
+                if (currentIndent > parentIndent) {
+                    return true;
+                }
+            }
+
+            // Stop if we hit a different top-level key at same or less indentation
+            if (trimmed.endsWith(':') && !trimmed.startsWith('-') && !trimmed.startsWith('#')) {
+                const thisIndent = this.getIndentation(line);
+                const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                if (thisIndent <= currentIndent && lineNum !== position.line) {
+                    break;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if the cursor is within a layoutPages array.
+     */
+    private isInLayoutPagesArray(document: vscode.TextDocument, position: vscode.Position): boolean {
+        // Look backwards to find if we're in a layoutPages array
+        for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 15; lineNum--) {
+            const line = document.lineAt(lineNum).text;
+            const trimmed = line.trim();
+
+            if (trimmed.startsWith('layoutPages:')) {
                 // Check if current line is indented more than this line (is a child)
                 const currentIndent = this.getIndentation(document.lineAt(position.line).text);
                 const parentIndent = this.getIndentation(line);

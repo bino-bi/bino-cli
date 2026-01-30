@@ -86,6 +86,11 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             return this.getSourcesCompletions(document);
         }
 
+        // Check for layoutPages field in ReportArtefact
+        if (this.isLayoutPagesField(document, position, linePrefix)) {
+            return this.getLayoutPagesCompletions();
+        }
+
         return undefined;
     }
 
@@ -646,5 +651,109 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
 
         search(dir, 0);
         return files;
+    }
+
+    /**
+     * Check if we're in the layoutPages field of a ReportArtefact.
+     */
+    private isLayoutPagesField(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        linePrefix: string
+    ): boolean {
+        const trimmed = linePrefix.trim();
+
+        // Check if we're at "layoutPages:" or starting an array item under layoutPages
+        if (trimmed === 'layoutPages:' || trimmed.startsWith('layoutPages: ')) {
+            return true;
+        }
+
+        // Check if we're in a layoutPages array item (- pattern)
+        if (trimmed === '-' || trimmed.startsWith('- ')) {
+            // Look backwards to find if we're under layoutPages:
+            for (let lineNum = position.line; lineNum >= 0 && lineNum > position.line - 15; lineNum--) {
+                const line = document.lineAt(lineNum).text;
+                const lineTrimmed = line.trim();
+
+                if (lineTrimmed.startsWith('layoutPages:')) {
+                    const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                    const parentIndent = this.getIndentation(line);
+                    if (currentIndent > parentIndent) {
+                        return true;
+                    }
+                }
+
+                // Stop if we hit a different top-level key
+                if (lineTrimmed.endsWith(':') && !lineTrimmed.startsWith('-') && !lineTrimmed.startsWith('#')) {
+                    const thisIndent = this.getIndentation(line);
+                    const currentIndent = this.getIndentation(document.lineAt(position.line).text);
+                    if (thisIndent <= currentIndent && lineNum !== position.line) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get completions for layoutPages field - suggests LayoutPage names and glob patterns.
+     */
+    private getLayoutPagesCompletions(): vscode.CompletionItem[] {
+        const items: vscode.CompletionItem[] = [];
+
+        // Get all LayoutPage document names
+        const layoutPages = this.indexer.getDocuments(['LayoutPage']);
+
+        // Add individual LayoutPage names
+        for (const page of layoutPages) {
+            const item = new vscode.CompletionItem(page.name, vscode.CompletionItemKind.Reference);
+            item.detail = 'LayoutPage';
+            item.documentation = new vscode.MarkdownString(
+                `Reference to LayoutPage \`${page.name}\`\n\nDefined in: ${page.file}`
+            );
+            item.sortText = `1_${page.name}`; // Sort after patterns
+            items.push(item);
+        }
+
+        // Group pages by prefix to suggest glob patterns
+        const prefixCounts = new Map<string, number>();
+        for (const page of layoutPages) {
+            // Extract potential prefixes (e.g., "chapter-1" -> "chapter-")
+            const match = page.name.match(/^([a-zA-Z]+-)/);
+            if (match) {
+                const prefix = match[1];
+                prefixCounts.set(prefix, (prefixCounts.get(prefix) || 0) + 1);
+            }
+        }
+
+        // Suggest glob patterns for common prefixes (2+ pages)
+        for (const [prefix, count] of prefixCounts) {
+            if (count >= 2) {
+                const pattern = `${prefix}*`;
+                const matchingPages = layoutPages.filter(p => p.name.startsWith(prefix));
+                const item = new vscode.CompletionItem(pattern, vscode.CompletionItemKind.Snippet);
+                item.detail = `Glob pattern (${count} pages)`;
+                item.documentation = new vscode.MarkdownString(
+                    `Matches ${count} LayoutPages:\n\n${matchingPages.map(p => `- \`${p.name}\``).join('\n')}`
+                );
+                item.sortText = `0_${pattern}`; // Sort patterns first
+                items.push(item);
+            }
+        }
+
+        // Always suggest wildcard pattern
+        const wildcardItem = new vscode.CompletionItem('*', vscode.CompletionItemKind.Snippet);
+        wildcardItem.detail = `All pages (${layoutPages.length} total)`;
+        wildcardItem.documentation = new vscode.MarkdownString(
+            `Matches all LayoutPages. This is the default when layoutPages is omitted.\n\n` +
+            `Current pages:\n${layoutPages.slice(0, 10).map(p => `- \`${p.name}\``).join('\n')}` +
+            (layoutPages.length > 10 ? `\n- ... and ${layoutPages.length - 10} more` : '')
+        );
+        wildcardItem.sortText = '0_*'; // Sort first
+        items.push(wildcardItem);
+
+        return items;
     }
 }

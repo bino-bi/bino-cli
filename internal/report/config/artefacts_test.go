@@ -78,13 +78,77 @@ func TestApplyReportArtefactDefaults(t *testing.T) {
 	if spec.Language != DefaultArtefactLanguage {
 		t.Fatalf("expected default language %q, got %q", DefaultArtefactLanguage, spec.Language)
 	}
+	if len(spec.LayoutPages) != 1 || spec.LayoutPages[0] != "*" {
+		t.Fatalf("expected default layoutPages [\"*\"], got %v", spec.LayoutPages)
+	}
 	if len(warnings) != 3 {
 		t.Fatalf("expected 3 warnings, got %d", len(warnings))
 	}
 
-	explicit := ReportArtefactSpec{Format: "a4", Orientation: "portrait", Language: "en"}
+	explicit := ReportArtefactSpec{Format: "a4", Orientation: "portrait", Language: "en", LayoutPages: StringOrSlice{"cover", "summary"}}
 	if warns := applyReportArtefactDefaults("demo", &explicit); len(warns) != 0 {
 		t.Fatalf("expected no warnings when fields are set, got %d", len(warns))
+	}
+	// Explicit layoutPages should not be overwritten
+	if len(explicit.LayoutPages) != 2 || explicit.LayoutPages[0] != "cover" {
+		t.Fatalf("explicit layoutPages should not be changed, got %v", explicit.LayoutPages)
+	}
+}
+
+func TestReportArtefactSpecLayoutPages(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedLen    int
+		expectedFirst  string
+	}{
+		{
+			name:          "string array format",
+			input:         `{"spec": {"layoutPages": ["cover", "sales-*", "appendix-*"]}}`,
+			expectedLen:   3,
+			expectedFirst: "cover",
+		},
+		{
+			name:          "single string format",
+			input:         `{"spec": {"layoutPages": "cover"}}`,
+			expectedLen:   1,
+			expectedFirst: "cover",
+		},
+		{
+			name:          "omitted uses default",
+			input:         `{"spec": {}}`,
+			expectedLen:   1,
+			expectedFirst: "*",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := Document{
+				File:     "report.yaml",
+				Position: 1,
+				Kind:     "ReportArtefact",
+				Name:     "test",
+				Raw:      json.RawMessage(tt.input),
+			}
+
+			artefacts, err := CollectArtefacts([]Document{doc})
+			if err != nil {
+				t.Fatalf("CollectArtefacts returned error: %v", err)
+			}
+
+			if len(artefacts) != 1 {
+				t.Fatalf("expected 1 artefact, got %d", len(artefacts))
+			}
+
+			if len(artefacts[0].Spec.LayoutPages) != tt.expectedLen {
+				t.Errorf("expected %d layoutPages, got %d", tt.expectedLen, len(artefacts[0].Spec.LayoutPages))
+			}
+
+			if artefacts[0].Spec.LayoutPages[0] != tt.expectedFirst {
+				t.Errorf("expected first layoutPage %q, got %q", tt.expectedFirst, artefacts[0].Spec.LayoutPages[0])
+			}
+		})
 	}
 }
 

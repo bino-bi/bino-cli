@@ -1148,6 +1148,26 @@
           "default": "de",
           "description": "Language code passed to the renderer (currently 'de' or 'en')."
         },
+        "layoutPages": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Single pattern to select LayoutPages by metadata.name."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "description": "Array of patterns to select LayoutPages by metadata.name."
+            }
+          ],
+          "default": ["*"],
+          "description": "Patterns to select LayoutPages by metadata.name. Supports glob syntax (*, ?, [abc]). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: ['*'] (all pages matching format)."
+        },
         "filename": {
           "type": "string",
           "minLength": 1,
