@@ -17,6 +17,9 @@ spec:
   format: xga              # logical page size (e.g. xga, a4, letter)
   orientation: landscape   # portrait | landscape
   language: en             # de | en
+  layoutPages:             # optional: LayoutPage selection patterns
+    - cover                # exact name match
+    - sales-*              # glob pattern
   filename: sales-report.pdf
   title: "Sales Overview"
   description: "Quarterly sales overview for the group."
@@ -31,6 +34,7 @@ Fields:
 - `spec.format` – logical page size, default `xga`.
 - `spec.orientation` – `portrait` or `landscape`, default `landscape`.
 - `spec.language` – current options: `de` or `en`.
+- `spec.layoutPages` – optional list of patterns to select LayoutPages by `metadata.name`. Supports glob syntax (`*`, `?`, `[abc]`). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: `["*"]` (all pages matching format).
 - `spec.filename` – required output filename (relative to output directory).
 - `spec.title` – required human-readable title; also used in PDF metadata.
 - `spec.description` – optional description.
@@ -84,5 +88,33 @@ spec:
   author: "Group Controlling"
   signingProfile: corporateSigner
 ```
+
+## Page selection
+
+By default, a ReportArtefact includes all LayoutPages that match its `spec.format`. Use `spec.layoutPages` to explicitly select which pages to include and control their order.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: quarterly-report
+spec:
+  format: xga
+  layoutPages:
+    - cover              # cover page first
+    - executive-summary  # then summary
+    - detail-*           # all detail pages (alphabetically)
+    - appendix-*         # appendices last
+  filename: quarterly-report.pdf
+  title: "Quarterly Report"
+```
+
+Pattern syntax:
+- `*` matches any sequence of characters
+- `?` matches a single character
+- `[abc]` matches any character in the set
+
+Pages are rendered in the order their patterns appear. Within each pattern, matching pages are sorted alphabetically by name.
 
 Use placeholder screenshots in your docs to illustrate final PDFs, then replace them with real examples later.
