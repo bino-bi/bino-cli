@@ -391,7 +391,9 @@ spec:
     - sample
     - bino
     - report
-`, d.ReportName, d.Language, d.Filename, quoteYAML(d.ReportTitle), quoteYAML(description), quoteYAML("Rainbow Reporting Team"))
+  layoutPages:
+    - $%s
+`, d.ReportName, d.Language, d.Filename, quoteYAML(d.ReportTitle), quoteYAML(description), quoteYAML("Rainbow Reporting Team"), d.LayoutName)
 
 	dataSource := fmt.Sprintf(`apiVersion: bino.bi/v1alpha1
 kind: DataSource

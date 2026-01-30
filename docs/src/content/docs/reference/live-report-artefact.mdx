@@ -352,6 +352,208 @@ LiveReportArtefact applications include built-in navigation. When navigating bet
 
 This provides a smooth single-page application experience while maintaining proper URL routing.
 
+## Parameterized LayoutPages in routes
+
+When using `layoutPages` in a route, you can pass parameters to LayoutPages that define them. This combines the power of LayoutPage parameters with dynamic query parameters.
+
+### Basic usage
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: regional-dashboard
+spec:
+  title: "Regional Dashboard"
+  routes:
+    "/regional":
+      layoutPages:
+        - page: regional-sales
+          params:
+            REGION: ${REGION}      # From query params
+            YEAR: ${YEAR}
+      queryParams:
+        - name: REGION
+          type: select
+          default: "EU"
+          options:
+            items:
+              - value: "EU"
+                label: "Europe"
+              - value: "US"
+                label: "North America"
+              - value: "APAC"
+                label: "Asia Pacific"
+        - name: YEAR
+          type: number
+          default: "2024"
+          options:
+            min: 2020
+            max: 2030
+```
+
+When users visit `/regional?REGION=US&YEAR=2023`, the query params flow into the LayoutPage params, rendering the page with those values.
+
+### Combining static and dynamic params
+
+You can mix static values with dynamic query param references:
+
+```yaml
+routes:
+  "/comparison":
+    layoutPages:
+      # First page: current year, user-selected region
+      - page: regional-sales
+        params:
+          REGION: ${REGION}
+          YEAR: "2024"              # Static value
+          LABEL: "Current Year"
+
+      # Second page: previous year, same region
+      - page: regional-sales
+        params:
+          REGION: ${REGION}         # Same as user selected
+          YEAR: "2023"              # Static: previous year
+          LABEL: "Previous Year"
+    queryParams:
+      - name: REGION
+        type: select
+        default: "EU"
+```
+
+This creates a comparison view showing two years side by side.
+
+### Multiple parameterized pages
+
+Include the same LayoutPage multiple times with different parameter combinations:
+
+```yaml
+routes:
+  "/all-regions":
+    layoutPages:
+      - page: regional-sales
+        params:
+          REGION: EU
+          YEAR: ${YEAR}
+      - page: regional-sales
+        params:
+          REGION: US
+          YEAR: ${YEAR}
+      - page: regional-sales
+        params:
+          REGION: APAC
+          YEAR: ${YEAR}
+    queryParams:
+      - name: YEAR
+        type: number
+        default: "2024"
+```
+
+This shows all three regions on a single page, with the year controlled by the query parameter.
+
+### Complete example
+
+```yaml
+---
+# Define a parameterized LayoutPage
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: department-kpis
+  params:
+    - name: DEPARTMENT
+      type: string
+      required: true
+    - name: YEAR
+      type: number
+      default: "2024"
+    - name: SHOW_FORECAST
+      type: boolean
+      default: "false"
+spec:
+  titleBusinessUnit: "${DEPARTMENT} KPIs"
+  pageLayout: 2x2
+  children:
+    - kind: Text
+      spec:
+        value: "${DEPARTMENT} Performance - ${YEAR}"
+    - kind: ChartStructure
+      spec:
+        dataset: department-data
+        chartTitle: "Revenue"
+    - kind: Table
+      spec:
+        dataset: department-data
+        tableTitle: "Details"
+
+---
+# Use it in a LiveReportArtefact
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: department-dashboard
+spec:
+  title: "Department Dashboard"
+  routes:
+    # Single department view
+    "/":
+      layoutPages:
+        - page: department-kpis
+          params:
+            DEPARTMENT: ${DEPARTMENT}
+            YEAR: ${YEAR}
+            SHOW_FORECAST: ${SHOW_FORECAST:false}
+      queryParams:
+        - name: DEPARTMENT
+          type: select
+          description: "Select department"
+          options:
+            dataset: department_list
+            valueColumn: dept_id
+            labelColumn: dept_name
+        - name: YEAR
+          type: number
+          default: "2024"
+          options:
+            min: 2020
+            max: 2030
+        - name: SHOW_FORECAST
+          type: select
+          default: "false"
+          options:
+            items:
+              - value: "true"
+                label: "Yes"
+              - value: "false"
+                label: "No"
+
+    # All departments view
+    "/all":
+      layoutPages:
+        - page: department-kpis
+          params:
+            DEPARTMENT: "Sales"
+            YEAR: ${YEAR}
+        - page: department-kpis
+          params:
+            DEPARTMENT: "Marketing"
+            YEAR: ${YEAR}
+        - page: department-kpis
+          params:
+            DEPARTMENT: "Engineering"
+            YEAR: ${YEAR}
+      queryParams:
+        - name: YEAR
+          type: number
+          default: "2024"
+```
+
+Access patterns:
+- `/?DEPARTMENT=Sales` – Shows Sales department for 2024
+- `/?DEPARTMENT=Marketing&YEAR=2023` – Shows Marketing for 2023
+- `/all` – Shows all departments for 2024
+- `/all?YEAR=2022` – Shows all departments for 2022
+
 ## Validation
 
 The CLI validates LiveReportArtefact manifests at load time:
@@ -359,6 +561,7 @@ The CLI validates LiveReportArtefact manifests at load time:
 - Root route `/` must be present.
 - All route paths must start with `/`.
 - All referenced `artefact` names must correspond to existing `ReportArtefact` manifests.
+- All referenced LayoutPages in `layoutPages` must exist.
 - Query parameter names must be unique within each route.
 
 Validation errors are reported before the server starts.

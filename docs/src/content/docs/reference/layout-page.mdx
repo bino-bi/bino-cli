@@ -286,3 +286,423 @@ The `metadata` block on inline children is optional. If omitted, the child has n
 :::
 
 For comprehensive constraint documentation, see [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).
+
+## LayoutPage Parameters
+
+LayoutPages can define typed parameters that allow the same page to be reused with different values. This is useful for creating templates that can be instantiated multiple times with different data, such as regional reports, time-period comparisons, or any scenario where you want to render the same layout with different configurations.
+
+### Defining Parameters
+
+Parameters are defined in `metadata.params`. Each parameter has a name, type, and optional validation rules.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: regional-sales
+  params:
+    - name: REGION
+      type: select
+      description: "Region to display"
+      required: true
+      options:
+        items:
+          - value: "EU"
+            label: "Europe"
+          - value: "US"
+            label: "North America"
+          - value: "APAC"
+            label: "Asia Pacific"
+    - name: YEAR
+      type: number
+      description: "Reporting year"
+      default: "2024"
+      options:
+        min: 2020
+        max: 2030
+    - name: SHOW_DETAILS
+      type: boolean
+      description: "Show detailed breakdown"
+      default: "false"
+spec:
+  titleBusinessUnit: "Sales Report - ${REGION}"
+  pageLayout: split-vertical
+  children:
+    - kind: Text
+      metadata:
+        name: region-header
+      spec:
+        value: "Region: ${REGION} | Year: ${YEAR}"
+        style:
+          fontSize: 24
+          fontWeight: bold
+    - kind: Table
+      metadata:
+        name: regional-table
+      spec:
+        dataset: sales-data
+```
+
+### Parameter Types
+
+| Type | Description | Options |
+|------|-------------|---------|
+| `string` | Free-form text value | None |
+| `number` | Numeric value | `min`, `max` |
+| `boolean` | True/false value | None |
+| `select` | Choice from predefined options | `items` array with `value` and `label` |
+| `date` | Date value | None |
+
+### Parameter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Parameter name (used as `${NAME}` in the spec) |
+| `type` | No | Parameter type, defaults to `string` |
+| `description` | No | Human-readable description |
+| `default` | No | Default value if not provided |
+| `required` | No | If `true`, the parameter must be provided |
+| `options` | No | Type-specific options (see below) |
+
+### Options by Type
+
+**For `select` type:**
+```yaml
+options:
+  items:
+    - value: "EU"
+      label: "Europe"
+    - value: "US"
+      label: "North America"
+```
+
+**For `number` type:**
+```yaml
+options:
+  min: 2020
+  max: 2030
+```
+
+### Using Parameters in Spec
+
+Parameters are referenced using `${PARAM_NAME}` syntax anywhere in the LayoutPage spec. They work just like environment variables but are resolved when the page is instantiated.
+
+```yaml
+spec:
+  titleBusinessUnit: "Report for ${REGION}"
+  children:
+    - kind: Text
+      spec:
+        value: "Year: ${YEAR}, Region: ${REGION}"
+    - kind: Table
+      spec:
+        dataset: sales-by-region
+        # Parameters can be used in any string field
+        tableTitle: "${REGION} Sales Data"
+```
+
+### Default Values
+
+Parameters can have default values that are used when no value is provided:
+
+```yaml
+params:
+  - name: YEAR
+    type: number
+    default: "2024"
+  - name: CURRENCY
+    type: string
+    default: "EUR"
+```
+
+### Using Parameters in ReportArtefact
+
+To use a parameterized LayoutPage in a ReportArtefact, use the object form with `page` and `params`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: multi-region-report
+spec:
+  format: xga
+  orientation: landscape
+  layoutPages:
+    # String form - no params
+    - cover-page
+
+    # Object form - with params
+    - page: regional-sales
+      params:
+        REGION: EU
+        YEAR: "2024"
+
+    # Same page with different params
+    - page: regional-sales
+      params:
+        REGION: US
+        YEAR: "2024"
+
+    - page: regional-sales
+      params:
+        REGION: APAC
+        YEAR: "2024"
+        SHOW_DETAILS: "true"
+
+  filename: multi-region-report.pdf
+  title: "Multi-Region Sales Report"
+```
+
+This generates a PDF with four pages:
+1. The cover page (no params)
+2. Regional sales for Europe
+3. Regional sales for North America
+4. Regional sales for Asia Pacific (with detailed breakdown)
+
+### Mixing String and Object Forms
+
+You can mix string patterns and parameterized objects in the same `layoutPages` list:
+
+```yaml
+layoutPages:
+  - cover                          # String: exact match
+  - intro-*                        # String: glob pattern
+  - page: regional-sales           # Object: with params
+    params:
+      REGION: EU
+  - appendix-*                     # String: glob pattern
+```
+
+:::note
+Glob patterns (`*`, `?`, `[abc]`) only work with the string form. To pass params, you must use the object form with an explicit page name.
+:::
+
+### Parameter Validation
+
+Parameters are validated against their type and options:
+
+```yaml
+params:
+  - name: REGION
+    type: select
+    required: true
+    options:
+      items:
+        - value: "EU"
+        - value: "US"
+        - value: "APAC"
+```
+
+If you pass an invalid value (e.g., `REGION: "INVALID"`), a warning is emitted but the build continues.
+
+If a required parameter is missing and has no default, an error is raised.
+
+### Dynamic Parameter Values
+
+Parameter values can reference environment variables:
+
+```yaml
+layoutPages:
+  - page: regional-sales
+    params:
+      REGION: ${DEFAULT_REGION}      # From environment
+      YEAR: ${REPORT_YEAR:2024}      # With fallback default
+```
+
+This allows runtime configuration of parameter values.
+
+### Example: Comparison Report
+
+Create a report comparing multiple time periods:
+
+```yaml
+# Define a reusable period comparison page
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: period-comparison
+  params:
+    - name: PERIOD_START
+      type: date
+      required: true
+    - name: PERIOD_END
+      type: date
+      required: true
+    - name: PERIOD_LABEL
+      type: string
+      required: true
+spec:
+  titleBusinessUnit: "${PERIOD_LABEL}"
+  pageLayout: split-vertical
+  children:
+    - kind: Text
+      spec:
+        value: "${PERIOD_LABEL}: ${PERIOD_START} to ${PERIOD_END}"
+    - kind: Table
+      spec:
+        dataset: sales-data
+        tableTitle: "Sales for ${PERIOD_LABEL}"
+
+---
+# Use it multiple times in a report
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: quarterly-comparison
+spec:
+  format: xga
+  layoutPages:
+    - page: period-comparison
+      params:
+        PERIOD_LABEL: "Q1 2024"
+        PERIOD_START: "2024-01-01"
+        PERIOD_END: "2024-03-31"
+    - page: period-comparison
+      params:
+        PERIOD_LABEL: "Q2 2024"
+        PERIOD_START: "2024-04-01"
+        PERIOD_END: "2024-06-30"
+    - page: period-comparison
+      params:
+        PERIOD_LABEL: "Q3 2024"
+        PERIOD_START: "2024-07-01"
+        PERIOD_END: "2024-09-30"
+    - page: period-comparison
+      params:
+        PERIOD_LABEL: "Q4 2024"
+        PERIOD_START: "2024-10-01"
+        PERIOD_END: "2024-12-31"
+  filename: quarterly-comparison.pdf
+  title: "2024 Quarterly Comparison"
+```
+
+### Example: Multi-Dimension Report
+
+Create a report with multiple dimensions (region × product):
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: dimension-analysis
+  params:
+    - name: REGION
+      type: select
+      options:
+        items:
+          - value: "EU"
+          - value: "US"
+    - name: PRODUCT
+      type: select
+      options:
+        items:
+          - value: "Widget"
+          - value: "Gadget"
+spec:
+  titleBusinessUnit: "${REGION} - ${PRODUCT}"
+  pageLayout: 2x2
+  children:
+    - kind: ChartStructure
+      spec:
+        dataset: sales-data
+        chartTitle: "${PRODUCT} Sales in ${REGION}"
+    - kind: Table
+      spec:
+        dataset: sales-data
+        tableTitle: "Details"
+
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: dimension-report
+spec:
+  layoutPages:
+    # EU pages
+    - page: dimension-analysis
+      params:
+        REGION: EU
+        PRODUCT: Widget
+    - page: dimension-analysis
+      params:
+        REGION: EU
+        PRODUCT: Gadget
+    # US pages
+    - page: dimension-analysis
+      params:
+        REGION: US
+        PRODUCT: Widget
+    - page: dimension-analysis
+      params:
+        REGION: US
+        PRODUCT: Gadget
+  filename: dimension-report.pdf
+  title: "Cross-Dimension Analysis"
+```
+
+### Using Parameters with LiveReportArtefact
+
+Parameters work with LiveReportArtefact routes, allowing interactive reports:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: interactive-dashboard
+spec:
+  title: "Sales Dashboard"
+  routes:
+    "/regional":
+      layoutPages:
+        - page: regional-sales
+          params:
+            REGION: ${REGION}     # From query params
+            YEAR: ${YEAR}
+      queryParams:
+        - name: REGION
+          type: select
+          default: "EU"
+          options:
+            items:
+              - value: "EU"
+                label: "Europe"
+              - value: "US"
+                label: "North America"
+        - name: YEAR
+          type: number
+          default: "2024"
+          options:
+            min: 2020
+            max: 2030
+```
+
+When users visit `/regional?REGION=US&YEAR=2023`, the page renders with those parameter values.
+
+### Best Practices
+
+1. **Use descriptive parameter names**: Use clear, uppercase names like `REGION`, `YEAR`, `PRODUCT_LINE`.
+
+2. **Provide defaults**: Always provide sensible defaults for non-required parameters.
+
+3. **Document parameters**: Use the `description` field to explain what each parameter controls.
+
+4. **Validate with types**: Use appropriate types (`number`, `select`, `date`) to ensure valid values.
+
+5. **Keep parameter lists short**: If you need many parameters, consider breaking the page into smaller, focused components.
+
+6. **Use consistent naming**: If the same concept (e.g., region, year) appears in multiple pages, use the same parameter name.
+
+### Comparison with Constraints
+
+Parameters and constraints serve different purposes:
+
+| Feature | Parameters | Constraints |
+|---------|------------|-------------|
+| Purpose | Vary content within a page | Include/exclude entire pages |
+| Scope | Per-instance values | Per-artefact filtering |
+| Use case | Same layout, different data | Different layouts for different contexts |
+| Syntax | `${PARAM}` in spec | `metadata.constraints` |
+
+You can combine both: use constraints to filter which pages are included, and parameters to customize the included pages.

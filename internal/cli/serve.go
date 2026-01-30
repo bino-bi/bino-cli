@@ -164,15 +164,20 @@ Environment knobs:
 			}
 
 			// Collect all query param names from the live artefact to exclude from env var check
-			queryParamNames := make(map[string]struct{})
+			excludeNames := make(map[string]struct{})
 			for _, route := range liveArtefact.Spec.Routes {
 				for _, p := range route.QueryParams {
-					queryParamNames[p.Name] = struct{}{}
+					excludeNames[p.Name] = struct{}{}
 				}
 			}
 
-			// Check for missing env vars - exclude query params which will be provided at runtime
-			if err := config.CheckMissingEnvVarsExcluding(docs, queryParamNames); err != nil {
+			// Also exclude LayoutPage param names (they're resolved at render time)
+			for name := range config.CollectLayoutPageParamNames(docs) {
+				excludeNames[name] = struct{}{}
+			}
+
+			// Check for missing env vars - exclude query params and layout page params
+			if err := config.CheckMissingEnvVarsExcluding(docs, excludeNames); err != nil {
 				return ConfigError(err)
 			}
 
@@ -574,7 +579,7 @@ func serveLayoutPagesHandler(
 	cache *serveRenderCache,
 	workdir string,
 	baseDocs []config.Document,
-	layoutPages config.StringOrSlice,
+	layoutPages config.LayoutPagesOrRefs,
 	liveArtefact config.LiveArtefact,
 	routePath string,
 	routeSpec config.LiveRouteSpec,
@@ -631,11 +636,11 @@ func serveLayoutPagesHandler(
 
 // filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
 // and all other document types (DataSets, DataSources, etc.) needed for rendering.
-func filterDocsForLayoutPages(docs []config.Document, layoutPages config.StringOrSlice) []config.Document {
+func filterDocsForLayoutPages(docs []config.Document, layoutPages config.LayoutPagesOrRefs) []config.Document {
 	// Build a set of requested layout page names
 	requestedPages := make(map[string]struct{})
-	for _, name := range layoutPages {
-		requestedPages[name] = struct{}{}
+	for _, ref := range layoutPages {
+		requestedPages[ref.Page] = struct{}{}
 	}
 
 	// Filter documents: keep all non-LayoutPage docs, and only matching LayoutPages
@@ -654,13 +659,25 @@ func filterDocsForLayoutPages(docs []config.Document, layoutPages config.StringO
 	return filtered
 }
 
-// buildLayoutPagesCacheKey creates a cache key from layout page names and sorted query params.
-func buildLayoutPagesCacheKey(layoutPages config.StringOrSlice, params map[string]string) string {
-	// Sort layout pages for consistent key
-	pages := make([]string, len(layoutPages))
-	copy(pages, layoutPages)
-	sort.Strings(pages)
-	key := "layoutPages:" + strings.Join(pages, ",")
+// buildLayoutPagesCacheKey creates a cache key from layout page refs and sorted query params.
+func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[string]string) string {
+	// Build page+params strings and sort for consistent key
+	var pageKeys []string
+	for _, ref := range layoutPages {
+		pageKey := ref.Page
+		if len(ref.Params) > 0 {
+			// Include params in the key
+			var paramParts []string
+			for k, v := range ref.Params {
+				paramParts = append(paramParts, k+"="+v)
+			}
+			sort.Strings(paramParts)
+			pageKey += "#" + strings.Join(paramParts, ",")
+		}
+		pageKeys = append(pageKeys, pageKey)
+	}
+	sort.Strings(pageKeys)
+	key := "layoutPages:" + strings.Join(pageKeys, ";")
 
 	if len(params) == 0 {
 		return key

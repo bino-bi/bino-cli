@@ -117,4 +117,203 @@ Pattern syntax:
 
 Pages are rendered in the order their patterns appear. Within each pattern, matching pages are sorted alphabetically by name.
 
-Use placeholder screenshots in your docs to illustrate final PDFs, then replace them with real examples later.
+## Parameterized LayoutPages
+
+You can include the same LayoutPage multiple times with different parameter values. This is useful for generating reports that repeat a layout for different regions, time periods, or other dimensions.
+
+### Basic syntax
+
+Use the object form with `page` and `params` to pass parameter values:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: regional-report
+spec:
+  format: xga
+  layoutPages:
+    # String form - simple page reference
+    - cover-page
+
+    # Object form - page with parameters
+    - page: regional-sales
+      params:
+        REGION: EU
+        YEAR: "2024"
+
+    # Same page with different parameters
+    - page: regional-sales
+      params:
+        REGION: US
+        YEAR: "2024"
+
+    - page: regional-sales
+      params:
+        REGION: APAC
+        YEAR: "2024"
+
+  filename: regional-report.pdf
+  title: "Regional Sales Report"
+```
+
+Each parameterized reference creates a unique page instance with the specified values substituted into the LayoutPage's spec.
+
+### Mixing forms
+
+You can mix string patterns and parameterized objects in the same list:
+
+```yaml
+layoutPages:
+  - cover                          # String: exact name
+  - executive-summary              # String: exact name
+  - page: regional-sales           # Object: with params
+    params:
+      REGION: EU
+  - page: regional-sales
+    params:
+      REGION: US
+  - appendix-*                     # String: glob pattern
+```
+
+:::note
+Glob patterns (`*`, `?`, `[abc]`) only work with the string form. To pass parameters, you must use the object form with an explicit page name.
+:::
+
+### Dynamic parameter values
+
+Parameter values can reference environment variables:
+
+```yaml
+layoutPages:
+  - page: regional-sales
+    params:
+      REGION: ${DEFAULT_REGION}      # Resolved from environment
+      YEAR: ${REPORT_YEAR:2024}      # With fallback default
+```
+
+This enables runtime configuration of reports without modifying the manifest.
+
+### Example: Multi-region report
+
+```yaml
+---
+# Define a parameterized LayoutPage (in pages.yaml)
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: regional-sales
+  params:
+    - name: REGION
+      type: select
+      required: true
+      options:
+        items:
+          - value: "EU"
+            label: "Europe"
+          - value: "US"
+            label: "North America"
+          - value: "APAC"
+            label: "Asia Pacific"
+    - name: YEAR
+      type: number
+      default: "2024"
+spec:
+  titleBusinessUnit: "Sales Report - ${REGION}"
+  pageLayout: split-vertical
+  children:
+    - kind: Text
+      spec:
+        value: "Region: ${REGION} | Year: ${YEAR}"
+    - kind: Table
+      spec:
+        dataset: regional-sales-data
+
+---
+# Use it multiple times (in report.yaml)
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: all-regions-report
+spec:
+  format: xga
+  orientation: landscape
+  layoutPages:
+    - page: regional-sales
+      params:
+        REGION: EU
+        YEAR: "2024"
+    - page: regional-sales
+      params:
+        REGION: US
+        YEAR: "2024"
+    - page: regional-sales
+      params:
+        REGION: APAC
+        YEAR: "2024"
+  filename: all-regions-2024.pdf
+  title: "2024 Sales by Region"
+```
+
+This generates a single PDF with three pages, each showing sales data for a different region.
+
+### Example: Time comparison report
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: quarterly-summary
+  params:
+    - name: QUARTER
+      type: string
+      required: true
+    - name: START_DATE
+      type: date
+      required: true
+    - name: END_DATE
+      type: date
+      required: true
+spec:
+  titleBusinessUnit: "${QUARTER} Summary"
+  children:
+    - kind: Text
+      spec:
+        value: "${QUARTER}: ${START_DATE} to ${END_DATE}"
+    - kind: ChartStructure
+      spec:
+        dataset: quarterly-data
+
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: year-in-review
+spec:
+  layoutPages:
+    - page: quarterly-summary
+      params:
+        QUARTER: "Q1 2024"
+        START_DATE: "2024-01-01"
+        END_DATE: "2024-03-31"
+    - page: quarterly-summary
+      params:
+        QUARTER: "Q2 2024"
+        START_DATE: "2024-04-01"
+        END_DATE: "2024-06-30"
+    - page: quarterly-summary
+      params:
+        QUARTER: "Q3 2024"
+        START_DATE: "2024-07-01"
+        END_DATE: "2024-09-30"
+    - page: quarterly-summary
+      params:
+        QUARTER: "Q4 2024"
+        START_DATE: "2024-10-01"
+        END_DATE: "2024-12-31"
+  filename: year-in-review-2024.pdf
+  title: "2024 Year in Review"
+```
+
+For complete documentation on defining parameters in LayoutPages, see [LayoutPage Parameters](/reference/layout-page/#layoutpage-parameters).
