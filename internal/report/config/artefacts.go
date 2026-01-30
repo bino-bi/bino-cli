@@ -23,17 +23,17 @@ const (
 
 // ReportArtefactSpec mirrors the ReportArtefact manifest spec section.
 type ReportArtefactSpec struct {
-	Format         string        `json:"format"`
-	Orientation    string        `json:"orientation"`
-	Language       string        `json:"language"`
-	LayoutPages    StringOrSlice `json:"layoutPages,omitempty"` // glob patterns matching LayoutPage metadata.name
-	Filename       string        `json:"filename"`
-	Title          string        `json:"title"`
-	Description    string        `json:"description"`
-	Subject        string        `json:"subject"`
-	Author         string        `json:"author"`
-	Keywords       []string      `json:"keywords"`
-	SigningProfile string        `json:"signingProfile,omitempty"`
+	Format         string           `json:"format"`
+	Orientation    string           `json:"orientation"`
+	Language       string           `json:"language"`
+	LayoutPages    LayoutPagesOrRefs `json:"layoutPages,omitempty"` // page names, glob patterns, or objects with params
+	Filename       string           `json:"filename"`
+	Title          string           `json:"title"`
+	Description    string           `json:"description"`
+	Subject        string           `json:"subject"`
+	Author         string           `json:"author"`
+	Keywords       []string         `json:"keywords"`
+	SigningProfile string           `json:"signingProfile,omitempty"`
 }
 
 // ArtefactByName filters and orders ReportArtefact manifests.
@@ -91,7 +91,7 @@ func applyReportArtefactDefaults(name string, spec *ReportArtefactSpec) []string
 	}
 	// Default layoutPages to ["*"] to select all pages (current behavior)
 	if len(spec.LayoutPages) == 0 {
-		spec.LayoutPages = StringOrSlice{"*"}
+		spec.LayoutPages = LayoutPagesOrRefs{{Page: "*"}}
 	}
 	return warnings
 }
@@ -114,7 +114,7 @@ type LiveReportArtefactSpec struct {
 // Either Artefact or LayoutPages must be set, but not both.
 type LiveRouteSpec struct {
 	Artefact    string               `json:"artefact,omitempty"`
-	LayoutPages StringOrSlice        `json:"layoutPages,omitempty"` // one or more LayoutPage names
+	LayoutPages LayoutPagesOrRefs    `json:"layoutPages,omitempty"` // one or more LayoutPage names with optional params
 	Title       string               `json:"title,omitempty"`
 	QueryParams []LiveQueryParamSpec `json:"queryParams,omitempty"`
 }
@@ -157,6 +157,127 @@ type LiveQueryParamSpec struct {
 	Optional    bool                   `json:"optional,omitempty"` // if true, parameter is optional even without default
 	Description string                 `json:"description,omitempty"`
 	Options     *LiveQueryParamOptions `json:"options,omitempty"` // options for select, number, number_range types
+}
+
+// LayoutPageParamSpec defines a parameter for a LayoutPage.
+// Parameters act like environment variables but with higher precedence and type validation.
+type LayoutPageParamSpec struct {
+	Name        string                  `json:"name"`
+	Type        string                  `json:"type,omitempty"`     // string, number, boolean, select, date (default: string)
+	Default     *string                 `json:"default,omitempty"`  // nil means required
+	Required    bool                    `json:"required,omitempty"` // true means param must be provided
+	Description string                  `json:"description,omitempty"`
+	Options     *LayoutPageParamOptions `json:"options,omitempty"` // options for select, number types
+}
+
+// LayoutPageParamOptions defines constraints for param values.
+type LayoutPageParamOptions struct {
+	Items []LayoutPageParamOptionItem `json:"items,omitempty"` // for select
+	Min   *float64                    `json:"min,omitempty"`   // for number
+	Max   *float64                    `json:"max,omitempty"`   // for number
+}
+
+// LayoutPageParamOptionItem defines a select option.
+type LayoutPageParamOptionItem struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+}
+
+// LayoutPageRef references a LayoutPage with optional params.
+// Supports both string form (just the page name) and object form (page + params).
+type LayoutPageRef struct {
+	Page   string            `json:"page,omitempty"`
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// IsGlob returns true if this reference is a glob pattern (string-only, no params).
+func (r LayoutPageRef) IsGlob() bool {
+	return len(r.Params) == 0 && containsGlobChars(r.Page)
+}
+
+// containsGlobChars checks if a string contains glob wildcard characters.
+func containsGlobChars(s string) bool {
+	return strings.ContainsAny(s, "*?[")
+}
+
+// LayoutPagesOrRefs is the type for spec.layoutPages that supports both:
+// - String items: "cover", "sales-*"
+// - Object items: {page: "regional-sales", params: {REGION: "EU"}}
+type LayoutPagesOrRefs []LayoutPageRef
+
+// UnmarshalJSON implements json.Unmarshaler for LayoutPagesOrRefs.
+// It accepts:
+// - A single string: "cover" -> [{Page: "cover"}]
+// - A string array: ["cover", "sales-*"] -> [{Page: "cover"}, {Page: "sales-*"}]
+// - A mixed array: ["cover", {page: "sales", params: {REGION: "EU"}}]
+func (l *LayoutPagesOrRefs) UnmarshalJSON(data []byte) error {
+	// Try single string first
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		*l = []LayoutPageRef{{Page: single}}
+		return nil
+	}
+
+	// Try array
+	var items []json.RawMessage
+	if err := json.Unmarshal(data, &items); err != nil {
+		return fmt.Errorf("layoutPages must be a string or array: %w", err)
+	}
+
+	result := make([]LayoutPageRef, 0, len(items))
+	for i, item := range items {
+		// Try string first
+		var str string
+		if err := json.Unmarshal(item, &str); err == nil {
+			result = append(result, LayoutPageRef{Page: str})
+			continue
+		}
+
+		// Try object
+		var ref LayoutPageRef
+		if err := json.Unmarshal(item, &ref); err != nil {
+			return fmt.Errorf("layoutPages[%d] must be string or {page, params}: %w", i, err)
+		}
+		if ref.Page == "" {
+			return fmt.Errorf("layoutPages[%d]: 'page' field is required in object form", i)
+		}
+		// Validate: globs cannot have params
+		if len(ref.Params) > 0 && containsGlobChars(ref.Page) {
+			return fmt.Errorf("layoutPages[%d]: glob pattern %q cannot have params; use explicit page name", i, ref.Page)
+		}
+		result = append(result, ref)
+	}
+	*l = result
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler for LayoutPagesOrRefs.
+// Returns a single string if only one element with no params, otherwise an array.
+func (l LayoutPagesOrRefs) MarshalJSON() ([]byte, error) {
+	if len(l) == 1 && len(l[0].Params) == 0 {
+		return json.Marshal(l[0].Page)
+	}
+
+	// Build array representation
+	items := make([]any, len(l))
+	for i, ref := range l {
+		if len(ref.Params) == 0 {
+			items[i] = ref.Page
+		} else {
+			items[i] = ref
+		}
+	}
+	return json.Marshal(items)
+}
+
+// ToStringSlice converts LayoutPagesOrRefs to a simple string slice for backward compatibility.
+// This loses param information but is useful for functions that only need page names/patterns.
+func (l LayoutPagesOrRefs) ToStringSlice() []string {
+	result := make([]string, len(l))
+	for i, ref := range l {
+		result[i] = ref.Page
+	}
+	return result
 }
 
 // LiveQueryParamOptions defines options for select, number, and number_range type parameters.

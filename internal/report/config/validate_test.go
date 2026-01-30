@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func ptrString(s string) *string {
+	return &s
+}
+
+func ptrFloat64(f float64) *float64 {
+	return &f
+}
+
 func TestValidateDocumentsAllowsUnique(t *testing.T) {
 	docs := []Document{
 		{File: "a.yaml", Position: 1, Kind: "DataSource", Name: "source_a"},
@@ -208,7 +216,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/": {LayoutPages: []string{"page1", "page2"}},
+					"/": {LayoutPages: LayoutPagesOrRefs{{Page: "page1"}, {Page: "page2"}}},
 				},
 			},
 		}
@@ -226,7 +234,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/": {LayoutPages: []string{"page1", "unknown-page"}},
+					"/": {LayoutPages: LayoutPagesOrRefs{{Page: "page1"}, {Page: "unknown-page"}}},
 				},
 			},
 		}
@@ -248,7 +256,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/": {Artefact: "main-report", LayoutPages: []string{"page1"}},
+					"/": {Artefact: "main-report", LayoutPages: LayoutPagesOrRefs{{Page: "page1"}}},
 				},
 			},
 		}
@@ -277,6 +285,266 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "must have either artefact or layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestValidateLayoutPageParams(t *testing.T) {
+	t.Run("valid params", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "regional-sales",
+			Params: []LayoutPageParamSpec{
+				{Name: "REGION", Type: "string", Required: true},
+				{Name: "YEAR", Type: "number", Default: ptrString("2024")},
+			},
+		}
+		warnings, err := ValidateLayoutPageParams(doc)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(warnings) > 0 {
+			t.Fatalf("unexpected warnings: %v", warnings)
+		}
+	})
+
+	t.Run("missing param name", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{Type: "string"},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err == nil {
+			t.Fatal("expected error for missing param name")
+		}
+		if !strings.Contains(err.Error(), "missing required 'name' field") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("duplicate param name", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{Name: "REGION"},
+				{Name: "REGION"},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err == nil {
+			t.Fatal("expected error for duplicate param name")
+		}
+		if !strings.Contains(err.Error(), "duplicate param name") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid param type", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{Name: "REGION", Type: "invalid"},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err == nil {
+			t.Fatal("expected error for invalid param type")
+		}
+		if !strings.Contains(err.Error(), "invalid type") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("select type without options", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{Name: "REGION", Type: "select"},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err == nil {
+			t.Fatal("expected error for select without options")
+		}
+		if !strings.Contains(err.Error(), "requires options.items") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("valid select type", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{
+					Name: "REGION",
+					Type: "select",
+					Options: &LayoutPageParamOptions{
+						Items: []LayoutPageParamOptionItem{
+							{Value: "EU", Label: "Europe"},
+							{Value: "US", Label: "North America"},
+						},
+					},
+				},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("number type min > max", func(t *testing.T) {
+		doc := Document{
+			Kind: "LayoutPage",
+			Name: "test-page",
+			Params: []LayoutPageParamSpec{
+				{
+					Name: "YEAR",
+					Type: "number",
+					Options: &LayoutPageParamOptions{
+						Min: ptrFloat64(2030),
+						Max: ptrFloat64(2020),
+					},
+				},
+			},
+		}
+		_, err := ValidateLayoutPageParams(doc)
+		if err == nil {
+			t.Fatal("expected error for min > max")
+		}
+		if !strings.Contains(err.Error(), "min > max") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("non-LayoutPage returns nil", func(t *testing.T) {
+		doc := Document{
+			Kind: "DataSource",
+			Name: "test",
+		}
+		warnings, err := ValidateLayoutPageParams(doc)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if warnings != nil {
+			t.Fatalf("unexpected warnings: %v", warnings)
+		}
+	})
+}
+
+func TestValidateLayoutPageRefParams(t *testing.T) {
+	pageDocs := map[string]Document{
+		"regional-sales": {
+			Kind: "LayoutPage",
+			Name: "regional-sales",
+			Params: []LayoutPageParamSpec{
+				{
+					Name:     "REGION",
+					Type:     "select",
+					Required: true,
+					Options: &LayoutPageParamOptions{
+						Items: []LayoutPageParamOptionItem{
+							{Value: "EU"},
+							{Value: "US"},
+						},
+					},
+				},
+				{Name: "YEAR", Type: "number", Default: ptrString("2024")},
+			},
+		},
+	}
+
+	t.Run("valid params", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "regional-sales",
+			Params: map[string]string{"REGION": "EU"},
+		}
+		warnings, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(warnings) > 0 {
+			t.Fatalf("unexpected warnings: %v", warnings)
+		}
+	})
+
+	t.Run("missing required param", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "regional-sales",
+			Params: map[string]string{},
+		}
+		_, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err == nil {
+			t.Fatal("expected error for missing required param")
+		}
+		if !strings.Contains(err.Error(), "missing required param") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("unknown param warns", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "regional-sales",
+			Params: map[string]string{"REGION": "EU", "UNKNOWN": "value"},
+		}
+		warnings, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(warnings) != 1 {
+			t.Fatalf("expected 1 warning, got %d", len(warnings))
+		}
+		if !strings.Contains(warnings[0], "unknown param") {
+			t.Fatalf("unexpected warning: %v", warnings[0])
+		}
+	})
+
+	t.Run("invalid select value", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "regional-sales",
+			Params: map[string]string{"REGION": "INVALID"},
+		}
+		_, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err == nil {
+			t.Fatal("expected error for invalid select value")
+		}
+		if !strings.Contains(err.Error(), "not a valid option") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("page not found returns nil", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "nonexistent",
+			Params: map[string]string{},
+		}
+		warnings, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if warnings != nil {
+			t.Fatalf("unexpected warnings: %v", warnings)
+		}
+	})
+
+	t.Run("var reference skips validation", func(t *testing.T) {
+		ref := LayoutPageRef{
+			Page:   "regional-sales",
+			Params: map[string]string{"REGION": "${DEFAULT_REGION}"},
+		}
+		warnings, err := ValidateLayoutPageRefParams(ref, pageDocs)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(warnings) > 0 {
+			t.Fatalf("unexpected warnings: %v", warnings)
 		}
 	})
 }

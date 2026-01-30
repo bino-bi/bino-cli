@@ -78,19 +78,19 @@ func TestApplyReportArtefactDefaults(t *testing.T) {
 	if spec.Language != DefaultArtefactLanguage {
 		t.Fatalf("expected default language %q, got %q", DefaultArtefactLanguage, spec.Language)
 	}
-	if len(spec.LayoutPages) != 1 || spec.LayoutPages[0] != "*" {
+	if len(spec.LayoutPages) != 1 || spec.LayoutPages[0].Page != "*" {
 		t.Fatalf("expected default layoutPages [\"*\"], got %v", spec.LayoutPages)
 	}
 	if len(warnings) != 3 {
 		t.Fatalf("expected 3 warnings, got %d", len(warnings))
 	}
 
-	explicit := ReportArtefactSpec{Format: "a4", Orientation: "portrait", Language: "en", LayoutPages: StringOrSlice{"cover", "summary"}}
+	explicit := ReportArtefactSpec{Format: "a4", Orientation: "portrait", Language: "en", LayoutPages: LayoutPagesOrRefs{{Page: "cover"}, {Page: "summary"}}}
 	if warns := applyReportArtefactDefaults("demo", &explicit); len(warns) != 0 {
 		t.Fatalf("expected no warnings when fields are set, got %d", len(warns))
 	}
 	// Explicit layoutPages should not be overwritten
-	if len(explicit.LayoutPages) != 2 || explicit.LayoutPages[0] != "cover" {
+	if len(explicit.LayoutPages) != 2 || explicit.LayoutPages[0].Page != "cover" {
 		t.Fatalf("explicit layoutPages should not be changed, got %v", explicit.LayoutPages)
 	}
 }
@@ -145,8 +145,8 @@ func TestReportArtefactSpecLayoutPages(t *testing.T) {
 				t.Errorf("expected %d layoutPages, got %d", tt.expectedLen, len(artefacts[0].Spec.LayoutPages))
 			}
 
-			if artefacts[0].Spec.LayoutPages[0] != tt.expectedFirst {
-				t.Errorf("expected first layoutPage %q, got %q", tt.expectedFirst, artefacts[0].Spec.LayoutPages[0])
+			if artefacts[0].Spec.LayoutPages[0].Page != tt.expectedFirst {
+				t.Errorf("expected first layoutPage %q, got %q", tt.expectedFirst, artefacts[0].Spec.LayoutPages[0].Page)
 			}
 		})
 	}
@@ -409,6 +409,141 @@ func TestCollectDocumentArtefacts(t *testing.T) {
 
 			if len(artefacts[0].Spec.Sources) > 0 && artefacts[0].Spec.Sources[0] != tt.expectedSource {
 				t.Errorf("first source = %q, want %q", artefacts[0].Spec.Sources[0], tt.expectedSource)
+			}
+		})
+	}
+}
+
+func TestLayoutPagesOrRefs_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedLen   int
+		expectedFirst string
+		expectedError bool
+	}{
+		{
+			name:          "single string",
+			input:         `"cover"`,
+			expectedLen:   1,
+			expectedFirst: "cover",
+		},
+		{
+			name:          "string array",
+			input:         `["cover", "sales-*", "appendix"]`,
+			expectedLen:   3,
+			expectedFirst: "cover",
+		},
+		{
+			name:          "object with params",
+			input:         `[{"page": "regional-sales", "params": {"REGION": "EU"}}]`,
+			expectedLen:   1,
+			expectedFirst: "regional-sales",
+		},
+		{
+			name:          "mixed array",
+			input:         `["cover", {"page": "sales", "params": {"YEAR": "2024"}}]`,
+			expectedLen:   2,
+			expectedFirst: "cover",
+		},
+		{
+			name:          "object without params",
+			input:         `[{"page": "simple"}]`,
+			expectedLen:   1,
+			expectedFirst: "simple",
+		},
+		{
+			name:          "glob with params - error",
+			input:         `[{"page": "sales-*", "params": {"REGION": "EU"}}]`,
+			expectedError: true,
+		},
+		{
+			name:          "empty page name - error",
+			input:         `[{"page": "", "params": {"REGION": "EU"}}]`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var refs LayoutPagesOrRefs
+			err := json.Unmarshal([]byte(tt.input), &refs)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(refs) != tt.expectedLen {
+				t.Errorf("expected %d refs, got %d", tt.expectedLen, len(refs))
+			}
+
+			if len(refs) > 0 && refs[0].Page != tt.expectedFirst {
+				t.Errorf("expected first page %q, got %q", tt.expectedFirst, refs[0].Page)
+			}
+		})
+	}
+}
+
+func TestLayoutPagesOrRefs_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		refs     LayoutPagesOrRefs
+		expected string
+	}{
+		{
+			name:     "single page no params",
+			refs:     LayoutPagesOrRefs{{Page: "cover"}},
+			expected: `"cover"`,
+		},
+		{
+			name:     "multiple pages no params",
+			refs:     LayoutPagesOrRefs{{Page: "cover"}, {Page: "sales"}},
+			expected: `["cover","sales"]`,
+		},
+		{
+			name:     "page with params",
+			refs:     LayoutPagesOrRefs{{Page: "sales", Params: map[string]string{"REGION": "EU"}}},
+			expected: `[{"page":"sales","params":{"REGION":"EU"}}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.refs)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if string(data) != tt.expected {
+				t.Errorf("expected %s, got %s", tt.expected, string(data))
+			}
+		})
+	}
+}
+
+func TestLayoutPageRef_IsGlob(t *testing.T) {
+	tests := []struct {
+		name     string
+		ref      LayoutPageRef
+		expected bool
+	}{
+		{name: "simple name", ref: LayoutPageRef{Page: "cover"}, expected: false},
+		{name: "asterisk glob", ref: LayoutPageRef{Page: "sales-*"}, expected: true},
+		{name: "question glob", ref: LayoutPageRef{Page: "chapter-?"}, expected: true},
+		{name: "bracket glob", ref: LayoutPageRef{Page: "[abc]"}, expected: true},
+		{name: "with params", ref: LayoutPageRef{Page: "sales", Params: map[string]string{"REGION": "EU"}}, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.ref.IsGlob(); got != tt.expected {
+				t.Errorf("IsGlob() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

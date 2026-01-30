@@ -164,7 +164,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			// Fail build if any environment variables are unresolved
-			if err := config.CheckMissingEnvVars(documents); err != nil {
+			// Exclude param names defined in LayoutPages (they're resolved at render time)
+			paramNames := config.CollectLayoutPageParamNames(documents)
+			if err := config.CheckMissingEnvVarsExcluding(documents, paramNames); err != nil {
 				return ConfigError(err)
 			}
 

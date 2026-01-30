@@ -102,6 +102,17 @@
       },
       "then": {
         "properties": {
+          "metadata": {
+            "properties": {
+              "params": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/layoutPageParamSpec"
+                },
+                "description": "Parameter definitions for this LayoutPage. When the page is referenced with params, these define the expected parameter names, types, and validation rules."
+              }
+            }
+          },
           "spec": { "$ref": "#/$defs/layoutPageSpec" }
         }
       }
@@ -1158,15 +1169,14 @@
             {
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/$defs/layoutPageRef"
               },
               "minItems": 1,
-              "description": "Array of patterns to select LayoutPages by metadata.name."
+              "description": "Array of LayoutPage references. Each item can be a string (name or glob pattern) or an object with page name and params."
             }
           ],
           "default": ["*"],
-          "description": "Patterns to select LayoutPages by metadata.name. Supports glob syntax (*, ?, [abc]). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: ['*'] (all pages matching format)."
+          "description": "LayoutPage references. Supports string patterns with glob syntax (*, ?, [abc]) or objects with page and params for parameterized pages. Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: ['*'] (all pages)."
         },
         "filename": {
           "type": "string",
@@ -1256,14 +1266,13 @@
             {
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/$defs/layoutPageRef"
               },
               "minItems": 1,
-              "description": "Array of LayoutPage document names to render in order."
+              "description": "Array of LayoutPage references. Each item can be a string (name or glob pattern) or an object with page name and params."
             }
           ],
-          "description": "One or more LayoutPage documents to render for this route. Cannot be used together with artefact."
+          "description": "One or more LayoutPage documents to render for this route. Can use parameterized refs with page and params. Cannot be used together with artefact."
         },
         "title": {
           "type": "string",
@@ -1367,6 +1376,71 @@
       },
       "additionalProperties": false
     },
+    "layoutPageParamSpec": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Name of the parameter. Must be a valid identifier (used as ${name} in the LayoutPage)."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "select", "date"],
+          "default": "string",
+          "description": "Type of the parameter. Used for validation of passed values."
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value if the parameter is not provided. If omitted and required is true, an error is raised."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the parameter must be provided when using this LayoutPage. Default is false."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this parameter controls."
+        },
+        "options": {
+          "$ref": "#/$defs/liveQueryParamOptions",
+          "description": "Options for select type or constraints for number type (min, max)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "layoutPageRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name or glob pattern to select LayoutPage(s) by metadata.name."
+        },
+        {
+          "type": "object",
+          "required": ["page"],
+          "properties": {
+            "page": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the LayoutPage to reference (must be exact name, not a glob pattern)."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Parameter values to pass to the LayoutPage. Keys must match parameter names defined in the LayoutPage's metadata.params."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Reference to a LayoutPage, either as a string (name or glob pattern) or an object with page name and params."
+    },
     "screenshotArtefactSpec": {
       "type": "object",
       "required": ["filenamePrefix", "refs", "layoutPages"],
@@ -1381,14 +1455,13 @@
             {
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/$defs/layoutPageRef"
               },
               "minItems": 1,
-              "description": "Array of LayoutPage document names to render in order."
+              "description": "Array of LayoutPage references. Each item can be a string (name or glob pattern) or an object with page name and params."
             }
           ],
-          "description": "One or more LayoutPage documents to render. Components referenced in 'refs' must be present in these pages."
+          "description": "One or more LayoutPage documents to render. Can use parameterized refs with page and params. Components referenced in 'refs' must be present in these pages."
         },
         "format": {
           "type": "string",
