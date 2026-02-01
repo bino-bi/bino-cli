@@ -237,12 +237,9 @@ type initTemplateData struct {
 	ReportName     string
 	ReportTitle    string
 	Language       string
-	Locale         string
 	Filename       string
 	LayoutName     string
 	DataSourceName string
-	StyleName      string
-	I18nName       string
 }
 
 func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
@@ -264,31 +261,17 @@ func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
 		return initTemplateData{}, err
 	}
 	layoutName := sanitizeManifestName(reportName+"-page", reportName+"-page")
-	styleName := sanitizeManifestName(reportName+"-style", reportName+"-style")
-	i18nName := sanitizeManifestName(reportName+"-copy", reportName+"-copy")
 	dsName := sanitizeSQLIdentifier(reportName + "_data")
 	data := initTemplateData{
 		Directory:      absDir,
 		ReportName:     reportName,
 		ReportTitle:    reportTitle,
 		Language:       lang,
-		Locale:         defaultLocaleForLanguage(lang),
 		Filename:       reportName + ".pdf",
 		LayoutName:     layoutName,
 		DataSourceName: dsName,
-		StyleName:      styleName,
-		I18nName:       i18nName,
 	}
 	return data, nil
-}
-
-func defaultLocaleForLanguage(lang string) string {
-	switch lang {
-	case "de":
-		return "de-DE"
-	default:
-		return "en-US"
-	}
 }
 
 func normalizeLanguage(value string) string {
@@ -392,7 +375,7 @@ spec:
     - bino
     - report
   layoutPages:
-    - $%s
+    - %s
 `, d.ReportName, d.Language, d.Filename, quoteYAML(d.ReportTitle), quoteYAML(description), quoteYAML("Rainbow Reporting Team"), d.LayoutName)
 
 	dataSource := fmt.Sprintf(`apiVersion: bino.bi/v1alpha1
@@ -420,31 +403,7 @@ spec:
           Welcome to %s!
           \${this.data['$%s'][0].name} just shipped the latest KPI export.
         dataset: $%s
----
-apiVersion: bino.bi/v1alpha1
-kind: ComponentStyle
-metadata:
-  name: %s
-spec:
-  content:
-    tokens:
-      brandColor: "#2563eb"
-    selectors:
-      ".hero":
-        fontWeight: 600
-        color: "#0f172a"
----
-apiVersion: bino.bi/v1alpha1
-kind: Internationalization
-metadata:
-  name: %s
-spec:
-  code: %s
-  namespace: intro
-  content:
-    messages:
-      welcome: %s
-`, d.LayoutName, d.ReportTitle, d.DataSourceName, d.DataSourceName, d.StyleName, d.I18nName, d.Locale, quoteYAML(fmt.Sprintf("Welcome to %s", d.ReportTitle)))
+`, d.LayoutName, d.ReportTitle, d.DataSourceName, d.DataSourceName)
 
 	bnignore := "# Bino build output\ndist/\n.bncache/\n"
 

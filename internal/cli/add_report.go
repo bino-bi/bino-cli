@@ -875,11 +875,8 @@ func buildReportArtefactDocument(data ReportArtefactManifestData) *schema.Docume
 	doc.Metadata.Description = data.Description
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
-	// Add $ prefix to layout page names for YAML reference syntax
 	layoutPages := make([]string, len(data.LayoutPages))
-	for i, page := range data.LayoutPages {
-		layoutPages[i] = "$" + page
-	}
+	copy(layoutPages, data.LayoutPages)
 
 	spec := &schema.ReportArtefactSpec{
 		Filename:    data.Filename,
@@ -940,7 +937,7 @@ func buildReportArtefactDocumentWithParams(data ReportArtefactManifestData) map[
 
 	// Add simple string refs first
 	for _, page := range data.LayoutPages {
-		layoutPages = append(layoutPages, "$"+page)
+		layoutPages = append(layoutPages, page)
 	}
 
 	// Add parameterized refs
@@ -980,9 +977,7 @@ func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schem
 		}
 		if len(route.LayoutPages) > 0 {
 			layoutPages := make([]string, len(route.LayoutPages))
-			for i, page := range route.LayoutPages {
-				layoutPages[i] = "$" + page
-			}
+			copy(layoutPages, route.LayoutPages)
 			routeSpec.LayoutPages = layoutPages
 		}
 		routes[path] = routeSpec

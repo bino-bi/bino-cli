@@ -482,7 +482,7 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 			})
 		} else {
 			// Simple string form
-			layoutPages = append(layoutPages, "$"+pageRef.Page)
+			layoutPages = append(layoutPages, pageRef.Page)
 		}
 
 		spec["layoutPages"] = layoutPages
