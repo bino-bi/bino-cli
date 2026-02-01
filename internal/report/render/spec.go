@@ -9,12 +9,15 @@ import (
 	reportspec "bino.bi/bino/internal/report/spec"
 )
 
+// dateString is a type alias for reportspec.DateString to simplify struct field declarations.
+type dateString = reportspec.DateString
+
 // layoutPageSpec defines the structure for LayoutPage components.
 type layoutPageSpec struct {
-	TitleBusinessUnit   string                 `json:"titleBusinessUnit"`
-	TitleNamespace      string                 `json:"titleNamespace"`
-	TitleDateStart      string                 `json:"titleDateStart"`
-	TitleDateEnd        string                 `json:"titleDateEnd"`
+	TitleBusinessUnit   string     `json:"titleBusinessUnit"`
+	TitleNamespace      string     `json:"titleNamespace"`
+	TitleDateStart      dateString `json:"titleDateStart"`
+	TitleDateEnd        dateString `json:"titleDateEnd"`
 	TitleDateFormat     string                 `json:"titleDateFormat"`
 	TitleDateLink       string                 `json:"titleDateLink"`
 	TitleMeasures       reportspec.MeasureList `json:"titleMeasures"`
@@ -39,8 +42,8 @@ type layoutPageSpec struct {
 func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "title-business-unit", s.TitleBusinessUnit)
 	writeAttr(b, "title-namespace", s.TitleNamespace)
-	writeAttr(b, "title-date-start", s.TitleDateStart)
-	writeAttr(b, "title-date-end", s.TitleDateEnd)
+	writeAttr(b, "title-date-start", s.TitleDateStart.String())
+	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
 	writeAttr(b, "title-date-link", s.TitleDateLink)
 	writeAttr(b, "title-measures", s.TitleMeasures.String())
@@ -75,8 +78,8 @@ type layoutCardSpec struct {
 	TitleOrder          string                 `json:"titleOrder"`
 	TitleOrderDirection string                 `json:"titleOrderDirection"`
 	TitleMeasures       reportspec.MeasureList `json:"titleMeasures"`
-	TitleDateStart      string                 `json:"titleDateStart"`
-	TitleDateEnd        string                 `json:"titleDateEnd"`
+	TitleDateStart      dateString             `json:"titleDateStart"`
+	TitleDateEnd        dateString             `json:"titleDateEnd"`
 	TitleDateFormat     string                 `json:"titleDateFormat"`
 	TitleDateLink       string                 `json:"titleDateLink"`
 	TitleNamespace      string                 `json:"titleNamespace"`
@@ -97,8 +100,8 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "title-order", s.TitleOrder)
 	writeAttr(b, "title-order-direction", s.TitleOrderDirection)
 	writeAttr(b, "title-measures", s.TitleMeasures.String())
-	writeAttr(b, "title-date-start", s.TitleDateStart)
-	writeAttr(b, "title-date-end", s.TitleDateEnd)
+	writeAttr(b, "title-date-start", s.TitleDateStart.String())
+	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
 	writeAttr(b, "title-date-link", s.TitleDateLink)
 	writeAttr(b, "title-namespace", s.TitleNamespace)
