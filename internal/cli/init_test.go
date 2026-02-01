@@ -54,8 +54,8 @@ func TestBuildInitTemplateData(t *testing.T) {
 	if data.ReportName != "pretty-report" {
 		t.Fatalf("ReportName = %s", data.ReportName)
 	}
-	if data.Language != "de" || data.Locale != "de-DE" {
-		t.Fatalf("unexpected language/locale: %s %s", data.Language, data.Locale)
+	if data.Language != "de" {
+		t.Fatalf("unexpected language: %s", data.Language)
 	}
 	if data.DataSourceName == "" || data.LayoutName == "" {
 		t.Fatalf("expected derived names to be non-empty")
@@ -69,12 +69,9 @@ func TestWriteInitBundleCreatesFiles(t *testing.T) {
 		ReportName:     "sample-report",
 		ReportTitle:    "Sample",
 		Language:       "en",
-		Locale:         "en-US",
 		Filename:       "sample-report.pdf",
 		LayoutName:     "sample-report-page",
 		DataSourceName: "sample_report_data",
-		StyleName:      "sample-report-style",
-		I18nName:       "sample-report-copy",
 	}
 	created, _, err := writeInitBundle(data, false)
 	if err != nil {
