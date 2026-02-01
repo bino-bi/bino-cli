@@ -2174,13 +2174,13 @@
         "titleNamespace": { "type": "string", "default": "_system" },
         "titleDateStart": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01)."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
+          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01). Also accepts datetime format from YAML date parsing."
         },
         "titleDateEnd": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31)."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
+          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31). Also accepts datetime format from YAML date parsing."
         },
         "titleDateFormat": {
           "type": "string",
@@ -2336,13 +2336,13 @@
         },
         "titleDateStart": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01)."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
+          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01). Also accepts datetime format from YAML date parsing."
         },
         "titleDateEnd": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31)."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
+          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31). Also accepts datetime format from YAML date parsing."
         },
         "titleDateFormat": {
           "type": "string",
