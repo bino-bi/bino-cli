@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bufio"
 	"compress/gzip"
 	"context"
@@ -58,7 +59,12 @@ func getAssetName() string {
 		archName = "x86_64"
 	}
 
-	return fmt.Sprintf("bino-cli_%s_%s.tar.gz", osName, archName)
+	ext := "tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = "zip"
+	}
+
+	return fmt.Sprintf("bino-cli_%s_%s.%s", osName, archName, ext)
 }
 
 // getLatestDownloadURL returns the latest download URL for the current platform.
@@ -247,13 +253,6 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
 	}
 
-	// Re-open archive for extraction
-	archiveFile, err = os.Open(archivePath)
-	if err != nil {
-		return fmt.Errorf("reopening archive: %w", err)
-	}
-	defer archiveFile.Close()
-
 	// Get current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -268,10 +267,25 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Extract the binary from the tarball
-	if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("extracting binary: %w", err)
+	// Extract the binary from the archive
+	if runtime.GOOS == "windows" {
+		// Windows uses zip archives
+		if err := extractBinaryFromZip(archivePath, tmpFile); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("extracting binary: %w", err)
+		}
+	} else {
+		// Re-open archive for extraction (Unix uses tar.gz)
+		archiveFile, err = os.Open(archivePath)
+		if err != nil {
+			return fmt.Errorf("reopening archive: %w", err)
+		}
+		defer archiveFile.Close()
+
+		if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("extracting binary: %w", err)
+		}
 	}
 	tmpFile.Close()
 
@@ -396,6 +410,33 @@ func extractBinaryFromTarGz(r io.Reader, w io.Writer) error {
 		if header.Typeflag == tar.TypeReg &&
 			(header.Name == "bino" || header.Name == "bino.exe") {
 			if _, err := io.Copy(w, tr); err != nil {
+				return fmt.Errorf("extracting binary: %w", err)
+			}
+			return nil
+		}
+	}
+
+	return errors.New("bino binary not found in archive")
+}
+
+// extractBinaryFromZip extracts the "bino.exe" binary from a zip archive.
+func extractBinaryFromZip(archivePath string, w io.Writer) error {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("opening zip archive: %w", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		// Look for the bino binary
+		if f.Name == "bino" || f.Name == "bino.exe" {
+			rc, err := f.Open()
+			if err != nil {
+				return fmt.Errorf("opening file in zip: %w", err)
+			}
+			defer rc.Close()
+
+			if _, err := io.Copy(w, rc); err != nil {
 				return fmt.Errorf("extracting binary: %w", err)
 			}
 			return nil
