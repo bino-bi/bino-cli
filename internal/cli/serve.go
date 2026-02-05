@@ -164,10 +164,15 @@ Environment knobs:
 			}
 
 			// Collect all query param names from the live artefact to exclude from env var check
+			// For select type params with static items, also exclude {name}_LABEL
 			excludeNames := make(map[string]struct{})
 			for _, route := range liveArtefact.Spec.Routes {
 				for _, p := range route.QueryParams {
 					excludeNames[p.Name] = struct{}{}
+					// For select params with static items, also exclude the _LABEL variant
+					if p.Type == "select" && p.Options != nil && len(p.Options.Items) > 0 {
+						excludeNames[p.Name+"_LABEL"] = struct{}{}
+					}
 				}
 			}
 
@@ -712,16 +717,27 @@ func (r queryParamValidationResult) IsValid() bool {
 // validateAndMergeQueryParams validates query parameters against route spec.
 // Returns merged params (request values + defaults) and list of missing required params.
 // Unlike before, this does NOT return an error - missing params are reported in the result.
+// For select type params with static items, also adds {name}_LABEL with the label from the option item.
 func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) queryParamValidationResult {
 	result := queryParamValidationResult{
 		Params:       make(map[string]string),
 		MissingNames: nil,
 	}
 
+	// Build param spec lookup for label resolution
+	paramSpecs := make(map[string]config.LiveQueryParamSpec)
+	for _, p := range routeSpec.QueryParams {
+		paramSpecs[p.Name] = p
+	}
+
 	// Apply defaults first
 	defaults := routeSpec.GetQueryParamDefaults()
 	for name, defaultVal := range defaults {
 		result.Params[name] = defaultVal
+		// Add _LABEL for select params with static items
+		if spec, ok := paramSpecs[name]; ok && spec.Type == "select" && spec.Options != nil && len(spec.Options.Items) > 0 {
+			result.Params[name+"_LABEL"] = lookupLiveSelectLabel(spec.Options.Items, defaultVal)
+		}
 	}
 
 	// Override with request values (only for declared params)
@@ -733,6 +749,10 @@ func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	for name := range declaredParams {
 		if values, ok := requestQuery[name]; ok && len(values) > 0 {
 			result.Params[name] = values[0]
+			// Add _LABEL for select params with static items
+			if spec, ok := paramSpecs[name]; ok && spec.Type == "select" && spec.Options != nil && len(spec.Options.Items) > 0 {
+				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(spec.Options.Items, values[0])
+			}
 		}
 	}
 
@@ -744,6 +764,20 @@ func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	}
 
 	return result
+}
+
+// lookupLiveSelectLabel finds the label for a given value in a list of live select option items.
+// If the value is not found or has no label, the value itself is returned.
+func lookupLiveSelectLabel(items []config.LiveQueryParamOptionItem, value string) string {
+	for _, item := range items {
+		if item.Value == value {
+			if item.Label != "" {
+				return item.Label
+			}
+			return value // No label defined, use value
+		}
+	}
+	return value // Value not found in items, use value as-is
 }
 
 // buildCacheKey creates a cache key from artefact name and sorted query params.

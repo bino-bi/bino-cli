@@ -134,7 +134,7 @@ params:
 
 #### select
 
-Choice from predefined options.
+Choice from predefined options. Each item has a `value` (the key used in code) and an optional `label` (the human-readable display name).
 
 ```yaml
 params:
@@ -151,6 +151,12 @@ params:
           label: "Asia Pacific"
 ```
 
+For select parameters, you can access both the value and the label:
+- `${REGION}` – returns the value (e.g., `"EU"`)
+- `${REGION_LABEL}` – returns the label (e.g., `"Europe"`)
+
+If no label is defined, `${REGION_LABEL}` returns the value.
+
 #### date
 
 Date value in YYYY-MM-DD format.
@@ -164,29 +170,34 @@ params:
 
 ## Using parameters in your layout
 
-Parameters are referenced using `${PARAM_NAME}` syntax anywhere in the spec:
+Parameters are referenced using `${PARAM_NAME}` syntax anywhere in the spec.
+
+For `select` type parameters, you can also use `${PARAM_NAME_LABEL}` to get the human-readable label instead of the value:
 
 ```yaml
 spec:
-  # In title fields
-  titleBusinessUnit: "Report for ${REGION}"
+  # In title fields - use the label for display
+  titleBusinessUnit: "Report for ${REGION_LABEL}"
 
   # In component specs
   children:
     - kind: Text
       spec:
-        value: "Year: ${YEAR}, Region: ${REGION}"
+        # Show label to users, use value in queries
+        value: "Year: ${YEAR}, Region: ${REGION_LABEL}"
 
     - kind: Table
       spec:
         dataset: sales-data
-        tableTitle: "${REGION} Sales"
+        tableTitle: "${REGION_LABEL} Sales"
 
     - kind: ChartStructure
       spec:
         dataset: regional-data
-        chartTitle: "${YEAR} Performance - ${REGION}"
+        chartTitle: "${YEAR} Performance - ${REGION_LABEL}"
 ```
+
+The `_LABEL` suffix is available for any `select` type parameter with defined options. If the label is not defined for an item, the value is used instead.
 
 ## Practical examples
 
@@ -222,14 +233,15 @@ metadata:
           - value: "EUR"
           - value: "GBP"
 spec:
-  titleBusinessUnit: "${REGION}"
+  # Use ${REGION_LABEL} for display, ${REGION} for data filtering
+  titleBusinessUnit: "${REGION_LABEL}"
   pageLayout: 2x2
   children:
     - kind: Text
       metadata:
         name: header
       spec:
-        value: "${REGION} Sales Report"
+        value: "${REGION_LABEL} Sales Report"
         style:
           fontSize: 28
           fontWeight: bold

@@ -669,6 +669,7 @@ type SelectedLayoutPage struct {
 // expandLayoutPageWithParams expands params into a LayoutPage document.
 // Returns a new document with:
 // - Params expanded into the Raw content using ${PARAM} substitution
+// - For select params, ${PARAM_LABEL} is also available with the label from the option item
 // - A unique name suffix based on the param values (e.g., "page#REGION=EU,YEAR=2024")
 // If params is empty, returns the original document unchanged.
 func expandLayoutPageWithParams(doc config.Document, params map[string]string) (config.Document, error) {
@@ -685,14 +686,26 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) (
 	}
 
 	// Step 2: Build effective params: explicit params > defaults from doc.Params
+	// Also add _LABEL variants for select type params
 	effectiveParams := make(map[string]string)
 	for _, def := range doc.Params {
 		if def.Default != nil {
 			effectiveParams[def.Name] = *def.Default
+			// For select params with default, also set the label
+			if def.Type == "select" && def.Options != nil {
+				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, *def.Default)
+			}
 		}
 	}
 	for k, v := range expandedParams {
 		effectiveParams[k] = v
+		// For select params, also set the _LABEL variant
+		for _, def := range doc.Params {
+			if def.Name == k && def.Type == "select" && def.Options != nil {
+				effectiveParams[k+"_LABEL"] = lookupSelectLabel(def.Options.Items, v)
+				break
+			}
+		}
 	}
 
 	// Step 3: Create lookup chain: params > ENV (fallback)
@@ -728,6 +741,20 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) (
 		Raw:            []byte(expandedContent),
 		MissingEnvVars: nil, // Params should have resolved any missing vars
 	}, nil
+}
+
+// lookupSelectLabel finds the label for a given value in a list of select option items.
+// If the value is not found or has no label, the value itself is returned.
+func lookupSelectLabel(items []config.LayoutPageParamOptionItem, value string) string {
+	for _, item := range items {
+		if item.Value == value {
+			if item.Label != "" {
+				return item.Label
+			}
+			return value // No label defined, use value
+		}
+	}
+	return value // Value not found in items, use value as-is
 }
 
 // selectLayoutPagesByRefs filters and orders LayoutPage documents by LayoutPageRef entries.
