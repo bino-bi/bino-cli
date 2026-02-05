@@ -229,101 +229,62 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
 
-				if len(artefacts) == 0 && len(documentArtefacts) == 0 {
-					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
-						Language:                 "de",
-						Mode:                     pipeline.RenderModePreview,
-						EngineVersion:            engineVersion,
-						QueryLogger:              queryLogger,
-						DataValidation:           dataValidationMode,
-						DataValidationSampleSize: dataValidationSampleSize,
+				// Build artefact info list for header dropdown
+				artefactInfos := make([]previewArtefactInfo, 0, len(artefacts)+len(documentArtefacts))
+				for _, art := range artefacts {
+					artefactInfos = append(artefactInfos, previewArtefactInfo{
+						Name:   art.Document.Name,
+						Title:  art.Spec.Title,
+						Format: art.Spec.Format,
+						IsDoc:  false,
 					})
-					if err != nil {
-						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
-						if policy.IsInvalidRoot {
-							logger.Errorf("Render blocked (%s): %s", reason, policy.Message)
-							setPreviewErrorPage(server, policy.Message, policy.Hint)
-							return nil
-						}
-						logger.Errorf("Render failed (%s): %v", reason, err)
-						return RuntimeError(err)
-					}
-					pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
-					frameHTML := withPreviewStyles(renderResult.FrameHTML)
-					contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
-					server.SetLocalAssets(pipeline.ConvertLocalAssets(renderResult.LocalAssets))
-					server.SetContentRoutes(nil)
-					server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8"))
-					server.BroadcastContent("/", contextHTML)
-					logger.Successf("Content refreshed (%s)", reason)
-					return nil
 				}
-
-				// Handle DocumentArtefact-only case
-				if len(artefacts) == 0 && len(documentArtefacts) > 0 {
-					routeMap := make(map[string]previewhttp.ContentFunc, len(documentArtefacts))
-					entries := make([]previewIndexEntry, 0, len(documentArtefacts))
-
-					for _, docArt := range documentArtefacts {
-						renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{})
-						if err != nil {
-							logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
-							continue
-						}
-						path := "/doc/" + docArt.Document.Name
-						routeMap[path] = previewhttp.StaticContent(append([]byte(nil), renderResult.HTML...), "text/html; charset=utf-8")
-						entries = append(entries, previewIndexEntry{
-							Name:        "doc/" + docArt.Document.Name,
-							Title:       docArt.Spec.Title,
-							Description: "Document: " + docArt.Document.Name,
-							Author:      docArt.Spec.Author,
-						})
-					}
-
-					server.SetLocalAssets(nil)
-					server.SetContentRoutes(routeMap)
-					server.SetContentFunc(previewhttp.StaticContent(buildPreviewIndex(entries), "text/html; charset=utf-8"))
-					logger.Successf("Content refreshed (%s)", reason)
-					return nil
-				}
-
-				if len(artefacts) == 1 {
-					art := artefacts[0]
-					renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
-						QueryLogger:              queryLogger,
-						EngineVersion:            engineVersion,
-						DataValidation:           dataValidationMode,
-						DataValidationSampleSize: dataValidationSampleSize,
+				for _, docArt := range documentArtefacts {
+					artefactInfos = append(artefactInfos, previewArtefactInfo{
+						Name:   docArt.Document.Name,
+						Title:  docArt.Spec.Title,
+						Format: docArt.Spec.Format,
+						IsDoc:  true,
 					})
-					if err != nil {
-						policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
-						if policy.IsInvalidRoot {
-							logger.Errorf("Render blocked for artefact %s (%s): %s", art.Document.Name, reason, policy.Message)
-							setPreviewErrorPage(server, policy.Message, policy.Hint)
-							return nil
-						}
-						logger.Errorf("Render failed (%s): %v", reason, err)
-						return RuntimeError(err)
-					}
-					pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
-					frameHTML := withPreviewStyles(renderResult.FrameHTML)
-					contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
-					server.SetLocalAssets(pipeline.ConvertLocalAssets(renderResult.LocalAssets))
-					server.SetContentRoutes(nil)
-					server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8"))
-					server.BroadcastContent("/", contextHTML)
-					logger.Successf("Content refreshed (%s)", reason)
-					return nil
 				}
 
-				routeMap := make(map[string]previewhttp.ContentFunc, len(artefacts))
-				entries := make([]previewIndexEntry, 0, len(artefacts))
+				// Always render "All Pages" view for "/" route - this is the default view
+				// that shows all LayoutPages without any artefact filtering
+				allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+					Language:                 "de",
+					Mode:                     pipeline.RenderModePreview,
+					EngineVersion:            engineVersion,
+					QueryLogger:              queryLogger,
+					DataValidation:           dataValidationMode,
+					DataValidationSampleSize: dataValidationSampleSize,
+				})
+				if err != nil {
+					policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
+					if policy.IsInvalidRoot {
+						logger.Errorf("Render blocked (%s): %s", reason, policy.Message)
+						setPreviewErrorPage(server, policy.Message, policy.Hint)
+						return nil
+					}
+					logger.Errorf("Render failed (%s): %v", reason, err)
+					return RuntimeError(err)
+				}
+				pipeline.LogDiagnostics(logger.Channel("datasource"), allPagesResult.Diagnostics)
+
+				routeMap := make(map[string]previewhttp.ContentFunc, len(artefacts)+len(documentArtefacts)+1)
 				allAssets := make([]previewhttp.LocalAsset, 0)
 				type artefactPayload struct {
 					path        string
 					contextHTML []byte
 				}
-				payloads := make([]artefactPayload, 0, len(artefacts))
+				payloads := make([]artefactPayload, 0, len(artefacts)+1)
+
+				// Add "All Pages" route (default "/" view)
+				allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, "/")
+				allPagesContextHTML := withPreviewContextStyles(allPagesResult.ContextHTML)
+				allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
+				payloads = append(payloads, artefactPayload{path: "/", contextHTML: allPagesContextHTML})
+
+				// Render each ReportArtefact
 				for _, art := range artefacts {
 					renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
 						QueryLogger:              queryLogger,
@@ -340,22 +301,15 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 						return RuntimeError(err)
 					}
 					pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
-					frameHTML := withPreviewStyles(renderResult.FrameHTML)
+					path := "/" + art.Document.Name
+					frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, path)
 					contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
 					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-					path := "/" + art.Document.Name
 					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 					payloads = append(payloads, artefactPayload{path: path, contextHTML: contextHTML})
-					entries = append(entries, previewIndexEntry{
-						Name:        art.Document.Name,
-						Title:       art.Spec.Title,
-						Description: art.Spec.Description,
-						Language:    art.Spec.Language,
-						Author:      art.Spec.Author,
-					})
 				}
 
-				// Add DocumentArtefacts to routes
+				// Render each DocumentArtefact
 				for _, docArt := range documentArtefacts {
 					renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
 						EngineVersion: engineVersion,
@@ -365,18 +319,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 						continue
 					}
 					path := "/doc/" + docArt.Document.Name
-					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), renderResult.HTML...), "text/html; charset=utf-8")
-					entries = append(entries, previewIndexEntry{
-						Name:        "doc/" + docArt.Document.Name,
-						Title:       docArt.Spec.Title,
-						Description: "Document: " + docArt.Document.Name,
-						Author:      docArt.Spec.Author,
-					})
+					// DocumentArtefacts get header injected too
+					frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, path)
+					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 				}
 
 				server.SetLocalAssets(allAssets)
 				server.SetContentRoutes(routeMap)
-				server.SetContentFunc(previewhttp.StaticContent(buildPreviewIndex(entries), "text/html; charset=utf-8"))
+				server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), allPagesFrameHTML...), "text/html; charset=utf-8"))
 				for _, payload := range payloads {
 					server.BroadcastContent(payload.path, payload.contextHTML)
 				}
@@ -464,53 +414,128 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	return cmd
 }
 
-type previewIndexEntry struct {
-	Name        string
-	Title       string
-	Description string
-	Language    string
-	Author      string
+// previewArtefactInfo holds metadata about an artefact for the preview header dropdown.
+type previewArtefactInfo struct {
+	Name   string `json:"name"`
+	Title  string `json:"title"`
+	Format string `json:"format"`
+	IsDoc  bool   `json:"isDoc"` // true for DocumentArtefact
 }
 
-func buildPreviewIndex(entries []previewIndexEntry) []byte {
+// buildPreviewHeader generates the HTML for the sticky preview header with artefact dropdown.
+func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) string {
 	var b strings.Builder
-	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Rainbow Preview Artefacts</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem auto; max-width: 720px; padding: 0 1rem; }\n    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }\n    p.description { color: #555; margin-top: 0; }\n    ul { list-style: none; padding: 0; }\n    li { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }\n    a { color: #0366d6; text-decoration: none; font-weight: 600; }\n    a:hover { text-decoration: underline; }\n    .meta { color: #666; font-size: 0.9rem; margin-top: 0.35rem; }\n  </style>\n</head>\n<body>\n  <h1>Available Report Artefacts</h1>\n")
-	if len(entries) == 0 {
-		b.WriteString("  <p class=\"description\">No ReportArtefact manifests found. Define one to preview individual reports.</p>\n</body>\n</html>")
-		return []byte(b.String())
+
+	b.WriteString(`<div id="bn-preview-header">`)
+	b.WriteString(`<span id="bn-preview-title">bino preview</span>`)
+	b.WriteString(`<select id="bn-preview-artefact-select">`)
+
+	// "All Pages" option
+	allSelected := ""
+	if currentPath == "/" {
+		allSelected = ` selected`
 	}
-	b.WriteString("  <p class=\"description\">Select a report to preview. Each link maps to /&lt;metadata.name&gt;.</p>\n  <ul>\n")
-	for _, entry := range entries {
-		link := "/" + entry.Name
-		b.WriteString("    <li>\n      <a href=\"")
-		b.WriteString(html.EscapeString(link))
-		b.WriteString("\">")
-		b.WriteString(html.EscapeString(entry.Name))
-		b.WriteString("</a>\n")
-		if entry.Title != "" {
-			b.WriteString("      <div class=\"meta\">")
-			b.WriteString(html.EscapeString(entry.Title))
-			b.WriteString("</div>\n")
+	b.WriteString(`<option value="/"` + allSelected + `>All Pages</option>`)
+
+	// Separate ReportArtefacts and DocumentArtefacts
+	var reportArts, docArts []previewArtefactInfo
+	for _, art := range artefacts {
+		if art.IsDoc {
+			docArts = append(docArts, art)
+		} else {
+			reportArts = append(reportArts, art)
 		}
-		if entry.Description != "" || entry.Language != "" || entry.Author != "" {
-			b.WriteString("      <div class=\"meta\">")
-			var parts []string
-			if entry.Description != "" {
-				parts = append(parts, entry.Description)
-			}
-			if entry.Language != "" {
-				parts = append(parts, "lang: "+entry.Language)
-			}
-			if entry.Author != "" {
-				parts = append(parts, "author: "+entry.Author)
-			}
-			b.WriteString(html.EscapeString(strings.Join(parts, " • ")))
-			b.WriteString("</div>\n")
-		}
-		b.WriteString("    </li>\n")
 	}
-	b.WriteString("  </ul>\n</body>\n</html>")
-	return []byte(b.String())
+
+	// ReportArtefacts
+	if len(reportArts) > 0 {
+		b.WriteString(`<optgroup label="Report Artefacts">`)
+		for _, art := range reportArts {
+			path := "/" + art.Name
+			selected := ""
+			if path == currentPath {
+				selected = ` selected`
+			}
+			label := art.Name
+			if art.Title != "" {
+				label = art.Title + " (" + art.Name + ")"
+			}
+			b.WriteString(`<option value="`)
+			b.WriteString(html.EscapeString(path))
+			b.WriteString(`"`)
+			b.WriteString(selected)
+			b.WriteString(`>`)
+			b.WriteString(html.EscapeString(label))
+			b.WriteString(`</option>`)
+		}
+		b.WriteString(`</optgroup>`)
+	}
+
+	// DocumentArtefacts
+	if len(docArts) > 0 {
+		b.WriteString(`<optgroup label="Document Artefacts">`)
+		for _, art := range docArts {
+			path := "/doc/" + art.Name
+			selected := ""
+			if path == currentPath {
+				selected = ` selected`
+			}
+			label := art.Name
+			if art.Title != "" {
+				label = art.Title + " (" + art.Name + ")"
+			}
+			b.WriteString(`<option value="`)
+			b.WriteString(html.EscapeString(path))
+			b.WriteString(`"`)
+			b.WriteString(selected)
+			b.WriteString(`>`)
+			b.WriteString(html.EscapeString(label))
+			b.WriteString(`</option>`)
+		}
+		b.WriteString(`</optgroup>`)
+	}
+
+	b.WriteString(`</select>`)
+	b.WriteString(`</div>`)
+
+	return b.String()
+}
+
+// withPreviewHeader injects the preview header into the HTML document after <body>.
+func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, currentPath string) []byte {
+	if len(doc) == 0 {
+		return doc
+	}
+
+	// Find <body> or <body ...> tag
+	bodyIdx := bytes.Index(doc, []byte("<body>"))
+	insertAt := -1
+	if bodyIdx != -1 {
+		insertAt = bodyIdx + len("<body>")
+	} else {
+		// Try <body with attributes
+		bodyIdx = bytes.Index(doc, []byte("<body "))
+		if bodyIdx != -1 {
+			// Find the closing >
+			closeIdx := bytes.Index(doc[bodyIdx:], []byte(">"))
+			if closeIdx != -1 {
+				insertAt = bodyIdx + closeIdx + 1
+			}
+		}
+	}
+
+	if insertAt == -1 {
+		return doc
+	}
+
+	header := buildPreviewHeader(artefacts, currentPath)
+
+	updated := make([]byte, 0, len(doc)+len(header))
+	updated = append(updated, doc[:insertAt]...)
+	updated = append(updated, []byte(header)...)
+	updated = append(updated, doc[insertAt:]...)
+
+	return updated
 }
 
 func setPreviewErrorPage(server *previewhttp.Server, message, hint string) {
@@ -566,6 +591,7 @@ var (
 			font-family: inherit;
 			color: #111827;
 			padding: 1.5rem;
+			padding-top: 3.5rem;
 		}
 		bn-context {
 			display: flex;
@@ -585,7 +611,46 @@ var (
 		@media (min-width: 769px) {
 			body {
 				padding: 2rem;
+				padding-top: 3.5rem;
 			}
+		}
+		/* Preview header styles */
+		#bn-preview-header {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 10000;
+			background: #ffffff;
+			border-bottom: 1px solid #e5e7eb;
+			padding: 0.5rem 1rem;
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			font-size: 0.875rem;
+			box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+		}
+		#bn-preview-title {
+			font-weight: 600;
+			color: #374151;
+		}
+		#bn-preview-artefact-select {
+			padding: 0.375rem 0.625rem;
+			border-radius: 6px;
+			border: 1px solid #d1d5db;
+			background: #f9fafb;
+			font-size: 0.875rem;
+			color: #374151;
+			cursor: pointer;
+			min-width: 200px;
+		}
+		#bn-preview-artefact-select:hover {
+			border-color: #9ca3af;
+		}
+		#bn-preview-artefact-select:focus {
+			outline: none;
+			border-color: #3b82f6;
+			box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 		}
 		/* Preview-only error indicator styles */
 		[has-error]::before, [has-errors]::before {
@@ -979,6 +1044,23 @@ var (
 			document.addEventListener("DOMContentLoaded", startErrorObserver);
 		} else {
 			startErrorObserver();
+		}
+
+		// Preview header artefact dropdown navigation
+		function initHeaderNavigation() {
+			var select = document.getElementById("bn-preview-artefact-select");
+			if (!select) return;
+			select.addEventListener("change", function(e) {
+				var newPath = e.target.value;
+				if (newPath && newPath !== normalizedPath) {
+					window.location.href = newPath;
+				}
+			});
+		}
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", initHeaderNavigation);
+		} else {
+			initHeaderNavigation();
 		}
 	})();
 	</script>

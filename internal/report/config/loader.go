@@ -318,7 +318,7 @@ func collectLayoutPageParamNamesFromYAML(content string) map[string]struct{} {
 			continue
 		}
 
-		// Collect param names
+		// Collect param names (and _LABEL variants for select type)
 		for _, p := range params {
 			param, ok := p.(map[string]any)
 			if !ok {
@@ -327,6 +327,11 @@ func collectLayoutPageParamNamesFromYAML(content string) map[string]struct{} {
 			name, ok := param["name"].(string)
 			if ok && name != "" {
 				paramNames[name] = struct{}{}
+				// For select params, also preserve the _LABEL variant
+				paramType, _ := param["type"].(string)
+				if paramType == "select" {
+					paramNames[name+"_LABEL"] = struct{}{}
+				}
 			}
 		}
 	}
