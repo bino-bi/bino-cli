@@ -122,6 +122,7 @@ func CollectMissingEnvVars(docs []Document) []MissingEnvVar {
 
 // CollectLayoutPageParamNames returns a set of all parameter names defined in LayoutPage documents.
 // These names can be used to exclude expected variables from the missing env var check.
+// For select type params, also includes {name}_LABEL variant.
 func CollectLayoutPageParamNames(docs []Document) map[string]struct{} {
 	paramNames := make(map[string]struct{})
 	for _, doc := range docs {
@@ -131,6 +132,10 @@ func CollectLayoutPageParamNames(docs []Document) map[string]struct{} {
 		for _, param := range doc.Params {
 			if param.Name != "" {
 				paramNames[param.Name] = struct{}{}
+				// For select params, also add the _LABEL variant
+				if param.Type == "select" {
+					paramNames[param.Name+"_LABEL"] = struct{}{}
+				}
 			}
 		}
 	}
