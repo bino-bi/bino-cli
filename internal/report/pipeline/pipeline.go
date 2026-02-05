@@ -671,44 +671,49 @@ type SelectedLayoutPage struct {
 // - Params expanded into the Raw content using ${PARAM} substitution
 // - For select params, ${PARAM_LABEL} is also available with the label from the option item
 // - A unique name suffix based on the param values (e.g., "page#REGION=EU,YEAR=2024")
-// If params is empty, returns the original document unchanged.
+// If both params is empty and doc has no params defined, returns the original document unchanged.
 func expandLayoutPageWithParams(doc config.Document, params map[string]string) (config.Document, error) {
-	if len(params) == 0 {
+	// If no explicit params and no defined params, return unchanged
+	if len(params) == 0 && len(doc.Params) == 0 {
 		return doc, nil
 	}
 
+	envLookup := config.EnvLookup()
+
 	// Step 1: Expand param values themselves (they may contain ${VAR} from ENV)
 	expandedParams := make(map[string]string)
-	envLookup := config.EnvLookup()
 	for k, v := range params {
 		expanded, _ := config.ExpandVars(v, envLookup)
 		expandedParams[k] = expanded
 	}
 
-	// Step 2: Build effective params: explicit params > defaults from doc.Params
+	// Step 2: Build effective params: explicit params > defaults > ENV fallback
 	// Also add _LABEL variants for select type params
 	effectiveParams := make(map[string]string)
 	for _, def := range doc.Params {
-		if def.Default != nil {
+		// Priority: explicit params > defaults > env
+		if v, ok := expandedParams[def.Name]; ok {
+			effectiveParams[def.Name] = v
+			// For select params, also set the _LABEL variant
+			if def.Type == "select" && def.Options != nil {
+				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, v)
+			}
+		} else if def.Default != nil {
 			effectiveParams[def.Name] = *def.Default
 			// For select params with default, also set the label
 			if def.Type == "select" && def.Options != nil {
 				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, *def.Default)
 			}
-		}
-	}
-	for k, v := range expandedParams {
-		effectiveParams[k] = v
-		// For select params, also set the _LABEL variant
-		for _, def := range doc.Params {
-			if def.Name == k && def.Type == "select" && def.Options != nil {
-				effectiveParams[k+"_LABEL"] = lookupSelectLabel(def.Options.Items, v)
-				break
+		} else if envVal, found := envLookup(def.Name); found {
+			// Param comes from environment variable - still look up its label
+			effectiveParams[def.Name] = envVal
+			if def.Type == "select" && def.Options != nil {
+				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, envVal)
 			}
 		}
 	}
 
-	// Step 3: Create lookup chain: params > ENV (fallback)
+	// Step 3: Create lookup chain: params > ENV (fallback for non-param vars)
 	lookup := config.ChainLookup(
 		config.MapLookup(effectiveParams),
 		envLookup,
@@ -717,17 +722,17 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) (
 	// Step 4: Expand document content
 	expandedContent, _ := config.ExpandVars(string(doc.Raw), lookup)
 
-	// Step 5: Generate unique name suffix
-	keys := make([]string, 0, len(expandedParams))
-	for k := range expandedParams {
-		keys = append(keys, k)
+	// Step 5: Generate unique name suffix based on effective param values
+	keys := make([]string, 0, len(doc.Params))
+	for _, def := range doc.Params {
+		if v, ok := effectiveParams[def.Name]; ok {
+			keys = append(keys, def.Name+"="+v)
+		}
 	}
-	sort.Strings(keys)
-	var parts []string
-	for _, k := range keys {
-		parts = append(parts, k+"="+expandedParams[k])
+	var nameSuffix string
+	if len(keys) > 0 {
+		nameSuffix = "#" + strings.Join(keys, ",")
 	}
-	nameSuffix := "#" + strings.Join(parts, ",")
 
 	// Create new document with expanded content and unique name
 	return config.Document{
@@ -762,17 +767,32 @@ func lookupSelectLabel(items []config.LayoutPageParamOptionItem, value string) s
 // Returns pages in ref order; within glob patterns, pages are sorted alphabetically by name.
 // Non-LayoutPage documents are preserved at the beginning of the result in their original order.
 // If refs is empty or contains only "*", the function returns docs unchanged (default behavior).
+// LayoutPages with defined params are expanded with default values even without explicit params.
 func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRefs) ([]config.Document, []SelectedLayoutPage, error) {
 	// Check if using default pattern (select all)
 	if len(refs) == 0 || (len(refs) == 1 && refs[0].Page == "*" && len(refs[0].Params) == 0) {
-		// Return all LayoutPages without params
+		// Return all LayoutPages, expanding those with params using defaults
+		var expandedDocs []config.Document
 		var layoutPages []SelectedLayoutPage
 		for _, doc := range docs {
 			if doc.Kind == "LayoutPage" {
-				layoutPages = append(layoutPages, SelectedLayoutPage{Doc: doc})
+				// Expand with defaults if the page has params defined
+				if len(doc.Params) > 0 {
+					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
+					if err != nil {
+						return nil, nil, fmt.Errorf("expand defaults for %q: %w", doc.Name, err)
+					}
+					expandedDocs = append(expandedDocs, expandedDoc)
+					layoutPages = append(layoutPages, SelectedLayoutPage{Doc: expandedDoc})
+				} else {
+					expandedDocs = append(expandedDocs, doc)
+					layoutPages = append(layoutPages, SelectedLayoutPage{Doc: doc})
+				}
+			} else {
+				expandedDocs = append(expandedDocs, doc)
 			}
 		}
-		return docs, layoutPages, nil
+		return expandedDocs, layoutPages, nil
 	}
 
 	// Separate LayoutPage documents from others
@@ -830,9 +850,19 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 			})
 
 			// Add to selected (mark as seen to avoid duplicates from globs)
+			// Expand pages with params using their defaults
 			for _, doc := range matches {
-				selectedDocs = append(selectedDocs, doc)
-				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+				if len(doc.Params) > 0 {
+					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
+					if err != nil {
+						return nil, nil, fmt.Errorf("expand defaults for %q: %w", doc.Name, err)
+					}
+					selectedDocs = append(selectedDocs, expandedDoc)
+					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc})
+				} else {
+					selectedDocs = append(selectedDocs, doc)
+					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+				}
 				seenGlob[doc.Name] = true
 			}
 		} else {
@@ -845,13 +875,24 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 
 			// For explicit refs with params, allow duplicates (same page, different params)
 			// For explicit refs without params, treat like globs (skip if already seen)
+			// Expand pages with params using their defaults or provided params
 			if len(ref.Params) == 0 {
 				if seenGlob[pageName] {
 					continue
 				}
 				seenGlob[pageName] = true
-				selectedDocs = append(selectedDocs, doc)
-				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+				// Expand with defaults if the page has params defined
+				if len(doc.Params) > 0 {
+					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
+					if err != nil {
+						return nil, nil, fmt.Errorf("expand defaults for %q: %w", pageName, err)
+					}
+					selectedDocs = append(selectedDocs, expandedDoc)
+					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc})
+				} else {
+					selectedDocs = append(selectedDocs, doc)
+					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
+				}
 			} else {
 				// Expand params into document to create unique instance
 				expandedDoc, err := expandLayoutPageWithParams(doc, ref.Params)
@@ -893,6 +934,21 @@ func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]c
 // contains the full report content for SSE delivery.
 // The workdir parameter is required for dataset execution.
 func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts RenderOptions) (FrameRenderResult, error) {
+	// Expand LayoutPages with defined params using their defaults/env values
+	expandedDocs := make([]config.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" && len(doc.Params) > 0 {
+			expandedDoc, err := expandLayoutPageWithParams(doc, nil)
+			if err != nil {
+				return FrameRenderResult{}, fmt.Errorf("expand params for %q: %w", doc.Name, err)
+			}
+			expandedDocs = append(expandedDocs, expandedDoc)
+		} else {
+			expandedDocs = append(expandedDocs, doc)
+		}
+	}
+	docs = expandedDocs
+
 	var datasetResults []dataset.Result
 	var diags []datasource.Diagnostic
 

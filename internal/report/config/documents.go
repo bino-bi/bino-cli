@@ -104,11 +104,23 @@ func CheckMissingEnvVarsExcluding(docs []Document, exclude map[string]struct{}) 
 // CollectMissingEnvVars returns all missing environment variables across documents.
 // Unlike CheckMissingEnvVars, it returns the list instead of an error.
 func CollectMissingEnvVars(docs []Document) []MissingEnvVar {
+	return CollectMissingEnvVarsExcluding(docs, nil)
+}
+
+// CollectMissingEnvVarsExcluding returns all missing environment variables across documents,
+// excluding any variable names in the provided set.
+func CollectMissingEnvVarsExcluding(docs []Document, exclude map[string]struct{}) []MissingEnvVar {
 	var missing []MissingEnvVar
 	seen := make(map[string]struct{})
 
 	for _, doc := range docs {
 		for _, varName := range doc.MissingEnvVars {
+			// Skip if this var is in the exclude list
+			if exclude != nil {
+				if _, ok := exclude[varName]; ok {
+					continue
+				}
+			}
 			key := varName + ":" + doc.File
 			if _, ok := seen[key]; ok {
 				continue

@@ -289,7 +289,9 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) ([]
 	}
 
 	// Check for missing environment variables
-	missingVars := config.CollectMissingEnvVars(docs)
+	// Exclude param names defined in LayoutPages (they're resolved at render time)
+	paramNames := config.CollectLayoutPageParamNames(docs)
+	missingVars := config.CollectMissingEnvVarsExcluding(docs, paramNames)
 	for _, mv := range missingVars {
 		diagnostics = append(diagnostics, LSPDiagnostic{
 			File:     mv.File,
