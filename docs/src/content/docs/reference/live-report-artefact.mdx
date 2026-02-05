@@ -137,6 +137,12 @@ queryParams:
           label: "Asia Pacific"
 ```
 
+For select parameters with static items, you can access both the value and label:
+- `${REGION}` – the value (e.g., `"EU"`)
+- `${REGION_LABEL}` – the label (e.g., `"Europe"`)
+
+This is useful for displaying human-readable text while using the value for data filtering.
+
 **For `select` with DataSet:**
 
 ```yaml
@@ -197,6 +203,23 @@ When accessed with `?YEAR=2024&REGION=EU`, the query becomes:
 SELECT * FROM sales
 WHERE year = 2024
 AND region = 'EU'
+```
+
+### Using labels in display text
+
+For select parameters with static items, use `${PARAM_LABEL}` to show the human-readable label:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales-page
+spec:
+  children:
+    - kind: Text
+      spec:
+        # Shows "Sales Report for Europe" instead of "Sales Report for EU"
+        value: "Sales Report for ${REGION_LABEL}"
 ```
 
 ## Minimal example
