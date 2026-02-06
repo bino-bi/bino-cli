@@ -182,7 +182,9 @@ func renderFontLinks(fonts []fontAsset) string {
 // renderLayoutPage renders a LayoutPage document as HTML.
 // docName is the metadata.name of the LayoutPage document, used to add a
 // data-bino-page attribute for preview identification.
-func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, rc *renderCtx) (string, bool, error) {
+// targetFormat and targetOrientation are the artefact-level defaults used when
+// the LayoutPage does not explicitly set pageFormat or pageOrientation.
+func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, targetOrientation string, rc *renderCtx) (string, bool, error) {
 	var payload struct {
 		Spec layoutPageSpec `json:"spec"`
 	}
@@ -192,6 +194,24 @@ func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, 
 
 	if !layoutPageMatchesFormat(payload.Spec.PageFormat, targetFormat) {
 		return "", false, nil
+	}
+
+	// Apply artefact-level defaults so the HTML attributes are always present.
+	// The template engine CSS requires both page-format and page-orientation
+	// to apply correct sizing and @page rules.
+	if payload.Spec.PageFormat == "" {
+		if targetFormat != "" {
+			payload.Spec.PageFormat = targetFormat
+		} else {
+			payload.Spec.PageFormat = defaultLayoutPageFormat
+		}
+	}
+	if payload.Spec.PageOrientation == "" {
+		if targetOrientation != "" {
+			payload.Spec.PageOrientation = targetOrientation
+		} else {
+			payload.Spec.PageOrientation = "landscape"
+		}
 	}
 
 	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, docName, rc)
