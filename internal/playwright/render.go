@@ -140,12 +140,22 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	}
 
 	pdfOpts := pw.PagePdfOptions{
-		Path:            pw.String(opts.PDFPath),
-		PrintBackground: pw.Bool(true),
+		Path:              pw.String(opts.PDFPath),
+		PrintBackground:   pw.Bool(true),
+		PreferCSSPageSize: pw.Bool(true),
 	}
 	format := strings.TrimSpace(opts.Format)
+	customFormat := false
 	if format != "" {
 		if w, h, ok := customFormatDimensions(format); ok {
+			customFormat = true
+			// Custom formats define landscape dimensions (width > height).
+			// Orientation is handled by swapping dimensions rather than using
+			// the Landscape flag, because Chromium swaps Width/Height when
+			// Landscape is set — which would invert the intended orientation.
+			if strings.EqualFold(opts.Orientation, "portrait") {
+				w, h = h, w
+			}
 			pdfOpts.Width = pw.String(fmt.Sprintf("%dpx", w))
 			pdfOpts.Height = pw.String(fmt.Sprintf("%dpx", h))
 		} else {
@@ -172,7 +182,9 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 		Bottom: pw.String(marginBottom),
 		Left:   pw.String("0"),
 	}
-	if opts.Orientation != "" {
+	// Only set Landscape for standard paper formats (A4, Letter, etc.).
+	// Custom formats handle orientation via dimension swapping above.
+	if !customFormat && opts.Orientation != "" {
 		landscape := strings.EqualFold(opts.Orientation, "landscape")
 		pdfOpts.Landscape = pw.Bool(landscape)
 	}
@@ -536,6 +548,58 @@ func customFormatDimensions(name string) (width, height int, ok bool) {
 		return 0, 0, false
 	}
 }
+
+// formatDimensionsPx returns the pixel dimensions (width, height) for a given
+// page format and orientation. It supports both custom screen formats (via
+// customFormatDimensions) and standard paper sizes at 96 DPI. The returned
+// dimensions have the orientation already applied: for landscape, width > height;
+// for portrait, height > width.
+func formatDimensionsPx(format, orientation string) (width, height int, ok bool) {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format == "" {
+		return 0, 0, false
+	}
+
+	var w, h int
+
+	// Try custom formats first (already defined as landscape dimensions).
+	if cw, ch, cok := customFormatDimensions(format); cok {
+		w, h = cw, ch
+	} else {
+		// Standard paper sizes at 96 DPI.
+		switch format {
+		case "a3":
+			w, h = 1123, 1587 // 297mm × 420mm
+		case "a4":
+			w, h = 794, 1123 // 210mm × 297mm
+		case "a5":
+			w, h = 559, 794 // 148mm × 210mm
+		case "letter":
+			w, h = 816, 1056 // 8.5in × 11in
+		case "legal":
+			w, h = 816, 1344 // 8.5in × 14in
+		case "tabloid":
+			w, h = 1056, 1632 // 11in × 17in
+		default:
+			return 0, 0, false
+		}
+
+		// Standard paper sizes are defined portrait (h > w).
+		// Swap for landscape.
+		if strings.EqualFold(orientation, "landscape") {
+			w, h = h, w
+		}
+		return w, h, true
+	}
+
+	// Custom formats are defined landscape (w > h).
+	// Swap for portrait.
+	if strings.EqualFold(orientation, "portrait") {
+		w, h = h, w
+	}
+	return w, h, true
+}
+
 
 // ScreenshotOptions controls the HTML-to-screenshot export pipeline using Playwright.
 type ScreenshotOptions struct {
