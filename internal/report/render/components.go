@@ -180,7 +180,9 @@ func renderFontLinks(fonts []fontAsset) string {
 }
 
 // renderLayoutPage renders a LayoutPage document as HTML.
-func renderLayoutPage(raw json.RawMessage, targetFormat string, rc *renderCtx) (string, bool, error) {
+// docName is the metadata.name of the LayoutPage document, used to add a
+// data-bino-page attribute for preview identification.
+func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, rc *renderCtx) (string, bool, error) {
 	var payload struct {
 		Spec layoutPageSpec `json:"spec"`
 	}
@@ -192,7 +194,7 @@ func renderLayoutPage(raw json.RawMessage, targetFormat string, rc *renderCtx) (
 		return "", false, nil
 	}
 
-	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, rc)
+	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, docName, rc)
 	if err != nil {
 		return "", false, err
 	}
@@ -200,10 +202,14 @@ func renderLayoutPage(raw json.RawMessage, targetFormat string, rc *renderCtx) (
 }
 
 // renderLayoutContainer renders a layout container (page or card) as HTML.
-func renderLayoutContainer(tag string, pageSpec layoutPageSpec, rc *renderCtx) (string, error) {
+// docName is written as data-bino-page attribute when non-empty (for preview page identification).
+func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<")
 	b.WriteString(tag)
+	if docName != "" {
+		writeAttr(&b, "data-bino-page", docName)
+	}
 	pageSpec.writeAttrs(&b)
 	b.WriteString(">\n")
 

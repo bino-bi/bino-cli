@@ -232,7 +232,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, rc)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, rc)
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}
@@ -325,7 +325,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, targetFormat, rc)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, rc)
 			if err != nil {
 				return FrameResult{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}
