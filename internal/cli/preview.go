@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -20,6 +22,7 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/watchers"
 )
 
@@ -280,7 +283,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 				// Add "All Pages" route (default "/" view)
 				allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, "/")
-				allPagesContextHTML := withPreviewContextStyles(allPagesResult.ContextHTML)
+				pageMeta := buildPageMetadata(docs, artefacts)
+				allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
 				allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
 				payloads = append(payloads, artefactPayload{path: "/", contextHTML: allPagesContextHTML})
 
@@ -420,6 +424,96 @@ type previewArtefactInfo struct {
 	Title  string `json:"title"`
 	Format string `json:"format"`
 	IsDoc  bool   `json:"isDoc"` // true for DocumentArtefact
+}
+
+// previewPageMeta holds metadata about a LayoutPage for the "All Pages" preview overlay.
+type previewPageMeta struct {
+	Name        string   `json:"name"`
+	Constraints []string `json:"constraints,omitempty"`
+	Artefacts   []string `json:"artefacts,omitempty"`
+}
+
+// buildPageMetadata computes per-page metadata (constraints and artefact usage) for the "All Pages" view.
+func buildPageMetadata(docs []config.Document, artefacts []config.Artefact) []previewPageMeta {
+	// Collect LayoutPage names and their constraints
+	type pageInfo struct {
+		name        string
+		constraints []string
+	}
+	var pages []pageInfo
+	for _, doc := range docs {
+		if doc.Kind != "LayoutPage" {
+			continue
+		}
+		var cs []string
+		for _, c := range doc.Constraints {
+			cs = append(cs, formatConstraint(c))
+		}
+		pages = append(pages, pageInfo{name: doc.Name, constraints: cs})
+	}
+
+	// Build page-name → artefact-names mapping
+	pageArtefacts := make(map[string][]string)
+	for _, art := range artefacts {
+		refs := art.Spec.LayoutPages
+		if len(refs) == 0 {
+			// No layoutPages specified means all pages are included
+			for _, p := range pages {
+				pageArtefacts[p.name] = appendUnique(pageArtefacts[p.name], art.Document.Name)
+			}
+			continue
+		}
+		for _, ref := range refs {
+			pageName := strings.TrimSpace(ref.Page)
+			if pageName == "" {
+				continue
+			}
+			if pageName == "*" || strings.ContainsAny(pageName, "*?[") {
+				// Glob pattern: match against all page names
+				for _, p := range pages {
+					matched, _ := path.Match(pageName, p.name)
+					if matched {
+						pageArtefacts[p.name] = appendUnique(pageArtefacts[p.name], art.Document.Name)
+					}
+				}
+			} else {
+				pageArtefacts[pageName] = appendUnique(pageArtefacts[pageName], art.Document.Name)
+			}
+		}
+	}
+
+	// Build result
+	result := make([]previewPageMeta, 0, len(pages))
+	for _, p := range pages {
+		result = append(result, previewPageMeta{
+			Name:        p.name,
+			Constraints: p.constraints,
+			Artefacts:   pageArtefacts[p.name],
+		})
+	}
+	return result
+}
+
+// formatConstraint formats a parsed constraint as a human-readable string.
+func formatConstraint(c *spec.Constraint) string {
+	if c.Raw != "" {
+		return c.Raw
+	}
+	switch c.Operator {
+	case "in", "not-in":
+		return c.Left + " " + c.Operator + " [" + strings.Join(c.Values, ", ") + "]"
+	default:
+		return c.Left + " " + c.Operator + " " + c.Right
+	}
+}
+
+func appendUnique(slice []string, val string) []string {
+	for _, s := range slice {
+		if s == val {
+			return slice
+		}
+	}
+	return append(slice, val)
 }
 
 // buildPreviewHeader generates the HTML for the sticky preview header with artefact dropdown.
@@ -651,6 +745,50 @@ var (
 			outline: none;
 			border-color: #3b82f6;
 			box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+		}
+		/* Page info bar for "All Pages" view - placed as sibling before bn-layout-page */
+		.bn-page-info {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+			padding: 5px 10px;
+			background: #f8fafc;
+			border: 1px solid #e2e8f0;
+			border-radius: 6px 6px 0 0;
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+			font-size: 11px;
+			line-height: 1.4;
+			margin-bottom: -1.75rem;
+			align-self: center;
+		}
+		.bn-page-info-name {
+			font-weight: 600;
+			color: #374151;
+			margin-right: 2px;
+		}
+		.bn-page-info-pill {
+			display: inline-block;
+			padding: 1px 6px;
+			border-radius: 4px;
+			font-size: 10px;
+			font-weight: 500;
+			white-space: nowrap;
+		}
+		.bn-page-info-pill.constraint {
+			background: #ede9fe;
+			color: #5b21b6;
+			border: 1px solid #c4b5fd;
+		}
+		.bn-page-info-pill.artefact {
+			background: #dbeafe;
+			color: #1e40af;
+			border: 1px solid #93c5fd;
+		}
+		.bn-page-info-label {
+			color: #6b7280;
+			font-size: 10px;
+			margin-left: 4px;
 		}
 		/* Preview-only error indicator styles */
 		[has-error]::before, [has-errors]::before {
@@ -1062,6 +1200,108 @@ var (
 		} else {
 			initHeaderNavigation();
 		}
+
+		// Page info overlays for "All Pages" view
+		function applyPageInfoOverlays() {
+			// Only show on "All Pages" route
+			if (normalizedPath !== "/") return;
+
+			// Remove existing overlays
+			document.querySelectorAll(".bn-page-info").forEach(function (el) {
+				el.remove();
+			});
+
+			// Read page metadata from bn-context data attribute
+			var bnContext = document.querySelector("bn-context");
+			if (!bnContext) return;
+			var metaJSON = bnContext.getAttribute("data-page-meta");
+			if (!metaJSON) return;
+			var pageMeta;
+			try {
+				pageMeta = JSON.parse(metaJSON);
+			} catch (e) {
+				return;
+			}
+			if (!Array.isArray(pageMeta)) return;
+
+			// Build lookup by page name
+			var metaByName = {};
+			pageMeta.forEach(function (m) {
+				metaByName[m.name] = m;
+			});
+
+			// Inject info bar before each bn-layout-page as a sibling element.
+			// bn-layout-page uses Shadow DOM so we cannot inject children into it.
+			// Search in both shadow root and light DOM.
+			var searchRoot = bnContext.shadowRoot || bnContext;
+			var pages = searchRoot.querySelectorAll("bn-layout-page[data-bino-page]");
+			if (pages.length === 0) {
+				pages = document.querySelectorAll("bn-layout-page[data-bino-page]");
+			}
+			pages.forEach(function (pageEl) {
+				var pageName = pageEl.getAttribute("data-bino-page");
+				if (!pageName) return;
+				// Strip param suffix for lookup (e.g. "page#REGION=EU" -> "page")
+				var baseName = pageName.split("#")[0];
+				var meta = metaByName[baseName] || metaByName[pageName];
+				if (!meta) return;
+
+				var overlay = document.createElement("div");
+				overlay.className = "bn-page-info";
+
+				// Page name
+				var nameSpan = document.createElement("span");
+				nameSpan.className = "bn-page-info-name";
+				nameSpan.textContent = pageName;
+				overlay.appendChild(nameSpan);
+
+				// Constraints
+				if (meta.constraints && meta.constraints.length > 0) {
+					var clabel = document.createElement("span");
+					clabel.className = "bn-page-info-label";
+					clabel.textContent = "constraints:";
+					overlay.appendChild(clabel);
+					meta.constraints.forEach(function (c) {
+						var pill = document.createElement("span");
+						pill.className = "bn-page-info-pill constraint";
+						pill.textContent = c;
+						overlay.appendChild(pill);
+					});
+				}
+
+				// Artefacts
+				if (meta.artefacts && meta.artefacts.length > 0) {
+					var alabel = document.createElement("span");
+					alabel.className = "bn-page-info-label";
+					alabel.textContent = "used in:";
+					overlay.appendChild(alabel);
+					meta.artefacts.forEach(function (a) {
+						var pill = document.createElement("span");
+						pill.className = "bn-page-info-pill artefact";
+						pill.textContent = a;
+						overlay.appendChild(pill);
+					});
+				}
+
+				// Insert as sibling before the page element
+				pageEl.parentNode.insertBefore(overlay, pageEl);
+			});
+		}
+
+		// Apply overlays after content updates
+		document.addEventListener("bn-preview:content-updated", function () {
+			applyPageInfoOverlays();
+		});
+
+		// Also apply on initial load
+		function initPageInfoOverlays() {
+			applyPageInfoOverlays();
+		}
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", initPageInfoOverlays);
+		} else {
+			initPageInfoOverlays();
+		}
 	})();
 	</script>
 `)
@@ -1091,6 +1331,33 @@ func withPreviewStyles(doc []byte) []byte {
 // additional injection is needed here.
 func withPreviewContextStyles(ctx []byte) []byte {
 	return ctx
+}
+
+// withPreviewPageMetadata injects page metadata (constraints and artefact usage) into
+// the "All Pages" context HTML. The metadata is stored as a data-page-meta attribute
+// on the <bn-context> element itself. This ensures it survives the DOM replacement
+// performed by swapContext and is accessible even if bn-context uses Shadow DOM.
+func withPreviewPageMetadata(ctx []byte, pageMeta []previewPageMeta) []byte {
+	if len(pageMeta) == 0 {
+		return ctx
+	}
+	data, err := json.Marshal(pageMeta)
+	if err != nil {
+		return ctx
+	}
+	// Insert data-page-meta attribute into the <bn-context ...> opening tag
+	attr := []byte(` data-page-meta="` + html.EscapeString(string(data)) + `"`)
+	openTag := []byte("<bn-context")
+	idx := bytes.Index(ctx, openTag)
+	if idx == -1 {
+		return ctx
+	}
+	insertAt := idx + len(openTag)
+	updated := make([]byte, 0, len(ctx)+len(attr))
+	updated = append(updated, ctx[:insertAt]...)
+	updated = append(updated, attr...)
+	updated = append(updated, ctx[insertAt:]...)
+	return updated
 }
 
 func openBrowser(url string) error {
