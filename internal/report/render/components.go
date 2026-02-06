@@ -1,11 +1,15 @@
 package render
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"html"
 	"strings"
+
+	"github.com/yuin/goldmark"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
@@ -529,12 +533,27 @@ func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
 func renderTextComponent(spec textSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-text")
-	writeAttr(&b, "value", spec.Value)
+	writeAttr(&b, "value", renderMarkdown(spec.Value))
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
 	b.WriteString("></bn-text>")
 	return b.String()
+}
+
+// renderMarkdown converts a Markdown string to HTML.
+// If the input contains no Markdown syntax, the output is the text
+// wrapped in a <p> tag by goldmark.
+func renderMarkdown(s string) string {
+	if s == "" {
+		return ""
+	}
+	md := goldmark.New(goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()))
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(s), &buf); err != nil {
+		return s
+	}
+	return strings.TrimSpace(buf.String())
 }
 
 // renderChartStructureComponent renders a ChartStructure component as HTML.

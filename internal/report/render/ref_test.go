@@ -271,7 +271,7 @@ func TestRenderLayoutChildWithLayoutCardRef(t *testing.T) {
 		t.Fatalf("expected bn-layout-card element in HTML, got:\n%s", html)
 	}
 	// Verify the text inside the card is rendered.
-	if !strings.Contains(html, `value="Hello from card"`) {
+	if !strings.Contains(html, `value="&lt;p&gt;Hello from card&lt;/p&gt;"`) {
 		t.Fatalf("expected text content from card in HTML, got:\n%s", html)
 	}
 }
