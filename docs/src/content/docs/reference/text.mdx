@@ -20,8 +20,58 @@ spec:
 
 Fields:
 
-- `spec.value` – required string value.
+- `spec.value` – required string value. Supports **Markdown** syntax (see below).
 - `spec.dataset` – optional dataset reference; either a single string or an array of strings.
+
+## Markdown support
+
+The `value` field accepts Markdown. The Markdown is converted to HTML at build time
+and the resulting HTML is placed in the `bn-text` element's `value` attribute.
+
+Plain strings still work — they are wrapped in a `<p>` tag automatically.
+
+### Examples
+
+**Bold and italic text:**
+
+```yaml
+spec:
+  value: "**Revenue** grew by *12%* this quarter"
+```
+
+**Links:**
+
+```yaml
+spec:
+  value: "Source: [World Bank](https://data.worldbank.org)"
+```
+
+**Lists:**
+
+```yaml
+spec:
+  value: |
+    Key findings:
+
+    - Revenue up 12%
+    - Costs down 3%
+    - Net margin improved
+```
+
+**Mixed formatting:**
+
+```yaml
+spec:
+  value: |
+    ### Regional Summary
+
+    | Region | Growth |
+    |--------|--------|
+    | EMEA   | +8%    |
+    | APAC   | +15%   |
+
+    > Data as of Q4 2025
+```
 
 ## Standalone text manifest
 
