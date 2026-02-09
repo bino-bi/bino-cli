@@ -11,6 +11,7 @@ import (
 type State struct {
 	LastUpdateCheck time.Time `json:"last_update_check"`
 	SetupCompleted  bool      `json:"setup_completed,omitempty"`
+	ChromeVersion   string    `json:"chrome_version,omitempty"`
 }
 
 // getStatePath returns the path to the state file.

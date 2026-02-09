@@ -18,15 +18,11 @@ Common flags:
 - `--out-dir` – output directory relative to workdir (default: `dist`).
 - `--artefact` – build only specified artefact names (can be repeated).
 - `--exclude-artefact` – skip specified artefact names (can be repeated).
-- `--browser` – browser engine for the rendering runtime (for example `chromium`, `firefox`, `webkit`).
+- `--chrome-path` – path to a Chrome or Chromium binary (default: auto-detected from cache or `CHROME_PATH` env).
 - `--no-graph` – skip writing dependency graph files.
 - `--no-lint` – skip running lint rules (lint runs by default).
 - `--log-sql` – log executed SQL queries.
 - `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
-
-Advanced flags:
-
-- `--driver-dir` – override Playwright driver cache directory.
 
 Build log flags:
 
@@ -47,7 +43,6 @@ You can set default values for build flags in your project's `bino.toml` file. T
 ```toml
 [build.args]
 out-dir = "output"
-browser = "firefox"
 log-sql = true
 no-lint = false
 artefact = ["monthly", "weekly"]
@@ -57,8 +52,8 @@ exclude-artefact = ["draft"]
 When you override a TOML default, the CLI logs an info message:
 
 ```bash
-$ bino build --browser webkit
-Overriding browser from bino.toml ("firefox" -> "webkit")
+$ bino build --out-dir reports
+Overriding out-dir from bino.toml ("output" -> "reports")
 ```
 
 ## Environment Variables via bino.toml

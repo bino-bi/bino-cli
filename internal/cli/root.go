@@ -18,7 +18,7 @@
 // - Checks ctx.Err() before starting each artefact build
 // - Propagates context to datasource collection (DuckDB queries)
 // - Propagates context to ephemeral HTTP server for PDF rendering
-// - Propagates context to Playwright PDF rendering
+// - Propagates context to Chrome PDF rendering
 // - On cancellation: stops current artefact, shuts down ephemeral server, returns
 //
 // ### preview
@@ -39,7 +39,7 @@
 // - Graceful shutdown with 5-second timeout for in-flight requests
 // - SSE connections respect request context for cleanup
 //
-// ### internal/playwright
+// ### internal/chrome
 // - RenderPDF() checks ctx.Err() at entry
 // - Page navigation timeout is separate from context cancellation
 // - waitForComponentReady() respects context for early termination
@@ -95,7 +95,7 @@ func newRootCommand() *cobra.Command {
 					fmt.Fprintln(os.Stderr, "")
 					fmt.Fprintln(os.Stderr, "┌─────────────────────────────────────────────────────┐")
 					fmt.Fprintln(os.Stderr, "│  Setup required: run 'bino setup' to download      │")
-					fmt.Fprintln(os.Stderr, "│  browser runtimes needed for PDF rendering.        │")
+					fmt.Fprintln(os.Stderr, "│  Chrome headless shell needed for PDF rendering.   │")
 					fmt.Fprintln(os.Stderr, "└─────────────────────────────────────────────────────┘")
 					fmt.Fprintln(os.Stderr, "")
 				}

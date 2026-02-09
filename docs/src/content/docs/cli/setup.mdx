@@ -1,9 +1,9 @@
 ---
 title: bino setup
-description: Install browser runtimes and template engine used for PDF rendering.
+description: Install Chrome headless shell and template engine used for PDF rendering.
 ---
 
-bino relies on a browser runtime and template engine to render PDFs.
+bino relies on Chrome headless shell and a template engine to render PDFs.
 Use `bino setup` to download and configure these dependencies.
 
 ## Usage
@@ -13,11 +13,6 @@ bino setup [flags]
 ```
 
 ## Flags
-
-### Browser runtime flags
-
-- `--browser` – one or more browsers to install (default: `chromium`). Repeat to add `firefox`, `webkit`, etc.
-- `--driver-dir` – custom directory for the browser driver cache.
 
 ### Template engine flags
 
@@ -31,19 +26,13 @@ bino setup [flags]
 
 ## Examples
 
-Install Chromium only:
+Install Chrome headless shell and template engine:
 
 ```bash
-bino setup --browser chromium
+bino setup
 ```
 
-Install multiple browsers:
-
-```bash
-bino setup --browser chromium --browser firefox
-```
-
-Install the template engine (latest version):
+Install the template engine only (latest version):
 
 ```bash
 bino setup --template-engine
@@ -61,9 +50,15 @@ Preview what would be installed without downloading:
 bino setup --dry-run
 ```
 
+## Chrome headless shell
+
+Chrome headless shell (`chrome-headless-shell`) is a lightweight Chrome binary purpose-built for headless rendering. It is downloaded from Google's Chrome for Testing infrastructure and cached in `~/.bn/chrome-headless-shell/`.
+
+If you need to use a custom Chrome or Chromium installation, set the `CHROME_PATH` environment variable to point to the binary. This takes priority over the cached version.
+
 ## Template engine
 
-The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from the browser runtimes and cached in `~/.bn/cdn/bn-template-engine/`.
+The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from Chrome headless shell and cached in `~/.bn/cdn/bn-template-engine/`.
 
 Multiple versions can be installed side by side. By default, bino uses the latest locally installed version unless a specific version is pinned in `bino.toml` via the `engine-version` field. See [Project configuration](/concepts/project-configuration) for more details.
 
