@@ -29,10 +29,10 @@ At a high level, the rendering flow is:
 1. `bino build` validates manifests and executes datasets in the query engine.
 2. bino passes layout specs (`LayoutPage`, `LayoutCard`, child components) and data to the front-end renderer.
 3. The renderer produces HTML for each report artefact.
-4. The rendering engine runs a real browser (for example Chromium) to export HTML pages as PDFs.
+4. The rendering engine uses Chrome headless shell to export HTML pages as PDFs.
 
 This approach ensures consistent typography and layout across platforms.
-Use `bino setup` to install the required browser runtimes.
+Use `bino setup` to install Chrome headless shell.
 
 ## Choosing layouts
 

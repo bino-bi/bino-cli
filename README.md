@@ -538,7 +538,7 @@ Validate manifests, run datasets, and build PDFs.
   - `--out-dir` – output directory relative to work-dir (default: `dist`).
   - `--include` – build only specified report names (can be repeated).
   - `--exclude` – skip specified report names (can be repeated).
-  - `--browser` – browser engine to use for PDF rendering (e.g. `chromium`, `firefox`, `webkit`).
+  - `--chrome-path` – path to Chrome binary (default: auto-detected or `CHROME_PATH` env).
   - `--no-graph` – skip writing dependency graph files (`.bngraph`).
   - `--log-sql` – log executed SQL to terminal and build log.
 - Example:
@@ -564,20 +564,18 @@ Inspect dependencies between artefacts, datasets, and datasources.
 
 ### `bino setup`
 
-Install or update the headless browser runtimes and template engine used for PDF rendering.
+Install or update Chrome headless shell and the template engine used for PDF rendering.
 
 - Common flags:
-  - `--browser` – browser(s) to install (can be repeated).
   - `--template-engine` – download or update the template engine.
   - `--engine-version` – specific template engine version to download (default: latest).
-  - `--driver-dir` – custom directory for browser driver/cache.
   - `--dry-run` – show what would be installed without downloading.
   - `--quiet` – reduce output noise.
 - Examples:
 
   ```bash
-  # Install browser runtime
-  bino setup --browser chromium
+  # Install Chrome headless shell
+  bino setup
 
   # Download latest template engine
   bino setup --template-engine
@@ -606,25 +604,25 @@ Clean bino's caches.
 
 ---
 
-## Browser Runtimes & PDF Rendering
+## Chrome Headless Shell & PDF Rendering
 
-bino uses a real browser to render HTML into high-quality PDFs. This ensures your reports look consistent across platforms, including fonts, layout, and complex components.
+bino uses Chrome headless shell to render HTML into high-quality PDFs. This ensures your reports look consistent across platforms, including fonts, layout, and complex components.
 
-### Installing browsers
+### Installing Chrome headless shell
 
 Typically you run this once per machine or environment:
 
 ```bash
-bino setup --browser chromium
+bino setup
 ```
 
-You can install multiple browsers if you want to test across engines.
+This downloads the latest stable `chrome-headless-shell` binary from the Chrome for Testing infrastructure and caches it in `~/.bn/chrome-headless-shell/`.
 
-### Choosing the browser for builds
+### Custom Chrome binary
 
-When building reports, you can choose the browser engine with a flag (depending on your configuration). Using a single engine (e.g. `chromium`) can make troubleshooting easier.
+You can point bino to a custom Chrome binary using the `CHROME_PATH` environment variable or the `--chrome-path` flag on `bino build`. This is useful on platforms without official builds (e.g., linux/arm64) or when using a system-installed Chrome.
 
-If bino reports that a browser is missing, re-run `bino setup` and check that your environment has necessary network and disk access.
+If bino reports that Chrome is missing, re-run `bino setup` and check that your environment has necessary network and disk access.
 
 ---
 
@@ -766,16 +764,16 @@ This section maps common symptoms to likely causes and fixes.
   - Required fields are present and have the right type (string, number, array, etc.).
 - Use completion to discover valid field names and values.
 
-### "Browser not found"
+### "Chrome headless shell not found"
 
 - Run:
 
   ```bash
-  bino setup --browser chromium
+  bino setup
   ```
 
-- Ensure that the setup command has network access and can write to its cache directory.
-- If you set a custom driver directory, verify that the same directory is used during builds.
+- Ensure that the setup command has network access and can write to its cache directory (`~/.bn/chrome-headless-shell/`).
+- Alternatively, set the `CHROME_PATH` environment variable to point to an existing Chrome or Chromium binary.
 
 ### "No template engine versions installed"
 
