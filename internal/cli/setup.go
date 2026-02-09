@@ -6,16 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/chrome"
 	"bino.bi/bino/internal/engine"
-	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/playwright"
 	"bino.bi/bino/internal/updater"
 )
 
 func newSetupCommand() *cobra.Command {
 	var (
-		browsers       []string
-		driverDir      string
 		dryRun         bool
 		quiet          bool
 		templateEngine bool
@@ -24,10 +21,10 @@ func newSetupCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Download or update browser runtimes and template engine",
-		Long: strings.TrimSpace(`Ensure browser runtimes, rendering driver, and template engine are available locally.
+		Short: "Download or update Chrome headless shell and template engine",
+		Long: strings.TrimSpace(`Ensure Chrome headless shell and template engine are available locally.
 Use --verbose (-v) to surface verbose installer logs.`),
-		Example: strings.TrimSpace(`  bino setup --browser chromium --browser webkit
+		Example: strings.TrimSpace(`  bino setup
   bino setup --template-engine
   bino setup --template-engine --engine-version v1.2.3
   bino setup --dry-run`),
@@ -43,14 +40,14 @@ Use --verbose (-v) to surface verbose installer logs.`),
 
 			// Determine which tasks to run
 			installTemplateEngine := templateEngine
-			installBrowsers := !templateEngine || len(browsers) > 0 || driverDir != ""
+			installChrome := !templateEngine
 
 			// Calculate total steps for progress display
 			totalSteps := 0
 			if installTemplateEngine {
 				totalSteps++
 			}
-			if installBrowsers {
+			if installChrome {
 				totalSteps++
 			}
 			currentStep := 0
@@ -99,43 +96,45 @@ Use --verbose (-v) to surface verbose installer logs.`),
 				}
 			}
 
-			// Handle browser runtime installation (default behavior when no flags specified)
-			if installBrowsers {
+			// Handle Chrome headless shell installation (default behavior when no flags specified)
+			if installChrome {
 				currentStep++
-				browserList := browsers
-				if len(browserList) == 0 {
-					browserList = []string{"chromium"}
-				}
 
 				if !quiet {
 					fmt.Fprintln(out, "")
-					fmt.Fprintf(out, "[%d/%d] Browser Runtimes\n", currentStep, totalSteps)
-					fmt.Fprintf(out, "      Browsers: %s\n", strings.Join(browserList, ", "))
-
-					// Show cache directory
-					cacheDir, err := pathutil.CacheDir("playwright")
-					if err == nil {
-						fmt.Fprintf(out, "      Cache: %s\n", cacheDir)
-					}
-					fmt.Fprintln(out, "      Installing Playwright driver and browsers...")
-					fmt.Fprintln(out, "")
+					fmt.Fprintf(out, "[%d/%d] Chrome Headless Shell\n", currentStep, totalSteps)
 				}
 
-				opts := playwright.InstallOptions{
-					Browsers:        browsers,
-					DriverDirectory: driverDir,
-					DryRun:          dryRun,
-					Quiet:           quiet,
-					Stdout:          out,
-					Stderr:          cmd.ErrOrStderr(),
+				mgr, err := chrome.NewManager()
+				if err != nil {
+					return RuntimeError(fmt.Errorf("initialize chrome manager: %w", err))
 				}
 
-				if err := playwright.Install(ctx, opts); err != nil {
+				if !quiet {
+					fmt.Fprintf(out, "      Cache: %s\n", mgr.CacheDir())
+				}
+
+				info, err := mgr.Install(ctx, chrome.InstallOptions{
+					DryRun: dryRun,
+					Quiet:  quiet,
+					Stdout: out,
+					Stderr: cmd.ErrOrStderr(),
+				})
+				if err != nil {
 					return ExternalError(err)
 				}
 
 				if !quiet {
-					fmt.Fprintln(out, "      ✓ Browser runtimes ready")
+					fmt.Fprintln(out, "      ✓ Chrome headless shell ready")
+				}
+
+				// Save version to state
+				if !dryRun && info.Version != "" {
+					state, err := updater.LoadState()
+					if err != nil {
+						state = &updater.State{}
+					}
+					state.ChromeVersion = info.Version
 				}
 			}
 
@@ -163,8 +162,6 @@ Use --verbose (-v) to surface verbose installer logs.`),
 		},
 	}
 
-	cmd.Flags().StringSliceVar(&browsers, "browser", nil, "Browsers to install (default: chromium). Repeat to add firefox, webkit, etc.")
-	cmd.Flags().StringVar(&driverDir, "driver-dir", "", "Override the browser driver cache directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the actions without downloading artifacts")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress verbose installer output")
 	cmd.Flags().BoolVar(&templateEngine, "template-engine", false, "Download or update the bn-template-engine")
@@ -172,5 +169,3 @@ Use --verbose (-v) to surface verbose installer logs.`),
 
 	return cmd
 }
-
-

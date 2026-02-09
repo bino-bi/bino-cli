@@ -1,6 +1,9 @@
-package playwright
+package chrome
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestFormatDimensionsPx(t *testing.T) {
 	tests := []struct {
@@ -68,5 +71,110 @@ func TestFormatDimensionsPx(t *testing.T) {
 				t.Errorf("formatDimensionsPx(%q, %q) = (%d, %d), want (%d, %d)", tt.format, tt.orientation, gotW, gotH, tt.wantW, tt.wantH)
 			}
 		})
+	}
+}
+
+func TestPxToInches(t *testing.T) {
+	tests := []struct {
+		px   int
+		want float64
+	}{
+		{96, 1.0},
+		{192, 2.0},
+		{48, 0.5},
+		{0, 0.0},
+	}
+	for _, tt := range tests {
+		got := pxToInches(tt.px)
+		if math.Abs(got-tt.want) > 0.001 {
+			t.Errorf("pxToInches(%d) = %f, want %f", tt.px, got, tt.want)
+		}
+	}
+}
+
+func TestMmToInches(t *testing.T) {
+	tests := []struct {
+		mm   float64
+		want float64
+	}{
+		{25.4, 1.0},
+		{0, 0.0},
+		{254, 10.0},
+	}
+	for _, tt := range tests {
+		got := mmToInches(tt.mm)
+		if math.Abs(got-tt.want) > 0.001 {
+			t.Errorf("mmToInches(%f) = %f, want %f", tt.mm, got, tt.want)
+		}
+	}
+}
+
+func TestParseMargin(t *testing.T) {
+	tests := []struct {
+		input string
+		want  float64
+	}{
+		{"20mm", mmToInches(20)},
+		{"15mm", mmToInches(15)},
+		{"1in", 1.0},
+		{"2.5in", 2.5},
+		{"2cm", cmToInches(2)},
+		{"96px", 1.0},
+		{"48px", 0.5},
+		{"20", mmToInches(20)}, // default to mm
+		{"", 0},
+	}
+	for _, tt := range tests {
+		got := parseMargin(tt.input)
+		if math.Abs(got-tt.want) > 0.001 {
+			t.Errorf("parseMargin(%q) = %f, want %f", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPaperSizeInches(t *testing.T) {
+	tests := []struct {
+		format string
+		wantW  float64
+		wantH  float64
+	}{
+		{"a4", mmToInches(210), mmToInches(297)},
+		{"A4", mmToInches(210), mmToInches(297)},
+		{"letter", 8.5, 11},
+		{"legal", 8.5, 14},
+		{"tabloid", 11, 17},
+		{"unknown", 0, 0},
+	}
+	for _, tt := range tests {
+		w, h := paperSizeInches(tt.format)
+		if math.Abs(w-tt.wantW) > 0.001 || math.Abs(h-tt.wantH) > 0.001 {
+			t.Errorf("paperSizeInches(%q) = (%f, %f), want (%f, %f)", tt.format, w, h, tt.wantW, tt.wantH)
+		}
+	}
+}
+
+func TestIsTruthy(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"1", true},
+		{"true", true},
+		{"True", true},
+		{"TRUE", true},
+		{"yes", true},
+		{"y", true},
+		{"Y", true},
+		{"0", false},
+		{"false", false},
+		{"no", false},
+		{"", false},
+		{"maybe", false},
+	}
+	for _, tt := range tests {
+		got := isTruthy(tt.input)
+		if got != tt.want {
+			t.Errorf("isTruthy(%q) = %v, want %v", tt.input, got, tt.want)
+		}
 	}
 }

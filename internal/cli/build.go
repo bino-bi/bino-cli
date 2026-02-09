@@ -16,7 +16,7 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/playwright"
+	"bino.bi/bino/internal/chrome"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
@@ -36,7 +36,7 @@ const componentReadyConsolePrefix = "componentRegisterIsRendered:"
 //   - Before loading manifests
 //   - Before building each artefact
 //   - During datasource collection (queries)
-//   - During PDF rendering via Playwright
+//   - During PDF rendering via Chrome headless shell
 //
 // On cancellation, partial work is abandoned and resources are cleaned up.
 func newBuildCommand() *cobra.Command {
@@ -45,8 +45,7 @@ func newBuildCommand() *cobra.Command {
 		outDir    string
 		include   []string
 		exclude   []string
-		driverDir string
-		browser   string
+		chromePath string
 		noGraph   bool
 		logSQL    bool
 		noLint    bool
@@ -132,8 +131,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			})
 
 			outDir = resolver.ResolveString("out-dir", "out-dir", outDir)
-			browser = resolver.ResolveString("browser", "browser", browser)
-			driverDir = resolver.ResolveString("driver-dir", "driver-dir", driverDir)
+			chromePath = resolver.ResolveString("chrome-path", "chrome-path", chromePath)
 			logFormat = resolver.ResolveString("log-format", "log-format", logFormat)
 			noGraph = resolver.ResolveBool("no-graph", "no-graph", noGraph)
 			noLint = resolver.ResolveBool("no-lint", "no-lint", noLint)
@@ -407,8 +405,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					Artefact:                 artefact,
 					SigningProfiles:          signingProfiles,
 					OutputDir:                outputDir,
-					Browser:                  browser,
-					DriverDir:                driverDir,
+					ChromePath:               chromePath,
 					Debug:                    logx.DebugEnabled(ctx),
 					Graph:                    graph,
 					GraphRoot:                root,
@@ -458,8 +455,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 						Docs:          documents,
 						Artefact:      ssArtefact,
 						OutputDir:     outputDir,
-						Browser:       browser,
-						DriverDir:     driverDir,
+						ChromePath:    chromePath,
 						Debug:         logx.DebugEnabled(ctx),
 						Spinner:       spinner,
 						QueryLogger:   queryLogger,
@@ -496,8 +492,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 						Artefact:        docArtefact,
 						SigningProfiles: signingProfiles,
 						OutputDir:       outputDir,
-						Browser:         browser,
-						DriverDir:       driverDir,
+						ChromePath:      chromePath,
 						Debug:           logx.DebugEnabled(ctx),
 						Spinner:         spinner,
 					})
@@ -649,8 +644,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for generated artefacts")
 	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to build (default: all)")
 	cmd.Flags().StringSliceVar(&exclude, "exclude-artefact", nil, "metadata.name entries to skip")
-	cmd.Flags().StringVar(&driverDir, "driver-dir", "", "Override the Playwright driver cache directory")
-	cmd.Flags().StringVar(&browser, "browser", "chromium", "Browser engine for PDF export (chromium, firefox, webkit)")
+	cmd.Flags().StringVar(&chromePath, "chrome-path", "", "Path to chrome-headless-shell binary (default: auto-detected or CHROME_PATH env)")
 	cmd.Flags().BoolVar(&noGraph, "no-graph", false, "Skip writing .bngraph dependency summaries next to PDFs")
 	cmd.Flags().BoolVar(&noLint, "no-lint", false, "Skip running lint rules")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal and build log")
@@ -697,8 +691,7 @@ type buildArtefactConfig struct {
 	Artefact                 config.Artefact
 	SigningProfiles          map[string]config.SigningProfile
 	OutputDir                string
-	Browser                  string
-	DriverDir                string
+	ChromePath               string
 	Debug                    bool
 	Graph                    *reportgraph.Graph
 	GraphRoot                *reportgraph.Node
@@ -811,11 +804,10 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
-	pdfOpts := playwright.PDFOptions{
+	pdfOpts := chrome.PDFOptions{
 		URL:                   server.URL(),
 		PDFPath:               pdfPath,
-		Browser:               cfg.Browser,
-		DriverDirectory:       cfg.DriverDir,
+		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artefact.Spec.Format,
 		Orientation:           cfg.Artefact.Spec.Orientation,
 		Timeout:               2 * time.Minute,
@@ -823,7 +815,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		WaitForComponentReady: true,
 		ReadyConsolePrefix:    componentReadyConsolePrefix,
 	}
-	pdfErr := playwright.RenderPDF(ctx, pdfOpts)
+	pdfErr := chrome.RenderPDF(ctx, pdfOpts)
 	closeErr := server.Close()
 	if pdfErr != nil {
 		if spinner != nil {
@@ -925,13 +917,12 @@ type buildDocumentArtefactConfig struct {
 	Artefact        config.DocumentArtefact
 	SigningProfiles map[string]config.SigningProfile
 	OutputDir       string
-	Browser         string
-	DriverDir       string
+	ChromePath      string
 	Debug           bool
 	Spinner         *Spinner
 }
 
-// buildDocumentArtefact renders a DocumentArtefact (markdown to PDF) using Playwright.
+// buildDocumentArtefact renders a DocumentArtefact (markdown to PDF) using Chrome.
 // It converts markdown files to HTML, serves them via an ephemeral server, and captures a PDF.
 func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig) (documentArtefactResult, error) {
 	if err := ctx.Err(); err != nil {
@@ -956,13 +947,12 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 	pdfPath := filepath.Join(cfg.OutputDir, filename)
 
 	// Build PDF options (used for both passes)
-	basePDFOpts := playwright.PDFOptions{
-		Format:          spec.Format,
-		Orientation:     spec.Orientation,
-		DriverDirectory: cfg.DriverDir,
-		Browser:         cfg.Browser,
-		Debug:           cfg.Debug,
-		Timeout:         2 * time.Minute,
+	basePDFOpts := chrome.PDFOptions{
+		Format:      spec.Format,
+		Orientation: spec.Orientation,
+		ChromePath:  cfg.ChromePath,
+		Debug:       cfg.Debug,
+		Timeout:     2 * time.Minute,
 	}
 	// Header/footer support
 	if spec.DisplayHeaderFooter {
@@ -1007,10 +997,10 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
 		}
 
-		// Collect heading page numbers via Playwright
+		// Collect heading page numbers via Chrome
 		collectOpts := basePDFOpts
 		collectOpts.URL = firstEphem.URL()
-		headings, err := playwright.CollectHeadingPages(ctx, collectOpts)
+		headings, err := chrome.CollectHeadingPages(ctx, collectOpts)
 		firstEphem.Close() // Close first pass server
 
 		if err != nil {
@@ -1059,7 +1049,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 	pdfOpts := basePDFOpts
 	pdfOpts.URL = ephem.URL()
 	pdfOpts.PDFPath = pdfPath
-	if err := playwright.RenderPDF(ctx, pdfOpts); err != nil {
+	if err := chrome.RenderPDF(ctx, pdfOpts); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
@@ -1102,7 +1092,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 
 // buildDefaultDocumentHeader creates the default header template for DocumentArtefact PDFs.
 // The header displays the document title centered at the top.
-// Playwright header/footer templates use special CSS classes for dynamic content.
+// Chrome header/footer templates use special CSS classes for dynamic content.
 func buildDefaultDocumentHeader(title string) string {
 	escapedTitle := title
 	// Basic HTML escaping for the title
@@ -1115,7 +1105,7 @@ func buildDefaultDocumentHeader(title string) string {
 
 // buildDefaultDocumentFooter creates the default footer template for DocumentArtefact PDFs.
 // The footer displays the date on the left and page number on the right.
-// Playwright footer templates use special CSS classes:
+// Chrome footer templates use special CSS classes:
 // - "date" class shows the formatted print date
 // - "pageNumber" class shows the current page number
 // - "totalPages" class shows the total number of pages
@@ -1265,8 +1255,7 @@ type buildScreenshotArtefactConfig struct {
 	Docs          []config.Document
 	Artefact      config.ScreenshotArtefact
 	OutputDir     string
-	Browser       string
-	DriverDir     string
+	ChromePath    string
 	Debug         bool
 	Spinner       *Spinner
 	QueryLogger   func(string)
@@ -1274,7 +1263,7 @@ type buildScreenshotArtefactConfig struct {
 
 // buildScreenshotArtefact captures screenshots of specific components.
 // It renders the HTML containing the specified layout pages, starts an ephemeral
-// server, and uses Playwright to capture screenshots of individual elements.
+// server, and uses Chrome to capture screenshots of individual elements.
 func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactConfig) ([]screenshotArtefactResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -1331,36 +1320,31 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	}
 	logger.Debugf("Capturing screenshots for %s", artefactName)
 
-	// Convert config refs to playwright refs
-	pwRefs := make([]playwright.ScreenshotRef, len(cfg.Artefact.Spec.Refs))
+	// Convert config refs to chrome refs
+	chromeRefs := make([]chrome.ScreenshotRef, len(cfg.Artefact.Spec.Refs))
 	for i, ref := range cfg.Artefact.Spec.Refs {
-		pwRefs[i] = playwright.ScreenshotRef{
+		chromeRefs[i] = chrome.ScreenshotRef{
 			Kind: ref.Kind,
 			Name: ref.Name,
 		}
 	}
 
-	screenshotOpts := playwright.ScreenshotOptions{
+	screenshotOpts := chrome.ScreenshotOptions{
 		URL:                   server.URL(),
 		OutputDir:             cfg.OutputDir,
-		Browser:               cfg.Browser,
-		DriverDirectory:       cfg.DriverDir,
+		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artefact.Spec.Format,
 		Orientation:           cfg.Artefact.Spec.Orientation,
 		Timeout:               2 * time.Minute,
 		Debug:                 cfg.Debug,
 		WaitForComponentReady: true,
 		ReadyConsolePrefix:    componentReadyConsolePrefix,
-		Refs:                  pwRefs,
+		Refs:                  chromeRefs,
 		FilenamePrefix:        cfg.Artefact.Spec.FilenamePrefix,
 		FilenamePattern:       cfg.Artefact.Spec.FilenamePattern,
-		ImageFormat:           cfg.Artefact.Spec.ImageFormat,
-		Quality:               cfg.Artefact.Spec.Quality,
-		OmitBackground:        cfg.Artefact.Spec.OmitBackground,
-		Scale:                 cfg.Artefact.Spec.Scale,
 	}
 
-	pwResults, screenshotErr := playwright.RenderScreenshots(ctx, screenshotOpts)
+	chromeResults, screenshotErr := chrome.RenderScreenshots(ctx, screenshotOpts)
 	closeErr := server.Close()
 
 	if screenshotErr != nil {
@@ -1379,9 +1363,9 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		return nil, fmt.Errorf("screenshot artefact %s: stop server: %w", artefactName, closeErr)
 	}
 
-	// Convert playwright results to our result type
-	results := make([]screenshotArtefactResult, len(pwResults))
-	for i, r := range pwResults {
+	// Convert chrome results to our result type
+	results := make([]screenshotArtefactResult, len(chromeResults))
+	for i, r := range chromeResults {
 		results[i] = screenshotArtefactResult{
 			ArtefactName: artefactName,
 			RefKind:      r.Ref.Kind,

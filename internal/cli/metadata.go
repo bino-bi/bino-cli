@@ -11,7 +11,7 @@ var AppMetadata = struct {
 	License     string
 }{
 	Name:        "bino",
-	Description: "A Go-based CLI that validates YAML report bundles, runs DuckDB-backed data pipelines, and renders HTML/PDF artefacts via Playwright.",
+	Description: "A Go-based CLI that validates YAML report bundles, runs DuckDB-backed data pipelines, and renders HTML/PDF artefacts via chromedp.",
 	URL:         "https://github.com/bino-bi/bino-cli",
 	Author:      "Sven Herrmann",
 	Email:       "sven@bino.bi",
@@ -55,9 +55,15 @@ var DirectDependencies = []DependencyInfo{
 		License: "MIT",
 	},
 	{
-		Module:  "github.com/playwright-community/playwright-go",
-		Version: "v0.5200.1",
-		URL:     "https://github.com/playwright-community/playwright-go",
+		Module:  "github.com/chromedp/chromedp",
+		Version: "v0.13.1",
+		URL:     "https://github.com/chromedp/chromedp",
+		License: "MIT",
+	},
+	{
+		Module:  "github.com/chromedp/cdproto",
+		Version: "v0.0.0-20250222",
+		URL:     "https://github.com/chromedp/cdproto",
 		License: "MIT",
 	},
 	{

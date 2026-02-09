@@ -20,7 +20,7 @@ const (
 	ErrorKindConfig ErrorKind = "config"
 	// ErrorKindRuntime indicates errors during command execution (rendering, I/O).
 	ErrorKindRuntime ErrorKind = "runtime"
-	// ErrorKindExternal indicates failures in external dependencies (Playwright, network).
+	// ErrorKindExternal indicates failures in external dependencies (Chrome, network).
 	ErrorKindExternal ErrorKind = "external"
 	// ErrorKindUnknown is the fallback for unclassified errors.
 	ErrorKindUnknown ErrorKind = "unknown"
@@ -86,7 +86,7 @@ func RuntimeErrorf(format string, args ...any) error {
 }
 
 // ExternalError wraps an error as an external dependency error (exit code 3).
-// Use for: Playwright failures, network errors, third-party tool issues.
+// Use for: Chrome failures, network errors, third-party tool issues.
 func ExternalError(err error) error {
 	return wrapError(ErrorKindExternal, err)
 }
@@ -169,7 +169,7 @@ func defaultHint(kind ErrorKind) string {
 	case ErrorKindRuntime:
 		return "An error occurred during execution; check the logs for more details"
 	case ErrorKindExternal:
-		return "Ensure external dependencies (like Playwright) are properly installed"
+		return "Ensure external dependencies (like Chrome headless shell) are properly installed"
 	default:
 		return ""
 	}
