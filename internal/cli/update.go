@@ -20,18 +20,25 @@ func newUpdateCommand() *cobra.Command {
 			ctx := cmd.Context()
 			out := cmd.OutOrStdout()
 
-			// Update CLI
-			fmt.Fprintf(out, "Checking for CLI updates (current: %s)...\n", version.Version)
+			sp := NewSpinner(SpinnerConfig{Stdout: out})
 
-			result, err := updater.Update(ctx)
+			// Update CLI
+			sp.Start(fmt.Sprintf("Checking for CLI updates (current: %s)", version.Version))
+
+			result, err := updater.Update(ctx, func(msg string) {
+				sp.Update(msg)
+			})
 			if err != nil {
+				sp.StopWithError("CLI update failed")
 				return fmt.Errorf("CLI update failed: %w", err)
 			}
 
 			if result == nil {
-				fmt.Fprintln(out, "CLI is already up to date.")
+				sp.Update("CLI is already up to date")
+				sp.Stop()
 			} else {
-				fmt.Fprintf(out, "Successfully updated CLI from %s to %s\n", result.PreviousVersion, result.NewVersion)
+				sp.Update(fmt.Sprintf("Updated CLI from %s to %s", result.PreviousVersion, result.NewVersion))
+				sp.Stop()
 				if result.ReleaseNotes != "" {
 					fmt.Fprintln(out, "\nRelease notes:")
 					fmt.Fprintln(out, result.ReleaseNotes)
@@ -39,8 +46,7 @@ func newUpdateCommand() *cobra.Command {
 			}
 
 			// Update template engine
-			fmt.Fprintln(out, "")
-			if err := updateTemplateEngine(cmd); err != nil {
+			if err := updateTemplateEngine(cmd, sp); err != nil {
 				return err
 			}
 
@@ -49,9 +55,8 @@ func newUpdateCommand() *cobra.Command {
 	}
 }
 
-func updateTemplateEngine(cmd *cobra.Command) error {
+func updateTemplateEngine(cmd *cobra.Command, sp *Spinner) error {
 	ctx := cmd.Context()
-	out := cmd.OutOrStdout()
 
 	mgr, err := engine.NewManager()
 	if err != nil {
@@ -66,40 +71,44 @@ func updateTemplateEngine(cmd *cobra.Command) error {
 	}
 
 	if localVersion != "" {
-		fmt.Fprintf(out, "Checking for template engine updates (current: %s)...\n", localVersion)
+		sp.Start(fmt.Sprintf("Checking for template engine updates (current: %s)", localVersion))
 	} else {
-		fmt.Fprintln(out, "Checking for template engine updates (not installed)...")
+		sp.Start("Checking for template engine updates (not installed)")
 	}
 
 	// Get latest remote version
 	remoteVersion, err := mgr.FetchLatestRemoteVersion(ctx)
 	if err != nil {
+		sp.StopWithError("Failed to check template engine updates")
 		return ExternalError(fmt.Errorf("fetch latest template engine version: %w", err))
 	}
 
 	// Compare versions
 	if localVersion != "" && semver.Compare(remoteVersion, localVersion) <= 0 {
-		fmt.Fprintln(out, "Template engine is already up to date.")
+		sp.Update("Template engine is already up to date")
+		sp.Stop()
 		return nil
 	}
 
 	// Download new version
 	if localVersion != "" {
-		fmt.Fprintf(out, "Downloading template engine %s...\n", remoteVersion)
+		sp.Update(fmt.Sprintf("Downloading template engine %s", remoteVersion))
 	} else {
-		fmt.Fprintf(out, "Installing template engine %s...\n", remoteVersion)
+		sp.Update(fmt.Sprintf("Installing template engine %s", remoteVersion))
 	}
 
 	info, err := mgr.Download(ctx, remoteVersion)
 	if err != nil {
+		sp.StopWithError("Template engine update failed")
 		return ExternalError(fmt.Errorf("download template engine: %w", err))
 	}
 
 	if localVersion != "" {
-		fmt.Fprintf(out, "Successfully updated template engine from %s to %s\n", localVersion, info.Version)
+		sp.Update(fmt.Sprintf("Updated template engine from %s to %s", localVersion, info.Version))
 	} else {
-		fmt.Fprintf(out, "Template engine %s installed at %s\n", info.Version, info.Path)
+		sp.Update(fmt.Sprintf("Installed template engine %s", info.Version))
 	}
+	sp.Stop()
 
 	return nil
 }

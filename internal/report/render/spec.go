@@ -18,11 +18,11 @@ type layoutPageSpec struct {
 	TitleNamespace      string     `json:"titleNamespace"`
 	TitleDateStart      dateString `json:"titleDateStart"`
 	TitleDateEnd        dateString `json:"titleDateEnd"`
-	TitleDateFormat     string                 `json:"titleDateFormat"`
-	TitleDateLink       string                 `json:"titleDateLink"`
-	TitleMeasures       reportspec.MeasureList `json:"titleMeasures"`
-	TitleScenarios      string                 `json:"titleScenarios"`
-	TitleVariances      string                 `json:"titleVariances"`
+	TitleDateFormat     string                   `json:"titleDateFormat"`
+	TitleDateLink       string                   `json:"titleDateLink"`
+	TitleMeasures       reportspec.MeasureList   `json:"titleMeasures"`
+	TitleScenarios      reportspec.StringOrSlice `json:"titleScenarios"`
+	TitleVariances      reportspec.StringOrSlice `json:"titleVariances"`
 	TitleOrder          string                 `json:"titleOrder"`
 	TitleOrderDirection string                 `json:"titleOrderDirection"`
 	PageLayout          string                 `json:"pageLayout"`
@@ -47,8 +47,8 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
 	writeAttr(b, "title-date-link", s.TitleDateLink)
 	writeAttr(b, "title-measures", s.TitleMeasures.String())
-	writeAttr(b, "title-scenarios", s.TitleScenarios)
-	writeAttr(b, "title-variances", s.TitleVariances)
+	writeAttr(b, "title-scenarios", s.TitleScenarios.String())
+	writeAttr(b, "title-variances", s.TitleVariances.String())
 	writeAttr(b, "title-order", s.TitleOrder)
 	writeAttr(b, "title-order-direction", s.TitleOrderDirection)
 	writeAttr(b, "page-layout", s.PageLayout)
@@ -71,10 +71,10 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 // layoutCardSpec defines the structure for LayoutCard components.
 // Cards use card-* prefixed layout properties instead of page-* properties.
 type layoutCardSpec struct {
-	TitleImage          string                 `json:"titleImage"`
-	TitleBusinessUnit   string                 `json:"titleBusinessUnit"`
-	TitleScenarios      string                 `json:"titleScenarios"`
-	TitleVariances      string                 `json:"titleVariances"`
+	TitleImage          string                   `json:"titleImage"`
+	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
+	TitleScenarios      reportspec.StringOrSlice `json:"titleScenarios"`
+	TitleVariances      reportspec.StringOrSlice `json:"titleVariances"`
 	TitleOrder          string                 `json:"titleOrder"`
 	TitleOrderDirection string                 `json:"titleOrderDirection"`
 	TitleMeasures       reportspec.MeasureList `json:"titleMeasures"`
@@ -95,8 +95,8 @@ type layoutCardSpec struct {
 func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "title-image", s.TitleImage)
 	writeAttr(b, "title-business-unit", s.TitleBusinessUnit)
-	writeAttr(b, "title-scenarios", s.TitleScenarios)
-	writeAttr(b, "title-variances", s.TitleVariances)
+	writeAttr(b, "title-scenarios", s.TitleScenarios.String())
+	writeAttr(b, "title-variances", s.TitleVariances.String())
 	writeAttr(b, "title-order", s.TitleOrder)
 	writeAttr(b, "title-order-direction", s.TitleOrderDirection)
 	writeAttr(b, "title-measures", s.TitleMeasures.String())
