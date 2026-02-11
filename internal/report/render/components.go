@@ -358,7 +358,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render text child: %w", err)
 		}
-		component = renderTextComponent(s)
+		component = renderTextComponent(s, rc.assetURLs)
 	case "Table":
 		var s tableSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
