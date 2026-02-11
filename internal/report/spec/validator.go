@@ -15,11 +15,16 @@ type SchemaError struct {
 	Description string
 	Value       interface{}
 	Context     string
+	Line        int // 1-based line number in source YAML (0 = unknown)
+	Column      int // 1-based column number in source YAML (0 = unknown)
 }
 
 // SchemaValidationError holds multiple schema errors with helpful formatting.
 type SchemaValidationError struct {
-	Errors []SchemaError
+	Errors      []SchemaError
+	File        string // source file path
+	DocPosition int    // 1-based document index in multi-doc file
+	Source      string // original YAML content (for snippet display)
 }
 
 func (e *SchemaValidationError) Error() string {

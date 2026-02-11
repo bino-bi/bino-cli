@@ -375,6 +375,10 @@ func parseValidationError(err error, baseDir string) []LSPDiagnostic {
 	if errors.As(err, &schemaErr) {
 		for _, se := range schemaErr.Errors {
 			diag := LSPDiagnostic{
+				File:     schemaErr.File,
+				Position: schemaErr.DocPosition,
+				Line:     se.Line,
+				Column:   se.Column,
 				Severity: "error",
 				Message:  se.Description,
 				Field:    se.Field,

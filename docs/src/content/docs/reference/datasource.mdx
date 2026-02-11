@@ -31,6 +31,17 @@ spec:
   connection: {} # for database queries
   query: "" # SQL for postgres_query / mysql_query
   ephemeral: false # optional caching hint
+
+  # CSV reader options (type: csv only)
+  delimiter: ";" # field delimiter
+  header: true # first row is header
+  skipRows: 0 # lines to skip before data
+  thousands: "." # thousands separator
+  decimalSeparator: "," # decimal point character
+  dateFormat: "%d/%m/%Y" # date parsing format
+  columnNames: [a, b, c] # explicit column names
+  columns: # column name → DuckDB type
+    amount: "DECIMAL(10,2)"
 ```
 
 Type-specific rules (simplified from the schema):
@@ -68,6 +79,72 @@ metadata:
 spec:
   type: csv
   path: ./data/sales_daily/*.csv
+```
+
+## CSV reader options
+
+When the default auto-detection does not produce the right result, add CSV reader options to `spec`.
+Any option that is set switches bino from `read_csv_auto` to `read_csv` with explicit parameters.
+
+| Field | Type | DuckDB parameter | Description |
+|---|---|---|---|
+| `delimiter` | string | `delim` | Field delimiter character (for example `";"` or `"\|"`). |
+| `header` | boolean | `header` | Whether the first row defines column names. Default `true`. |
+| `skipRows` | integer | `skip` | Number of lines to skip before reading data. |
+| `thousands` | string | `thousands` | Thousands separator in numeric values (for example `"."`). |
+| `decimalSeparator` | string | `decimal_separator` | Decimal point character (for example `","`). |
+| `dateFormat` | string | `dateformat` | Date format using DuckDB strftime specifiers (for example `"%d/%m/%Y"`). |
+| `columns` | object | `columns` | Map of column name to DuckDB type. Mutually exclusive with `columnNames`. |
+| `columnNames` | string[] | `names` | Explicit column names. Mutually exclusive with `columns`. |
+
+### European number format
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: eu_sales
+spec:
+  type: csv
+  path: ./data/eu_sales.csv
+  delimiter: ";"
+  thousands: "."
+  decimalSeparator: ","
+  dateFormat: "%d/%m/%Y"
+```
+
+### Headerless CSV with typed columns
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sensor_data
+spec:
+  type: csv
+  path: ./data/sensors.csv
+  header: false
+  columns:
+    ts: "TIMESTAMP"
+    device_id: "INTEGER"
+    reading: "DECIMAL(8,3)"
+```
+
+### Custom column names
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: raw_export
+spec:
+  type: csv
+  path: ./data/export.csv
+  header: false
+  columnNames: [date, region, amount]
 ```
 
 ## Parquet files

@@ -163,7 +163,7 @@ type LiveQueryParamSpec struct {
 // Parameters act like environment variables but with higher precedence and type validation.
 type LayoutPageParamSpec struct {
 	Name        string                  `json:"name"`
-	Type        string                  `json:"type,omitempty"`     // string, number, boolean, select, date (default: string)
+	Type        string                  `json:"type,omitempty"`     // string, number, boolean, select, date, date_time (default: string)
 	Default     *string                 `json:"default,omitempty"`  // nil means required
 	Required    bool                    `json:"required,omitempty"` // true means param must be provided
 	Description string                  `json:"description,omitempty"`

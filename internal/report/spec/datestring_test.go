@@ -17,14 +17,19 @@ func TestDateString_UnmarshalJSON(t *testing.T) {
 			expected: "2023-01-05",
 		},
 		{
-			name:     "datetime with Z",
+			name:     "datetime midnight UTC (YAML artifact)",
 			input:    `"2023-01-05T00:00:00Z"`,
 			expected: "2023-01-05",
 		},
 		{
-			name:     "datetime with time",
+			name:     "datetime with non-midnight time preserved",
 			input:    `"2023-12-31T23:59:59Z"`,
-			expected: "2023-12-31",
+			expected: "2023-12-31T23:59:59Z",
+		},
+		{
+			name:     "datetime with afternoon time preserved",
+			input:    `"2024-06-15T14:30:00Z"`,
+			expected: "2024-06-15T14:30:00Z",
 		},
 		{
 			name:     "null",
@@ -57,21 +62,38 @@ func TestDateString_InStruct(t *testing.T) {
 		DateEnd   DateString `json:"dateEnd"`
 	}
 
-	// This simulates what happens when YAML parses a date without quotes
-	// and then marshals it to JSON (which is how bino processes manifests)
-	input := `{"dateStart": "2023-01-05T00:00:00Z", "dateEnd": "2023-12-31"}`
+	t.Run("midnight UTC normalized to date-only", func(t *testing.T) {
+		// Simulates YAML parsing unquoted date → time.Time → JSON datetime
+		input := `{"dateStart": "2023-01-05T00:00:00Z", "dateEnd": "2023-12-31"}`
 
-	var spec TestSpec
-	if err := json.Unmarshal([]byte(input), &spec); err != nil {
-		t.Fatalf("Unmarshal error = %v", err)
-	}
+		var spec TestSpec
+		if err := json.Unmarshal([]byte(input), &spec); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
 
-	if spec.DateStart.String() != "2023-01-05" {
-		t.Errorf("DateStart = %q, want %q", spec.DateStart.String(), "2023-01-05")
-	}
-	if spec.DateEnd.String() != "2023-12-31" {
-		t.Errorf("DateEnd = %q, want %q", spec.DateEnd.String(), "2023-12-31")
-	}
+		if spec.DateStart.String() != "2023-01-05" {
+			t.Errorf("DateStart = %q, want %q", spec.DateStart.String(), "2023-01-05")
+		}
+		if spec.DateEnd.String() != "2023-12-31" {
+			t.Errorf("DateEnd = %q, want %q", spec.DateEnd.String(), "2023-12-31")
+		}
+	})
+
+	t.Run("non-midnight datetime preserved", func(t *testing.T) {
+		input := `{"dateStart": "2024-01-01T08:00:00Z", "dateEnd": "2024-03-31T17:30:00Z"}`
+
+		var spec TestSpec
+		if err := json.Unmarshal([]byte(input), &spec); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
+
+		if spec.DateStart.String() != "2024-01-01T08:00:00Z" {
+			t.Errorf("DateStart = %q, want %q", spec.DateStart.String(), "2024-01-01T08:00:00Z")
+		}
+		if spec.DateEnd.String() != "2024-03-31T17:30:00Z" {
+			t.Errorf("DateEnd = %q, want %q", spec.DateEnd.String(), "2024-03-31T17:30:00Z")
+		}
+	})
 }
 
 func TestNormalizeDateString(t *testing.T) {
@@ -80,12 +102,14 @@ func TestNormalizeDateString(t *testing.T) {
 		expected string
 	}{
 		{"2023-01-05", "2023-01-05"},
-		{"2023-01-05T00:00:00Z", "2023-01-05"},
-		{"2023-12-31T23:59:59Z", "2023-12-31"},
+		{"2023-01-05T00:00:00Z", "2023-01-05"},              // midnight UTC → date-only
+		{"2023-12-31T23:59:59Z", "2023-12-31T23:59:59Z"},    // non-midnight preserved
+		{"2024-06-15T14:30:00Z", "2024-06-15T14:30:00Z"},    // non-midnight preserved
+		{"2024-01-01T08:00:00+01:00", "2024-01-01T08:00:00+01:00"}, // with offset preserved
 		{"", ""},
 		{"invalid", "invalid"},
-		{"2023-01-05T", "2023-01-05"}, // T at position 10, so it gets normalized
-		{"2023-01-0T00:00:00Z", "2023-01-0T00:00:00Z"}, // Invalid date, T not at position 10
+		{"2023-01-05T", "2023-01-05T"},                       // T at position 10, not midnight → preserved
+		{"2023-01-0T00:00:00Z", "2023-01-0T00:00:00Z"},      // Invalid date, T not at position 10
 	}
 
 	for _, tt := range tests {

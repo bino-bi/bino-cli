@@ -6,7 +6,7 @@ type LayoutPageParamSpec struct {
 	// Name is the parameter name, referenced as ${NAME} in the spec.
 	Name string `yaml:"name" json:"name"`
 
-	// Type is the parameter type: string, number, boolean, select, or date.
+	// Type is the parameter type: string, number, boolean, select, date, or date_time.
 	// Defaults to "string" if not specified.
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 
@@ -65,11 +65,12 @@ type LayoutPageSpecWithParams struct {
 
 // ParamType constants for LayoutPageParamSpec.Type
 const (
-	ParamTypeString  = "string"
-	ParamTypeNumber  = "number"
-	ParamTypeBoolean = "boolean"
-	ParamTypeSelect  = "select"
-	ParamTypeDate    = "date"
+	ParamTypeString   = "string"
+	ParamTypeNumber   = "number"
+	ParamTypeBoolean  = "boolean"
+	ParamTypeSelect   = "select"
+	ParamTypeDate     = "date"
+	ParamTypeDateTime = "date_time"
 )
 
 // ValidParamTypes returns all valid parameter types.
@@ -80,5 +81,6 @@ func ValidParamTypes() []string {
 		ParamTypeBoolean,
 		ParamTypeSelect,
 		ParamTypeDate,
+		ParamTypeDateTime,
 	}
 }

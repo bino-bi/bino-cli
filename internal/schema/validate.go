@@ -115,9 +115,16 @@ func ValidateJSON(jsonBytes []byte) error {
 		return nil
 	}
 
-	// Convert to structured errors
+	// Convert to structured errors, filtering out noisy meta-validator errors
+	// from gojsonschema's if/then/else and allOf/anyOf/oneOf composition.
 	issues := make([]ValidationIssue, 0, len(result.Errors()))
 	for _, desc := range result.Errors() {
+		switch desc.Type() {
+		case "condition_then", "condition_else",
+			"number_all_of", "number_any_of", "number_one_of":
+			continue
+		}
+
 		field := desc.Field()
 		if field == "" {
 			field = "(root)"

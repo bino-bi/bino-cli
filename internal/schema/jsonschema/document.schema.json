@@ -506,6 +506,45 @@
         "ephemeral": {
           "type": "boolean",
           "description": "Controls whether this datasource is always refetched or may be cached between builds. When not set, bino derives ephemerality from the source type: database queries and remote URLs are treated as changing, inline content and in-project files as stable. Set explicitly to false to enable caching even for remote or database sources (for example a static S3 dataset)."
+        },
+        "delimiter": {
+          "type": "string",
+          "maxLength": 4,
+          "description": "Field delimiter character for CSV files (for example ';' or '|'). Defaults to auto-detection when not set."
+        },
+        "header": {
+          "type": "boolean",
+          "description": "Whether the CSV file has a header row. When true (the default), the first row defines column names."
+        },
+        "skipRows": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of lines to skip at the beginning of the CSV file before reading data."
+        },
+        "thousands": {
+          "type": "string",
+          "maxLength": 1,
+          "description": "Thousands separator in numeric values (for example '.' for '1.000.000')."
+        },
+        "decimalSeparator": {
+          "type": "string",
+          "maxLength": 1,
+          "description": "Decimal point character in numeric values (for example ',' for '3,14')."
+        },
+        "columnNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Explicit column names. Mutually exclusive with 'columns'."
+        },
+        "dateFormat": {
+          "type": "string",
+          "description": "Date format string using DuckDB strftime specifiers (for example '%d/%m/%Y')."
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of column name to DuckDB type (for example 'amount': 'DECIMAL(10,2)'). Mutually exclusive with 'columnNames'."
         }
       },
       "allOf": [
@@ -570,6 +609,12 @@
           },
           "then": {
             "required": ["connection", "query"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "csv" } } },
+          "then": {
+            "not": { "required": ["columns", "columnNames"] }
           }
         }
       ]
@@ -1055,6 +1100,45 @@
         "ephemeral": {
           "type": "boolean",
           "description": "Controls caching behavior."
+        },
+        "delimiter": {
+          "type": "string",
+          "maxLength": 4,
+          "description": "Field delimiter character for CSV files."
+        },
+        "header": {
+          "type": "boolean",
+          "description": "Whether the CSV file has a header row."
+        },
+        "skipRows": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of lines to skip at the beginning of the CSV file."
+        },
+        "thousands": {
+          "type": "string",
+          "maxLength": 1,
+          "description": "Thousands separator in numeric values."
+        },
+        "decimalSeparator": {
+          "type": "string",
+          "maxLength": 1,
+          "description": "Decimal point character in numeric values."
+        },
+        "columnNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Explicit column names. Mutually exclusive with 'columns'."
+        },
+        "dateFormat": {
+          "type": "string",
+          "description": "Date format string using DuckDB strftime specifiers."
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of column name to DuckDB type. Mutually exclusive with 'columnNames'."
         }
       },
       "allOf": [
@@ -1086,6 +1170,12 @@
         {
           "if": { "properties": { "type": { "const": "mysql_query" } } },
           "then": { "required": ["connection", "query"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "csv" } } },
+          "then": {
+            "not": { "required": ["columns", "columnNames"] }
+          }
         }
       ]
     },
@@ -1388,9 +1478,9 @@
         },
         "type": {
           "type": "string",
-          "enum": ["string", "number", "boolean", "select", "date"],
+          "enum": ["string", "number", "boolean", "select", "date", "date_time"],
           "default": "string",
-          "description": "Type of the parameter. Used for validation of passed values."
+          "description": "Type of the parameter. Used for validation of passed values. Use 'date' for date-only (YYYY-MM-DD) and 'date_time' for date and time (ISO 8601)."
         },
         "default": {
           "type": "string",
@@ -2174,13 +2264,13 @@
         "titleNamespace": { "type": "string", "default": "_system" },
         "titleDateStart": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
-          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01). Also accepts datetime format from YAML date parsing."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
+          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01) or ISO 8601 datetime (e.g. 2023-01-01T14:30:00Z)."
         },
         "titleDateEnd": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
-          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31). Also accepts datetime format from YAML date parsing."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
+          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31) or ISO 8601 datetime (e.g. 2023-12-31T23:59:59Z)."
         },
         "titleDateFormat": {
           "type": "string",
@@ -2336,13 +2426,13 @@
         },
         "titleDateStart": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
-          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01). Also accepts datetime format from YAML date parsing."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
+          "description": "Start date in yyyy-MM-dd format (e.g. 2023-01-01) or ISO 8601 datetime (e.g. 2023-01-01T14:30:00Z)."
         },
         "titleDateEnd": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
-          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31). Also accepts datetime format from YAML date parsing."
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
+          "description": "End date in yyyy-MM-dd format (e.g. 2023-12-31) or ISO 8601 datetime (e.g. 2023-12-31T23:59:59Z)."
         },
         "titleDateFormat": {
           "type": "string",

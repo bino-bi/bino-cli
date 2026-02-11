@@ -167,12 +167,13 @@ func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact, layoutPageNam
 
 // ValidLayoutPageParamTypes lists valid types for LayoutPage params.
 var ValidLayoutPageParamTypes = map[string]struct{}{
-	"":        {}, // default to string
-	"string":  {},
-	"number":  {},
-	"boolean": {},
-	"select":  {},
-	"date":    {},
+	"":          {}, // default to string
+	"string":    {},
+	"number":    {},
+	"boolean":   {},
+	"select":    {},
+	"date":      {},
+	"date_time": {},
 }
 
 // ValidateLayoutPageParams validates the parameter definitions in a LayoutPage document.
@@ -197,7 +198,7 @@ func ValidateLayoutPageParams(doc Document) (warnings []string, err error) {
 
 		// Validate type
 		if _, valid := ValidLayoutPageParamTypes[param.Type]; !valid {
-			return warnings, fmt.Errorf("LayoutPage %q: param %q has invalid type %q (valid: string, number, boolean, select, date)", doc.Name, param.Name, param.Type)
+			return warnings, fmt.Errorf("LayoutPage %q: param %q has invalid type %q (valid: string, number, boolean, select, date, date_time)", doc.Name, param.Name, param.Type)
 		}
 
 		// Validate select type has options

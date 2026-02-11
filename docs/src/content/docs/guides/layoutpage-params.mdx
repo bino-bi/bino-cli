@@ -168,6 +168,17 @@ params:
     default: "2024-01-01"
 ```
 
+#### date_time
+
+Date and time value in ISO 8601 format (e.g. `2024-01-15T14:30:00Z`).
+
+```yaml
+params:
+  - name: REPORT_TIMESTAMP
+    type: date_time
+    default: "2024-01-01T00:00:00Z"
+```
+
 ## Using parameters in your layout
 
 Parameters are referenced using `${PARAM_NAME}` syntax anywhere in the spec.
@@ -619,6 +630,10 @@ params:
 # Use date for dates
 - name: PERIOD_END
   type: date
+
+# Use date_time for timestamps
+- name: CUTOFF_TIME
+  type: date_time
 ```
 
 ### 5. Keep parameter lists focused
