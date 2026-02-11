@@ -2302,12 +2302,18 @@
           ]
         },
         "titleScenarios": {
-          "type": "string",
-          "description": "List of scenarios displayed in card header. If empty, the scenarios are omitted. Values: ac, fc, py, pl."
+          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac, fc, py, pl.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         },
         "titleVariances": {
-          "type": "string",
-          "description": "List of variances calculated from the given scenarios. The scenarios used in the variances must also be defined in the scenarios property. Variance is defined as (ScenarioA - ScenarioB). The pos/neg/neu postfix defines which value is 'good' (positive or negative). If empty, variance charts are hidden. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]."
+          "description": "List of variances calculated from the given scenarios. Can be a YAML array or a comma-separated string. The scenarios used in the variances must also be defined in the scenarios property. Variance is defined as (ScenarioA - ScenarioB). The pos/neg/neu postfix defines which value is 'good' (positive or negative). If empty, variance charts are hidden. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu].",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         },
         "titleOrder": {
           "type": "string",
@@ -2388,12 +2394,18 @@
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted."
         },
         "titleScenarios": {
-          "type": "string",
-          "description": "List of scenarios displayed in card header. If empty, the scenarios are omitted. Values: ac, fc, py, pl."
+          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac, fc, py, pl.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         },
         "titleVariances": {
-          "type": "string",
-          "description": "List of variances calculated from the given scenarios. The scenarios used in the variances must also be defined in the scenarios property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]."
+          "description": "List of variances calculated from the given scenarios. Can be a YAML array or a comma-separated string. The scenarios used in the variances must also be defined in the scenarios property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu].",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         },
         "titleOrder": {
           "type": "string",
