@@ -168,8 +168,16 @@ type UpdateResult struct {
 	ReleaseNotes    string
 }
 
+// ProgressFunc is called with status messages during update operations.
+type ProgressFunc func(message string)
+
 // Update performs the self-update to the latest version.
-func Update(ctx context.Context) (*UpdateResult, error) {
+// If onProgress is non-nil, it is called with status messages at each step.
+func Update(ctx context.Context, onProgress ProgressFunc) (*UpdateResult, error) {
+	if onProgress == nil {
+		onProgress = func(string) {}
+	}
+
 	vStr := strings.TrimPrefix(version.Version, "v")
 	currentVersion, err := semver.Parse(vStr)
 	if err != nil {
@@ -177,6 +185,7 @@ func Update(ctx context.Context) (*UpdateResult, error) {
 		currentVersion = semver.MustParse("0.0.0")
 	}
 
+	onProgress("Checking for latest version")
 	latestVersionStr, downloadURL, err := resolveLatestVersion(ctx)
 	if err != nil {
 		return nil, err
@@ -192,7 +201,7 @@ func Update(ctx context.Context) (*UpdateResult, error) {
 	}
 
 	// Download and apply the update with checksum verification
-	if err := downloadAndApply(ctx, latestVersionStr, downloadURL); err != nil {
+	if err := downloadAndApply(ctx, latestVersionStr, downloadURL, onProgress); err != nil {
 		return nil, fmt.Errorf("applying update: %w", err)
 	}
 
@@ -202,17 +211,19 @@ func Update(ctx context.Context) (*UpdateResult, error) {
 	}, nil
 }
 
-// downloadAndApplbny downloads the tarball from the given URL, verifies its
+// downloadAndApply downloads the tarball from the given URL, verifies its
 // SHA-256 checksum against checksums.txt, and replaces the current executable.
-func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error {
+func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onProgress ProgressFunc) error {
 	assetName := getAssetName()
 
 	// Fetch and parse checksums.txt for this release
+	onProgress("Verifying checksums")
 	expectedChecksum, err := fetchExpectedChecksum(ctx, versionTag, assetName)
 	if err != nil {
 		return fmt.Errorf("fetching checksums: %w", err)
 	}
 
+	onProgress(fmt.Sprintf("Downloading %s", versionTag))
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
 	}
@@ -268,6 +279,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error
 	defer os.Remove(tmpPath)
 
 	// Extract the binary from the archive
+	onProgress("Extracting binary")
 	if runtime.GOOS == "windows" {
 		// Windows uses zip archives
 		if err := extractBinaryFromZip(archivePath, tmpFile); err != nil {
@@ -295,6 +307,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string) error
 	}
 
 	// Replace the old binary with the new one
+	onProgress("Installing binary")
 	// First, rename the old binary to a backup
 	backupPath := execPath + ".old"
 	if err := os.Rename(execPath, backupPath); err != nil {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	reportspec "bino.bi/bino/internal/report/spec"
 )
 
 // Artefact captures a validated ReportArtefact manifest.
@@ -119,35 +121,8 @@ type LiveRouteSpec struct {
 	QueryParams []LiveQueryParamSpec `json:"queryParams,omitempty"`
 }
 
-// StringOrSlice is a type that can unmarshal from either a string or an array of strings.
-type StringOrSlice []string
-
-// UnmarshalJSON implements json.Unmarshaler for StringOrSlice.
-func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
-	// Try to unmarshal as a single string first
-	var single string
-	if err := json.Unmarshal(data, &single); err == nil {
-		*s = []string{single}
-		return nil
-	}
-
-	// Try to unmarshal as an array of strings
-	var arr []string
-	if err := json.Unmarshal(data, &arr); err != nil {
-		return err
-	}
-	*s = arr
-	return nil
-}
-
-// MarshalJSON implements json.Marshaler for StringOrSlice.
-// Returns a single string if only one element, otherwise an array.
-func (s StringOrSlice) MarshalJSON() ([]byte, error) {
-	if len(s) == 1 {
-		return json.Marshal(s[0])
-	}
-	return json.Marshal([]string(s))
-}
+// StringOrSlice is an alias for reportspec.StringOrSlice.
+type StringOrSlice = reportspec.StringOrSlice
 
 // LiveQueryParamSpec defines an allowed query parameter for live serving.
 type LiveQueryParamSpec struct {
