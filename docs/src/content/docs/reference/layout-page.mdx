@@ -41,7 +41,7 @@ spec:
 
 Key fields (see JSON schema for full list):
 
-- Title row fields: `titleBusinessUnit`, `titleNamespace`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`.
+- Title row fields: `titleBusinessUnit`, `titleNamespace`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
 - Content: `children` – required array of `layoutChild` objects.
@@ -351,7 +351,8 @@ spec:
 | `number` | Numeric value | `min`, `max` |
 | `boolean` | True/false value | None |
 | `select` | Choice from predefined options | `items` array with `value` and `label` |
-| `date` | Date value | None |
+| `date` | Date value (YYYY-MM-DD) | None |
+| `date_time` | Date and time value (ISO 8601) | None |
 
 ### Parameter Fields
 
@@ -688,7 +689,7 @@ When users visit `/regional?REGION=US&YEAR=2023`, the page renders with those pa
 
 3. **Document parameters**: Use the `description` field to explain what each parameter controls.
 
-4. **Validate with types**: Use appropriate types (`number`, `select`, `date`) to ensure valid values.
+4. **Validate with types**: Use appropriate types (`number`, `select`, `date`, `date_time`) to ensure valid values.
 
 5. **Keep parameter lists short**: If you need many parameters, consider breaking the page into smaller, focused components.
 

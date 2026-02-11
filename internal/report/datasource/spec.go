@@ -44,6 +44,16 @@ type sourceSpec struct {
 	// The query result is used to populate the DuckDB view.
 	Query string `json:"query"`
 
+	// CSV reader options
+	Delimiter        string            `json:"delimiter,omitempty"`
+	Header           *bool             `json:"header,omitempty"`
+	SkipRows         int               `json:"skipRows,omitempty"`
+	Thousands        string            `json:"thousands,omitempty"`
+	DecimalSeparator string            `json:"decimalSeparator,omitempty"`
+	ColumnNames      []string          `json:"columnNames,omitempty"`
+	DateFormat       string            `json:"dateFormat,omitempty"`
+	Columns          map[string]string `json:"columns,omitempty"`
+
 	// Ephemeral controls whether the datasource should be refetched on every build.
 	// If nil (not set), ephemeral status is auto-detected based on source type:
 	//   - postgres_query, mysql_query: always ephemeral (data may change)

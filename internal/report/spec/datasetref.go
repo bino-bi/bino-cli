@@ -192,8 +192,29 @@ type InlineDataSource struct {
 	// Sheet specifies the Excel sheet name or index (for type "excel").
 	Sheet string `json:"sheet,omitempty"`
 
-	// Columns specifies column definitions for CSV/inline sources.
-	Columns json.RawMessage `json:"columns,omitempty"`
+	// Delimiter is the field delimiter character for CSV files.
+	Delimiter string `json:"delimiter,omitempty"`
+
+	// Header indicates whether the CSV file has a header row.
+	Header *bool `json:"header,omitempty"`
+
+	// SkipRows is the number of rows to skip at the beginning of the CSV file.
+	SkipRows int `json:"skipRows,omitempty"`
+
+	// Thousands is the thousands separator in numeric values.
+	Thousands string `json:"thousands,omitempty"`
+
+	// DecimalSeparator is the decimal point character in numeric values.
+	DecimalSeparator string `json:"decimalSeparator,omitempty"`
+
+	// ColumnNames provides explicit column names for CSV files.
+	ColumnNames []string `json:"columnNames,omitempty"`
+
+	// DateFormat is a DuckDB strftime format string for parsing date values.
+	DateFormat string `json:"dateFormat,omitempty"`
+
+	// Columns specifies a map of column name to DuckDB type for CSV files.
+	Columns map[string]string `json:"columns,omitempty"`
 
 	// Ephemeral marks the datasource as non-cacheable.
 	// When true, datasets using this source skip caching.

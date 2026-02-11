@@ -257,17 +257,39 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 		}
 
 		if err := spec.ValidateDocument(rawJSON); err != nil {
-			return nil, fmt.Errorf("%s document %d: %w", path, index+1, err)
+			// Enrich SchemaValidationError with file, position, and line info
+			var schemaErr *spec.SchemaValidationError
+			if errors.As(err, &schemaErr) {
+				schemaErr.File = path
+				schemaErr.DocPosition = index
+				schemaErr.Source = expanded
+
+				// Parse YAML nodes to resolve line/column positions
+				nodes, parseErr := spec.ParseYAMLNodes(expanded)
+				if parseErr == nil && index-1 >= 0 && index-1 < len(nodes) {
+					docNode := nodes[index-1]
+					for i := range schemaErr.Errors {
+						line, col, ok := spec.ResolvePathPosition(docNode, schemaErr.Errors[i].Field)
+						if ok {
+							schemaErr.Errors[i].Line = line
+							schemaErr.Errors[i].Column = col
+						}
+					}
+				}
+
+				return nil, schemaErr
+			}
+			return nil, fmt.Errorf("%s document %d: %w", path, index, err)
 		}
 
 		var header documentHeader
 		if err := json.Unmarshal(rawJSON, &header); err != nil {
-			return nil, fmt.Errorf("header %s document %d: %w", path, index+1, err)
+			return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
 		}
 
 		constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
 		if err != nil {
-			return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index+1, err)
+			return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err)
 		}
 
 		docs = append(docs, Document{

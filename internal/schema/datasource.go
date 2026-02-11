@@ -74,8 +74,22 @@ type DataSourceSpec struct {
 	// Content is an alternative field for embedded data content.
 	Content any `yaml:"content,omitempty" json:"content,omitempty"`
 
-	// Columns specifies column definitions for CSV/inline sources.
-	Columns any `yaml:"columns,omitempty" json:"columns,omitempty"`
+	// Thousands is the thousands separator in numeric values (e.g., '.' for European format).
+	Thousands string `yaml:"thousands,omitempty" json:"thousands,omitempty"`
+
+	// DecimalSeparator is the decimal point character in numeric values (e.g., ',' for European format).
+	DecimalSeparator string `yaml:"decimalSeparator,omitempty" json:"decimalSeparator,omitempty"`
+
+	// ColumnNames provides explicit column names for CSV files.
+	// Mutually exclusive with Columns.
+	ColumnNames []string `yaml:"columnNames,omitempty" json:"columnNames,omitempty"`
+
+	// DateFormat is a DuckDB strftime format string for parsing date values (e.g., '%d/%m/%Y').
+	DateFormat string `yaml:"dateFormat,omitempty" json:"dateFormat,omitempty"`
+
+	// Columns specifies a map of column name to DuckDB type for CSV files (e.g., "amount": "DECIMAL(10,2)").
+	// Mutually exclusive with ColumnNames.
+	Columns map[string]string `yaml:"columns,omitempty" json:"columns,omitempty"`
 
 	// Ephemeral marks the datasource as non-cacheable.
 	// When true, datasets using this source skip caching.

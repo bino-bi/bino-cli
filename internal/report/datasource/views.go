@@ -308,7 +308,7 @@ func buildViewSourceSQL(spec sourceSpec) (string, error) {
 	case sourceTypeExcel:
 		return buildFileSourceSQL(spec, "read_xlsx")
 	case sourceTypeCSV:
-		return buildFileSourceSQL(spec, "read_csv_auto")
+		return buildCSVSourceSQL(spec)
 	case sourceTypeParquet:
 		return buildFileSourceSQL(spec, "read_parquet")
 	case sourceTypePostgresQuery:
@@ -322,16 +322,28 @@ func buildViewSourceSQL(spec sourceSpec) (string, error) {
 	}
 }
 
-// buildFileSourceSQL creates a query for file-based sources (excel, csv, parquet).
+// buildFileSourceSQL creates a query for file-based sources (excel, parquet).
 func buildFileSourceSQL(spec sourceSpec, readerFn string) (string, error) {
+	return buildFileSourceSQLWithParams(spec, readerFn, "")
+}
+
+// buildFileSourceSQLWithParams creates a query for file-based sources with optional extra DuckDB parameters.
+func buildFileSourceSQLWithParams(spec sourceSpec, readerFn string, extraParams string) (string, error) {
 	path := strings.TrimSpace(spec.Path)
 	if path == "" {
 		return "", fmt.Errorf("path is required for %s datasources", spec.Type)
 	}
 
+	formatCall := func(fn, resolvedPath string) string {
+		if extraParams != "" {
+			return fmt.Sprintf("SELECT * FROM %s('%s', %s)", fn, escapeSQLString(resolvedPath), extraParams)
+		}
+		return fmt.Sprintf("SELECT * FROM %s('%s')", fn, escapeSQLString(resolvedPath))
+	}
+
 	// URLs (http, https, s3) are passed directly to DuckDB
 	if pathutil.IsURL(path) {
-		return fmt.Sprintf("SELECT * FROM %s('%s')", readerFn, escapeSQLString(path)), nil
+		return formatCall(readerFn, path), nil
 	}
 
 	// Resolve local path relative to the manifest file
@@ -359,17 +371,17 @@ func buildFileSourceSQL(spec sourceSpec, readerFn string) (string, error) {
 			}
 			// For a single file, just read it directly
 			if len(matches) == 1 {
-				return fmt.Sprintf("SELECT * FROM %s('%s')", readerFn, escapeSQLString(matches[0])), nil
+				return formatCall(readerFn, matches[0]), nil
 			}
 			// For multiple files, UNION ALL them together
 			var parts []string
 			for _, m := range matches {
-				parts = append(parts, fmt.Sprintf("SELECT * FROM %s('%s')", readerFn, escapeSQLString(m)))
+				parts = append(parts, formatCall(readerFn, m))
 			}
 			return strings.Join(parts, " UNION ALL "), nil
 		}
 		// Other readers (csv, parquet) support globs natively
-		return fmt.Sprintf("SELECT * FROM %s('%s')", readerFn, escapeSQLString(resolved)), nil
+		return formatCall(readerFn, resolved), nil
 	}
 
 	// Check file exists
@@ -377,7 +389,75 @@ func buildFileSourceSQL(spec sourceSpec, readerFn string) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("SELECT * FROM %s('%s')", readerFn, escapeSQLString(resolved)), nil
+	return formatCall(readerFn, resolved), nil
+}
+
+// buildCSVSourceSQL creates a query for CSV datasources, using read_csv with explicit
+// parameters when any CSV reader options are set, or read_csv_auto otherwise.
+func buildCSVSourceSQL(spec sourceSpec) (string, error) {
+	params := buildCSVParams(spec)
+	if params == "" {
+		return buildFileSourceSQLWithParams(spec, "read_csv_auto", "")
+	}
+	return buildFileSourceSQLWithParams(spec, "read_csv", params)
+}
+
+// buildCSVParams builds the DuckDB parameter string from CSV reader options on the spec.
+// Returns an empty string if no CSV options are set.
+func buildCSVParams(spec sourceSpec) string {
+	var parts []string
+
+	if spec.Delimiter != "" {
+		parts = append(parts, fmt.Sprintf("delim = '%s'", escapeSQLString(spec.Delimiter)))
+	}
+	if spec.Header != nil {
+		parts = append(parts, fmt.Sprintf("header = %t", *spec.Header))
+	}
+	if spec.SkipRows > 0 {
+		parts = append(parts, fmt.Sprintf("skip = %d", spec.SkipRows))
+	}
+	if spec.Thousands != "" {
+		parts = append(parts, fmt.Sprintf("thousands = '%s'", escapeSQLString(spec.Thousands)))
+	}
+	if spec.DecimalSeparator != "" {
+		parts = append(parts, fmt.Sprintf("decimal_separator = '%s'", escapeSQLString(spec.DecimalSeparator)))
+	}
+	if spec.DateFormat != "" {
+		parts = append(parts, fmt.Sprintf("dateformat = '%s'", escapeSQLString(spec.DateFormat)))
+	}
+	if len(spec.Columns) > 0 {
+		parts = append(parts, fmt.Sprintf("columns = %s", formatDuckDBStruct(spec.Columns)))
+	}
+	if len(spec.ColumnNames) > 0 {
+		parts = append(parts, fmt.Sprintf("names = %s", formatDuckDBList(spec.ColumnNames)))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// formatDuckDBStruct formats a map as a DuckDB struct literal: {'key1': 'val1', 'key2': 'val2'}.
+// Keys are sorted for deterministic output.
+func formatDuckDBStruct(m map[string]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("'%s': '%s'", escapeSQLString(k), escapeSQLString(m[k])))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// formatDuckDBList formats a string slice as a DuckDB list literal: ['a', 'b', 'c'].
+func formatDuckDBList(items []string) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, fmt.Sprintf("'%s'", escapeSQLString(item)))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // buildPostgresSourceSQL creates a query for postgres_query datasources.
