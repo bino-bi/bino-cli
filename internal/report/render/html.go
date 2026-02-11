@@ -226,8 +226,14 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 		segments = append(segments, ds...)
 	}
 
+	// Build asset URL map for resolving asset: image references in markdown.
+	assetURLMap := make(map[string]string, len(assetComponents))
+	for _, ac := range assetComponents {
+		assetURLMap[ac.name] = ac.value
+	}
+
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap)
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -321,8 +327,14 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		segments = append(segments, ds...)
 	}
 
+	// Build asset URL map for resolving asset: image references in markdown.
+	assetURLMap := make(map[string]string, len(assetComponents))
+	for _, ac := range assetComponents {
+		assetURLMap[ac.name] = ac.value
+	}
+
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap)
 
 	for _, doc := range docs {
 		switch doc.Kind {

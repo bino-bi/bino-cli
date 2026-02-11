@@ -178,6 +178,19 @@ This wraps the component in an HTML `<figure>` element with a `<figcaption>`, wh
 
 Refs without a caption are rendered as before, without the figure wrapper.
 
+### Asset images
+
+You can embed images from [`Asset`](/reference/asset/) manifests using the `asset:` URL scheme
+in standard Markdown image syntax:
+
+```markdown
+![Company Logo](asset:companyLogo)
+```
+
+The `asset:` prefix is resolved at build time to the actual URL based on the asset's source
+type (`localPath`, `remoteURL`, or `inlineBase64`). See the
+[Asset reference](/reference/asset/#using-assets-in-markdown-images) for details.
+
 ### Syntax highlighting
 
 Code blocks with language hints are syntax-highlighted:

@@ -58,6 +58,17 @@ spec:
     - Net margin improved
 ```
 
+**Asset images:**
+
+You can embed images from [`Asset`](/reference/asset/) manifests using the `asset:` URL scheme:
+
+```yaml
+spec:
+  value: "![Company Logo](asset:brandLogo)"
+```
+
+The `asset:` prefix is resolved at build time to the actual URL. See the [Asset reference](/reference/asset/#using-assets-in-markdown-images) for details.
+
 **Mixed formatting:**
 
 ```yaml

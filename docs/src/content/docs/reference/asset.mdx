@@ -80,4 +80,64 @@ spec:
     localPath: ./assets/fonts/corporate-heading.woff2
 ```
 
-Use assets from layout components (for example via a URL field) by referring to their registered paths or by using front-end conventions.
+## Using assets in Markdown images
+
+You can reference any non-font asset from Markdown content using the `asset:` URL scheme:
+
+```markdown
+![Company Logo](asset:brandLogo)
+```
+
+At build time bino resolves `asset:brandLogo` to the actual URL based on the asset's source type:
+
+| Source type    | Resolved URL                          |
+|----------------|---------------------------------------|
+| `localPath`    | `/assets/files/brandLogo`             |
+| `remoteURL`    | The URL as-is                         |
+| `inlineBase64` | `data:image/png;base64,…`             |
+
+If the name does not match any asset the image renders as a broken link (`#asset-not-found:name`).
+
+This works in two contexts:
+
+1. **DocumentArtefact** – inside `.md` source files rendered via `spec.sources`.
+2. **Text components** – in the `spec.value` Markdown of `Text`, `LayoutPage` inline text children, and `Grid` text cells.
+
+### Example
+
+Given this asset:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: companyLogo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./assets/logo.png
+```
+
+Reference it from a DocumentArtefact markdown file:
+
+```markdown
+# Annual Report
+
+![Company Logo](asset:companyLogo)
+
+Welcome to the 2025 annual report.
+```
+
+Or from a Text component:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: headerWithLogo
+spec:
+  value: "![Logo](asset:companyLogo) **ACME Corp**"
+```
