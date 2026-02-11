@@ -322,6 +322,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 						logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
 						continue
 					}
+					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 					path := "/doc/" + docArt.Document.Name
 					// DocumentArtefacts get header injected too
 					frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, path)

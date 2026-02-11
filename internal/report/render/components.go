@@ -788,7 +788,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal text spec: %w", err)
 		}
-		return renderTextComponent(s), nil
+		return renderTextComponent(s, rc.assetURLs), nil
 	case "Table":
 		var s tableSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -941,14 +941,15 @@ func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
 // This is an exported function that can be used by other packages (e.g., markdown)
 // to render components consistently without duplicating spec types.
 // Supported kinds: Text, Table, ChartStructure, ChartTime, Image.
-func RenderComponentFromSpec(kind string, specRaw json.RawMessage) (string, error) {
+// The assetURLs parameter is optional and used to resolve asset: image references in Text markdown.
+func RenderComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[string]string) (string, error) {
 	switch kind {
 	case "Text":
 		var s textSpec
 		if err := json.Unmarshal(specRaw, &s); err != nil {
 			return "", fmt.Errorf("parse text spec: %w", err)
 		}
-		return renderTextComponent(s), nil
+		return renderTextComponent(s, assetURLs), nil
 	case "Table":
 		var s tableSpec
 		if err := json.Unmarshal(specRaw, &s); err != nil {

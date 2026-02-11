@@ -989,7 +989,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		}
 
 		// Start ephemeral server for first pass
-		firstEphem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), firstPassResult.HTML, nil)
+		firstEphem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), firstPassResult.HTML, pipeline.ConvertLocalAssets(firstPassResult.LocalAssets))
 		if err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
@@ -1027,7 +1027,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 	}
 
 	// Start ephemeral server for final PDF generation
-	ephem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, nil)
+	ephem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, pipeline.ConvertLocalAssets(renderResult.LocalAssets))
 	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
