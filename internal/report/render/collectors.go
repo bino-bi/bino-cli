@@ -238,6 +238,36 @@ func resolveLocalAssetPath(docFile, src string) (string, error) {
 	return absPath, nil
 }
 
+// ResolveAssetURLs builds a name→URL map for all non-font Asset documents
+// and returns the corresponding local assets that need HTTP serving.
+func ResolveAssetURLs(docs []config.Document) (map[string]string, []LocalAsset, error) {
+	urls := make(map[string]string)
+	var locals []LocalAsset
+	for _, doc := range docs {
+		if doc.Kind != "Asset" {
+			continue
+		}
+		var payload struct {
+			Spec assetSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, nil, fmt.Errorf("render: parse asset %s: %w", doc.Name, err)
+		}
+		if payload.Spec.Type == "font" {
+			continue
+		}
+		value, local, err := resolveAssetValue(doc, payload.Spec, assetURLPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		urls[doc.Name] = value
+		if local != nil {
+			locals = append(locals, *local)
+		}
+	}
+	return urls, locals, nil
+}
+
 // fontURLPath generates a URL path for font assets.
 func fontURLPath(name string) string {
 	return "/assets/fonts/" + url.PathEscape(name)
