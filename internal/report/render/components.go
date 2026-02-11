@@ -28,18 +28,22 @@ type renderCtx struct {
 	// globalIndex maps kind+name to the document from the unfiltered set.
 	// Used to distinguish refs filtered by constraints from refs that don't exist at all.
 	globalIndex map[string]config.Document
+	// assetURLs maps asset name to resolved URL for asset: image references in markdown.
+	assetURLs map[string]string
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
 // The allDocs parameter is the unfiltered document set used to distinguish constraint-filtered
 // refs from genuinely missing refs. If nil, docs is used (treating all missing refs as errors).
-func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext, allDocs []config.Document) *renderCtx {
+// The assetURLs parameter maps asset names to resolved URLs for asset: image references in markdown.
+func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext, allDocs []config.Document, assetURLs map[string]string) *renderCtx {
 	rc := &renderCtx{
 		ctx:           ctx,
 		docs:          docs,
 		constraintCtx: constraintCtx,
 		docIndex:      make(map[string]config.Document, len(docs)),
 		globalIndex:   make(map[string]config.Document),
+		assetURLs:     assetURLs,
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
@@ -530,10 +534,10 @@ func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
 }
 
 // renderTextComponent renders a Text component as HTML.
-func renderTextComponent(spec textSpec) string {
+func renderTextComponent(spec textSpec, assetURLs map[string]string) string {
 	var b strings.Builder
 	b.WriteString("<bn-text")
-	writeAttr(&b, "value", renderMarkdown(spec.Value))
+	writeAttr(&b, "value", renderMarkdown(spec.Value, assetURLs))
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
@@ -544,11 +548,16 @@ func renderTextComponent(spec textSpec) string {
 // renderMarkdown converts a Markdown string to HTML.
 // If the input contains no Markdown syntax, the output is the text
 // wrapped in a <p> tag by goldmark.
-func renderMarkdown(s string) string {
+// When assetURLs is non-nil, asset: image references are resolved.
+func renderMarkdown(s string, assetURLs map[string]string) string {
 	if s == "" {
 		return ""
 	}
-	md := goldmark.New(goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()))
+	opts := []goldmark.Option{goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe())}
+	if len(assetURLs) > 0 {
+		opts = append(opts, goldmark.WithExtensions(NewAssetExtension(assetURLs)))
+	}
+	md := goldmark.New(opts...)
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(s), &buf); err != nil {
 		return s
