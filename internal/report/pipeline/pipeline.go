@@ -1215,7 +1215,8 @@ func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
 
 // DocumentArtefactResult captures the outcome of rendering a document artefact.
 type DocumentArtefactResult struct {
-	HTML []byte
+	HTML        []byte
+	LocalAssets []render.LocalAsset
 }
 
 // DocumentArtefactRenderOptions configures document artefact rendering.
@@ -1284,8 +1285,15 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 		engineVersion = "latest"
 	}
 
+	// Resolve asset URLs for asset: image references in markdown
+	assetURLs, assetLocals, err := render.ResolveAssetURLs(docs)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+	}
+
 	// Create render context with documents, datasets, and datasources
 	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
+	renderCtx.AssetURLs = assetURLs
 
 	// Render markdown files to HTML content with full context
 	mathEnabled := spec.MathEnabled()
@@ -1321,7 +1329,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 		RenderContext: renderCtx,
 	})
 
-	return DocumentArtefactResult{HTML: html}, nil
+	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals}, nil
 }
 
 // LogDocumentArtefactWarnings logs any warnings collected during document artefact validation.

@@ -43,6 +43,8 @@ type RenderContext struct {
 	ComponentStyles []ComponentStyleEntry
 	// EngineVersion is the template engine version to use.
 	EngineVersion string
+	// AssetURLs maps asset names to resolved URLs for asset: image references.
+	AssetURLs map[string]string
 	// docIndex maps kind:name to documents for ref resolution.
 	docIndex map[string]config.Document
 }
@@ -155,6 +157,11 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 		extension.Footnote,
 		extension.DefinitionList,
 		NewRefExtensionWithContext(rc), // Use context-aware ref extension
+	}
+
+	// Add asset URL resolution if asset URLs are available
+	if rc != nil && len(rc.AssetURLs) > 0 {
+		extensions = append(extensions, render.NewAssetExtension(rc.AssetURLs))
 	}
 
 	// Add KaTeX extension for math rendering if enabled
@@ -704,14 +711,14 @@ func mustParseTemplate(name, text string) *htmltemplate.Template {
 // This is used by :ref[Kind:name] to inline component HTML.
 // It delegates to render.RenderComponentFromSpec to ensure consistent HTML output
 // between DocumentArtefact and ReportArtefact rendering.
-func RenderComponentHTML(doc config.Document) (string, error) {
+func RenderComponentHTML(doc config.Document, assetURLs map[string]string) (string, error) {
 	var payload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
 	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
 		return "", fmt.Errorf("parse %s %s: %w", doc.Kind, doc.Name, err)
 	}
-	return render.RenderComponentFromSpec(doc.Kind, payload.Spec)
+	return render.RenderComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
 }
 
 // NewRefExtensionWithContext creates a goldmark extension that renders :ref[Kind:name]
@@ -778,7 +785,7 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 		doc, found := r.rc.ResolveRef(kind, name)
 		if found {
 			// Render the actual component
-			componentHTML, err := RenderComponentHTML(doc)
+			componentHTML, err := RenderComponentHTML(doc, r.rc.AssetURLs)
 			if err == nil {
 				_, _ = w.WriteString(`<div class="bn-ref-container" data-ref-kind="`)
 				_, _ = w.WriteString(html.EscapeString(kind))
