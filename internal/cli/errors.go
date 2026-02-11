@@ -197,13 +197,22 @@ func FormatError(ctx context.Context, err error) (string, int) {
 	style.RedBold.Fprint(&b, SymbolError)
 	b.WriteString(" ")
 	errColor.Fprint(&b, prefix(kind))
-	b.WriteString("\n\n")
 
 	// Check for schema validation error (special formatting)
 	var schemaErr *spec.SchemaValidationError
 	if errors.As(err, &schemaErr) {
+		// Show file and document position in the header
+		if schemaErr.File != "" {
+			b.WriteString(" in ")
+			style.Cyan.Fprint(&b, schemaErr.File)
+			if schemaErr.DocPosition > 0 {
+				style.Dim.Fprintf(&b, " (document #%d)", schemaErr.DocPosition)
+			}
+		}
+		b.WriteString("\n\n")
 		b.WriteString(formatSchemaValidationError(schemaErr))
 	} else {
+		b.WriteString("\n\n")
 		// Regular error message
 		message := extractCoreMessage(err)
 		b.WriteString("  ")
@@ -248,7 +257,7 @@ func formatSchemaValidationError(schemaErr *spec.SchemaValidationError) string {
 			b.WriteString("\n")
 		}
 
-		// Field path
+		// Field path with optional line:col
 		b.WriteString("  ")
 		style.Red.Fprint(&b, SymbolError)
 		b.WriteString(" ")
@@ -256,6 +265,9 @@ func formatSchemaValidationError(schemaErr *spec.SchemaValidationError) string {
 			style.Cyan.Fprint(&b, err.Field)
 		} else {
 			style.Dim.Fprint(&b, "(document root)")
+		}
+		if err.Line > 0 {
+			style.Dim.Fprintf(&b, " (line %d, col %d)", err.Line, err.Column)
 		}
 		b.WriteString("\n")
 
@@ -272,6 +284,26 @@ func formatSchemaValidationError(schemaErr *spec.SchemaValidationError) string {
 				style.Dim.Fprint(&b, "got: ")
 				style.Yellow.Fprint(&b, valStr)
 				b.WriteString("\n")
+			}
+		}
+
+		// Source snippet
+		if err.Line > 0 && schemaErr.Source != "" {
+			snippet := spec.ExtractSourceSnippet(schemaErr.Source, err.Line, 2)
+			if snippet != "" {
+				b.WriteString("\n")
+				// Render snippet with dim line numbers
+				for _, line := range strings.Split(strings.TrimRight(snippet, "\n"), "\n") {
+					// Each line is formatted as "    N │ content"
+					// Dim the line number prefix, keep content normal
+					if sep := strings.Index(line, "│"); sep >= 0 {
+						style.Dim.Fprint(&b, line[:sep+len("│")])
+						b.WriteString(line[sep+len("│"):])
+					} else {
+						b.WriteString(line)
+					}
+					b.WriteString("\n")
+				}
 			}
 		}
 	}

@@ -24,6 +24,27 @@ spec:
 - Place `sales.csv` relative to the manifest or adjust `path` accordingly.
 - Use a glob (for example `./data/sales_*.csv`) to read multiple files.
 
+### CSV reader options
+
+If your CSV uses a non-standard format (for example European number formatting or a
+different delimiter), add reader options to `spec`:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./data/sales.csv
+  delimiter: ";"
+  thousands: "."
+  decimalSeparator: ","
+```
+
+See [DataSource reference — CSV reader options](/reference/datasource/#csv-reader-options) for the full list of options.
+
 ## 2. Excel datasource
 
 For Excel, use `type: excel` and point to the file:
