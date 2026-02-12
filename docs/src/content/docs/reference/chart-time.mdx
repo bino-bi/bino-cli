@@ -29,9 +29,7 @@ spec:
   type: line                 # bar | line | area
   internationalisation: "_system"
   internationalisationMode: "default"
-  componentStatus: "ok"
   translation: "chart.revenue.time"
-  hideAxisLabels: false
   showCategories: true
   showMeasureScale: true
   showOverlayAvg: true
@@ -41,9 +39,6 @@ spec:
   percentageScaling: "default"
   unitScaling: "default"
   syncSpaceLeft: 0
-  pixelPerPercentage: 2
-  pixelPerUnit: 0.1
-  leftSideOffsetForHorizontalSync: 0
   scenarios: ["ac1", "fc1"]
   variances: ["dfc1_ac1_pos"]
 ```
@@ -58,11 +53,11 @@ spec:
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose.
 - `filter`, `level`, `order`, `orderDirection`, `measureScale`, `measureUnit` – similar semantics to `ChartStructure`.
 - `type` – chart type: `bar`, `line`, or `area`.
-- `hideAxisLabels`, `showCategories`, `showMeasureScale` – visibility flags.
+- `showCategories`, `showMeasureScale` – visibility flags.
 - `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
 - `limit` – column stack limit; 0 means unlimited.
 - `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
-- `percentageScaling`, `unitScaling`, `pixelPerPercentage`, `pixelPerUnit`, `syncSpaceLeft`, `leftSideOffsetForHorizontalSync` – scaling and sync options.
+- `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options.
 - `scenarios` and `variances` – configured as for `ChartStructure`.
 
 ## Example: Monthly revenue line chart

@@ -152,13 +152,10 @@ type chartStructureSpec struct {
 	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
 	Internationalisation     string                   `json:"internationalisation"`
 	InternationalisationMode string                   `json:"internationalisationMode"`
-	ComponentStatus          string                   `json:"componentStatus"`
 	Translation              string                   `json:"translation"`
-	HideCategories           *bool                    `json:"hideCategories"`
 	ShowCategories           *bool                    `json:"showCategories"`
 	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
 	Limit                    *int                     `json:"limit"`
-	PixelPerPercentage       *float64                 `json:"pixelPerPercentage"`
 	PixelPerUnit             *float64                 `json:"pixelPerUnit"`
 	Scenarios                []string                 `json:"scenarios"`
 	Variances                []string                 `json:"variances"`
@@ -177,13 +174,10 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeAttr(b, "internationalisation", s.Internationalisation)
 	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "component-status", s.ComponentStatus)
 	writeAttr(b, "translation", s.Translation)
-	writeBoolAttr(b, "hide-categories", s.HideCategories)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
-	writeFloatAttr(b, "pixel-per-percentage", s.PixelPerPercentage)
 	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
@@ -205,9 +199,7 @@ type chartTimeSpec struct {
 	Type                            string                   `json:"type"`
 	Internationalisation            string                   `json:"internationalisation"`
 	InternationalisationMode        string                   `json:"internationalisationMode"`
-	ComponentStatus                 string                   `json:"componentStatus"`
 	Translation                     string                   `json:"translation"`
-	HideAxisLabels                  *bool                    `json:"hideAxisLabels"`
 	ShowCategories                  *bool                    `json:"showCategories"`
 	ShowMeasureScale                *bool                    `json:"showMeasureScale"`
 	ShowOverlayAvg                  *bool                    `json:"showOverlayAvg"`
@@ -218,9 +210,6 @@ type chartTimeSpec struct {
 	PercentageScaling               reportspec.StringOrFloat `json:"percentageScaling"`
 	UnitScaling                     reportspec.StringOrFloat `json:"unitScaling"`
 	SyncSpaceLeft                   *float64                 `json:"syncSpaceLeft"`
-	PixelPerPercentage              *float64                 `json:"pixelPerPercentage"`
-	PixelPerUnit                    *float64                 `json:"pixelPerUnit"`
-	LeftSideOffsetForHorizontalSync *float64                 `json:"leftSideOffsetForHorizontalSync"`
 	Scenarios                       []string                 `json:"scenarios"`
 	Variances                       []string                 `json:"variances"`
 }
@@ -240,9 +229,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "type", s.Type)
 	writeAttr(b, "internationalisation", s.Internationalisation)
 	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "component-status", s.ComponentStatus)
 	writeAttr(b, "translation", s.Translation)
-	writeBoolAttr(b, "hide-axis-labels", s.HideAxisLabels)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeBoolAttr(b, "show-overlay-avg", s.ShowOverlayAvg)
@@ -253,9 +240,6 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeFloatAttr(b, "sync-space-left", s.SyncSpaceLeft)
-	writeFloatAttr(b, "pixel-per-percentage", s.PixelPerPercentage)
-	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
-	writeFloatAttr(b, "left-side-offset-for-horizontal-sync", s.LeftSideOffsetForHorizontalSync)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
 }
@@ -312,7 +296,6 @@ type tableSpec struct {
 	MeasureUnit              string                       `json:"measureUnit"`
 	Internationalisation     string                       `json:"internationalisation"`
 	InternationalisationMode string                       `json:"internationalisationMode"`
-	ComponentStatus          string                       `json:"componentStatus"`
 	Translation              string                       `json:"translation"`
 	CategoryWidth            string                       `json:"categoryWidth"`
 	DataFormat               string                       `json:"dataFormat"`
@@ -322,7 +305,6 @@ type tableSpec struct {
 	ShowGroupTitle           *bool                        `json:"showGroupTitle"`
 	ShowMeasureScale         *bool                        `json:"showMeasureScale"`
 	Limit                    *int                         `json:"limit"`
-	ScenariosDataFormat      string                       `json:"scenariosDataFormat"`
 	Type                     string                       `json:"type"`
 	Scenarios                []string                     `json:"scenarios"`
 	Variances                []string                     `json:"variances"`
@@ -345,7 +327,6 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "measure-unit", s.MeasureUnit)
 	writeAttr(b, "internationalisation", s.Internationalisation)
 	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "component-status", s.ComponentStatus)
 	writeAttr(b, "translation", s.Translation)
 	writeAttr(b, "category-width", s.CategoryWidth)
 	writeAttr(b, "data-format", s.DataFormat)
@@ -355,7 +336,6 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-group-title", s.ShowGroupTitle)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
-	writeAttr(b, "scenarios-data-format", s.ScenariosDataFormat)
 	writeAttr(b, "type", s.Type)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
