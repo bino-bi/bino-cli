@@ -26,13 +26,10 @@ spec:
   unitScaling: "default"        # name or number
   internationalisation: "_system"
   internationalisationMode: "default"
-  componentStatus: "ok"
   translation: "chart.revenue.by_region"
-  hideCategories: false
   showCategories: true
   showMeasureScale: true
   limit: 10
-  pixelPerPercentage: 2
   pixelPerUnit: 0.1
   scenarios: ["ac1", "py1"]
   variances: ["dpy1_ac1_pos"]
@@ -48,9 +45,9 @@ spec:
 - `measureScale` – SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
 - `measureUnit` – unit string, for example `mEUR`.
 - `percentageScaling` / `unitScaling` – name of a scaling group or numeric scaling factor.
-- `showCategories`, `hideCategories`, `showMeasureScale` – visibility flags.
+- `showCategories`, `showMeasureScale` – visibility flags.
 - `limit` – maximum bars per group; rows beyond the limit are cumulated as REST.
-- `pixelPerPercentage`, `pixelPerUnit` – explicit scaling overrides.
+- `pixelPerUnit` – explicit scaling override.
 - `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 
