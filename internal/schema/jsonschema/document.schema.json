@@ -2754,9 +2754,7 @@
         },
         "internationalisation": { "type": "string" },
         "internationalisationMode": { "type": "string" },
-        "componentStatus": { "type": "string" },
         "translation": { "type": "string" },
-        "hideCategories": { "type": "boolean" },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
           "type": "boolean",
@@ -2767,7 +2765,6 @@
           "minimum": 0,
           "description": "Maximum number of bars for each group. 0 means no limit. Rows cut by the limit are cumulated as REST."
         },
-        "pixelPerPercentage": { "type": "number", "minimum": 0 },
         "pixelPerUnit": { "type": "number", "minimum": 0 },
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4.",
@@ -2842,9 +2839,7 @@
         },
         "internationalisation": { "type": "string" },
         "internationalisationMode": { "type": "string" },
-        "componentStatus": { "type": "string" },
         "translation": { "type": "string" },
-        "hideAxisLabels": { "type": "boolean" },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
           "type": "boolean",
@@ -2880,9 +2875,6 @@
           "type": "number",
           "description": "Left side offset for horizontal sync."
         },
-        "pixelPerPercentage": { "type": "number", "minimum": 0 },
-        "pixelPerUnit": { "type": "number", "minimum": 0 },
-        "leftSideOffsetForHorizontalSync": { "type": "number" },
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4.",
           "oneOf": [
@@ -3318,7 +3310,6 @@
         },
         "internationalisation": { "type": "string" },
         "internationalisationMode": { "type": "string" },
-        "componentStatus": { "type": "string" },
         "translation": { "type": "string" },
         "categoryWidth": {
           "type": "string",
@@ -3455,8 +3446,7 @@
               }
             }
           ]
-        },
-        "scenariosDataFormat": { "type": "string" }
+        }
       }
     }
   }
