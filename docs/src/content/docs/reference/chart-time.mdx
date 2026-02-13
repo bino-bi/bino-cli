@@ -26,7 +26,6 @@ spec:
   orderDirection: asc
   measureScale: M
   measureUnit: "EUR"
-  type: line                 # bar | line | area
   internationalisation: "_system"
   internationalisationMode: "default"
   translation: "chart.revenue.time"
@@ -52,7 +51,6 @@ spec:
 - `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose.
 - `filter`, `level`, `order`, `orderDirection`, `measureScale`, `measureUnit` – similar semantics to `ChartStructure`.
-- `type` – chart type: `bar`, `line`, or `area`.
 - `showCategories`, `showMeasureScale` – visibility flags.
 - `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
 - `limit` – column stack limit; 0 means unlimited.
@@ -78,7 +76,6 @@ spec:
   orderDirection: asc
   measureScale: M
   measureUnit: "EUR"
-  type: line
   showMeasureScale: true
   showOverlayAvg: true
   scenarios: ["ac1"]
