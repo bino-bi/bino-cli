@@ -149,9 +149,6 @@ type ChartTimeSpec struct {
 
 	// ChartTitle is the chart title.
 	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
-
-	// Type is the chart type (line, bar, area).
-	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 }
 
 // GridSpec represents the spec section of a Grid manifest.

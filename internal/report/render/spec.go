@@ -196,7 +196,6 @@ type chartTimeSpec struct {
 	OrderDirection                  string                   `json:"orderDirection"`
 	MeasureScale                    string                   `json:"measureScale"`
 	MeasureUnit                     string                   `json:"measureUnit"`
-	Type                            string                   `json:"type"`
 	Internationalisation            string                   `json:"internationalisation"`
 	InternationalisationMode        string                   `json:"internationalisationMode"`
 	Translation                     string                   `json:"translation"`
@@ -226,7 +225,6 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "order-direction", s.OrderDirection)
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "type", s.Type)
 	writeAttr(b, "internationalisation", s.Internationalisation)
 	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
 	writeAttr(b, "translation", s.Translation)
