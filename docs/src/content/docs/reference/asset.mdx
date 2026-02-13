@@ -13,10 +13,10 @@ apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
   name: brandLogo
+  description: Main brand logo used in report headers
 spec:
   type: image            # image | file | font
   mediaType: image/png   # MIME type
-  purpose: brand-logo    # optional free-form description
   source:
     # exactly one of: inlineBase64 | localPath | remoteURL
 ```
@@ -25,7 +25,7 @@ Important fields:
 
 - `spec.type` – one of `image`, `file`, `font`.
 - `spec.mediaType` – MIME type, for example `image/png`, `image/svg+xml`, `font/woff2`.
-- `spec.purpose` – optional description of how the asset is used.
+- `metadata.description` – optional free-form description of this asset.
 - `spec.source.inlineBase64` – base64-encoded content embedded in the manifest.
 - `spec.source.localPath` – relative or absolute path to a file in your project.
 - `spec.source.remoteURL` – HTTP/HTTPS URL pointing to a remote asset.
@@ -40,10 +40,10 @@ apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
   name: brandLogo
+  description: Main brand logo
 spec:
   type: image
   mediaType: image/png
-  purpose: brand-logo
   source:
     localPath: ./assets/brand-logo.png
 ```
@@ -56,10 +56,10 @@ apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
   name: sampleReportPreview
+  description: Sample report preview screenshot
 spec:
   type: image
   mediaType: image/png
-  purpose: "Sample report preview screenshot"
   source:
     remoteURL: https://via.placeholder.com/1200x800?text=Report+Preview
 ```
@@ -72,10 +72,10 @@ apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
   name: corporateHeadingFont
+  description: Heading font for corporate reports
 spec:
   type: font
   mediaType: font/woff2
-  purpose: "Heading font for corporate reports"
   source:
     localPath: ./assets/fonts/corporate-heading.woff2
 ```

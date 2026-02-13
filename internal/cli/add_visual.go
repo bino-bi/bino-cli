@@ -43,7 +43,6 @@ type ChartTimeManifestData struct {
 	Constraints []string
 	Dataset     string
 	Title       string
-	ChartType   string // line, bar, area
 }
 
 func newAddTableCommand() *cobra.Command {
@@ -492,7 +491,6 @@ func newAddChartTimeCommand() *cobra.Command {
 	var (
 		flagDataset    string
 		flagTitle      string
-		flagType       string
 		flagConstraint []string
 		flagOutput     string
 		flagAppendTo   string
@@ -507,27 +505,16 @@ func newAddChartTimeCommand() *cobra.Command {
 		Long: strings.TrimSpace(`
 Create a new ChartTime manifest for time-series charts.
 
-ChartTime displays time-series data from a DataSet:
-  - line: Line chart for trends
-  - bar: Bar chart for time periods
-  - area: Area chart for cumulative data
+ChartTime displays time-series data from a DataSet.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
   bino add charttime
 
-  # Line chart
+  # With options
   bino add charttime sales_trend \
     --dataset monthly_sales \
-    --type line \
     --title "Sales Trend" \
-    --output components/charts.yaml \
-    --no-prompt
-
-  # Area chart
-  bino add charttime cumulative_revenue \
-    --dataset revenue_data \
-    --type area \
     --output components/charts.yaml \
     --no-prompt
 `),
@@ -574,7 +561,6 @@ ChartTime displays time-series data from a DataSet:
 				Constraints: flagConstraint,
 				Dataset:     flagDataset,
 				Title:       flagTitle,
-				ChartType:   flagType,
 			}
 
 			var outputPath string
@@ -623,23 +609,6 @@ ChartTime displays time-series data from a DataSet:
 					}
 					return RuntimeError(err)
 				}
-			}
-
-			// Chart type
-			if data.ChartType == "" {
-				options := []SelectOption{
-					{Label: "line", Description: "Line chart for trends"},
-					{Label: "bar", Description: "Bar chart for time periods"},
-					{Label: "area", Description: "Area chart for cumulative data"},
-				}
-
-				idx, err := addPromptSelect(reader, out, "Chart type", options, 0)
-				if err != nil {
-					return RuntimeError(err)
-				}
-
-				types := []string{"line", "bar", "area"}
-				data.ChartType = types[idx]
 			}
 
 			// Title
@@ -710,7 +679,6 @@ ChartTime displays time-series data from a DataSet:
 
 	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name (required)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Chart title")
-	cmd.Flags().StringVar(&flagType, "type", "", "Chart type (line, bar, area)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -719,7 +687,6 @@ ChartTime displays time-series data from a DataSet:
 	cmd.Flags().BoolVar(&flagOpenEditor, "open-editor", false, "Open in $EDITOR after creation")
 
 	_ = cmd.RegisterFlagCompletionFunc("dataset", completeDatasets)
-	_ = cmd.RegisterFlagCompletionFunc("type", completeChartTimeTypes)
 
 	return cmd
 }
@@ -754,14 +721,6 @@ func completeChartStructureTypes(_ *cobra.Command, _ []string, _ string) ([]stri
 		"pie\tPie chart",
 		"donut\tDonut chart",
 		"radar\tRadar chart",
-	}, cobra.ShellCompDirectiveNoFileComp
-}
-
-func completeChartTimeTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	return []string{
-		"line\tLine chart",
-		"bar\tBar chart",
-		"area\tArea chart",
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -829,7 +788,6 @@ func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
 	spec := &schema.ChartTimeSpec{
 		Dataset:    "$" + data.Dataset,
 		ChartTitle: data.Title,
-		Type:       data.ChartType,
 	}
 
 	doc.Spec = spec

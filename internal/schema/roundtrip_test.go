@@ -201,7 +201,6 @@ func TestDocumentRoundTrip(t *testing.T) {
 				Spec: &ChartTimeSpec{
 					Dataset:    "$monthly_sales",
 					ChartTitle: "Sales Trend",
-					Type:       "line",
 				},
 			},
 		},

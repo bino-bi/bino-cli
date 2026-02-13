@@ -41,7 +41,6 @@ type internationalization struct {
 type assetSpec struct {
 	Type      string      `json:"type"`
 	MediaType string      `json:"mediaType"`
-	Purpose   string      `json:"purpose"`
 	Source    assetSource `json:"source"`
 }
 

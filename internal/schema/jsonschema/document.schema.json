@@ -326,6 +326,10 @@
           },
           "description": "Key-value pairs for arbitrary metadata. Not used by the system."
         },
+        "description": {
+          "type": "string",
+          "description": "Optional free-form description of this document's purpose or contents."
+        },
         "constraints": {
           "type": "array",
           "items": {
@@ -380,10 +384,6 @@
         "mediaType": {
           "type": "string",
           "description": "MIME media type of the asset (for example 'image/png', 'image/svg+xml', 'font/woff2'). Used when embedding the asset into the report."
-        },
-        "purpose": {
-          "type": "string",
-          "description": "Optional free-form description of how this asset is used (for example 'brand-logo', 'heading-font')."
         },
         "source": {
           "$ref": "#/$defs/assetSource",
@@ -2831,11 +2831,6 @@
         "measureUnit": {
           "type": "string",
           "description": "Measure unit displayed in the chart."
-        },
-        "type": {
-          "type": "string",
-          "enum": ["bar", "line", "area"],
-          "description": "Chart type."
         },
         "internationalisation": { "type": "string" },
         "internationalisationMode": { "type": "string" },
