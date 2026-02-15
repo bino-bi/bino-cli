@@ -21,8 +21,8 @@ spec:
   axisLabelsMode: smart      # smart | long | short
   dateInterval: auto         # year | quarter | month | week | day | hour | minute | second | millisecond | auto
   filter: "region_group = 'EMEA'"
-  level: category
-  order: category
+  level: auto                # rowcategory | category | subcategory | auto
+  order: auto                # category | categoryindex | rowgroup | rowgroupindex | ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   orderDirection: asc
   measureScale: M
   measureUnit: "EUR"
@@ -38,8 +38,12 @@ spec:
   percentageScaling: "default"
   unitScaling: "default"
   syncSpaceLeft: 0
-  scenarios: ["ac1", "fc1"]
+  scenarios: ["ac1", "fc1"]   # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dfc1_ac1_pos"]
+  stack:                       # optional stacked chart config
+    by: scenario               # scenario | category | subcategory | rowgroup
+    mode: absolute             # absolute | relative | absolute-relative
+    order: dataset             # asc | desc | dataset
 ```
 
 ## Fields
@@ -49,14 +53,24 @@ spec:
 - `chartMode` – rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
 - `maxBars` – threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
-- `dateInterval` – desired time granularity; `auto` lets the renderer choose.
-- `filter`, `level`, `order`, `orderDirection`, `measureScale`, `measureUnit` – similar semantics to `ChartStructure`.
+- `dateInterval` – desired time granularity; `auto` lets the renderer choose based on dataset meta.
+- `filter` – optional filter expression.
+- `level` – aggregation level: `rowcategory`, `category`, `subcategory`, or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
+- `order` – sort key; if you use a scenario, it must appear in `scenarios`. Set to `auto` to detect from the dataset silently. When left blank, it is detected with a warning.
+- `orderDirection` – sort direction (`asc` or `desc`).
+- `measureScale`, `measureUnit` – SI prefix and unit string.
 - `showCategories`, `showMeasureScale` – visibility flags.
 - `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
 - `limit` – column stack limit; 0 means unlimited.
 - `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
 - `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options.
-- `scenarios` and `variances` – configured as for `ChartStructure`.
+- `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
+- `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
+- `stack` – optional object to enable stacked rendering:
+  - `by` – (required) stacking dimension: `scenario` stacks scenario slots; `category`, `subcategory`, or `rowgroup` decompose by data dimension.
+  - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
+  - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default).
+  - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
 
 ## Example: Monthly revenue line chart
 
@@ -135,3 +149,67 @@ When rendered in line mode:
   - **PP (Previous Period)**: Gray fill, gray stroke, solid line
   - **FC (Forecast)**: White fill, black stroke, dashed line
   - **PL (Plan)**: White fill, black stroke, solid line
+
+## Example: Stacked columns by scenario
+
+Stack AC and PP values as additive columns:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_stacked_chart
+spec:
+  dataset: revenue_monthly
+  chartTitle: "Revenue stacked by scenario"
+  dateInterval: month
+  unitScaling: 0.05
+  scenarios: ["ac1", "pp1"]
+  stack:
+    by: scenario
+    mode: absolute
+```
+
+## Example: 100% stacked columns
+
+Show the relative contribution of each scenario:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_relative_stacked
+spec:
+  dataset: revenue_monthly
+  chartTitle: "Revenue share by scenario"
+  dateInterval: month
+  unitScaling: 100
+  scenarios: ["ac1", "pp1", "fc1"]
+  stack:
+    by: scenario
+    mode: relative
+```
+
+## Example: Stacked area chart
+
+Combine `chartMode: line` with `stack` to render stacked area fills:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_stacked_area
+spec:
+  dataset: revenue_monthly
+  chartTitle: "Revenue trend (stacked area)"
+  chartMode: line
+  dateInterval: month
+  unitScaling: 0.05
+  scenarios: ["ac1", "pp1", "fc1"]
+  stack:
+    by: scenario
+    mode: absolute
+```

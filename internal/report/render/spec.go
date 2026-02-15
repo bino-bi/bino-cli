@@ -138,6 +138,13 @@ type textSpec struct {
 	Dataset reportspec.DatasetList `json:"dataset"`
 }
 
+// stackConfig defines the stacking configuration for chart components.
+type stackConfig struct {
+	By    string `json:"by"`
+	Mode  string `json:"mode,omitempty"`
+	Order string `json:"order,omitempty"`
+}
+
 // chartStructureSpec defines the structure for ChartStructure components.
 type chartStructureSpec struct {
 	Dataset                  reportspec.DatasetList   `json:"dataset"`
@@ -159,6 +166,7 @@ type chartStructureSpec struct {
 	PixelPerUnit             *float64                 `json:"pixelPerUnit"`
 	Scenarios                []string                 `json:"scenarios"`
 	Variances                []string                 `json:"variances"`
+	Stack                    *stackConfig             `json:"stack,omitempty"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -181,6 +189,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
+	writeStackAttr(b, "stack", s.Stack)
 }
 
 // chartTimeSpec defines the structure for ChartTime components.
@@ -211,6 +220,7 @@ type chartTimeSpec struct {
 	SyncSpaceLeft                   *float64                 `json:"syncSpaceLeft"`
 	Scenarios                       []string                 `json:"scenarios"`
 	Variances                       []string                 `json:"variances"`
+	Stack                           *stackConfig             `json:"stack,omitempty"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -240,6 +250,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "sync-space-left", s.SyncSpaceLeft)
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
+	writeStackAttr(b, "stack", s.Stack)
 }
 
 // chartTreeSpec defines the structure for ChartTree components.
@@ -375,6 +386,18 @@ func writeCSVAttr(b *strings.Builder, name string, values []string) {
 		return
 	}
 	writeAttr(b, name, strings.Join(values, ","))
+}
+
+// writeStackAttr writes a stack config as a JSON string attribute.
+func writeStackAttr(b *strings.Builder, name string, s *stackConfig) {
+	if s == nil || s.By == "" {
+		return
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		return
+	}
+	writeAttr(b, name, string(data))
 }
 
 // imageSpec defines the structure for Image components.

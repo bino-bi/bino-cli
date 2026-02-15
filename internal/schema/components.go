@@ -128,6 +128,18 @@ type TableSpec struct {
 	TableTitle string `yaml:"tableTitle,omitempty" json:"tableTitle,omitempty"`
 }
 
+// StackConfig configures stacked chart rendering.
+type StackConfig struct {
+	// By determines what to stack: "scenario", "category", "subcategory", or "rowgroup".
+	By string `yaml:"by" json:"by"`
+
+	// Mode controls how stacked values are displayed: "absolute", "relative", or "absolute-relative".
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+
+	// Order controls segment ordering within each stack: "asc", "desc", or "dataset".
+	Order string `yaml:"order,omitempty" json:"order,omitempty"`
+}
+
 // ChartStructureSpec represents the spec section of a ChartStructure manifest.
 type ChartStructureSpec struct {
 	// Dataset is a reference to a DataSet (required).
@@ -139,6 +151,9 @@ type ChartStructureSpec struct {
 
 	// Type is the chart type (bar, pie, donut, etc.).
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+
+	// Stack configures stacked bar rendering.
+	Stack *StackConfig `yaml:"stack,omitempty" json:"stack,omitempty"`
 }
 
 // ChartTimeSpec represents the spec section of a ChartTime manifest.
@@ -149,6 +164,9 @@ type ChartTimeSpec struct {
 
 	// ChartTitle is the chart title.
 	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
+
+	// Stack configures stacked column/area rendering.
+	Stack *StackConfig `yaml:"stack,omitempty" json:"stack,omitempty"`
 }
 
 // GridSpec represents the spec section of a Grid manifest.
