@@ -2785,6 +2785,30 @@
               "items": { "type": "string" }
             }
           ]
+        },
+        "stack": {
+          "type": "object",
+          "description": "Configures stacked bar rendering. When set, bars are stacked instead of shown side-by-side.",
+          "required": ["by"],
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": ["scenario", "category", "subcategory", "rowgroup"],
+              "description": "Stacking dimension. 'scenario' stacks scenario slots; others decompose by the specified data dimension."
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["absolute", "relative", "absolute-relative"],
+              "default": "absolute",
+              "description": "Stacking mode. 'absolute': additive values. 'relative': 100% stacked. 'absolute-relative': absolute height with percentage labels."
+            },
+            "order": {
+              "type": "string",
+              "enum": ["asc", "desc", "dataset"],
+              "default": "dataset",
+              "description": "Segment order within each stack."
+            }
+          }
         }
       }
     },
@@ -2901,6 +2925,30 @@
           "minimum": 1,
           "default": 28,
           "description": "Threshold for auto-switching to line mode. Only applies when chartMode is 'auto'."
+        },
+        "stack": {
+          "type": "object",
+          "description": "Configures stacked column/area rendering. When set with chartMode 'bar', renders stacked columns. When set with chartMode 'line', renders stacked area chart.",
+          "required": ["by"],
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": ["scenario", "category", "subcategory", "rowgroup"],
+              "description": "Stacking dimension. 'scenario' stacks scenario slots; others decompose by the specified data dimension."
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["absolute", "relative", "absolute-relative"],
+              "default": "absolute",
+              "description": "Stacking mode. 'absolute': additive values. 'relative': 100% stacked. 'absolute-relative': absolute height with percentage labels."
+            },
+            "order": {
+              "type": "string",
+              "enum": ["asc", "desc", "dataset"],
+              "default": "dataset",
+              "description": "Segment order within each stack."
+            }
+          }
         }
       }
     },
