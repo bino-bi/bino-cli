@@ -37,6 +37,7 @@ spec:
   scenarios: ["ac1", "py1"]          # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dpy1_ac1_pos"]
   barColumns: []                     # columns to render as inline bar charts
+  scale: auto                        # "" | none | auto | 0.5 | 1.2 | …
   unitScaling: 0.01                  # pixels per unit for absolute variance bars
   percentageScaling: 0.5             # pixels per percentage for relative variance pins
   thereof: []
@@ -63,6 +64,11 @@ spec:
 - `barColumns` – list of column names to render as inline IBCS-compliant bar charts instead of numbers.
 - `unitScaling` – pixels per unit for absolute variance bars (d_ prefix columns). Default: 0.01.
 - `percentageScaling` – pixels per percentage point for relative variance pins (dr_ prefix columns). Default: 0.5.
+- `scale` – proportional scaling of the entire table (font size, em-based spacing, SVG bar charts, pins, patterns). All visual dimensions scale together.
+  - *not set* or `""` – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor.
+  - `"none"` – no scaling; render at the base font size regardless of available space.
+  - `"auto"` – auto-scale to fit the parent width silently (no warning).
+  - A positive number (`"0.5"`, `"1.2"`, …) – fixed factor applied to the base font size.
 - `thereof`, `partof`, `columnthereof` – drilldown configuration.
 
 ## Example: Grouped table with drilldown
@@ -143,3 +149,31 @@ spec:
   scenarios: ["ac1", "pp1", "fc1"]
   barColumns: ["ac1", "pp1", "fc1"]
 ```
+
+## Scaling
+
+Use `scale` to shrink or grow the entire table proportionally.
+Font size, em-based padding, border widths, SVG bar charts, pin lengths,
+dot radii, and hatch patterns all scale together.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: scaled_table
+spec:
+  dataset: revenue_by_segment
+  tableTitle: "Revenue (auto-fit)"
+  scenarios: ["ac1", "pp1"]
+  scale: auto           # shrink to fit the available card width
+```
+
+### Scale modes
+
+| Value | Behaviour |
+|-------|-----------|
+| *not set* / `""` | Auto-scale to fit the parent width. Emits an `AUTO_scale` warning with the applied factor. |
+| `none` | No scaling. The table renders at its base font size regardless of available space. |
+| `auto` | Auto-scale to fit the parent width silently (no warning). |
+| `0.5`, `1.2`, … | Fixed factor applied to the base font size. All dimensions scale proportionally. |
