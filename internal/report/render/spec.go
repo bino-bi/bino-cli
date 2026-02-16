@@ -322,6 +322,7 @@ type tableSpec struct {
 	BarColumns               []string                     `json:"barColumns"`
 	UnitScaling              *float64                     `json:"unitScaling"`
 	PercentageScaling        *float64                     `json:"percentageScaling"`
+	Scale                    string                       `json:"scale,omitempty"`
 	Thereof                  reportspec.ThereofList       `json:"thereof"`
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
@@ -353,6 +354,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeCSVAttr(b, "bar-columns", s.BarColumns)
 	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
 	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
+	writeAttr(b, "scale", s.Scale)
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
