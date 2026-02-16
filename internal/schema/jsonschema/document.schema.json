@@ -1851,8 +1851,16 @@
       "type": "object",
       "required": ["value"],
       "properties": {
-        "value": { "type": "string" },
-        "dataset": { "$ref": "#/$defs/datasetRef" }
+        "value": {
+          "type": "string",
+          "description": "Text content. Supports Markdown (converted to HTML at build time) and template expressions like ${data.myDataset[0].ac1}."
+        },
+        "dataset": { "$ref": "#/$defs/datasetRef" },
+        "scale": {
+          "type": "string",
+          "description": "Font-size scaling mode. \"none\" disables scaling, \"auto\" auto-scales silently, a positive number (e.g. \"0.8\") sets an explicit factor. When omitted, auto-scales and warns with the applied factor.",
+          "examples": ["none", "auto", "0.5", "0.8", "1.2"]
+        }
       }
     },
     "componentStyleSpec": {

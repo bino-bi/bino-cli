@@ -541,6 +541,7 @@ func renderTextComponent(spec textSpec, assetURLs map[string]string) string {
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
+	writeAttr(&b, "scale", spec.Scale)
 	b.WriteString("></bn-text>")
 	return b.String()
 }
@@ -717,6 +718,7 @@ func renderChartTreeLabelComponent(spec chartTreeLabelSpec) string {
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
+	writeAttr(&b, "scale", spec.Scale)
 	b.WriteString("></bn-text>")
 	return b.String()
 }
