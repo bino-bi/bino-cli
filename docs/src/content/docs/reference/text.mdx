@@ -1,10 +1,10 @@
 ---
 title: Text
-description: Define text blocks, optionally bound to datasets.
+description: Define text blocks, optionally bound to datasets, with auto-scaling and template expressions.
 ---
 
 `Text` manifests define text values that can be used directly or as children of layouts and cards.
-They can optionally bind to one or more datasets.
+They can optionally bind to one or more datasets and support font-size scaling to fit the available space.
 
 ## Spec overview
 
@@ -16,12 +16,14 @@ metadata:
 spec:
   value: "Quarterly performance overview"
   dataset: kpi_summary   # string or array
+  scale: auto             # optional scaling mode
 ```
 
 Fields:
 
-- `spec.value` – required string value. Supports **Markdown** syntax (see below).
+- `spec.value` – required string. Supports **Markdown** syntax (see below) and **template expressions** (see below).
 - `spec.dataset` – optional dataset reference; either a single string or an array of strings.
+- `spec.scale` – optional scaling mode (see [Scaling](#scaling)).
 
 ## Markdown support
 
@@ -84,6 +86,64 @@ spec:
     > Data as of Q4 2025
 ```
 
+## Template expressions
+
+The `value` field supports JavaScript template literal syntax for dynamic content.
+Expressions are evaluated at runtime in the browser with access to bound datasets and translations.
+
+Available variables inside `${...}`:
+
+- `data.<datasetName>` – the bound dataset rows (array of objects).
+- `t('<key>')` – returns a translated string from the active Internationalization manifest.
+
+```yaml
+spec:
+  dataset: kpi_summary
+  value: "Revenue: ${data.kpi_summary[0].ac1}"
+```
+
+```yaml
+spec:
+  value: "${t('report.title')}"
+```
+
+### Security
+
+Template evaluation is **sandboxed** — only `data` and `t` are accessible.
+Global objects (`window`, `document`, `fetch`, etc.) are blocked.
+The HTML output is **sanitized** against XSS: only safe tags
+(`br`, `b`, `i`, `strong`, `em`, `span`, `p`, `div`, `table`, `a`, etc.) and
+attributes (`class`, `style`, `href`, `title`, `colspan`, `rowspan`) are kept.
+Event handlers (`onclick`, `onerror`, …) and `javascript:` URIs are stripped.
+
+## Scaling
+
+The `scale` field controls how the text component scales its font size
+to fit within the available parent space. Scaling considers **both width and height** —
+the tighter constraint wins.
+
+| `scale` value | Behavior |
+|---|---|
+| _(not set)_ | Auto-scale to fit; emits an `AUTO_scale` warning with the applied factor |
+| `"none"` | No scaling; emits `WARN_overflow` warning if content overflows |
+| `"auto"` | Auto-scale to fit, silently (no warning) |
+| `"0.5"`, `"0.8"`, `"1.2"`, … | Apply `baseFontSize × factor`; emits `WARN_overflow` if content still overflows |
+
+Invalid values (negative, non-numeric, unrecognized keywords) fall back to the
+default behaviour and emit an `ERR_scale` warning.
+
+```yaml
+spec:
+  value: "This text will shrink to fit its container"
+  scale: auto
+```
+
+```yaml
+spec:
+  value: "Fixed 80% size"
+  scale: "0.8"
+```
+
 ## Standalone text manifest
 
 ```yaml
@@ -110,6 +170,5 @@ spec:
     - kind: Text
       spec:
         value: "Sales Overview Report"
+        scale: auto
 ```
-
-In more advanced setups, text components may consult datasets or i18n keys via front-end conventions.
