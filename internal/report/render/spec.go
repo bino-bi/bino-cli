@@ -136,6 +136,7 @@ type layoutChildMeta struct {
 type textSpec struct {
 	Value   string                 `json:"value"`
 	Dataset reportspec.DatasetList `json:"dataset"`
+	Scale   string                 `json:"scale,omitempty"`
 }
 
 // stackConfig defines the stacking configuration for chart components.
@@ -279,6 +280,7 @@ type chartTreeNode struct {
 type chartTreeLabelSpec struct {
 	Value   string                 `json:"value"`
 	Dataset reportspec.DatasetList `json:"dataset"`
+	Scale   string                 `json:"scale,omitempty"`
 }
 
 func (s chartTreeSpec) writeAttrs(b *strings.Builder) {

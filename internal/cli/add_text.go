@@ -24,6 +24,7 @@ type TextManifestData struct {
 	Constraints []string
 	Value       string
 	Dataset     string // Optional dataset reference
+	Scale       string // Optional scaling mode: "none", "auto", or a positive number
 }
 
 // ComponentStyleManifestData holds data for rendering a ComponentStyle manifest.
@@ -47,6 +48,7 @@ func newAddTextCommand() *cobra.Command {
 	var (
 		flagValue      string
 		flagDataset    string
+		flagScale      string
 		flagConstraint []string
 		flagOutput     string
 		flagAppendTo   string
@@ -124,6 +126,7 @@ Text components can display:
 				Constraints: flagConstraint,
 				Value:       flagValue,
 				Dataset:     flagDataset,
+				Scale:       flagScale,
 			}
 
 			var outputPath string
@@ -269,6 +272,7 @@ Text components can display:
 
 	cmd.Flags().StringVar(&flagValue, "value", "", "Static text value")
 	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name for dynamic text")
+	cmd.Flags().StringVar(&flagScale, "scale", "", `Scaling mode: "none", "auto", or a positive number`)
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -692,6 +696,7 @@ func buildTextDocument(data TextManifestData) *schema.Document {
 
 	spec := &schema.TextSpec{
 		Value: data.Value,
+		Scale: data.Scale,
 	}
 
 	// Add $ prefix to dataset for reference syntax

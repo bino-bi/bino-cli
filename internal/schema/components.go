@@ -65,8 +65,16 @@ type TextSpec struct {
 	// Should be a reference like "$dataset_name".
 	Dataset string `yaml:"dataset,omitempty" json:"dataset,omitempty"`
 
-	// Value is the static text value.
+	// Value is the text content. Supports Markdown (converted to HTML at build
+	// time) and template expressions like ${data.myDataset[0].ac1}.
 	Value string `yaml:"value,omitempty" json:"value,omitempty"`
+
+	// Scale controls font-size scaling relative to the available parent space.
+	// Valid values: "none", "auto", or a positive number (e.g. "0.8").
+	// When omitted the component auto-scales and emits a warning with the
+	// applied factor; "auto" auto-scales silently; "none" disables scaling
+	// (warns on overflow); a number sets an explicit factor.
+	Scale string `yaml:"scale,omitempty" json:"scale,omitempty"`
 }
 
 // ComponentStyleSpec represents the spec section of a ComponentStyle manifest.
