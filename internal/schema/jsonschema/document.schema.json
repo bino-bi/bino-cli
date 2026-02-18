@@ -2934,6 +2934,10 @@
           "default": 28,
           "description": "Threshold for auto-switching to line mode. Only applies when chartMode is 'auto'."
         },
+        "lineFullWidth": {
+          "type": "boolean",
+          "description": "When true, line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode."
+        },
         "stack": {
           "type": "object",
           "description": "Configures stacked column/area rendering. When set with chartMode 'bar', renders stacked columns. When set with chartMode 'line', renders stacked area chart.",
