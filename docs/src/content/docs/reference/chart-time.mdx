@@ -41,6 +41,7 @@ spec:
   syncSpaceLeft: 0
   scenarios: ["ac1", "fc1"]   # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dfc1_ac1_pos"]
+  scale: auto                    # "" | none | auto | 0.5 | 1.2 | …
   stack:                       # optional stacked chart config
     by: scenario               # scenario | category | subcategory | rowgroup
     mode: absolute             # absolute | relative | absolute-relative
@@ -68,6 +69,11 @@ spec:
 - `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options. When `unitScaling` is set to a numeric value and bars exceed the available container height, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section above it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a higher point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
 - `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
+- `scale` – proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
+  - *not set* or `""` – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor.
+  - `"none"` – no scaling; render at the base font size regardless of available space.
+  - `"auto"` – auto-scale to fit the parent width silently (no warning).
+  - `"0.5"`, `"1.2"`, … – fixed factor applied to the base font size. All dimensions scale proportionally.
 - `stack` – optional object to enable stacked rendering:
   - `by` – (required) stacking dimension: `scenario` stacks scenario slots; `category`, `subcategory`, or `rowgroup` decompose by data dimension.
   - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
