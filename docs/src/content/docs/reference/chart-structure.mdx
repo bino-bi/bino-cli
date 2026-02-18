@@ -48,7 +48,7 @@ spec:
 - `order` / `orderDirection` – sort key and direction; if you use a scenario, it must appear in `scenarios`. Set `order` to `auto` to detect from the dataset silently. When left blank, it is detected with a warning.
 - `measureScale` – SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
 - `measureUnit` – unit string, for example `mEUR`.
-- `percentageScaling` / `unitScaling` – name of a scaling group or numeric scaling factor.
+- `percentageScaling` / `unitScaling` – name of a scaling group or numeric scaling factor. When `unitScaling` is set to a numeric value and bars exceed the available container width, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section beyond it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a wider point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
 - `showCategories`, `showMeasureScale` – visibility flags.
 - `limit` – maximum bars per group; rows beyond the limit are cumulated as REST.
 - `pixelPerUnit` – explicit scaling override.
@@ -109,6 +109,26 @@ spec:
     by: scenario
     mode: absolute
 ```
+
+### Overdrive bars (overflow handling)
+
+When `unitScaling` is set to a fixed numeric value (not `auto`), bars may exceed the
+available container width. Instead of silently clipping the bars, the renderer applies
+**overdrive rendering**:
+
+1. **Base section** – the bar is drawn up to a computed cut width that fits within the container.
+2. **Break indicator** – a vertical zigzag line across the bar height signals the axis break.
+3. **Overdrive section** – a proportionally scaled continuation beyond the break shows how much the bar exceeds the cut point.
+
+Bars that fit within the available space render normally.
+Among overflowing bars, the overdrive width is proportional to the overflow amount,
+so a bar overflowing by 200 px gets twice the overdrive of one overflowing by 100 px.
+
+AC scenario bars break at a wider point than PP, FC, and PL bars.
+This staggered break position maintains the IBCS visual hierarchy between scenario types.
+
+Overdrive bars apply to bar mode only and do not affect stacked charts, relative variance needles, or auto-fit scaling.
+The existing overflow warning is still emitted alongside the visual treatment.
 
 ## Example: 100% stacked bars
 

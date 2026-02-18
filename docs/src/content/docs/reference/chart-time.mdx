@@ -18,6 +18,7 @@ spec:
   chartTitle: "Daily revenue"
   chartMode: bar             # bar | line | auto
   maxBars: 28                # threshold for auto mode
+  lineFullWidth: true         # stretch line charts to full width
   axisLabelsMode: smart      # smart | long | short
   dateInterval: auto         # year | quarter | month | week | day | hour | minute | second | millisecond | auto
   filter: "region_group = 'EMEA'"
@@ -52,6 +53,7 @@ spec:
 - `chartTitle` – optional title.
 - `chartMode` – rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
 - `maxBars` – threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
+- `lineFullWidth` – when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
 - `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` – optional filter expression.
@@ -63,7 +65,7 @@ spec:
 - `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
 - `limit` – column stack limit; 0 means unlimited.
 - `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
-- `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options.
+- `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options. When `unitScaling` is set to a numeric value and bars exceed the available container height, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section above it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a higher point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
 - `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `stack` – optional object to enable stacked rendering:
@@ -149,6 +151,26 @@ When rendered in line mode:
   - **PP (Previous Period)**: Gray fill, gray stroke, solid line
   - **FC (Forecast)**: White fill, black stroke, dashed line
   - **PL (Plan)**: White fill, black stroke, solid line
+
+### Overdrive bars (overflow handling)
+
+When `unitScaling` is set to a fixed numeric value (not `auto`), bars may exceed the
+available container height. Instead of silently clipping the bars, the renderer applies
+**overdrive rendering**:
+
+1. **Base section** – the bar is drawn up to a computed cut height that fits within the container.
+2. **Break indicator** – a zigzag line across the bar width signals the axis break.
+3. **Overdrive section** – a proportionally scaled continuation above the break shows how much the bar exceeds the cut point.
+
+Bars that fit within the available space render normally.
+Among overflowing bars, the overdrive height is proportional to the overflow amount,
+so a bar overflowing by 200 px gets twice the overdrive of one overflowing by 100 px.
+
+AC scenario bars break at a higher point than PP, FC, and PL bars.
+This staggered break position maintains the IBCS visual hierarchy between scenario types.
+
+Overdrive bars apply to bar mode only and do not affect line charts, stacked charts, or auto-fit scaling.
+The existing overflow warning is still emitted alongside the visual treatment.
 
 ## Example: Stacked columns by scenario
 

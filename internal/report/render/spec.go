@@ -215,6 +215,7 @@ type chartTimeSpec struct {
 	ShowOverlayMedian               *bool                    `json:"showOverlayMedian"`
 	Limit                           *int                     `json:"limit"`
 	MaxBars                         *int                     `json:"maxBars"`
+	LineFullWidth                   *bool                    `json:"lineFullWidth"`
 	IntervalSpanLimit               *int                     `json:"intervalSpanLimit"`
 	PercentageScaling               reportspec.StringOrFloat `json:"percentageScaling"`
 	UnitScaling                     reportspec.StringOrFloat `json:"unitScaling"`
@@ -245,6 +246,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-overlay-median", s.ShowOverlayMedian)
 	writeIntAttr(b, "limit", s.Limit)
 	writeIntAttr(b, "max-bars", s.MaxBars)
+	writeBoolAttr(b, "line-full-width", s.LineFullWidth)
 	writeIntAttr(b, "interval-span-limit", s.IntervalSpanLimit)
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
