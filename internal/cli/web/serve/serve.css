@@ -1,0 +1,111 @@
+:root {
+  color-scheme: light;
+  font-family: var(--bino-font-sans);
+  background-color: var(--bino-bg);
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+html {
+  display: block !important;
+  overflow-x: auto;
+}
+body {
+  display: flex !important;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bino-bg);
+  font-family: inherit;
+  color: var(--bino-text);
+}
+#bino-content-area {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-x: auto;
+  min-width: 0;
+}
+bn-context {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+  width: fit-content;
+  min-width: 100%;
+  margin: 0 auto;
+  transition: opacity 0.15s ease;
+}
+bn-layout-page {
+  box-sizing: border-box;
+  background: var(--bino-surface);
+  box-shadow: var(--bino-shadow-page);
+  flex-shrink: 0;
+}
+/* Missing params banner (light DOM, shown in content area) */
+.bino-missing-params-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: #fef3c7;
+  border: 1px solid var(--bino-warning-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 480px;
+  margin: 2rem auto;
+}
+.bino-missing-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.bino-missing-text strong {
+  display: block;
+  color: var(--bino-warning-text);
+  margin-bottom: 0.5rem;
+}
+.bino-missing-text p {
+  margin: 0;
+  color: #78350f;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.bino-missing-text .required {
+  color: var(--bino-error);
+  font-weight: bold;
+}
+/* Print media optimizations */
+@media print {
+  html {
+    *, *::before, *::after {
+      box-sizing: border-box;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+  }
+  @page {
+    margin: 0.5cm;
+  }
+  body {
+    margin 0;
+    display: block !important;
+    background: var(--bino-surface) !important;
+  }
+  bino-control-panel {
+    display: none !important;
+  }
+  #bino-content-area {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  bn-context {
+    gap: 0 !important;
+  }
+  bn-layout-page {
+    box-shadow: none !important;
+    brake-after: page;
+    page-break-after: always;
+    page-break-inside: avoid;
+    brake-inside: avoid;
+  }
+  bn-layout-page:last-child {
+    page-break-after: auto;
+  }
+}
