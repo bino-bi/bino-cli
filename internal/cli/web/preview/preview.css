@@ -1,0 +1,115 @@
+:root {
+  color-scheme: light;
+  font-family: var(--bino-font-sans);
+  background-color: var(--bino-bg);
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+html {
+  display: block !important;
+  overflow-x: auto;
+}
+body {
+  display: block !important;
+  justify-content: initial !important;
+  margin: 0;
+  min-height: 100vh;
+  min-width: fit-content;
+  background: var(--bino-bg);
+  font-family: inherit;
+  color: var(--bino-text);
+  padding: 1.5rem;
+  padding-top: 3.5rem;
+}
+bn-context {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+  width: fit-content;
+  min-width: 100%;
+  margin: 0 auto;
+}
+bn-layout-page {
+  box-sizing: border-box;
+  background: var(--bino-surface);
+  box-shadow: var(--bino-shadow-page);
+  flex-shrink: 0;
+}
+@media (min-width: 769px) {
+  body {
+    padding: 2rem;
+    padding-top: 3.5rem;
+  }
+}
+/* Page info bar for "All Pages" view - placed as sibling before bn-layout-page */
+.bn-page-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 5px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--bino-radius) var(--bino-radius) 0 0;
+  font-family: var(--bino-font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: -1.75rem;
+  align-self: center;
+}
+.bn-page-info-name {
+  font-weight: 600;
+  color: var(--bino-text-muted);
+  margin-right: 2px;
+}
+.bn-page-info-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.bn-page-info-pill.constraint {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+}
+.bn-page-info-pill.artefact {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+.bn-page-info-label {
+  color: var(--bino-text-secondary);
+  font-size: 10px;
+  margin-left: 4px;
+}
+/* Error indicator badges on components with has-error/has-errors attributes */
+[has-error]::before, [has-errors]::before {
+  content: "\26A0";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--bino-warning, #f59e0b);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+/* Error highlight animation (applied to light DOM elements by error panel) */
+.bn-error-highlight {
+  animation: bn-error-pulse 0.6s ease-out;
+}
+@keyframes bn-error-pulse {
+  0% { outline-color: var(--bino-warning); outline-width: 2px; }
+  50% { outline-color: var(--bino-error); outline-width: 4px; }
+  100% { outline-color: var(--bino-warning); outline-width: 2px; }
+}
