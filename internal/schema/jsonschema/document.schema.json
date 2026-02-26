@@ -1533,7 +1533,7 @@
     },
     "screenshotArtefactSpec": {
       "type": "object",
-      "required": ["filenamePrefix", "refs", "layoutPages"],
+      "required": ["filenamePrefix", "refs"],
       "properties": {
         "layoutPages": {
           "oneOf": [
@@ -1551,7 +1551,7 @@
               "description": "Array of LayoutPage references. Each item can be a string (name or glob pattern) or an object with page name and params."
             }
           ],
-          "description": "One or more LayoutPage documents to render. Can use parameterized refs with page and params. Components referenced in 'refs' must be present in these pages."
+          "description": "One or more LayoutPage documents to render. Optional — when omitted, pages are auto-discovered from refs. Can use parameterized refs with page and params."
         },
         "format": {
           "type": "string",

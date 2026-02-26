@@ -3,8 +3,8 @@ title: ScreenshotArtefact
 description: Capture PNG or JPEG screenshots of specific components for embedding in presentations or dashboards.
 ---
 
-`ScreenshotArtefact` manifests define screenshot outputs that capture individual components from your report pages.
-Unlike `ReportArtefact` which generates full-page PDFs, `ScreenshotArtefact` extracts specific charts, tables, or other components as image files.
+`ScreenshotArtefact` manifests define screenshot outputs that capture individual components as image files.
+Unlike `ReportArtefact` which generates full-page PDFs, `ScreenshotArtefact` extracts specific charts, tables, or other components as standalone PNG or JPEG images.
 
 ## Use Cases
 
@@ -12,6 +12,25 @@ Unlike `ReportArtefact` which generates full-page PDFs, `ScreenshotArtefact` ext
 - Generate thumbnail previews for dashboards
 - Create image assets for documentation
 - Capture specific visualizations for email reports
+
+## Minimal Example
+
+The simplest screenshot artefact only needs `filenamePrefix` and `refs`.
+The system automatically finds (or wraps) the component:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: chart_export
+spec:
+  filenamePrefix: export
+  refs:
+    - kind: Table
+      name: umsatz_zahlen
+```
+
+Output: `export-umsatz_zahlen.png`
 
 ## Spec Outline
 
@@ -21,19 +40,16 @@ kind: ScreenshotArtefact
 metadata:
   name: chart_exports
 spec:
-  layoutPages:
-    - dashboard_page
   filenamePrefix: quarterly-report
-  filenamePattern: ref          # "index" or "ref"
-  imageFormat: png              # "png" or "jpeg"
-  format: full_hd               # viewport size
+  format: full-hd
   orientation: landscape
   language: de
+  scale: device
+  imageFormat: png
+  filenamePattern: ref
   refs:
     - kind: ChartStructure
       name: sales_by_region
-    - kind: ChartTime
-      name: revenue_trend
     - kind: Table
       name: summary_table
 ```
@@ -42,32 +58,46 @@ spec:
 
 ### Required Fields
 
-- `spec.layoutPages` – One or more `LayoutPage` names to render. Components in `refs` must be present in these pages.
-- `spec.filenamePrefix` – Prefix for all generated screenshot filenames.
-- `spec.refs` – List of component references to capture:
-  - `kind` – Component type: `ChartStructure`, `ChartTime`, `ChartTree`, `Table`, `LayoutCard`, or `Text`
-  - `name` – The component's `metadata.name`
+- `spec.filenamePrefix` -- Prefix for all generated screenshot filenames.
+- `spec.refs` -- List of component references to capture:
+  - `kind` -- Component type: `ChartStructure`, `ChartTime`, `ChartTree`, `Table`, `LayoutCard`, or `Text`.
+  - `name` -- The component's `metadata.name`.
 
 ### Optional Fields
 
-- `spec.filenamePattern` – Filename pattern:
+- `spec.layoutPages` -- Explicit list of `LayoutPage` names to render. **Usually not needed** -- see [How Components Are Resolved](#how-components-are-resolved) below.
+- `spec.format` -- Viewport size: `xga` (default), `hd`, `full-hd`, `4k`, `4k2k`, or paper sizes (`a4`, `a3`, `letter`, etc.).
+- `spec.orientation` -- Viewport orientation: `portrait` or `landscape` (default: `landscape`).
+- `spec.language` -- Language for rendering: `de` (default) or `en`.
+- `spec.scale` -- Screenshot resolution:
+  - `"css"` (default) -- 1x resolution (CSS pixels).
+  - `"device"` -- 2x resolution (retina/HiDPI). **Recommended for sharp output.**
+- `spec.filenamePattern` -- Filename pattern:
   - `"ref"` (default): `{prefix}-{component_name}.{ext}` (e.g., `report-sales_chart.png`)
   - `"index"`: `{prefix}-001.{ext}`, `{prefix}-002.{ext}`, etc.
-- `spec.imageFormat` – Image format: `"png"` (default) or `"jpeg"`
-- `spec.quality` – JPEG quality (1-100). Only used when `imageFormat: jpeg`
-- `spec.omitBackground` – If `true`, capture with transparent background (PNG only)
-- `spec.scale` – Screenshot scale: `"css"` (CSS pixels) or `"device"` (device pixels)
-- `spec.format` – Viewport size: `xga`, `hd`, `full_hd`, `4k`, `4k2k`, or standard paper sizes
-- `spec.orientation` – Viewport orientation: `portrait` or `landscape` (default: `landscape`)
-- `spec.language` – Language for rendering: `de` or `en` (default: `de`)
+- `spec.imageFormat` -- `"png"` (default) or `"jpeg"`.
+- `spec.quality` -- JPEG quality (1--100). Only used when `imageFormat: jpeg`.
+- `spec.omitBackground` -- If `true`, capture with transparent background (PNG only).
+
+## How Components Are Resolved
+
+When `layoutPages` is **omitted** (the recommended default), the system resolves each ref automatically:
+
+1. **Page scan** -- All `LayoutPage` documents are scanned for children matching the ref `kind` + `name` (via inline `metadata.name` or `ref` field). If found, that page is rendered.
+2. **Standalone wrap** -- If no page contains the component but a standalone document with the matching `kind` and `name` exists (e.g., a `Table` defined in its own YAML file), bino synthesizes a bare-minimum wrapper page automatically and renders it.
+3. **Error** -- If neither is found, the build fails with a clear error message.
+
+This means you can screenshot **any named component** in your project without manually wiring up pages.
+
+When `layoutPages` **is set**, the system skips auto-discovery and only renders the specified pages. Use this when you need to control rendering params, page format, or when a component appears on multiple pages and you want a specific one.
 
 ## Component Targeting
 
-Screenshots target components by their `metadata.name`. The component must have a name defined:
+Components are targeted by their `kind` and `metadata.name`. There are two ways a component can have a name:
+
+### Inline Children (on a LayoutPage)
 
 ```yaml
-# In your LayoutPage
-apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
   name: dashboard
@@ -75,40 +105,70 @@ spec:
   children:
     - kind: ChartStructure
       metadata:
-        name: sales_chart    # This name is used in refs
+        name: sales_chart      # targetable as ChartStructure/sales_chart
       spec:
         dataset: sales_data
-        title: "Sales by Region"
+        chartTitle: Sales by Region
 ```
 
-Then reference it in the ScreenshotArtefact:
+### Standalone Components (own YAML file)
+
+```yaml
+# components/kpi_table.yaml
+kind: Table
+metadata:
+  name: kpi_table              # targetable as Table/kpi_table
+spec:
+  dataset: kpi_data
+  tableTitle: Key Performance Indicators
+```
+
+Both work identically in `refs`:
 
 ```yaml
 refs:
   - kind: ChartStructure
-    name: sales_chart
+    name: sales_chart          # found on dashboard page
+  - kind: Table
+    name: kpi_table            # standalone, auto-wrapped
 ```
 
 ## Examples
 
-### Basic Screenshot Export
+### Standalone Component Screenshot
+
+The simplest case -- screenshot a component defined in its own file.
+No `layoutPages`, no dedicated page needed:
 
 ```yaml
+# components/revenue_table.yaml
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_data
+  tableTitle: Revenue Overview
+  scenarios: [ac1, fc1]
+  variances: [dac1_fc1_pos]
+---
+# reports/screenshots.yaml
 apiVersion: bino.bi/v1alpha1
 kind: ScreenshotArtefact
 metadata:
-  name: chart_screenshots
+  name: table_export
 spec:
-  layoutPages: main_dashboard
-  filenamePrefix: dashboard
+  filenamePrefix: revenue
+  format: full-hd
+  scale: device
   refs:
-    - kind: ChartStructure
-      name: revenue_chart
+    - kind: Table
+      name: revenue_table
 ```
 
-Output: `dashboard-revenue_chart.png`
+Output: `revenue-revenue_table.png`
 
-### Multiple Components with JPEG
+### High-Resolution Multi-Component Export
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -116,15 +176,10 @@ kind: ScreenshotArtefact
 metadata:
   name: presentation_assets
 spec:
-  layoutPages:
-    - page1
-    - page2
   filenamePrefix: q4-presentation
-  filenamePattern: ref
-  imageFormat: jpeg
-  quality: 90
-  format: full_hd
-  orientation: landscape
+  format: full-hd
+  scale: device
+  imageFormat: png
   refs:
     - kind: ChartStructure
       name: sales_overview
@@ -135,9 +190,28 @@ spec:
 ```
 
 Output:
-- `q4-presentation-sales_overview.jpeg`
-- `q4-presentation-monthly_trend.jpeg`
-- `q4-presentation-kpi_summary.jpeg`
+- `q4-presentation-sales_overview.png`
+- `q4-presentation-monthly_trend.png`
+- `q4-presentation-kpi_summary.png`
+
+### JPEG with Quality Control
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: email_charts
+spec:
+  filenamePrefix: weekly-update
+  imageFormat: jpeg
+  quality: 85
+  format: hd
+  refs:
+    - kind: ChartStructure
+      name: weekly_chart
+```
+
+Output: `weekly-update-weekly_chart.jpeg`
 
 ### Indexed Filenames
 
@@ -147,119 +221,56 @@ kind: ScreenshotArtefact
 metadata:
   name: numbered_exports
 spec:
-  layoutPages: report_page
-  filenamePrefix: export
+  filenamePrefix: slide
   filenamePattern: index
-  refs:
-    - kind: ChartStructure
-      name: chart1
-    - kind: ChartStructure
-      name: chart2
-    - kind: Table
-      name: table1
-```
-
-Output:
-- `export-001.png`
-- `export-002.png`
-- `export-003.png`
-
-### High-Resolution Screenshots
-
-```yaml
-apiVersion: bino.bi/v1alpha1
-kind: ScreenshotArtefact
-metadata:
-  name: hires_charts
-spec:
-  layoutPages: dashboard
-  filenamePrefix: hires
-  format: 4k
+  format: full-hd
   scale: device
   refs:
     - kind: ChartStructure
-      name: main_chart
-```
-
-### Transparent Background (PNG)
-
-```yaml
-apiVersion: bino.bi/v1alpha1
-kind: ScreenshotArtefact
-metadata:
-  name: transparent_charts
-spec:
-  layoutPages: dashboard
-  filenamePrefix: transparent
-  imageFormat: png
-  omitBackground: true
-  refs:
+      name: chart_a
     - kind: ChartStructure
-      name: overlay_chart
-```
-
-## Complete Example
-
-Here's a full example showing a LayoutPage with named components and a ScreenshotArtefact that captures them:
-
-```yaml
-# pages.yaml
-apiVersion: bino.bi/v1alpha1
-kind: LayoutPage
-metadata:
-  name: quarterly_dashboard
-spec:
-  pageLayout: split-vertical
-  children:
-    - kind: ChartStructure
-      metadata:
-        name: sales_by_region
-      spec:
-        dataset: regional_sales
-        title: "Sales by Region"
-        scenarios:
-          - ac1
-        showCategories: true
+      name: chart_b
     - kind: Table
-      metadata:
-        name: top_products
-      spec:
-        dataset: product_performance
-        limit: 10
-        scenarios:
-          - ac1
-          - pp1
-        variances:
-          - dac1_pp1_pos
----
-# report.yaml
+      name: summary
+```
+
+Output: `slide-001.png`, `slide-002.png`, `slide-003.png`
+
+### Explicit Page Selection
+
+When a component exists on multiple pages (e.g., with different params) and you need a specific one:
+
+```yaml
 apiVersion: bino.bi/v1alpha1
 kind: ScreenshotArtefact
 metadata:
-  name: quarterly_charts
+  name: regional_charts
 spec:
   layoutPages:
-    - quarterly_dashboard
-  filenamePrefix: q4-2024
-  filenamePattern: ref
-  imageFormat: png
-  format: full_hd
-  orientation: landscape
-  language: en
+    - page: regional_dashboard
+      params:
+        REGION: EU
+  filenamePrefix: eu-dashboard
+  format: full-hd
+  scale: device
   refs:
     - kind: ChartStructure
-      name: sales_by_region
-    - kind: Table
-      name: top_products
+      name: regional_sales
 ```
 
-Running `bino build` will generate:
-- `q4-2024-sales_by_region.png`
-- `q4-2024-top_products.png`
+## Best Practices
+
+**Use `scale: device` for sharp images.** Without it, screenshots render at 1x CSS pixels which looks blurry on modern displays. The `device` setting renders at 2x (retina) resolution.
+
+**Prefer `full-hd` or `hd` format over paper sizes.** Paper sizes (`a4`, `letter`) are designed for print layouts. Screen formats give components more natural proportions for digital use.
+
+**Let refs auto-resolve.** Omit `layoutPages` unless you have a specific reason to set it. Auto-resolution keeps your manifests simple and avoids the format-matching pitfall (the page's `pageFormat` must match the artefact's `format`, otherwise the page is silently excluded).
+
+**Use standalone components for reusable exports.** Define components in their own YAML files (e.g., `components/kpi_table.yaml`) and reference them by name. This way the same component can be used in reports, preview, and screenshot exports.
+
+**Match `format` when using `layoutPages`.** If you explicitly set `layoutPages`, ensure the page's `pageFormat` matches the artefact's `format`. A `full-hd` artefact will not render an `a4` page -- the page is silently skipped. This is the most common cause of empty screenshots.
 
 ## Supported Component Kinds
-
-The following component kinds can be captured as screenshots:
 
 | Kind | Description |
 |------|-------------|
@@ -272,7 +283,7 @@ The following component kinds can be captured as screenshots:
 
 ## Notes
 
-- Components must have `metadata.name` defined to be targetable
-- The specified `layoutPages` must contain all referenced components
-- Screenshots are captured after the page has fully rendered (including async data loading)
-- Multiple ScreenshotArtefacts can target the same components with different settings
+- Components must have `metadata.name` defined to be targetable.
+- Screenshots are captured after the page has fully rendered (including async data loading).
+- Multiple `ScreenshotArtefact` documents can target the same components with different settings (e.g., PNG + JPEG, or different formats).
+- When auto-wrapping standalone components, the synthetic page inherits `format` and `orientation` from the artefact spec.
