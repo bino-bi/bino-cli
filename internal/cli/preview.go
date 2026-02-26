@@ -254,6 +254,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// Always render "All Pages" view for "/" route - this is the default view
 				// that shows all LayoutPages without any artefact filtering
 				allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+					Workdir:                  watchDir,
 					Language:                 "de",
 					Mode:                     pipeline.RenderModePreview,
 					EngineVersion:            engineVersion,
@@ -521,16 +522,16 @@ func appendUnique(slice []string, val string) []string {
 func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) string {
 	var b strings.Builder
 
-	b.WriteString(`<div id="bn-preview-header">`)
-	b.WriteString(`<span id="bn-preview-title">bino preview</span>`)
-	b.WriteString(`<select id="bn-preview-artefact-select">`)
+	b.WriteString(`<div id='bn-preview-header'>`)
+	b.WriteString(`<span id='bn-preview-title'>bino preview</span>`)
+	b.WriteString(`<select id='bn-preview-artefact-select'>`)
 
 	// "All Pages" option
 	allSelected := ""
 	if currentPath == "/" {
 		allSelected = ` selected`
 	}
-	b.WriteString(`<option value="/"` + allSelected + `>All Pages</option>`)
+	b.WriteString(`<option value='/'` + allSelected + `>All Pages</option>`)
 
 	// Separate ReportArtefacts and DocumentArtefacts
 	var reportArts, docArts []previewArtefactInfo
@@ -544,7 +545,7 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) str
 
 	// ReportArtefacts
 	if len(reportArts) > 0 {
-		b.WriteString(`<optgroup label="Report Artefacts">`)
+		b.WriteString(`<optgroup label='Report Artefacts'>`)
 		for _, art := range reportArts {
 			path := "/" + art.Name
 			selected := ""
@@ -555,9 +556,9 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) str
 			if art.Title != "" {
 				label = art.Title + " (" + art.Name + ")"
 			}
-			b.WriteString(`<option value="`)
+			b.WriteString(`<option value='`)
 			b.WriteString(html.EscapeString(path))
-			b.WriteString(`"`)
+			b.WriteString(`'`)
 			b.WriteString(selected)
 			b.WriteString(`>`)
 			b.WriteString(html.EscapeString(label))
@@ -568,7 +569,7 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) str
 
 	// DocumentArtefacts
 	if len(docArts) > 0 {
-		b.WriteString(`<optgroup label="Document Artefacts">`)
+		b.WriteString(`<optgroup label='Document Artefacts'>`)
 		for _, art := range docArts {
 			path := "/doc/" + art.Name
 			selected := ""
@@ -579,9 +580,9 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) str
 			if art.Title != "" {
 				label = art.Title + " (" + art.Name + ")"
 			}
-			b.WriteString(`<option value="`)
+			b.WriteString(`<option value='`)
 			b.WriteString(html.EscapeString(path))
-			b.WriteString(`"`)
+			b.WriteString(`'`)
 			b.WriteString(selected)
 			b.WriteString(`>`)
 			b.WriteString(html.EscapeString(label))

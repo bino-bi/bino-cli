@@ -176,7 +176,7 @@ func renderFontLinks(fonts []fontAsset) string {
 	}
 	var b strings.Builder
 	for _, font := range fonts {
-		b.WriteString("  <link rel=\"stylesheet\"")
+		b.WriteString("  <link rel='stylesheet'")
 		writeAttr(&b, "href", font.href)
 		if font.mediaType != "" {
 			writeAttr(&b, "type", font.mediaType)
@@ -208,7 +208,7 @@ func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, 
 	// The template engine CSS requires both page-format and page-orientation
 	// to apply correct sizing and @page rules.
 	if payload.Spec.PageFormat == "" {
-		if targetFormat != "" {
+		if targetFormat != "" && isPageLayoutFormat(targetFormat) {
 			payload.Spec.PageFormat = targetFormat
 		} else {
 			payload.Spec.PageFormat = defaultLayoutPageFormat
@@ -257,7 +257,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 			continue
 		}
 		// Build slot div with source location attributes for click-to-source in preview
-		b.WriteString(fmt.Sprintf("  <div slot=\"slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\"", slotIdx))
+		b.WriteString(fmt.Sprintf("  <div slot='slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx))
 		writeSourceAttrs(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -293,7 +293,7 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 			continue
 		}
 		// Build slot div with source location attributes for click-to-source in preview
-		b.WriteString(fmt.Sprintf("  <div slot=\"card-slot-%d\" style=\"flex: 1 1 0%%; height: 100%%;\"", slotIdx))
+		b.WriteString(fmt.Sprintf("  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx))
 		writeSourceAttrs(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -602,9 +602,9 @@ func renderChartTreeComponent(spec chartTreeSpec, rc *renderCtx) (string, error)
 		if nodeContent == "" {
 			continue // Skip nodes that couldn't be rendered (e.g., filtered refs)
 		}
-		b.WriteString("\n  <div slot=\"")
+		b.WriteString("\n  <div slot='")
 		b.WriteString(html.EscapeString(node.ID))
-		b.WriteString("\">")
+		b.WriteString("'>")
 		b.WriteString(nodeContent)
 		b.WriteString("</div>")
 	}
@@ -759,9 +759,9 @@ func renderGridComponent(spec gridSpec, rc *renderCtx) (string, error) {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
 		slotName := child.Row.String() + "-" + child.Column.String()
-		b.WriteString("\n  <div slot=\"")
+		b.WriteString("\n  <div slot='")
 		b.WriteString(html.EscapeString(slotName))
-		b.WriteString("\">")
+		b.WriteString("'>")
 		b.WriteString(childContent)
 		b.WriteString("</div>")
 	}
@@ -885,9 +885,9 @@ func writeAttr(b *strings.Builder, name, value string) {
 	}
 	b.WriteByte(' ')
 	b.WriteString(name)
-	b.WriteString("=\"")
+	b.WriteString("='")
 	b.WriteString(html.EscapeString(value))
-	b.WriteString("\"")
+	b.WriteString("'")
 }
 
 // writeSourceAttrs writes data attributes for click-to-source functionality in preview.
@@ -927,16 +927,34 @@ func indentBlock(s string, spaces int) string {
 	return strings.Join(lines, "\n")
 }
 
+// knownPageFormats lists the page layout formats supported by the template engine.
+// Values like "pdf" are output formats, not page layout formats, and must not
+// be used to filter or default LayoutPage page-format attributes.
+var knownPageFormats = map[string]bool{
+	"xga": true, "hd": true, "full-hd": true, "4k": true, "4k2k": true,
+	"a4": true, "a3": true, "a2": true, "a1": true, "a0": true,
+	"letter": true, "legal": true,
+}
+
+// isPageLayoutFormat reports whether format is a recognised page layout format.
+func isPageLayoutFormat(format string) bool {
+	return knownPageFormats[strings.ToLower(strings.TrimSpace(format))]
+}
+
 // layoutPageMatchesFormat checks if a page format matches the target format.
+// If targetFormat is not a recognised page layout format (e.g. "pdf"), the
+// page is always included because non-layout formats cannot meaningfully
+// filter pages.
 func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
-	if strings.TrimSpace(targetFormat) == "" {
+	target := strings.TrimSpace(targetFormat)
+	if target == "" || !isPageLayoutFormat(target) {
 		return true
 	}
 	format := strings.TrimSpace(pageFormat)
 	if format == "" {
 		format = defaultLayoutPageFormat
 	}
-	return strings.EqualFold(format, targetFormat)
+	return strings.EqualFold(format, target)
 }
 
 // RenderComponentFromSpec renders a component HTML from its kind and spec JSON.

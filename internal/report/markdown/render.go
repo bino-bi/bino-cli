@@ -203,7 +203,7 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 
 		// Add page break between files (except before the first one)
 		if i > 0 && opts.PageBreakBetweenFiles {
-			contentBuf.WriteString(`<div class="bn-page-break"></div>`)
+			contentBuf.WriteString(`<div class='bn-page-break'></div>`)
 			contentBuf.WriteString("\n")
 		}
 
@@ -227,7 +227,7 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 
 	// Render TOC if enabled and has items
 	if opts.TableOfContents && len(tocTree.Items) > 0 {
-		tocBuf.WriteString(`<nav class="bn-toc"><h2>Table of Contents</h2>`)
+		tocBuf.WriteString(`<nav class='bn-toc'><h2>Table of Contents</h2>`)
 		renderTOCWithPageNumbers(&tocBuf, tocTree.Items, opts.TOCPageNumbers)
 		tocBuf.WriteString(`</nav>`)
 	}
@@ -257,7 +257,7 @@ func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers ma
 		// Add page number first (floated right) if available
 		if pageNumbers != nil && len(item.ID) > 0 {
 			if pageNum, ok := pageNumbers[itemID]; ok && pageNum > 0 {
-				buf.WriteString(`<span class="bn-toc-page">`)
+				buf.WriteString(`<span class='bn-toc-page'>`)
 				fmt.Fprintf(buf, "%d", pageNum)
 				buf.WriteString(`</span>`)
 			}
@@ -265,9 +265,9 @@ func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers ma
 
 		// Write the link with title
 		if len(item.ID) > 0 {
-			buf.WriteString(`<a href="#`)
+			buf.WriteString(`<a href='#`)
 			buf.WriteString(html.EscapeString(itemID))
-			buf.WriteString(`">`)
+			buf.WriteString(`'>`)
 		}
 		buf.WriteString(html.EscapeString(string(item.Title)))
 		if len(item.ID) > 0 {
@@ -371,7 +371,7 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 		contextBody.WriteByte('\n')
 	}
 	// Add the markdown content wrapped in a document section
-	contextBody.WriteString(`<section class="bn-document-content">`)
+	contextBody.WriteString(`<section class='bn-document-content'>`)
 	contextBody.WriteString("\n")
 	contextBody.Write(content)
 	contextBody.WriteString("\n</section>")
@@ -405,13 +405,13 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 	if err := fullDocumentTemplate.Execute(&buf, data); err != nil {
 		// Fallback to basic wrapping if template fails
 		buf.Reset()
-		buf.WriteString("<!DOCTYPE html><html lang=\"")
+		buf.WriteString("<!DOCTYPE html><html lang='")
 		buf.WriteString(html.EscapeString(locale))
-		buf.WriteString("\"><head><meta charset=\"utf-8\"><title>")
+		buf.WriteString("'><head><meta charset='utf-8'><title>")
 		buf.WriteString(html.EscapeString(opts.Title))
-		buf.WriteString("</title></head><body><bn-context locale=\"")
+		buf.WriteString("</title></head><body><bn-context locale='")
 		buf.WriteString(html.EscapeString(locale))
-		buf.WriteString("\">")
+		buf.WriteString("'>")
 		buf.Write(content)
 		buf.WriteString("</bn-context></body></html>")
 	}
@@ -426,9 +426,9 @@ func writeAttr(b *strings.Builder, name, value string) {
 	}
 	b.WriteByte(' ')
 	b.WriteString(name)
-	b.WriteString("=\"")
+	b.WriteString("='")
 	b.WriteString(html.EscapeString(value))
-	b.WriteString("\"")
+	b.WriteString("'")
 }
 
 // fullTemplateData holds data for the full document template.
@@ -443,14 +443,14 @@ type fullTemplateData struct {
 
 // fullDocumentTemplate is the HTML template for full bino document rendering.
 var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
-<html dir="ltr" lang="{{.Locale}}">
+<html dir='ltr' lang='{{.Locale}}'>
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0'>
   <title>{{.Title}}</title>
-  <script type="module" src="/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js"></script>
-  <script nomodule src="/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js"></script>
+  <script type='module' src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
+  <script nomodule src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
   <style>
     /* Page format */
     {{.PageCSS}}
@@ -691,7 +691,7 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <bn-context locale="{{.Locale}}">
+  <bn-context locale='{{.Locale}}'>
 {{.ContextBody}}
   </bn-context>
 </body>
@@ -777,7 +777,7 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 
 	// Wrap in figure if caption is present
 	if caption != "" {
-		_, _ = w.WriteString(`<figure class="bn-figure">`)
+		_, _ = w.WriteString(`<figure class='bn-figure'>`)
 	}
 
 	// Try to resolve the reference
@@ -787,11 +787,11 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 			// Render the actual component
 			componentHTML, err := RenderComponentHTML(doc, r.rc.AssetURLs)
 			if err == nil {
-				_, _ = w.WriteString(`<div class="bn-ref-container" data-ref-kind="`)
+				_, _ = w.WriteString(`<div class='bn-ref-container' data-ref-kind='`)
 				_, _ = w.WriteString(html.EscapeString(kind))
-				_, _ = w.WriteString(`" data-ref-name="`)
+				_, _ = w.WriteString(`' data-ref-name='`)
 				_, _ = w.WriteString(html.EscapeString(name))
-				_, _ = w.WriteString(`">`)
+				_, _ = w.WriteString(`'>`)
 				_, _ = w.WriteString(componentHTML)
 				_, _ = w.WriteString(`</div>`)
 
@@ -808,11 +808,11 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 	}
 
 	// Fallback: render as placeholder reference
-	_, _ = w.WriteString(`<bn-ref kind="`)
+	_, _ = w.WriteString(`<bn-ref kind='`)
 	_, _ = w.WriteString(html.EscapeString(kind))
-	_, _ = w.WriteString(`" name="`)
+	_, _ = w.WriteString(`' name='`)
 	_, _ = w.WriteString(html.EscapeString(name))
-	_, _ = w.WriteString(`"></bn-ref>`)
+	_, _ = w.WriteString(`'></bn-ref>`)
 
 	// Close figure and add caption for fallback case
 	if caption != "" {
