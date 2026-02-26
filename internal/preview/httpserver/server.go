@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/runtimecfg"
 )
@@ -183,6 +184,7 @@ func New(cfg Config) (*Server, error) {
 	mux.Handle("/cdn/", compressionHandlerFunc(srv.handleCDN))
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
+	mux.Handle("/__bino/", web.Handler("/__bino/"))
 
 	srv.httpServer = &http.Server{Handler: mux}
 	srv.contentFn = StaticContent([]byte("Hello world"), "text/plain; charset=utf-8")
