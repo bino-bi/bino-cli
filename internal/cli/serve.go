@@ -1983,7 +1983,7 @@ func withServeStyles(frameHTML []byte) []byte {
 	// Build new body structure
 	var sb strings.Builder
 	sb.WriteString(resultStr[:bodyEnd])
-	sb.WriteString(`<div id="bino-control-panel"></div><div id="bino-content-area">`)
+	sb.WriteString(`<div id='bino-control-panel'></div><div id='bino-content-area'>`)
 	sb.WriteString(originalBodyContent)
 	sb.WriteString(`</div>`)
 	sb.WriteString(resultStr[bodyCloseTag:])
