@@ -356,7 +356,8 @@ type ScreenshotOptions struct {
 	ReadyConsolePrefix    string
 	Refs                  []ScreenshotRef
 	FilenamePrefix        string
-	FilenamePattern       string // "index" or "ref"
+	FilenamePattern       string  // "index" or "ref"
+	Scale                 float64 // device scale factor (e.g. 2.0 for retina)
 }
 
 // ScreenshotRef identifies a component to capture a screenshot of.
@@ -406,6 +407,12 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 		viewportWidth, viewportHeight = viewportHeight, viewportWidth
 	}
 
+	// Apply device scale factor for high-DPI screenshots
+	scaleFactor := opts.Scale
+	if scaleFactor <= 0 {
+		scaleFactor = 1.0
+	}
+
 	allocCtx, allocCancel := newExecAllocator(ctx, opts.ChromePath, opts.Debug)
 	defer allocCancel()
 
@@ -423,7 +430,7 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 
 	// Navigate with viewport emulation and wait for network idle
 	if err := chromedp.Run(taskCtx,
-		chromedp.EmulateViewport(int64(viewportWidth), int64(viewportHeight)),
+		chromedp.EmulateViewport(int64(viewportWidth), int64(viewportHeight), chromedp.EmulateScale(scaleFactor)),
 		chromedp.Navigate(opts.URL),
 		waitNetworkIdle(),
 	); err != nil {

@@ -5,6 +5,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -537,6 +538,7 @@ type RenderScreenshotArtefactOptions struct {
 
 // RenderScreenshotArtefactHTML generates HTML for capturing screenshots.
 // It renders the specified layout pages and their dependencies.
+// When layoutPages is empty, pages are auto-discovered from refs.
 // The workdir parameter is required for dataset execution.
 func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.ScreenshotArtefact, opts RenderScreenshotArtefactOptions) (RenderResult, error) {
 	// Build constraint context from screenshot artefact
@@ -551,8 +553,23 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 		return RenderResult{}, err
 	}
 
+	// Determine which layout pages to render
+	layoutPages := artefact.Spec.LayoutPages
+	if len(layoutPages) == 0 {
+		// Auto-discover pages containing the referenced components,
+		// and synthesize wrapper pages for standalone components not on any page.
+		var syntheticDocs []config.Document
+		layoutPages, syntheticDocs, err = resolveScreenshotRefs(filtered, artefact.Spec.Refs, artefact.Spec.Format, artefact.Spec.Orientation)
+		if err != nil {
+			return RenderResult{}, fmt.Errorf("screenshot artefact %s: %w", artefact.Document.Name, err)
+		}
+		if len(syntheticDocs) > 0 {
+			filtered = append(filtered, syntheticDocs...)
+		}
+	}
+
 	// Further filter to only include specified layout pages and their dependencies
-	filtered, err = filterDocsForLayoutPages(filtered, artefact.Spec.LayoutPages)
+	filtered, err = filterDocsForLayoutPages(filtered, layoutPages)
 	if err != nil {
 		return RenderResult{}, err
 	}
@@ -618,6 +635,114 @@ func buildLiveConstraintContext(artefact config.LiveArtefact, mode spec.Mode) (*
 		Mode:         mode,
 		ArtefactKind: "livereport",
 	}, nil
+}
+
+// resolveScreenshotRefs resolves screenshot refs to layout pages.
+// For each ref it first looks for an existing LayoutPage containing a matching child.
+// If none is found it checks whether a standalone component document exists with
+// the matching kind+name and synthesizes a minimal wrapper LayoutPage for it.
+// Returns the list of page names to render and any synthetic documents to inject.
+func resolveScreenshotRefs(docs []config.Document, refs []config.ScreenshotRef, format, orientation string) (pages []string, syntheticDocs []config.Document, err error) {
+	if len(refs) == 0 {
+		return nil, nil, fmt.Errorf("no refs specified")
+	}
+
+	type pageChild struct {
+		Kind     string `json:"kind"`
+		Ref      string `json:"ref,omitempty"`
+		Metadata struct {
+			Name string `json:"name"`
+		} `json:"metadata"`
+	}
+	type pageLayout struct {
+		Spec struct {
+			Children []pageChild `json:"children"`
+		} `json:"spec"`
+	}
+
+	// Build lookup set from refs
+	type refKey struct{ Kind, Name string }
+	refSet := make(map[refKey]bool, len(refs))
+	for _, r := range refs {
+		refSet[refKey{r.Kind, r.Name}] = true
+	}
+
+	// Phase 1: scan LayoutPages for children matching the refs
+	resolved := make(map[refKey]bool)
+	seen := make(map[string]bool)
+	for _, doc := range docs {
+		if doc.Kind != "LayoutPage" {
+			continue
+		}
+		var layout pageLayout
+		if err := json.Unmarshal(doc.Raw, &layout); err != nil {
+			continue
+		}
+		for _, child := range layout.Spec.Children {
+			name := child.Metadata.Name
+			if name == "" {
+				name = child.Ref
+			}
+			key := refKey{child.Kind, name}
+			if name != "" && refSet[key] {
+				resolved[key] = true
+				if !seen[doc.Name] {
+					seen[doc.Name] = true
+					pages = append(pages, doc.Name)
+				}
+			}
+		}
+	}
+
+	// Phase 2: for unresolved refs, look for standalone component documents
+	// and synthesize minimal wrapper pages
+	for _, r := range refs {
+		key := refKey{r.Kind, r.Name}
+		if resolved[key] {
+			continue
+		}
+		// Look for a standalone document matching kind+name
+		found := false
+		for _, doc := range docs {
+			if doc.Kind == r.Kind && doc.Name == r.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, nil, fmt.Errorf("ref %s/%s not found as page child or standalone component", r.Kind, r.Name)
+		}
+
+		// Synthesize a minimal LayoutPage that wraps this component via ref
+		pageName := "_screenshot_" + strings.ToLower(r.Kind) + "_" + r.Name
+		raw, _ := json.Marshal(map[string]any{
+			"apiVersion": "bino.bi/v1alpha1",
+			"kind":       "LayoutPage",
+			"metadata":   map[string]any{"name": pageName},
+			"spec": map[string]any{
+				"pageFormat":      format,
+				"pageOrientation": orientation,
+				"children": []map[string]any{
+					{"kind": r.Kind, "ref": r.Name},
+				},
+			},
+		})
+		syntheticDocs = append(syntheticDocs, config.Document{
+			Kind: "LayoutPage",
+			Name: pageName,
+			Raw:  raw,
+		})
+		pages = append(pages, pageName)
+	}
+
+	if len(pages) == 0 {
+		refNames := make([]string, len(refs))
+		for i, r := range refs {
+			refNames[i] = r.Kind + "/" + r.Name
+		}
+		return nil, nil, fmt.Errorf("no layout pages found containing refs: %s", strings.Join(refNames, ", "))
+	}
+	return pages, syntheticDocs, nil
 }
 
 // filterDocsForLayoutPages filters documents to include only the specified layout pages

@@ -1329,6 +1329,12 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		}
 	}
 
+	// Map scale setting to device scale factor
+	var scaleFactor float64
+	if strings.EqualFold(cfg.Artefact.Spec.Scale, "device") {
+		scaleFactor = 2.0
+	}
+
 	screenshotOpts := chrome.ScreenshotOptions{
 		URL:                   server.URL(),
 		OutputDir:             cfg.OutputDir,
@@ -1342,6 +1348,7 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		Refs:                  chromeRefs,
 		FilenamePrefix:        cfg.Artefact.Spec.FilenamePrefix,
 		FilenamePattern:       cfg.Artefact.Spec.FilenamePattern,
+		Scale:                 scaleFactor,
 	}
 
 	chromeResults, screenshotErr := chrome.RenderScreenshots(ctx, screenshotOpts)
