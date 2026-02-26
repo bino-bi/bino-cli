@@ -57,7 +57,7 @@ func TestRenderLayoutChildWithRef(t *testing.T) {
 	html := string(result.HTML)
 
 	// Verify the chart is rendered with original title.
-	if !strings.Contains(html, `chart-title="Original Title"`) {
+	if !strings.Contains(html, `chart-title='Original Title'`) {
 		t.Fatalf("expected chart with original title in HTML, got:\n%s", html)
 	}
 	if !strings.Contains(html, `<bn-chart-time`) {
@@ -107,11 +107,11 @@ func TestRenderLayoutChildWithRefAndOverride(t *testing.T) {
 	html := string(result.HTML)
 
 	// Verify the chart is rendered with overridden title.
-	if !strings.Contains(html, `chart-title="Overridden Title"`) {
+	if !strings.Contains(html, `chart-title='Overridden Title'`) {
 		t.Fatalf("expected chart with overridden title in HTML, got:\n%s", html)
 	}
 	// Verify the original level is preserved.
-	if !strings.Contains(html, `level="category"`) {
+	if !strings.Contains(html, `level='category'`) {
 		t.Fatalf("expected level=category to be preserved from base spec, got:\n%s", html)
 	}
 }
@@ -271,7 +271,7 @@ func TestRenderLayoutChildWithLayoutCardRef(t *testing.T) {
 		t.Fatalf("expected bn-layout-card element in HTML, got:\n%s", html)
 	}
 	// Verify the text inside the card is rendered.
-	if !strings.Contains(html, `value="&lt;p&gt;Hello from card&lt;/p&gt;"`) {
+	if !strings.Contains(html, `value='&lt;p&gt;Hello from card&lt;/p&gt;'`) {
 		t.Fatalf("expected text content from card in HTML, got:\n%s", html)
 	}
 }
@@ -323,11 +323,11 @@ func TestRenderLayoutChildWithLayoutCardRefAndOverride(t *testing.T) {
 	html := string(result.HTML)
 
 	// Verify the card has overridden title-image.
-	if !strings.Contains(html, `title-image="overridden.png"`) {
+	if !strings.Contains(html, `title-image='overridden.png'`) {
 		t.Fatalf("expected overridden title-image in HTML, got:\n%s", html)
 	}
 	// Verify the original layout is preserved.
-	if !strings.Contains(html, `card-layout="single"`) {
+	if !strings.Contains(html, `card-layout='single'`) {
 		t.Fatalf("expected card-layout to be preserved from base spec, got:\n%s", html)
 	}
 }

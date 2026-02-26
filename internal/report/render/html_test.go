@@ -18,6 +18,10 @@ func TestLayoutPageMatchesFormat(t *testing.T) {
 		{name: "default page format matches xga", pageFormat: "", target: "xga", wantAllowed: true},
 		{name: "case insensitive compare", pageFormat: "HD", target: "hd", wantAllowed: true},
 		{name: "mismatch filtered", pageFormat: "a4", target: "hd", wantAllowed: false},
+		{name: "pdf output format includes all pages", pageFormat: "xga", target: "pdf", wantAllowed: true},
+		{name: "pdf output format includes a4 page", pageFormat: "a4", target: "pdf", wantAllowed: true},
+		{name: "pdf output format includes default page", pageFormat: "", target: "pdf", wantAllowed: true},
+		{name: "unknown format includes all pages", pageFormat: "a4", target: "png", wantAllowed: true},
 	}
 
 	for _, tt := range tests {
@@ -113,7 +117,7 @@ func TestRenderInternationalizations(t *testing.T) {
 	if len(segments) != 1 {
 		t.Fatalf("expected 1 segment, got %d", len(segments))
 	}
-	want := `<bn-internationalization code="de-DE" namespace="default">{&#34;hello&#34;:&#34;Hallo&#34;}</bn-internationalization>`
+	want := `<bn-internationalization code='de-DE' namespace='default'>{&#34;hello&#34;:&#34;Hallo&#34;}</bn-internationalization>`
 	got := strings.ReplaceAll(segments[0], "\n", "")
 	if got != want {
 		t.Fatalf("segment mismatch\n got: %s\nwant: %s", got, want)

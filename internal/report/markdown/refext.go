@@ -118,14 +118,14 @@ func (r *refRenderer) renderRef(w util.BufWriter, source []byte, node ast.Node, 
 
 	// Wrap in figure if caption is present
 	if n.Caption != "" {
-		_, _ = w.WriteString(`<figure class="bn-figure">`)
+		_, _ = w.WriteString(`<figure class='bn-figure'>`)
 	}
 
-	_, _ = w.WriteString(`<bn-ref kind="`)
+	_, _ = w.WriteString(`<bn-ref kind='`)
 	_, _ = w.WriteString(n.RefKind)
-	_, _ = w.WriteString(`" name="`)
+	_, _ = w.WriteString(`' name='`)
 	_, _ = w.WriteString(n.RefName)
-	_, _ = w.WriteString(`"></bn-ref>`)
+	_, _ = w.WriteString(`'></bn-ref>`)
 
 	// Close figure and add caption
 	if n.Caption != "" {

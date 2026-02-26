@@ -89,7 +89,7 @@ func RenderFiles(ctx context.Context, files []string, opts RenderOptions) ([]byt
 
 		// Add page break between files (except before the first one)
 		if i > 0 && opts.PageBreakBetweenFiles {
-			contentBuf.WriteString(`<div class="bn-page-break"></div>`)
+			contentBuf.WriteString(`<div class='bn-page-break'></div>`)
 			contentBuf.WriteString("\n")
 		}
 
@@ -115,7 +115,7 @@ func RenderFiles(ctx context.Context, files []string, opts RenderOptions) ([]byt
 	if opts.TableOfContents && len(tocTree.Items) > 0 {
 		tocList := toc.RenderList(tocTree)
 		if tocList != nil {
-			tocBuf.WriteString(`<nav class="bn-toc"><h2>Table of Contents</h2>`)
+			tocBuf.WriteString(`<nav class='bn-toc'><h2>Table of Contents</h2>`)
 			if err := goldmark.DefaultRenderer().Render(&tocBuf, nil, tocList); err != nil {
 				logger.Warnf("TOC rendering failed: %v", err)
 			} else {

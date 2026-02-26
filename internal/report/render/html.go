@@ -20,13 +20,13 @@ const (
 
 // baseTemplate format args: locale, engineVersion, engineVersion, fontMarkup, orientationAttr, locale, body
 var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
-<html dir="ltr" lang="%s">
+<html dir='ltr' lang='%s'>
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
-  <script type="module" src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
-  <script nomodule src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0'>
+  <script type='module' src='/cdn/bn-template-engine/%s/bn-template-engine.esm.js'></script>
+  <script nomodule src='/cdn/bn-template-engine/%s/bn-template-engine.esm.js'></script>
   <style>
     html,
     body {
@@ -39,7 +39,7 @@ var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
 %s
 </head>
 <body>
-	<bn-context%s locale="%s">
+	<bn-context%s locale='%s'>
 %s
   </bn-context>
 </body>
@@ -52,13 +52,13 @@ var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
 // via SSE to reduce initial page load time.
 // Format args: locale, engineVersion, engineVersion, fontMarkup, locale
 var frameTemplate = strings.TrimSpace(`<!DOCTYPE html>
-<html dir="ltr" lang="%s">
+<html dir='ltr' lang='%s'>
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
-  <script type="module" src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
-  <script nomodule src="/cdn/bn-template-engine/%s/bn-template-engine.esm.js"></script>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0'>
+  <script type='module' src='/cdn/bn-template-engine/%s/bn-template-engine.esm.js'></script>
+  <script nomodule src='/cdn/bn-template-engine/%s/bn-template-engine.esm.js'></script>
   <style>
     html,
     body {
@@ -71,8 +71,8 @@ var frameTemplate = strings.TrimSpace(`<!DOCTYPE html>
 %s
 </head>
 <body>
-  <bn-context locale="%s">
-    <div class="bn-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#6b7280;">
+  <bn-context locale='%s'>
+    <div class='bn-loading' style='display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#6b7280;'>
       Loading report…
     </div>
   </bn-context>
@@ -84,7 +84,7 @@ var frameTemplate = strings.TrimSpace(`<!DOCTYPE html>
 // contextTemplate wraps context-only content in a bn-context element for SSE delivery.
 // This is used by FrameResult.ContextHTML so the client-side swapContext logic can
 // parse and replace the bn-context element.
-var contextTemplate = strings.TrimSpace(`<bn-context%s locale="%s">
+var contextTemplate = strings.TrimSpace(`<bn-context%s locale='%s'>
 %s
 </bn-context>
 `)
@@ -257,7 +257,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 
 	var body strings.Builder
 	if len(segments) == 0 {
-		body.WriteString("<section class=\"empty-state\">Define a LayoutPage or Text manifest to see the preview.</section>")
+		body.WriteString("<section class='empty-state'>Define a LayoutPage or Text manifest to see the preview.</section>")
 	} else {
 		for _, segment := range segments {
 			body.WriteString(segment)
@@ -270,7 +270,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	// render-orientation is only added in build mode for PDF generation
 	if mode == RenderModeBuild {
 		if trimmed := strings.TrimSpace(renderOrientation); trimmed != "" {
-			orientationAttr = fmt.Sprintf(" render-orientation=\"%s\"", html.EscapeString(trimmed))
+			orientationAttr = fmt.Sprintf(" render-orientation='%s'", html.EscapeString(trimmed))
 		}
 	}
 	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, fontMarkup, orientationAttr, html.EscapeString(locale), body.String())
@@ -356,7 +356,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 
 	var body strings.Builder
 	if len(segments) == 0 {
-		body.WriteString("<section class=\"empty-state\">Define a LayoutPage or Text manifest to see the preview.</section>")
+		body.WriteString("<section class='empty-state'>Define a LayoutPage or Text manifest to see the preview.</section>")
 	} else {
 		for _, segment := range segments {
 			body.WriteString(segment)
