@@ -32,7 +32,7 @@ The style object has the following top-level sections:
 | `bn-text` | Style settings for text components (extensible) |
 | `bn-chart-time` | Style settings for time/column charts |
 | `bn-chart-structure` | Style settings for structure/bar charts |
-| `bn-chart-tree` | Style settings for hierarchical tree diagrams |
+| `bn-tree` | Style settings for hierarchical tree diagrams |
 | `bn-grid` | Style settings for grid layouts with row/column headers |
 
 ---
@@ -136,7 +136,7 @@ All scale factors are multiplied by `global.fontSizePx` to calculate pixel value
 
 ---
 
-## Tree chart style (`bn-chart-tree`)
+## Tree chart style (`bn-tree`)
 
 Style settings for hierarchical tree diagrams.
 
@@ -149,7 +149,7 @@ Style settings for hierarchical tree diagrams.
 | `operatorColor` | string | `#404040` | Color for operator nodes (CSS color) |
 
 ```yaml
-bn-chart-tree:
+bn-tree:
   edgeColor: "#606060"
   edgeWidth: 2
   operatorCircleRadius: 12
@@ -301,7 +301,7 @@ spec:
         neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
         neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
 
-    bn-chart-tree:
+    bn-tree:
       edgeColor: "#505050"
       edgeWidth: 1.5
       operatorCircleRadius: 12

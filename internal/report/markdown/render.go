@@ -75,7 +75,7 @@ func NewRenderContext(docs []config.Document, datasetResults []dataset.Result, d
 	// Build document index for ref resolution
 	for _, doc := range docs {
 		switch doc.Kind {
-		case "Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image", "LayoutCard", "Grid":
+		case "Text", "Table", "ChartStructure", "ChartTime", "Tree", "Image", "LayoutCard", "Grid":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
 		}
