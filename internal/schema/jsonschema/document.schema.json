@@ -23,7 +23,7 @@
         "LayoutCard",
         "ChartStructure",
         "ChartTime",
-        "ChartTree",
+        "Tree",
         "Grid",
         "Table",
         "ComponentStyle",
@@ -156,12 +156,12 @@
     {
       "if": {
         "properties": {
-          "kind": { "const": "ChartTree" }
+          "kind": { "const": "Tree" }
         }
       },
       "then": {
         "properties": {
-          "spec": { "$ref": "#/$defs/chartTreeSpec" }
+          "spec": { "$ref": "#/$defs/treeSpec" }
         }
       }
     },
@@ -1621,7 +1621,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["ChartStructure", "ChartTime", "ChartTree", "Table", "LayoutCard", "Text"],
+          "enum": ["ChartStructure", "ChartTime", "Tree", "Table", "LayoutCard", "Text"],
           "description": "Kind of the component to capture (for example 'ChartStructure', 'ChartTime', 'Table')."
         },
         "name": {
@@ -1885,7 +1885,7 @@
         "bn-text": { "$ref": "#/$defs/textStyle" },
         "bn-chart-time": { "$ref": "#/$defs/timeChartStyle" },
         "bn-chart-structure": { "$ref": "#/$defs/structureChartStyle" },
-        "bn-chart-tree": { "$ref": "#/$defs/treeChartStyle" }
+        "bn-tree": { "$ref": "#/$defs/treeStyle" }
       },
       "additionalProperties": true
     },
@@ -1945,9 +1945,9 @@
       },
       "additionalProperties": true
     },
-    "treeChartStyle": {
+    "treeStyle": {
       "type": "object",
-      "description": "Style settings for bn-chart-tree (hierarchical tree diagrams).",
+      "description": "Style settings for bn-tree (hierarchical tree diagrams).",
       "properties": {
         "edgeColor": {
           "type": "string",
@@ -2529,7 +2529,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Grid", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "Tree", "Grid", "LayoutCard", "Image"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -2605,12 +2605,12 @@
         {
           "if": {
             "properties": {
-              "kind": { "const": "ChartTree" }
+              "kind": { "const": "Tree" }
             }
           },
           "then": {
             "properties": {
-              "spec": { "$ref": "#/$defs/chartTreeSpec" }
+              "spec": { "$ref": "#/$defs/treeSpec" }
             }
           }
         },
@@ -2964,10 +2964,10 @@
         }
       }
     },
-    "chartTreeSpec": {
+    "treeSpec": {
       "type": "object",
       "required": ["edges"],
-      "description": "Configuration for a ChartTree component. Tree charts display hierarchical structures with nodes connected by edges, commonly used for driver trees and decomposition diagrams.",
+      "description": "Configuration for a Tree component. Trees display hierarchical structures with nodes connected by edges, commonly used for driver trees and decomposition diagrams.",
       "properties": {
         "edges": {
           "description": "JSON array defining connections between nodes. Each edge specifies a source (from) and target (to) node ID, with optional operator and styling.",
@@ -3046,13 +3046,13 @@
         "nodes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/chartTreeNode"
+            "$ref": "#/$defs/treeNode"
           },
           "description": "Array of node definitions with content for each node in the tree."
         }
       }
     },
-    "chartTreeNode": {
+    "treeNode": {
       "type": "object",
       "required": ["id", "kind"],
       "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, or ChartTime component, either inline or by reference.",
@@ -3092,7 +3092,7 @@
           },
           "then": {
             "properties": {
-              "spec": { "$ref": "#/$defs/chartTreeLabelSpec" }
+              "spec": { "$ref": "#/$defs/treeLabelSpec" }
             }
           }
         },
@@ -3146,7 +3146,7 @@
         }
       ]
     },
-    "chartTreeLabelSpec": {
+    "treeLabelSpec": {
       "type": "object",
       "required": ["value"],
       "description": "Configuration for a Label component in a tree node. Labels display simple text or HTML content.",
@@ -3273,7 +3273,7 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartTree", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "Tree", "Image"],
           "description": "The type of component to render in this child."
         },
         "metadata": {
@@ -3320,8 +3320,8 @@
           "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
         },
         {
-          "if": { "properties": { "kind": { "const": "ChartTree" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/chartTreeSpec" } } }
+          "if": { "properties": { "kind": { "const": "Tree" } } },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/treeSpec" } } }
         },
         {
           "if": { "properties": { "kind": { "const": "Image" } } },

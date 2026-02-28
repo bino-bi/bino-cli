@@ -152,11 +152,11 @@ func parseDataSetSpec(raw json.RawMessage) (dataSetSpec, error) {
 }
 
 // extractDatasets parses the dataset field from a component manifest.
-// For ChartTree components, it also extracts datasets from nodes.
+// For Tree components, it also extracts datasets from nodes.
 func extractDatasets(raw json.RawMessage) ([]string, error) {
 	var payload struct {
 		Dataset reportspec.DatasetList `json:"dataset"`
-		Nodes   []chartTreeNodeSpec    `json:"nodes"`
+		Nodes   []treeNodeSpec    `json:"nodes"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("dataset field: %w", err)
@@ -164,7 +164,7 @@ func extractDatasets(raw json.RawMessage) ([]string, error) {
 
 	datasets := payload.Dataset.Strings()
 
-	// Also extract datasets from ChartTree nodes
+	// Also extract datasets from Tree nodes
 	for _, node := range payload.Nodes {
 		if len(node.Spec) == 0 {
 			continue
@@ -181,8 +181,8 @@ func extractDatasets(raw json.RawMessage) ([]string, error) {
 	return datasets, nil
 }
 
-// chartTreeNodeSpec represents a node in a ChartTree for dataset extraction.
-type chartTreeNodeSpec struct {
+// treeNodeSpec represents a node in a Tree for dataset extraction.
+type treeNodeSpec struct {
 	ID   string          `json:"id"`
 	Kind string          `json:"kind"`
 	Ref  string          `json:"ref,omitempty"`

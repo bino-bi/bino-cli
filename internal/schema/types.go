@@ -34,7 +34,7 @@ const (
 	KindTable                = "Table"
 	KindChartStructure       = "ChartStructure"
 	KindChartTime            = "ChartTime"
-	KindChartTree            = "ChartTree"
+	KindTree                 = "Tree"
 	KindGrid                 = "Grid"
 	KindAsset                = "Asset"
 	KindComponentStyle       = "ComponentStyle"

@@ -18,9 +18,9 @@ import (
 //
 // Documents that may contain inline definitions:
 //   - ChartStructure, ChartTime, Table, Text: spec.dataset can be inline
-//   - ChartTree: spec.nodes[].spec.dataset can be inline (for Table, ChartStructure, ChartTime nodes)
+//   - Tree: spec.nodes[].spec.dataset can be inline (for Table, ChartStructure, ChartTime nodes)
 //   - DataSet: spec.dependencies can contain inline DataSources, spec.source can be inline
-//   - LayoutPage, LayoutCard: children[].spec.dataset can be inline, children[].spec.nodes[].spec.dataset for ChartTree
+//   - LayoutPage, LayoutCard: children[].spec.dataset can be inline, children[].spec.nodes[].spec.dataset for Tree
 func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 	registry := newInlineRegistry()
 
@@ -32,9 +32,9 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 			if err := materializeComponentInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("%s %q: %w", doc.Kind, doc.Name, err)
 			}
-		case "ChartTree":
-			if err := materializeChartTreeDocInlines(doc, registry); err != nil {
-				return nil, fmt.Errorf("ChartTree %q: %w", doc.Name, err)
+		case "Tree":
+			if err := materializeTreeDocInlines(doc, registry); err != nil {
+				return nil, fmt.Errorf("Tree %q: %w", doc.Name, err)
 			}
 		case "Grid":
 			if err := materializeGridDocInlines(doc, registry); err != nil {
@@ -594,10 +594,10 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 				modified = true
 			}
 
-		case "ChartTree":
-			// Process ChartTree nodes that may contain inline datasets
-			if err := materializeChartTreeNodesInlines(doc, i, child.Spec, registry); err != nil {
-				return fmt.Errorf("child[%d] (ChartTree): %w", i, err)
+		case "Tree":
+			// Process Tree nodes that may contain inline datasets
+			if err := materializeTreeNodesInlines(doc, i, child.Spec, registry); err != nil {
+				return fmt.Errorf("child[%d] (Tree): %w", i, err)
 			}
 			modified = true
 
@@ -618,27 +618,27 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 	return nil
 }
 
-// chartTreeSpec is used to parse ChartTree spec for inline processing.
-type chartTreeSpec struct {
-	Nodes []chartTreeNode `json:"nodes"`
+// treeSpec is used to parse Tree spec for inline processing.
+type treeSpec struct {
+	Nodes []treeNode `json:"nodes"`
 }
 
-// chartTreeNode represents a node in a ChartTree.
-type chartTreeNode struct {
+// treeNode represents a node in a Tree.
+type treeNode struct {
 	ID   string          `json:"id"`
 	Kind string          `json:"kind"`
 	Ref  string          `json:"ref,omitempty"`
 	Spec json.RawMessage `json:"spec,omitempty"`
 }
 
-// chartTreeDocSpec wraps the spec for parsing standalone ChartTree documents.
-type chartTreeDocSpec struct {
-	Spec chartTreeSpec `json:"spec"`
+// treeDocSpec wraps the spec for parsing standalone Tree documents.
+type treeDocSpec struct {
+	Spec treeSpec `json:"spec"`
 }
 
-// materializeChartTreeDocInlines processes inline datasets in standalone ChartTree documents.
-func materializeChartTreeDocInlines(doc *Document, registry *inlineRegistry) error {
-	var treeDoc chartTreeDocSpec
+// materializeTreeDocInlines processes inline datasets in standalone Tree documents.
+func materializeTreeDocInlines(doc *Document, registry *inlineRegistry) error {
+	var treeDoc treeDocSpec
 	if err := json.Unmarshal(doc.Raw, &treeDoc); err != nil {
 		return nil // Parse error, skip
 	}
@@ -706,7 +706,7 @@ func materializeChartTreeDocInlines(doc *Document, registry *inlineRegistry) err
 
 			// Rewrite the node's dataset
 			if len(resolvedNames) > 0 {
-				if err := rewriteChartTreeDocNodeDataset(doc, nodeIdx, resolvedNames); err != nil {
+				if err := rewriteTreeDocNodeDataset(doc, nodeIdx, resolvedNames); err != nil {
 					return fmt.Errorf("node[%d]: %w", nodeIdx, err)
 				}
 			}
@@ -716,8 +716,8 @@ func materializeChartTreeDocInlines(doc *Document, registry *inlineRegistry) err
 	return nil
 }
 
-// rewriteChartTreeDocNodeDataset rewrites a standalone ChartTree node's dataset field.
-func rewriteChartTreeDocNodeDataset(doc *Document, nodeIndex int, resolvedNames []string) error {
+// rewriteTreeDocNodeDataset rewrites a standalone Tree node's dataset field.
+func rewriteTreeDocNodeDataset(doc *Document, nodeIndex int, resolvedNames []string) error {
 	var docMap map[string]any
 	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
 		return fmt.Errorf("unmarshal document: %w", err)
@@ -898,10 +898,10 @@ func rewriteGridDocChildDataset(doc *Document, childIndex int, resolvedNames []s
 	return nil
 }
 
-// materializeChartTreeNodesInlines processes inline datasets in ChartTree nodes.
-// ChartTree nodes can contain Table, ChartStructure, ChartTime components with inline datasets.
-func materializeChartTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
-	var treeSpec chartTreeSpec
+// materializeTreeNodesInlines processes inline datasets in Tree nodes.
+// Tree nodes can contain Table, ChartStructure, ChartTime components with inline datasets.
+func materializeTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
+	var treeSpec treeSpec
 	if err := json.Unmarshal(treeSpecRaw, &treeSpec); err != nil {
 		return nil // Parse error, skip
 	}
@@ -972,7 +972,7 @@ func materializeChartTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw
 
 			// Rewrite the node's dataset
 			if len(resolvedNames) > 0 {
-				if err := rewriteChartTreeNodeDataset(doc, childIndex, nodeIdx, resolvedNames); err != nil {
+				if err := rewriteTreeNodeDataset(doc, childIndex, nodeIdx, resolvedNames); err != nil {
 					return fmt.Errorf("node[%d]: %w", nodeIdx, err)
 				}
 				modified = true
@@ -984,8 +984,8 @@ func materializeChartTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw
 	return nil
 }
 
-// rewriteChartTreeNodeDataset rewrites a ChartTree node's dataset field to use resolved names.
-func rewriteChartTreeNodeDataset(doc *Document, childIndex, nodeIndex int, resolvedNames []string) error {
+// rewriteTreeNodeDataset rewrites a Tree node's dataset field to use resolved names.
+func rewriteTreeNodeDataset(doc *Document, childIndex, nodeIndex int, resolvedNames []string) error {
 	var docMap map[string]any
 	if err := json.Unmarshal(doc.Raw, &docMap); err != nil {
 		return fmt.Errorf("unmarshal document: %w", err)
