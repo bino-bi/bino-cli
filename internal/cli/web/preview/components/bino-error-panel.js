@@ -1,129 +1,119 @@
-import { escapeHtml } from '../../shared/dom-utils.js';
+import { LitElement, html, css } from 'lit';
 
-const template = document.createElement('template');
-template.innerHTML = `
-<style>
-  :host {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-height: 200px;
-    overflow-y: auto;
-    background: var(--bino-warning-bg, #fffbeb);
-    border-top: 2px solid var(--bino-warning, #f59e0b);
-    font-family: var(--bino-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-    font-size: 13px;
-    z-index: 10001;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
-    display: none;
-  }
-  :host(.visible) {
-    display: block;
-  }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    background: #fef3c7;
-    border-bottom: 1px solid var(--bino-warning-border, #fcd34d);
-    font-weight: 600;
-    color: var(--bino-warning-text, #92400e);
-  }
-  .close-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    color: var(--bino-warning-text, #92400e);
-    padding: 0 4px;
-  }
-  .close-btn:hover {
-    color: #78350f;
-  }
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  li {
-    padding: 8px 12px;
-    border-bottom: 1px solid #fde68a;
-    cursor: pointer;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  li:hover {
-    background: #fef3c7;
-  }
-  li.highlighted {
-    background: #fde68a;
-    border-left: 3px solid var(--bino-warning, #f59e0b);
-  }
-  li:last-child {
-    border-bottom: none;
-  }
-  .badge {
-    flex-shrink: 0;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  .badge.warning {
-    background: var(--bino-warning-border, #fcd34d);
-    color: #78350f;
-  }
-  .badge.error {
-    background: #fca5a5;
-    color: #7f1d1d;
-  }
-  .message {
-    color: #78350f;
-  }
-</style>
-<div class='header'>
-  <span id='count'></span>
-  <button class='close-btn' title='Close'>&times;</button>
-</div>
-<ul id='list'></ul>
-`;
+class BinoErrorPanel extends LitElement {
+  static properties = {
+    _errors: { state: true },
+    _visible: { state: true },
+  };
 
-class BinoErrorPanel extends HTMLElement {
+  static styles = css`
+    :host {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: var(--bino-panel-max-height);
+      overflow-y: auto;
+      background: var(--bino-warning-bg);
+      border-top: 2px solid var(--bino-warning);
+      font-family: var(--bino-font-sans);
+      font-size: 13px;
+      z-index: var(--bino-z-panel);
+      box-shadow: var(--bino-shadow-panel);
+      display: none;
+    }
+    :host([visible]) {
+      display: block;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border-bottom: 1px solid var(--bino-warning-border);
+      font-weight: 600;
+      color: var(--bino-warning-text);
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--bino-warning-text);
+      padding: 0 4px;
+    }
+    .close-btn:hover {
+      color: #78350f;
+    }
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    li {
+      padding: 8px 12px;
+      border-bottom: 1px solid #fde68a;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    li:hover {
+      background: #fef3c7;
+    }
+    li.highlighted {
+      background: #fde68a;
+      border-left: 3px solid var(--bino-warning);
+    }
+    li:last-child {
+      border-bottom: none;
+    }
+    .badge {
+      flex-shrink: 0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: var(--bino-font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge.warning {
+      background: var(--bino-warning-border);
+      color: #78350f;
+    }
+    .badge.error {
+      background: #fca5a5;
+      color: #7f1d1d;
+    }
+    .message {
+      color: #78350f;
+    }
+  `;
+
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
-    this._countEl = this.shadowRoot.getElementById('count');
-    this._listEl = this.shadowRoot.getElementById('list');
-    this._closeBtn = this.shadowRoot.querySelector('.close-btn');
     this._errors = [];
+    this._visible = false;
     this._scanTimer = null;
     this._observer = null;
     this._badges = [];
     this._highlightTimer = null;
+    this._boundOnShowErrors = this._onShowErrors.bind(this);
+    this._boundOnContentUpdated = this._debouncedScan.bind(this);
   }
 
   connectedCallback() {
-    this._closeBtn.addEventListener('click', this._onClose.bind(this));
-
-    // Listen for "show errors" event from toolbar
-    document.addEventListener('bino-show-errors', this._onShowErrors.bind(this));
-
-    // Listen for content updates to rescan
-    document.addEventListener('bn-preview:content-updated', this._debouncedScan.bind(this));
-
-    // Start observing
+    super.connectedCallback();
+    document.addEventListener('bino-show-errors', this._boundOnShowErrors);
+    document.addEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
     this._startObserver();
-
-    // Initial scan
     this._debouncedScan();
   }
 
   disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('bino-show-errors', this._boundOnShowErrors);
+    document.removeEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
     if (this._observer) {
       this._observer.disconnect();
       this._observer = null;
@@ -131,8 +121,46 @@ class BinoErrorPanel extends HTMLElement {
     this._removeBadges();
   }
 
+  updated(changedProperties) {
+    if (changedProperties.has('_visible')) {
+      if (this._visible) {
+        this.setAttribute('visible', '');
+      } else {
+        this.removeAttribute('visible');
+      }
+    }
+  }
+
+  render() {
+    if (!this._visible || this._errors.length === 0) {
+      return html``;
+    }
+
+    var self = this;
+    var count = this._errors.length;
+    return html`
+      <div class="header">
+        <span>${count} warning${count !== 1 ? 's' : ''} found</span>
+        <button class="close-btn" title="Close" @click=${this._onClose}>&times;</button>
+      </div>
+      <ul>
+        ${this._errors.map(function(item, idx) {
+          return html`
+            <li @click=${() => self._scrollToElement(item.element)}>
+              <span class="badge ${item.error.type || 'warning'}">${item.error.type || 'warning'}</span>
+              <span class="message">${item.error.message || item.error.id || 'Unknown error'}</span>
+            </li>
+          `;
+        })}
+      </ul>
+    `;
+  }
+
   _startObserver() {
-    this._observer = new MutationObserver(this._onMutation.bind(this));
+    var self = this;
+    this._observer = new MutationObserver(function(mutations) {
+      self._onMutation(mutations);
+    });
     this._observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -203,67 +231,43 @@ class BinoErrorPanel extends HTMLElement {
     }));
 
     if (results.length > 0) {
-      this._showPanel(results);
+      this._visible = true;
       this._injectBadges(results);
     } else {
-      this._hidePanel();
+      this._visible = false;
       this._removeBadges();
     }
-  }
-
-  _showPanel(errors) {
-    this._countEl.textContent = errors.length + ' warning' + (errors.length !== 1 ? 's' : '') + ' found';
-    this._listEl.innerHTML = '';
-    var self = this;
-    errors.forEach(function(item, idx) {
-      var li = document.createElement('li');
-      li._errorElement = item.element;
-      li.innerHTML = '<span class="badge ' + (item.error.type || 'warning') + '">' +
-        (item.error.type || 'warning') + '</span><span class="message">' +
-        escapeHtml(item.error.message || item.error.id || 'Unknown error') + '</span>';
-      li.addEventListener('click', function() {
-        self._scrollToElement(item.element);
-      });
-      self._listEl.appendChild(li);
-    });
-    this.classList.add('visible');
   }
 
   // Highlight all list items that belong to a given source element
   _highlightForElement(el) {
     var self = this;
-    var items = this._listEl.querySelectorAll('li');
+    var items = this.renderRoot.querySelectorAll('li');
     var firstMatch = null;
-    items.forEach(function(li) {
+    items.forEach(function(li, idx) {
       li.classList.remove('highlighted');
-      if (li._errorElement === el) {
+      if (self._errors[idx] && self._errors[idx].element === el) {
         li.classList.add('highlighted');
         if (!firstMatch) firstMatch = li;
       }
     });
-    // Scroll the first matching item into view
     if (firstMatch) {
       firstMatch.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-    // Auto-clear highlight after 4 seconds
     if (this._highlightTimer) clearTimeout(this._highlightTimer);
     this._highlightTimer = setTimeout(function() {
       items.forEach(function(li) { li.classList.remove('highlighted'); });
     }, 4000);
   }
 
-  _hidePanel() {
-    this.classList.remove('visible');
-  }
-
   _onClose() {
-    this._hidePanel();
+    this._visible = false;
     document.dispatchEvent(new CustomEvent('bino-panel-dismissed'));
   }
 
   _onShowErrors() {
     if (this._errors.length > 0) {
-      this._showPanel(this._errors);
+      this._visible = true;
     }
   }
 
@@ -279,12 +283,9 @@ class BinoErrorPanel extends HTMLElement {
   }
 
   // Inject clickable badge overlays next to elements with has-error/has-errors.
-  // Badges are inserted as siblings (not children) because the error elements are
-  // Web Components with Shadow DOM that won't render light DOM children.
   _injectBadges(errors) {
     this._removeBadges();
     var self = this;
-    // Group errors by element
     var elementMap = new Map();
     errors.forEach(function(item, idx) {
       if (!elementMap.has(item.element)) {
@@ -304,20 +305,16 @@ class BinoErrorPanel extends HTMLElement {
       badge.title = items.map(function(i) { return i.error.message || i.error.id || 'Error'; }).join('\n');
       badge.addEventListener('click', function(e) {
         e.stopPropagation();
-        // Show panel and highlight errors belonging to this element
-        self._showPanel(self._errors);
+        self._visible = true;
         self._highlightForElement(el);
       });
 
-      // Insert badge as a sibling after the element, positioned absolutely
-      // within the element's parent (which must be position:relative).
       var parent = el.parentNode;
       if (parent) {
         var computed = window.getComputedStyle(parent);
         if (computed.position === 'static') {
           parent.style.position = 'relative';
         }
-        // Insert right after the element so it overlaps its top-right corner
         el.insertAdjacentElement('afterend', badge);
       }
       self._badges.push(badge);

@@ -1,131 +1,110 @@
-import { escapeHtml } from '../../shared/dom-utils.js';
+import { LitElement, html, css } from 'lit';
 
-const template = document.createElement('template');
-template.innerHTML = `
-<style>
-  :host {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: var(--bino-surface, #ffffff);
-    border-bottom: 1px solid var(--bino-border, #e5e7eb);
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-family: var(--bino-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-    box-shadow: var(--bino-shadow-header, 0 1px 3px rgba(0,0,0,0.05));
-  }
-  .title {
-    font-weight: 600;
-    color: var(--bino-text-muted, #374151);
-  }
-  select {
-    padding: 0.375rem 0.625rem;
-    border-radius: var(--bino-radius, 6px);
-    border: 1px solid var(--bino-border-light, #d1d5db);
-    background: #f9fafb;
-    font-size: 0.875rem;
-    color: var(--bino-text-muted, #374151);
-    cursor: pointer;
-    min-width: 200px;
-  }
-  select:hover {
-    border-color: #9ca3af;
-  }
-  select:focus {
-    outline: none;
-    border-color: var(--bino-primary, #3b82f6);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-  .warning-badge {
-    display: none;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.625rem;
-    border-radius: 999px;
-    background: var(--bino-warning-bg, #fffbeb);
-    border: 1px solid var(--bino-warning-border, #fcd34d);
-    color: var(--bino-warning-text, #92400e);
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    user-select: none;
-  }
-  .warning-badge:hover {
-    background: #fef3c7;
-  }
-  .warning-badge.visible {
-    display: inline-flex;
-  }
-  .warning-icon {
-    font-size: 0.875rem;
-  }
-  .spacer {
-    flex: 1;
-  }
-  ::slotted(*) {
-    margin-left: auto;
-  }
-</style>
-<span class='title'>bino preview</span>
-<select id='artefact-select'></select>
-<span class='warning-badge' id='warning-badge' title='Show warnings'>
-  <span class='warning-icon'>\u26A0</span>
-  <span id='warning-count'>0</span>
-</span>
-<span class='spacer'></span>
-<slot></slot>
-`;
+class BinoToolbar extends LitElement {
+  static properties = {
+    artefacts: { type: Array },
+    currentPath: { type: String, attribute: 'current-path' },
+    _errorCount: { state: true },
+    _badgeVisible: { state: true },
+  };
 
-class BinoToolbar extends HTMLElement {
+  static styles = css`
+    :host {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: var(--bino-z-toolbar);
+      display: flex;
+      align-items: center;
+      gap: var(--bino-space-md);
+      background: var(--bino-surface);
+      border-bottom: 1px solid var(--bino-border);
+      padding: var(--bino-space-sm) var(--bino-space-md);
+      font-size: var(--bino-font-size-md);
+      font-family: var(--bino-font-sans);
+      box-shadow: var(--bino-shadow-header);
+    }
+    .title {
+      font-weight: 600;
+      color: var(--bino-text-muted);
+    }
+    select {
+      padding: 0.375rem 0.625rem;
+      border-radius: var(--bino-radius);
+      border: 1px solid var(--bino-border-light);
+      background: #f9fafb;
+      font-size: var(--bino-font-size-md);
+      color: var(--bino-text-muted);
+      cursor: pointer;
+      min-width: var(--bino-search-width);
+    }
+    select:hover {
+      border-color: #9ca3af;
+    }
+    select:focus {
+      outline: none;
+      border-color: var(--bino-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    .warning-badge {
+      display: none;
+      align-items: center;
+      gap: var(--bino-space-xs);
+      padding: var(--bino-space-xs) 0.625rem;
+      border-radius: 999px;
+      background: var(--bino-warning-bg);
+      border: 1px solid var(--bino-warning-border);
+      color: var(--bino-warning-text);
+      font-size: var(--bino-font-size-sm);
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .warning-badge:hover {
+      background: #fef3c7;
+    }
+    .warning-badge.visible {
+      display: inline-flex;
+    }
+    .warning-icon {
+      font-size: var(--bino-font-size-md);
+    }
+    .spacer {
+      flex: 1;
+    }
+    ::slotted(*) {
+      margin-left: auto;
+    }
+  `;
+
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
-    this._select = this.shadowRoot.getElementById('artefact-select');
-    this._badge = this.shadowRoot.getElementById('warning-badge');
-    this._countEl = this.shadowRoot.getElementById('warning-count');
+    this.artefacts = [];
+    this.currentPath = '/';
     this._errorCount = 0;
+    this._badgeVisible = false;
     this._panelDismissed = false;
+    this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
+    this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
   }
 
   connectedCallback() {
-    this._renderOptions();
-    this._select.addEventListener('change', this._onSelectChange.bind(this));
-    this._badge.addEventListener('click', this._onBadgeClick.bind(this));
-
-    // Listen for error count changes from the error panel
-    document.addEventListener('bino-errors-changed', this._onErrorsChanged.bind(this));
-    document.addEventListener('bino-panel-dismissed', this._onPanelDismissed.bind(this));
+    super.connectedCallback();
+    document.addEventListener('bino-errors-changed', this._boundOnErrorsChanged);
+    document.addEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
   }
 
-  static get observedAttributes() {
-    return ['artefacts', 'current-path'];
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('bino-errors-changed', this._boundOnErrorsChanged);
+    document.removeEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
   }
 
-  attributeChangedCallback() {
-    this._renderOptions();
-  }
-
-  _renderOptions() {
-    var artefactsAttr = this.getAttribute('artefacts');
-    var currentPath = this.getAttribute('current-path') || '/';
-    var artefacts = [];
-    try {
-      artefacts = JSON.parse(artefactsAttr || '[]');
-    } catch (e) {
-      artefacts = [];
-    }
-
-    var html = '';
-
-    // "All Pages" option
-    var allSelected = currentPath === '/' ? ' selected' : '';
-    html += '<option value="/"' + allSelected + '>All Pages</option>';
+  render() {
+    var self = this;
+    var currentPath = this.currentPath || '/';
+    var artefacts = this.artefacts || [];
 
     // Separate ReportArtefacts and DocumentArtefacts
     var reportArts = [];
@@ -138,35 +117,37 @@ class BinoToolbar extends HTMLElement {
       }
     });
 
-    if (reportArts.length > 0) {
-      html += '<optgroup label="Report Artefacts">';
-      reportArts.forEach(function(art) {
-        var path = '/' + art.name;
-        var selected = path === currentPath ? ' selected' : '';
-        var label = art.name;
-        if (art.title) {
-          label = art.title + ' (' + art.name + ')';
-        }
-        html += '<option value="' + escapeHtml(path) + '"' + selected + '>' + escapeHtml(label) + '</option>';
-      });
-      html += '</optgroup>';
-    }
-
-    if (docArts.length > 0) {
-      html += '<optgroup label="Document Artefacts">';
-      docArts.forEach(function(art) {
-        var path = '/doc/' + art.name;
-        var selected = path === currentPath ? ' selected' : '';
-        var label = art.name;
-        if (art.title) {
-          label = art.title + ' (' + art.name + ')';
-        }
-        html += '<option value="' + escapeHtml(path) + '"' + selected + '>' + escapeHtml(label) + '</option>';
-      });
-      html += '</optgroup>';
-    }
-
-    this._select.innerHTML = html;
+    return html`
+      <span class="title">bino preview</span>
+      <select id="artefact-select" @change=${this._onSelectChange}>
+        <option value="/" ?selected=${currentPath === '/'}>All Pages</option>
+        ${reportArts.length > 0 ? html`
+          <optgroup label="Report Artefacts">
+            ${reportArts.map(function(art) {
+              var path = '/' + art.name;
+              var label = art.title ? art.title + ' (' + art.name + ')' : art.name;
+              return html`<option value=${path} ?selected=${path === currentPath}>${label}</option>`;
+            })}
+          </optgroup>
+        ` : ''}
+        ${docArts.length > 0 ? html`
+          <optgroup label="Document Artefacts">
+            ${docArts.map(function(art) {
+              var path = '/doc/' + art.name;
+              var label = art.title ? art.title + ' (' + art.name + ')' : art.name;
+              return html`<option value=${path} ?selected=${path === currentPath}>${label}</option>`;
+            })}
+          </optgroup>
+        ` : ''}
+      </select>
+      <span class="warning-badge ${this._badgeVisible ? 'visible' : ''}"
+        title="Show warnings" @click=${this._onBadgeClick}>
+        <span class="warning-icon">\u26A0</span>
+        <span>${this._errorCount}</span>
+      </span>
+      <span class="spacer"></span>
+      <slot></slot>
+    `;
   }
 
   _onSelectChange(e) {
@@ -178,25 +159,23 @@ class BinoToolbar extends HTMLElement {
 
   _onBadgeClick() {
     this._panelDismissed = false;
-    this._badge.classList.remove('visible');
+    this._badgeVisible = false;
     document.dispatchEvent(new CustomEvent('bino-show-errors'));
   }
 
   _onErrorsChanged(e) {
     this._errorCount = (e.detail && e.detail.count) || 0;
-    this._countEl.textContent = this._errorCount;
-    // Only show badge when panel was dismissed and there are errors
     if (this._panelDismissed && this._errorCount > 0) {
-      this._badge.classList.add('visible');
+      this._badgeVisible = true;
     } else {
-      this._badge.classList.remove('visible');
+      this._badgeVisible = false;
     }
   }
 
   _onPanelDismissed() {
     this._panelDismissed = true;
     if (this._errorCount > 0) {
-      this._badge.classList.add('visible');
+      this._badgeVisible = true;
     }
   }
 }

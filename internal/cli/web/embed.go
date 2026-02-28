@@ -9,13 +9,14 @@ import (
 	"strings"
 )
 
-//go:embed shared/*.css shared/*.js preview/*.css preview/*.js preview/components/*.js serve/*.css serve/*.js serve/components/*.js
+//go:embed shared/*.css shared/*.js shared/*.json preview/*.css preview/*.js preview/components/*.js serve/*.css serve/*.js serve/components/*.js
 var assets embed.FS
 
 // mimeTypes maps file extensions to MIME types for embedded assets.
 var mimeTypes = map[string]string{
-	".css": "text/css; charset=utf-8",
-	".js":  "application/javascript; charset=utf-8",
+	".css":  "text/css; charset=utf-8",
+	".js":   "application/javascript; charset=utf-8",
+	".json": "application/json; charset=utf-8",
 }
 
 // Handler returns an http.Handler that serves embedded web assets under the
