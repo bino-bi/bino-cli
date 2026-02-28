@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
@@ -1089,6 +1090,8 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 	sb.WriteString(contextBase64)
 	sb.WriteString(`"};</script>`)
 	sb.WriteString("\n")
+	sb.WriteString(web.ImportMapScript())
+	sb.WriteString("\n")
 	sb.WriteString(`<script type="module" src="/__bino/serve/serve-app.js"></script>`)
 	return sb.String()
 }
@@ -1121,7 +1124,7 @@ func withServeStyles(frameHTML []byte) []byte {
 	result = append(result, styleBlock...)
 	result = append(result, frameHTML[headClose:]...)
 
-	// Inject control panel and content wrapper after <body>
+	// Inject bino-serve-shell wrapper after <body>
 	resultStr := string(result)
 	bodyOpen := strings.Index(resultStr, "<body")
 	if bodyOpen == -1 {
@@ -1134,22 +1137,20 @@ func withServeStyles(frameHTML []byte) []byte {
 	}
 	bodyEnd := bodyOpen + bodyClose + 1
 
-	// Inject the layout wrapper: control panel + content area
 	// Find </body> to wrap content
 	bodyCloseTag := strings.Index(resultStr, "</body>")
 	if bodyCloseTag == -1 {
 		return result
 	}
 
-	// Extract original body content
+	// Extract original body content and wrap in shell
 	originalBodyContent := resultStr[bodyEnd:bodyCloseTag]
 
-	// Build new body structure
 	var sb strings.Builder
 	sb.WriteString(resultStr[:bodyEnd])
-	sb.WriteString(`<bino-control-panel></bino-control-panel><div id='bino-content-area'>`)
+	sb.WriteString(`<bino-serve-shell>`)
 	sb.WriteString(originalBodyContent)
-	sb.WriteString(`</div>`)
+	sb.WriteString(`</bino-serve-shell>`)
 	sb.WriteString(resultStr[bodyCloseTag:])
 
 	return []byte(sb.String())
