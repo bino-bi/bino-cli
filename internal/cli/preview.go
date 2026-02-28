@@ -21,6 +21,7 @@ import (
 	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/spec"
@@ -252,6 +253,29 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					})
 				}
 
+
+				// Build document info list for assets modal
+				documentInfos := make([]previewDocumentInfo, 0, len(docs))
+				for _, doc := range docs {
+					var cs []string
+					for _, c := range doc.Constraints {
+						cs = append(cs, formatConstraint(c))
+					}
+					documentInfos = append(documentInfos, previewDocumentInfo{
+						Kind:        doc.Kind,
+						Name:        doc.Name,
+						File:        pathutil.RelPath(watchDir, doc.File),
+						Labels:      doc.Labels,
+						Constraints: cs,
+					})
+				}
+
+				// Build dependency graph for artefact graph visualization
+				g, graphErr := reportgraph.Build(ctx, docs)
+				if graphErr != nil {
+					logger.Warnf("Graph build skipped: %v", graphErr)
+				}
+
 				// Always render "All Pages" view for "/" route - this is the default view
 				// that shows all LayoutPages without any artefact filtering
 				allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
@@ -284,7 +308,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				payloads := make([]artefactPayload, 0, len(artefacts)+1)
 
 				// Add "All Pages" route (default "/" view)
-				allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, "/")
+				allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
 				pageMeta := buildPageMetadata(docs, artefacts)
 				allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
 				allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
@@ -308,7 +332,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					}
 					pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
 					path := "/" + art.Document.Name
-					frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, path)
+					var artGraph *previewGraphData
+					if g != nil {
+						if rootNode, ok := g.ReportArtefactByName(art.Document.Name); ok {
+							artGraph = buildPreviewGraphData(g, rootNode)
+						}
+					}
+					frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, path, artGraph)
 					contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
 					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
@@ -326,8 +356,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					}
 					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 					path := "/doc/" + docArt.Document.Name
+					var docGraph *previewGraphData
+					if g != nil {
+						if rootNode, ok := g.DocumentArtefactByName(docArt.Document.Name); ok {
+							docGraph = buildPreviewGraphData(g, rootNode)
+						}
+					}
 					// DocumentArtefacts get header injected too
-					frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, path)
+					frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, path, docGraph)
 					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 				}
 
@@ -429,11 +465,63 @@ type previewArtefactInfo struct {
 	IsDoc  bool   `json:"isDoc"` // true for DocumentArtefact
 }
 
+// previewDocumentInfo holds metadata about a manifest document for the assets modal.
+type previewDocumentInfo struct {
+	Kind        string            `json:"kind"`
+	Name        string            `json:"name"`
+	File        string            `json:"file"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Constraints []string          `json:"constraints,omitempty"`
+}
+
 // previewPageMeta holds metadata about a LayoutPage for the "All Pages" preview overlay.
 type previewPageMeta struct {
 	Name        string   `json:"name"`
 	Constraints []string `json:"constraints,omitempty"`
 	Artefacts   []string `json:"artefacts,omitempty"`
+}
+
+// previewGraphNode is a serializable graph node for the frontend dependency graph.
+type previewGraphNode struct {
+	ID        string   `json:"id"`
+	Kind      string   `json:"kind"`
+	Name      string   `json:"name"`
+	DependsOn []string `json:"dependsOn,omitempty"`
+}
+
+// previewGraphData holds the dependency subgraph for a single artefact.
+type previewGraphData struct {
+	Nodes  map[string]previewGraphNode `json:"nodes"`
+	RootID string                      `json:"rootId"`
+}
+
+// buildPreviewGraphData extracts the reachable subgraph from root and serializes it for the frontend.
+func buildPreviewGraphData(g *reportgraph.Graph, root *reportgraph.Node) *previewGraphData {
+	if g == nil || root == nil {
+		return nil
+	}
+	reachable := collectReachableNodes(g, []*reportgraph.Node{root})
+
+	nodes := make(map[string]previewGraphNode, len(reachable))
+	for id, node := range reachable {
+		var deps []string
+		for _, dep := range node.DependsOn {
+			if _, ok := reachable[dep]; ok {
+				deps = append(deps, dep)
+			}
+		}
+		nodes[id] = previewGraphNode{
+			ID:        node.ID,
+			Kind:      string(node.Kind),
+			Name:      displayName(node),
+			DependsOn: deps,
+		}
+	}
+
+	return &previewGraphData{
+		Nodes:  nodes,
+		RootID: root.ID,
+	}
 }
 
 // buildPageMetadata computes per-page metadata (constraints and artefact usage) for the "All Pages" view.
@@ -520,22 +608,32 @@ func appendUnique(slice []string, val string) []string {
 }
 
 // buildPreviewHeader generates the HTML for the sticky preview toolbar and error panel Web Components.
-func buildPreviewHeader(artefacts []previewArtefactInfo, currentPath string) string {
+func buildPreviewHeader(artefacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) string {
 	artefactsJSON, _ := json.Marshal(artefacts)
+	documentsJSON, _ := json.Marshal(documents)
 
 	var b strings.Builder
 	b.WriteString(`<bino-toolbar artefacts='`)
 	b.WriteString(html.EscapeString(string(artefactsJSON)))
+	b.WriteString(`' documents='`)
+	b.WriteString(html.EscapeString(string(documentsJSON)))
 	b.WriteString(`' current-path='`)
 	b.WriteString(html.EscapeString(currentPath))
+	if graphData != nil {
+		graphJSON, _ := json.Marshal(graphData)
+		b.WriteString(`' graph='`)
+		b.WriteString(html.EscapeString(string(graphJSON)))
+	}
 	b.WriteString(`'><bino-search></bino-search></bino-toolbar>`)
 	b.WriteString(`<bino-error-panel></bino-error-panel>`)
+	b.WriteString(`<bino-assets-modal></bino-assets-modal>`)
+	b.WriteString(`<bino-graph-modal></bino-graph-modal>`)
 
 	return b.String()
 }
 
 // withPreviewHeader injects the preview header into the HTML document after <body>.
-func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, currentPath string) []byte {
+func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) []byte {
 	if len(doc) == 0 {
 		return doc
 	}
@@ -561,7 +659,7 @@ func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, currentPath 
 		return doc
 	}
 
-	header := buildPreviewHeader(artefacts, currentPath)
+	header := buildPreviewHeader(artefacts, documents, currentPath, graphData)
 
 	updated := make([]byte, 0, len(doc)+len(header))
 	updated = append(updated, doc[:insertAt]...)

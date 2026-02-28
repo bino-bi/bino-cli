@@ -2,6 +2,8 @@ import { decodeBase64, normalizePath, waitForEngine, swapContext } from '../shar
 import './components/bino-toolbar.js';
 import './components/bino-error-panel.js';
 import './components/bino-search.js';
+import './components/bino-assets-modal.js';
+import './components/bino-graph-modal.js';
 
 if (!window.EventSource || window.__bnPreviewRuntime) {
   // Prevent double-initialization

@@ -3,6 +3,8 @@ import { LitElement, html, css } from 'lit';
 class BinoToolbar extends LitElement {
   static properties = {
     artefacts: { type: Array },
+    documents: { type: Array },
+    graph: { type: Object },
     currentPath: { type: String, attribute: 'current-path' },
     _errorCount: { state: true },
     _badgeVisible: { state: true },
@@ -70,6 +72,28 @@ class BinoToolbar extends LitElement {
     .warning-icon {
       font-size: var(--bino-font-size-md);
     }
+    .assets-btn, .graph-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bino-space-xs);
+      padding: var(--bino-space-xs) 0.625rem;
+      border-radius: 999px;
+      background: var(--bino-surface);
+      border: 1px solid var(--bino-border-light);
+      color: var(--bino-text-secondary);
+      font-size: var(--bino-font-size-sm);
+      font-weight: 600;
+      font-family: var(--bino-font-sans);
+      cursor: pointer;
+      user-select: none;
+    }
+    .assets-btn:hover, .graph-btn:hover {
+      background: var(--bino-surface-hover);
+      border-color: #9ca3af;
+    }
+    .assets-icon, .graph-icon {
+      font-size: var(--bino-font-size-md);
+    }
     .spacer {
       flex: 1;
     }
@@ -81,6 +105,8 @@ class BinoToolbar extends LitElement {
   constructor() {
     super();
     this.artefacts = [];
+    this.documents = [];
+    this.graph = null;
     this.currentPath = '/';
     this._errorCount = 0;
     this._badgeVisible = false;
@@ -145,9 +171,39 @@ class BinoToolbar extends LitElement {
         <span class="warning-icon">\u26A0</span>
         <span>${this._errorCount}</span>
       </span>
+      <button class="assets-btn" title="Manifest documents" @click=${this._onAssetsClick}>
+        <span class="assets-icon">\u25A6</span>
+        <span>Assets (${(this.documents || []).length})</span>
+      </button>
+      ${this.graph ? html`
+        <button class="graph-btn" title="Dependency graph" @click=${this._onGraphClick}>
+          <span class="graph-icon">\u229E</span>
+          <span>Graph</span>
+        </button>
+      ` : ''}
       <span class="spacer"></span>
       <slot></slot>
     `;
+  }
+
+  updated(changedProperties) {
+    if (changedProperties.has('documents')) {
+      document.dispatchEvent(new CustomEvent('bino-documents-changed', {
+        detail: { documents: this.documents || [] }
+      }));
+    }
+  }
+
+  _onAssetsClick() {
+    document.dispatchEvent(new CustomEvent('bino-open-assets', {
+      detail: { documents: this.documents || [] }
+    }));
+  }
+
+  _onGraphClick() {
+    document.dispatchEvent(new CustomEvent('bino-open-graph', {
+      detail: { graph: this.graph }
+    }));
   }
 
   _onSelectChange(e) {
