@@ -18,6 +18,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
+	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
@@ -597,14 +598,17 @@ func buildPreviewErrorPage(message, hint string) []byte {
 	return []byte(b.String())
 }
 
-var (
-	previewStyleMarker = []byte("bn-preview-style")
-	previewStyleBlock  = []byte(`
-	<link id="bn-preview-style" rel="stylesheet" href="/__bino/shared/tokens.css">
-	<link rel="stylesheet" href="/__bino/preview/preview.css">
-	<script type="module" src="/__bino/preview/preview-app.js"></script>
-`)
-)
+var previewStyleMarker = []byte("bn-preview-style")
+
+func previewStyleBlock() []byte {
+	var b strings.Builder
+	b.WriteString("\n\t<link id=\"bn-preview-style\" rel=\"stylesheet\" href=\"/__bino/shared/tokens.css\">\n")
+	b.WriteString("\t<link rel=\"stylesheet\" href=\"/__bino/preview/preview.css\">\n")
+	b.WriteString("\t")
+	b.WriteString(web.ImportMapScript())
+	b.WriteString("\n\t<script type=\"module\" src=\"/__bino/preview/preview-app.js\"></script>\n")
+	return []byte(b.String())
+}
 
 // withPreviewStyles injects a lightweight set of layout styles so preview pages are centered
 // and readable without relying on external assets.
@@ -617,9 +621,10 @@ func withPreviewStyles(doc []byte) []byte {
 	if idx == -1 {
 		return doc
 	}
-	updated := make([]byte, 0, len(doc)+len(previewStyleBlock))
+	block := previewStyleBlock()
+	updated := make([]byte, 0, len(doc)+len(block))
 	updated = append(updated, doc[:idx]...)
-	updated = append(updated, previewStyleBlock...)
+	updated = append(updated, block...)
 	updated = append(updated, doc[idx:]...)
 	return updated
 }

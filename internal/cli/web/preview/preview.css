@@ -19,8 +19,8 @@ body {
   background: var(--bino-bg);
   font-family: inherit;
   color: var(--bino-text);
-  padding: 1.5rem;
-  padding-top: 3.5rem;
+  padding: var(--bino-space-lg);
+  padding-top: calc(var(--bino-toolbar-height) + var(--bino-space-sm));
 }
 bn-context {
   display: flex;
@@ -39,22 +39,22 @@ bn-layout-page {
 }
 @media (min-width: 769px) {
   body {
-    padding: 2rem;
-    padding-top: 3.5rem;
+    padding: var(--bino-space-xl);
+    padding-top: calc(var(--bino-toolbar-height) + var(--bino-space-sm));
   }
 }
 /* Page info bar for "All Pages" view - placed as sibling before bn-layout-page */
 .bn-page-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--bino-space-sm);
   flex-wrap: wrap;
   padding: 5px 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: var(--bino-radius) var(--bino-radius) 0 0;
   font-family: var(--bino-font-sans);
-  font-size: 11px;
+  font-size: var(--bino-font-size-xs);
   line-height: 1.4;
   margin-bottom: -1.75rem;
   align-self: center;
@@ -95,14 +95,14 @@ bn-layout-page {
   right: 2px;
   width: 18px;
   height: 18px;
-  background: var(--bino-warning, #f59e0b);
+  background: var(--bino-warning);
   color: #fff;
   font-size: 12px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--bino-z-toolbar);
 }
 /* Error highlight animation (applied to light DOM elements by error panel) */
 .bn-error-highlight {

@@ -18,11 +18,10 @@ body {
   font-family: inherit;
   color: var(--bino-text);
 }
-#bino-content-area {
+bino-serve-shell {
+  display: flex;
   flex: 1;
-  padding: 1.5rem;
-  overflow-x: auto;
-  min-width: 0;
+  min-height: 100vh;
 }
 bn-context {
   display: flex;
@@ -32,7 +31,8 @@ bn-context {
   width: fit-content;
   min-width: 100%;
   margin: 0 auto;
-  transition: opacity 0.15s ease;
+  padding: var(--bino-space-lg);
+  transition: opacity var(--bino-transition-fast);
 }
 bn-layout-page {
   box-sizing: border-box;
@@ -44,13 +44,13 @@ bn-layout-page {
 .bino-missing-params-banner {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--bino-space-md);
   background: #fef3c7;
   border: 1px solid var(--bino-warning-border);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: var(--bino-space-lg);
   max-width: 480px;
-  margin: 2rem auto;
+  margin: var(--bino-space-xl) auto;
 }
 .bino-missing-icon {
   font-size: 1.5rem;
@@ -59,12 +59,12 @@ bn-layout-page {
 .bino-missing-text strong {
   display: block;
   color: var(--bino-warning-text);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--bino-space-sm);
 }
 .bino-missing-text p {
   margin: 0;
   color: #78350f;
-  font-size: 0.875rem;
+  font-size: var(--bino-font-size-md);
   line-height: 1.5;
 }
 .bino-missing-text .required {
@@ -84,26 +84,24 @@ bn-layout-page {
     margin: 0.5cm;
   }
   body {
-    margin 0;
+    margin: 0;
     display: block !important;
     background: var(--bino-surface) !important;
   }
+  bino-serve-shell,
   bino-control-panel {
     display: none !important;
   }
-  #bino-content-area {
-    padding: 0 !important;
-    overflow: visible !important;
-  }
   bn-context {
+    padding: 0 !important;
     gap: 0 !important;
   }
   bn-layout-page {
     box-shadow: none !important;
-    brake-after: page;
+    break-after: page;
     page-break-after: always;
     page-break-inside: avoid;
-    brake-inside: avoid;
+    break-inside: avoid;
   }
   bn-layout-page:last-child {
     page-break-after: auto;

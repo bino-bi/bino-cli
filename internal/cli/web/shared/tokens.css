@@ -19,4 +19,40 @@
   --bino-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --bino-shadow-page: 0 14px 40px rgba(15, 23, 42, 0.12);
   --bino-shadow-header: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --bino-shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.1);
+  --bino-shadow-panel: 0 -4px 12px rgba(0, 0, 0, 0.1);
+
+  /* Spacing */
+  --bino-space-xs: 0.25rem;
+  --bino-space-sm: 0.5rem;
+  --bino-space-md: 1rem;
+  --bino-space-lg: 1.5rem;
+  --bino-space-xl: 2rem;
+
+  /* Sizing */
+  --bino-toolbar-height: 3rem;
+  --bino-sidebar-width: 280px;
+  --bino-panel-max-height: 200px;
+  --bino-search-width: 200px;
+  --bino-search-width-focus: 300px;
+
+  /* Z-index layers */
+  --bino-z-toolbar: 10000;
+  --bino-z-panel: 10001;
+  --bino-z-dropdown: 10002;
+
+  /* Typography */
+  --bino-font-size-xs: 0.6875rem;
+  --bino-font-size-sm: 0.75rem;
+  --bino-font-size-base: 0.8125rem;
+  --bino-font-size-md: 0.875rem;
+
+  /* Transitions */
+  --bino-transition-fast: 0.15s ease;
+  --bino-transition-normal: 0.2s ease;
+
+  /* Additional surfaces */
+  --bino-surface-hover: #f3f4f6;
+  --bino-surface-active: #eff6ff;
+  --bino-active-text: #1d4ed8;
 }

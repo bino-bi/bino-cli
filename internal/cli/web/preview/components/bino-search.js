@@ -1,187 +1,233 @@
-import { escapeHtml } from '../../shared/dom-utils.js';
+import { LitElement, html, css } from 'lit';
 
-var template = document.createElement('template');
-template.innerHTML = `
-<style>
-  :host {
-    position: relative;
-    display: inline-block;
-    font-family: var(--bino-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-  }
-  .search-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  .search-icon {
-    position: absolute;
-    left: 0.5rem;
-    pointer-events: none;
-    color: var(--bino-text-secondary, #6b7280);
-    font-size: 0.8125rem;
-    line-height: 1;
-  }
-  input {
-    width: 200px;
-    padding: 0.375rem 0.625rem 0.375rem 1.75rem;
-    border: 1px solid var(--bino-border-light, #d1d5db);
-    border-radius: var(--bino-radius, 6px);
-    font-size: 0.8125rem;
-    font-family: inherit;
-    color: var(--bino-text, #111827);
-    background: #f9fafb;
-    transition: width 0.2s ease, border-color 0.15s, box-shadow 0.15s;
-  }
-  input:focus {
-    width: 300px;
-    outline: none;
-    border-color: var(--bino-primary, #3b82f6);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    background: var(--bino-surface, #ffffff);
-  }
-  input::placeholder {
-    color: var(--bino-text-secondary, #6b7280);
-  }
-  .dropdown {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
-    min-width: 320px;
-    max-height: 400px;
-    overflow-y: auto;
-    background: var(--bino-surface, #ffffff);
-    border: 1px solid var(--bino-border, #e5e7eb);
-    border-radius: var(--bino-radius, 6px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    z-index: 10001;
-  }
-  .dropdown.open {
-    display: block;
-  }
-  .result {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-    border-bottom: 1px solid #f3f4f6;
-    font-size: 0.8125rem;
-    transition: background 0.1s;
-  }
-  .result:last-child {
-    border-bottom: none;
-  }
-  .result:hover, .result.active {
-    background: #f0f4ff;
-  }
-  .result-name {
-    font-weight: 500;
-    color: var(--bino-text, #111827);
-  }
-  .result-kind {
-    font-size: 0.6875rem;
-    color: var(--bino-text-secondary, #6b7280);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  .result-context {
-    font-size: 0.75rem;
-    color: var(--bino-text-secondary, #6b7280);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .no-results {
-    padding: 0.75rem;
-    text-align: center;
-    font-size: 0.8125rem;
-    color: var(--bino-text-secondary, #6b7280);
-  }
-  mark {
-    background: #fef08a;
-    color: inherit;
-    border-radius: 2px;
-    padding: 0 1px;
-  }
-</style>
-<div class='search-wrap'>
-  <span class='search-icon'>\u2315</span>
-  <input type='text' placeholder='Search elements...' autocomplete='off' spellcheck='false'>
-</div>
-<div class='dropdown' id='dropdown'></div>
-`;
+class BinoSearch extends LitElement {
+  static properties = {
+    _results: { state: true },
+    _activeIndex: { state: true },
+    _open: { state: true },
+  };
 
-class BinoSearch extends HTMLElement {
+  static styles = css`
+    :host {
+      position: relative;
+      display: inline-block;
+      font-family: var(--bino-font-sans);
+    }
+    .search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-icon {
+      position: absolute;
+      left: var(--bino-space-sm);
+      pointer-events: none;
+      color: var(--bino-text-secondary);
+      font-size: var(--bino-font-size-base);
+      line-height: 1;
+    }
+    input {
+      width: var(--bino-search-width);
+      padding: 0.375rem 0.625rem 0.375rem 1.75rem;
+      border: 1px solid var(--bino-border-light);
+      border-radius: var(--bino-radius);
+      font-size: var(--bino-font-size-base);
+      font-family: inherit;
+      color: var(--bino-text);
+      background: #f9fafb;
+      transition: width var(--bino-transition-normal), border-color var(--bino-transition-fast), box-shadow var(--bino-transition-fast);
+    }
+    input:focus {
+      width: var(--bino-search-width-focus);
+      outline: none;
+      border-color: var(--bino-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      background: var(--bino-surface);
+    }
+    input::placeholder {
+      color: var(--bino-text-secondary);
+    }
+    .dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 320px;
+      max-height: 400px;
+      overflow-y: auto;
+      background: var(--bino-surface);
+      border: 1px solid var(--bino-border);
+      border-radius: var(--bino-radius);
+      box-shadow: var(--bino-shadow-dropdown);
+      z-index: var(--bino-z-panel);
+    }
+    .dropdown.open {
+      display: block;
+    }
+    .result {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: var(--bino-space-sm) 0.75rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--bino-surface-hover);
+      font-size: var(--bino-font-size-base);
+      transition: background 0.1s;
+    }
+    .result:last-child {
+      border-bottom: none;
+    }
+    .result:hover, .result.active {
+      background: #f0f4ff;
+    }
+    .result-name {
+      font-weight: 500;
+      color: var(--bino-text);
+    }
+    .result-kind {
+      font-size: var(--bino-font-size-xs);
+      color: var(--bino-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .result-context {
+      font-size: var(--bino-font-size-sm);
+      color: var(--bino-text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .no-results {
+      padding: 0.75rem;
+      text-align: center;
+      font-size: var(--bino-font-size-base);
+      color: var(--bino-text-secondary);
+    }
+    mark {
+      background: #fef08a;
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+  `;
+
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
-    this._input = this.shadowRoot.querySelector('input');
-    this._dropdown = this.shadowRoot.getElementById('dropdown');
     this._results = [];
     this._activeIndex = -1;
+    this._open = false;
     this._debounceTimer = null;
+    this._query = '';
   }
 
   connectedCallback() {
+    super.connectedCallback();
     var self = this;
 
-    this._input.addEventListener('input', function() {
-      clearTimeout(self._debounceTimer);
-      self._debounceTimer = setTimeout(function() {
-        self._search(self._input.value.trim());
-      }, 150);
-    });
-
-    this._input.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        self._close();
-        self._input.blur();
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        self._moveActive(1);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        self._moveActive(-1);
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (self._activeIndex >= 0 && self._activeIndex < self._results.length) {
-          self._selectResult(self._activeIndex);
-        } else if (self._results.length > 0) {
-          self._selectResult(0);
-        }
-        return;
-      }
-    });
-
-    this._input.addEventListener('focus', function() {
-      if (self._input.value.trim() && self._results.length > 0) {
-        self._dropdown.classList.add('open');
-      }
-    });
-
     // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!self.contains(e.target) && !self.shadowRoot.contains(e.target)) {
+    this._boundOutsideClick = function(e) {
+      if (!self.contains(e.target) && !self.renderRoot.contains(e.target)) {
         self._close();
       }
-    });
+    };
+    document.addEventListener('click', this._boundOutsideClick);
 
     // Re-index when content updates
-    document.addEventListener('bn-preview:content-updated', function() {
-      // Clear cached results so next search re-scans
-      if (self._input.value.trim()) {
-        self._search(self._input.value.trim());
+    this._boundContentUpdated = function() {
+      if (self._query) {
+        self._search(self._query);
       }
-    });
+    };
+    document.addEventListener('bn-preview:content-updated', this._boundContentUpdated);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('click', this._boundOutsideClick);
+    document.removeEventListener('bn-preview:content-updated', this._boundContentUpdated);
+  }
+
+  render() {
+    var self = this;
+    return html`
+      <div class="search-wrap">
+        <span class="search-icon">\u2315</span>
+        <input type="text" placeholder="Search elements..." autocomplete="off" spellcheck="false"
+          @input=${this._onInput}
+          @keydown=${this._onKeydown}
+          @focus=${this._onFocus}>
+      </div>
+      <div class="dropdown ${this._open ? 'open' : ''}">
+        ${this._results.length === 0 && this._open
+          ? html`<div class="no-results">No results found</div>`
+          : this._results.map(function(result, index) {
+              return html`
+                <div class="result ${index === self._activeIndex ? 'active' : ''}"
+                  @click=${() => self._selectResult(index)}>
+                  <span class="result-kind">${result.kind}</span>
+                  <span class="result-name">${self._highlightMatch(result, self._query)}</span>
+                </div>
+              `;
+            })
+        }
+      </div>
+    `;
+  }
+
+  _highlightMatch(result, query) {
+    if (!query) return result.name;
+    var lowerQuery = query.toLowerCase();
+    var nameIdx = result.name.toLowerCase().indexOf(lowerQuery);
+    if (nameIdx === -1) return result.name;
+
+    var before = result.name.substring(0, nameIdx);
+    var match = result.name.substring(nameIdx, nameIdx + query.length);
+    var after = result.name.substring(nameIdx + query.length);
+    return html`${before}<mark>${match}</mark>${after}`;
+  }
+
+  _onInput(e) {
+    var self = this;
+    var value = e.target.value.trim();
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(function() {
+      self._query = value;
+      self._search(value);
+    }, 150);
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') {
+      this._close();
+      e.target.blur();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this._moveActive(1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._moveActive(-1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (this._activeIndex >= 0 && this._activeIndex < this._results.length) {
+        this._selectResult(this._activeIndex);
+      } else if (this._results.length > 0) {
+        this._selectResult(0);
+      }
+      return;
+    }
+  }
+
+  _onFocus() {
+    if (this._query && this._results.length > 0) {
+      this._open = true;
+    }
   }
 
   _search(query) {
@@ -237,7 +283,7 @@ class BinoSearch extends HTMLElement {
       }
     });
 
-    // Search text content within layout pages (limit to avoid performance issues)
+    // Search text content within layout pages
     if (results.length < 50) {
       pages.forEach(function(pageEl) {
         var pageName = pageEl.getAttribute('data-bino-page') || '';
@@ -246,13 +292,12 @@ class BinoSearch extends HTMLElement {
 
         for (var i = 0; i < textEls.length && results.length < 50; i++) {
           var textEl = textEls[i];
-          // Only check direct text nodes, skip script/style
           if (textEl.tagName === 'SCRIPT' || textEl.tagName === 'STYLE') continue;
 
           var childNodes = textEl.childNodes;
           for (var j = 0; j < childNodes.length; j++) {
             var node = childNodes[j];
-            if (node.nodeType !== 3) continue; // Text node only
+            if (node.nodeType !== 3) continue;
             var text = node.textContent.trim();
             if (!text || text.length < 2) continue;
 
@@ -270,7 +315,7 @@ class BinoSearch extends HTMLElement {
                 el: textEl,
                 query: query
               });
-              break; // One match per element
+              break;
             }
           }
         }
@@ -278,61 +323,7 @@ class BinoSearch extends HTMLElement {
     }
 
     this._results = results;
-    this._renderResults(query);
-  }
-
-  _renderResults(query) {
-    if (this._results.length === 0) {
-      this._dropdown.innerHTML = '<div class="no-results">No results found</div>';
-      this._dropdown.classList.add('open');
-      return;
-    }
-
-    var self = this;
-    var lowerQuery = query.toLowerCase();
-    var html = '';
-
-    this._results.forEach(function(result, index) {
-      var activeClass = index === self._activeIndex ? ' active' : '';
-      var displayName = result.type === 'text' ? result.name : escapeHtml(result.name);
-
-      // Highlight match in name
-      if (result.type !== 'text') {
-        var nameIdx = result.name.toLowerCase().indexOf(lowerQuery);
-        if (nameIdx !== -1) {
-          displayName = escapeHtml(result.name.substring(0, nameIdx)) +
-                        '<mark>' + escapeHtml(result.name.substring(nameIdx, nameIdx + query.length)) + '</mark>' +
-                        escapeHtml(result.name.substring(nameIdx + query.length));
-        }
-      } else {
-        // For text results, highlight the matched portion
-        var textIdx = result.name.toLowerCase().indexOf(lowerQuery);
-        if (textIdx !== -1) {
-          displayName = escapeHtml(result.name.substring(0, textIdx)) +
-                        '<mark>' + escapeHtml(result.name.substring(textIdx, textIdx + query.length)) + '</mark>' +
-                        escapeHtml(result.name.substring(textIdx + query.length));
-        } else {
-          displayName = escapeHtml(result.name);
-        }
-      }
-
-      html += '<div class="result' + activeClass + '" data-index="' + index + '">';
-      html += '<span class="result-kind">' + escapeHtml(result.kind) + '</span>';
-      html += '<span class="result-name">' + displayName + '</span>';
-      html += '</div>';
-    });
-
-    this._dropdown.innerHTML = html;
-    this._dropdown.classList.add('open');
-
-    // Bind click events
-    var resultEls = this._dropdown.querySelectorAll('.result');
-    resultEls.forEach(function(el) {
-      el.addEventListener('click', function() {
-        var idx = parseInt(el.getAttribute('data-index'), 10);
-        self._selectResult(idx);
-      });
-    });
+    this._open = true;
   }
 
   _moveActive(delta) {
@@ -343,14 +334,11 @@ class BinoSearch extends HTMLElement {
     if (newIndex >= this._results.length) newIndex = 0;
     this._activeIndex = newIndex;
 
-    // Update visual state
-    var items = this._dropdown.querySelectorAll('.result');
-    items.forEach(function(el, i) {
-      if (i === newIndex) {
-        el.classList.add('active');
-        el.scrollIntoView({ block: 'nearest' });
-      } else {
-        el.classList.remove('active');
+    // Scroll active item into view
+    this.updateComplete.then(() => {
+      var items = this.renderRoot.querySelectorAll('.result');
+      if (items[newIndex]) {
+        items[newIndex].scrollIntoView({ block: 'nearest' });
       }
     });
   }
@@ -368,7 +356,7 @@ class BinoSearch extends HTMLElement {
     var el = result.el;
     var originalOutline = el.style.outline;
     var originalOutlineOffset = el.style.outlineOffset;
-    el.style.outline = '2px solid ' + getComputedStyle(document.documentElement).getPropertyValue('--bino-primary').trim() || '#3b82f6';
+    el.style.outline = '2px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--bino-primary').trim() || '#3b82f6');
     el.style.outlineOffset = '2px';
 
     setTimeout(function() {
@@ -378,7 +366,7 @@ class BinoSearch extends HTMLElement {
   }
 
   _close() {
-    this._dropdown.classList.remove('open');
+    this._open = false;
     this._activeIndex = -1;
   }
 }
