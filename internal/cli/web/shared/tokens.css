@@ -40,6 +40,7 @@
   --bino-z-toolbar: 10000;
   --bino-z-panel: 10001;
   --bino-z-dropdown: 10002;
+  --bino-z-modal: 10003;
 
   /* Typography */
   --bino-font-size-xs: 0.6875rem;
