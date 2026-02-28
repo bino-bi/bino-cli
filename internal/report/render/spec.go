@@ -256,36 +256,36 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeStackAttr(b, "stack", s.Stack)
 }
 
-// chartTreeSpec defines the structure for ChartTree components.
-// Tree charts display hierarchical structures with nodes connected by edges,
+// treeSpec defines the structure for Tree components.
+// Trees display hierarchical structures with nodes connected by edges,
 // commonly used for driver trees and decomposition diagrams.
-type chartTreeSpec struct {
+type treeSpec struct {
 	Edges         json.RawMessage `json:"edges"`
 	Direction     string          `json:"direction"`
 	LevelSpacing  *float64        `json:"levelSpacing"`
 	NodeSpacing   *float64        `json:"nodeSpacing"`
 	EdgeStyle     string          `json:"edgeStyle"`
 	ShowOperators *bool           `json:"showOperators"`
-	Nodes         []chartTreeNode `json:"nodes"`
+	Nodes         []treeNode `json:"nodes"`
 }
 
-// chartTreeNode defines a node in the tree chart.
+// treeNode defines a node in a tree.
 // Each node can contain a Label, Table, ChartStructure, or ChartTime component.
-type chartTreeNode struct {
+type treeNode struct {
 	ID   string          `json:"id"`
 	Kind string          `json:"kind"`
 	Ref  string          `json:"ref,omitempty"`
 	Spec json.RawMessage `json:"spec,omitempty"`
 }
 
-// chartTreeLabelSpec defines a simple label component for tree nodes.
-type chartTreeLabelSpec struct {
+// treeLabelSpec defines a simple label component for tree nodes.
+type treeLabelSpec struct {
 	Value   string                 `json:"value"`
 	Dataset reportspec.DatasetList `json:"dataset"`
 	Scale   string                 `json:"scale,omitempty"`
 }
 
-func (s chartTreeSpec) writeAttrs(b *strings.Builder) {
+func (s treeSpec) writeAttrs(b *strings.Builder) {
 	// Write edges as JSON string attribute
 	if len(s.Edges) > 0 {
 		writeAttr(b, "edges", string(s.Edges))

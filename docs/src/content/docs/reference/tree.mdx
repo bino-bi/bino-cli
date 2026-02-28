@@ -1,9 +1,9 @@
 ---
-title: ChartTree
+title: Tree
 description: Configure tree diagrams for driver trees and decomposition charts.
 ---
 
-`ChartTree` manifests describe hierarchical tree diagrams where nodes are connected by edges.
+`Tree` manifests describe hierarchical tree diagrams where nodes are connected by edges.
 They are commonly used for driver trees, decomposition diagrams, and organizational charts.
 
 Unlike `ChartStructure` and `ChartTime`, tree charts are **structure-driven** rather than data-driven.
@@ -13,7 +13,7 @@ The tree layout is defined by edges connecting node IDs, and the node content is
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
-kind: ChartTree
+kind: Tree
 metadata:
   name: roi_driver_tree
 spec:
@@ -194,7 +194,7 @@ nodes:
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
-kind: ChartTree
+kind: Tree
 metadata:
   name: roi_driver_tree
   description: Return on Investment decomposition
@@ -243,7 +243,7 @@ spec:
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
-kind: ChartTree
+kind: Tree
 metadata:
   name: sales_analysis_tree
 spec:
@@ -297,7 +297,7 @@ metadata:
 spec:
   pageLayout: full
   children:
-    - kind: ChartTree
+    - kind: Tree
       spec:
         edges:
           - { from: "sales", to: "price", operator: "x" }
@@ -368,7 +368,7 @@ spec:
 ---
 # Tree using the reference
 apiVersion: bino.bi/v1alpha1
-kind: ChartTree
+kind: Tree
 metadata:
   name: cost_tree
 spec:
