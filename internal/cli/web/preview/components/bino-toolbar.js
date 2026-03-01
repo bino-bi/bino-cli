@@ -72,7 +72,7 @@ class BinoToolbar extends LitElement {
     .warning-icon {
       font-size: var(--bino-font-size-md);
     }
-    .assets-btn, .graph-btn {
+    .assets-btn, .graph-btn, .explorer-btn {
       display: inline-flex;
       align-items: center;
       gap: var(--bino-space-xs);
@@ -87,11 +87,11 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .assets-btn:hover, .graph-btn:hover {
+    .assets-btn:hover, .graph-btn:hover, .explorer-btn:hover {
       background: var(--bino-surface-hover);
       border-color: #9ca3af;
     }
-    .assets-icon, .graph-icon {
+    .assets-icon, .graph-icon, .explorer-icon {
       font-size: var(--bino-font-size-md);
     }
     .spacer {
@@ -181,6 +181,10 @@ class BinoToolbar extends LitElement {
           <span>Graph</span>
         </button>
       ` : ''}
+      <button class="explorer-btn" title="Data Explorer" @click=${this._onExplorerClick}>
+        <span class="explorer-icon">\u2636</span>
+        <span>Explorer</span>
+      </button>
       <span class="spacer"></span>
       <slot></slot>
     `;
@@ -204,6 +208,10 @@ class BinoToolbar extends LitElement {
     document.dispatchEvent(new CustomEvent('bino-open-graph', {
       detail: { graph: this.graph }
     }));
+  }
+
+  _onExplorerClick() {
+    document.dispatchEvent(new CustomEvent('bino-open-explorer'));
   }
 
   _onSelectChange(e) {

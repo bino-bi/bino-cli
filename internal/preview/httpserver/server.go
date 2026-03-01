@@ -106,11 +106,12 @@ type LocalAsset struct {
 
 // Config controls Server construction.
 type Config struct {
-	ListenAddr string
-	CacheDir   string
-	CDNBaseURL string
-	Logger     logx.Logger
-	HTTPClient *http.Client
+	ListenAddr      string
+	CacheDir        string
+	CDNBaseURL      string
+	Logger          logx.Logger
+	HTTPClient      *http.Client
+	ExplorerHandler http.Handler
 }
 
 // maxContextCacheEntries limits the number of cached context entries to prevent
@@ -185,6 +186,9 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
+	if cfg.ExplorerHandler != nil {
+		mux.Handle("/__explorer/", cfg.ExplorerHandler)
+	}
 
 	srv.httpServer = &http.Server{Handler: mux}
 	srv.contentFn = StaticContent([]byte("Hello world"), "text/plain; charset=utf-8")
