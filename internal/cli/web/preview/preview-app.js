@@ -4,6 +4,7 @@ import './components/bino-error-panel.js';
 import './components/bino-search.js';
 import './components/bino-assets-modal.js';
 import './components/bino-graph-modal.js';
+import './components/bino-data-explorer.js';
 
 if (!window.EventSource || window.__bnPreviewRuntime) {
   // Prevent double-initialization

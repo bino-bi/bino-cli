@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net/http"
 	"os/exec"
 	"path"
 	"runtime"
@@ -17,6 +18,7 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/preview/explorer"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/report/config"
@@ -166,6 +168,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			refreshMu := &sync.Mutex{}
 			var server *previewhttp.Server
+			var explorerSession *explorer.Session
 
 			refresh := func(reason string) error {
 				// Check for cancellation before acquiring lock
@@ -203,6 +206,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// Warn about unresolved environment variables (preview continues with empty values)
 				for _, m := range config.CollectMissingEnvVars(docs) {
 					logger.Warnf("unresolved environment variable %s in %s", m.VarName, m.File)
+				}
+
+				// Refresh explorer session with latest documents (non-fatal on error)
+				if explorerSession != nil {
+					if err := explorerSession.Refresh(ctx, docs); err != nil {
+						logger.Warnf("Explorer refresh: %v", err)
+					}
 				}
 
 				// Run lint rules if enabled
@@ -400,10 +410,20 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			defer watcher.Close()
 			go watcher.Run(ctx)
 
+			// Create explorer session for data exploration
+			explorerSession, err = explorer.NewSession(ctx, logger.Channel("explorer"))
+			if err != nil {
+				logger.Warnf("Data explorer unavailable: %v", err)
+			}
+			if explorerSession != nil {
+				defer explorerSession.Close()
+			}
+
 			server, err = previewhttp.New(previewhttp.Config{
-				ListenAddr: addr,
-				CacheDir:   cacheDir,
-				Logger:     logger.Channel("server"),
+				ListenAddr:      addr,
+				CacheDir:        cacheDir,
+				Logger:          logger.Channel("server"),
+				ExplorerHandler: explorerHandler(explorerSession),
 			})
 			if err != nil {
 				return RuntimeError(err)
@@ -628,6 +648,7 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, documents []previewDocu
 	b.WriteString(`<bino-error-panel></bino-error-panel>`)
 	b.WriteString(`<bino-assets-modal></bino-assets-modal>`)
 	b.WriteString(`<bino-graph-modal></bino-graph-modal>`)
+	b.WriteString(`<bino-data-explorer></bino-data-explorer>`)
 
 	return b.String()
 }
@@ -807,4 +828,12 @@ func validateBrowserURL(url string) error {
 
 func previewCacheDir() (string, error) {
 	return pathutil.CacheDir("cdn")
+}
+
+// explorerHandler returns the explorer HTTP handler if the session is available.
+func explorerHandler(session *explorer.Session) http.Handler {
+	if session == nil {
+		return nil
+	}
+	return explorer.Handler(session)
 }
