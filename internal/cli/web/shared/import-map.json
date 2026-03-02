@@ -5,7 +5,6 @@
     "lit-html": "https://esm.sh/lit-html@3.2.1",
     "lit-html/": "https://esm.sh/lit-html@3.2.1/",
     "@lit/reactive-element": "https://esm.sh/@lit/reactive-element@2.1.0",
-    "@lit/reactive-element/": "https://esm.sh/@lit/reactive-element@2.1.0/",
-    "@vaadin/router": "https://esm.sh/@vaadin/router@1.7.5"
+    "@lit/reactive-element/": "https://esm.sh/@lit/reactive-element@2.1.0/"
   }
 }

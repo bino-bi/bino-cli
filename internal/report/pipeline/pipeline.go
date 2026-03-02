@@ -331,6 +331,9 @@ type RenderOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// LayoutPageParams provides override values for LayoutPage parameters.
+	// Used by serve mode to pass URL query params as LayoutPage param values.
+	LayoutPageParams map[string]string
 }
 
 // RenderResult captures the outcome of rendering HTML from documents.
@@ -1059,11 +1062,11 @@ func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]c
 // contains the full report content for SSE delivery.
 // The workdir parameter is required for dataset execution.
 func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts RenderOptions) (FrameRenderResult, error) {
-	// Expand LayoutPages with defined params using their defaults/env values
+	// Expand LayoutPages with defined params using overrides/defaults/env values
 	expandedDocs := make([]config.Document, 0, len(docs))
 	for _, doc := range docs {
 		if doc.Kind == "LayoutPage" && len(doc.Params) > 0 {
-			expandedDoc, err := expandLayoutPageWithParams(doc, nil)
+			expandedDoc, err := expandLayoutPageWithParams(doc, opts.LayoutPageParams)
 			if err != nil {
 				return FrameRenderResult{}, fmt.Errorf("expand params for %q: %w", doc.Name, err)
 			}

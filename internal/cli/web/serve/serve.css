@@ -12,7 +12,9 @@ html {
 }
 body {
   display: flex !important;
+  justify-content: flex-start !important;
   margin: 0;
+  padding: 0 !important;
   min-height: 100vh;
   background: var(--bino-bg);
   font-family: inherit;
@@ -28,8 +30,7 @@ bn-context {
   flex-direction: column;
   align-items: center;
   gap: 1.75rem;
-  width: fit-content;
-  min-width: 100%;
+  width: 100%;
   margin: 0 auto;
   padding: var(--bino-space-lg);
   transition: opacity var(--bino-transition-fast);
