@@ -25,7 +25,7 @@ class BinoControlPanel extends LitElement {
       top: 0;
       font-family: var(--bino-font-sans);
     }
-    :host(:empty), :host([hidden]) {
+    :host([hidden]) {
       display: none;
     }
     h3 {
@@ -258,11 +258,17 @@ class BinoControlPanel extends LitElement {
 
   render() {
     var routeKeys = Object.keys(this.routes).sort();
+    var hasRoutes = routeKeys.length > 0;
+    var hasParams = this.queryParams.length > 0;
+
+    // Hide the panel when there is nothing to show
+    this.hidden = !hasRoutes && !hasParams;
+
     var urlParams = new URLSearchParams(window.location.search);
 
     return html`
-      ${routeKeys.length > 1 ? this._renderNavigation(routeKeys) : ''}
-      ${this.queryParams.length > 0 ? this._renderParams(urlParams) : ''}
+      ${hasRoutes ? this._renderNavigation(routeKeys) : ''}
+      ${hasParams ? this._renderParams(urlParams) : ''}
     `;
   }
 

@@ -611,12 +611,13 @@ func serveLayoutPagesHandler(
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
 	filteredDocs := filterDocsForLayoutPages(reqCtx.Docs, layoutPages)
 
-	// Render the layout pages directly
+	// Render the layout pages directly, passing query params as LayoutPage param overrides
 	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
-		Workdir:       workdir,
-		Mode:          pipeline.RenderModeServe,
-		EngineVersion: engineVersion,
-		QueryLogger:   queryLogger,
+		Workdir:          workdir,
+		Mode:             pipeline.RenderModeServe,
+		EngineVersion:    engineVersion,
+		QueryLogger:      queryLogger,
+		LayoutPageParams: reqCtx.QueryParams,
 	})
 	if err != nil {
 		logger.Errorf("Render failed for layoutPages: %v", err)
