@@ -153,10 +153,12 @@ func parseDataSetSpec(raw json.RawMessage) (dataSetSpec, error) {
 
 // extractDatasets parses the dataset field from a component manifest.
 // For Tree components, it also extracts datasets from nodes.
+// For Grid components, it also extracts datasets from children.
 func extractDatasets(raw json.RawMessage) ([]string, error) {
 	var payload struct {
-		Dataset reportspec.DatasetList `json:"dataset"`
-		Nodes   []treeNodeSpec    `json:"nodes"`
+		Dataset  reportspec.DatasetList `json:"dataset"`
+		Nodes    []treeNodeSpec         `json:"nodes"`
+		Children []gridChildSpec        `json:"children"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("dataset field: %w", err)
@@ -178,6 +180,20 @@ func extractDatasets(raw json.RawMessage) ([]string, error) {
 		datasets = append(datasets, nodePayload.Dataset.Strings()...)
 	}
 
+	// Also extract datasets from Grid children
+	for _, child := range payload.Children {
+		if len(child.Spec) == 0 {
+			continue
+		}
+		var childPayload struct {
+			Dataset reportspec.DatasetList `json:"dataset"`
+		}
+		if err := json.Unmarshal(child.Spec, &childPayload); err != nil {
+			continue
+		}
+		datasets = append(datasets, childPayload.Dataset.Strings()...)
+	}
+
 	return datasets, nil
 }
 
@@ -187,6 +203,16 @@ type treeNodeSpec struct {
 	Kind string          `json:"kind"`
 	Ref  string          `json:"ref,omitempty"`
 	Spec json.RawMessage `json:"spec,omitempty"`
+}
+
+// gridChildSpec represents a child in a Grid for graph building and dataset extraction.
+type gridChildSpec struct {
+	Row      json.RawMessage `json:"row"`
+	Column   json.RawMessage `json:"column"`
+	Kind     string          `json:"kind"`
+	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 
 // reportArtefactSpec represents the parsed specification for a ReportArtefact manifest.
