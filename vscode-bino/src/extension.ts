@@ -15,6 +15,9 @@ import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
+import { PreviewTreeProvider } from './previewTree';
+import { ActionsTreeProvider } from './actionsTree';
+import { EnvironmentTreeProvider } from './environmentTree';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -168,13 +171,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register PRQL completions/snippets in YAML
     registerPrqlCompletion(context);
 
-    // Register tree view for Bino Explorer
+    // Register tree view for Bino Documents (sidebar panel)
     const treeProvider = new BinoTreeProvider(indexer, validator);
-    const treeView = vscode.window.createTreeView('binoExplorer', {
+    const treeView = vscode.window.createTreeView('binoDocuments', {
         treeDataProvider: treeProvider,
         showCollapseAll: true
     });
     context.subscriptions.push(treeView);
+
+    // Register Preview & Build tree
+    const previewTreeProvider = new PreviewTreeProvider(previewManager);
+    context.subscriptions.push(
+        vscode.window.createTreeView('binoPreview', {
+            treeDataProvider: previewTreeProvider,
+        })
+    );
+
+    // Register Scaffolding tree
+    const actionsTreeProvider = new ActionsTreeProvider();
+    context.subscriptions.push(
+        vscode.window.createTreeView('binoActions', {
+            treeDataProvider: actionsTreeProvider,
+        })
+    );
+
+    // Register Environment tree
+    const environmentTreeProvider = new EnvironmentTreeProvider(indexer, validator);
+    context.subscriptions.push(
+        vscode.window.createTreeView('binoEnvironment', {
+            treeDataProvider: environmentTreeProvider,
+        })
+    );
 
     // Register commands
     context.subscriptions.push(
@@ -390,6 +417,117 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.showDependentsForItem', async (item: BinoTreeItem) => {
             await showGraphForTreeItem(indexer, item, 'in');
+        })
+    );
+
+    // --- Helper: run a bino command in the integrated terminal ---
+    function runInTerminal(args: string): void {
+        const config = vscode.workspace.getConfiguration('bino');
+        const binPath = config.get<string>('binPath');
+        const bino = binPath && binPath.trim() ? binPath : 'bino';
+        const terminal = vscode.window.createTerminal({ name: `Bino: ${args}`, cwd: indexer?.getProjectRootForUri() });
+        terminal.show();
+        terminal.sendText(`${bino} ${args}`);
+    }
+
+    // --- Scaffolding commands (bino add <kind>) ---
+    const addCommands: [string, string][] = [
+        ['bino.initProject', 'init'],
+        ['bino.addDataset', 'add dataset'],
+        ['bino.addDatasource', 'add datasource'],
+        ['bino.addConnectionSecret', 'add connectionsecret'],
+        ['bino.addLayoutPage', 'add layoutpage'],
+        ['bino.addLayoutCard', 'add layoutcard'],
+        ['bino.addTable', 'add table'],
+        ['bino.addText', 'add text'],
+        ['bino.addChartStructure', 'add chartstructure'],
+        ['bino.addChartTime', 'add charttime'],
+        ['bino.addReportArtefact', 'add reportartefact'],
+        ['bino.addLiveReportArtefact', 'add livereportartefact'],
+        ['bino.addSigningProfile', 'add signingprofile'],
+        ['bino.addAsset', 'add asset'],
+        ['bino.addComponentStyle', 'add componentstyle'],
+        ['bino.addInternationalization', 'add internationalization'],
+    ];
+    for (const [cmdId, binoArgs] of addCommands) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand(cmdId, () => runInTerminal(binoArgs))
+        );
+    }
+
+    // Cache clean commands (run via child_process, not terminal)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.cacheClean', async () => {
+            const config = vscode.workspace.getConfiguration('bino');
+            const binPath = config.get<string>('binPath');
+            const bino = binPath && binPath.trim() ? binPath : 'bino';
+            try {
+                const { execSync } = await import('child_process');
+                execSync(`${bino} cache clean`, { cwd: indexer?.getProjectRootForUri(), timeout: 10000 });
+                vscode.window.showInformationMessage('Bino cache cleaned');
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to clean cache: ${err}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.cacheCleanGlobal', async () => {
+            const config = vscode.workspace.getConfiguration('bino');
+            const binPath = config.get<string>('binPath');
+            const bino = binPath && binPath.trim() ? binPath : 'bino';
+            try {
+                const { execSync } = await import('child_process');
+                execSync(`${bino} cache clean --global`, { cwd: indexer?.getProjectRootForUri(), timeout: 10000 });
+                vscode.window.showInformationMessage('Bino global cache cleaned');
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to clean global cache: ${err}`);
+            }
+        })
+    );
+
+    // Build specific artefact — QuickPick from indexed ReportArtefact names
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.buildArtefact', async () => {
+            const artefacts = indexer?.getDocuments(['ReportArtefact', 'LiveReportArtefact', 'DocumentArtefact']) ?? [];
+            if (artefacts.length === 0) {
+                vscode.window.showInformationMessage('No artefacts found in workspace');
+                return;
+            }
+            const items = artefacts.map(a => ({ label: a.name, description: a.kind }));
+            const picked = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select an artefact to build',
+                title: 'Bino: Build Artefact',
+            });
+            if (picked) {
+                runInTerminal(`build --artefact ${picked.label}`);
+            }
+        })
+    );
+
+    // Validate with queries
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.validateWithQueries', () => {
+            runInTerminal('lint --execute-queries');
+        })
+    );
+
+    // Graph commands (terminal)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.showGraphTree', () => {
+            runInTerminal('graph --view tree');
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.showGraphFlat', () => {
+            runInTerminal('graph --view flat');
+        })
+    );
+
+    // Open Bino settings
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.openSettings', () => {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'bino');
         })
     );
 

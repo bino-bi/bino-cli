@@ -27,16 +27,30 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "views": {
-      "explorer": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "binoExplorer",
-          "name": "Bino Reports",
-          "when": "bino.projectDetected",
-          "icon": "$(file-code)"
+          "id": "bino",
+          "title": "Bino Reports",
+          "icon": "resources/bino-activity-bar.svg"
         }
       ]
     },
+    "views": {
+      "bino": [
+        { "id": "binoDocuments", "name": "Documents", "when": "bino.projectDetected" },
+        { "id": "binoPreview", "name": "Preview & Build", "when": "bino.projectDetected" },
+        { "id": "binoActions", "name": "Scaffolding", "when": "bino.projectDetected" },
+        { "id": "binoEnvironment", "name": "Environment", "when": "bino.projectDetected" }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "binoDocuments",
+        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Open Folder](command:vscode.openFolder)",
+        "when": "!bino.projectDetected"
+      }
+    ],
     "commands": [
       {
         "command": "bino.refreshIndex",
@@ -159,18 +173,133 @@
         "title": "Preview Rows (100 rows)",
         "category": "Bino",
         "icon": "$(preview)"
+      },
+      {
+        "command": "bino.initProject",
+        "title": "Initialize Project",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addDataset",
+        "title": "Add DataSet",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addDatasource",
+        "title": "Add DataSource",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addConnectionSecret",
+        "title": "Add ConnectionSecret",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addLayoutPage",
+        "title": "Add LayoutPage",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addLayoutCard",
+        "title": "Add LayoutCard",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addTable",
+        "title": "Add Table",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addText",
+        "title": "Add Text",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addChartStructure",
+        "title": "Add ChartStructure",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addChartTime",
+        "title": "Add ChartTime",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addReportArtefact",
+        "title": "Add ReportArtefact",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addLiveReportArtefact",
+        "title": "Add LiveReportArtefact",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addSigningProfile",
+        "title": "Add SigningProfile",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addAsset",
+        "title": "Add Asset",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addComponentStyle",
+        "title": "Add ComponentStyle",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addInternationalization",
+        "title": "Add Internationalization",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.cacheClean",
+        "title": "Clean Cache",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.cacheCleanGlobal",
+        "title": "Clean Cache (Global)",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.buildArtefact",
+        "title": "Build Specific Artefact",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.validateWithQueries",
+        "title": "Validate with Queries",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.showGraphTree",
+        "title": "Show Graph (Tree)",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.showGraphFlat",
+        "title": "Show Graph (Flat)",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.openSettings",
+        "title": "Open Bino Settings",
+        "category": "Bino"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "bino.refreshIndex",
-          "when": "view == binoExplorer",
+          "when": "view == binoDocuments",
           "group": "navigation"
         },
         {
           "command": "bino.validateWorkspace",
-          "when": "view == binoExplorer",
+          "when": "view == binoDocuments",
           "group": "navigation"
         }
       ],
@@ -215,22 +344,22 @@
       "view/item/context": [
         {
           "command": "bino.openFirstProblem",
-          "when": "view == binoExplorer && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem == binoDocument",
           "group": "navigation"
         },
         {
           "command": "bino.showGraphForItem",
-          "when": "view == binoExplorer && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem == binoDocument",
           "group": "graph@1"
         },
         {
           "command": "bino.showDependenciesForItem",
-          "when": "view == binoExplorer && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem == binoDocument",
           "group": "graph@2"
         },
         {
           "command": "bino.showDependentsForItem",
-          "when": "view == binoExplorer && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem == binoDocument",
           "group": "graph@3"
         }
       ],

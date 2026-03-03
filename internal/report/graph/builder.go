@@ -123,7 +123,7 @@ func (b *builder) categorize() {
 	for _, doc := range b.docs {
 		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
 		switch doc.Kind {
-		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset":
+		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset", "Grid":
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
 		}
@@ -137,7 +137,7 @@ func (b *builder) categorize() {
 			b.layoutPageDocs = append(b.layoutPageDocs, doc)
 		case "LayoutCard":
 			b.layoutCardDocs = append(b.layoutCardDocs, doc)
-		case "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset":
+		case "Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset", "Grid":
 			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
@@ -220,7 +220,7 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset"}
+	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "Image", "Asset", "Grid"}
 	for _, kind := range kinds {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {
@@ -342,6 +342,48 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 		node.Attributes["parent"] = parentName
 		b.nodes[node.ID] = node
 		return node.ID, nil
+	case "Grid":
+		label := fmt.Sprintf("Grid %s#%s", parentName, pathKey(path))
+		nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(path))
+		node, err := b.buildComponentNode("Grid", effectiveSpec, effectiveFile, label, nodeName)
+		if err != nil {
+			return "", err
+		}
+		node.Attributes["parent"] = parentName
+
+		// Parse grid children and resolve their dataset dependencies.
+		var gridPayload struct {
+			Children []gridChildSpec `json:"children"`
+		}
+		if err := json.Unmarshal(effectiveSpec, &gridPayload); err != nil {
+			var wrapper struct {
+				Spec struct {
+					Children []gridChildSpec `json:"children"`
+				} `json:"spec"`
+			}
+			if errWrap := json.Unmarshal(effectiveSpec, &wrapper); errWrap == nil {
+				gridPayload.Children = wrapper.Spec.Children
+			}
+		}
+		for i, gc := range gridPayload.Children {
+			childPath := append(append([]int(nil), path...), i)
+			lc := layoutChild{
+				Kind:     gc.Kind,
+				Ref:      gc.Ref,
+				Optional: gc.Optional,
+				Spec:     gc.Spec,
+			}
+			childID, err := b.buildLayoutChild(parentName, effectiveFile, lc, childPath)
+			if err != nil {
+				return "", err
+			}
+			if childID != "" {
+				node.DependsOn = append(node.DependsOn, childID)
+			}
+		}
+
+		b.nodes[node.ID] = node
+		return node.ID, nil
 	default:
 		return "", fmt.Errorf("unsupported child kind %q", child.Kind)
 	}
@@ -366,7 +408,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 	if !found {
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		if lpDoc, lpFound := b.docIndex["LayoutPage:"+child.Ref]; lpFound {
-			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, Tree, LayoutCard, and Image can be referenced",
+			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, and Image can be referenced",
 				parentName, child.Ref, lpDoc.Name)
 		}
 
