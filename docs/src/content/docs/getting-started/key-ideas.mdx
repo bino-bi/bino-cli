@@ -1,0 +1,110 @@
+---
+title: Key ideas
+description: The mental model you need before writing your first manifest.
+sidebar:
+  order: 2
+---
+
+Before you open a YAML file, here are the five things that make bino click.
+
+## Everything is a manifest
+
+A bino project is a directory of YAML files. Each YAML document is a **manifest** — a declarative description of one building block. Every manifest has the same envelope:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource          # the role of this document
+metadata:
+  name: monthly_sales     # unique identifier
+spec:
+  # ... kind-specific fields
+```
+
+The `kind` field tells bino what the manifest does. There are only a handful of kinds to learn:
+
+| Kind | Role |
+|------|------|
+| `DataSource` | Loads raw data (CSV, Excel, Parquet, Postgres, MySQL) |
+| `DataSet` | Runs a SQL query on top of data sources |
+| `LayoutPage` | Defines a page with charts, tables, and text |
+| `LayoutCard` | A reusable card that can be placed inside pages |
+| `ReportArtefact` | Assembles pages into a PDF with metadata |
+| `ComponentStyle` | Defines reusable visual styles |
+| `Asset` | Registers images, fonts, and files |
+
+## Data flows through a pipeline
+
+Data moves in one direction:
+
+```
+DataSource  →  DataSet  →  LayoutPage  →  ReportArtefact  →  PDF
+   (raw)        (SQL)       (visual)        (assembly)      (output)
+```
+
+A **DataSource** registers raw data — a CSV file, an Excel sheet, a Postgres query. It becomes a named view in the query engine.
+
+A **DataSet** runs SQL against those views. You can join, filter, aggregate, and window — anything DuckDB supports. The result is another named table available to layouts.
+
+A **LayoutPage** arranges visual components (charts, tables, text) on a page and binds them to datasets.
+
+A **ReportArtefact** collects pages into a single PDF, sets the filename and metadata, and optionally applies a digital signature.
+
+## SQL is the query language
+
+All data transformations happen in SQL. bino embeds DuckDB, so you get full analytical SQL without needing a running database:
+
+```yaml
+kind: DataSet
+metadata:
+  name: revenue_by_region
+spec:
+  query: |
+    SELECT region, SUM(amount) AS total
+    FROM sales_csv
+    GROUP BY region
+    ORDER BY total DESC
+```
+
+If your data is in a CSV, you query it with SQL. If it's in Postgres, you query it with SQL. The abstraction layer is always the same.
+
+## Layouts compose
+
+Pages are built from a small set of visual components: `ChartStructure`, `ChartTime`, `Table`, `Text`. You place them into a page layout grid (`2x2`, `split-vertical`, `1-over-2`, and more):
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: sales_dashboard
+spec:
+  pageLayout: 2x2
+  children:
+    - kind: ChartTime
+      spec:
+        dataset: monthly_revenue
+    - kind: ChartStructure
+      spec:
+        dataset: revenue_by_region
+    - kind: Table
+      spec:
+        dataset: top_customers
+    - kind: Text
+      spec:
+        value: "Data as of ${REPORT_DATE}"
+```
+
+Cards group components into reusable units. Pages group into artefacts. The pieces snap together.
+
+## Everything is a file
+
+There is no database, no UI state, no hidden configuration. Your entire report definition lives in files on disk:
+
+- YAML manifests define the report structure.
+- SQL lives inside `DataSet` manifests (or in `.sql` files if you prefer).
+- Data files (CSV, Excel, Parquet) sit next to your manifests.
+- A `bino.toml` file at the project root holds project-level settings.
+
+This means you get Git, code review, branching, and CI for free. Two people can work on different pages of the same report and merge without conflict.
+
+---
+
+Ready to build? Follow the [Your first report](/getting-started/first-report/) tutorial. For a deeper dive into why this approach works, see [Reporting as Code](/why/reporting-as-code/).

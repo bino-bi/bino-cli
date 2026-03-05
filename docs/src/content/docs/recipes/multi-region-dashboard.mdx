@@ -1,0 +1,257 @@
+---
+title: "Recipe: Multi-region dashboard"
+description: One layout template, multiple regions, one PDF — using parameterized LayoutPages.
+sidebar:
+  order: 3
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+This recipe builds a weekly operational dashboard for a company with multiple regions. One `LayoutPage` template serves all regions. The `ReportArtefact` instantiates it with different parameters. The result: a single PDF with one section per region, generated from one `bino build` command.
+
+## Project structure
+
+```
+ops-dashboard/
+  bino.toml
+  manifests/
+    data.yaml             # DataSource + DataSets
+    regional-page.yaml    # Parameterized LayoutPage
+    report.yaml           # ReportArtefact
+    i18n.yaml             # Internationalization (optional)
+  data/
+    regions.csv
+```
+
+## Data layer
+
+```yaml
+# manifests/data.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: ops_metrics
+spec:
+  type: postgres_query
+  connection:
+    host: ${DB_HOST}
+    port: 5432
+    database: operations
+    schema: public
+    user: reporting
+    secret: opsDbCredentials
+  query: |
+    SELECT
+      region,
+      week,
+      deliveries_total,
+      deliveries_on_time,
+      avg_delivery_hours,
+      warehouse_throughput,
+      exception_count
+    FROM v_weekly_ops_metrics
+    WHERE week = DATE_TRUNC('week', CURRENT_DATE - INTERVAL '1 week')
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: opsDbCredentials
+spec:
+  type: postgres
+  postgres:
+    passwordFromEnv: OPS_DB_PASSWORD
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: regional_kpis
+spec:
+  query: |
+    SELECT
+      deliveries_total,
+      ROUND(100.0 * deliveries_on_time / NULLIF(deliveries_total, 0), 1) AS on_time_pct,
+      ROUND(avg_delivery_hours, 1) AS avg_hours,
+      warehouse_throughput,
+      exception_count
+    FROM ops_metrics
+    WHERE region = '${REGION}'
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: regional_trend
+spec:
+  dependencies:
+    - type: postgres_query
+      connection:
+        host: ${DB_HOST}
+        port: 5432
+        database: operations
+        schema: public
+        user: reporting
+        secret: opsDbCredentials
+      query: |
+        SELECT week, deliveries_on_time, deliveries_total
+        FROM v_weekly_ops_metrics
+        WHERE region = '${REGION}'
+        ORDER BY week
+  query: |
+    SELECT * FROM @inline(0)
+```
+
+## Parameterized layout page
+
+```yaml
+# manifests/regional-page.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: regional-dashboard
+  params:
+    - name: REGION
+      type: select
+      required: true
+      options:
+        items:
+          - value: "EU-WEST"
+            label: "Europe West"
+          - value: "EU-EAST"
+            label: "Europe East"
+          - value: "NA"
+            label: "North America"
+          - value: "APAC"
+            label: "Asia Pacific"
+          - value: "LATAM"
+            label: "Latin America"
+spec:
+  titleBusinessUnit: "Operations — ${REGION}"
+  titleNamespace: _system
+  titleDateStart: 2024-01-01
+  titleDateEnd: 2024-12-31
+  titleDateFormat: week
+  titleDateLink: none
+  pageLayout: 2x2
+  pageFormat: xga
+  pageOrientation: landscape
+  footerDisplayPageNumber: true
+  footerText: "Confidential — ${REGION} Operations"
+  children:
+    - kind: Text
+      spec:
+        dataset: regional_kpis
+    - kind: ChartTime
+      spec:
+        dataset: regional_trend
+        chartTitle: "On-time delivery trend"
+        dateInterval: week
+        level: category
+    - kind: ChartStructure
+      spec:
+        dataset: regional_kpis
+        chartTitle: "KPI overview"
+        level: category
+    - kind: Table
+      spec:
+        dataset: regional_kpis
+        tableTitle: "Key metrics"
+        type: list
+```
+
+## Report artefact — one page per region
+
+```yaml
+# manifests/report.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: weekly-ops-dashboard
+spec:
+  format: xga
+  orientation: landscape
+  language: en
+  layoutPages:
+    - page: regional-dashboard
+      params:
+        REGION: EU-WEST
+    - page: regional-dashboard
+      params:
+        REGION: EU-EAST
+    - page: regional-dashboard
+      params:
+        REGION: NA
+    - page: regional-dashboard
+      params:
+        REGION: APAC
+    - page: regional-dashboard
+      params:
+        REGION: LATAM
+  filename: "ops-dashboard-week-${REPORT_WEEK}.pdf"
+  title: "Weekly Operations Dashboard"
+  author: "Central Operations"
+```
+
+A single `bino build` produces one PDF with five pages — one per region.
+
+## Adding a new region
+
+To add a sixth region (say, Middle East):
+
+1. Add the option to the LayoutPage params:
+   ```yaml
+   - value: "ME"
+     label: "Middle East"
+   ```
+
+2. Add one line to the ReportArtefact:
+   ```yaml
+   - page: regional-dashboard
+     params:
+       REGION: ME
+   ```
+
+No layout changes. No copy-paste. The new region inherits the same dashboard layout automatically.
+
+## Multi-language support
+
+Add an `Internationalization` manifest to translate labels per language:
+
+```yaml
+# manifests/i18n.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: ops-labels-en
+spec:
+  language: en
+  namespace: _system
+  translations:
+    deliveries_total: "Total deliveries"
+    on_time_pct: "On-time %"
+    avg_hours: "Avg. delivery (hours)"
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: ops-labels-de
+spec:
+  language: de
+  namespace: _system
+  translations:
+    deliveries_total: "Lieferungen gesamt"
+    on_time_pct: "Pünktlich %"
+    avg_hours: "Ø Lieferzeit (Stunden)"
+```
+
+Create a second `ReportArtefact` with `language: de` to produce a German version from the same data and layout.
+
+<Aside>
+For full i18n documentation, see [Internationalization reference](/reference/internationalization/).
+</Aside>
+
+---
+
+See also: [Parameterized LayoutPages](/reference/layout-page/#layoutpage-parameters) for the full parameter syntax, and the [Compliance report recipe](/recipes/compliance-report/) for A4 formatting and digital signing.
