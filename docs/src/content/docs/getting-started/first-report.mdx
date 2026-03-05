@@ -5,8 +5,9 @@ description: Scaffold, preview, and build a simple bino report bundle.
 
 import { Steps, Aside } from "@astrojs/starlight/components";
 
-This guide walks through creating a new report bundle, previewing it in the browser, and exporting a PDF.
-It assumes you have `bino` installed and available on your `PATH`.
+In the next few minutes you will scaffold a report bundle, preview it live in your browser, and export a PDF — the core loop you will use every day with bino. The scaffolded project includes sample CSV data, SQL queries, charts, and tables so you can see how the pieces fit together before building your own.
+
+This guide assumes you have `bino` installed and available on your `PATH`.
 
 <Steps>
 
@@ -47,6 +48,7 @@ It assumes you have `bino` installed and available on your `PATH`.
 
     Use your editor to explore these files.
     The manifests all share `apiVersion: bino.bi/v1alpha1` and a `kind` that selects the spec.
+    Each kind has a specific role: `DataSource` loads raw data, `DataSet` runs SQL on top of it, `LayoutPage` defines the visual layout, and `ReportArtefact` assembles pages into a PDF. See [Key ideas](/getting-started/key-ideas/) for the full mental model.
 
 3.  **Preview the report**
 
@@ -83,8 +85,14 @@ It assumes you have `bino` installed and available on your `PATH`.
 
 </Steps>
 
+## What you just built
+
+You created a complete report bundle: data sources feed into SQL queries, queries power charts and tables, and a layout page composes them into a PDF. This is the [Reporting as Code](/why/reporting-as-code/) workflow — everything is a text file, everything is reproducible, and the same `bino build` command works on your laptop and in CI.
+
 ## Where to go next
 
 - Learn about [workdirs and manifests](/concepts/workdir-and-manifests/).
 - Explore the [schema reference](/reference/report-artefact/) to understand each `kind` in detail.
 - Browse [how-to guides](/guides/practical-howto/) for common tasks like connecting CSVs, databases, and styling layouts.
+- See [Recipe: CI/CD pipeline](/recipes/ci-cd-pipeline/) to automate builds in GitHub Actions or GitLab CI.
+- Read [Recipe: Monthly client report](/recipes/monthly-client-report/) for a full end-to-end SaaS reporting example.

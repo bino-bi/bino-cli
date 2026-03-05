@@ -1,0 +1,200 @@
+---
+title: "Recipe: CI/CD pipeline"
+description: Automate report builds with GitHub Actions, GitLab CI, and scheduled pipelines.
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This recipe shows how to run `bino build` in a CI/CD pipeline so reports are generated automatically on every commit, on a schedule, or on demand.
+
+## Prerequisites
+
+- A bino report bundle committed to a Git repository.
+- CI runner with internet access (for installing bino and Chrome headless shell).
+- Any secrets (database passwords, API keys) stored as CI/CD environment variables.
+
+## Install bino in CI
+
+bino ships a single binary. Install it and its rendering engine in one step:
+
+```bash
+# Install bino
+/bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+
+# Install Chrome headless shell (required for PDF rendering)
+bino setup
+```
+
+<Aside type="tip">
+Set `CI=1` in your environment to disable the interactive update check.
+</Aside>
+
+## Build and upload
+
+A typical CI job:
+
+1. Checks out the repository.
+2. Installs bino and Chrome headless shell.
+3. Runs `bino build --out-dir dist/`.
+4. Uploads the generated PDFs as build artefacts or to object storage.
+
+## GitHub Actions example
+
+```yaml
+name: Build Reports
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 1 * *"   # 6 AM on the 1st of each month
+  workflow_dispatch:        # manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bino
+        run: |
+          /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+          bino setup
+
+      - name: Build reports
+        run: bino build --out-dir dist/
+
+      - name: Upload PDFs
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: dist/*.pdf
+```
+
+### Parameterized builds
+
+Use `workflow_dispatch` inputs to pass parameters at trigger time:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Region filter"
+        default: "EU"
+      year:
+        description: "Reporting year"
+        default: "2024"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      REGION: ${{ github.event.inputs.region }}
+      REPORT_YEAR: ${{ github.event.inputs.year }}
+    steps:
+      # ... install + build as above
+```
+
+Your manifests reference `${REGION}` and `${REPORT_YEAR}` as environment variables.
+
+## GitLab CI example
+
+```yaml
+build-reports:
+  image: ubuntu:latest
+  variables:
+    CI: "1"
+  script:
+    - apt-get update && apt-get install -y curl
+    - /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+    - bino setup
+    - bino build --out-dir dist/
+  artifacts:
+    paths:
+      - dist/*.pdf
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+```
+
+## Caching Chrome headless shell
+
+Chrome headless shell is ~150 MB. Cache it between runs to speed up pipelines:
+
+<Tabs>
+  <TabItem label="GitHub Actions">
+```yaml
+- name: Cache Chrome headless shell
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/bino
+    key: bino-chrome-${{ runner.os }}
+
+- name: Install bino + Chrome
+  run: |
+    /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
+    bino setup
+```
+  </TabItem>
+  <TabItem label="GitLab CI">
+```yaml
+build-reports:
+  cache:
+    paths:
+      - .cache/bino
+  variables:
+    XDG_CACHE_HOME: $CI_PROJECT_DIR/.cache
+```
+  </TabItem>
+</Tabs>
+
+## Post-build hooks for upload
+
+Instead of CI-specific upload steps, you can use bino's `post-build` hook to push PDFs to S3, GCS, or any storage:
+
+```toml
+# bino.toml
+[build.hooks]
+post-build = ["./scripts/upload.sh"]
+```
+
+```bash
+#!/bin/bash
+# scripts/upload.sh
+aws s3 sync "$BINO_OUTPUT_DIR" "s3://reports-bucket/$(date +%Y-%m)/" \
+  --exclude "*.log" --exclude "*.json"
+```
+
+This keeps the upload logic inside the report bundle, independent of your CI platform.
+
+## Selective builds
+
+Build only specific artefacts to speed up CI:
+
+```bash
+# Build only the executive summary
+bino build --artefact executive_summary
+
+# Build everything except the appendix
+bino build --exclude-artefact appendix_detail
+```
+
+## Tips
+
+- **Pin the bino version** in CI by downloading a specific release URL instead of `latest`.
+- **Keep secrets in CI variables**, never in manifests. Use `${VAR}` syntax and `*FromEnv` fields in `ConnectionSecret`.
+- **Use `bino lint`** as a fast validation step in PRs — it checks manifests without building PDFs.
+- **Run `bino build --verbose`** in CI for detailed logs when debugging failures.
+
+---
+
+See also: [Hooks and ETL workflows](/guides/hooks-and-etl/) for more automation patterns, and [Monthly client report recipe](/recipes/monthly-client-report/) for an end-to-end example.

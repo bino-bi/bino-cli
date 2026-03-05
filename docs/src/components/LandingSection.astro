@@ -31,6 +31,38 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     </div>
   </section>
 
+  <section class="personas-section">
+    <h2 class="section-title">Who uses bino</h2>
+    <p class="section-subtitle">Teams that ship reports on a schedule.</p>
+    <div class="persona-grid">
+      <a href="/why/use-cases/" class="persona-card">
+        <div class="persona-icon">💰</div>
+        <h3>Finance & Controlling</h3>
+        <p>Monthly management reports, P&L summaries, board decks — versioned and reproducible.</p>
+      </a>
+      <a href="/why/use-cases/" class="persona-card">
+        <div class="persona-icon">📊</div>
+        <h3>SaaS Companies</h3>
+        <p>Branded client usage reports generated automatically from your analytics database.</p>
+      </a>
+      <a href="/why/use-cases/" class="persona-card">
+        <div class="persona-icon">🏢</div>
+        <h3>Agencies</h3>
+        <p>White-label analytics for multiple clients. One template, per-client branding.</p>
+      </a>
+      <a href="/why/use-cases/" class="persona-card">
+        <div class="persona-icon">🚚</div>
+        <h3>Operations</h3>
+        <p>Multi-region dashboards and operational KPIs distributed on a weekly schedule.</p>
+      </a>
+      <a href="/why/use-cases/" class="persona-card">
+        <div class="persona-icon">🔧</div>
+        <h3>Data Engineers</h3>
+        <p>Add PDF output to existing pipelines. No BI platform needed — just YAML and SQL.</p>
+      </a>
+    </div>
+  </section>
+
   <section class="docs-section">
     <h2 class="section-title">Start Building</h2>
     <CardGrid>
@@ -159,6 +191,44 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     color: var(--sl-color-gray-3);
     line-height: 1.6;
     font-size: 0.95rem;
+  }
+
+  /* Personas Section */
+  .persona-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .persona-card {
+    padding: 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: transparent;
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+
+  .persona-card:hover {
+    border-color: var(--sl-color-accent-high);
+  }
+
+  .persona-icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .persona-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    color: var(--sl-color-white);
+  }
+
+  .persona-card p {
+    color: var(--sl-color-gray-3);
+    line-height: 1.5;
+    font-size: 0.9rem;
   }
 
   /* Commercial Section */
