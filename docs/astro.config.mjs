@@ -26,11 +26,15 @@ export default defineConfig({
 			lastUpdated: true,
 			sidebar: [
 				{
+					label: 'Why bino',
+					autogenerate: { directory: 'why' },
+				},
+				{
 					label: 'Getting started',
 					items: [
 						{ label: 'Installation', slug: 'getting-started/installation' },
+						{ label: 'Key ideas', slug: 'getting-started/key-ideas' },
 						{ label: 'Your first report', slug: 'getting-started/first-report' },
-						// { label: 'Vscode Extension', slug: 'getting-started/vscode-extension' },
 					],
 				},
 				{
@@ -40,6 +44,10 @@ export default defineConfig({
 				{
 					label: 'How-to guides',
 					autogenerate: { directory: 'guides' },
+				},
+				{
+					label: 'Recipes',
+					autogenerate: { directory: 'recipes' },
 				},
 				{
 					label: 'CLI',

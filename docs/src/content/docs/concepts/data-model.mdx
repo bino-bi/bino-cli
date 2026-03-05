@@ -3,6 +3,8 @@ title: Data model
 description: How datasources, datasets, secrets, and external storage work together.
 ---
 
+One of the core principles of [Reporting as Code](/why/reporting-as-code/) is that data transformations are declarative and reproducible. In bino, you never manually export, paste, or reshape data — you define the sources and the SQL, and the engine handles the rest.
+
 bino uses an embedded analytical engine.
 `DataSource` and `DataSet` manifests describe how raw data becomes analytical tables used by layouts and reports.
 

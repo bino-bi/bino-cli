@@ -1,0 +1,59 @@
+---
+title: Reporting as Code
+description: Why plain-text report definitions beat manual workflows.
+sidebar:
+  order: 1
+---
+
+Every organisation has reports that need to go out on a schedule: monthly client summaries, quarterly board decks, compliance filings, operational dashboards. The typical workflow looks like this:
+
+1. Export data from a database or BI tool.
+2. Open Excel. Paste, pivot, format, conditionally colour.
+3. Copy charts into PowerPoint or Word. Tweak margins.
+4. Export to PDF. Attach to an email. Send.
+5. Next month, do it again — hoping nothing changed in the source.
+
+This process is slow, error-prone, and impossible to version-control. When a number is wrong, you dig through email threads to find the right spreadsheet. When the layout changes, you redo work by hand. When a new colleague joins, they watch over your shoulder.
+
+## What "Reporting as Code" means
+
+Reporting as Code applies the principles of software engineering to the reporting lifecycle. Instead of manual steps, you define your reports in plain-text files — YAML manifests and SQL queries — that live alongside your application code.
+
+The result: a report bundle you can commit, diff, review, branch, test, and deploy just like any other software artefact.
+
+## Five principles
+
+**Declarative.** You describe *what* the report should contain — data sources, queries, layouts, formatting — not *how* to assemble it. bino's engine takes care of execution.
+
+**Versioned.** Every change to a report definition is a Git commit. You can see exactly when a column was added, who changed a filter, and why. Roll back to last month's version in seconds.
+
+**Reproducible.** Given the same manifests and the same data, the output is identical. No hidden formatting, no "it looked different on my machine." CI produces the same PDF every time.
+
+**Automated.** Reports build themselves. A cron job, a CI pipeline, or a webhook trigger runs `bino build` and the PDF appears. No human in the loop for routine runs.
+
+**Composable.** Data sources, queries, layouts, and styles are independent building blocks. Reuse a layout across reports. Swap a CSV for a Postgres connection. Override a style for a specific client. Each piece has a single job.
+
+## How bino implements this
+
+bino is built around YAML manifests with a `kind` field that defines the role of each document:
+
+- **DataSource** — registers raw data (CSV, Excel, Parquet, Postgres, MySQL, object storage).
+- **DataSet** — runs SQL on top of data sources to produce derived tables.
+- **LayoutPage** — defines a page with headers, footers, and a grid of child components (charts, tables, text).
+- **ReportArtefact** — ties pages together into a PDF with metadata, filename, and optional digital signing.
+
+You write these manifests in your editor, preview changes with `bino preview` (hot-reloading included), and build final PDFs with `bino build`. The embedded DuckDB engine runs all queries locally — no external service required.
+
+## Who benefits
+
+- **Finance and controlling teams** producing monthly or quarterly management reports on a fixed schedule.
+- **SaaS companies** sending branded usage or analytics reports to each customer.
+- **Agencies** generating white-label reports for multiple clients from the same template.
+- **Operations and logistics teams** distributing regional performance dashboards across locations.
+- **Data engineers** who want to add a reporting output to an existing data pipeline without adopting a full BI platform.
+
+If your reports follow a pattern and repeat on a schedule, Reporting as Code replaces busywork with a pipeline you can trust.
+
+---
+
+Next: see [real-world use cases](/why/use-cases/) or jump to [how bino works](/why/how-it-works/).

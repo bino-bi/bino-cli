@@ -1,0 +1,282 @@
+---
+title: "Recipe: Compliance report"
+description: A4 formatted regulatory report with multiple data sources, digital signing, and audit trail.
+sidebar:
+  order: 4
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+This recipe builds a quarterly compliance report for a financial services company. The report uses A4 portrait formatting, pulls data from both Postgres and Excel, includes headers and footers with page numbers, and applies a digital signature. Development and production use different data sources via constraints.
+
+## Project structure
+
+```
+compliance-report/
+  bino.toml
+  manifests/
+    connections.yaml      # ConnectionSecrets
+    datasources.yaml      # DataSources (dev + prod)
+    datasets.yaml         # DataSet queries
+    pages.yaml            # LayoutPage definitions
+    report.yaml           # ReportArtefact + SigningProfile
+    styles.yaml           # ComponentStyle
+  data/
+    auditor-adjustments.xlsx   # Excel file from auditors
+  certs/
+    compliance-cert.pem
+    compliance-key.pem
+```
+
+## Connections and data sources
+
+```yaml
+# manifests/connections.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: warehouseDb
+spec:
+  type: postgres
+  postgres:
+    passwordFromEnv: DWH_PASSWORD
+```
+
+Use constraints to swap data sources between development and production:
+
+```yaml
+# manifests/datasources.yaml
+---
+# Development: inline mock data
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: financial_data
+  constraints:
+    - labels.env==dev
+spec:
+  type: inline
+  inline:
+    content:
+      - { period: "Q4-2024", category: "Revenue", amount: 12500000, currency: "EUR" }
+      - { period: "Q4-2024", category: "COGS", amount: 7800000, currency: "EUR" }
+      - { period: "Q4-2024", category: "OpEx", amount: 2100000, currency: "EUR" }
+      - { period: "Q4-2024", category: "EBIT", amount: 2600000, currency: "EUR" }
+---
+# Production: Postgres data warehouse
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: financial_data
+  constraints:
+    - labels.env==prod
+spec:
+  type: postgres_query
+  connection:
+    host: ${DWH_HOST}
+    port: 5432
+    database: dwh
+    schema: finance
+    user: compliance_reader
+    secret: warehouseDb
+  query: |
+    SELECT period, category, amount, currency
+    FROM v_quarterly_financials
+    WHERE period = '${REPORT_PERIOD}'
+---
+# Auditor adjustments from Excel (both envs)
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: auditor_adjustments
+spec:
+  type: excel
+  path: ./data/auditor-adjustments.xlsx
+```
+
+## Datasets
+
+```yaml
+# manifests/datasets.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: adjusted_financials
+spec:
+  query: |
+    SELECT
+      f.period,
+      f.category,
+      f.amount + COALESCE(a.adjustment, 0) AS adjusted_amount,
+      f.currency,
+      a.adjustment,
+      a.note AS adjustment_note
+    FROM financial_data f
+    LEFT JOIN auditor_adjustments a
+      ON f.period = a.period AND f.category = a.category
+    ORDER BY
+      CASE f.category
+        WHEN 'Revenue' THEN 1
+        WHEN 'COGS' THEN 2
+        WHEN 'OpEx' THEN 3
+        WHEN 'EBIT' THEN 4
+      END
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: compliance_summary
+spec:
+  query: |
+    SELECT
+      COUNT(*) AS total_line_items,
+      COUNT(adjustment) AS items_adjusted,
+      SUM(ABS(COALESCE(adjustment, 0))) AS total_adjustment_value
+    FROM adjusted_financials
+```
+
+## Layout pages — A4 portrait
+
+```yaml
+# manifests/pages.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: compliance-cover
+spec:
+  titleBusinessUnit: "Quarterly Compliance Report"
+  titleNamespace: _system
+  pageLayout: full
+  pageFormat: a4
+  pageOrientation: portrait
+  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerDisplayPageNumber: false
+  children:
+    - kind: Text
+      spec:
+        value: |
+          Quarterly Financial Compliance Report
+          Period: ${REPORT_PERIOD}
+          Prepared by: Group Compliance
+          Date: ${REPORT_DATE}
+        style:
+          fontSize: 24
+          fontWeight: bold
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: compliance-financials
+spec:
+  titleBusinessUnit: "Financial Summary"
+  titleNamespace: _system
+  pageLayout: split-vertical
+  pageFormat: a4
+  pageOrientation: portrait
+  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerDisplayPageNumber: true
+  children:
+    - kind: Table
+      spec:
+        dataset: adjusted_financials
+        tableTitle: "Adjusted financial figures"
+        type: list
+    - kind: Text
+      spec:
+        dataset: compliance_summary
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: compliance-adjustments
+spec:
+  titleBusinessUnit: "Auditor Adjustments"
+  titleNamespace: _system
+  pageLayout: full
+  pageFormat: a4
+  pageOrientation: portrait
+  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerDisplayPageNumber: true
+  children:
+    - kind: Table
+      spec:
+        dataset: adjusted_financials
+        tableTitle: "Adjustment details"
+        type: list
+```
+
+## Report artefact with digital signing
+
+```yaml
+# manifests/report.yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: SigningProfile
+metadata:
+  name: complianceSigner
+spec:
+  certificate:
+    path: ./certs/compliance-cert.pem
+  privateKey:
+    path: ./certs/compliance-key.pem
+  signer:
+    name: "Head of Compliance"
+    location: "Frankfurt"
+    reason: "Quarterly regulatory filing"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: quarterly_compliance
+  labels:
+    env: ${REPORT_ENV:dev}
+spec:
+  format: a4
+  orientation: portrait
+  language: en
+  layoutPages:
+    - compliance-cover
+    - compliance-financials
+    - compliance-adjustments
+  filename: "compliance-${REPORT_PERIOD}.pdf"
+  title: "Quarterly Compliance Report — ${REPORT_PERIOD}"
+  subject: "Regulatory quarterly filing"
+  author: "Group Compliance"
+  keywords: ["compliance", "quarterly", "regulatory"]
+  signingProfile: complianceSigner
+```
+
+## Development vs. production builds
+
+```bash
+# Development — uses inline mock data
+REPORT_ENV=dev REPORT_PERIOD=Q4-2024 REPORT_DATE=2025-01-15 bino build
+
+# Production — uses real database
+REPORT_ENV=prod REPORT_PERIOD=Q4-2024 REPORT_DATE=2025-01-15 \
+  DWH_HOST=dwh.internal DWH_PASSWORD=secret \
+  bino build --out-dir dist/
+```
+
+The `labels.env` on the `ReportArtefact` activates the matching `DataSource` constraint. Development builds use inline data; production builds hit the data warehouse — same manifests, same layout, different data.
+
+## Build logs for audit trail
+
+Use `--verbose` and `--log-sql` to capture a detailed build log:
+
+```bash
+bino build --verbose --log-sql 2>&1 | tee "build-log-${REPORT_PERIOD}.txt"
+```
+
+The log records which data sources were loaded, which queries ran, and how long each step took. Store it alongside the PDF for audit purposes.
+
+<Aside type="caution">
+Keep private keys (`compliance-key.pem`) out of Git. Store them as CI secrets or in a secure vault. Only the certificate (`compliance-cert.pem`) needs to be in the repository.
+</Aside>
+
+---
+
+See also: [Signing reports guide](/guides/signing-reports/) for full signing documentation, and [Constraints and scoped names](/concepts/constraints-and-scoped-names/) for constraint syntax details.

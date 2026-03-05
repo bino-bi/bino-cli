@@ -3,20 +3,22 @@ title: BinoBI CLI documentation
 description: Declarative report bundles with YAML and SQL.
 template: splash
 hero:
-  tagline: Build pixel-perfect PDF reports from YAML and SQL.
+  tagline: Stop building reports by hand. Define them in YAML, query with SQL, generate pixel-perfect PDFs.
   image:
     file: ../../assets/landing_page.webp
   actions:
     - text: Get started
       link: /getting-started/installation/
       icon: rocket
-    - text: Schema reference
-      link: /reference
-      icon: document
+    - text: Why bino?
+      link: /why/reporting-as-code/
+      icon: open-book
       variant: minimal
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
+
+Every month, teams export data, paste into spreadsheets, tweak formatting, and email PDFs. bino replaces that loop with a code-driven pipeline: YAML manifests define your report, SQL queries shape the data, and `bino build` produces the PDF. Version-controlled, reproducible, automated.
 
 ## Quick Install
 

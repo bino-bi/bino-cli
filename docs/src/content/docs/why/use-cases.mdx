@@ -1,0 +1,54 @@
+---
+title: When to use bino
+description: Real-world B2B scenarios where bino excels — and where it does not.
+sidebar:
+  order: 2
+---
+
+bino is purpose-built for **scheduled, structured, multi-page PDF reports** that pull data from databases and files. Below are five scenarios where it shines, followed by situations where a different tool is a better fit.
+
+## Monthly client reports for a SaaS company
+
+You run a B2B SaaS product and send each customer a monthly usage report: active users, feature adoption, API calls, storage consumed. Today, someone on the Customer Success team exports data from your analytics database, pastes it into a branded Google Slides template, and emails the PDF. It takes 30 minutes per customer and looks slightly different every time.
+
+With bino, you define one report bundle: a Postgres `DataSource` pointing at your analytics database, parameterized `DataSet` queries filtered by customer ID, and a branded `LayoutPage` with your logo, colours, and chart layout. A CI job runs `bino build` for each customer on the first of the month. The output is a pixel-perfect PDF, uploaded to S3 and linked in an automated email. The Customer Success team reviews instead of assembles.
+
+## Regulatory compliance reports
+
+A financial services company files quarterly reports with detailed formatting requirements: A4 portrait, specific header and footer text, page numbers, and a digital signature from the compliance officer. Source data comes from both a Postgres data warehouse and Excel files provided by auditors.
+
+bino handles multiple data source types in the same bundle. `DataSource` manifests for Postgres and Excel feed into `DataSet` queries that join and aggregate across sources. `LayoutPage` manifests control the A4 formatting precisely — headers, footers, page breaks, margins. A `SigningProfile` applies a digital signature to every output PDF. Constraints separate development data (inline mock rows) from production data (real database connections), so the same bundle works in both environments.
+
+## Multi-region operational dashboards
+
+A logistics company operates in 12 countries and publishes a weekly performance dashboard for each regional manager. The content is the same — delivery times, warehouse throughput, exception rates — but filtered by region.
+
+One parameterized `LayoutPage` template serves all 12 regions. The `ReportArtefact` lists the same page 12 times, each with a different `REGION` parameter. A single `bino build` produces 12 PDFs (or one combined PDF with 12 sections). Add a new region by adding one line to the artefact manifest and one row to the region reference table. No layout work required.
+
+## Branded analytics for agency clients
+
+A marketing agency manages campaigns for 20 clients. Each client gets a monthly performance report with their own logo, colour palette, and KPI selection. The underlying data comes from a shared analytics platform exported as CSV.
+
+bino's `ComponentStyle` and `Asset` manifests handle per-client branding. Constraints and labels on manifests select which styles, logos, and data filters apply to each client's artefact. The agency maintains one set of layout templates and one set of data queries. Client-specific overrides live in small, focused manifest files. When the agency signs a new client, they add a few YAML files — no copy-paste of an entire report project.
+
+## Internal management and controlling reports
+
+A mid-size manufacturing company produces a monthly Group Controlling report: a 15-page PDF with a cover, executive summary, P&L table, revenue charts by product line, and an appendix with detailed breakdowns. The data comes from SAP exports (Excel) and a Postgres data warehouse.
+
+The controlling team defines the full report as a bino bundle: `DataSource` manifests for both Excel and Postgres, `DataSet` queries for all aggregations and calculations, `LayoutPage` manifests for each page, and a `ReportArtefact` that orders the pages and sets PDF metadata. `bino preview` lets them iterate on layout and data in real time. When the numbers are final, `bino build` produces the PDF in seconds. The bundle is committed to Git, so last month's report is one `git checkout` away.
+
+---
+
+## When bino is NOT the right tool
+
+**Real-time dashboards.** bino produces static PDFs. If you need live, interactive dashboards that update as data changes, use a BI tool like Metabase, Superset, or Grafana.
+
+**Ad-hoc data exploration.** bino is for structured, repeatable reports. If you need to slice and dice data interactively to answer one-off questions, use a notebook (Jupyter, DuckDB CLI) or a BI tool.
+
+**One-off reports.** If you need a single report once and never again, the setup cost of YAML manifests and SQL queries may not pay off. bino's value compounds with repetition.
+
+**Pixel-level graphic design.** bino gives you precise control over page layout, typography, and charts. But if your report is primarily a design piece — think magazine layouts or marketing collateral — a design tool like Figma or InDesign is more appropriate.
+
+---
+
+Next: learn [how bino works under the hood](/why/how-it-works/) or jump straight to [installation](/getting-started/installation/).
