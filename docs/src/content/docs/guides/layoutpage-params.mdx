@@ -3,6 +3,8 @@ title: LayoutPage Parameters
 description: Create reusable report templates with typed parameters for multi-region, multi-period, and multi-dimension reports.
 ---
 
+import dashboardImg from "../../../../assets/sample-dashboard.png";
+
 LayoutPage parameters allow you to create reusable page templates that can be instantiated multiple times with different values. This is essential for reports that repeat the same layout for different regions, time periods, products, or any other dimension.
 
 ## When to use parameters
@@ -77,6 +79,8 @@ bino build --artefact regional-report
 ```
 
 This generates a PDF with two pages: one for Europe and one for North America.
+
+<img src={dashboardImg.src} alt="A parameterized dashboard page rendered with region-specific data" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Parameter definition reference
 

@@ -1,0 +1,20 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: revenue_by_region
+spec:
+  query: SELECT * FROM revenue_data ORDER BY categoryIndex
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: revenue_trend
+spec:
+  query: SELECT * FROM monthly_revenue ORDER BY date
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: financial_summary
+spec:
+  query: SELECT * FROM kpi_table_data ORDER BY rowGroupIndex, categoryIndex

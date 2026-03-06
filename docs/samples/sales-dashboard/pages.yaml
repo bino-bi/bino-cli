@@ -1,0 +1,296 @@
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales-dashboard-page
+spec:
+  pageLayout: 2x2
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "Revenue"
+        unit: "EUR k"
+    titleScenarios: "AC, PY, BU"
+    dateEnd: "2025-06-30"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - Monthly Sales Report"
+    code: "S.01"
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: revenue_chart
+      spec:
+        dataset: revenue_by_region
+        scenarios:
+          - ac1
+          - pp1
+        variances:
+          - dac1_pp1_pos
+          - drac1_pp1_pos
+        level: category
+        order: ac1
+        orderDirection: desc
+        unitScaling: 0.001
+        percentageScaling: 25
+        chartTitle: "Revenue by Region"
+    - kind: ChartTime
+      metadata:
+        name: revenue_trend_chart
+      spec:
+        dataset: revenue_trend
+        scenarios:
+          - ac1
+          - pp1
+          - fc1
+        level: category
+        order: category
+        orderDirection: asc
+        unitScaling: 0.001
+        chartTitle: "Monthly Revenue Trend"
+    - kind: Table
+      metadata:
+        name: financial_table
+      spec:
+        dataset: financial_summary
+        scenarios:
+          - ac1
+          - pp1
+          - pl1
+        variances:
+          - dac1_pl1_pos
+          - drac1_pl1_pos
+        grouped: true
+    - kind: Text
+      metadata:
+        name: kpi_summary
+      spec:
+        value: |
+          **H1 2025 Summary**
+
+          Total revenue reached **EUR 13.7m** year-to-date, exceeding plan by **+3.6%** and prior year by **+10.1%**. DACH remains the strongest region contributing 31% of total revenue. Growth in Eastern Europe accelerated with +20.8% vs PY.
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: chart-structure-page
+spec:
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "Revenue"
+        unit: "EUR k"
+    titleScenarios: "AC, PY"
+    dateEnd: "2025-06-30"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - Revenue Analysis"
+    code: "S.02"
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: revenue_chart_full
+      spec:
+        dataset: revenue_by_region
+        scenarios:
+          - ac1
+          - pp1
+        variances:
+          - dac1_pp1_pos
+          - drac1_pp1_pos
+        level: category
+        order: ac1
+        orderDirection: desc
+        unitScaling: 0.001
+        percentageScaling: 25
+        chartTitle: "Revenue by Region"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: chart-time-page
+spec:
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "Revenue"
+        unit: "EUR k"
+    titleScenarios: "AC, PY, FC"
+    dateEnd: "2025-12-31"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - Revenue Trend"
+    code: "S.03"
+  children:
+    - kind: ChartTime
+      metadata:
+        name: revenue_trend_full
+      spec:
+        dataset: revenue_trend
+        scenarios:
+          - ac1
+          - pp1
+          - fc1
+        level: category
+        order: category
+        orderDirection: asc
+        unitScaling: 0.001
+        chartTitle: "Monthly Revenue Development"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: table-page
+spec:
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "P&L"
+        unit: "EUR k"
+    titleScenarios: "AC, PY, BU"
+    dateEnd: "2025-06-30"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - Financial Summary"
+    code: "S.04"
+  children:
+    - kind: Table
+      metadata:
+        name: financial_table_full
+      spec:
+        dataset: financial_summary
+        scenarios:
+          - ac1
+          - pp1
+          - pl1
+        variances:
+          - dac1_pp1_pos
+          - dac1_pl1_pos
+          - drac1_pl1_pos
+        grouped: true
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: text-page
+spec:
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "Executive Summary"
+        unit: ""
+    dateEnd: "2025-06-30"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - Management Report"
+    code: "S.05"
+  children:
+    - kind: Text
+      metadata:
+        name: exec_summary
+      spec:
+        value: |
+          **H1 2025 Executive Summary**
+
+          The first half of 2025 showed strong performance across all business segments. Key highlights:
+
+          - **Total Revenue:** EUR 13.7m (+10.1% vs PY, +3.6% vs Budget)
+          - **Product Sales:** EUR 8.4m, driven by new enterprise contracts
+          - **Services Revenue:** EUR 3.3m, growing +12.1% year-over-year
+          - **Licensing:** EUR 2.0m, stable recurring base
+
+          **Regional Performance:**
+          The DACH region continues to lead with EUR 4.3m, followed by UK & Ireland at EUR 3.1m. Eastern Europe showed the highest growth rate at +20.8%.
+
+          **Outlook:**
+          Full-year forecast stands at EUR 28.5m, supported by a strong pipeline in Q3. The team expects continued momentum from the recently launched product line expansion.
+        dataset: revenue_by_region
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: layout-card-page
+spec:
+  pageLayout: 2x2
+  titleRow:
+    businessUnit: "Acme Corp"
+    measures:
+      - name: "KPI Dashboard"
+        unit: ""
+    dateEnd: "2025-06-30"
+    dateFormat: month
+    dateLink: interval
+  footer:
+    text: "Acme Corp - KPI Cards"
+    code: "S.06"
+  children:
+    - kind: LayoutCard
+      metadata:
+        name: revenue_card
+      spec:
+        title: "Revenue Overview"
+        children:
+          - kind: ChartStructure
+            spec:
+              dataset: revenue_by_region
+              scenarios:
+                - ac1
+                - pp1
+              level: category
+              order: ac1
+              orderDirection: desc
+              unitScaling: 0.001
+    - kind: LayoutCard
+      metadata:
+        name: trend_card
+      spec:
+        title: "Revenue Trend"
+        children:
+          - kind: ChartTime
+            spec:
+              dataset: revenue_trend
+              scenarios:
+                - ac1
+                - pp1
+                - fc1
+              level: category
+              order: category
+              orderDirection: asc
+              unitScaling: 0.001
+    - kind: LayoutCard
+      metadata:
+        name: table_card
+      spec:
+        title: "Financial Summary"
+        children:
+          - kind: Table
+            spec:
+              dataset: financial_summary
+              scenarios:
+                - ac1
+                - pp1
+              variances:
+                - dac1_pp1_pos
+              grouped: true
+    - kind: LayoutCard
+      metadata:
+        name: summary_card
+      spec:
+        title: "Executive Summary"
+        children:
+          - kind: Text
+            spec:
+              value: |
+                **H1 2025 Highlights**
+
+                Revenue: **EUR 13.7m** (+3.6% vs BU)
+
+                Top Region: **DACH** (EUR 4.3m)
+
+                Growth Leader: **Eastern Europe** (+20.8%)
+
+                FY Forecast: **EUR 28.5m**

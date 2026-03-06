@@ -6,6 +6,8 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import dashboardImg from "../../../../assets/sample-dashboard.png";
+import chartStructureImg from "../../../../assets/sample-chart-structure.png";
 
 This recipe builds a monthly usage report for SaaS clients. Each client gets a branded PDF with their logo, a KPI summary, a usage trend chart, a feature adoption breakdown, and a data table. The data comes from Postgres.
 
@@ -172,6 +174,10 @@ spec:
         tableTitle: "Sessions by feature"
         type: list
 ```
+
+<img src={dashboardImg.src} alt="A 2x2 client usage dashboard with KPIs, trend chart, feature adoption, and data table" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+
+<img src={chartStructureImg.src} alt="A ChartStructure showing feature adoption breakdown" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Report artefact
 

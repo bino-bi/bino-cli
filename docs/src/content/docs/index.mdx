@@ -26,6 +26,31 @@ Every month, teams export data, paste into spreadsheets, tweak formatting, and e
 /bin/bash -c "$(curl -fsSL https://github.com/bino-bi/bino-cli-releases/releases/latest/download/install.sh)"
 ```
 
+## From YAML to PDF in seconds
+
+Write a few lines of YAML, point bino at your data, and get a pixel-perfect PDF. The same workflow runs on your laptop and in CI.
+
+```yaml
+# data.yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: revenue_data
+spec:
+  type: inline
+  content:
+    - category: "DACH"
+      ac1: 4250
+      pp1: 3800
+    - category: "Nordics"
+      ac1: 2870
+      pp1: 2650
+```
+
+```bash
+bino build   # produces dist/report.pdf
+```
+
 import LandingSection from "../../components/LandingSection.astro";
 
 <LandingSection />

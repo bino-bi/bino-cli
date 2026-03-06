@@ -3,6 +3,8 @@ title: Styling and internationalization
 description: Apply consistent styles and translations to your reports.
 ---
 
+import dashboardImg from "../../../../assets/sample-dashboard.png";
+
 This guide shows how to combine `ComponentStyle` and `Internationalization` manifests.
 You will define a style, a translation block, and reference them from layouts conceptually.
 
@@ -47,4 +49,5 @@ Conceptually:
 - Styles are referenced by name in component configuration.
 
 Keep your documentation clear about which keys and style names are used where.
-Add placeholder screenshots showing the same layout with default vs corporate styles to highlight the difference.
+
+<img src={dashboardImg.src} alt="A styled report dashboard with corporate theme applied" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />

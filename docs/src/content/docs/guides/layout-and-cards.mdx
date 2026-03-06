@@ -3,6 +3,9 @@ title: Designing layouts and cards
 description: Use LayoutPage and LayoutCard to structure dashboards and reports.
 ---
 
+import dashboardImg from "../../../../assets/sample-dashboard.png";
+import layoutCardsImg from "../../../../assets/sample-layout-cards.png";
+
 This guide shows how to combine `LayoutPage` and `LayoutCard` to build dashboards.
 You will define a page-level layout with nested cards and components.
 
@@ -25,6 +28,8 @@ spec:
   footerText: "Internal dashboard"
   children: []
 ```
+
+<img src={dashboardImg.src} alt="A 2x2 dashboard with ChartStructure, ChartTime, and Text components" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## 2. Add KPI cards
 
@@ -66,6 +71,8 @@ spec:
               tableTitle: "EBIT by region"
 ```
 
+<img src={layoutCardsImg.src} alt="A 2x2 layout with LayoutCards containing different components" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+
 ## 3. Use custom templates for complex layouts
 
 For custom grids, switch to `cardLayout: custom-template` or `pageLayout: custom-template`:
@@ -88,4 +95,3 @@ children:
 ```
 
 Map child components to grid areas according to your front-end conventions.
-Use placeholder screenshots in the docs to illustrate the visual layout before real design assets are ready.

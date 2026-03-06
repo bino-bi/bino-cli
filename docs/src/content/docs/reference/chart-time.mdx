@@ -3,6 +3,8 @@ title: ChartTime
 description: Configure time-series charts with smart date axes and overlays.
 ---
 
+import chartTimeImg from "../../../../assets/sample-chart-time.png";
+
 `ChartTime` manifests describe time-based charts.
 They share many fields with `ChartStructure` but add date-axis-specific options.
 
@@ -102,6 +104,8 @@ spec:
   showOverlayAvg: true
   scenarios: ["ac1"]
 ```
+
+<img src={chartTimeImg.src} alt="ChartTime showing monthly revenue trend as line chart with AC, PY, and FC scenarios" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Example: Line chart mode
 

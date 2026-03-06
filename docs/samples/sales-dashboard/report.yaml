@@ -1,0 +1,19 @@
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  format: xga
+  orientation: landscape
+  language: en
+  filename: sales-dashboard.pdf
+  title: "Acme Corp - Sales Dashboard H1 2025"
+  description: "Monthly management report with revenue analysis by region and trend."
+  author: "Reporting Team"
+  layoutPages:
+    - sales-dashboard-page
+    - chart-structure-page
+    - chart-time-page
+    - table-page
+    - text-page
+    - layout-card-page
