@@ -3,6 +3,8 @@ title: ChartStructure
 description: Configure categorical structure charts (rankings, breakdowns, variances).
 ---
 
+import chartStructureImg from "../../../../assets/sample-chart-structure.png";
+
 `ChartStructure` manifests describe charts that show categories, groups, and variances.
 They work on datasets with category-style dimensions and scenario-style measures.
 
@@ -87,11 +89,7 @@ spec:
   showMeasureScale: true
 ```
 
-You can document chart appearances in your own reports using placeholder screenshots such as:
-
-```md
-![Structure chart placeholder](https://via.placeholder.com/1200x600?text=Structure+Chart)
-```
+<img src={chartStructureImg.src} alt="ChartStructure showing revenue by region with absolute and relative variance bars" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Example: Stacked bars by scenario
 

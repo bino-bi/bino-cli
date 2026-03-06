@@ -1,0 +1,9 @@
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporate-style
+spec:
+  content:
+    global:
+      fontFamily: "'Noto Sans', sans-serif, Arial"
+      fontSizePx: 11

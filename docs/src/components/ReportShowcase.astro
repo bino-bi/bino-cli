@@ -1,0 +1,237 @@
+---
+import dashboardImg from "../assets/sample-dashboard.png";
+import chartStructureImg from "../assets/sample-chart-structure.png";
+import chartTimeImg from "../assets/sample-chart-time.png";
+import textImg from "../assets/sample-text.png";
+import layoutCardsImg from "../assets/sample-layout-cards.png";
+
+const slides = [
+  {
+    src: dashboardImg.src,
+    alt: "Sales Dashboard - 2x2 grid with chart, trend, and KPI summary",
+    label: "Sales Dashboard",
+    description: "A 2x2 grid layout combining structure charts, time series, tables, and text.",
+  },
+  {
+    src: chartStructureImg.src,
+    alt: "Revenue by Region - IBCS bar chart with variance analysis",
+    label: "Structure Chart",
+    description: "IBCS-compliant bar chart with absolute and relative variance columns.",
+  },
+  {
+    src: chartTimeImg.src,
+    alt: "Monthly Revenue Trend - time series with AC, PY, and FC scenarios",
+    label: "Time Series Chart",
+    description: "Monthly revenue trend with actual, prior year, and forecast scenarios.",
+  },
+  {
+    src: textImg.src,
+    alt: "Executive Summary - rich text with Markdown formatting",
+    label: "Text & Markdown",
+    description: "Rich text component with Markdown support for executive summaries.",
+  },
+  {
+    src: layoutCardsImg.src,
+    alt: "KPI Cards - 2x2 layout with four dashboard cards",
+    label: "Layout Cards",
+    description: "Reusable card components for modular dashboard composition.",
+  },
+];
+---
+
+<section class="showcase-section">
+  <h2 class="showcase-title">Built with bino</h2>
+  <p class="showcase-subtitle">Real report pages generated from YAML + SQL. Every pixel defined in code.</p>
+
+  <div class="showcase-slider" id="showcase-slider">
+    <div class="slider-track" id="slider-track">
+      {slides.map((slide, i) => (
+        <div class="slide" data-index={i}>
+          <div class="slide-image-wrapper">
+            <img src={slide.src} alt={slide.alt} loading="lazy" />
+          </div>
+          <div class="slide-caption">
+            <strong>{slide.label}</strong>
+            <span>{slide.description}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <button class="slider-btn slider-btn-prev" id="slider-prev" aria-label="Previous slide">&lsaquo;</button>
+    <button class="slider-btn slider-btn-next" id="slider-next" aria-label="Next slide">&rsaquo;</button>
+
+    <div class="slider-dots" id="slider-dots">
+      {slides.map((_, i) => (
+        <button class={`dot ${i === 0 ? "active" : ""}`} data-index={i} aria-label={`Go to slide ${i + 1}`} />
+      ))}
+    </div>
+  </div>
+</section>
+
+<script>
+  const track = document.getElementById("slider-track");
+  const prevBtn = document.getElementById("slider-prev");
+  const nextBtn = document.getElementById("slider-next");
+  const dotsContainer = document.getElementById("slider-dots");
+  const dots = dotsContainer?.querySelectorAll(".dot");
+  const slides = track?.querySelectorAll(".slide");
+  let current = 0;
+  const total = slides?.length ?? 0;
+
+  function goTo(index: number) {
+    if (!track || !dots || !slides) return;
+    current = ((index % total) + total) % total;
+    track.style.transform = `translateX(-${current * 100}%)`;
+    dots.forEach((d, i) => d.classList.toggle("active", i === current));
+  }
+
+  prevBtn?.addEventListener("click", () => goTo(current - 1));
+  nextBtn?.addEventListener("click", () => goTo(current + 1));
+  dotsContainer?.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const idx = target.dataset.index;
+    if (idx !== undefined) goTo(Number(idx));
+  });
+
+  // Auto-advance every 6 seconds
+  let autoplay = setInterval(() => goTo(current + 1), 6000);
+  const slider = document.getElementById("showcase-slider");
+  slider?.addEventListener("mouseenter", () => clearInterval(autoplay));
+  slider?.addEventListener("mouseleave", () => {
+    autoplay = setInterval(() => goTo(current + 1), 6000);
+  });
+</script>
+
+<style>
+  .showcase-section {
+    padding: 0 0 2rem;
+  }
+
+  .showcase-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+  }
+
+  .showcase-subtitle {
+    text-align: center;
+    font-size: 1.25rem;
+    color: var(--sl-color-gray-3);
+    margin-bottom: 2rem;
+  }
+
+  .showcase-slider {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7);
+  }
+
+  .slider-track {
+    display: flex;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .slide {
+    min-width: 100%;
+    flex-shrink: 0;
+  }
+
+  .slide-image-wrapper {
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .slide-image-wrapper img {
+    max-width: 100%;
+    max-height: 480px;
+    object-fit: contain;
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: white;
+  }
+
+  .slide-caption {
+    padding: 0.75rem 1.5rem 1.25rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .slide-caption strong {
+    font-size: 1.1rem;
+    color: var(--sl-color-white);
+  }
+
+  .slide-caption span {
+    font-size: 0.9rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .slider-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-60%);
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s;
+    z-index: 2;
+    line-height: 1;
+  }
+
+  .slider-btn:hover {
+    background: var(--sl-color-gray-5);
+    border-color: var(--sl-color-accent-high);
+  }
+
+  .slider-btn-prev {
+    left: 0.75rem;
+  }
+
+  .slider-btn-next {
+    right: 0.75rem;
+  }
+
+  .slider-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-bottom: 1rem;
+  }
+
+  .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    border: 1px solid var(--sl-color-gray-4);
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .dot.active {
+    background: var(--sl-color-accent-high);
+    border-color: var(--sl-color-accent-high);
+  }
+
+  .dot:hover {
+    border-color: var(--sl-color-accent-high);
+  }
+</style>
