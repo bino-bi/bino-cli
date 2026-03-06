@@ -48,12 +48,9 @@ Use `bino setup` to install Chrome headless shell.
 You place child components into these layouts using the `children` array.
 See [LayoutPage](/reference/layout-page/) and [LayoutCard](/reference/layout-card/) for examples and tips.
 
-## Images and placeholders
+## Screenshots and assets
 
-When documenting sample reports and layouts, you can reference placeholder images from the web, for example:
+You can capture individual components as images using [`ScreenshotArtefact`](/reference/screenshot-artefact/).
+This is useful for embedding charts in presentations, dashboards, or documentation.
 
-```md
-![Report preview placeholder](https://via.placeholder.com/1200x800?text=Report+Preview)
-```
-
-Later, replace these URLs with real report screenshots or locally hosted assets registered as `Asset` manifests.
+For images and fonts included in your report, register them as [`Asset`](/reference/asset/) manifests and reference them via the `asset:` URL scheme in Markdown fields.

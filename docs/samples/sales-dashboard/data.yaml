@@ -1,0 +1,190 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: revenue_data
+spec:
+  type: inline
+  content:
+    - category: "DACH"
+      categoryIndex: 1
+      operation: "+"
+      ac1: 4250
+      pp1: 3800
+      pl1: 4100
+      fc1: 4400
+    - category: "Nordics"
+      categoryIndex: 2
+      operation: "+"
+      ac1: 2870
+      pp1: 2650
+      pl1: 2900
+      fc1: 3100
+    - category: "UK & Ireland"
+      categoryIndex: 3
+      operation: "+"
+      ac1: 3120
+      pp1: 3400
+      pl1: 3200
+      fc1: 3350
+    - category: "Southern Europe"
+      categoryIndex: 4
+      operation: "+"
+      ac1: 1980
+      pp1: 1750
+      pl1: 2100
+      fc1: 2200
+    - category: "Eastern Europe"
+      categoryIndex: 5
+      operation: "+"
+      ac1: 1450
+      pp1: 1200
+      pl1: 1500
+      fc1: 1600
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: monthly_revenue
+spec:
+  type: inline
+  content:
+    - date: "2025-01-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 2100
+      pp1: 1950
+      pl1: 2000
+    - date: "2025-02-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 2350
+      pp1: 2100
+      pl1: 2200
+    - date: "2025-03-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 2680
+      pp1: 2300
+      pl1: 2500
+    - date: "2025-04-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 2450
+      pp1: 2200
+      pl1: 2400
+    - date: "2025-05-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 2890
+      pp1: 2500
+      pl1: 2600
+    - date: "2025-06-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      ac1: 3100
+      pp1: 2800
+      pl1: 2900
+    - date: "2025-07-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 3050
+      pp1: 2700
+      pl1: 2800
+    - date: "2025-08-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 3200
+      pp1: 2850
+      pl1: 2900
+    - date: "2025-09-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 3350
+      pp1: 2900
+      pl1: 3000
+    - date: "2025-10-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 3100
+      pp1: 2750
+      pl1: 2950
+    - date: "2025-11-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 2900
+      pp1: 2600
+      pl1: 2800
+    - date: "2025-12-01"
+      operation: "+"
+      category: "Total"
+      categoryIndex: 1
+      fc1: 3500
+      pp1: 3100
+      pl1: 3200
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: kpi_table_data
+spec:
+  type: inline
+  content:
+    - rowGroup: "Revenue"
+      rowGroupIndex: 1
+      category: "Product Sales"
+      categoryIndex: 1
+      operation: "+"
+      ac1: 8420
+      pp1: 7650
+      pl1: 8200
+    - rowGroup: "Revenue"
+      rowGroupIndex: 1
+      category: "Services"
+      categoryIndex: 2
+      operation: "+"
+      ac1: 3250
+      pp1: 2900
+      pl1: 3100
+    - rowGroup: "Revenue"
+      rowGroupIndex: 1
+      category: "Licensing"
+      categoryIndex: 3
+      operation: "+"
+      ac1: 2000
+      pp1: 1850
+      pl1: 1900
+    - rowGroup: "Costs"
+      rowGroupIndex: 2
+      category: "Personnel"
+      categoryIndex: 4
+      operation: "-"
+      ac1: 5100
+      pp1: 4800
+      pl1: 5000
+    - rowGroup: "Costs"
+      rowGroupIndex: 2
+      category: "Infrastructure"
+      categoryIndex: 5
+      operation: "-"
+      ac1: 1800
+      pp1: 1650
+      pl1: 1700
+    - rowGroup: "Costs"
+      rowGroupIndex: 2
+      category: "Marketing"
+      categoryIndex: 6
+      operation: "-"
+      ac1: 2200
+      pp1: 1900
+      pl1: 2100

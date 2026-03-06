@@ -3,6 +3,8 @@ title: Practical how-to tips
 description: Task-oriented tips for building and maintaining bino report bundles.
 ---
 
+import dashboardImg from "../../../../assets/sample-dashboard.png";
+
 This page collects practical tips for everyday bino work.
 Use it as a checklist when setting up new bundles or troubleshooting.
 For end-to-end walkthroughs, see [Recipes](/recipes/ci-cd-pipeline/).
@@ -41,4 +43,5 @@ For end-to-end walkthroughs, see [Recipes](/recipes/ci-cd-pipeline/).
 
 - Use `metadata.labels` and `metadata.annotations` to tag manifests with team, domain, or lifecycle information.
 - Keep how-to notes in your Starlight docs so new team members can follow established patterns.
-- Use placeholder screenshots in docs and replace them as real reports stabilize.
+
+<img src={dashboardImg.src} alt="A sample bino dashboard with multiple components" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />

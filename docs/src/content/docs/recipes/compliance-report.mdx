@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import textImg from "../../../../assets/sample-text.png";
 
 This recipe builds a quarterly compliance report for a financial services company. The report uses A4 portrait formatting, pulls data from both Postgres and Excel, includes headers and footers with page numbers, and applies a digital signature. Development and production use different data sources via constraints.
 
@@ -207,6 +208,8 @@ spec:
         tableTitle: "Adjustment details"
         type: list
 ```
+
+<img src={textImg.src} alt="A compliance report page with text content and financial summary" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Report artefact with digital signing
 

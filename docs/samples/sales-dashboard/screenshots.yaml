@@ -1,0 +1,35 @@
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: doc_screenshots
+spec:
+  filenamePrefix: sample
+  format: full-hd
+  orientation: landscape
+  scale: device
+  imageFormat: png
+  refs:
+    - kind: ChartStructure
+      name: revenue_chart
+    - kind: ChartTime
+      name: revenue_trend_chart
+    - kind: Table
+      name: financial_table
+    - kind: Text
+      name: kpi_summary
+    - kind: ChartStructure
+      name: revenue_chart_full
+    - kind: ChartTime
+      name: revenue_trend_full
+    - kind: Table
+      name: financial_table_full
+    - kind: Text
+      name: exec_summary
+    - kind: LayoutCard
+      name: revenue_card
+    - kind: LayoutCard
+      name: trend_card
+    - kind: LayoutCard
+      name: table_card
+    - kind: LayoutCard
+      name: summary_card

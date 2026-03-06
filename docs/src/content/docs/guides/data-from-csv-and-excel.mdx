@@ -3,6 +3,8 @@ title: Using CSV and Excel data
 description: Connect CSV and Excel files to datasets, tables, and charts.
 ---
 
+import chartStructureImg from "../../../../assets/sample-chart-structure.png";
+
 This guide walks through using CSV and Excel files as datasources.
 You will create a datasource, a dataset, and a simple layout that displays the data.
 
@@ -110,6 +112,8 @@ spec:
         measureUnit: "EUR"
 ```
 
+<img src={chartStructureImg.src} alt="A ChartStructure with horizontal bar chart showing sales by region" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+
 ## 5. Run preview and build
 
 From the workdir:
@@ -123,5 +127,3 @@ Once the result looks good, build the PDF:
 ```bash
 bino build
 ```
-
-Use placeholder screenshots (later replaced with real ones) to document the resulting table and chart in your docs.

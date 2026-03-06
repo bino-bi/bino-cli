@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import dashboardImg from "../../../../assets/sample-dashboard.png";
 
 This recipe builds a weekly operational dashboard for a company with multiple regions. One `LayoutPage` template serves all regions. The `ReportArtefact` instantiates it with different parameters. The result: a single PDF with one section per region, generated from one `bino build` command.
 
@@ -194,6 +195,8 @@ spec:
 ```
 
 A single `bino build` produces one PDF with five pages — one per region.
+
+<img src={dashboardImg.src} alt="A multi-region operations dashboard with KPIs, trend chart, and data table" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
 ## Adding a new region
 
