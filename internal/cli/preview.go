@@ -723,14 +723,14 @@ func previewStyleBlock() []byte {
 	var b strings.Builder
 	b.WriteString("\n\t<link id=\"bn-preview-style\" rel=\"stylesheet\" href=\"/__bino/shared/tokens.css\">\n")
 	b.WriteString("\t<link rel=\"stylesheet\" href=\"/__bino/preview/preview.css\">\n")
-	b.WriteString("\t")
-	b.WriteString(web.ImportMapScript())
-	b.WriteString("\n\t<script type=\"module\" src=\"/__bino/preview/preview-app.js\"></script>\n")
+	b.WriteString("\t<script type=\"module\" src=\"/__bino/preview/preview-app.js\"></script>\n")
 	return []byte(b.String())
 }
 
 // withPreviewStyles injects a lightweight set of layout styles so preview pages are centered
-// and readable without relying on external assets.
+// and readable without relying on external assets. The import map is placed before the first
+// <script> tag so that Firefox (which strictly enforces the HTML spec) processes it before
+// any module scripts begin loading.
 func withPreviewStyles(doc []byte) []byte {
 	if len(doc) == 0 || bytes.Contains(doc, previewStyleMarker) {
 		return doc
@@ -741,8 +741,20 @@ func withPreviewStyles(doc []byte) []byte {
 		return doc
 	}
 	block := previewStyleBlock()
-	updated := make([]byte, 0, len(doc)+len(block))
-	updated = append(updated, doc[:idx]...)
+	importMap := []byte(web.ImportMapScript() + "\n  ")
+	updated := make([]byte, 0, len(doc)+len(block)+len(importMap))
+
+	// Inject the import map before the first <script> tag so it is parsed
+	// before any module scripts. Firefox requires this ordering.
+	scriptIdx := bytes.Index(doc, []byte("<script"))
+	if scriptIdx != -1 {
+		updated = append(updated, doc[:scriptIdx]...)
+		updated = append(updated, importMap...)
+		updated = append(updated, doc[scriptIdx:idx]...)
+	} else {
+		updated = append(updated, doc[:idx]...)
+		updated = append(updated, importMap...)
+	}
 	updated = append(updated, block...)
 	updated = append(updated, doc[idx:]...)
 	return updated

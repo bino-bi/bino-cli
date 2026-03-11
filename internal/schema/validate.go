@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/xeipuuv/gojsonschema"
 	"gopkg.in/yaml.v3"
@@ -167,6 +168,14 @@ func convertYAMLToJSON(v any) any {
 			result[i] = convertYAMLToJSON(v)
 		}
 		return result
+	case time.Time:
+		// YAML auto-parses bare dates (e.g. 2025-01-31) as time.Time with midnight UTC.
+		// Normalize to date-only string so the schema validator sees "2025-01-31"
+		// instead of "2025-01-31T00:00:00Z". Preserve real datetime values.
+		if val.Hour() == 0 && val.Minute() == 0 && val.Second() == 0 && val.Nanosecond() == 0 {
+			return val.Format("2006-01-02")
+		}
+		return val.Format(time.RFC3339)
 	default:
 		return v
 	}
