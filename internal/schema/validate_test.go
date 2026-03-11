@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	yamlPkg "gopkg.in/yaml.v3"
 )
 
 func TestValidate_ValidDocument(t *testing.T) {
@@ -311,6 +313,106 @@ func TestIsValidationError(t *testing.T) {
 
 	if IsValidationError(fmt.Errorf("not a validation error")) {
 		t.Error("expected IsValidationError to return false for non-ValidationError")
+	}
+}
+
+func TestValidate_LayoutPageDateFields(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "date-only values",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  titleDateStart: 2025-01-31
+  titleDateEnd: 2025-12-31
+  children:
+    - kind: Text
+      metadata:
+        name: t
+      spec:
+        value: hello
+`,
+		},
+		{
+			name: "quoted datetime values",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  titleDateStart: "2025-01-31T08:00:00Z"
+  titleDateEnd: "2025-12-31T23:59:59+01:00"
+  children:
+    - kind: Text
+      metadata:
+        name: t
+      spec:
+        value: hello
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
+func TestConvertYAMLToJSON_TimeNormalization(t *testing.T) {
+	// YAML parses bare dates as time.Time; convertYAMLToJSON should
+	// normalize midnight UTC to date-only strings.
+	tests := []struct {
+		name     string
+		yaml     string
+		wantDate string
+	}{
+		{
+			name:     "bare date becomes date-only string",
+			yaml:     "date: 2025-01-31",
+			wantDate: "2025-01-31",
+		},
+		{
+			name:     "quoted date stays string",
+			yaml:     `date: "2025-06-15"`,
+			wantDate: "2025-06-15",
+		},
+		{
+			name:     "quoted datetime preserved",
+			yaml:     `date: "2025-06-15T14:30:00Z"`,
+			wantDate: "2025-06-15T14:30:00Z",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var doc any
+			if err := yamlPkg.Unmarshal([]byte(tt.yaml), &doc); err != nil {
+				t.Fatalf("YAML unmarshal error: %v", err)
+			}
+			converted := convertYAMLToJSON(doc)
+			m, ok := converted.(map[string]any)
+			if !ok {
+				t.Fatalf("expected map, got %T", converted)
+			}
+			got, ok := m["date"].(string)
+			if !ok {
+				t.Fatalf("expected string for date, got %T: %v", m["date"], m["date"])
+			}
+			if got != tt.wantDate {
+				t.Errorf("got %q, want %q", got, tt.wantDate)
+			}
+		})
 	}
 }
 

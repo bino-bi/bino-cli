@@ -857,22 +857,34 @@ func buildMissingParamsFrameHTML() string {
 }
 
 // injectServeScript adds the navigation script and embedded context before </head>.
+// The import map is placed before the first <script> tag so that Firefox processes it
+// before any module scripts begin loading.
 // If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
 func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) []byte {
 	htmlStr := string(htmlBytes)
 	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, missingParams)
+	importMap := web.ImportMapScript() + "\n  "
 
-	// Find </head> and inject the script
 	headClose := strings.Index(htmlStr, "</head>")
-	if headClose != -1 {
-		var b strings.Builder
-		b.WriteString(htmlStr[:headClose])
-		b.WriteString(script)
-		b.WriteString(htmlStr[headClose:])
-		return []byte(b.String())
+	if headClose == -1 {
+		return htmlBytes
 	}
 
-	return htmlBytes
+	var b strings.Builder
+	// Inject the import map before the first <script> tag so it is parsed
+	// before any module scripts. Firefox requires this ordering.
+	scriptIdx := strings.Index(htmlStr, "<script")
+	if scriptIdx != -1 {
+		b.WriteString(htmlStr[:scriptIdx])
+		b.WriteString(importMap)
+		b.WriteString(htmlStr[scriptIdx:headClose])
+	} else {
+		b.WriteString(htmlStr[:headClose])
+		b.WriteString(importMap)
+	}
+	b.WriteString(script)
+	b.WriteString(htmlStr[headClose:])
+	return []byte(b.String())
 }
 
 // queryParamInfo holds info about a query parameter for JSON serialization.
@@ -1090,8 +1102,6 @@ func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, rout
 	sb.WriteString(`,"initialContextBase64":"`)
 	sb.WriteString(contextBase64)
 	sb.WriteString(`"};</script>`)
-	sb.WriteString("\n")
-	sb.WriteString(web.ImportMapScript())
 	sb.WriteString("\n")
 	sb.WriteString(`<script type="module" src="/__bino/serve/serve-app.js"></script>`)
 	return sb.String()
