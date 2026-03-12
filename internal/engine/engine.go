@@ -39,8 +39,9 @@ const (
 	downloadTimeout = 5 * time.Minute
 )
 
-// versionPattern matches semver versions with v prefix (e.g., v1.2.3).
-var versionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+// versionPattern matches semver versions with v prefix, optionally with pre-release suffix
+// (e.g., v1.2.3, v1.0.0-alpha.2, v1.0.0-beta.1).
+var versionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
 
 // VersionInfo describes a cached template engine version.
 type VersionInfo struct {
@@ -159,7 +160,7 @@ func (m *Manager) ResolveVersion(version string) (VersionInfo, error) {
 	}
 
 	if !versionPattern.MatchString(version) {
-		return VersionInfo{}, fmt.Errorf("invalid version format %q - expected v#.#.# (e.g., v1.2.3)", version)
+		return VersionInfo{}, fmt.Errorf("invalid version format %q - expected semver (e.g., v1.2.3 or v1.0.0-alpha.2)", version)
 	}
 
 	versionPath := filepath.Join(m.cacheDir, version)
@@ -206,7 +207,7 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 	}
 
 	if !versionPattern.MatchString(version) {
-		return VersionInfo{}, fmt.Errorf("invalid version format %q - expected v#.#.# (e.g., v1.2.3)", version)
+		return VersionInfo{}, fmt.Errorf("invalid version format %q - expected semver (e.g., v1.2.3 or v1.0.0-alpha.2)", version)
 	}
 
 	zipFileName := fmt.Sprintf("bn-template-engine-%s.zip", version)
