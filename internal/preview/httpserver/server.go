@@ -296,6 +296,25 @@ func (s *Server) BroadcastContent(path string, html []byte) {
 	s.sse.Broadcast(formatSSE("content", data))
 }
 
+// BroadcastRefreshing notifies connected SSE clients that a content refresh has started.
+func (s *Server) BroadcastRefreshing(reason string) {
+	if s == nil || s.sse == nil {
+		return
+	}
+	payload, _ := json.Marshal(struct {
+		Reason string `json:"reason"`
+	}{Reason: reason})
+	s.sse.Broadcast(formatSSE("refreshing", payload))
+}
+
+// BroadcastRefreshDone notifies connected SSE clients that the content refresh has completed.
+func (s *Server) BroadcastRefreshDone() {
+	if s == nil || s.sse == nil {
+		return
+	}
+	s.sse.Broadcast(formatSSE("refresh-done", []byte(`{}`)))
+}
+
 // evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
 // Must be called with contentMu held.
 func (s *Server) evictOldestCacheEntries() {
