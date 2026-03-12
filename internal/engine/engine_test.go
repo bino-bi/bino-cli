@@ -175,6 +175,45 @@ func TestResolveVersion_NotFound(t *testing.T) {
 	}
 }
 
+func TestResolveVersion_Prerelease(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	createMockVersion(t, tmpDir, "v1.0.0-alpha.2")
+
+	mgr := NewManagerWithClient(tmpDir, nil)
+
+	info, err := mgr.ResolveVersion("v1.0.0-alpha.2")
+	if err != nil {
+		t.Fatalf("ResolveVersion('v1.0.0-alpha.2') error = %v", err)
+	}
+	if info.Version != "v1.0.0-alpha.2" {
+		t.Errorf("ResolveVersion('v1.0.0-alpha.2').Version = %q, want v1.0.0-alpha.2", info.Version)
+	}
+}
+
+func TestListLocalVersions_WithPrerelease(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	for _, v := range []string{"v1.0.0", "v1.0.0-alpha.2", "v1.0.0-beta.1"} {
+		createMockVersion(t, tmpDir, v)
+	}
+
+	mgr := NewManagerWithClient(tmpDir, nil)
+	result, err := mgr.ListLocalVersions()
+	if err != nil {
+		t.Fatalf("ListLocalVersions() error = %v", err)
+	}
+
+	if len(result) != 3 {
+		t.Fatalf("ListLocalVersions() returned %d versions, want 3", len(result))
+	}
+
+	// v1.0.0 should sort before pre-release versions (semver: release > pre-release)
+	if result[0].Version != "v1.0.0" {
+		t.Errorf("ListLocalVersions()[0].Version = %q, want v1.0.0", result[0].Version)
+	}
+}
+
 func TestResolveVersion_InvalidFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	mgr := NewManagerWithClient(tmpDir, nil)
@@ -212,12 +251,18 @@ func TestVersionPattern(t *testing.T) {
 		{"v1.2.3", true},
 		{"v10.20.30", true},
 		{"v0.0.0", true},
+		{"v1.0.0-alpha", true},
+		{"v1.0.0-alpha.1", true},
+		{"v1.0.0-alpha.2", true},
+		{"v1.0.0-beta", true},
+		{"v1.0.0-beta.1", true},
+		{"v1.0.0-rc.1", true},
+		{"v1.0.0-0.3.7", true},
 		{"1.0.0", false},  // missing v prefix
 		{"v1.0", false},   // missing patch
 		{"v1", false},     // missing minor and patch
 		{"vX.Y.Z", false}, // not numbers
 		{"", false},
-		{"v1.0.0-beta", false}, // prerelease not supported
 	}
 
 	for _, tc := range tests {
