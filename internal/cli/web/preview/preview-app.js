@@ -59,7 +59,21 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
 
   source.addEventListener('ready', function () {
     sseReady = true;
+    document.dispatchEvent(new CustomEvent('bn-preview:refresh-done'));
     tryFetchContext();
+  });
+
+  source.addEventListener('refreshing', function (event) {
+    try {
+      var payload = JSON.parse(event.data || '{}');
+      document.dispatchEvent(new CustomEvent('bn-preview:refreshing', { detail: payload }));
+    } catch (err) {
+      document.dispatchEvent(new CustomEvent('bn-preview:refreshing', { detail: {} }));
+    }
+  });
+
+  source.addEventListener('refresh-done', function () {
+    document.dispatchEvent(new CustomEvent('bn-preview:refresh-done'));
   });
 
   source.addEventListener('content', function (event) {

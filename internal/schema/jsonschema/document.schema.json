@@ -3163,7 +3163,7 @@
     },
     "gridSpec": {
       "type": "object",
-      "required": ["rowHeaders", "columnHeaders", "cells"],
+      "required": ["rowHeaders", "columnHeaders", "children"],
       "description": "Configuration for a Grid component. Grids create CSS grid-based layouts with row and column headers for organizing child components in a tabular structure.",
       "properties": {
         "chartTitle": {
