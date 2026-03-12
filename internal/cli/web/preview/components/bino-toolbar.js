@@ -8,6 +8,7 @@ class BinoToolbar extends LitElement {
     currentPath: { type: String, attribute: 'current-path' },
     _errorCount: { state: true },
     _badgeVisible: { state: true },
+    _refreshing: { state: true },
   };
 
   static styles = css`
@@ -100,6 +101,32 @@ class BinoToolbar extends LitElement {
     ::slotted(*) {
       margin-left: auto;
     }
+    .progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .progress-bar.active {
+      opacity: 1;
+    }
+    .progress-bar::after {
+      content: '';
+      display: block;
+      height: 100%;
+      width: 40%;
+      background: var(--bino-primary);
+      border-radius: 1px;
+      animation: progress-slide 1.2s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
   `;
 
   constructor() {
@@ -110,21 +137,28 @@ class BinoToolbar extends LitElement {
     this.currentPath = '/';
     this._errorCount = 0;
     this._badgeVisible = false;
+    this._refreshing = false;
     this._panelDismissed = false;
     this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
     this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
+    this._boundOnRefreshing = this._onRefreshing.bind(this);
+    this._boundOnRefreshDone = this._onRefreshDone.bind(this);
   }
 
   connectedCallback() {
     super.connectedCallback();
     document.addEventListener('bino-errors-changed', this._boundOnErrorsChanged);
     document.addEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
+    document.addEventListener('bn-preview:refreshing', this._boundOnRefreshing);
+    document.addEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener('bino-errors-changed', this._boundOnErrorsChanged);
     document.removeEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
+    document.removeEventListener('bn-preview:refreshing', this._boundOnRefreshing);
+    document.removeEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
   }
 
   render() {
@@ -187,6 +221,7 @@ class BinoToolbar extends LitElement {
       </button>
       <span class="spacer"></span>
       <slot></slot>
+      <div class="progress-bar ${this._refreshing ? 'active' : ''}"></div>
     `;
   }
 
@@ -241,6 +276,14 @@ class BinoToolbar extends LitElement {
     if (this._errorCount > 0) {
       this._badgeVisible = true;
     }
+  }
+
+  _onRefreshing() {
+    this._refreshing = true;
+  }
+
+  _onRefreshDone() {
+    this._refreshing = false;
   }
 }
 

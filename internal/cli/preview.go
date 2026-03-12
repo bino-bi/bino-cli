@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -187,6 +188,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				if err := ctx.Err(); err != nil {
 					return err
 				}
+
+				server.BroadcastRefreshing(reason)
+				defer server.BroadcastRefreshDone()
 
 				// Run pre-refresh hook (on failure: log and continue)
 				refreshHookEnv := previewHookEnv
@@ -387,7 +391,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				return nil
 			}
 
-			refreshCh := make(chan string, 1)
+			refreshCh := make(chan string, 16)
 			enqueue := func(reason string) {
 				select {
 				case refreshCh <- reason:
@@ -440,12 +444,26 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 
 			go func() {
+				debounce := time.NewTimer(0)
+				if !debounce.Stop() {
+					<-debounce.C
+				}
+				var reasons []string
 				for {
 					select {
 					case <-ctx.Done():
+						debounce.Stop()
 						return
 					case reason := <-refreshCh:
-						if err := refresh(reason); err != nil {
+						reasons = append(reasons, reason)
+						debounce.Reset(300 * time.Millisecond)
+					case <-debounce.C:
+						if len(reasons) == 0 {
+							continue
+						}
+						coalesced := coalesceReasons(reasons)
+						reasons = reasons[:0]
+						if err := refresh(coalesced); err != nil {
 							logger.Errorf("Refresh failed: %v", err)
 						}
 					}
@@ -616,6 +634,17 @@ func formatConstraint(c *spec.Constraint) string {
 	default:
 		return c.Left + " " + c.Operator + " " + c.Right
 	}
+}
+
+// coalesceReasons merges multiple file-change reasons into a single human-readable string.
+func coalesceReasons(reasons []string) string {
+	if len(reasons) == 0 {
+		return "unknown"
+	}
+	if len(reasons) == 1 {
+		return reasons[0]
+	}
+	return fmt.Sprintf("%s (+%d more)", reasons[0], len(reasons)-1)
 }
 
 func appendUnique(slice []string, val string) []string {

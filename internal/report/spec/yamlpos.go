@@ -32,11 +32,11 @@ func ParseYAMLNodes(content string) ([]*yaml.Node, error) {
 }
 
 // ResolvePathPosition walks a yaml.Node tree to resolve a dotted field path
-// (e.g., "spec.cells") to its YAML source line and column.
+// (e.g., "spec.children") to its YAML source line and column.
 // Returns (line, col, true) on success, or (0, 0, false) if the path is not found.
 // Line and column are 1-based.
 //
-// When a path is only partially resolved (e.g., "spec.cells" where "cells" doesn't
+// When a path is only partially resolved (e.g., "spec.children" where "children" doesn't
 // exist under "spec"), the position of the last matched key is returned, so the user
 // sees the parent where the missing field should be added.
 func ResolvePathPosition(node *yaml.Node, path string) (line, col int, ok bool) {
