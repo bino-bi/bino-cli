@@ -3438,6 +3438,11 @@
             }
           ]
         },
+        "barColumnWidth": {
+          "type": "string",
+          "enum": ["w5", "w10", "w15", "w20", "w25", "w30", "w40", "w60", "w80", "w100"],
+          "description": "Maximum width of inline bar/pin chart columns in em. Default: w30."
+        },
         "unitScaling": {
           "type": "number",
           "default": 0.01,
