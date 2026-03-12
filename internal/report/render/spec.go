@@ -322,6 +322,7 @@ type tableSpec struct {
 	Scenarios                []string                     `json:"scenarios"`
 	Variances                []string                     `json:"variances"`
 	BarColumns               []string                     `json:"barColumns"`
+	BarColumnWidth           string                       `json:"barColumnWidth"`
 	UnitScaling              *float64                     `json:"unitScaling"`
 	PercentageScaling        *float64                     `json:"percentageScaling"`
 	Scale                    string                       `json:"scale,omitempty"`
@@ -354,6 +355,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
 	writeCSVAttr(b, "bar-columns", s.BarColumns)
+	writeAttr(b, "bar-column-width", s.BarColumnWidth)
 	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
 	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
 	writeAttr(b, "scale", s.Scale)
