@@ -37,7 +37,7 @@ spec:
   scenarios: ["ac1", "py1"]          # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dpy1_ac1_pos"]
   barColumns: []                     # columns to render as inline bar charts
-  barColumnWidth: w30                # w5 | w10 | w15 | w20 | w25 | w30 | w40 | w60 | w80 | w100
+  barColumnWidth: w10                # w5 | w10 | w15 | w20 | w25 | w30 | w40 | w60 | w80 | w100
   scale: auto                        # "" | none | auto | 0.5 | 1.2 | …
   unitScaling: 0.01                  # pixels per unit for absolute variance bars
   percentageScaling: 0.5             # pixels per percentage for relative variance pins
@@ -63,7 +63,7 @@ spec:
 - `scenarios` – list of scenario measures, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank (and variances are also blank), they are detected with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `barColumns` – list of column names to render as inline IBCS-compliant bar charts instead of numbers.
-- `barColumnWidth` – maximum width of inline bar/pin chart columns in em (`w5`..`w100`). Default: `w30`.
+- `barColumnWidth` – maximum width of inline bar/pin chart columns in em (`w5`..`w100`). Default: `w10`.
 - `unitScaling` – pixels per unit for absolute variance bars (d_ prefix columns). Default: 0.01.
 - `percentageScaling` – pixels per percentage point for relative variance pins (dr_ prefix columns). Default: 0.5.
 - `scale` – proportional scaling of the entire table (font size, em-based spacing, SVG bar charts, pins, patterns). All visual dimensions scale together.

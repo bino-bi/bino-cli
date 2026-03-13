@@ -74,6 +74,7 @@ Style settings for vertical column charts (time series visualizations).
 | `axisStyles` | object | SVG styles for axis elements by scenario |
 | `barStyles` | object | SVG styles for bar/column elements by scenario |
 | `varianceStyles` | object | SVG styles for variance indicators |
+| `stackColors` | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
 | `padding` | object | Padding around the chart area |
 
 ### Scale factors (time chart)
@@ -110,6 +111,7 @@ Style settings for horizontal bar charts (structure visualizations).
 | `axisStyles` | object | SVG styles for axis elements by scenario |
 | `barStyles` | object | SVG styles for bar elements by scenario |
 | `varianceStyles` | object | SVG styles for variance indicators |
+| `stackColors` | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
 | `padding` | object | Padding around the chart area |
 
 ### Scale factors (structure chart)
@@ -276,6 +278,7 @@ spec:
         pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
         neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
         neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+      stackColors: ["#000000", "#c0c0c0", "#808080"]
       padding:
         top: 15
         left: 15
@@ -300,6 +303,7 @@ spec:
         pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
         neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
         neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+      stackColors: ["#000000", "#c0c0c0", "#808080"]
 
     bn-tree:
       edgeColor: "#505050"

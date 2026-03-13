@@ -138,7 +138,7 @@ type TableSpec struct {
 
 // StackConfig configures stacked chart rendering.
 type StackConfig struct {
-	// By determines what to stack: "scenario", "category", "subcategory", or "rowgroup".
+	// By determines what to stack: "scenarios" (stack scenario slots) or "dimensions" (auto-derive from level).
 	By string `yaml:"by" json:"by"`
 
 	// Mode controls how stacked values are displayed: "absolute", "relative", or "absolute-relative".

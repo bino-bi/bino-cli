@@ -37,7 +37,7 @@ spec:
   variances: ["dpy1_ac1_pos"]
   scale: auto                    # "" | none | auto | 0.5 | 1.2 | …
   stack:                        # optional stacked chart config
-    by: scenario                # scenario | category | subcategory | rowgroup
+    by: scenarios               # scenarios | dimensions
     mode: absolute              # absolute | relative | absolute-relative
     order: dataset              # asc | desc | dataset
 ```
@@ -63,7 +63,7 @@ spec:
   - `"auto"` – auto-scale to fit the parent height silently (no warning).
   - `"0.5"`, `"1.2"`, … – fixed factor applied to the base font size. All dimensions scale proportionally.
 - `stack` – optional object to enable stacked bar rendering:
-  - `by` – (required) stacking dimension: `scenario` stacks scenario slots; `category`, `subcategory`, or `rowgroup` decompose by data dimension.
+  - `by` – (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
   - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default).
 
@@ -110,7 +110,7 @@ spec:
   unitScaling: 0.003
   scenarios: ["ac1", "pp1"]
   stack:
-    by: scenario
+    by: scenarios
     mode: absolute
 ```
 
@@ -153,6 +153,6 @@ spec:
   unitScaling: 150
   scenarios: ["ac1", "pp1", "fc1"]
   stack:
-    by: scenario
+    by: scenarios
     mode: relative
 ```
