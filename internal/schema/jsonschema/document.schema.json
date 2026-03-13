@@ -1929,6 +1929,11 @@
         "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
         "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
         "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "stackColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of CSS colors for stacked segments. Segments cycle through these colors. Default: [\"#000000\", \"#c0c0c0\", \"#808080\"]."
+        },
         "padding": { "$ref": "#/$defs/paddingStyle" }
       },
       "additionalProperties": true
@@ -1941,6 +1946,11 @@
         "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
         "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
         "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "stackColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of CSS colors for stacked segments. Segments cycle through these colors. Default: [\"#000000\", \"#c0c0c0\", \"#808080\"]."
+        },
         "padding": { "$ref": "#/$defs/paddingStyle" }
       },
       "additionalProperties": true
@@ -2801,8 +2811,8 @@
           "properties": {
             "by": {
               "type": "string",
-              "enum": ["scenario", "category", "subcategory", "rowgroup"],
-              "description": "Stacking dimension. 'scenario' stacks scenario slots; others decompose by the specified data dimension."
+              "enum": ["scenarios", "dimensions"],
+              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' auto-derives the stack column from the level prop (rowGroup→category, category→subCategory)."
             },
             "mode": {
               "type": "string",
@@ -2945,8 +2955,8 @@
           "properties": {
             "by": {
               "type": "string",
-              "enum": ["scenario", "category", "subcategory", "rowgroup"],
-              "description": "Stacking dimension. 'scenario' stacks scenario slots; others decompose by the specified data dimension."
+              "enum": ["scenarios", "dimensions"],
+              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' auto-derives the stack column from the level prop (rowGroup→category, category→subCategory)."
             },
             "mode": {
               "type": "string",
@@ -3441,7 +3451,7 @@
         "barColumnWidth": {
           "type": "string",
           "enum": ["w5", "w10", "w15", "w20", "w25", "w30", "w40", "w60", "w80", "w100"],
-          "description": "Maximum width of inline bar/pin chart columns in em. Default: w30."
+          "description": "Maximum width of inline bar/pin chart columns in em. Default: w10."
         },
         "unitScaling": {
           "type": "number",
