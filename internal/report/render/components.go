@@ -67,7 +67,175 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	return rc
 }
 
+// collectReferencedDatasources scans component documents for $-prefixed dataset
+// references that point directly to datasources. Returns a set of datasource names
+// (without the $ prefix) that are referenced by components.
+// Both docs (filtered) and globalDocs (unfiltered) are scanned to capture all references.
+func collectReferencedDatasources(docs []config.Document, globalDocs []config.Document) map[string]bool {
+	refs := make(map[string]bool)
+	for _, doc := range docs {
+		collectDatasourceRefsFromDoc(doc, refs)
+	}
+	for _, doc := range globalDocs {
+		collectDatasourceRefsFromDoc(doc, refs)
+	}
+	return refs
+}
+
+// collectDatasourceRefsFromDoc extracts $-prefixed dataset references from a single document.
+func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
+	switch doc.Kind {
+	case "Text", "Table", "ChartStructure", "ChartTime", "Image":
+		var p struct {
+			Spec struct {
+				Dataset spec.DatasetList `json:"dataset"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &p) == nil {
+			addDatasourceRefs(p.Spec.Dataset, refs)
+		}
+	case "Tree":
+		var p struct {
+			Spec struct {
+				Nodes []struct {
+					Spec json.RawMessage `json:"spec"`
+				} `json:"nodes"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &p) == nil {
+			for _, node := range p.Spec.Nodes {
+				extractDatasetFromSpec(node.Spec, refs)
+			}
+		}
+	case "Grid":
+		var p struct {
+			Spec struct {
+				Children []struct {
+					Spec json.RawMessage `json:"spec"`
+				} `json:"children"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &p) == nil {
+			for _, child := range p.Spec.Children {
+				extractDatasetFromSpec(child.Spec, refs)
+			}
+		}
+	case "LayoutPage", "LayoutCard":
+		var p struct {
+			Spec struct {
+				Children []json.RawMessage `json:"children"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &p) == nil {
+			for _, childRaw := range p.Spec.Children {
+				collectDatasourceRefsFromLayoutChild(childRaw, refs)
+			}
+		}
+	}
+}
+
+// collectDatasourceRefsFromLayoutChild extracts $-prefixed dataset refs from a layout child's spec.
+// Handles nested Tree nodes, Grid children, and LayoutCard children recursively.
+func collectDatasourceRefsFromLayoutChild(raw json.RawMessage, refs map[string]bool) {
+	var child struct {
+		Kind string          `json:"kind"`
+		Spec json.RawMessage `json:"spec"`
+	}
+	if json.Unmarshal(raw, &child) != nil || child.Spec == nil {
+		return
+	}
+
+	switch child.Kind {
+	case "Tree":
+		var ts struct {
+			Nodes []struct {
+				Spec json.RawMessage `json:"spec"`
+			} `json:"nodes"`
+		}
+		if json.Unmarshal(child.Spec, &ts) == nil {
+			for _, node := range ts.Nodes {
+				extractDatasetFromSpec(node.Spec, refs)
+			}
+		}
+	case "Grid":
+		var gs struct {
+			Children []struct {
+				Kind string          `json:"kind"`
+				Spec json.RawMessage `json:"spec"`
+			} `json:"children"`
+		}
+		if json.Unmarshal(child.Spec, &gs) == nil {
+			for _, gc := range gs.Children {
+				extractDatasetFromSpec(gc.Spec, refs)
+				if gc.Kind == "Tree" && gc.Spec != nil {
+					var ts struct {
+						Nodes []struct {
+							Spec json.RawMessage `json:"spec"`
+						} `json:"nodes"`
+					}
+					if json.Unmarshal(gc.Spec, &ts) == nil {
+						for _, node := range ts.Nodes {
+							extractDatasetFromSpec(node.Spec, refs)
+						}
+					}
+				}
+			}
+		}
+	case "LayoutCard":
+		var cs struct {
+			Children []json.RawMessage `json:"children"`
+		}
+		if json.Unmarshal(child.Spec, &cs) == nil {
+			for _, grandchild := range cs.Children {
+				collectDatasourceRefsFromLayoutChild(grandchild, refs)
+			}
+		}
+	default:
+		extractDatasetFromSpec(child.Spec, refs)
+	}
+}
+
+// extractDatasetFromSpec parses a component spec JSON and adds any $-prefixed dataset refs.
+func extractDatasetFromSpec(raw json.RawMessage, refs map[string]bool) {
+	if raw == nil {
+		return
+	}
+	var p struct {
+		Dataset spec.DatasetList `json:"dataset"`
+	}
+	if json.Unmarshal(raw, &p) == nil {
+		addDatasourceRefs(p.Dataset, refs)
+	}
+}
+
+// addDatasourceRefs extracts $-prefixed dataset references from a DatasetList
+// and adds them (without the $ prefix) to the refs map.
+func addDatasourceRefs(dl spec.DatasetList, refs map[string]bool) {
+	for _, s := range dl.Strings() {
+		if strings.HasPrefix(s, "$") {
+			refs[s[1:]] = true
+		}
+	}
+}
+
+// filterDatasourcesByRefs returns only datasource results whose names appear in the referenced set.
+// If referenced is empty, returns nil (no datasources needed).
+func filterDatasourcesByRefs(results []datasource.Result, referenced map[string]bool) []datasource.Result {
+	if len(referenced) == 0 {
+		return nil
+	}
+	var filtered []datasource.Result
+	for _, res := range results {
+		if referenced[res.Name] {
+			filtered = append(filtered, res)
+		}
+	}
+	return filtered
+}
+
 // renderDatasources generates bn-datasource elements for collected data.
+// Data is gzip-compressed and base64-encoded to reduce HTML size and enable
+// hash-based change detection in the template engine.
 func renderDatasources(results []datasource.Result) []string {
 	if len(results) == 0 {
 		return nil
@@ -77,8 +245,15 @@ func renderDatasources(results []datasource.Result) []string {
 		var b strings.Builder
 		b.WriteString("<bn-datasource")
 		writeAttr(&b, "name", res.Name)
+		writeAttr(&b, "raw", "false")
 		b.WriteString(">")
-		b.WriteString(html.EscapeString(string(res.Data)))
+		compressed, err := CompressContent(res.Data)
+		if err != nil {
+			// Fall back to plain JSON on compression failure.
+			b.WriteString(html.EscapeString(string(res.Data)))
+		} else {
+			b.WriteString(compressed)
+		}
 		b.WriteString("</bn-datasource>")
 		segments = append(segments, b.String())
 	}
@@ -87,6 +262,8 @@ func renderDatasources(results []datasource.Result) []string {
 
 // renderDatasets generates bn-dataset elements for evaluated DataSet results.
 // Each dataset is rendered with static="true" indicating pre-computed data.
+// Data is gzip-compressed and base64-encoded (raw="false") to reduce HTML size
+// and enable hash-based change detection in the template engine.
 func renderDatasets(results []dataset.Result) []string {
 	if len(results) == 0 {
 		return nil
@@ -97,8 +274,15 @@ func renderDatasets(results []dataset.Result) []string {
 		b.WriteString("<bn-dataset")
 		writeAttr(&b, "name", res.Name)
 		writeAttr(&b, "static", "true")
+		writeAttr(&b, "raw", "false")
 		b.WriteString(">")
-		b.WriteString(html.EscapeString(string(res.Data)))
+		compressed, err := CompressContent(res.Data)
+		if err != nil {
+			// Fall back to plain JSON on compression failure.
+			b.WriteString(html.EscapeString(string(res.Data)))
+		} else {
+			b.WriteString(compressed)
+		}
 		b.WriteString("</bn-dataset>")
 		segments = append(segments, b.String())
 	}
@@ -541,7 +725,7 @@ func renderTextComponent(spec textSpec, assetURLs map[string]string) string {
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
-	writeAttr(&b, "scale", spec.Scale)
+	writeAttr(&b, "scale", spec.Scale.String())
 	b.WriteString("></bn-text>")
 	return b.String()
 }
@@ -718,7 +902,7 @@ func renderTreeLabelComponent(spec treeLabelSpec) string {
 	if value := spec.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
-	writeAttr(&b, "scale", spec.Scale)
+	writeAttr(&b, "scale", spec.Scale.String())
 	b.WriteString("></bn-text>")
 	return b.String()
 }

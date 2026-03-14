@@ -219,6 +219,9 @@ type InlineDataSource struct {
 	// Ephemeral marks the datasource as non-cacheable.
 	// When true, datasets using this source skip caching.
 	Ephemeral *bool `json:"ephemeral,omitempty"`
+
+	// Sample configures DuckDB's USING SAMPLE clause to limit data during development.
+	Sample json.RawMessage `json:"sample,omitempty"`
 }
 
 // QueryField represents a query that can be either an inline string or a file reference.

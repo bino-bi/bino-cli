@@ -435,6 +435,40 @@
       "enum": ["json", "csv", "parquet", "excel"],
       "description": "File format of input data files. Choose 'csv', 'excel', 'parquet' or 'json' so DuckDB can parse the files correctly."
     },
+    "sampleConfig": {
+      "description": "DuckDB USING SAMPLE configuration. Use a number for an exact row count, a string for a percentage, or an object to also specify the sampling method.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of rows to sample (for example 1000)."
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?%$",
+          "description": "Percentage of rows to sample (for example '10%')."
+        },
+        {
+          "type": "object",
+          "required": ["size"],
+          "properties": {
+            "size": {
+              "description": "Number of rows or percentage to sample.",
+              "oneOf": [
+                { "type": "integer", "minimum": 1 },
+                { "type": "string", "pattern": "^\\d+(\\.\\d+)?%$" }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": ["bernoulli", "reservoir", "system"],
+              "description": "Sampling method. 'bernoulli' evaluates each row independently (good accuracy), 'system' samples entire vector chunks (faster, higher variance), 'reservoir' returns an exact row count."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "inlineContent": {
       "description": "Inline data rows embedded directly in the manifest, expressed either as a YAML array of objects or as a JSON array encoded as a string.",
       "oneOf": [
@@ -545,6 +579,10 @@
           "type": "object",
           "additionalProperties": { "type": "string" },
           "description": "Map of column name to DuckDB type (for example 'amount': 'DECIMAL(10,2)'). Mutually exclusive with 'columnNames'."
+        },
+        "sample": {
+          "$ref": "#/$defs/sampleConfig",
+          "description": "Sample a subset of rows from this datasource using DuckDB's USING SAMPLE clause. Ideal for working with large datasets during preview and development. Use a number for an exact row count (for example 1000), a string for a percentage (for example '10%'), or an object to specify a sampling method (bernoulli, reservoir, or system). Combine with constraints to disable sampling in production builds."
         }
       },
       "allOf": [
@@ -1139,6 +1177,10 @@
           "type": "object",
           "additionalProperties": { "type": "string" },
           "description": "Map of column name to DuckDB type. Mutually exclusive with 'columnNames'."
+        },
+        "sample": {
+          "$ref": "#/$defs/sampleConfig",
+          "description": "Sample a subset of rows from this datasource using DuckDB's USING SAMPLE clause."
         }
       },
       "allOf": [
@@ -1857,9 +1899,9 @@
         },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "scale": {
-          "type": "string",
+          "type": ["string", "number"],
           "description": "Font-size scaling mode. \"none\" disables scaling, \"auto\" auto-scales silently, a positive number (e.g. \"0.8\") sets an explicit factor. When omitted, auto-scales and warns with the applied factor.",
-          "examples": ["none", "auto", "0.5", "0.8", "1.2"]
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
         }
       }
     },
@@ -3464,7 +3506,7 @@
           "description": "Pixels per percentage point for relative variance pins (dr_ prefix columns). Controls the width of the pin charts."
         },
         "scale": {
-          "type": "string",
+          "type": ["string", "number"],
           "description": "Proportional scaling of the entire table (font, spacing, bars, pins, patterns). Blank or not set: auto-scale to fit parent width with warning. 'none': no scaling. 'auto': auto-scale silently. A positive number (e.g. '0.5', '1.2'): fixed factor applied to the base font size."
         },
         "thereof": {
