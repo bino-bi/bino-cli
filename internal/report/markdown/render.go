@@ -337,28 +337,40 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 		}
 	}
 
-	// Render datasources
+	// Render datasources (compressed with raw="false")
 	if rc != nil {
 		for _, res := range rc.DatasourceResults {
 			var b strings.Builder
 			b.WriteString("<bn-datasource")
 			writeAttr(&b, "name", res.Name)
+			writeAttr(&b, "raw", "false")
 			b.WriteString(">")
-			b.WriteString(html.EscapeString(string(res.Data)))
+			compressed, err := render.CompressContent(res.Data)
+			if err != nil {
+				b.WriteString(html.EscapeString(string(res.Data)))
+			} else {
+				b.WriteString(compressed)
+			}
 			b.WriteString("</bn-datasource>")
 			segments = append(segments, b.String())
 		}
 	}
 
-	// Render datasets
+	// Render datasets (compressed with raw="false")
 	if rc != nil {
 		for _, res := range rc.DatasetResults {
 			var b strings.Builder
 			b.WriteString("<bn-dataset")
 			writeAttr(&b, "name", res.Name)
 			writeAttr(&b, "static", "true")
+			writeAttr(&b, "raw", "false")
 			b.WriteString(">")
-			b.WriteString(html.EscapeString(string(res.Data)))
+			compressed, err := render.CompressContent(res.Data)
+			if err != nil {
+				b.WriteString(html.EscapeString(string(res.Data)))
+			} else {
+				b.WriteString(compressed)
+			}
 			b.WriteString("</bn-dataset>")
 			segments = append(segments, b.String())
 		}

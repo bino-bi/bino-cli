@@ -10,6 +10,76 @@ import (
 	"bino.bi/bino/internal/pathutil"
 )
 
+// sampleSpec represents a DuckDB USING SAMPLE configuration.
+// It can be unmarshaled from:
+//   - a number (row count): sample: 1000
+//   - a string (percentage): sample: "10%"
+//   - an object: sample: { size: 1000, method: "reservoir" }
+type sampleSpec struct {
+	Size   string // row count (e.g. "1000") or percentage (e.g. "10%")
+	Method string // bernoulli, reservoir, system (optional)
+}
+
+func (s *sampleSpec) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		return nil
+	}
+
+	// Try number (row count)
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		s.Size = fmt.Sprintf("%d", int(n))
+		return nil
+	}
+
+	// Try string (percentage like "10%")
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		s.Size = str
+		return nil
+	}
+
+	// Try object { size, method }
+	var obj struct {
+		Size   json.RawMessage `json:"size"`
+		Method string          `json:"method"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("sample must be a number, string, or object: %w", err)
+	}
+
+	s.Method = strings.ToLower(strings.TrimSpace(obj.Method))
+
+	// Parse size (number or string)
+	var sizeNum float64
+	if err := json.Unmarshal(obj.Size, &sizeNum); err == nil {
+		s.Size = fmt.Sprintf("%d", int(sizeNum))
+		return nil
+	}
+	var sizeStr string
+	if err := json.Unmarshal(obj.Size, &sizeStr); err == nil {
+		s.Size = sizeStr
+		return nil
+	}
+
+	return fmt.Errorf("sample.size must be a number or string")
+}
+
+// buildSampleClause returns the DuckDB USING SAMPLE clause for this sample config.
+// Returns an empty string if sample is nil or has no size.
+func buildSampleClause(sample *sampleSpec) string {
+	if sample == nil || sample.Size == "" {
+		return ""
+	}
+
+	if sample.Method == "" {
+		return fmt.Sprintf(" USING SAMPLE %s", sample.Size)
+	}
+
+	return fmt.Sprintf(" USING SAMPLE %s (%s)", sample.Size, sample.Method)
+}
+
 // Supported DataSource types.
 const (
 	sourceTypeInline        = "inline"
@@ -62,6 +132,11 @@ type sourceSpec struct {
 	//   - Local files outside workdir: ephemeral (can't detect changes)
 	// Set explicitly to false to cache remote/database sources.
 	Ephemeral *bool `json:"ephemeral,omitempty"`
+
+	// Sample configures DuckDB's USING SAMPLE clause to limit the number of rows
+	// returned by this datasource. Useful for working with large datasets during
+	// preview and development.
+	Sample *sampleSpec `json:"sample,omitempty"`
 
 	// Internal fields set by the loader.
 	Name    string `json:"-"`
