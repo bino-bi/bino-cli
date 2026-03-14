@@ -31,6 +31,7 @@ spec:
   connection: {} # for database queries
   query: "" # SQL for postgres_query / mysql_query
   ephemeral: false # optional caching hint
+  sample: 1000 # optional row sampling (number, string, or object)
 
   # CSV reader options (type: csv only)
   delimiter: ";" # field delimiter
@@ -223,6 +224,112 @@ spec:
 ```
 
 For more on secrets and object storage, see [ConnectionSecret](/reference/connection-secret/).
+
+## Sampling
+
+The `sample` property lets you load only a subset of rows from a datasource using DuckDB's [`USING SAMPLE`](https://duckdb.org/docs/stable/sql/samples.html) clause. This is ideal for working with large datasets during preview and development, where you need fast iteration without waiting for millions of rows to load.
+
+`sample` accepts three forms:
+
+| Form | Example | DuckDB clause |
+|---|---|---|
+| number | `sample: 1000` | `USING SAMPLE 1000` |
+| string | `sample: "10%"` | `USING SAMPLE 10%` |
+| object | `sample: { size: 1000, method: reservoir }` | `USING SAMPLE 1000 (reservoir)` |
+
+### Sampling methods
+
+When using the object form you can specify a `method`:
+
+- **`bernoulli`** - evaluates each row independently with the given probability. Good accuracy, works well for most datasets.
+- **`system`** - samples entire vector chunks. Faster than bernoulli but higher variance, not recommended for small datasets (< 10k rows).
+- **`reservoir`** - returns an exact number of rows. Only method that guarantees an exact count.
+
+When no method is specified, DuckDB uses its default (system for percentages, reservoir for row counts).
+
+### Basic usage
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: fact_sales
+spec:
+  type: parquet
+  path: ./warehouse/fact_sales/*.parquet
+  sample: 5000 # load only 5000 rows
+```
+
+### Percentage sampling
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: events
+spec:
+  type: csv
+  path: ./data/events_2024.csv
+  sample: "10%" # load roughly 10% of rows
+```
+
+### Sampling with a specific method
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: transactions
+spec:
+  type: postgres_query
+  connection:
+    host: ${DB_HOST}
+    port: 5432
+    database: analytics
+    user: reporting
+    secret: pgCredentials
+  query: |
+    SELECT * FROM transactions WHERE year = 2024
+  sample:
+    size: 10000
+    method: reservoir # guarantees exactly 10000 rows
+```
+
+### Sampling with constraints for development only
+
+Combine `sample` with constraints so the sampled datasource is used during preview and development, while the full dataset is used for production builds:
+
+```yaml
+# Development: sampled data for fast iteration
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: fact_sales
+  constraints:
+    - mode!=build
+spec:
+  type: parquet
+  path: ./warehouse/fact_sales/*.parquet
+  sample: "5%"
+
+# Production: full dataset
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: fact_sales
+  constraints:
+    - mode==build
+spec:
+  type: parquet
+  path: ./warehouse/fact_sales/*.parquet
+```
+
+This pattern keeps `bino preview` fast and responsive while ensuring `bino build` always produces reports from the complete dataset.
 
 ## Conditional inclusion with constraints
 

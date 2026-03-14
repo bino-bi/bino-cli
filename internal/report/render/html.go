@@ -218,6 +218,10 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
 	}
+	// Filter datasources to only include those directly referenced by components via $ prefix.
+	referencedSources := collectReferencedDatasources(docs, allDocs)
+	sources = filterDatasourcesByRefs(sources, referencedSources)
+
 	if ds := renderDatasources(sources); len(ds) > 0 {
 		segments = append(segments, ds...)
 	}
@@ -320,6 +324,10 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
 	}
+	// Filter datasources to only include those directly referenced by components via $ prefix.
+	referencedSources := collectReferencedDatasources(docs, allDocs)
+	sources = filterDatasourcesByRefs(sources, referencedSources)
+
 	if ds := renderDatasources(sources); len(ds) > 0 {
 		segments = append(segments, ds...)
 	}

@@ -136,7 +136,7 @@ type layoutChildMeta struct {
 type textSpec struct {
 	Value   string                 `json:"value"`
 	Dataset reportspec.DatasetList `json:"dataset"`
-	Scale   string                 `json:"scale,omitempty"`
+	Scale   reportspec.StringOrFloat `json:"scale,omitempty"`
 }
 
 // stackConfig defines the stacking configuration for chart components.
@@ -280,9 +280,9 @@ type treeNode struct {
 
 // treeLabelSpec defines a simple label component for tree nodes.
 type treeLabelSpec struct {
-	Value   string                 `json:"value"`
-	Dataset reportspec.DatasetList `json:"dataset"`
-	Scale   string                 `json:"scale,omitempty"`
+	Value   string                   `json:"value"`
+	Dataset reportspec.DatasetList   `json:"dataset"`
+	Scale   reportspec.StringOrFloat `json:"scale,omitempty"`
 }
 
 func (s treeSpec) writeAttrs(b *strings.Builder) {
@@ -325,7 +325,7 @@ type tableSpec struct {
 	BarColumnWidth           string                       `json:"barColumnWidth"`
 	UnitScaling              *float64                     `json:"unitScaling"`
 	PercentageScaling        *float64                     `json:"percentageScaling"`
-	Scale                    string                       `json:"scale,omitempty"`
+	Scale                    reportspec.StringOrFloat     `json:"scale,omitempty"`
 	Thereof                  reportspec.ThereofList       `json:"thereof"`
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
@@ -358,7 +358,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "bar-column-width", s.BarColumnWidth)
 	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
 	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
-	writeAttr(b, "scale", s.Scale)
+	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
