@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -147,16 +148,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			// Resolve data validation mode
 			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
-			dataValidationMode := dataset.DataValidationWarn // default
-			switch dataValidation {
-			case "fail":
-				dataValidationMode = dataset.DataValidationFail
-			case "warn":
-				dataValidationMode = dataset.DataValidationWarn
-			case "off":
-				dataValidationMode = dataset.DataValidationOff
-			default:
-				return ConfigErrorf("invalid --data-validation value %q, expected 'fail', 'warn', or 'off'", dataValidation)
+			dataValidationMode, err := resolveDataValidationMode(dataValidation)
+			if err != nil {
+				return ConfigError(err)
 			}
 			dataValidationSampleSize := dataset.GetDataValidationSampleSize()
 
@@ -171,224 +165,33 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			var server *previewhttp.Server
 			var explorerSession *explorer.Session
 
+			refreshCfg := previewRefreshConfig{
+				Logger:                   logger,
+				Workdir:                  watchDir,
+				EnableLint:               enableLint,
+				EngineVersion:            engineVersion,
+				QueryLogger:              queryLogger,
+				DataValidationMode:       dataValidationMode,
+				DataValidationSampleSize: dataValidationSampleSize,
+				HookRunner:               hookRunner,
+				HookEnv:                  previewHookEnv,
+			}
+
 			refresh := func(reason string) error {
-				// Check for cancellation before acquiring lock
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-
 				refreshMu.Lock()
 				defer refreshMu.Unlock()
-
 				if server == nil {
 					return RuntimeErrorf("preview: server not initialized")
 				}
-
-				// Check for cancellation after acquiring lock
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-
 				server.BroadcastRefreshing(reason)
 				defer server.BroadcastRefreshDone()
-
-				// Run pre-refresh hook (on failure: log and continue)
-				refreshHookEnv := previewHookEnv
-				refreshHookEnv.RefreshReason = reason
-				if err := hookRunner.Run(ctx, "pre-refresh", refreshHookEnv); err != nil {
-					logger.Errorf("pre-refresh hook failed: %v", err)
-					return nil
-				}
-
-				logger.Infof("Rendering report (%s)", reason)
-				docs, err := config.LoadDir(ctx, watchDir)
-				if err != nil {
-					logger.Errorf("Render failed (%s): %v", reason, err)
-					return RuntimeError(err)
-				}
-
-				// Warn about unresolved environment variables (preview continues with empty values)
-				for _, m := range config.CollectMissingEnvVars(docs) {
-					logger.Warnf("unresolved environment variable %s in %s", m.VarName, m.File)
-				}
-
-				// Refresh explorer session with latest documents (non-fatal on error)
-				if explorerSession != nil {
-					if err := explorerSession.Refresh(ctx, docs); err != nil {
-						logger.Warnf("Explorer refresh: %v", err)
-					}
-				}
-
-				// Run lint rules if enabled
-				if enableLint {
-					lintDocs := configDocsToLintDocs(docs)
-					runner := lint.NewDefaultRunner()
-					findings := runner.Run(ctx, lintDocs)
-					for _, f := range findings {
-						relPath := pathutil.RelPath(watchDir, f.File)
-						loc := relPath
-						if f.DocIdx > 0 {
-							loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
-						}
-						logger.Warnf("[%s] %s: %s", f.RuleID, loc, f.Message)
-					}
-				}
-
-				artefacts, err := config.CollectArtefacts(docs)
-				if err != nil {
-					logger.Errorf("Artefact scan failed (%s): %v", reason, err)
-					return RuntimeError(err)
-				}
-				pipeline.LogArtefactWarnings(logger, artefacts)
-
-				documentArtefacts, err := config.CollectDocumentArtefacts(docs)
-				if err != nil {
-					logger.Errorf("DocumentArtefact scan failed (%s): %v", reason, err)
-					return RuntimeError(err)
-				}
-				pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
-
-				// Build artefact info list for header dropdown
-				artefactInfos := make([]previewArtefactInfo, 0, len(artefacts)+len(documentArtefacts))
-				for _, art := range artefacts {
-					artefactInfos = append(artefactInfos, previewArtefactInfo{
-						Name:   art.Document.Name,
-						Title:  art.Spec.Title,
-						Format: art.Spec.Format,
-						IsDoc:  false,
-					})
-				}
-				for _, docArt := range documentArtefacts {
-					artefactInfos = append(artefactInfos, previewArtefactInfo{
-						Name:   docArt.Document.Name,
-						Title:  docArt.Spec.Title,
-						Format: docArt.Spec.Format,
-						IsDoc:  true,
-					})
-				}
-
-
-				// Build document info list for assets modal
-				documentInfos := make([]previewDocumentInfo, 0, len(docs))
-				for _, doc := range docs {
-					var cs []string
-					for _, c := range doc.Constraints {
-						cs = append(cs, formatConstraint(c))
-					}
-					documentInfos = append(documentInfos, previewDocumentInfo{
-						Kind:        doc.Kind,
-						Name:        doc.Name,
-						File:        pathutil.RelPath(watchDir, doc.File),
-						Labels:      doc.Labels,
-						Constraints: cs,
-					})
-				}
-
-				// Build dependency graph for artefact graph visualization
-				g, graphErr := reportgraph.Build(ctx, docs)
-				if graphErr != nil {
-					logger.Warnf("Graph build skipped: %v", graphErr)
-				}
-
-				// Always render "All Pages" view for "/" route - this is the default view
-				// that shows all LayoutPages without any artefact filtering
-				allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
-					Workdir:                  watchDir,
-					Language:                 "de",
-					Mode:                     pipeline.RenderModePreview,
-					EngineVersion:            engineVersion,
-					QueryLogger:              queryLogger,
-					DataValidation:           dataValidationMode,
-					DataValidationSampleSize: dataValidationSampleSize,
-				})
-				if err != nil {
-					policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
-					if policy.IsInvalidRoot {
-						logger.Errorf("Render blocked (%s): %s", reason, policy.Message)
-						setPreviewErrorPage(server, policy.Message, policy.Hint)
-						return nil
-					}
-					logger.Errorf("Render failed (%s): %v", reason, err)
-					return RuntimeError(err)
-				}
-				pipeline.LogDiagnostics(logger.Channel("datasource"), allPagesResult.Diagnostics)
-
-				routeMap := make(map[string]previewhttp.ContentFunc, len(artefacts)+len(documentArtefacts)+1)
-				allAssets := make([]previewhttp.LocalAsset, 0)
-				type artefactPayload struct {
-					path        string
-					contextHTML []byte
-				}
-				payloads := make([]artefactPayload, 0, len(artefacts)+1)
-
-				// Add "All Pages" route (default "/" view)
-				allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
-				pageMeta := buildPageMetadata(docs, artefacts)
-				allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
-				allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
-				payloads = append(payloads, artefactPayload{path: "/", contextHTML: allPagesContextHTML})
-
-				// Render each ReportArtefact
-				for _, art := range artefacts {
-					renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
-						QueryLogger:              queryLogger,
-						EngineVersion:            engineVersion,
-						DataValidation:           dataValidationMode,
-						DataValidationSampleSize: dataValidationSampleSize,
-					})
-					if err != nil {
-						if pipeline.IsInvalidRootError(err) {
-							logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)
-							continue
-						}
-						logger.Errorf("Render failed for %s (%s): %v", art.Document.Name, reason, err)
-						return RuntimeError(err)
-					}
-					pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
-					path := "/" + art.Document.Name
-					var artGraph *previewGraphData
-					if g != nil {
-						if rootNode, ok := g.ReportArtefactByName(art.Document.Name); ok {
-							artGraph = buildPreviewGraphData(g, rootNode)
-						}
-					}
-					frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, path, artGraph)
-					contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
-					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
-					payloads = append(payloads, artefactPayload{path: path, contextHTML: contextHTML})
-				}
-
-				// Render each DocumentArtefact
-				for _, docArt := range documentArtefacts {
-					renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
-						EngineVersion: engineVersion,
-					})
-					if err != nil {
-						logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
-						continue
-					}
-					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-					path := "/doc/" + docArt.Document.Name
-					var docGraph *previewGraphData
-					if g != nil {
-						if rootNode, ok := g.DocumentArtefactByName(docArt.Document.Name); ok {
-							docGraph = buildPreviewGraphData(g, rootNode)
-						}
-					}
-					// DocumentArtefacts get header injected too
-					frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, path, docGraph)
-					routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
-				}
-
-				server.SetLocalAssets(allAssets)
-				server.SetContentRoutes(routeMap)
-				server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), allPagesFrameHTML...), "text/html; charset=utf-8"))
-				for _, payload := range payloads {
-					server.BroadcastContent(payload.path, payload.contextHTML)
-				}
-				logger.Successf("Content refreshed (%s)", reason)
-				return nil
+				return refreshPreviewContent(ctx, reason, server, explorerSession, &refreshCfg)
 			}
 
 			refreshCh := make(chan string, 16)
@@ -493,6 +296,223 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
 
 	return cmd
+}
+
+// previewRefreshConfig holds configuration for a preview content refresh.
+type previewRefreshConfig struct {
+	Logger                   logx.Logger
+	Workdir                  string
+	EnableLint               bool
+	EngineVersion            string
+	QueryLogger              func(string)
+	DataValidationMode       dataset.DataValidationMode
+	DataValidationSampleSize int
+	HookRunner               *hooks.Runner
+	HookEnv                  hooks.HookEnv
+}
+
+// refreshPreviewContent loads manifests, renders all artefacts, and updates the
+// preview server. It is the core logic extracted from the preview refresh closure.
+func refreshPreviewContent(ctx context.Context, reason string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig) error {
+	logger := cfg.Logger
+	watchDir := cfg.Workdir
+
+	// Run pre-refresh hook (on failure: log and continue)
+	refreshHookEnv := cfg.HookEnv
+	refreshHookEnv.RefreshReason = reason
+	if err := cfg.HookRunner.Run(ctx, "pre-refresh", refreshHookEnv); err != nil {
+		logger.Errorf("pre-refresh hook failed: %v", err)
+		return nil
+	}
+
+	logger.Infof("Rendering report (%s)", reason)
+	docs, err := config.LoadDir(ctx, watchDir)
+	if err != nil {
+		logger.Errorf("Render failed (%s): %v", reason, err)
+		return RuntimeError(err)
+	}
+
+	// Warn about unresolved environment variables (preview continues with empty values)
+	for _, m := range config.CollectMissingEnvVars(docs) {
+		logger.Warnf("unresolved environment variable %s in %s", m.VarName, m.File)
+	}
+
+	// Refresh explorer session with latest documents (non-fatal on error)
+	if explorerSession != nil {
+		if err := explorerSession.Refresh(ctx, docs); err != nil {
+			logger.Warnf("Explorer refresh: %v", err)
+		}
+	}
+
+	// Run lint rules if enabled
+	if cfg.EnableLint {
+		lintDocs := configDocsToLintDocs(docs)
+		runner := lint.NewDefaultRunner()
+		findings := runner.Run(ctx, lintDocs)
+		for _, f := range findings {
+			relPath := pathutil.RelPath(watchDir, f.File)
+			loc := relPath
+			if f.DocIdx > 0 {
+				loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
+			}
+			logger.Warnf("[%s] %s: %s", f.RuleID, loc, f.Message)
+		}
+	}
+
+	artefacts, err := config.CollectArtefacts(docs)
+	if err != nil {
+		logger.Errorf("Artefact scan failed (%s): %v", reason, err)
+		return RuntimeError(err)
+	}
+	pipeline.LogArtefactWarnings(logger, artefacts)
+
+	documentArtefacts, err := config.CollectDocumentArtefacts(docs)
+	if err != nil {
+		logger.Errorf("DocumentArtefact scan failed (%s): %v", reason, err)
+		return RuntimeError(err)
+	}
+	pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
+
+	// Build artefact info list for header dropdown
+	artefactInfos := make([]previewArtefactInfo, 0, len(artefacts)+len(documentArtefacts))
+	for _, art := range artefacts {
+		artefactInfos = append(artefactInfos, previewArtefactInfo{
+			Name:   art.Document.Name,
+			Title:  art.Spec.Title,
+			Format: art.Spec.Format,
+			IsDoc:  false,
+		})
+	}
+	for _, docArt := range documentArtefacts {
+		artefactInfos = append(artefactInfos, previewArtefactInfo{
+			Name:   docArt.Document.Name,
+			Title:  docArt.Spec.Title,
+			Format: docArt.Spec.Format,
+			IsDoc:  true,
+		})
+	}
+
+	// Build document info list for assets modal
+	documentInfos := make([]previewDocumentInfo, 0, len(docs))
+	for _, doc := range docs {
+		var cs []string
+		for _, c := range doc.Constraints {
+			cs = append(cs, formatConstraint(c))
+		}
+		documentInfos = append(documentInfos, previewDocumentInfo{
+			Kind:        doc.Kind,
+			Name:        doc.Name,
+			File:        pathutil.RelPath(watchDir, doc.File),
+			Labels:      doc.Labels,
+			Constraints: cs,
+		})
+	}
+
+	// Build dependency graph for artefact graph visualization
+	g, graphErr := reportgraph.Build(ctx, docs)
+	if graphErr != nil {
+		logger.Warnf("Graph build skipped: %v", graphErr)
+	}
+
+	// Always render "All Pages" view for "/" route - this is the default view
+	// that shows all LayoutPages without any artefact filtering
+	allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+		Workdir:                  watchDir,
+		Language:                 "de",
+		Mode:                     pipeline.RenderModePreview,
+		EngineVersion:            cfg.EngineVersion,
+		QueryLogger:              cfg.QueryLogger,
+		DataValidation:           cfg.DataValidationMode,
+		DataValidationSampleSize: cfg.DataValidationSampleSize,
+	})
+	if err != nil {
+		policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
+		if policy.IsInvalidRoot {
+			logger.Errorf("Render blocked (%s): %s", reason, policy.Message)
+			setPreviewErrorPage(server, policy.Message, policy.Hint)
+			return nil
+		}
+		logger.Errorf("Render failed (%s): %v", reason, err)
+		return RuntimeError(err)
+	}
+	pipeline.LogDiagnostics(logger.Channel("datasource"), allPagesResult.Diagnostics)
+
+	routeMap := make(map[string]previewhttp.ContentFunc, len(artefacts)+len(documentArtefacts)+1)
+	allAssets := make([]previewhttp.LocalAsset, 0)
+	type artefactPayload struct {
+		path        string
+		contextHTML []byte
+	}
+	payloads := make([]artefactPayload, 0, len(artefacts)+1)
+
+	// Add "All Pages" route (default "/" view)
+	allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
+	pageMeta := buildPageMetadata(docs, artefacts)
+	allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
+	allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
+	payloads = append(payloads, artefactPayload{path: "/", contextHTML: allPagesContextHTML})
+
+	// Render each ReportArtefact
+	for _, art := range artefacts {
+		renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
+			QueryLogger:              cfg.QueryLogger,
+			EngineVersion:            cfg.EngineVersion,
+			DataValidation:           cfg.DataValidationMode,
+			DataValidationSampleSize: cfg.DataValidationSampleSize,
+		})
+		if err != nil {
+			if pipeline.IsInvalidRootError(err) {
+				logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)
+				continue
+			}
+			logger.Errorf("Render failed for %s (%s): %v", art.Document.Name, reason, err)
+			return RuntimeError(err)
+		}
+		pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
+		path := "/" + art.Document.Name
+		var artGraph *previewGraphData
+		if g != nil {
+			if rootNode, ok := g.ReportArtefactByName(art.Document.Name); ok {
+				artGraph = buildPreviewGraphData(g, rootNode)
+			}
+		}
+		frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, path, artGraph)
+		contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
+		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+		routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		payloads = append(payloads, artefactPayload{path: path, contextHTML: contextHTML})
+	}
+
+	// Render each DocumentArtefact
+	for _, docArt := range documentArtefacts {
+		renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
+			EngineVersion: cfg.EngineVersion,
+		})
+		if err != nil {
+			logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
+			continue
+		}
+		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+		path := "/doc/" + docArt.Document.Name
+		var docGraph *previewGraphData
+		if g != nil {
+			if rootNode, ok := g.DocumentArtefactByName(docArt.Document.Name); ok {
+				docGraph = buildPreviewGraphData(g, rootNode)
+			}
+		}
+		// DocumentArtefacts get header injected too
+		frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, path, docGraph)
+		routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+	}
+
+	server.SetLocalAssets(allAssets)
+	server.SetContentRoutes(routeMap)
+	server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), allPagesFrameHTML...), "text/html; charset=utf-8"))
+	for _, payload := range payloads {
+		server.BroadcastContent(payload.path, payload.contextHTML)
+	}
+	logger.Successf("Content refreshed (%s)", reason)
+	return nil
 }
 
 // previewArtefactInfo holds metadata about an artefact for the preview header dropdown.
