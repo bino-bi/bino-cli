@@ -2321,7 +2321,7 @@
           "default": "",
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted."
         },
-        "titleNamespace": { "type": "string", "default": "_system" },
+        "titleNamespace": { "type": "string", "default": "_system", "description": "Namespace used for title translations via the internationalization store." },
         "titleDateStart": {
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
@@ -2402,10 +2402,11 @@
             "split-horizontal",
             "split-vertical"
           ],
-          "default": "full"
+          "default": "full",
+          "description": "Layout mode for arranging child components. full: single slot. split-vertical/horizontal: two slots. NxN: equal grid. 1-over-2, etc.: asymmetric layouts. custom-template: uses pageCustomTemplate."
         },
-        "pageCustomTemplate": { "type": "string", "default": "\"a b\" \"c d\"" },
-        "pageGridGap": { "type": "string", "default": "0" },
+        "pageCustomTemplate": { "type": "string", "default": "\"a b\" \"c d\"", "description": "CSS grid-template-areas string for custom-template layout mode. Each quoted row defines a grid row; letters map to slot indices." },
+        "pageGridGap": { "type": "string", "default": "0", "description": "Gap between grid cells in pixels." },
         "pageFormat": {
           "type": "string",
           "enum": ["xga", "hd", "full-hd", "4k", "4k2k", "a4", "a3", "a2", "a1", "a0", "letter", "legal"],
@@ -2417,9 +2418,9 @@
           "enum": ["landscape", "portrait"],
           "description": "Defines page orientation. Default is based on the given format."
         },
-        "pageFitToContent": { "type": "boolean", "default": true },
-        "pageNumber": { "type": "string" },
-        "footerDisplayPageNumber": { "type": "boolean", "default": true },
+        "pageFitToContent": { "type": "boolean", "default": true, "description": "When true, the page body height shrinks to fit content. When false, the body stretches to fill the full page height." },
+        "pageNumber": { "type": "string", "description": "Page number displayed in the footer." },
+        "footerDisplayPageNumber": { "type": "boolean", "default": true, "description": "Whether to display the page number in the footer." },
         "footerText": { "type": "string" },
         "messageImage": {
           "type": "string",
