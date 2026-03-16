@@ -12,10 +12,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/cli/web"
-	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
-	"bino.bi/bino/internal/pathutil"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -61,44 +59,14 @@ Environment knobs:
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("serve")
 
-			cacheDir, err := previewCacheDir()
+			env, err := initCommandEnv(ctx, cmd, workdir, "serve", logger)
 			if err != nil {
-				return RuntimeError(err)
-			}
-			logger.Debugf("Using cache directory %s", cacheDir)
-
-			// Find project root (directory containing bino.toml)
-			watchDir, err := pipeline.ResolveProjectRoot(workdir)
-			if err != nil {
-				return ConfigError(err)
+				return err
 			}
 
-			// Load project config for defaults
-			projectCfg, cfgErr := pathutil.LoadProjectConfig(watchDir)
-			if cfgErr != nil {
-				logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
-				projectCfg = &pathutil.ProjectConfig{}
-			}
-
-			// Apply environment variables from TOML for serve section
-			projectCfg.Serve.Env.Apply(func(key, tomlVal, envVal string) {
-				logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
-			})
-
-			// Create hook runner
-			hookRunner := hooks.NewRunner(
-				hooks.Resolve(projectCfg.Hooks, projectCfg.Serve.Hooks, logger.Channel("hooks")),
-				logger.Channel("hooks"), watchDir,
-			)
-
-			// Resolve arguments with TOML defaults
-			resolver := pathutil.NewArgResolver(cmd, projectCfg.Serve.Args, func(format string, args ...any) {
-				logger.Infof(format, args...)
-			})
-
-			port = resolver.ResolveInt("port", "port", port)
-			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
-			live = resolver.ResolveString("live", "live", live)
+			port = env.Resolver.ResolveInt("port", "port", port)
+			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			live = env.Resolver.ResolveString("live", "live", live)
 
 			// Determine listen address
 			if addr == "" {
@@ -110,37 +78,14 @@ Environment knobs:
 				return ConfigErrorf("--live flag is required: specify the name of a LiveReportArtefact to serve")
 			}
 
-			// Resolve template engine version
-			engineVersion := projectCfg.EngineVersion
-			engineMgr, err := engine.NewManager()
-			if err != nil {
-				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
-			}
-			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
-			if err != nil {
-				return ConfigError(fmt.Errorf("template engine: %w", err))
-			}
-			engineVersion = engineInfo.Version
-			logger.Infof("Using template engine %s", engineVersion)
-
 			logger.Infof("Starting serve on %s", addr)
-			logger.Infof("Project directory %s", watchDir)
+			logger.Infof("Project directory %s", env.ProjectRoot)
 			logger.Infof("Serving LiveReportArtefact %q", live)
 
-			// Set up SQL query logger if --log-sql is enabled
-			var queryLogger func(string)
-			if logSQL {
-				queryLogger = func(query string) {
-					if logx.DebugEnabled(ctx) {
-						logger.Infof("SQL query:\n%s", query)
-					} else {
-						logger.Infof("SQL: %s", strings.ReplaceAll(strings.TrimSpace(query), "\n", " "))
-					}
-				}
-			}
+			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
 			// Load documents once at startup
-			docs, err := config.LoadDir(ctx, watchDir)
+			docs, err := config.LoadDir(ctx, env.ProjectRoot)
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -214,7 +159,7 @@ Environment knobs:
 			// Create the server
 			server, err := previewhttp.New(previewhttp.Config{
 				ListenAddr: addr,
-				CacheDir:   cacheDir,
+				CacheDir:   env.CacheDir,
 				Logger:     logger.Channel("server"),
 			})
 			if err != nil {
@@ -224,13 +169,13 @@ Environment knobs:
 			// Run pre-serve hook (once, before route setup)
 			serveHookEnv := hooks.HookEnv{
 				Mode:         "serve",
-				Workdir:      watchDir,
-				ReportID:     projectCfg.ReportID,
+				Workdir:      env.ProjectRoot,
+				ReportID:     env.ProjectCfg.ReportID,
 				Verbose:      logx.DebugEnabled(ctx),
 				ListenAddr:   addr,
 				LiveArtefact: live,
 			}
-			if err := hookRunner.Run(ctx, "pre-serve", serveHookEnv); err != nil {
+			if err := env.HookRunner.Run(ctx, "pre-serve", serveHookEnv); err != nil {
 				return RuntimeError(err)
 			}
 
@@ -238,13 +183,13 @@ Environment knobs:
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
 				LiveArtefact:  *liveArtefact,
 				ArtefactMap:   artefactMap,
-				HookRunner:    hookRunner,
+				HookRunner:    env.HookRunner,
 				HookEnv:       serveHookEnv,
 				Logger:        logger,
-				Workdir:       watchDir,
+				Workdir:       env.ProjectRoot,
 				BaseDocs:      docs,
 				QueryLogger:   queryLogger,
-				EngineVersion: engineVersion,
+				EngineVersion: env.EngineVersion,
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -253,7 +198,7 @@ Environment knobs:
 			if routeSetup.RootContent != nil {
 				server.SetContentFunc(routeSetup.RootContent)
 			}
-			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, watchDir, docs, engineVersion))
+			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion))
 
 			url := server.URL()
 			logger.Successf("Serving at %s", url)
