@@ -5,9 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"bino.bi/bino/internal/pathutil"
+)
+
+var (
+	sampleSizeRe   = regexp.MustCompile(`^\d+%?$`)
+	sampleMethodRe = regexp.MustCompile(`^(system|bernoulli|reservoir)$`)
 )
 
 // sampleSpec represents a DuckDB USING SAMPLE configuration.
@@ -68,16 +74,25 @@ func (s *sampleSpec) UnmarshalJSON(data []byte) error {
 
 // buildSampleClause returns the DuckDB USING SAMPLE clause for this sample config.
 // Returns an empty string if sample is nil or has no size.
-func buildSampleClause(sample *sampleSpec) string {
+// Returns an error if sample.Size or sample.Method contain invalid values.
+func buildSampleClause(sample *sampleSpec) (string, error) {
 	if sample == nil || sample.Size == "" {
-		return ""
+		return "", nil
+	}
+
+	if !sampleSizeRe.MatchString(sample.Size) {
+		return "", fmt.Errorf("invalid sample size %q: must be a number or number with %% suffix", sample.Size)
+	}
+
+	if sample.Method != "" && !sampleMethodRe.MatchString(sample.Method) {
+		return "", fmt.Errorf("invalid sample method %q: must be system, bernoulli, or reservoir", sample.Method)
 	}
 
 	if sample.Method == "" {
-		return fmt.Sprintf(" USING SAMPLE %s", sample.Size)
+		return fmt.Sprintf(" USING SAMPLE %s", sample.Size), nil
 	}
 
-	return fmt.Sprintf(" USING SAMPLE %s (%s)", sample.Size, sample.Method)
+	return fmt.Sprintf(" USING SAMPLE %s (%s)", sample.Size, sample.Method), nil
 }
 
 // Supported DataSource types.
