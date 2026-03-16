@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,104 +151,13 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return err
 			}
 
-			// Step 1: Load and validate manifests
-			out.Step("Loading manifests...")
-			loadStart := time.Now()
-			documents, err := config.LoadDir(ctx, absDir)
+			// Step 1: Load, validate, and filter manifests
+			manifests, err := loadBuildManifests(ctx, out, logger, absDir, include, exclude, noLint, noGraph)
 			if err != nil {
-				return ConfigError(err)
+				return err
 			}
-			if len(documents) == 0 {
-				return ConfigErrorf("no YAML documents found in %s", absDir)
-			}
-
-			// Fail build if any environment variables are unresolved
-			// Exclude param names defined in LayoutPages (they're resolved at render time)
-			paramNames := config.CollectLayoutPageParamNames(documents)
-			if err := config.CheckMissingEnvVarsExcluding(documents, paramNames); err != nil {
-				return ConfigError(err)
-			}
-
-			out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
-
-			// Show manifest summary
-			out.Blank()
-			out.Info("Manifest summary:")
-			for _, doc := range documents {
-				relPath := pathutil.RelPath(absDir, doc.File)
-				out.ListColored(fmt.Sprintf("%s #%d", relPath, doc.Position), "kind", doc.Kind, "name", doc.Name)
-			}
-			out.Blank()
-
-			// Run lint rules unless disabled
-			var lintFindings []lint.Finding
-			if !noLint {
-				lintDocs := configDocsToLintDocs(documents)
-				runner := lint.NewDefaultRunner()
-				lintFindings = runner.Run(ctx, lintDocs)
-				if len(lintFindings) > 0 {
-					printLintFindings(out, lintFindings, absDir)
-					out.Blank()
-				}
-			}
-
-			artefacts, err := config.CollectArtefacts(documents)
-			if err != nil {
-				return ConfigError(err)
-			}
-
-			screenshotArtefacts, err := config.CollectScreenshotArtefacts(documents)
-			if err != nil {
-				return ConfigError(err)
-			}
-
-			documentArtefacts, err := config.CollectDocumentArtefacts(documents)
-			if err != nil {
-				return ConfigError(err)
-			}
-
-			if len(artefacts) == 0 && len(screenshotArtefacts) == 0 && len(documentArtefacts) == 0 {
-				return ConfigErrorf("no ReportArtefact, ScreenshotArtefact, or DocumentArtefact manifests found in %s", absDir)
-			}
-
-			signingProfiles, err := config.CollectSigningProfiles(documents)
-			if err != nil {
-				return ConfigError(err)
-			}
-
-			// Validate that all include names exist in any artefact type
-			if err := pipeline.ValidateAllArtefactNames(artefacts, screenshotArtefacts, documentArtefacts, include); err != nil {
-				return ConfigError(err)
-			}
-
-			filterOpts := pipeline.FilterOptions{
-				Include: include,
-				Exclude: exclude,
-			}
-			selected := pipeline.FilterArtefacts(artefacts, filterOpts)
-			selectedScreenshots := pipeline.FilterScreenshotArtefacts(screenshotArtefacts, filterOpts)
-			selectedDocuments := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
-
-			if len(selected) == 0 && len(selectedScreenshots) == 0 && len(selectedDocuments) == 0 {
-				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
-			}
-			pipeline.LogArtefactWarnings(logger, selected)
-			pipeline.LogDocumentArtefactWarnings(logger, selectedDocuments)
-
-			if err := pipeline.EnsureSigningProfiles(selected, signingProfiles); err != nil {
-				return ConfigError(err)
-			}
-			if err := pipeline.EnsureDocumentSigningProfiles(selectedDocuments, signingProfiles); err != nil {
-				return ConfigError(err)
-			}
-
-			var graph *reportgraph.Graph
-			if !noGraph {
-				graph, err = reportgraph.Build(ctx, documents)
-				if err != nil {
-					return RuntimeError(err)
-				}
-			}
+			documents := manifests.Documents
+			lintFindings := manifests.LintFindings
 
 			outputDir := pipeline.ResolveOutputDir(absDir, outDir)
 			if err := pathutil.EnsureDir(outputDir); err != nil {
@@ -341,16 +251,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Resolve data validation mode
 			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
-			dataValidationMode := dataset.DataValidationWarn // default
-			switch dataValidation {
-			case "fail":
-				dataValidationMode = dataset.DataValidationFail
-			case "warn":
-				dataValidationMode = dataset.DataValidationWarn
-			case "off":
-				dataValidationMode = dataset.DataValidationOff
-			default:
-				return ConfigErrorf("invalid --data-validation value %q, expected 'fail', 'warn', or 'off'", dataValidation)
+			dataValidationMode, err := resolveDataValidationMode(dataValidation)
+			if err != nil {
+				return ConfigError(err)
 			}
 
 			// Run pre-build hooks
@@ -367,141 +270,31 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return RuntimeError(err)
 			}
 
-			// Step 2: Build artefacts
-			out.Step(fmt.Sprintf("Building %d artefact(s)...", len(selected)))
-
-			results := make([]artefactResult, 0, len(selected))
-			for _, artefact := range selected {
-				// Check for cancellation before starting each artefact
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-
-				var root *reportgraph.Node
-				if graph != nil {
-					node, ok := graph.ReportArtefactByName(artefact.Document.Name)
-					if !ok {
-						return RuntimeErrorf("graph: artefact node %s not found", artefact.Document.Name)
-					}
-					root = node
-				}
-
-				// Create spinner for this artefact
-				spinner := NewSpinner(SpinnerConfig{
-					Stdout:  cmd.OutOrStdout(),
-					NoColor: logx.NoColorEnabled(ctx),
-				})
-
-				artefactHookEnv := buildHookEnv
-				artefactHookEnv.ArtefactName = artefact.Document.Name
-				artefactHookEnv.ArtefactKind = "report"
-
-				entry, err := buildArtefact(ctx, buildArtefactConfig{
-					Logger:                   logger.Channel(artefact.Document.Name),
-					Workdir:                  absDir,
-					CacheDir:                 cacheDir,
-					EngineVersion:            engineVersion,
-					Docs:                     documents,
-					Artefact:                 artefact,
-					SigningProfiles:          signingProfiles,
-					OutputDir:                outputDir,
-					ChromePath:               chromePath,
-					Debug:                    logx.DebugEnabled(ctx),
-					Graph:                    graph,
-					GraphRoot:                root,
-					GraphBase:                absDir,
-					Spinner:                  spinner,
-					QueryLogger:              queryLogger,
-					QueryExecLogger:          queryExecLogger,
-					EmbedOptions:             embedOpts,
-					ExecutionPlan:            execPlan,
-					DataValidation:           dataValidationMode,
-					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
-					HookRunner:               hookRunner,
-					HookEnv:                  artefactHookEnv,
-				})
-				if err != nil {
-					policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
-					if policy.IsInvalidRoot {
-						return ConfigError(err)
-					}
-					return RuntimeError(err)
-				}
-				results = append(results, entry)
+			// Step 2: Build all artefacts
+			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
+				Logger:          logger,
+				AbsDir:          absDir,
+				CacheDir:        cacheDir,
+				EngineVersion:   engineVersion,
+				OutputDir:       outputDir,
+				ChromePath:      chromePath,
+				Debug:           logx.DebugEnabled(ctx),
+				NoColor:         logx.NoColorEnabled(ctx),
+				Stdout:          cmd.OutOrStdout(),
+				QueryLogger:     queryLogger,
+				QueryExecLogger: queryExecLogger,
+				EmbedOpts:       embedOpts,
+				ExecPlan:        execPlan,
+				DataValidation:  dataValidationMode,
+				HookRunner:      hookRunner,
+				HookEnv:         buildHookEnv,
+			})
+			if err != nil {
+				return err
 			}
-
-			// Step 3: Build screenshot artefacts (using pre-filtered selectedScreenshots)
-			var screenshotResults []screenshotArtefactResult
-			if len(selectedScreenshots) > 0 {
-				out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(selectedScreenshots)))
-
-				for _, ssArtefact := range selectedScreenshots {
-					// Check for cancellation before starting each screenshot artefact
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-
-					// Create spinner for this screenshot artefact
-					spinner := NewSpinner(SpinnerConfig{
-						Stdout:  cmd.OutOrStdout(),
-						NoColor: logx.NoColorEnabled(ctx),
-					})
-
-					ssResults, err := buildScreenshotArtefact(ctx, buildScreenshotArtefactConfig{
-						Logger:        logger.Channel(ssArtefact.Document.Name),
-						Workdir:       absDir,
-						CacheDir:      cacheDir,
-						EngineVersion: engineVersion,
-						Docs:          documents,
-						Artefact:      ssArtefact,
-						OutputDir:     outputDir,
-						ChromePath:    chromePath,
-						Debug:         logx.DebugEnabled(ctx),
-						Spinner:       spinner,
-						QueryLogger:   queryLogger,
-					})
-					if err != nil {
-						return RuntimeError(err)
-					}
-					screenshotResults = append(screenshotResults, ssResults...)
-				}
-			}
-
-			// Step 4: Build document artefacts (using pre-filtered selectedDocuments)
-			var documentResults []documentArtefactResult
-			if len(selectedDocuments) > 0 {
-				out.Step(fmt.Sprintf("Building %d document artefact(s)...", len(selectedDocuments)))
-
-				for _, docArtefact := range selectedDocuments {
-					// Check for cancellation before starting each document artefact
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-
-					// Create spinner for this document artefact
-					spinner := NewSpinner(SpinnerConfig{
-						Stdout:  cmd.OutOrStdout(),
-						NoColor: logx.NoColorEnabled(ctx),
-					})
-
-					docResult, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
-						Logger:          logger.Channel(docArtefact.Document.Name),
-						Workdir:         absDir,
-						CacheDir:        cacheDir,
-						EngineVersion:   engineVersion,
-						Artefact:        docArtefact,
-						SigningProfiles: signingProfiles,
-						OutputDir:       outputDir,
-						ChromePath:      chromePath,
-						Debug:           logx.DebugEnabled(ctx),
-						Spinner:         spinner,
-					})
-					if err != nil {
-						return RuntimeError(err)
-					}
-					documentResults = append(documentResults, docResult)
-				}
-			}
+			results := buildResults.Reports
+			screenshotResults := buildResults.Screenshots
+			documentResults := buildResults.Documents
 
 			// Run post-build hooks
 			if err := hookRunner.Run(ctx, "post-build", buildHookEnv); err != nil {
@@ -518,110 +311,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			var jsonLogPath string
 			if logFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
-				completedTime := time.Now()
-
-				// Build document entries
-				docEntries := make([]buildlog.DocumentEntry, 0, len(documents))
-				for _, doc := range documents {
-					docEntries = append(docEntries, buildlog.DocumentEntry{
-						File:     doc.File,
-						Position: doc.Position,
-						Kind:     doc.Kind,
-						Name:     doc.Name,
-					})
-				}
-
-				// Build artefact entries
-				artefactEntries := make([]buildlog.ArtefactEntry, 0, len(results))
-				for _, res := range results {
-					artefactEntries = append(artefactEntries, buildlog.ArtefactEntry{
-						Name:  res.Name,
-						PDF:   res.PDFPath,
-						Graph: res.GraphPath,
-					})
-				}
-
-				// Build query entries from collected metadata
-				queryEntries := make([]buildlog.QueryEntry, 0, len(queryExecMetas))
-				for _, meta := range queryExecMetas {
-					queryEntries = append(queryEntries, buildlog.BuildQueryEntry(meta, embedOpts))
-				}
-
-				// Get execution plan steps if enabled
-				var planSteps []buildlog.ExecutionStep
-				if execPlan != nil {
-					planSteps = execPlan.GetSteps()
-				}
-
-				jsonLog := &buildlog.JSONBuildLog{
-					RunID:         runID,
-					ReportID:      projectCfg.ReportID,
-					EngineVersion: engineVersion,
-					Started:       startTime,
-					Completed:     completedTime,
-					DurationMs:    completedTime.Sub(startTime).Milliseconds(),
-					Workdir:       absDir,
-					Documents:     docEntries,
-					Artefacts:     artefactEntries,
-					Queries:       queryEntries,
-					ExecutionPlan: planSteps,
-					Lint:          findingsToLintEntries(lintFindings),
-					Warnings:      buildWarnings,
-				}
-
+				jsonLog := assembleJSONBuildLog(runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
 					logger.Warnf("failed to write JSON build log: %v", err)
 				}
 			}
 
-			// Print results with relative paths
-			out.Blank()
-			resultItems := make([]string, 0, len(results))
-			style := StyleFromContext(ctx)
-			for _, res := range results {
-				// Make PDF path relative to workdir for cleaner output
-				relPDFPath := pathutil.RelPath(absDir, res.PDFPath)
-				item := fmt.Sprintf("%s %s %s", FormatName(res.Name), style.Dim.Sprint(SymbolArrow), FormatPath(relPDFPath))
-				if res.GraphPath != "" {
-					item += style.Dim.Sprintf(" (+graph)")
-				}
-				resultItems = append(resultItems, item)
-			}
-			out.Summary(fmt.Sprintf("Generated %d artefact(s):", len(results)), resultItems)
-
-			// Print screenshot results if any
-			if len(screenshotResults) > 0 {
-				out.Blank()
-				ssItems := make([]string, 0, len(screenshotResults))
-				var ssErrors []string
-				for _, res := range screenshotResults {
-					if res.Error != nil {
-						ssErrors = append(ssErrors, fmt.Sprintf("%s/%s: %v", res.RefKind, res.RefName, res.Error))
-						continue
-					}
-					relPath := pathutil.RelPath(absDir, res.FilePath)
-					item := fmt.Sprintf("%s/%s %s %s", res.RefKind, res.RefName, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
-					ssItems = append(ssItems, item)
-				}
-				out.Summary(fmt.Sprintf("Generated %d screenshot(s):", len(ssItems)), ssItems)
-				if len(ssErrors) > 0 {
-					for _, errMsg := range ssErrors {
-						out.Warning(fmt.Sprintf("Screenshot error: %s", errMsg))
-					}
-				}
-			}
-
-			// Print document artefact results if any
-			if len(documentResults) > 0 {
-				out.Blank()
-				docItems := make([]string, 0, len(documentResults))
-				for _, res := range documentResults {
-					relPath := pathutil.RelPath(absDir, res.PDFPath)
-					item := fmt.Sprintf("%s %s %s", res.Name, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
-					docItems = append(docItems, item)
-				}
-				out.Summary(fmt.Sprintf("Generated %d document(s):", len(documentResults)), docItems)
-			}
+			// Print results
+			printBuildSummary(out, ctx, absDir, results, screenshotResults, documentResults)
 
 			// Print final success
 			out.Done("Build complete")
@@ -1387,4 +1084,387 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		spinner.Stop()
 	}
 	return results, nil
+}
+
+// buildExecutionConfig holds configuration for building all artefact types.
+type buildExecutionConfig struct {
+	Logger          logx.Logger
+	AbsDir          string
+	CacheDir        string
+	EngineVersion   string
+	OutputDir       string
+	ChromePath      string
+	Debug           bool
+	NoColor         bool
+	Stdout          io.Writer
+	QueryLogger     func(string)
+	QueryExecLogger duckdb.QueryExecLogger
+	EmbedOpts       buildlog.EmbedOptions
+	ExecPlan        *buildlog.ExecutionPlan
+	DataValidation  dataset.DataValidationMode
+	HookRunner      *hooks.Runner
+	HookEnv         hooks.HookEnv
+}
+
+// buildAllResults holds the results from building all artefact types.
+type buildAllResults struct {
+	Reports     []artefactResult
+	Screenshots []screenshotArtefactResult
+	Documents   []documentArtefactResult
+}
+
+// buildAllArtefacts iterates over all selected artefact types and builds them.
+func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifestData, cfg buildExecutionConfig) (*buildAllResults, error) {
+	spinnerCfg := SpinnerConfig{Stdout: cfg.Stdout, NoColor: cfg.NoColor}
+
+	// Build report artefacts
+	out.Step(fmt.Sprintf("Building %d artefact(s)...", len(manifests.Selected)))
+	results := make([]artefactResult, 0, len(manifests.Selected))
+	for _, artefact := range manifests.Selected {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		var root *reportgraph.Node
+		if manifests.Graph != nil {
+			node, ok := manifests.Graph.ReportArtefactByName(artefact.Document.Name)
+			if !ok {
+				return nil, RuntimeErrorf("graph: artefact node %s not found", artefact.Document.Name)
+			}
+			root = node
+		}
+
+		artefactHookEnv := cfg.HookEnv
+		artefactHookEnv.ArtefactName = artefact.Document.Name
+		artefactHookEnv.ArtefactKind = "report"
+
+		entry, err := buildArtefact(ctx, buildArtefactConfig{
+			Logger:                   cfg.Logger.Channel(artefact.Document.Name),
+			Workdir:                  cfg.AbsDir,
+			CacheDir:                 cfg.CacheDir,
+			EngineVersion:            cfg.EngineVersion,
+			Docs:                     manifests.Documents,
+			Artefact:                 artefact,
+			SigningProfiles:          manifests.SigningProfiles,
+			OutputDir:                cfg.OutputDir,
+			ChromePath:               cfg.ChromePath,
+			Debug:                    cfg.Debug,
+			Graph:                    manifests.Graph,
+			GraphRoot:                root,
+			GraphBase:                cfg.AbsDir,
+			Spinner:                  NewSpinner(spinnerCfg),
+			QueryLogger:              cfg.QueryLogger,
+			QueryExecLogger:          cfg.QueryExecLogger,
+			EmbedOptions:             cfg.EmbedOpts,
+			ExecutionPlan:            cfg.ExecPlan,
+			DataValidation:           cfg.DataValidation,
+			DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+			HookRunner:               cfg.HookRunner,
+			HookEnv:                  artefactHookEnv,
+		})
+		if err != nil {
+			policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
+			if policy.IsInvalidRoot {
+				return nil, ConfigError(err)
+			}
+			return nil, RuntimeError(err)
+		}
+		results = append(results, entry)
+	}
+
+	// Build screenshot artefacts
+	var screenshotResults []screenshotArtefactResult
+	if len(manifests.SelectedScreenshots) > 0 {
+		out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(manifests.SelectedScreenshots)))
+		for _, ssArtefact := range manifests.SelectedScreenshots {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			ssResults, err := buildScreenshotArtefact(ctx, buildScreenshotArtefactConfig{
+				Logger:        cfg.Logger.Channel(ssArtefact.Document.Name),
+				Workdir:       cfg.AbsDir,
+				CacheDir:      cfg.CacheDir,
+				EngineVersion: cfg.EngineVersion,
+				Docs:          manifests.Documents,
+				Artefact:      ssArtefact,
+				OutputDir:     cfg.OutputDir,
+				ChromePath:    cfg.ChromePath,
+				Debug:         cfg.Debug,
+				Spinner:       NewSpinner(spinnerCfg),
+				QueryLogger:   cfg.QueryLogger,
+			})
+			if err != nil {
+				return nil, RuntimeError(err)
+			}
+			screenshotResults = append(screenshotResults, ssResults...)
+		}
+	}
+
+	// Build document artefacts
+	var documentResults []documentArtefactResult
+	if len(manifests.SelectedDocuments) > 0 {
+		out.Step(fmt.Sprintf("Building %d document artefact(s)...", len(manifests.SelectedDocuments)))
+		for _, docArtefact := range manifests.SelectedDocuments {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			docResult, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
+				Logger:          cfg.Logger.Channel(docArtefact.Document.Name),
+				Workdir:         cfg.AbsDir,
+				CacheDir:        cfg.CacheDir,
+				EngineVersion:   cfg.EngineVersion,
+				Artefact:        docArtefact,
+				SigningProfiles: manifests.SigningProfiles,
+				OutputDir:       cfg.OutputDir,
+				ChromePath:      cfg.ChromePath,
+				Debug:           cfg.Debug,
+				Spinner:         NewSpinner(spinnerCfg),
+			})
+			if err != nil {
+				return nil, RuntimeError(err)
+			}
+			documentResults = append(documentResults, docResult)
+		}
+	}
+
+	return &buildAllResults{
+		Reports:     results,
+		Screenshots: screenshotResults,
+		Documents:   documentResults,
+	}, nil
+}
+
+// buildManifestData holds validated manifest data ready for building.
+type buildManifestData struct {
+	Documents           []config.Document
+	Selected            []config.Artefact
+	SelectedScreenshots []config.ScreenshotArtefact
+	SelectedDocuments   []config.DocumentArtefact
+	SigningProfiles     map[string]config.SigningProfile
+	Graph               *reportgraph.Graph
+	LintFindings        []lint.Finding
+}
+
+// loadBuildManifests loads YAML documents, validates them, collects and filters
+// artefacts, and builds the dependency graph. It prints progress to out.
+func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, absDir string, include, exclude []string, noLint, noGraph bool) (*buildManifestData, error) {
+	out.Step("Loading manifests...")
+	loadStart := time.Now()
+	documents, err := config.LoadDir(ctx, absDir)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+	if len(documents) == 0 {
+		return nil, ConfigErrorf("no YAML documents found in %s", absDir)
+	}
+
+	// Fail build if any environment variables are unresolved
+	// Exclude param names defined in LayoutPages (they're resolved at render time)
+	paramNames := config.CollectLayoutPageParamNames(documents)
+	if err := config.CheckMissingEnvVarsExcluding(documents, paramNames); err != nil {
+		return nil, ConfigError(err)
+	}
+
+	out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
+
+	// Show manifest summary
+	out.Blank()
+	out.Info("Manifest summary:")
+	for _, doc := range documents {
+		relPath := pathutil.RelPath(absDir, doc.File)
+		out.ListColored(fmt.Sprintf("%s #%d", relPath, doc.Position), "kind", doc.Kind, "name", doc.Name)
+	}
+	out.Blank()
+
+	// Run lint rules unless disabled
+	var lintFindings []lint.Finding
+	if !noLint {
+		lintDocs := configDocsToLintDocs(documents)
+		runner := lint.NewDefaultRunner()
+		lintFindings = runner.Run(ctx, lintDocs)
+		if len(lintFindings) > 0 {
+			printLintFindings(out, lintFindings, absDir)
+			out.Blank()
+		}
+	}
+
+	artefacts, err := config.CollectArtefacts(documents)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+
+	screenshotArtefacts, err := config.CollectScreenshotArtefacts(documents)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+
+	documentArtefacts, err := config.CollectDocumentArtefacts(documents)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+
+	if len(artefacts) == 0 && len(screenshotArtefacts) == 0 && len(documentArtefacts) == 0 {
+		return nil, ConfigErrorf("no ReportArtefact, ScreenshotArtefact, or DocumentArtefact manifests found in %s", absDir)
+	}
+
+	signingProfiles, err := config.CollectSigningProfiles(documents)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
+
+	// Validate that all include names exist in any artefact type
+	if err := pipeline.ValidateAllArtefactNames(artefacts, screenshotArtefacts, documentArtefacts, include); err != nil {
+		return nil, ConfigError(err)
+	}
+
+	filterOpts := pipeline.FilterOptions{
+		Include: include,
+		Exclude: exclude,
+	}
+	selected := pipeline.FilterArtefacts(artefacts, filterOpts)
+	selectedScreenshots := pipeline.FilterScreenshotArtefacts(screenshotArtefacts, filterOpts)
+	selectedDocuments := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
+
+	if len(selected) == 0 && len(selectedScreenshots) == 0 && len(selectedDocuments) == 0 {
+		return nil, ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
+	}
+	pipeline.LogArtefactWarnings(logger, selected)
+	pipeline.LogDocumentArtefactWarnings(logger, selectedDocuments)
+
+	if err := pipeline.EnsureSigningProfiles(selected, signingProfiles); err != nil {
+		return nil, ConfigError(err)
+	}
+	if err := pipeline.EnsureDocumentSigningProfiles(selectedDocuments, signingProfiles); err != nil {
+		return nil, ConfigError(err)
+	}
+
+	var graph *reportgraph.Graph
+	if !noGraph {
+		graph, err = reportgraph.Build(ctx, documents)
+		if err != nil {
+			return nil, RuntimeError(err)
+		}
+	}
+
+	return &buildManifestData{
+		Documents:           documents,
+		Selected:            selected,
+		SelectedScreenshots: selectedScreenshots,
+		SelectedDocuments:   selectedDocuments,
+		SigningProfiles:     signingProfiles,
+		Graph:               graph,
+		LintFindings:        lintFindings,
+	}, nil
+}
+
+// resolveDataValidationMode parses a data validation mode string.
+func resolveDataValidationMode(value string) (dataset.DataValidationMode, error) {
+	switch value {
+	case "fail":
+		return dataset.DataValidationFail, nil
+	case "warn":
+		return dataset.DataValidationWarn, nil
+	case "off":
+		return dataset.DataValidationOff, nil
+	default:
+		return "", fmt.Errorf("invalid data-validation value %q, expected 'fail', 'warn', or 'off'", value)
+	}
+}
+
+// assembleJSONBuildLog creates a JSON build log structure from collected build data.
+func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.Time, absDir string, documents []config.Document, results []artefactResult, queryExecMetas []duckdb.QueryExecMeta, embedOpts buildlog.EmbedOptions, execPlan *buildlog.ExecutionPlan, lintFindings []lint.Finding, buildWarnings []string) *buildlog.JSONBuildLog {
+	completedTime := time.Now()
+
+	docEntries := make([]buildlog.DocumentEntry, 0, len(documents))
+	for _, doc := range documents {
+		docEntries = append(docEntries, buildlog.DocumentEntry{
+			File:     doc.File,
+			Position: doc.Position,
+			Kind:     doc.Kind,
+			Name:     doc.Name,
+		})
+	}
+
+	artefactEntries := make([]buildlog.ArtefactEntry, 0, len(results))
+	for _, res := range results {
+		artefactEntries = append(artefactEntries, buildlog.ArtefactEntry{
+			Name:  res.Name,
+			PDF:   res.PDFPath,
+			Graph: res.GraphPath,
+		})
+	}
+
+	queryEntries := make([]buildlog.QueryEntry, 0, len(queryExecMetas))
+	for _, meta := range queryExecMetas {
+		queryEntries = append(queryEntries, buildlog.BuildQueryEntry(meta, embedOpts))
+	}
+
+	var planSteps []buildlog.ExecutionStep
+	if execPlan != nil {
+		planSteps = execPlan.GetSteps()
+	}
+
+	return &buildlog.JSONBuildLog{
+		RunID:         runID,
+		ReportID:      reportID,
+		EngineVersion: engineVersion,
+		Started:       startTime,
+		Completed:     completedTime,
+		DurationMs:    completedTime.Sub(startTime).Milliseconds(),
+		Workdir:       absDir,
+		Documents:     docEntries,
+		Artefacts:     artefactEntries,
+		Queries:       queryEntries,
+		ExecutionPlan: planSteps,
+		Lint:          findingsToLintEntries(lintFindings),
+		Warnings:      buildWarnings,
+	}
+}
+
+// printBuildSummary prints the build results to the structured output.
+func printBuildSummary(out *Output, ctx context.Context, absDir string, results []artefactResult, screenshotResults []screenshotArtefactResult, documentResults []documentArtefactResult) {
+	out.Blank()
+	style := StyleFromContext(ctx)
+	resultItems := make([]string, 0, len(results))
+	for _, res := range results {
+		relPDFPath := pathutil.RelPath(absDir, res.PDFPath)
+		item := fmt.Sprintf("%s %s %s", FormatName(res.Name), style.Dim.Sprint(SymbolArrow), FormatPath(relPDFPath))
+		if res.GraphPath != "" {
+			item += style.Dim.Sprintf(" (+graph)")
+		}
+		resultItems = append(resultItems, item)
+	}
+	out.Summary(fmt.Sprintf("Generated %d artefact(s):", len(results)), resultItems)
+
+	if len(screenshotResults) > 0 {
+		out.Blank()
+		ssItems := make([]string, 0, len(screenshotResults))
+		var ssErrors []string
+		for _, res := range screenshotResults {
+			if res.Error != nil {
+				ssErrors = append(ssErrors, fmt.Sprintf("%s/%s: %v", res.RefKind, res.RefName, res.Error))
+				continue
+			}
+			relPath := pathutil.RelPath(absDir, res.FilePath)
+			item := fmt.Sprintf("%s/%s %s %s", res.RefKind, res.RefName, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
+			ssItems = append(ssItems, item)
+		}
+		out.Summary(fmt.Sprintf("Generated %d screenshot(s):", len(ssItems)), ssItems)
+		if len(ssErrors) > 0 {
+			for _, errMsg := range ssErrors {
+				out.Warning(fmt.Sprintf("Screenshot error: %s", errMsg))
+			}
+		}
+	}
+
+	if len(documentResults) > 0 {
+		out.Blank()
+		docItems := make([]string, 0, len(documentResults))
+		for _, res := range documentResults {
+			relPath := pathutil.RelPath(absDir, res.PDFPath)
+			item := fmt.Sprintf("%s %s %s", res.Name, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
+			docItems = append(docItems, item)
+		}
+		out.Summary(fmt.Sprintf("Generated %d document(s):", len(documentResults)), docItems)
+	}
 }

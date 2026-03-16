@@ -234,144 +234,26 @@ Environment knobs:
 				return RuntimeError(err)
 			}
 
-			// Create render cache for on-demand rendering
-			renderCache := newServeRenderCache()
-
-			// Set up routes based on LiveReportArtefact spec
-			routeMap := make(map[string]previewhttp.ContentFunc)
-			for path, route := range liveArtefact.Spec.Routes {
-				// Capture variables for closure
-				routePath := path
-				routeSpec := route
-
-				if route.Artefact != "" {
-					// Route references an artefact
-					art, ok := artefactMap[route.Artefact]
-					if !ok {
-						// This should have been caught by validation, but be safe
-						return ConfigErrorf("route %q references unknown artefact %q", path, route.Artefact)
-					}
-					routeArt := art
-
-					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
-						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
-							return nil, "", err
-						}
-						return serveRenderHandler(
-							reqCtx,
-							logger,
-							renderCache,
-							watchDir,
-							docs,
-							routeArt,
-							*liveArtefact,
-							routePath,
-							routeSpec,
-							queryLogger,
-							engineVersion,
-						)
-					}
-				} else {
-					// Route references layoutPages directly
-					routeLayoutPages := route.LayoutPages
-
-					routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
-						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
-							return nil, "", err
-						}
-						return serveLayoutPagesHandler(
-							reqCtx,
-							logger,
-							renderCache,
-							watchDir,
-							docs,
-							routeLayoutPages,
-							*liveArtefact,
-							routePath,
-							routeSpec,
-							queryLogger,
-							engineVersion,
-						)
-					}
-				}
+			// Set up routes and assets
+			routeSetup, err := setupServeRoutes(serveRouteConfig{
+				LiveArtefact:  *liveArtefact,
+				ArtefactMap:   artefactMap,
+				HookRunner:    hookRunner,
+				HookEnv:       serveHookEnv,
+				Logger:        logger,
+				Workdir:       watchDir,
+				BaseDocs:      docs,
+				QueryLogger:   queryLogger,
+				EngineVersion: engineVersion,
+			})
+			if err != nil {
+				return ConfigError(err)
 			}
-
-			// Set up the server routes
-			server.SetContentRoutes(routeMap)
-
-			// Set default content function for root if "/" is in routes
-			if rootRoute, ok := liveArtefact.Spec.Routes["/"]; ok {
-				rootSpec := rootRoute // Capture route spec
-				if rootRoute.Artefact != "" {
-					rootArt := artefactMap[rootRoute.Artefact]
-					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
-						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
-							return nil, "", err
-						}
-						return serveRenderHandler(
-							reqCtx,
-							logger,
-							renderCache,
-							watchDir,
-							docs,
-							rootArt,
-							*liveArtefact,
-							"/",
-							rootSpec,
-							queryLogger,
-							engineVersion,
-						)
-					})
-				} else {
-					rootLayoutPages := rootRoute.LayoutPages
-					server.SetContentFunc(func(reqCtx context.Context) ([]byte, string, error) {
-						if err := hookRunner.Run(reqCtx, "pre-request", serveHookEnv); err != nil {
-							return nil, "", err
-						}
-						return serveLayoutPagesHandler(
-							reqCtx,
-							logger,
-							renderCache,
-							watchDir,
-							docs,
-							rootLayoutPages,
-							*liveArtefact,
-							"/",
-							rootSpec,
-							queryLogger,
-							engineVersion,
-						)
-					})
-				}
+			server.SetContentRoutes(routeSetup.RouteMap)
+			if routeSetup.RootContent != nil {
+				server.SetContentFunc(routeSetup.RootContent)
 			}
-
-			// Collect all assets from all referenced routes
-			allAssets := make([]previewhttp.LocalAsset, 0)
-			for _, route := range liveArtefact.Spec.Routes {
-				if route.Artefact != "" {
-					art := artefactMap[route.Artefact]
-					renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe, engineVersion)
-					if err != nil {
-						logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
-						continue
-					}
-					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-				} else {
-					// For layoutPages routes, render with default settings to collect assets
-					renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
-						Workdir:       watchDir,
-						Mode:          pipeline.RenderModeServe,
-						EngineVersion: engineVersion,
-						QueryLogger:   nil,
-					})
-					if err != nil {
-						logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
-						continue
-					}
-					allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-				}
-			}
-			server.SetLocalAssets(allAssets)
+			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, watchDir, docs, engineVersion))
 
 			url := server.URL()
 			logger.Successf("Serving at %s", url)
@@ -445,6 +327,127 @@ func prepareServeRequest(
 		QueryParams: queryParams,
 		Docs:        docs,
 	}, nil, nil
+}
+
+// serveRouteConfig holds configuration for setting up serve routes.
+type serveRouteConfig struct {
+	LiveArtefact  config.LiveArtefact
+	ArtefactMap   map[string]config.Artefact
+	HookRunner    *hooks.Runner
+	HookEnv       hooks.HookEnv
+	Logger        logx.Logger
+	Workdir       string
+	BaseDocs      []config.Document
+	QueryLogger   func(string)
+	EngineVersion string
+}
+
+// serveRouteSetup holds the results of route setup.
+type serveRouteSetup struct {
+	RouteMap    map[string]previewhttp.ContentFunc
+	RootContent previewhttp.ContentFunc // nil if "/" not in routes
+}
+
+// setupServeRoutes builds the route map and root content function from a LiveReportArtefact.
+func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
+	renderCache := newServeRenderCache()
+	routeMap := make(map[string]previewhttp.ContentFunc)
+
+	for path, route := range cfg.LiveArtefact.Spec.Routes {
+		routePath := path
+		routeSpec := route
+
+		if route.Artefact != "" {
+			art, ok := cfg.ArtefactMap[route.Artefact]
+			if !ok {
+				return nil, fmt.Errorf("route %q references unknown artefact %q", path, route.Artefact)
+			}
+			routeArt := art
+
+			routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
+					return nil, "", err
+				}
+				return serveRenderHandler(
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
+					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion,
+				)
+			}
+		} else {
+			routeLayoutPages := route.LayoutPages
+
+			routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
+				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
+					return nil, "", err
+				}
+				return serveLayoutPagesHandler(
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
+					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion,
+				)
+			}
+		}
+	}
+
+	setup := &serveRouteSetup{RouteMap: routeMap}
+
+	// Set default content function for root if "/" is in routes
+	if rootRoute, ok := cfg.LiveArtefact.Spec.Routes["/"]; ok {
+		rootSpec := rootRoute
+		if rootRoute.Artefact != "" {
+			rootArt := cfg.ArtefactMap[rootRoute.Artefact]
+			setup.RootContent = func(reqCtx context.Context) ([]byte, string, error) {
+				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
+					return nil, "", err
+				}
+				return serveRenderHandler(
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
+					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion,
+				)
+			}
+		} else {
+			rootLayoutPages := rootRoute.LayoutPages
+			setup.RootContent = func(reqCtx context.Context) ([]byte, string, error) {
+				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
+					return nil, "", err
+				}
+				return serveLayoutPagesHandler(
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
+					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion,
+				)
+			}
+		}
+	}
+
+	return setup, nil
+}
+
+// collectServeAssets pre-renders routes to collect all local assets needed for serving.
+func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact config.LiveArtefact, artefactMap map[string]config.Artefact, watchDir string, docs []config.Document, engineVersion string) []previewhttp.LocalAsset {
+	allAssets := make([]previewhttp.LocalAsset, 0)
+	for _, route := range liveArtefact.Spec.Routes {
+		if route.Artefact != "" {
+			art := artefactMap[route.Artefact]
+			renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe, engineVersion)
+			if err != nil {
+				logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
+				continue
+			}
+			allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+		} else {
+			renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+				Workdir:       watchDir,
+				Mode:          pipeline.RenderModeServe,
+				EngineVersion: engineVersion,
+				QueryLogger:   nil,
+			})
+			if err != nil {
+				logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
+				continue
+			}
+			allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+		}
+	}
+	return allAssets
 }
 
 // serveRenderCache provides thread-safe caching for rendered content.
