@@ -80,9 +80,10 @@ func TestSampleSpecUnmarshalJSON(t *testing.T) {
 
 func TestBuildSampleClause(t *testing.T) {
 	tests := []struct {
-		name   string
-		sample *sampleSpec
-		want   string
+		name    string
+		sample  *sampleSpec
+		want    string
+		wantErr bool
 	}{
 		{
 			name:   "nil sample",
@@ -119,11 +120,35 @@ func TestBuildSampleClause(t *testing.T) {
 			sample: &sampleSpec{Size: "5%", Method: "system"},
 			want:   " USING SAMPLE 5% (system)",
 		},
+		// Injection attempts
+		{
+			name:    "SQL injection in size",
+			sample:  &sampleSpec{Size: "1000; DROP TABLE users--"},
+			wantErr: true,
+		},
+		{
+			name:    "SQL injection in method",
+			sample:  &sampleSpec{Size: "100", Method: "system); DROP TABLE users--"},
+			wantErr: true,
+		},
+		{
+			name:    "size with spaces",
+			sample:  &sampleSpec{Size: "100 ROWS"},
+			wantErr: true,
+		},
+		{
+			name:    "unknown method",
+			sample:  &sampleSpec{Size: "100", Method: "custom"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildSampleClause(tt.sample)
+			got, err := buildSampleClause(tt.sample)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("buildSampleClause() error = %v, wantErr %v", err, tt.wantErr)
+			}
 			if got != tt.want {
 				t.Errorf("buildSampleClause() = %q, want %q", got, tt.want)
 			}
