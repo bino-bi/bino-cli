@@ -272,7 +272,11 @@ func createView(ctx context.Context, db *sql.DB, session *duckdb.Session, v view
 	}
 
 	// Append USING SAMPLE clause if configured
-	sourceSQL += buildSampleClause(v.spec.Sample)
+	sampleClause, err := buildSampleClause(v.spec.Sample)
+	if err != nil {
+		return fmt.Errorf("datasource %q: %w", v.name, err)
+	}
+	sourceSQL += sampleClause
 
 	// Use quoted identifier for the view name to handle special characters
 	viewSQL := fmt.Sprintf("CREATE OR REPLACE VIEW \"%s\" AS %s", v.name, sourceSQL)
