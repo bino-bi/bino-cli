@@ -99,15 +99,15 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			out.Header(fmt.Sprintf("BINO %s", version.Version))
 
 			// Find project root (directory containing bino.toml)
-			absDir, err := pipeline.ResolveProjectRoot(workdir)
+			projectRoot, err := pipeline.ResolveProjectRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
 			}
 
 			// Load project config for defaults
-			projectCfg, cfgErr := pathutil.LoadProjectConfig(absDir)
-			if cfgErr != nil {
-				logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
+			projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
+			if err != nil {
+				logger.Debugf("Could not load bino.toml defaults: %v", err)
 				projectCfg = &pathutil.ProjectConfig{}
 			}
 
@@ -119,7 +119,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Create hook runner
 			hookRunner := hooks.NewRunner(
 				hooks.Resolve(projectCfg.Hooks, projectCfg.Build.Hooks, logger.Channel("hooks")),
-				logger.Channel("hooks"), absDir,
+				logger.Channel("hooks"), projectRoot,
 			)
 
 			// Resolve arguments with TOML defaults
@@ -148,14 +148,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			// Step 1: Load, validate, and filter manifests
-			manifests, err := loadBuildManifests(ctx, out, logger, absDir, include, exclude, noLint, noGraph)
+			manifests, err := loadBuildManifests(ctx, out, logger, projectRoot, include, exclude, noLint, noGraph)
 			if err != nil {
 				return err
 			}
 			documents := manifests.Documents
 			lintFindings := manifests.LintFindings
 
-			outputDir := pipeline.ResolveOutputDir(absDir, outDir)
+			outputDir := pipeline.ResolveOutputDir(projectRoot, outDir)
 			if err := pathutil.EnsureDir(outputDir); err != nil {
 				return RuntimeErrorf("create out dir %s: %w", outputDir, err)
 			}
@@ -255,7 +255,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Run pre-build hooks
 			buildHookEnv := hooks.HookEnv{
 				Mode:      "build",
-				Workdir:   absDir,
+				Workdir:   projectRoot,
 				ReportID:  projectCfg.ReportID,
 				Verbose:   logx.DebugEnabled(ctx),
 				OutputDir: outputDir,
@@ -268,7 +268,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Step 2: Build all artefacts
 			builder := &pipeline.Builder{
-				Workdir:                  absDir,
+				Workdir:                  projectRoot,
 				EngineVersion:            engineVersion,
 				CacheDir:                 cacheDir,
 				Logger:                   logger,
@@ -305,7 +305,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
-			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
+			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, projectRoot, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
 				logger.Warnf("failed to write build log: %v", err)
 			}
 
@@ -313,14 +313,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			var jsonLogPath string
 			if logFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
-				jsonLog := assembleJSONBuildLog(runID, projectCfg.ReportID, engineVersion, startTime, absDir, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
+				jsonLog := assembleJSONBuildLog(runID, projectCfg.ReportID, engineVersion, startTime, projectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
 					logger.Warnf("failed to write JSON build log: %v", err)
 				}
 			}
 
 			// Print results
-			printBuildSummary(out, ctx, absDir, results, screenshotResults, documentResults)
+			printBuildSummary(out, ctx, projectRoot, results, screenshotResults, documentResults)
 
 			// Print final success
 			out.Done("Build complete")
@@ -859,13 +859,6 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
 	}
 
-	// DEBUG: Write rendered HTML to file for inspection
-	if cfg.Debug {
-		if err := os.WriteFile("/tmp/screenshot-debug.html", []byte(renderResult.HTML), 0644); err != nil {
-			logger.Warnf("Failed to write debug HTML: %v", err)
-		}
-	}
-
 	// Check for cancellation before screenshot capture
 	if err := ctx.Err(); err != nil {
 		if spinner != nil {
@@ -1073,15 +1066,15 @@ type buildManifestData struct {
 
 // loadBuildManifests loads YAML documents, validates them, collects and filters
 // artefacts, and builds the dependency graph. It prints progress to out.
-func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, absDir string, include, exclude []string, noLint, noGraph bool) (*buildManifestData, error) {
+func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, projectRoot string, include, exclude []string, noLint, noGraph bool) (*buildManifestData, error) {
 	out.Step("Loading manifests...")
 	loadStart := time.Now()
-	documents, err := config.LoadDir(ctx, absDir)
+	documents, err := config.LoadDir(ctx, projectRoot)
 	if err != nil {
 		return nil, ConfigError(err)
 	}
 	if len(documents) == 0 {
-		return nil, ConfigErrorf("no YAML documents found in %s", absDir)
+		return nil, ConfigErrorf("no YAML documents found in %s", projectRoot)
 	}
 
 	// Fail build if any environment variables are unresolved
@@ -1097,7 +1090,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, ab
 	out.Blank()
 	out.Info("Manifest summary:")
 	for _, doc := range documents {
-		relPath := pathutil.RelPath(absDir, doc.File)
+		relPath := pathutil.RelPath(projectRoot, doc.File)
 		out.ListColored(fmt.Sprintf("%s #%d", relPath, doc.Position), "kind", doc.Kind, "name", doc.Name)
 	}
 	out.Blank()
@@ -1109,7 +1102,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, ab
 		runner := lint.NewDefaultRunner()
 		lintFindings = runner.Run(ctx, lintDocs)
 		if len(lintFindings) > 0 {
-			printLintFindings(out, lintFindings, absDir)
+			printLintFindings(out, lintFindings, projectRoot)
 			out.Blank()
 		}
 	}
@@ -1130,7 +1123,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, ab
 	}
 
 	if len(artefacts) == 0 && len(screenshotArtefacts) == 0 && len(documentArtefacts) == 0 {
-		return nil, ConfigErrorf("no ReportArtefact, ScreenshotArtefact, or DocumentArtefact manifests found in %s", absDir)
+		return nil, ConfigErrorf("no ReportArtefact, ScreenshotArtefact, or DocumentArtefact manifests found in %s", projectRoot)
 	}
 
 	signingProfiles, err := config.CollectSigningProfiles(documents)
@@ -1198,7 +1191,7 @@ func resolveDataValidationMode(value string) (dataset.DataValidationMode, error)
 }
 
 // assembleJSONBuildLog creates a JSON build log structure from collected build data.
-func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.Time, absDir string, documents []config.Document, results []artefactResult, queryExecMetas []duckdb.QueryExecMeta, embedOpts buildlog.EmbedOptions, execPlan *buildlog.ExecutionPlan, lintFindings []lint.Finding, buildWarnings []string) *buildlog.JSONBuildLog {
+func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.Time, projectRoot string, documents []config.Document, results []artefactResult, queryExecMetas []duckdb.QueryExecMeta, embedOpts buildlog.EmbedOptions, execPlan *buildlog.ExecutionPlan, lintFindings []lint.Finding, buildWarnings []string) *buildlog.JSONBuildLog {
 	completedTime := time.Now()
 
 	docEntries := make([]buildlog.DocumentEntry, 0, len(documents))
@@ -1237,7 +1230,7 @@ func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.
 		Started:       startTime,
 		Completed:     completedTime,
 		DurationMs:    completedTime.Sub(startTime).Milliseconds(),
-		Workdir:       absDir,
+		Workdir:       projectRoot,
 		Documents:     docEntries,
 		Artefacts:     artefactEntries,
 		Queries:       queryEntries,
@@ -1248,12 +1241,12 @@ func assembleJSONBuildLog(runID, reportID, engineVersion string, startTime time.
 }
 
 // printBuildSummary prints the build results to the structured output.
-func printBuildSummary(out *Output, ctx context.Context, absDir string, results []artefactResult, screenshotResults []screenshotArtefactResult, documentResults []documentArtefactResult) {
+func printBuildSummary(out *Output, ctx context.Context, projectRoot string, results []artefactResult, screenshotResults []screenshotArtefactResult, documentResults []documentArtefactResult) {
 	out.Blank()
 	style := StyleFromContext(ctx)
 	resultItems := make([]string, 0, len(results))
 	for _, res := range results {
-		relPDFPath := pathutil.RelPath(absDir, res.PDFPath)
+		relPDFPath := pathutil.RelPath(projectRoot, res.PDFPath)
 		item := fmt.Sprintf("%s %s %s", FormatName(res.Name), style.Dim.Sprint(SymbolArrow), FormatPath(relPDFPath))
 		if res.GraphPath != "" {
 			item += style.Dim.Sprintf(" (+graph)")
@@ -1271,7 +1264,7 @@ func printBuildSummary(out *Output, ctx context.Context, absDir string, results 
 				ssErrors = append(ssErrors, fmt.Sprintf("%s/%s: %v", res.RefKind, res.RefName, res.Error))
 				continue
 			}
-			relPath := pathutil.RelPath(absDir, res.FilePath)
+			relPath := pathutil.RelPath(projectRoot, res.FilePath)
 			item := fmt.Sprintf("%s/%s %s %s", res.RefKind, res.RefName, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
 			ssItems = append(ssItems, item)
 		}
@@ -1287,7 +1280,7 @@ func printBuildSummary(out *Output, ctx context.Context, absDir string, results 
 		out.Blank()
 		docItems := make([]string, 0, len(documentResults))
 		for _, res := range documentResults {
-			relPath := pathutil.RelPath(absDir, res.PDFPath)
+			relPath := pathutil.RelPath(projectRoot, res.PDFPath)
 			item := fmt.Sprintf("%s %s %s", res.Name, style.Dim.Sprint(SymbolArrow), FormatPath(relPath))
 			docItems = append(docItems, item)
 		}

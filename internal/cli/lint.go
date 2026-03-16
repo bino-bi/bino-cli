@@ -66,7 +66,7 @@ there is a fatal error loading manifests.`),
 			out.Header(fmt.Sprintf("BINO LINT %s", version.Version))
 
 			// Find project root (directory containing bino.toml)
-			absDir, err := pipeline.ResolveProjectRoot(workdir)
+			projectRoot, err := pipeline.ResolveProjectRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -79,12 +79,12 @@ there is a fatal error loading manifests.`),
 			// Step 1: Load and validate manifests
 			out.Step("Loading manifests...")
 			loadStart := time.Now()
-			documents, err := config.LoadDir(ctx, absDir)
+			documents, err := config.LoadDir(ctx, projectRoot)
 			if err != nil {
 				return ConfigError(err)
 			}
 			if len(documents) == 0 {
-				return ConfigErrorf("no YAML documents found in %s", absDir)
+				return ConfigErrorf("no YAML documents found in %s", projectRoot)
 			}
 
 			out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
@@ -109,7 +109,7 @@ there is a fatal error loading manifests.`),
 					DataValidation:           dataset.DataValidationWarn,
 					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
 				}
-				results, warnings, err := dataset.Execute(ctx, absDir, documents, execOpts)
+				results, warnings, err := dataset.Execute(ctx, projectRoot, documents, execOpts)
 				if err != nil {
 					out.StepDone("Query execution failed", time.Since(queryStart))
 					out.Warning(fmt.Sprintf("Query execution error: %v", err))
@@ -124,7 +124,7 @@ there is a fatal error loading manifests.`),
 				out.Blank()
 				out.Warning(fmt.Sprintf("Found %d lint warning(s):", len(findings)))
 				for _, f := range findings {
-					relPath := pathutil.RelPath(absDir, f.File)
+					relPath := pathutil.RelPath(projectRoot, f.File)
 					loc := relPath
 					if f.DocIdx > 0 {
 						loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
@@ -149,21 +149,21 @@ there is a fatal error loading manifests.`),
 			}
 
 			// Build output directory
-			outputDir := pipeline.ResolveOutputDir(absDir, outDir)
+			outputDir := pipeline.ResolveOutputDir(projectRoot, outDir)
 			if err := pathutil.EnsureDir(outputDir); err != nil {
 				logger.Warnf("failed to create output directory: %v", err)
 			}
 
 			// Write lint log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-lint-%s.log", shortRunID))
-			if err := writeLintLog(logPath, runID, startTime, absDir, documents, findings); err != nil {
+			if err := writeLintLog(logPath, runID, startTime, projectRoot, documents, findings); err != nil {
 				logger.Warnf("failed to write lint log: %v", err)
 			}
 
 			// Write JSON lint log if requested
 			if logFormat == "json" {
 				jsonLogPath := filepath.Join(outputDir, fmt.Sprintf("bino-lint-%s.json", shortRunID))
-				if err := writeLintJSONLog(jsonLogPath, runID, startTime, absDir, documents, findings); err != nil {
+				if err := writeLintJSONLog(jsonLogPath, runID, startTime, projectRoot, documents, findings); err != nil {
 					logger.Warnf("failed to write JSON lint log: %v", err)
 				}
 			}

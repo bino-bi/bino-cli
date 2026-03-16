@@ -51,9 +51,9 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		return nil, ConfigError(err)
 	}
 
-	projectCfg, cfgErr := pathutil.LoadProjectConfig(projectRoot)
-	if cfgErr != nil {
-		logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
+	projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
+	if err != nil {
+		logger.Debugf("Could not load bino.toml defaults: %v", err)
 		projectCfg = &pathutil.ProjectConfig{}
 	}
 
