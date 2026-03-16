@@ -16,7 +16,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
@@ -72,82 +71,27 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("preview")
 
-			cacheDir, err := previewCacheDir()
+			env, err := initCommandEnv(ctx, cmd, workdir, "preview", logger)
 			if err != nil {
-				return RuntimeError(err)
-			}
-			logger.Debugf("Using cache directory %s", cacheDir)
-
-			// Find project root (directory containing bino.toml)
-			watchDir, err := pipeline.ResolveProjectRoot(workdir)
-			if err != nil {
-				return ConfigError(err)
+				return err
 			}
 
-			// Load project config for defaults
-			projectCfg, cfgErr := pathutil.LoadProjectConfig(watchDir)
-			if cfgErr != nil {
-				logger.Debugf("Could not load bino.toml defaults: %v", cfgErr)
-				projectCfg = &pathutil.ProjectConfig{}
-			}
+			port = env.Resolver.ResolveInt("port", "port", port)
+			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			enableLint = env.Resolver.ResolveBool("lint", "lint", enableLint)
 
-			// Apply environment variables from TOML (actual env vars take precedence)
-			projectCfg.Preview.Env.Apply(func(key, tomlVal, envVal string) {
-				logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
-			})
-
-			// Create hook runner
-			hookRunner := hooks.NewRunner(
-				hooks.Resolve(projectCfg.Hooks, projectCfg.Preview.Hooks, logger.Channel("hooks")),
-				logger.Channel("hooks"), watchDir,
-			)
-
-			// Resolve arguments with TOML defaults
-			resolver := pathutil.NewArgResolver(cmd, projectCfg.Preview.Args, func(format string, args ...any) {
-				logger.Infof(format, args...)
-			})
-
-			port = resolver.ResolveInt("port", "port", port)
-			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
-			enableLint = resolver.ResolveBool("lint", "lint", enableLint)
-
-			// Resolve template engine version
-			engineVersion := projectCfg.EngineVersion
-			engineVersionPinned := engineVersion != ""
-			engineMgr, err := engine.NewManager()
-			if err != nil {
-				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
-			}
-			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
-			if err != nil {
-				return ConfigError(fmt.Errorf("template engine: %w", err))
-			}
-			engineVersion = engineInfo.Version
-			logger.Infof("Using template engine %s", engineVersion)
-			if !engineVersionPinned {
+			if !env.EngineVersionPinned {
 				logger.Warnf("No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds.")
 			}
 
 			addr := fmt.Sprintf("127.0.0.1:%d", port)
 			logger.Infof("Starting preview server on %s", addr)
-			logger.Infof("Watching workdir %s", watchDir)
+			logger.Infof("Watching workdir %s", env.ProjectRoot)
 
-			// Set up SQL query logger if --log-sql is enabled
-			var queryLogger func(string)
-			if logSQL {
-				queryLogger = func(query string) {
-					if logx.DebugEnabled(ctx) {
-						// Verbose mode: print with extra formatting
-						logger.Infof("SQL query:\n%s", query)
-					} else {
-						// Normal mode: compact output
-						logger.Infof("SQL: %s", strings.ReplaceAll(strings.TrimSpace(query), "\n", " "))
-					}
-				}
-			}
+			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
 			// Resolve data validation mode
-			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
+			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
 			dataValidationMode, err := resolveDataValidationMode(dataValidation)
 			if err != nil {
 				return ConfigError(err)
@@ -156,8 +100,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			previewHookEnv := hooks.HookEnv{
 				Mode:     "preview",
-				Workdir:  watchDir,
-				ReportID: projectCfg.ReportID,
+				Workdir:  env.ProjectRoot,
+				ReportID: env.ProjectCfg.ReportID,
 				Verbose:  logx.DebugEnabled(ctx),
 			}
 
@@ -167,13 +111,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			refreshCfg := previewRefreshConfig{
 				Logger:                   logger,
-				Workdir:                  watchDir,
+				Workdir:                  env.ProjectRoot,
 				EnableLint:               enableLint,
-				EngineVersion:            engineVersion,
+				EngineVersion:            env.EngineVersion,
 				QueryLogger:              queryLogger,
 				DataValidationMode:       dataValidationMode,
 				DataValidationSampleSize: dataValidationSampleSize,
-				HookRunner:               hookRunner,
+				HookRunner:               env.HookRunner,
 				HookEnv:                  previewHookEnv,
 			}
 
@@ -204,7 +148,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			watchLog := logger.Channel("watcher")
 			watcher, err := watchers.NewWatcher(watchers.Config{
-				Root:   watchDir,
+				Root:   env.ProjectRoot,
 				Logger: watchLog,
 				Handler: func(evt watchers.Event) {
 					watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
@@ -228,7 +172,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			server, err = previewhttp.New(previewhttp.Config{
 				ListenAddr:      addr,
-				CacheDir:        cacheDir,
+				CacheDir:        env.CacheDir,
 				Logger:          logger.Channel("server"),
 				ExplorerHandler: explorerHandler(explorerSession),
 			})
@@ -238,7 +182,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			// Run pre-preview hook (once, before initial refresh)
 			previewHookEnv.ListenAddr = addr
-			if err := hookRunner.Run(ctx, "pre-preview", previewHookEnv); err != nil {
+			if err := env.HookRunner.Run(ctx, "pre-preview", previewHookEnv); err != nil {
 				return RuntimeError(err)
 			}
 
