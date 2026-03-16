@@ -12,7 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
@@ -98,49 +97,25 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Print header
 			out.Header(fmt.Sprintf("BINO %s", version.Version))
 
-			// Find project root (directory containing bino.toml)
-			projectRoot, err := pipeline.ResolveProjectRoot(workdir)
+			env, err := initCommandEnv(ctx, cmd, workdir, "build", logger)
 			if err != nil {
-				return ConfigError(err)
+				return err
 			}
 
-			// Load project config for defaults
-			projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
-			if err != nil {
-				logger.Debugf("Could not load bino.toml defaults: %v", err)
-				projectCfg = &pathutil.ProjectConfig{}
-			}
-
-			// Apply environment variables from TOML (actual env vars take precedence)
-			projectCfg.Build.Env.Apply(func(key, tomlVal, envVal string) {
-				out.Info(fmt.Sprintf("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal))
-			})
-
-			// Create hook runner
-			hookRunner := hooks.NewRunner(
-				hooks.Resolve(projectCfg.Hooks, projectCfg.Build.Hooks, logger.Channel("hooks")),
-				logger.Channel("hooks"), projectRoot,
-			)
-
-			// Resolve arguments with TOML defaults
-			resolver := pathutil.NewArgResolver(cmd, projectCfg.Build.Args, func(format string, args ...any) {
-				out.Info(fmt.Sprintf(format, args...))
-			})
-
-			outDir = resolver.ResolveString("out-dir", "out-dir", outDir)
-			chromePath = resolver.ResolveString("chrome-path", "chrome-path", chromePath)
-			logFormat = resolver.ResolveString("log-format", "log-format", logFormat)
-			noGraph = resolver.ResolveBool("no-graph", "no-graph", noGraph)
-			noLint = resolver.ResolveBool("no-lint", "no-lint", noLint)
-			logSQL = resolver.ResolveBool("log-sql", "log-sql", logSQL)
-			embedDataCSV = resolver.ResolveBool("embed-data-csv", "embed-data-csv", embedDataCSV)
-			embedDataMaxRows = resolver.ResolveInt("embed-data-max-rows", "embed-data-max-rows", embedDataMaxRows)
-			embedDataMaxBytes = resolver.ResolveInt("embed-data-max-bytes", "embed-data-max-bytes", embedDataMaxBytes)
-			embedDataBase64 = resolver.ResolveBool("embed-data-base64", "embed-data-base64", embedDataBase64)
-			embedDataRedact = resolver.ResolveBool("embed-data-redact", "embed-data-redact", embedDataRedact)
-			detailedExecutionPlan = resolver.ResolveBool("detailed-execution-plan", "detailed-execution-plan", detailedExecutionPlan)
-			include = resolver.ResolveStringSlice("artefact", "artefact", include)
-			exclude = resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
+			outDir = env.Resolver.ResolveString("out-dir", "out-dir", outDir)
+			chromePath = env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath)
+			logFormat = env.Resolver.ResolveString("log-format", "log-format", logFormat)
+			noGraph = env.Resolver.ResolveBool("no-graph", "no-graph", noGraph)
+			noLint = env.Resolver.ResolveBool("no-lint", "no-lint", noLint)
+			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			embedDataCSV = env.Resolver.ResolveBool("embed-data-csv", "embed-data-csv", embedDataCSV)
+			embedDataMaxRows = env.Resolver.ResolveInt("embed-data-max-rows", "embed-data-max-rows", embedDataMaxRows)
+			embedDataMaxBytes = env.Resolver.ResolveInt("embed-data-max-bytes", "embed-data-max-bytes", embedDataMaxBytes)
+			embedDataBase64 = env.Resolver.ResolveBool("embed-data-base64", "embed-data-base64", embedDataBase64)
+			embedDataRedact = env.Resolver.ResolveBool("embed-data-redact", "embed-data-redact", embedDataRedact)
+			detailedExecutionPlan = env.Resolver.ResolveBool("detailed-execution-plan", "detailed-execution-plan", detailedExecutionPlan)
+			include = env.Resolver.ResolveStringSlice("artefact", "artefact", include)
+			exclude = env.Resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
 
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
@@ -148,40 +123,21 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			// Step 1: Load, validate, and filter manifests
-			manifests, err := loadBuildManifests(ctx, out, logger, projectRoot, include, exclude, noLint, noGraph)
+			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph)
 			if err != nil {
 				return err
 			}
 			documents := manifests.Documents
 			lintFindings := manifests.LintFindings
 
-			outputDir := pipeline.ResolveOutputDir(projectRoot, outDir)
+			outputDir := pipeline.ResolveOutputDir(env.ProjectRoot, outDir)
 			if err := pathutil.EnsureDir(outputDir); err != nil {
 				return RuntimeErrorf("create out dir %s: %w", outputDir, err)
 			}
 
-			cacheDir, err := previewCacheDir()
-			if err != nil {
-				return RuntimeError(err)
-			}
-
-			// Resolve template engine version
-			engineVersion := projectCfg.EngineVersion
-			engineVersionPinned := engineVersion != ""
-			engineMgr, err := engine.NewManager()
-			if err != nil {
-				return RuntimeError(fmt.Errorf("initialize engine manager: %w", err))
-			}
-			engineInfo, err := engineMgr.EnsureVersion(ctx, engineVersion)
-			if err != nil {
-				return ConfigError(fmt.Errorf("template engine: %w", err))
-			}
-			engineVersion = engineInfo.Version
-			out.Info(fmt.Sprintf("Using template engine %s", engineVersion))
-
 			// Track build warnings for logs
 			var buildWarnings []string
-			if !engineVersionPinned {
+			if !env.EngineVersionPinned {
 				warnMsg := "No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds."
 				out.Warning(warnMsg)
 				buildWarnings = append(buildWarnings, warnMsg)
@@ -246,7 +202,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			_ = logFormat
 
 			// Resolve data validation mode
-			dataValidation = resolver.ResolveString("data-validation", "data-validation", dataValidation)
+			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
 			dataValidationMode, err := resolveDataValidationMode(dataValidation)
 			if err != nil {
 				return ConfigError(err)
@@ -255,22 +211,22 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Run pre-build hooks
 			buildHookEnv := hooks.HookEnv{
 				Mode:      "build",
-				Workdir:   projectRoot,
-				ReportID:  projectCfg.ReportID,
+				Workdir:   env.ProjectRoot,
+				ReportID:  env.ProjectCfg.ReportID,
 				Verbose:   logx.DebugEnabled(ctx),
 				OutputDir: outputDir,
 				Include:   strings.Join(include, ","),
 				Exclude:   strings.Join(exclude, ","),
 			}
-			if err := hookRunner.Run(ctx, "pre-build", buildHookEnv); err != nil {
+			if err := env.HookRunner.Run(ctx, "pre-build", buildHookEnv); err != nil {
 				return RuntimeError(err)
 			}
 
 			// Step 2: Build all artefacts
 			builder := &pipeline.Builder{
-				Workdir:                  projectRoot,
-				EngineVersion:            engineVersion,
-				CacheDir:                 cacheDir,
+				Workdir:                  env.ProjectRoot,
+				EngineVersion:            env.EngineVersion,
+				CacheDir:                 env.CacheDir,
 				Logger:                   logger,
 				QueryLogger:              queryLogger,
 				QueryExecLogger:          queryExecLogger,
@@ -288,7 +244,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				Debug:      logx.DebugEnabled(ctx),
 				NoColor:    logx.NoColorEnabled(ctx),
 				Stdout:     cmd.OutOrStdout(),
-				HookRunner: hookRunner,
+				HookRunner: env.HookRunner,
 				HookEnv:    buildHookEnv,
 			})
 			if err != nil {
@@ -299,13 +255,13 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			documentResults := buildResults.Documents
 
 			// Run post-build hooks
-			if err := hookRunner.Run(ctx, "post-build", buildHookEnv); err != nil {
+			if err := env.HookRunner.Run(ctx, "post-build", buildHookEnv); err != nil {
 				return RuntimeError(err)
 			}
 
 			// Write build log
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.log", shortRunID))
-			if err := writeBuildLog(logPath, runID, projectCfg.ReportID, engineVersion, startTime, projectRoot, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
+			if err := writeBuildLog(logPath, runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, documentResults, executedQueries, buildWarnings); err != nil {
 				logger.Warnf("failed to write build log: %v", err)
 			}
 
@@ -313,14 +269,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			var jsonLogPath string
 			if logFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
-				jsonLog := assembleJSONBuildLog(runID, projectCfg.ReportID, engineVersion, startTime, projectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
+				jsonLog := assembleJSONBuildLog(runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
 					logger.Warnf("failed to write JSON build log: %v", err)
 				}
 			}
 
 			// Print results
-			printBuildSummary(out, ctx, projectRoot, results, screenshotResults, documentResults)
+			printBuildSummary(out, ctx, env.ProjectRoot, results, screenshotResults, documentResults)
 
 			// Print final success
 			out.Done("Build complete")
