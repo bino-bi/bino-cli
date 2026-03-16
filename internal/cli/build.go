@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,15 +16,12 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/chrome"
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
-	"bino.bi/bino/internal/report/signing"
 	"bino.bi/bino/internal/version"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -271,23 +267,29 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			// Step 2: Build all artefacts
+			builder := &pipeline.Builder{
+				Workdir:                  absDir,
+				EngineVersion:            engineVersion,
+				CacheDir:                 cacheDir,
+				Logger:                   logger,
+				QueryLogger:              queryLogger,
+				QueryExecLogger:          queryExecLogger,
+				EmbedOptions:             embedOpts,
+				ExecutionPlan:            execPlan,
+				DataValidation:           dataValidationMode,
+				DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+			}
+
 			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
-				Logger:          logger,
-				AbsDir:          absDir,
-				CacheDir:        cacheDir,
-				EngineVersion:   engineVersion,
-				OutputDir:       outputDir,
-				ChromePath:      chromePath,
-				Debug:           logx.DebugEnabled(ctx),
-				NoColor:         logx.NoColorEnabled(ctx),
-				Stdout:          cmd.OutOrStdout(),
-				QueryLogger:     queryLogger,
-				QueryExecLogger: queryExecLogger,
-				EmbedOpts:       embedOpts,
-				ExecPlan:        execPlan,
-				DataValidation:  dataValidationMode,
-				HookRunner:      hookRunner,
-				HookEnv:         buildHookEnv,
+				Builder:    builder,
+				Logger:     logger,
+				OutputDir:  outputDir,
+				ChromePath: chromePath,
+				Debug:      logx.DebugEnabled(ctx),
+				NoColor:    logx.NoColorEnabled(ctx),
+				Stdout:     cmd.OutOrStdout(),
+				HookRunner: hookRunner,
+				HookEnv:    buildHookEnv,
 			})
 			if err != nil {
 				return err
@@ -380,28 +382,20 @@ type artefactResult struct {
 }
 
 type buildArtefactConfig struct {
-	Logger                   logx.Logger
-	Workdir                  string
-	CacheDir                 string
-	EngineVersion            string
-	Docs                     []config.Document
-	Artefact                 config.Artefact
-	SigningProfiles          map[string]config.SigningProfile
-	OutputDir                string
-	ChromePath               string
-	Debug                    bool
-	Graph                    *reportgraph.Graph
-	GraphRoot                *reportgraph.Node
-	GraphBase                string
-	Spinner                  *Spinner
-	QueryLogger              func(string)
-	QueryExecLogger          duckdb.QueryExecLogger
-	EmbedOptions             buildlog.EmbedOptions
-	ExecutionPlan            *buildlog.ExecutionPlan
-	DataValidation           dataset.DataValidationMode
-	DataValidationSampleSize int
-	HookRunner               *hooks.Runner
-	HookEnv                  hooks.HookEnv
+	Builder         *pipeline.Builder
+	Logger          logx.Logger
+	Docs            []config.Document
+	Artefact        config.Artefact
+	SigningProfiles map[string]config.SigningProfile
+	OutputDir       string
+	ChromePath      string
+	Debug           bool
+	Graph           *reportgraph.Graph
+	GraphRoot       *reportgraph.Node
+	GraphBase       string
+	Spinner         *Spinner
+	HookRunner      *hooks.Runner
+	HookEnv         hooks.HookEnv
 }
 
 // buildArtefact renders a single report artefact to PDF.
@@ -440,15 +434,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Rendering HTML for %s", artefactName)
 
-	renderResult, err := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, cfg.Docs, cfg.Artefact, pipeline.RenderArtefactOptions{
-		EngineVersion:            cfg.EngineVersion,
-		QueryLogger:              cfg.QueryLogger,
-		QueryExecLogger:          cfg.QueryExecLogger,
-		EmbedOptions:             cfg.EmbedOptions,
-		ExecutionPlan:            cfg.ExecutionPlan,
-		DataValidation:           cfg.DataValidation,
-		DataValidationSampleSize: cfg.DataValidationSampleSize,
-	})
+	renderResult, err := cfg.Builder.RenderArtefactHTML(ctx, cfg.Docs, cfg.Artefact)
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
 	if err != nil {
 		if spinner != nil {
@@ -467,20 +453,12 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		}
 	}
 
-	// Check for cancellation before starting the ephemeral server
+	// Check for cancellation before PDF generation
 	if err := ctx.Err(); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Cancelled %s", artefactName))
 		}
 		return artefactResult{}, err
-	}
-
-	server, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, pipeline.ConvertLocalAssets(renderResult.LocalAssets))
-	if err != nil {
-		if spinner != nil {
-			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
-		}
-		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	pdfFilename := cfg.Artefact.Spec.Filename
@@ -501,33 +479,20 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
-	pdfOpts := chrome.PDFOptions{
-		URL:                   server.URL(),
+	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
+	if err := cfg.Builder.RenderPDF(ctx, renderResult.HTML, renderResult.LocalAssets, pipeline.PDFRenderOptions{
 		PDFPath:               pdfPath,
 		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artefact.Spec.Format,
 		Orientation:           cfg.Artefact.Spec.Orientation,
-		Timeout:               2 * time.Minute,
 		Debug:                 cfg.Debug,
 		WaitForComponentReady: true,
 		ReadyConsolePrefix:    componentReadyConsolePrefix,
-	}
-	pdfErr := chrome.RenderPDF(ctx, pdfOpts)
-	closeErr := server.Close()
-	if pdfErr != nil {
+	}); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
-		if closeErr != nil {
-			logger.Warnf("server shutdown error: %v", closeErr)
-		}
-		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, pdfErr)
-	}
-	if closeErr != nil && !errors.Is(closeErr, context.Canceled) {
-		if spinner != nil {
-			spinner.StopWithError(fmt.Sprintf("Server error for %s", artefactName))
-		}
-		return artefactResult{}, fmt.Errorf("artefact %s: stop server: %w", artefactName, closeErr)
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	graphPath, err := writeGraphReport(cfg.Graph, cfg.GraphRoot, pdfPath, cfg.GraphBase)
@@ -558,7 +523,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			return artefactResult{}, fmt.Errorf("artefact %s: signing profile %s missing", artefactName, ref)
 		}
 		logger.Debugf("Signing PDF %s with profile %s", pdfPath, ref)
-		if err := signing.Apply(ctx, profile, pdfPath); err != nil {
+		if err := cfg.Builder.SignPDF(ctx, pdfPath, profile); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
 			}
@@ -607,10 +572,8 @@ type documentArtefactResult struct {
 }
 
 type buildDocumentArtefactConfig struct {
+	Builder         *pipeline.Builder
 	Logger          logx.Logger
-	Workdir         string
-	CacheDir        string
-	EngineVersion   string
 	Artefact        config.DocumentArtefact
 	SigningProfiles map[string]config.SigningProfile
 	OutputDir       string
@@ -643,13 +606,12 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 	}
 	pdfPath := filepath.Join(cfg.OutputDir, filename)
 
-	// Build PDF options (used for both passes)
-	basePDFOpts := chrome.PDFOptions{
+	// Build shared PDF render options (used for both passes)
+	basePDFOpts := pipeline.PDFRenderOptions{
+		ChromePath:  cfg.ChromePath,
 		Format:      spec.Format,
 		Orientation: spec.Orientation,
-		ChromePath:  cfg.ChromePath,
 		Debug:       cfg.Debug,
-		Timeout:     2 * time.Minute,
 	}
 	// Header/footer support
 	if spec.DisplayHeaderFooter {
@@ -658,7 +620,6 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		basePDFOpts.FooterTemplate = spec.FooterTemplate
 		basePDFOpts.MarginTop = spec.MarginTop
 		basePDFOpts.MarginBottom = spec.MarginBottom
-		// Use default templates if not specified
 		if basePDFOpts.HeaderTemplate == "" {
 			basePDFOpts.HeaderTemplate = buildDefaultDocumentHeader(spec.Title)
 		}
@@ -675,9 +636,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		}
 
 		// First pass: render without page numbers to collect heading positions
-		firstPassResult, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, artefact, pipeline.DocumentArtefactRenderOptions{
-			EngineVersion: cfg.EngineVersion,
-		})
+		firstPassResult, err := cfg.Builder.RenderDocumentHTML(ctx, artefact, pipeline.DocumentArtefactRenderOptions{})
 		if err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
@@ -685,35 +644,18 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 			return documentArtefactResult{}, err
 		}
 
-		// Start ephemeral server for first pass
-		firstEphem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), firstPassResult.HTML, pipeline.ConvertLocalAssets(firstPassResult.LocalAssets))
-		if err != nil {
-			if spinner != nil {
-				spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
-			}
-			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
-		}
-
-		// Collect heading page numbers via Chrome
-		collectOpts := basePDFOpts
-		collectOpts.URL = firstEphem.URL()
-		headings, err := chrome.CollectHeadingPages(ctx, collectOpts)
-		firstEphem.Close() // Close first pass server
-
+		// Collect heading page numbers via Builder (ephemeral server + Chrome)
+		tocPageNumbers, err = cfg.Builder.CollectHeadingPages(ctx, firstPassResult.HTML, firstPassResult.LocalAssets, basePDFOpts)
 		if err != nil {
 			logger.Warnf("Failed to collect heading pages for %s: %v (continuing without page numbers)", artefactName, err)
+			tocPageNumbers = nil
 		} else {
-			tocPageNumbers = make(map[string]int, len(headings))
-			for _, h := range headings {
-				tocPageNumbers[h.ID] = h.PageNum
-			}
 			logger.Debugf("Collected %d heading page numbers for %s", len(tocPageNumbers), artefactName)
 		}
 	}
 
 	// Final pass: render with page numbers (if collected)
-	renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, artefact, pipeline.DocumentArtefactRenderOptions{
-		EngineVersion:  cfg.EngineVersion,
+	renderResult, err := cfg.Builder.RenderDocumentHTML(ctx, artefact, pipeline.DocumentArtefactRenderOptions{
 		TOCPageNumbers: tocPageNumbers,
 	})
 	if err != nil {
@@ -722,16 +664,6 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		}
 		return documentArtefactResult{}, err
 	}
-
-	// Start ephemeral server for final PDF generation
-	ephem, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, pipeline.ConvertLocalAssets(renderResult.LocalAssets))
-	if err != nil {
-		if spinner != nil {
-			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
-		}
-		return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
-	}
-	defer ephem.Close()
 
 	// Check for cancellation before generating PDF
 	if err := ctx.Err(); err != nil {
@@ -742,11 +674,10 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		spinner.Update(fmt.Sprintf("Generating PDF for %s", artefactName))
 	}
 
-	// Generate final PDF
-	pdfOpts := basePDFOpts
-	pdfOpts.URL = ephem.URL()
-	pdfOpts.PDFPath = pdfPath
-	if err := chrome.RenderPDF(ctx, pdfOpts); err != nil {
+	// Generate final PDF via Builder (ephemeral server + Chrome)
+	finalPDFOpts := basePDFOpts
+	finalPDFOpts.PDFPath = pdfPath
+	if err := cfg.Builder.RenderPDF(ctx, renderResult.HTML, renderResult.LocalAssets, finalPDFOpts); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
@@ -772,7 +703,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 			return documentArtefactResult{}, fmt.Errorf("document artefact %s: signing profile %s missing", artefactName, ref)
 		}
 		logger.Debugf("Signing PDF %s with profile %s", pdfPath, ref)
-		if err := signing.Apply(ctx, profile, pdfPath); err != nil {
+		if err := cfg.Builder.SignPDF(ctx, pdfPath, profile); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
 			}
@@ -811,62 +742,6 @@ func buildDefaultDocumentFooter() string {
   <span class="date"></span>
   <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
 </div>`
-}
-
-// ephemeralServer wraps an HTTP server used for PDF rendering.
-// It manages a child context that can be canceled independently.
-type ephemeralServer struct {
-	server *previewhttp.Server
-	cancel context.CancelFunc
-	errCh  chan error
-}
-
-// startEphemeralServer creates and starts a temporary HTTP server for PDF rendering.
-// The server runs in a goroutine and is stopped when Close() is called or when
-// the parent context is canceled. The child context isolates the server's lifecycle
-// from the parent context, allowing controlled shutdown.
-func startEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []previewhttp.LocalAsset) (*ephemeralServer, error) {
-	// Check for cancellation before allocating resources
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	srv, err := previewhttp.New(previewhttp.Config{
-		ListenAddr: "127.0.0.1:0",
-		CacheDir:   cacheDir,
-		Logger:     logger,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("start server: %w", err)
-	}
-	srv.SetLocalAssets(assets)
-	srv.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), html...), "text/html; charset=utf-8"))
-	runCtx, cancel := context.WithCancel(ctx)
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Start(runCtx)
-	}()
-	return &ephemeralServer{server: srv, cancel: cancel, errCh: errCh}, nil
-}
-
-func (s *ephemeralServer) URL() string {
-	if s == nil || s.server == nil {
-		return ""
-	}
-	return s.server.URL()
-}
-
-func (s *ephemeralServer) Close() error {
-	if s == nil {
-		return nil
-	}
-	s.cancel()
-	select {
-	case err := <-s.errCh:
-		return err
-	case <-time.After(5 * time.Second):
-		return fmt.Errorf("server shutdown timed out")
-	}
 }
 
 // writeBuildLog writes a detailed build log file with run information.
@@ -945,17 +820,14 @@ type screenshotArtefactResult struct {
 }
 
 type buildScreenshotArtefactConfig struct {
-	Logger        logx.Logger
-	Workdir       string
-	CacheDir      string
-	EngineVersion string
-	Docs          []config.Document
-	Artefact      config.ScreenshotArtefact
-	OutputDir     string
-	ChromePath    string
-	Debug         bool
-	Spinner       *Spinner
-	QueryLogger   func(string)
+	Builder    *pipeline.Builder
+	Logger     logx.Logger
+	Docs       []config.Document
+	Artefact   config.ScreenshotArtefact
+	OutputDir  string
+	ChromePath string
+	Debug      bool
+	Spinner    *Spinner
 }
 
 // buildScreenshotArtefact captures screenshots of specific components.
@@ -979,10 +851,7 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	}
 	logger.Debugf("Rendering HTML for screenshot artefact %s", artefactName)
 
-	renderResult, err := pipeline.RenderScreenshotArtefactHTML(ctx, cfg.Workdir, cfg.Docs, cfg.Artefact, pipeline.RenderScreenshotArtefactOptions{
-		EngineVersion: cfg.EngineVersion,
-		QueryLogger:   cfg.QueryLogger,
-	})
+	renderResult, err := cfg.Builder.RenderScreenshotHTML(ctx, cfg.Docs, cfg.Artefact)
 	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
@@ -991,24 +860,18 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	}
 
 	// DEBUG: Write rendered HTML to file for inspection
-	if err := os.WriteFile("/tmp/screenshot-debug.html", []byte(renderResult.HTML), 0644); err != nil {
-		logger.Warnf("Failed to write debug HTML: %v", err)
+	if cfg.Debug {
+		if err := os.WriteFile("/tmp/screenshot-debug.html", []byte(renderResult.HTML), 0644); err != nil {
+			logger.Warnf("Failed to write debug HTML: %v", err)
+		}
 	}
 
-	// Check for cancellation before starting the ephemeral server
+	// Check for cancellation before screenshot capture
 	if err := ctx.Err(); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Cancelled %s", artefactName))
 		}
 		return nil, err
-	}
-
-	server, err := startEphemeralServer(ctx, cfg.CacheDir, logger.Channel("server"), renderResult.HTML, pipeline.ConvertLocalAssets(renderResult.LocalAssets))
-	if err != nil {
-		if spinner != nil {
-			spinner.StopWithError(fmt.Sprintf("Failed to start server for %s", artefactName))
-		}
-		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
 	}
 
 	// Update spinner for screenshot capture
@@ -1017,13 +880,10 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	}
 	logger.Debugf("Capturing screenshots for %s", artefactName)
 
-	// Convert config refs to chrome refs
-	chromeRefs := make([]chrome.ScreenshotRef, len(cfg.Artefact.Spec.Refs))
+	// Convert config refs to Builder refs
+	refs := make([]pipeline.ScreenshotRef, len(cfg.Artefact.Spec.Refs))
 	for i, ref := range cfg.Artefact.Spec.Refs {
-		chromeRefs[i] = chrome.ScreenshotRef{
-			Kind: ref.Kind,
-			Name: ref.Name,
-		}
+		refs[i] = pipeline.ScreenshotRef{Kind: ref.Kind, Name: ref.Name}
 	}
 
 	// Map scale setting to device scale factor
@@ -1032,44 +892,30 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		scaleFactor = 2.0
 	}
 
-	screenshotOpts := chrome.ScreenshotOptions{
-		URL:                   server.URL(),
+	// Capture screenshots via Builder (ephemeral server + Chrome)
+	captureResults, err := cfg.Builder.CaptureScreenshots(ctx, renderResult.HTML, renderResult.LocalAssets, pipeline.ScreenshotRenderOptions{
 		OutputDir:             cfg.OutputDir,
 		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artefact.Spec.Format,
 		Orientation:           cfg.Artefact.Spec.Orientation,
-		Timeout:               2 * time.Minute,
 		Debug:                 cfg.Debug,
 		WaitForComponentReady: true,
 		ReadyConsolePrefix:    componentReadyConsolePrefix,
-		Refs:                  chromeRefs,
+		Refs:                  refs,
 		FilenamePrefix:        cfg.Artefact.Spec.FilenamePrefix,
 		FilenamePattern:       cfg.Artefact.Spec.FilenamePattern,
 		Scale:                 scaleFactor,
-	}
-
-	chromeResults, screenshotErr := chrome.RenderScreenshots(ctx, screenshotOpts)
-	closeErr := server.Close()
-
-	if screenshotErr != nil {
+	})
+	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to capture screenshots for %s", artefactName))
 		}
-		if closeErr != nil {
-			logger.Warnf("server shutdown error: %v", closeErr)
-		}
-		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, screenshotErr)
-	}
-	if closeErr != nil && !errors.Is(closeErr, context.Canceled) {
-		if spinner != nil {
-			spinner.StopWithError(fmt.Sprintf("Server error for %s", artefactName))
-		}
-		return nil, fmt.Errorf("screenshot artefact %s: stop server: %w", artefactName, closeErr)
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
 	}
 
-	// Convert chrome results to our result type
-	results := make([]screenshotArtefactResult, len(chromeResults))
-	for i, r := range chromeResults {
+	// Convert Builder results to CLI result type
+	results := make([]screenshotArtefactResult, len(captureResults))
+	for i, r := range captureResults {
 		results[i] = screenshotArtefactResult{
 			ArtefactName: artefactName,
 			RefKind:      r.Ref.Kind,
@@ -1088,22 +934,15 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 
 // buildExecutionConfig holds configuration for building all artefact types.
 type buildExecutionConfig struct {
-	Logger          logx.Logger
-	AbsDir          string
-	CacheDir        string
-	EngineVersion   string
-	OutputDir       string
-	ChromePath      string
-	Debug           bool
-	NoColor         bool
-	Stdout          io.Writer
-	QueryLogger     func(string)
-	QueryExecLogger duckdb.QueryExecLogger
-	EmbedOpts       buildlog.EmbedOptions
-	ExecPlan        *buildlog.ExecutionPlan
-	DataValidation  dataset.DataValidationMode
-	HookRunner      *hooks.Runner
-	HookEnv         hooks.HookEnv
+	Builder    *pipeline.Builder
+	Logger     logx.Logger
+	OutputDir  string
+	ChromePath string
+	Debug      bool
+	NoColor    bool
+	Stdout     io.Writer
+	HookRunner *hooks.Runner
+	HookEnv    hooks.HookEnv
 }
 
 // buildAllResults holds the results from building all artefact types.
@@ -1139,28 +978,20 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 		artefactHookEnv.ArtefactKind = "report"
 
 		entry, err := buildArtefact(ctx, buildArtefactConfig{
-			Logger:                   cfg.Logger.Channel(artefact.Document.Name),
-			Workdir:                  cfg.AbsDir,
-			CacheDir:                 cfg.CacheDir,
-			EngineVersion:            cfg.EngineVersion,
-			Docs:                     manifests.Documents,
-			Artefact:                 artefact,
-			SigningProfiles:          manifests.SigningProfiles,
-			OutputDir:                cfg.OutputDir,
-			ChromePath:               cfg.ChromePath,
-			Debug:                    cfg.Debug,
-			Graph:                    manifests.Graph,
-			GraphRoot:                root,
-			GraphBase:                cfg.AbsDir,
-			Spinner:                  NewSpinner(spinnerCfg),
-			QueryLogger:              cfg.QueryLogger,
-			QueryExecLogger:          cfg.QueryExecLogger,
-			EmbedOptions:             cfg.EmbedOpts,
-			ExecutionPlan:            cfg.ExecPlan,
-			DataValidation:           cfg.DataValidation,
-			DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
-			HookRunner:               cfg.HookRunner,
-			HookEnv:                  artefactHookEnv,
+			Builder:         cfg.Builder,
+			Logger:          cfg.Logger.Channel(artefact.Document.Name),
+			Docs:            manifests.Documents,
+			Artefact:        artefact,
+			SigningProfiles: manifests.SigningProfiles,
+			OutputDir:       cfg.OutputDir,
+			ChromePath:      cfg.ChromePath,
+			Debug:           cfg.Debug,
+			Graph:           manifests.Graph,
+			GraphRoot:       root,
+			GraphBase:       cfg.Builder.Workdir,
+			Spinner:         NewSpinner(spinnerCfg),
+			HookRunner:      cfg.HookRunner,
+			HookEnv:         artefactHookEnv,
 		})
 		if err != nil {
 			policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
@@ -1181,17 +1012,14 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				return nil, err
 			}
 			ssResults, err := buildScreenshotArtefact(ctx, buildScreenshotArtefactConfig{
-				Logger:        cfg.Logger.Channel(ssArtefact.Document.Name),
-				Workdir:       cfg.AbsDir,
-				CacheDir:      cfg.CacheDir,
-				EngineVersion: cfg.EngineVersion,
-				Docs:          manifests.Documents,
-				Artefact:      ssArtefact,
-				OutputDir:     cfg.OutputDir,
-				ChromePath:    cfg.ChromePath,
-				Debug:         cfg.Debug,
-				Spinner:       NewSpinner(spinnerCfg),
-				QueryLogger:   cfg.QueryLogger,
+				Builder:    cfg.Builder,
+				Logger:     cfg.Logger.Channel(ssArtefact.Document.Name),
+				Docs:       manifests.Documents,
+				Artefact:   ssArtefact,
+				OutputDir:  cfg.OutputDir,
+				ChromePath: cfg.ChromePath,
+				Debug:      cfg.Debug,
+				Spinner:    NewSpinner(spinnerCfg),
 			})
 			if err != nil {
 				return nil, RuntimeError(err)
@@ -1209,10 +1037,8 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				return nil, err
 			}
 			docResult, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
+				Builder:         cfg.Builder,
 				Logger:          cfg.Logger.Channel(docArtefact.Document.Name),
-				Workdir:         cfg.AbsDir,
-				CacheDir:        cfg.CacheDir,
-				EngineVersion:   cfg.EngineVersion,
 				Artefact:        docArtefact,
 				SigningProfiles: manifests.SigningProfiles,
 				OutputDir:       cfg.OutputDir,
