@@ -43,7 +43,7 @@ func ScanManifests(ctx context.Context, dir string) ([]ManifestInfo, error) {
 	if err != nil {
 		// If we can't load at all, return empty list rather than error
 		// This allows the add command to work in empty projects
-		return nil, nil
+		return nil, nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	manifests := make([]ManifestInfo, 0, len(docs))
@@ -240,7 +240,7 @@ func WriteManifest(path, content string) error {
 	}
 
 	// Write file
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
@@ -264,7 +264,7 @@ func AppendToManifest(path, content string) error {
 	newContent += content
 
 	// Write back
-	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
@@ -327,11 +327,11 @@ type DataSetManifestData struct {
 	Description  string
 	Constraints  []string
 	Dependencies []string
-	Query        string   // SQL query content (inline)
-	QueryFile    string   // SQL file path (external)
-	PRQL         string   // PRQL query content (inline)
-	PRQLFile     string   // PRQL file path (external)
-	Source       string   // DataSource name (pass-through)
+	Query        string // SQL query content (inline)
+	QueryFile    string // SQL file path (external)
+	PRQL         string // PRQL query content (inline)
+	PRQLFile     string // PRQL file path (external)
+	Source       string // DataSource name (pass-through)
 }
 
 // DataSourceManifestData holds data for rendering a DataSource manifest.
@@ -374,8 +374,7 @@ func quoteYAMLIfNeeded(s string) string {
 	}
 
 	if needsQuotes {
-		escaped := strings.ReplaceAll(s, "\"", "\\\"")
-		return fmt.Sprintf("\"%s\"", escaped)
+		return fmt.Sprintf("%q", s)
 	}
 
 	return s
@@ -401,7 +400,7 @@ func SearchQueryFiles(dir string, ext string) ([]string, error) {
 
 		err := filepath.WalkDir(searchPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil // Skip errors
+				return nil //nolint:nilerr // best effort: non-fatal for suggestions
 			}
 			if d.IsDir() {
 				// Skip hidden directories and common ignores

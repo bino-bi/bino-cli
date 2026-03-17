@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ func promptParamDefinition() (*LayoutPageParamData, error) {
 		}
 		// Validate: uppercase letters, digits, underscores
 		for _, r := range s {
-			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
 				return fmt.Errorf("parameter names should contain only letters, digits, and underscores")
 			}
 		}
@@ -78,7 +79,7 @@ func promptParamDefinition() (*LayoutPageParamData, error) {
 		),
 	).WithTheme(getHuhTheme())
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return nil, errAddCanceled
 		}
 		return nil, err
@@ -93,7 +94,7 @@ func promptParamDefinition() (*LayoutPageParamData, error) {
 	param.Description = desc
 
 	// Required?
-	required, err := huhConfirm("Is this parameter required?", false)
+	required, err := huhConfirm("Is this parameter required?")
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +160,7 @@ func promptSelectOptions() ([]schema.LayoutPageParamOptionItem, error) {
 		})
 
 		if len(items) >= 2 {
-			addMore, err := huhConfirm("Add another option?", false)
+			addMore, err := huhConfirm("Add another option?")
 			if err != nil {
 				return nil, err
 			}
@@ -174,7 +175,7 @@ func promptSelectOptions() ([]schema.LayoutPageParamOptionItem, error) {
 
 // promptNumberOptions prompts for number type min/max options.
 func promptNumberOptions() (*schema.LayoutPageParamOptions, error) {
-	addConstraints, err := huhConfirm("Add min/max constraints?", false)
+	addConstraints, err := huhConfirm("Add min/max constraints?")
 	if err != nil {
 		return nil, err
 	}
@@ -189,8 +190,8 @@ func promptNumberOptions() (*schema.LayoutPageParamOptions, error) {
 		return nil, err
 	}
 	if minStr != "" {
-		if min, err := strconv.ParseFloat(minStr, 64); err == nil {
-			options.Min = &min
+		if minVal, err := strconv.ParseFloat(minStr, 64); err == nil {
+			options.Min = &minVal
 		}
 	}
 
@@ -199,8 +200,8 @@ func promptNumberOptions() (*schema.LayoutPageParamOptions, error) {
 		return nil, err
 	}
 	if maxStr != "" {
-		if max, err := strconv.ParseFloat(maxStr, 64); err == nil {
-			options.Max = &max
+		if maxVal, err := strconv.ParseFloat(maxStr, 64); err == nil {
+			options.Max = &maxVal
 		}
 	}
 
@@ -221,7 +222,7 @@ func promptParamDefinitions() ([]LayoutPageParamData, error) {
 			fmt.Printf("  Added parameter: %s (%s)\n", param.Name, param.Type)
 		}
 
-		addMore, err := huhConfirm("Add another parameter?", false)
+		addMore, err := huhConfirm("Add another parameter?")
 		if err != nil {
 			return params, err
 		}
@@ -242,7 +243,7 @@ func promptParamValue(param config.LayoutPageParamSpec) (string, error) {
 
 	// Handle select type with predefined options
 	if param.Type == "select" && param.Options != nil && len(param.Options.Items) > 0 {
-		var options []huh.Option[string]
+		options := make([]huh.Option[string], 0, len(param.Options.Items))
 		for _, item := range param.Options.Items {
 			label := item.Value
 			if item.Label != "" {
@@ -266,7 +267,7 @@ func promptParamValue(param config.LayoutPageParamSpec) (string, error) {
 		).WithTheme(getHuhTheme())
 
 		if err := form.Run(); err != nil {
-			if err == huh.ErrUserAborted {
+			if errors.Is(err, huh.ErrUserAborted) {
 				return "", errAddCanceled
 			}
 			return "", err
@@ -285,11 +286,12 @@ func promptParamValue(param config.LayoutPageParamSpec) (string, error) {
 	case "number":
 		placeholder = "Enter a number"
 		if param.Options != nil {
-			if param.Options.Min != nil && param.Options.Max != nil {
+			switch {
+			case param.Options.Min != nil && param.Options.Max != nil:
 				placeholder = fmt.Sprintf("%.0f - %.0f", *param.Options.Min, *param.Options.Max)
-			} else if param.Options.Min != nil {
+			case param.Options.Min != nil:
 				placeholder = fmt.Sprintf(">= %.0f", *param.Options.Min)
-			} else if param.Options.Max != nil {
+			case param.Options.Max != nil:
 				placeholder = fmt.Sprintf("<= %.0f", *param.Options.Max)
 			}
 		}
@@ -353,7 +355,7 @@ func promptParamValues(pageName string, params []config.LayoutPageParamSpec) (ma
 }
 
 // detectPageParams loads and returns the parameters defined on a LayoutPage.
-func detectPageParams(workdir string, pageName string, manifests []ManifestInfo) ([]config.LayoutPageParamSpec, error) {
+func detectPageParams(pageName string, manifests []ManifestInfo) []config.LayoutPageParamSpec {
 	// Find the manifest file for this page
 	var pageManifest *ManifestInfo
 	for _, m := range manifests {
@@ -363,13 +365,13 @@ func detectPageParams(workdir string, pageName string, manifests []ManifestInfo)
 		}
 	}
 	if pageManifest == nil {
-		return nil, nil
+		return nil
 	}
 
 	// Read the file and parse to find params
 	content, err := os.ReadFile(pageManifest.File)
 	if err != nil {
-		return nil, nil
+		return nil // best effort: non-fatal for suggestions
 	}
 
 	// Parse multi-document YAML to find the right document
@@ -389,33 +391,33 @@ func detectPageParams(workdir string, pageName string, manifests []ManifestInfo)
 		// Check if this document has params
 		metadata, ok := doc["metadata"].(map[string]any)
 		if !ok {
-			return nil, nil
+			return nil
 		}
 
 		paramsRaw, ok := metadata["params"]
 		if !ok {
-			return nil, nil
+			return nil
 		}
 
 		// Convert to JSON and back to parse into struct
 		paramsJSON, err := json.Marshal(paramsRaw)
 		if err != nil {
-			return nil, nil
+			return nil // best effort: non-fatal for suggestions
 		}
 
 		var params []config.LayoutPageParamSpec
 		if err := json.Unmarshal(paramsJSON, &params); err != nil {
-			return nil, nil
+			return nil // best effort: non-fatal for suggestions
 		}
 
-		return params, nil
+		return params
 	}
 
-	return nil, nil
+	return nil
 }
 
 // getPageParamsInfo returns parameter info for all LayoutPages that have params.
-func getPageParamsInfo(workdir string, manifests []ManifestInfo) (map[string][]config.LayoutPageParamSpec, error) {
+func getPageParamsInfo(manifests []ManifestInfo) map[string][]config.LayoutPageParamSpec {
 	result := make(map[string][]config.LayoutPageParamSpec)
 
 	for _, m := range manifests {
@@ -423,23 +425,20 @@ func getPageParamsInfo(workdir string, manifests []ManifestInfo) (map[string][]c
 			continue
 		}
 
-		params, err := detectPageParams(workdir, m.Name, manifests)
-		if err != nil {
-			continue
-		}
+		params := detectPageParams(m.Name, manifests)
 		if len(params) > 0 {
 			result[m.Name] = params
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 // updateArtefactLayoutPages adds a page to an existing artefact's layoutPages.
 func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) error {
 	content, err := os.ReadFile(artefactPath)
 	if err != nil {
-		return fmt.Errorf("read artefact file: %w", err)
+		return fmt.Errorf("read artifact file: %w", err)
 	}
 
 	// Parse multi-document YAML
@@ -508,29 +507,29 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 	}
 	encoder.Close()
 
-	if err := os.WriteFile(artefactPath, []byte(buf.String()), 0o644); err != nil {
-		return fmt.Errorf("write artefact file: %w", err)
+	if err := os.WriteFile(artefactPath, []byte(buf.String()), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
+		return fmt.Errorf("write artifact file: %w", err)
 	}
 
 	return nil
 }
 
-// promptAddToArtefacts prompts to add a newly created page to existing artefacts.
+// promptAddToArtefacts prompts to add a newly created page to existing artifacts.
 func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestInfo, pageParams []LayoutPageParamData) error {
 	// Find existing ReportArtefacts
-	artefacts := FilterByKind(manifests, "ReportArtefact")
-	if len(artefacts) == 0 {
+	artifacts := FilterByKind(manifests, "ReportArtefact")
+	if len(artifacts) == 0 {
 		return nil
 	}
 
-	addToArtefact, err := huhConfirm("Add this page to an existing ReportArtefact?", false)
+	addToArtefact, err := huhConfirm("Add this page to an existing ReportArtefact?")
 	if err != nil || !addToArtefact {
 		return err
 	}
 
-	// Select artefact(s)
-	items := ManifestsToFuzzyItems(artefacts)
-	selected, err := huhMultiFuzzySelect("Select artefact(s)", items)
+	// Select artifact(s)
+	items := ManifestsToFuzzyItems(artifacts)
+	selected, err := huhMultiFuzzySelect("Select artifact(s)", items)
 	if err != nil {
 		return err
 	}
@@ -540,7 +539,7 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 
 		// If page has params, prompt for values
 		if len(pageParams) > 0 {
-			withParams, err := huhConfirm(fmt.Sprintf("Add %s to %s with parameters?", pageName, item.Name), true)
+			withParams, err := huhConfirm(fmt.Sprintf("Add %s to %s with parameters?", pageName, item.Name))
 			if err != nil {
 				return err
 			}
@@ -581,7 +580,7 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 			}
 		}
 
-		// Update the artefact file
+		// Update the artifact file
 		artefactPath := item.File
 		if !filepath.IsAbs(artefactPath) {
 			artefactPath = filepath.Join(workdir, artefactPath)
@@ -598,54 +597,4 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 	}
 
 	return nil
-}
-
-// convertParamDataToSchemaParams converts CLI param data to schema params for YAML generation.
-func convertParamDataToSchemaParams(params []LayoutPageParamData) []schema.LayoutPageParamSpec {
-	var result []schema.LayoutPageParamSpec
-	for _, p := range params {
-		spec := schema.LayoutPageParamSpec{
-			Name:        p.Name,
-			Type:        p.Type,
-			Description: p.Description,
-			Default:     p.Default,
-			Required:    p.Required,
-		}
-		if p.Options != nil {
-			spec.Options = p.Options
-		}
-		result = append(result, spec)
-	}
-	return result
-}
-
-// convertSchemaParamsToConfigParams converts schema params to config params for prompting.
-func convertSchemaParamsToConfigParams(params []schema.LayoutPageParamSpec) []config.LayoutPageParamSpec {
-	var result []config.LayoutPageParamSpec
-	for _, p := range params {
-		var def *string
-		if p.Default != "" {
-			def = &p.Default
-		}
-		spec := config.LayoutPageParamSpec{
-			Name:        p.Name,
-			Type:        p.Type,
-			Description: p.Description,
-			Default:     def,
-			Required:    p.Required,
-		}
-		if p.Options != nil {
-			spec.Options = &config.LayoutPageParamOptions{}
-			for _, item := range p.Options.Items {
-				spec.Options.Items = append(spec.Options.Items, config.LayoutPageParamOptionItem{
-					Value: item.Value,
-					Label: item.Label,
-				})
-			}
-			spec.Options.Min = p.Options.Min
-			spec.Options.Max = p.Options.Max
-		}
-		result = append(result, spec)
-	}
-	return result
 }

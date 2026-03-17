@@ -146,7 +146,7 @@ type LocalAsset struct {
 // GenerateHTML walks the workdir manifests and renders HTML markup that can be served to the preview browser.
 // Datasource diagnostics and local assets that need HTTP proxying are returned alongside the rendered markup.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
-func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrientation string, renderFormat string, mode RenderMode, engineVersion string) (Result, []datasource.Diagnostic, error) {
+func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrientation string, renderFormat string, mode Mode, engineVersion string) (Result, []datasource.Diagnostic, error) {
 	docs, err := config.LoadDir(ctx, workdir)
 	if err != nil {
 		return Result{}, nil, fmt.Errorf("render: load manifests: %w", err)
@@ -174,7 +174,7 @@ func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrie
 // GenerateHTMLFromDocuments renders HTML using an already loaded set of manifests.
 // The mode parameter determines whether build-specific attributes like render-orientation are included.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
-func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode RenderMode, engineVersion string) (Result, []datasource.Diagnostic, error) {
+func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode Mode, engineVersion string) (Result, []datasource.Diagnostic, error) {
 	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil)
 }
 
@@ -183,7 +183,7 @@ func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, loca
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 // The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
-func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode RenderMode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (Result, []datasource.Diagnostic, error) {
+func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -272,7 +272,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	fontMarkup := renderFontLinks(fontAssets)
 	orientationAttr := ""
 	// render-orientation is only added in build mode for PDF generation
-	if mode == RenderModeBuild {
+	if mode == ModeBuild {
 		if trimmed := strings.TrimSpace(renderOrientation); trimmed != "" {
 			orientationAttr = fmt.Sprintf(" render-orientation='%s'", html.EscapeString(trimmed))
 		}

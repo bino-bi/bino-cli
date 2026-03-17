@@ -85,7 +85,7 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	switch doc.Kind {
 	case "DataSource":
 		// DataSource is already a view, just select from it
-		query = fmt.Sprintf("SELECT * FROM \"%s\"", doc.Name)
+		query = fmt.Sprintf("SELECT * FROM %q", doc.Name)
 
 	case "DataSet":
 		// DataSet has a custom query
@@ -131,5 +131,5 @@ func BuildDataSourceQuery(doc *config.Document, allDocs []config.Document) (stri
 		return "", fmt.Errorf("expected DataSource, got %s", doc.Kind)
 	}
 	// Since DataSources are views, just select from the view name
-	return fmt.Sprintf("SELECT * FROM \"%s\"", doc.Name), nil
+	return fmt.Sprintf("SELECT * FROM %q", doc.Name), nil
 }

@@ -15,13 +15,5 @@ type FindingData struct {
 
 // ToFindingData converts a Finding to FindingData for use by the buildlog package.
 func (f Finding) ToFindingData() FindingData {
-	return FindingData{
-		RuleID:  f.RuleID,
-		Message: f.Message,
-		File:    f.File,
-		DocIdx:  f.DocIdx,
-		Path:    f.Path,
-		Line:    f.Line,
-		Column:  f.Column,
-	}
+	return FindingData(f)
 }

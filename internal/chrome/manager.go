@@ -150,7 +150,7 @@ func (m *Manager) FetchDownloadURL(ctx context.Context) (version, downloadURL st
 }
 
 func (m *Manager) fetchLastKnownGood(ctx context.Context) (*lastKnownGoodResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, lastKnownGoodURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, lastKnownGoodURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -188,7 +188,7 @@ func (m *Manager) Download(ctx context.Context, version, downloadURL string) (Ve
 	defer os.Remove(tmpPath)
 
 	// Download the zip file
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
 	if err != nil {
 		tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("create download request: %w", err)
@@ -232,7 +232,7 @@ func (m *Manager) Download(ctx context.Context, version, downloadURL string) (Ve
 
 	// On macOS, remove quarantine attribute
 	if runtime.GOOS == "darwin" {
-		_ = exec.Command("xattr", "-d", "com.apple.quarantine", execPath).Run()
+		_ = exec.CommandContext(ctx, "xattr", "-d", "com.apple.quarantine", execPath).Run()
 	}
 
 	return VersionInfo{
@@ -357,7 +357,7 @@ func (m *Manager) LatestLocalVersion() (VersionInfo, error) {
 func (m *Manager) ResolveExecPath() (string, error) {
 	// Priority 1: CHROME_PATH environment variable
 	if envPath := os.Getenv("CHROME_PATH"); envPath != "" {
-		if _, err := os.Stat(envPath); err != nil {
+		if _, err := os.Stat(envPath); err != nil { //nolint:gosec // G703: CHROME_PATH is set by the user, not external input
 			return "", fmt.Errorf("CHROME_PATH %q: %w", envPath, err)
 		}
 		return envPath, nil
@@ -462,6 +462,6 @@ func extractZipFile(f *zip.File, destPath string) error {
 	}
 	defer dst.Close()
 
-	_, err = io.Copy(dst, src)
+	_, err = io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
 	return err
 }

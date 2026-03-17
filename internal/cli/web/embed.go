@@ -51,6 +51,6 @@ func Handler(prefix string) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(data)
+		_, _ = w.Write(data) //nolint:gosec // G705: serving embedded static assets, not user content
 	})
 }

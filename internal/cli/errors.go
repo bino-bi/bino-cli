@@ -177,7 +177,7 @@ func defaultHint(kind ErrorKind) string {
 
 // FormatError prepares a user-facing error message and exit code based on the wrapped error kind.
 // Enhanced formatting is always enabled; colors respect NO_COLOR env and --no-color flag.
-func FormatError(ctx context.Context, err error) (string, int) {
+func FormatError(ctx context.Context, err error) (msg string, code int) {
 	if err == nil {
 		return "", 0
 	}
@@ -186,7 +186,7 @@ func FormatError(ctx context.Context, err error) (string, int) {
 	style := GetStyle()
 
 	kind := errorKind(err)
-	code := exitCode(kind)
+	code = exitCode(kind)
 
 	var b strings.Builder
 
@@ -320,7 +320,7 @@ func extractCoreMessage(err error) string {
 	msg := err.Error()
 
 	// Try to extract the innermost meaningful message
-	// Skip generic prefixes like "artefact X: " or "build: "
+	// Skip generic prefixes like "artifact X: " or "build: "
 	parts := strings.Split(msg, ": ")
 	if len(parts) > 2 {
 		// Return the last two parts for context

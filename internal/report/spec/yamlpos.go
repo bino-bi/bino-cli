@@ -77,6 +77,8 @@ func ResolvePathPosition(node *yaml.Node, path string) (line, col int, ok bool) 
 				lastKeyLine, lastKeyCol = current.Line, current.Column
 				found = true
 			}
+
+		default:
 		}
 
 		if !found {
@@ -118,7 +120,7 @@ func ExtractSourceSnippet(source string, line, contextLines int) string {
 	var b strings.Builder
 	for i := start; i <= end; i++ {
 		prefix := fmt.Sprintf("%*d", width, i)
-		b.WriteString(fmt.Sprintf("    %s │ %s\n", prefix, lines[i-1]))
+		fmt.Fprintf(&b, "    %s │ %s\n", prefix, lines[i-1])
 	}
 
 	return b.String()

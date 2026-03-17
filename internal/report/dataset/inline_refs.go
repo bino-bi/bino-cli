@@ -54,7 +54,7 @@ func RewriteInlineRefs(query string, inlineNames []string) (string, error) {
 		}
 
 		// Return the generated name as a quoted identifier for DuckDB
-		return fmt.Sprintf(`"%s"`, inlineNames[idx])
+		return fmt.Sprintf("%q", inlineNames[idx])
 	})
 
 	return result, rewriteErr

@@ -102,14 +102,14 @@ func TestNormalizeDateString(t *testing.T) {
 		expected string
 	}{
 		{"2023-01-05", "2023-01-05"},
-		{"2023-01-05T00:00:00Z", "2023-01-05"},              // midnight UTC → date-only
-		{"2023-12-31T23:59:59Z", "2023-12-31T23:59:59Z"},    // non-midnight preserved
-		{"2024-06-15T14:30:00Z", "2024-06-15T14:30:00Z"},    // non-midnight preserved
+		{"2023-01-05T00:00:00Z", "2023-01-05"},                     // midnight UTC → date-only
+		{"2023-12-31T23:59:59Z", "2023-12-31T23:59:59Z"},           // non-midnight preserved
+		{"2024-06-15T14:30:00Z", "2024-06-15T14:30:00Z"},           // non-midnight preserved
 		{"2024-01-01T08:00:00+01:00", "2024-01-01T08:00:00+01:00"}, // with offset preserved
 		{"", ""},
 		{"invalid", "invalid"},
-		{"2023-01-05T", "2023-01-05T"},                       // T at position 10, not midnight → preserved
-		{"2023-01-0T00:00:00Z", "2023-01-0T00:00:00Z"},      // Invalid date, T not at position 10
+		{"2023-01-05T", "2023-01-05T"}, // T at position 10, not midnight → preserved
+		{"2023-01-0T00:00:00Z", "2023-01-0T00:00:00Z"}, // Invalid date, T not at position 10
 	}
 
 	for _, tt := range tests {

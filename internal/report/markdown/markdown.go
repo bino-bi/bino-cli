@@ -139,7 +139,7 @@ func RenderFiles(ctx context.Context, files []string, opts RenderOptions) ([]byt
 func WrapDocument(content []byte, opts DocumentOptions) []byte {
 	var customCSS template.CSS
 	if opts.Stylesheet != "" {
-		customCSS = template.CSS(opts.Stylesheet)
+		customCSS = template.CSS(opts.Stylesheet) //nolint:gosec // G203: stylesheet is from trusted manifest config
 	}
 
 	data := struct {
@@ -151,8 +151,8 @@ func WrapDocument(content []byte, opts DocumentOptions) []byte {
 		Orientation string
 	}{
 		Title:       opts.Title,
-		Content:     template.HTML(content),
-		PageCSS:     template.CSS(generatePageCSS(opts.Format, opts.Orientation)),
+		Content:     template.HTML(content),                                       //nolint:gosec // G203: content is rendered markdown from trusted manifests
+		PageCSS:     template.CSS(generatePageCSS(opts.Format, opts.Orientation)), //nolint:gosec // G203: generated from trusted format/orientation values
 		CustomCSS:   customCSS,
 		Format:      opts.Format,
 		Orientation: opts.Orientation,
@@ -195,7 +195,7 @@ func LoadStylesheet(baseDir, path string) (string, error) {
 func generatePageCSS(format, orientation string) string {
 	pageSize := getPageSize(format)
 	if orientation == "landscape" {
-		pageSize = pageSize + " landscape"
+		pageSize += " landscape"
 	}
 
 	return fmt.Sprintf(`

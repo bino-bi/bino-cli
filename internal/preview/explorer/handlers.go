@@ -36,8 +36,8 @@ type sourceInfo struct {
 }
 
 type datasetInfo struct {
-	Name       string   `json:"name"`
-	DependsOn  []string `json:"dependsOn,omitempty"`
+	Name      string   `json:"name"`
+	DependsOn []string `json:"dependsOn,omitempty"`
 }
 
 type columnInfo struct {
@@ -54,11 +54,11 @@ type queryRequest struct {
 
 // queryResponse is the JSON response for the query endpoint.
 type queryResponse struct {
-	Columns    []columnInfo    `json:"columns"`
-	Rows       [][]any         `json:"rows"`
-	TotalRows  any             `json:"totalRows"` // int or "unknown"
-	DurationMs int64           `json:"durationMs"`
-	Error      string          `json:"error,omitempty"`
+	Columns    []columnInfo `json:"columns"`
+	Rows       [][]any      `json:"rows"`
+	TotalRows  any          `json:"totalRows"` // int or "unknown"
+	DurationMs int64        `json:"durationMs"`
+	Error      string       `json:"error,omitempty"`
 }
 
 // summarizeRequest is the JSON body for the summarize endpoint.
@@ -134,7 +134,7 @@ func handleQuery(session *Session) http.HandlerFunc {
 
 		err := session.WithDB(func(db *sql.DB) error {
 			// Run paginated query and count in sequence (same connection)
-			paginatedSQL := fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", sqlText, limit, offset)
+			paginatedSQL := fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", sqlText, limit, offset) //nolint:gosec // G201: local dev-only SQL explorer, user writes own queries
 			rows, err := db.QueryContext(ctx, paginatedSQL)
 			if err != nil {
 				return err
@@ -177,7 +177,7 @@ func handleQuery(session *Session) http.HandlerFunc {
 			// Count total rows (5s timeout, falls back to "unknown")
 			countCtx, countCancel := context.WithTimeout(ctx, 5*time.Second)
 			defer countCancel()
-			countSQL := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", sqlText)
+			countSQL := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", sqlText) //nolint:gosec // G201: local dev-only SQL explorer, user writes own queries
 			var totalRows int64
 			if err := db.QueryRowContext(countCtx, countSQL).Scan(&totalRows); err != nil {
 				resp.TotalRows = "unknown"
@@ -210,16 +210,17 @@ func handleSummarize(session *Session) http.HandlerFunc {
 
 		// Build the summarize SQL
 		var summarizeSQL string
-		if req.Name != "" {
-			summarizeSQL = fmt.Sprintf(`SUMMARIZE SELECT * FROM "%s"`, req.Name)
-		} else if req.SQL != "" {
+		switch {
+		case req.Name != "":
+			summarizeSQL = fmt.Sprintf("SUMMARIZE SELECT * FROM %q", req.Name)
+		case req.SQL != "":
 			sqlText := strings.TrimSpace(req.SQL)
 			if isWriteOperation(sqlText) {
 				writeJSON(w, http.StatusBadRequest, queryResponse{Error: "write operations are not allowed"})
 				return
 			}
 			summarizeSQL = fmt.Sprintf("SUMMARIZE (%s)", sqlText)
-		} else {
+		default:
 			writeJSON(w, http.StatusBadRequest, queryResponse{Error: "name or sql is required"})
 			return
 		}
@@ -290,7 +291,7 @@ func handleSummarize(session *Session) http.HandlerFunc {
 func fetchColumns(ctx context.Context, session *Session, viewName string) ([]columnInfo, error) {
 	var cols []columnInfo
 	err := session.WithDB(func(db *sql.DB) error {
-		query := fmt.Sprintf(`SELECT * FROM "%s" LIMIT 0`, viewName)
+		query := fmt.Sprintf(`SELECT * FROM %q LIMIT 0`, viewName) //nolint:gosec // G201: viewName is an internal registered DuckDB view, not user input
 		rows, err := db.QueryContext(ctx, query)
 		if err != nil {
 			return err
@@ -317,14 +318,14 @@ func fetchColumns(ctx context.Context, session *Session, viewName string) ([]col
 // writeOperationPattern detects SQL statements that modify data.
 var writeOperationPattern = regexp.MustCompile(`(?i)^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|COPY|ATTACH|DETACH|GRANT|REVOKE)\b`)
 
-func isWriteOperation(sql string) bool {
-	return writeOperationPattern.MatchString(sql)
+func isWriteOperation(stmt string) bool {
+	return writeOperationPattern.MatchString(stmt)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 // normalizeValue converts sql.DB scan results into JSON-friendly values.
@@ -373,4 +374,3 @@ func extractDependsOn(raw json.RawMessage) []string {
 	deps = append(deps, spec.Spec.Sources...)
 	return deps
 }
-

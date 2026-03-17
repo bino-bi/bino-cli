@@ -5,16 +5,16 @@ import (
 	"errors"
 )
 
-// RenderMode describes the caller context for rendering.
-type RenderMode string
+// Mode describes the caller context for rendering.
+type Mode string
 
 const (
-	// RenderModeBuild indicates a build (PDF generation) context.
-	RenderModeBuild RenderMode = "build"
-	// RenderModePreview indicates a live preview (HTTP server) context.
-	RenderModePreview RenderMode = "preview"
-	// RenderModeServe indicates a production serve (bino serve) context.
-	RenderModeServe RenderMode = "serve"
+	// ModeBuild indicates a build (PDF generation) context.
+	ModeBuild Mode = "build"
+	// ModePreview indicates a live preview (HTTP server) context.
+	ModePreview Mode = "preview"
+	// ModeServe indicates a production serve (bino serve) context.
+	ModeServe Mode = "serve"
 )
 
 // InvalidLayoutPolicy describes how callers should react to an invalid layout error.
@@ -29,7 +29,7 @@ type InvalidLayoutPolicy struct {
 
 // ClassifyInvalidLayout inspects err and returns policy info for handling invalid layouts.
 // The mode parameter allows future mode-specific behavior if needed.
-func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
+func ClassifyInvalidLayout(err error, mode Mode) InvalidLayoutPolicy {
 	if err == nil {
 		return InvalidLayoutPolicy{}
 	}
@@ -40,6 +40,6 @@ func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
 	return InvalidLayoutPolicy{
 		IsInvalidRoot: true,
 		Message:       target.Error(),
-		Hint:          "Ensure at least one LayoutPage is defined and referenced by your report artefact.",
+		Hint:          "Ensure at least one LayoutPage is defined and referenced by your report artifact.",
 	}
 }

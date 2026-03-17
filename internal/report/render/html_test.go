@@ -127,31 +127,31 @@ func TestRenderInternationalizations(t *testing.T) {
 func TestRenderOrientationOnlyInBuildMode(t *testing.T) {
 	tests := []struct {
 		name            string
-		mode            RenderMode
+		mode            Mode
 		orientation     string
 		wantOrientation bool
 	}{
 		{
 			name:            "build mode with orientation includes attribute",
-			mode:            RenderModeBuild,
+			mode:            ModeBuild,
 			orientation:     "landscape",
 			wantOrientation: true,
 		},
 		{
 			name:            "preview mode with orientation excludes attribute",
-			mode:            RenderModePreview,
+			mode:            ModePreview,
 			orientation:     "landscape",
 			wantOrientation: false,
 		},
 		{
 			name:            "build mode without orientation excludes attribute",
-			mode:            RenderModeBuild,
+			mode:            ModeBuild,
 			orientation:     "",
 			wantOrientation: false,
 		},
 		{
 			name:            "preview mode without orientation excludes attribute",
-			mode:            RenderModePreview,
+			mode:            ModePreview,
 			orientation:     "",
 			wantOrientation: false,
 		},

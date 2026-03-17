@@ -15,11 +15,11 @@
 // ## Cancellation Behavior by Command
 //
 // ### build
-// - Checks ctx.Err() before starting each artefact build
+// - Checks ctx.Err() before starting each artifact build
 // - Propagates context to datasource collection (DuckDB queries)
 // - Propagates context to ephemeral HTTP server for PDF rendering
 // - Propagates context to Chrome PDF rendering
-// - On cancellation: stops current artefact, shuts down ephemeral server, returns
+// - On cancellation: stops current artifact, shuts down ephemeral server, returns
 //
 // ### preview
 // - Propagates context to HTTP server's Start() method

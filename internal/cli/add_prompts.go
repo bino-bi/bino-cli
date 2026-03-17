@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,23 +16,11 @@ import (
 
 // Theme colors for the add wizard
 var (
-	primaryColor   = lipgloss.Color("99")  // Purple
-	secondaryColor = lipgloss.Color("241") // Gray
-	successColor   = lipgloss.Color("42")  // Green
-	warningColor   = lipgloss.Color("214") // Orange
-	errorColor     = lipgloss.Color("196") // Red
-
-	titleStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
-			Bold(true).
-			MarginBottom(1)
+	successColor = lipgloss.Color("42") // Green
 
 	successStyle = lipgloss.NewStyle().
 			Foreground(successColor).
 			Bold(true)
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(errorColor)
 )
 
 // SelectOption represents an option in a select prompt.
@@ -47,7 +36,6 @@ type FuzzyItem struct {
 	Kind     string
 	File     string
 	Position int
-	score    int // Internal score for sorting
 }
 
 // String returns the searchable string for fuzzy matching.
@@ -109,7 +97,7 @@ func huhSelect(title string, options []SelectOption, def int) (int, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return -1, errAddCanceled
 		}
 		return -1, err
@@ -142,7 +130,7 @@ func huhInput(title, placeholder string, def string, validate func(string) error
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return "", errAddCanceled
 		}
 		return "", err
@@ -152,8 +140,8 @@ func huhInput(title, placeholder string, def string, validate func(string) error
 }
 
 // huhConfirm displays an interactive yes/no confirmation.
-func huhConfirm(title string, def bool) (bool, error) {
-	var confirmed bool = def
+func huhConfirm(title string) (bool, error) {
+	var confirmed bool
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -166,84 +154,13 @@ func huhConfirm(title string, def bool) (bool, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return false, errAddCanceled
 		}
 		return false, err
 	}
 
 	return confirmed, nil
-}
-
-// huhText displays a multi-line text editor.
-func huhText(title, placeholder, def string) (string, error) {
-	var value string
-	if def != "" {
-		value = def
-	}
-
-	text := huh.NewText().
-		Title(title).
-		Value(&value).
-		CharLimit(10000)
-
-	if placeholder != "" {
-		text = text.Placeholder(placeholder)
-	}
-
-	form := huh.NewForm(
-		huh.NewGroup(text),
-	).WithTheme(getHuhTheme())
-
-	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
-			return "", errAddCanceled
-		}
-		return "", err
-	}
-
-	return value, nil
-}
-
-// huhMultiSelect displays an interactive multi-select with checkboxes.
-func huhMultiSelect(title string, options []SelectOption, limit int) ([]int, error) {
-	if len(options) == 0 {
-		return nil, nil
-	}
-
-	// Build huh options
-	huhOptions := make([]huh.Option[int], len(options))
-	for i, opt := range options {
-		label := opt.Label
-		if opt.Description != "" {
-			label = fmt.Sprintf("%s - %s", opt.Label, opt.Description)
-		}
-		huhOptions[i] = huh.NewOption(label, i)
-	}
-
-	var selected []int
-
-	multi := huh.NewMultiSelect[int]().
-		Title(title).
-		Options(huhOptions...).
-		Value(&selected)
-
-	if limit > 0 {
-		multi = multi.Limit(limit)
-	}
-
-	form := huh.NewForm(
-		huh.NewGroup(multi),
-	).WithTheme(getHuhTheme())
-
-	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
-			return nil, errAddCanceled
-		}
-		return nil, err
-	}
-
-	return selected, nil
 }
 
 // huhFuzzySelect displays a filterable select for fuzzy searching.
@@ -285,7 +202,7 @@ func huhFuzzySelect(title string, items []FuzzyItem, allowEmpty bool) (*FuzzyIte
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return nil, errAddCanceled
 		}
 		return nil, err
@@ -326,7 +243,7 @@ func huhMultiFuzzySelect(title string, items []FuzzyItem) ([]FuzzyItem, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return nil, errAddCanceled
 		}
 		return nil, err
@@ -372,7 +289,7 @@ func huhConstraintBuilder() ([]string, error) {
 		).WithTheme(getHuhTheme())
 
 		if err := form.Run(); err != nil {
-			if err == huh.ErrUserAborted {
+			if errors.Is(err, huh.ErrUserAborted) {
 				return constraints, errAddCanceled
 			}
 			return constraints, err
@@ -418,7 +335,7 @@ func huhCustomConstraint() (string, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return "", errAddCanceled
 		}
 		return "", err
@@ -437,7 +354,7 @@ func huhCustomConstraint() (string, error) {
 		).WithTheme(getHuhTheme())
 
 		if err := form.Run(); err != nil {
-			if err == huh.ErrUserAborted {
+			if errors.Is(err, huh.ErrUserAborted) {
 				return "", errAddCanceled
 			}
 			return "", err
@@ -464,7 +381,7 @@ func huhCustomConstraint() (string, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return "", errAddCanceled
 		}
 		return "", err
@@ -493,7 +410,7 @@ func huhCustomConstraint() (string, error) {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
+		if errors.Is(err, huh.ErrUserAborted) {
 			return "", errAddCanceled
 		}
 		return "", err
@@ -516,8 +433,8 @@ func huhCustomConstraint() (string, error) {
 // These ignore the reader/out parameters and use huh instead
 
 // addPromptSelect wraps huhSelect for backward compatibility.
-func addPromptSelect(_ interface{}, _ interface{}, label string, options []SelectOption, def int) (int, error) {
-	return huhSelect(label, options, def)
+func addPromptSelect(_ interface{}, _ interface{}, label string, options []SelectOption) (int, error) {
+	return huhSelect(label, options, 0)
 }
 
 // addPromptString wraps huhInput for backward compatibility.
@@ -526,18 +443,18 @@ func addPromptString(_ interface{}, _ interface{}, label, def string) (string, e
 }
 
 // addPromptConfirm wraps huhConfirm for backward compatibility.
-func addPromptConfirm(_ interface{}, _ interface{}, label string, def bool) (bool, error) {
-	return huhConfirm(label, def)
+func addPromptConfirm(_ interface{}, _ interface{}, label string, _ bool) (bool, error) {
+	return huhConfirm(label)
 }
 
 // addPromptAddString wraps huhInput with validation for backward compatibility.
-func addPromptAddString(_ interface{}, _ interface{}, label, def string, validate func(string) error) (string, error) {
-	return huhInput(label, "", def, validate)
+func addPromptAddString(_ interface{}, _ interface{}, label string, validate func(string) error) (string, error) {
+	return huhInput(label, "", "", validate)
 }
 
 // addPromptFuzzySearch wraps huhFuzzySelect for backward compatibility.
-func addPromptFuzzySearch(_ interface{}, _ interface{}, label string, items []FuzzyItem, allowEmpty bool) (*FuzzyItem, error) {
-	return huhFuzzySelect(label, items, allowEmpty)
+func addPromptFuzzySearch(_ interface{}, _ interface{}, label string, items []FuzzyItem) (*FuzzyItem, error) {
+	return huhFuzzySelect(label, items, false)
 }
 
 // addPromptMultiFuzzySearch wraps huhMultiFuzzySelect for backward compatibility.
@@ -581,7 +498,7 @@ func promptWithEditor(tempPrefix, ext, template string) (string, error) {
 	args := buildEditorArgs(editor, tmpPath)
 
 	// Run editor
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -649,16 +566,7 @@ func isTerminal(fd int) bool {
 
 // isInteractive checks if stdin is a terminal (interactive session).
 func isInteractive() bool {
-	return isTerminal(int(os.Stdin.Fd()))
-}
-
-// formatSelectedNames formats a list of FuzzyItems as comma-separated names.
-func formatSelectedNames(items []FuzzyItem) string {
-	names := make([]string, len(items))
-	for i, item := range items {
-		names[i] = item.Name
-	}
-	return strings.Join(names, ", ")
+	return isTerminal(int(os.Stdin.Fd())) //nolint:gosec // G115: fd value fits in int on all supported platforms
 }
 
 // previewLines returns the first n lines of content for preview.

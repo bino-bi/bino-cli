@@ -3,6 +3,8 @@ package datasource
 import "fmt"
 
 // Diagnostic captures a non-fatal issue encountered while resolving a datasource.
+//
+//nolint:errname // named for domain role, not error interface
 type Diagnostic struct {
 	Datasource string
 	Stage      string

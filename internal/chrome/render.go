@@ -2,14 +2,13 @@ package chrome
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"encoding/json"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
@@ -175,7 +174,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 		return fmt.Errorf("generate pdf: %w", err)
 	}
 
-	if err := os.WriteFile(opts.PDFPath, buf, 0o644); err != nil {
+	if err := os.WriteFile(opts.PDFPath, buf, 0o644); err != nil { //nolint:gosec // G306: PDF output files need standard read perms
 		return fmt.Errorf("write pdf: %w", err)
 	}
 
@@ -256,7 +255,7 @@ func CollectHeadingPages(ctx context.Context, opts PDFOptions) ([]HeadingPageInf
 	marginTopPx := 0.0
 	marginBottomPx := 0.0
 	if opts.DisplayHeaderFooter {
-		marginTopPx = 75.6   // 20mm default
+		marginTopPx = 75.6    // 20mm default
 		marginBottomPx = 56.7 // 15mm default
 	}
 	effectivePageHeight := pageHeightPx - marginTopPx - marginBottomPx
@@ -478,7 +477,7 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 			continue
 		}
 
-		if err := os.WriteFile(result.FilePath, buf, 0o644); err != nil {
+		if err := os.WriteFile(result.FilePath, buf, 0o644); err != nil { //nolint:gosec // G306: screenshot output files need standard read perms
 			result.Error = fmt.Errorf("write screenshot %s: %w", result.FilePath, err)
 			results = append(results, result)
 			continue
@@ -557,8 +556,7 @@ func observeComponentReady(ctx context.Context, prefix string, logger logx.Logge
 	}
 
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		switch ev := ev.(type) {
-		case *runtime.EventConsoleAPICalled:
+		if ev, ok := ev.(*runtime.EventConsoleAPICalled); ok {
 			// Join all console.log arguments into a single string,
 			// matching Playwright's behavior. In CDP, console.log("prefix:", value)
 			// arrives as separate args rather than a single concatenated string.
@@ -719,20 +717,20 @@ func parseMargin(s string) float64 {
 	var value float64
 	switch {
 	case strings.HasSuffix(s, "in"):
-		fmt.Sscanf(strings.TrimSuffix(s, "in"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "in"), "%f", &value)
 		return value
 	case strings.HasSuffix(s, "mm"):
-		fmt.Sscanf(strings.TrimSuffix(s, "mm"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "mm"), "%f", &value)
 		return mmToInches(value)
 	case strings.HasSuffix(s, "cm"):
-		fmt.Sscanf(strings.TrimSuffix(s, "cm"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "cm"), "%f", &value)
 		return cmToInches(value)
 	case strings.HasSuffix(s, "px"):
-		fmt.Sscanf(strings.TrimSuffix(s, "px"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "px"), "%f", &value)
 		return value / 96.0
 	default:
 		// Default: treat as millimeters
-		fmt.Sscanf(s, "%f", &value)
+		_, _ = fmt.Sscanf(s, "%f", &value)
 		return mmToInches(value)
 	}
 }

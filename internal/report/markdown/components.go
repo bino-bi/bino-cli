@@ -1,7 +1,7 @@
 package markdown
 
 // This file previously contained duplicated component specs and render functions.
-// These have been removed in favor of using render.RenderComponentFromSpec
+// These have been removed in favor of using render.ComponentFromSpec
 // from the internal/report/render package to ensure consistent HTML output
 // between DocumentArtefact and ReportArtefact rendering.
 //

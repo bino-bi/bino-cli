@@ -374,9 +374,9 @@ func renderFontLinks(fonts []fontAsset) string {
 // renderLayoutPage renders a LayoutPage document as HTML.
 // docName is the metadata.name of the LayoutPage document, used to add a
 // data-bino-page attribute for preview identification.
-// targetFormat and targetOrientation are the artefact-level defaults used when
+// targetFormat and targetOrientation are the artifact-level defaults used when
 // the LayoutPage does not explicitly set pageFormat or pageOrientation.
-func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, targetOrientation string, rc *renderCtx) (string, bool, error) {
+func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, targetOrientation string, rc *renderCtx) (htmlOut string, matched bool, err error) {
 	var payload struct {
 		Spec layoutPageSpec `json:"spec"`
 	}
@@ -388,7 +388,7 @@ func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, 
 		return "", false, nil
 	}
 
-	// Apply artefact-level defaults so the HTML attributes are always present.
+	// Apply artifact-level defaults so the HTML attributes are always present.
 	// The template engine CSS requires both page-format and page-orientation
 	// to apply correct sizing and @page rules.
 	if payload.Spec.PageFormat == "" {
@@ -406,11 +406,11 @@ func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, 
 		}
 	}
 
-	html, err := renderLayoutContainer("bn-layout-page", payload.Spec, docName, rc)
+	htmlOut, err = renderLayoutContainer("bn-layout-page", payload.Spec, docName, rc)
 	if err != nil {
 		return "", false, err
 	}
-	return html, true, nil
+	return htmlOut, true, nil
 }
 
 // renderLayoutContainer renders a layout container (page or card) as HTML.
@@ -441,7 +441,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 			continue
 		}
 		// Build slot div with source location attributes for click-to-source in preview
-		b.WriteString(fmt.Sprintf("  <div slot='slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx))
+		fmt.Fprintf(&b, "  <div slot='slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		writeSourceAttrs(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -477,7 +477,7 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 			continue
 		}
 		// Build slot div with source location attributes for click-to-source in preview
-		b.WriteString(fmt.Sprintf("  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx))
+		fmt.Fprintf(&b, "  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		writeSourceAttrs(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -524,7 +524,7 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 
 // renderLayoutChild renders a child component within a layout.
 // Returns (html, skip, error) where skip=true means the child should be skipped (missing ref).
-func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
+func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip bool, err error) {
 	// Resolve ref to get effective spec (base from referenced doc + overrides).
 	effectiveSpec, err := resolveChildSpec(child, rc)
 	if err != nil {
@@ -566,31 +566,31 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (string, bool, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
-		html, err := renderTreeComponent(s, rc)
+		htmlOut, err := renderTreeComponent(s, rc)
 		if err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
-		component = html
+		component = htmlOut
 	case "LayoutCard":
 		var s layoutCardSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render layout card child: %w", err)
 		}
-		html, err := renderLayoutCardContainer(s, rc)
+		htmlOut, err := renderLayoutCardContainer(s, rc)
 		if err != nil {
 			return "", false, err
 		}
-		component = html
+		component = htmlOut
 	case "Grid":
 		var s gridSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
-		html, err := renderGridComponent(s, rc)
+		htmlOut, err := renderGridComponent(s, rc)
 		if err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
-		component = html
+		component = htmlOut
 	case "Image":
 		var s imageSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -718,14 +718,14 @@ func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
 }
 
 // renderTextComponent renders a Text component as HTML.
-func renderTextComponent(spec textSpec, assetURLs map[string]string) string {
+func renderTextComponent(s textSpec, assetURLs map[string]string) string {
 	var b strings.Builder
 	b.WriteString("<bn-text")
-	writeAttr(&b, "value", renderMarkdown(spec.Value, assetURLs))
-	if value := spec.Dataset.Join(","); value != "" {
+	writeAttr(&b, "value", renderMarkdown(s.Value, assetURLs))
+	if value := s.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
-	writeAttr(&b, "scale", spec.Scale.String())
+	writeAttr(&b, "scale", s.Scale.String())
 	b.WriteString("></bn-text>")
 	return b.String()
 }
@@ -751,19 +751,19 @@ func renderMarkdown(s string, assetURLs map[string]string) string {
 }
 
 // renderChartStructureComponent renders a ChartStructure component as HTML.
-func renderChartStructureComponent(spec chartStructureSpec) string {
+func renderChartStructureComponent(s chartStructureSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-chart-structure")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString("></bn-chart-structure>")
 	return b.String()
 }
 
 // renderChartTimeComponent renders a ChartTime component as HTML.
-func renderChartTimeComponent(spec chartTimeSpec) string {
+func renderChartTimeComponent(s chartTimeSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-chart-time")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString("></bn-chart-time>")
 	return b.String()
 }
@@ -771,14 +771,14 @@ func renderChartTimeComponent(spec chartTimeSpec) string {
 // renderTreeComponent renders a Tree component as HTML.
 // Tree charts use slotted content for nodes, so we render node slots inside the element.
 // Each node can contain a Label, Table, ChartStructure, or ChartTime component.
-func renderTreeComponent(spec treeSpec, rc *renderCtx) (string, error) {
+func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-tree")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString(">")
 
 	// Render node content as slotted elements
-	for _, node := range spec.Nodes {
+	for _, node := range s.Nodes {
 		nodeContent, err := renderTreeNode(node, rc)
 		if err != nil {
 			return "", fmt.Errorf("render tree node %q: %w", node.ID, err)
@@ -792,7 +792,7 @@ func renderTreeComponent(spec treeSpec, rc *renderCtx) (string, error) {
 		b.WriteString(nodeContent)
 		b.WriteString("</div>")
 	}
-	if len(spec.Nodes) > 0 {
+	if len(s.Nodes) > 0 {
 		b.WriteString("\n")
 	}
 	b.WriteString("</bn-tree>")
@@ -895,46 +895,46 @@ func resolveTreeNodeSpec(node treeNode, rc *renderCtx) (json.RawMessage, error) 
 }
 
 // renderTreeLabelComponent renders a Label component for tree nodes.
-func renderTreeLabelComponent(spec treeLabelSpec) string {
+func renderTreeLabelComponent(s treeLabelSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-text")
-	writeAttr(&b, "value", spec.Value)
-	if value := spec.Dataset.Join(","); value != "" {
+	writeAttr(&b, "value", s.Value)
+	if value := s.Dataset.Join(","); value != "" {
 		writeAttr(&b, "datasets", value)
 	}
-	writeAttr(&b, "scale", spec.Scale.String())
+	writeAttr(&b, "scale", s.Scale.String())
 	b.WriteString("></bn-text>")
 	return b.String()
 }
 
 // renderTableComponent renders a Table component as HTML.
-func renderTableComponent(spec tableSpec) string {
+func renderTableComponent(s tableSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-table")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString("></bn-table>")
 	return b.String()
 }
 
 // renderImageComponent renders an Image component as HTML.
-func renderImageComponent(spec imageSpec) string {
+func renderImageComponent(s imageSpec) string {
 	var b strings.Builder
 	b.WriteString("<bn-image")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString("></bn-image>")
 	return b.String()
 }
 
 // renderGridComponent renders a Grid component as HTML.
 // Grid uses slotted content for children, with slot names following the pattern "{row-id}-{column-id}".
-func renderGridComponent(spec gridSpec, rc *renderCtx) (string, error) {
+func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-grid")
-	spec.writeAttrs(&b)
+	s.writeAttrs(&b)
 	b.WriteString(">")
 
 	// Render child content as slotted elements
-	for _, child := range spec.Children {
+	for _, child := range s.Children {
 		childContent, err := renderGridChild(child, rc)
 		if err != nil {
 			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)
@@ -949,7 +949,7 @@ func renderGridComponent(spec gridSpec, rc *renderCtx) (string, error) {
 		b.WriteString(childContent)
 		b.WriteString("</div>")
 	}
-	if len(spec.Children) > 0 {
+	if len(s.Children) > 0 {
 		b.WriteString("\n")
 	}
 	b.WriteString("</bn-grid>")
@@ -1120,13 +1120,13 @@ var knownPageFormats = map[string]bool{
 	"letter": true, "legal": true,
 }
 
-// isPageLayoutFormat reports whether format is a recognised page layout format.
+// isPageLayoutFormat reports whether format is a recognized page layout format.
 func isPageLayoutFormat(format string) bool {
 	return knownPageFormats[strings.ToLower(strings.TrimSpace(format))]
 }
 
 // layoutPageMatchesFormat checks if a page format matches the target format.
-// If targetFormat is not a recognised page layout format (e.g. "pdf"), the
+// If targetFormat is not a recognized page layout format (e.g. "pdf"), the
 // page is always included because non-layout formats cannot meaningfully
 // filter pages.
 func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
@@ -1141,12 +1141,12 @@ func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
 	return strings.EqualFold(format, target)
 }
 
-// RenderComponentFromSpec renders a component HTML from its kind and spec JSON.
+// ComponentFromSpec renders a component HTML from its kind and spec JSON.
 // This is an exported function that can be used by other packages (e.g., markdown)
 // to render components consistently without duplicating spec types.
 // Supported kinds: Text, Table, ChartStructure, ChartTime, Image.
 // The assetURLs parameter is optional and used to resolve asset: image references in Text markdown.
-func RenderComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[string]string) (string, error) {
+func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[string]string) (string, error) {
 	switch kind {
 	case "Text":
 		var s textSpec

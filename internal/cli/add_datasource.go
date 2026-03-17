@@ -141,10 +141,8 @@ Modes:
 			}
 
 			// Build manifest data
-			csvHeader := true
-			if flagCSVNoHeader {
-				csvHeader = false
-			}
+			csvHeader := !flagCSVNoHeader
+
 			if cmd.Flags().Changed("csv-header") {
 				csvHeader = flagCSVHeader
 			}
@@ -197,7 +195,7 @@ Modes:
 				data.Name, err = promptDataSourceName(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -226,7 +224,7 @@ Modes:
 				dsType, err := promptDataSourceType(reader, out)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -239,7 +237,7 @@ Modes:
 			if needsConfig {
 				if err := promptConnectionConfig(reader, out, workdir, &data); err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -267,7 +265,7 @@ Modes:
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "DataSource", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -297,7 +295,7 @@ Modes:
 				return RuntimeError(err)
 			}
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -311,7 +309,7 @@ Modes:
 				editor := getEditor()
 				if editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -369,12 +367,12 @@ func completeConnectionSecrets(cmd *cobra.Command, _ []string, _ string) ([]stri
 	ctx := cmd.Context()
 	workdir, err := pathutil.ResolveWorkdir(".")
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	manifests, err := ScanManifests(ctx, workdir)
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	secrets := FilterByKind(manifests, "ConnectionSecret")
@@ -387,7 +385,7 @@ func completeConnectionSecrets(cmd *cobra.Command, _ []string, _ string) ([]stri
 
 // promptDataSourceName prompts for a valid, unique DataSource name.
 func promptDataSourceName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this DataSource", "", func(name string) error {
+	return addPromptAddString(reader, out, "Name for this DataSource", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -410,7 +408,7 @@ func promptDataSourceType(reader *bufio.Reader, out io.Writer) (DataSourceType, 
 		{Label: "MySQL", Description: "MySQL database query"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What type of data source?", options, 0)
+	idx, err := addPromptSelect(reader, out, "What type of data source?", options)
 	if err != nil {
 		return DataSourceTypeNone, err
 	}
@@ -485,12 +483,12 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 
 	// Schema (optional, mainly for PostgreSQL)
 	if data.Type == DataSourceTypePostgres {
-		schema, err := addPromptString(reader, out, "Schema (optional, default: public)", "")
+		schemaName, err := addPromptString(reader, out, "Schema (optional, default: public)", "")
 		if err != nil {
 			return err
 		}
-		if schema != "" && schema != "public" {
-			data.DBSchema = schema
+		if schemaName != "" && schemaName != "public" {
+			data.DBSchema = schemaName
 		}
 	}
 
@@ -544,7 +542,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 // promptFileSource prompts for file path selection.
 func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data *DataSourceManifestData, ext string) error {
 	// Search for existing files
-	files, _ := searchDataFiles(workdir, ext)
+	files := searchDataFiles(workdir, ext)
 
 	options := []SelectOption{
 		{Label: "Select existing file", Description: fmt.Sprintf("Choose from %d found %s files", len(files), ext)},
@@ -555,7 +553,7 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 		options = options[1:] // Remove "Select existing" if no files
 	}
 
-	idx, err := addPromptSelect(reader, out, "File source", options, 0)
+	idx, err := addPromptSelect(reader, out, "File source", options)
 	if err != nil {
 		return err
 	}
@@ -568,7 +566,7 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 	switch idx {
 	case 0: // Select existing
 		items := FilesToFuzzyItems(files, ext+" file")
-		item, err := addPromptFuzzySearch(reader, out, "Select file", items, false)
+		item, err := addPromptFuzzySearch(reader, out, "Select file", items)
 		if err != nil {
 			return err
 		}
@@ -624,7 +622,7 @@ func promptCSVOptions(reader *bufio.Reader, out io.Writer, data *DataSourceManif
 }
 
 // searchDataFiles searches for data files in common locations.
-func searchDataFiles(dir string, ext string) ([]string, error) {
+func searchDataFiles(dir string, ext string) []string {
 	var files []string
 
 	// Search in common locations
@@ -643,7 +641,7 @@ func searchDataFiles(dir string, ext string) ([]string, error) {
 
 		err := filepath.WalkDir(searchPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil // Skip errors
+				return nil //nolint:nilerr // best effort: non-fatal for suggestions
 			}
 			if d.IsDir() {
 				// Skip hidden directories and common ignores
@@ -668,7 +666,7 @@ func searchDataFiles(dir string, ext string) ([]string, error) {
 		}
 	}
 
-	return files, nil
+	return files
 }
 
 // writeDataSourceManifest writes the DataSource manifest to the specified path.
@@ -686,9 +684,9 @@ func promptDataSourcePostActions(reader *bufio.Reader, out io.Writer) error {
 		{Label: "Run lint", Description: "Validate manifests with bino lint"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What next?", options, 0)
+	idx, err := addPromptSelect(reader, out, "What next?", options)
 	if err != nil {
-		return nil // Don't error on post-action failures
+		return nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	switch idx {
@@ -746,6 +744,8 @@ func buildDataSourceDocument(data DataSourceManifestData) *schema.Document {
 
 	case DataSourceTypeParquet, DataSourceTypeExcel, DataSourceTypeJSON:
 		spec.Path = data.Path
+
+	default:
 	}
 
 	doc.Spec = spec

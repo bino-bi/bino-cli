@@ -148,7 +148,7 @@ func TestCacheBypassed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.url, nil)
 			got := cacheBypassed(req)
 			if got != tt.want {
 				t.Errorf("cacheBypassed() = %v, want %v", got, tt.want)
@@ -453,7 +453,7 @@ func TestHandleRoot(t *testing.T) {
 				srv.SetContentRoutes(tt.routes)
 			}
 
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.path, nil)
 			w := httptest.NewRecorder()
 			srv.handleRoot(w, req)
 
@@ -525,7 +525,7 @@ func TestHandleAsset(t *testing.T) {
 			}
 			srv.SetLocalAssets(tt.assets)
 
-			req := httptest.NewRequest(http.MethodGet, tt.urlPath, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.urlPath, nil)
 			w := httptest.NewRecorder()
 			srv.handleAsset(w, req)
 
@@ -560,7 +560,7 @@ func TestHandleCDN_CacheHit(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/cached/file.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/cached/file.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -595,7 +595,7 @@ func TestHandleCDN_CacheMiss(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/new/file.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/new/file.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -644,7 +644,7 @@ func TestHandleCDN_CacheBypass(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/file.js?cache=0", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/file.js?cache=0", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -687,7 +687,7 @@ func TestHandleCDN_InvalidPath(t *testing.T) {
 				t.Fatalf("New() error = %v", err)
 			}
 
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.path, nil)
 			w := httptest.NewRecorder()
 			srv.handleCDN(w, req)
 
@@ -716,7 +716,7 @@ func TestHandleCDN_UpstreamError(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/file.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/file.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -746,7 +746,7 @@ func TestHandleCDN_BodyTooLarge(t *testing.T) {
 	}
 	srv.maxCDNBytes = 100 // Set small limit
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/large.bin", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/large.bin", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -765,7 +765,7 @@ func TestHandleEvents(t *testing.T) {
 			t.Fatalf("New() error = %v", err)
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/__preview/events", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__preview/events", nil)
 		w := httptest.NewRecorder()
 		srv.handleEvents(w, req)
 
@@ -1185,7 +1185,7 @@ func TestHandleCDN_NoCacheDir(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/file.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/file.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -1219,7 +1219,7 @@ func TestHandleCDN_NonOKResponseNotCached(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/missing.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/missing.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -1256,7 +1256,7 @@ func TestHandleCDN_ContentLengthHeaderExceedsLimit(t *testing.T) {
 	}
 	srv.maxCDNBytes = 100
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/file.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/file.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -1298,7 +1298,7 @@ func TestHandleCDN_TemplateEngine_ServesFromLocalCache(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -1333,7 +1333,7 @@ func TestHandleCDN_TemplateEngine_NotFoundLocally(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/bn-template-engine/v1.0.0/bn-template-engine.esm.js", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 
@@ -1373,7 +1373,7 @@ func TestHandleCDN_CacheFirst_UsesCache(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cdn/some/style.css", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cdn/some/style.css", nil)
 	w := httptest.NewRecorder()
 	srv.handleCDN(w, req)
 

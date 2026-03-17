@@ -249,7 +249,7 @@ func buildCreateSecret(name string, spec SecretSpec) (string, error) {
 	}
 
 	// Quote the secret name to handle names with special characters like hyphens
-	return fmt.Sprintf("CREATE SECRET \"%s\" (\n    %s\n)", name, strings.Join(parts, ",\n    ")), nil
+	return fmt.Sprintf("CREATE SECRET %q (\n    %s\n)", name, strings.Join(parts, ",\n    ")), nil
 }
 
 func addPostgresParams(parts *[]string, auth *PostgresAuthSpec) error {

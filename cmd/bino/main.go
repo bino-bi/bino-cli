@@ -14,6 +14,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -28,6 +32,7 @@ func main() {
 		}
 		msg, code := cli.FormatError(handleCtx, err)
 		fmt.Fprintf(os.Stderr, "bino: %s\n", msg)
-		os.Exit(code)
+		return code
 	}
+	return 0
 }

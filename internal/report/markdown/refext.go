@@ -114,7 +114,7 @@ func (r *refRenderer) renderRef(w util.BufWriter, source []byte, node ast.Node, 
 		return ast.WalkContinue, nil
 	}
 
-	n := node.(*RefNode)
+	n, _ := node.(*RefNode)
 
 	// Wrap in figure if caption is present
 	if n.Caption != "" {

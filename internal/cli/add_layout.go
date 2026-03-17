@@ -139,7 +139,7 @@ populate with component references later.
 				data.Name, err = promptGenericName(reader, out, manifests, "LayoutPage")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -178,7 +178,7 @@ populate with component references later.
 					data.Params, err = promptParamDefinitions()
 					if err != nil {
 						if errors.Is(err, errAddCanceled) {
-							fmt.Fprintln(out, "\nCancelled.")
+							fmt.Fprintln(out, "\nCanceled.")
 							return nil
 						}
 						return RuntimeError(err)
@@ -202,7 +202,7 @@ populate with component references later.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LayoutPage", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -235,7 +235,7 @@ populate with component references later.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -243,7 +243,7 @@ populate with component references later.
 				return err
 			}
 
-			// Offer to link to existing artefacts
+			// Offer to link to existing artifacts
 			if err := promptAddToArtefacts(workdir, data.Name, manifests, data.Params); err != nil {
 				if !errors.Is(err, errAddCanceled) {
 					fmt.Fprintf(out, "Warning: %v\n", err)
@@ -253,7 +253,7 @@ populate with component references later.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -386,7 +386,7 @@ related content.
 				data.Name, err = promptGenericName(reader, out, manifests, "LayoutCard")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -436,7 +436,7 @@ related content.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LayoutCard", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -460,7 +460,7 @@ related content.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -471,7 +471,7 @@ related content.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -620,17 +620,21 @@ func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]a
 
 	// Add description if present
 	if data.Description != "" {
-		doc["metadata"].(map[string]any)["description"] = data.Description
+		if m, ok := doc["metadata"].(map[string]any); ok {
+			m["description"] = data.Description
+		}
 	}
 
 	// Add constraints if present
 	if len(data.Constraints) > 0 {
-		doc["metadata"].(map[string]any)["constraints"] = data.Constraints
+		if m, ok := doc["metadata"].(map[string]any); ok {
+			m["constraints"] = data.Constraints
+		}
 	}
 
 	// Add params if present
 	if len(data.Params) > 0 {
-		var paramsData []map[string]any
+		paramsData := make([]map[string]any, 0, len(data.Params))
 		for _, p := range data.Params {
 			paramMap := map[string]any{
 				"name": p.Name,
@@ -672,7 +676,9 @@ func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]a
 			}
 			paramsData = append(paramsData, paramMap)
 		}
-		doc["metadata"].(map[string]any)["params"] = paramsData
+		if m, ok := doc["metadata"].(map[string]any); ok {
+			m["params"] = paramsData
+		}
 	}
 
 	// Add children with $ prefix
@@ -680,7 +686,9 @@ func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]a
 	for i, child := range data.Children {
 		children[i] = "$" + child
 	}
-	doc["spec"].(map[string]any)["children"] = children
+	if m, ok := doc["spec"].(map[string]any); ok {
+		m["children"] = children
+	}
 
 	return doc
 }
