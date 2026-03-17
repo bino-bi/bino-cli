@@ -16,11 +16,11 @@ type testLogger struct {
 }
 
 func (l *testLogger) Infof(format string, args ...any)    { l.log("info", format, args...) }
-func (l *testLogger) Successf(format string, args ...any)  { l.log("success", format, args...) }
-func (l *testLogger) Warnf(format string, args ...any)     { l.log("warn", format, args...) }
-func (l *testLogger) Errorf(format string, args ...any)    { l.log("error", format, args...) }
-func (l *testLogger) Debugf(format string, args ...any)    { l.log("debug", format, args...) }
-func (l *testLogger) Channel(_ string) logx.Logger          { return l }
+func (l *testLogger) Successf(format string, args ...any) { l.log("success", format, args...) }
+func (l *testLogger) Warnf(format string, args ...any)    { l.log("warn", format, args...) }
+func (l *testLogger) Errorf(format string, args ...any)   { l.log("error", format, args...) }
+func (l *testLogger) Debugf(format string, args ...any)   { l.log("debug", format, args...) }
+func (l *testLogger) Channel(_ string) logx.Logger        { return l }
 
 func (l *testLogger) log(level, format string, args ...any) {
 	msg := level + ": " + format
@@ -109,7 +109,7 @@ func TestRun(t *testing.T) {
 			runner := NewRunner(cfg, logger, t.TempDir())
 
 			err := runner.Run(context.Background(), tt.checkpoint, HookEnv{
-				Mode:   "build",
+				Mode:    "build",
 				Workdir: t.TempDir(),
 			})
 
@@ -158,7 +158,7 @@ func TestRunContextCancellation(t *testing.T) {
 
 	err := runner.Run(ctx, "pre-build", HookEnv{Mode: "build"})
 	if err == nil {
-		t.Fatal("expected error from cancelled context, got nil")
+		t.Fatal("expected error from canceled context, got nil")
 	}
 }
 
@@ -192,7 +192,7 @@ func TestRunArtefactEnvVars(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &Config{Hooks: pathutil.HooksConfig{
 		"pre-datasource": {
-			`test "$BINO_ARTEFACT_NAME" = "monthly" && test "$BINO_ARTEFACT_KIND" = "report"`,
+			`test "$BINO_ARTIFACT_NAME" = "monthly" && test "$BINO_ARTIFACT_KIND" = "report"`,
 		},
 	}}
 	logger := &testLogger{}
@@ -205,7 +205,7 @@ func TestRunArtefactEnvVars(t *testing.T) {
 		ArtefactKind: "report",
 	})
 	if err != nil {
-		t.Fatalf("artefact env var check failed: %v", err)
+		t.Fatalf("artifact env var check failed: %v", err)
 	}
 }
 
@@ -274,17 +274,17 @@ func TestBuildEnvSlice(t *testing.T) {
 	}
 
 	checks := map[string]string{
-		"BINO_MODE":           "build",
-		"BINO_WORKDIR":        "/test",
-		"BINO_REPORT_ID":      "abc",
-		"BINO_HOOK":           "pre-build",
-		"BINO_VERBOSE":        "0",
-		"BINO_OUTPUT_DIR":     "/dist",
-		"BINO_ARTEFACT_NAME":  "report1",
-		"BINO_ARTEFACT_KIND":  "report",
-		"BINO_INCLUDE":        "a,b",
-		"BINO_EXCLUDE":        "c",
-		"BINO_PDF_PATH":       "/dist/report1.pdf",
+		"BINO_MODE":          "build",
+		"BINO_WORKDIR":       "/test",
+		"BINO_REPORT_ID":     "abc",
+		"BINO_HOOK":          "pre-build",
+		"BINO_VERBOSE":       "0",
+		"BINO_OUTPUT_DIR":    "/dist",
+		"BINO_ARTIFACT_NAME": "report1",
+		"BINO_ARTIFACT_KIND": "report",
+		"BINO_INCLUDE":       "a,b",
+		"BINO_EXCLUDE":       "c",
+		"BINO_PDF_PATH":      "/dist/report1.pdf",
 	}
 
 	for key, want := range checks {

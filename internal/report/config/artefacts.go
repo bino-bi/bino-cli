@@ -9,8 +9,8 @@ import (
 	reportspec "bino.bi/bino/internal/report/spec"
 )
 
-// Artefact captures a validated ReportArtefact manifest.
-type Artefact struct {
+// Artifact captures a validated ReportArtefact manifest.
+type Artifact struct {
 	Document Document
 	Spec     ReportArtefactSpec
 	Labels   map[string]string // metadata.labels for constraint context
@@ -25,21 +25,21 @@ const (
 
 // ReportArtefactSpec mirrors the ReportArtefact manifest spec section.
 type ReportArtefactSpec struct {
-	Format         string           `json:"format"`
-	Orientation    string           `json:"orientation"`
-	Language       string           `json:"language"`
+	Format         string            `json:"format"`
+	Orientation    string            `json:"orientation"`
+	Language       string            `json:"language"`
 	LayoutPages    LayoutPagesOrRefs `json:"layoutPages,omitempty"` // page names, glob patterns, or objects with params
-	Filename       string           `json:"filename"`
-	Title          string           `json:"title"`
-	Description    string           `json:"description"`
-	Subject        string           `json:"subject"`
-	Author         string           `json:"author"`
-	Keywords       []string         `json:"keywords"`
-	SigningProfile string           `json:"signingProfile,omitempty"`
+	Filename       string            `json:"filename"`
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	Subject        string            `json:"subject"`
+	Author         string            `json:"author"`
+	Keywords       []string          `json:"keywords"`
+	SigningProfile string            `json:"signingProfile,omitempty"`
 }
 
 // ArtefactByName filters and orders ReportArtefact manifests.
-type ArtefactByName []Artefact
+type ArtefactByName []Artifact
 
 func (a ArtefactByName) Len() int           { return len(a) }
 func (a ArtefactByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -47,8 +47,8 @@ func (a ArtefactByName) Less(i, j int) bool { return a[i].Document.Name < a[j].D
 
 // CollectArtefacts inspects the provided documents for ReportArtefacts and ensures
 // metadata.name uniqueness.
-func CollectArtefacts(docs []Document) ([]Artefact, error) {
-	artefacts := make([]Artefact, 0, len(docs))
+func CollectArtefacts(docs []Document) ([]Artifact, error) {
+	artifacts := make([]Artifact, 0, len(docs))
 	seen := make(map[string]struct{})
 	for _, doc := range docs {
 		if doc.Kind != "ReportArtefact" {
@@ -61,17 +61,17 @@ func CollectArtefacts(docs []Document) ([]Artefact, error) {
 			return nil, fmt.Errorf("parse ReportArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("report artefact missing metadata.name")
+			return nil, fmt.Errorf("report artifact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple ReportArtefact documents share metadata.name %q", doc.Name)
 		}
 		seen[doc.Name] = struct{}{}
 		warnings := applyReportArtefactDefaults(doc.Name, &payload.Spec)
-		artefacts = append(artefacts, Artefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
+		artifacts = append(artifacts, Artifact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
 	}
-	sort.Sort(ArtefactByName(artefacts))
-	return artefacts, nil
+	sort.Sort(ArtefactByName(artifacts))
+	return artifacts, nil
 }
 
 func applyReportArtefactDefaults(name string, spec *ReportArtefactSpec) []string {
@@ -113,9 +113,9 @@ type LiveReportArtefactSpec struct {
 }
 
 // LiveRouteSpec defines a route mapping to a ReportArtefact or LayoutPages.
-// Either Artefact or LayoutPages must be set, but not both.
+// Either Artifact or LayoutPages must be set, but not both.
 type LiveRouteSpec struct {
-	Artefact    string               `json:"artefact,omitempty"`
+	Artifact    string               `json:"artifact,omitempty"`
 	LayoutPages LayoutPagesOrRefs    `json:"layoutPages,omitempty"` // one or more LayoutPage names with optional params
 	Title       string               `json:"title,omitempty"`
 	QueryParams []LiveQueryParamSpec `json:"queryParams,omitempty"`
@@ -282,7 +282,7 @@ func (a LiveArtefactByName) Less(i, j int) bool { return a[i].Document.Name < a[
 // CollectLiveArtefacts inspects the provided documents for LiveReportArtefacts and ensures
 // metadata.name uniqueness.
 func CollectLiveArtefacts(docs []Document) ([]LiveArtefact, error) {
-	artefacts := make([]LiveArtefact, 0, len(docs))
+	artifacts := make([]LiveArtefact, 0, len(docs))
 	seen := make(map[string]struct{})
 	for _, doc := range docs {
 		if doc.Kind != "LiveReportArtefact" {
@@ -295,25 +295,25 @@ func CollectLiveArtefacts(docs []Document) ([]LiveArtefact, error) {
 			return nil, fmt.Errorf("parse LiveReportArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("live report artefact missing metadata.name")
+			return nil, fmt.Errorf("live report artifact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple LiveReportArtefact documents share metadata.name %q", doc.Name)
 		}
 		seen[doc.Name] = struct{}{}
 		var warnings []string
-		artefacts = append(artefacts, LiveArtefact{Document: doc, Spec: payload.Spec, Warnings: warnings})
+		artifacts = append(artifacts, LiveArtefact{Document: doc, Spec: payload.Spec, Warnings: warnings})
 	}
-	sort.Sort(LiveArtefactByName(artefacts))
-	return artefacts, nil
+	sort.Sort(LiveArtefactByName(artifacts))
+	return artifacts, nil
 }
 
 // FindLiveArtefact finds a LiveReportArtefact by name.
 // Returns nil if not found.
-func FindLiveArtefact(artefacts []LiveArtefact, name string) *LiveArtefact {
-	for i := range artefacts {
-		if artefacts[i].Document.Name == name {
-			return &artefacts[i]
+func FindLiveArtefact(artifacts []LiveArtefact, name string) *LiveArtefact {
+	for i := range artifacts {
+		if artifacts[i].Document.Name == name {
+			return &artifacts[i]
 		}
 	}
 	return nil
@@ -358,7 +358,7 @@ const (
 // ScreenshotArtefactSpec mirrors the ScreenshotArtefact manifest spec section.
 type ScreenshotArtefactSpec struct {
 	Refs            []ScreenshotRef `json:"refs"`
-	LayoutPages     StringOrSlice   `json:"layoutPages"`               // one or more LayoutPage names to render
+	LayoutPages     StringOrSlice   `json:"layoutPages"` // one or more LayoutPage names to render
 	Format          string          `json:"format"`
 	Orientation     string          `json:"orientation"`
 	Language        string          `json:"language"`
@@ -386,7 +386,7 @@ func (a ScreenshotArtefactByName) Less(i, j int) bool { return a[i].Document.Nam
 // CollectScreenshotArtefacts inspects the provided documents for ScreenshotArtefacts and ensures
 // metadata.name uniqueness.
 func CollectScreenshotArtefacts(docs []Document) ([]ScreenshotArtefact, error) {
-	artefacts := make([]ScreenshotArtefact, 0, len(docs))
+	artifacts := make([]ScreenshotArtefact, 0, len(docs))
 	seen := make(map[string]struct{})
 	for _, doc := range docs {
 		if doc.Kind != "ScreenshotArtefact" {
@@ -399,17 +399,17 @@ func CollectScreenshotArtefacts(docs []Document) ([]ScreenshotArtefact, error) {
 			return nil, fmt.Errorf("parse ScreenshotArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("screenshot artefact missing metadata.name")
+			return nil, fmt.Errorf("screenshot artifact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple ScreenshotArtefact documents share metadata.name %q", doc.Name)
 		}
 		seen[doc.Name] = struct{}{}
 		warnings := applyScreenshotArtefactDefaults(doc.Name, &payload.Spec)
-		artefacts = append(artefacts, ScreenshotArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
+		artifacts = append(artifacts, ScreenshotArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
 	}
-	sort.Sort(ScreenshotArtefactByName(artefacts))
-	return artefacts, nil
+	sort.Sort(ScreenshotArtefactByName(artifacts))
+	return artifacts, nil
 }
 
 func applyScreenshotArtefactDefaults(name string, spec *ScreenshotArtefactSpec) []string {
@@ -495,9 +495,9 @@ type SourcesOrStrings []string
 // It accepts both a string array and an array of DocumentSource objects.
 func (s *SourcesOrStrings) UnmarshalJSON(data []byte) error {
 	// Try string array first (new format)
-	var strings []string
-	if err := json.Unmarshal(data, &strings); err == nil {
-		*s = strings
+	var strs []string
+	if err := json.Unmarshal(data, &strs); err == nil {
+		*s = strs
 		return nil
 	}
 
@@ -523,6 +523,7 @@ func (s SourcesOrStrings) MarshalJSON() ([]byte, error) {
 }
 
 // DocumentSource specifies a markdown file to include in the document.
+//
 // Deprecated: Use string paths directly in the sources array instead.
 type DocumentSource struct {
 	File string `json:"file"`
@@ -538,7 +539,7 @@ func (a DocumentArtefactByName) Less(i, j int) bool { return a[i].Document.Name 
 // CollectDocumentArtefacts inspects the provided documents for DocumentArtefacts and ensures
 // metadata.name uniqueness.
 func CollectDocumentArtefacts(docs []Document) ([]DocumentArtefact, error) {
-	artefacts := make([]DocumentArtefact, 0, len(docs))
+	artifacts := make([]DocumentArtefact, 0, len(docs))
 	seen := make(map[string]struct{})
 	for _, doc := range docs {
 		if doc.Kind != "DocumentArtefact" {
@@ -551,17 +552,17 @@ func CollectDocumentArtefacts(docs []Document) ([]DocumentArtefact, error) {
 			return nil, fmt.Errorf("parse DocumentArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("document artefact missing metadata.name")
+			return nil, fmt.Errorf("document artifact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple DocumentArtefact documents share metadata.name %q", doc.Name)
 		}
 		seen[doc.Name] = struct{}{}
 		warnings := applyDocumentArtefactDefaults(doc.Name, &payload.Spec)
-		artefacts = append(artefacts, DocumentArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
+		artifacts = append(artifacts, DocumentArtefact{Document: doc, Spec: payload.Spec, Labels: doc.Labels, Warnings: warnings})
 	}
-	sort.Sort(DocumentArtefactByName(artefacts))
-	return artefacts, nil
+	sort.Sort(DocumentArtefactByName(artifacts))
+	return artifacts, nil
 }
 
 func applyDocumentArtefactDefaults(name string, spec *DocumentArtefactSpec) []string {

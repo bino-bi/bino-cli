@@ -176,7 +176,7 @@ func promptString(reader *bufio.Reader, out io.Writer, label, def string) (strin
 	}
 	input, err := reader.ReadString('\n')
 	if err != nil {
-		if errors.Is(err, io.EOF) && len(input) == 0 {
+		if errors.Is(err, io.EOF) && input == "" {
 			return strings.TrimSpace(def), nil
 		}
 		return "", err
@@ -216,7 +216,7 @@ func promptConfirm(reader *bufio.Reader, out io.Writer, question string, def boo
 		}
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			if errors.Is(err, io.EOF) && len(input) == 0 {
+			if errors.Is(err, io.EOF) && input == "" {
 				return def, nil
 			}
 			return false, err
@@ -436,13 +436,12 @@ report-id = "%s"
 }
 
 func quoteYAML(value string) string {
-	escaped := strings.ReplaceAll(value, "\"", "\\\"")
-	return fmt.Sprintf("\"%s\"", escaped)
+	return fmt.Sprintf("%q", value)
 }
 
-func writeInitBundle(data initTemplateData, force bool) ([]string, string, error) {
+func writeInitBundle(data initTemplateData, force bool) (created []string, dir string, err error) {
 	files := data.files()
-	created := make([]string, 0, len(files))
+	created = make([]string, 0, len(files))
 	for _, file := range files {
 		absPath := filepath.Join(data.Directory, file.Path)
 		if err := pathutil.EnsureDir(filepath.Dir(absPath)); err != nil {
@@ -455,7 +454,7 @@ func writeInitBundle(data initTemplateData, force bool) ([]string, string, error
 				return nil, "", fmt.Errorf("stat %s: %w", absPath, err)
 			}
 		}
-		if err := os.WriteFile(absPath, []byte(file.Content), 0o644); err != nil {
+		if err := os.WriteFile(absPath, []byte(file.Content), 0o644); err != nil { //nolint:gosec // G306: scaffold files need standard read perms
 			return nil, "", fmt.Errorf("write %s: %w", absPath, err)
 		}
 		created = append(created, file.Path)

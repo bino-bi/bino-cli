@@ -19,7 +19,7 @@ type JSONBuildLog struct {
 	DurationMs    int64           `json:"duration_ms"`
 	Workdir       string          `json:"workdir"`
 	Documents     []DocumentEntry `json:"documents"`
-	Artefacts     []ArtefactEntry `json:"artefacts"`
+	Artifacts     []ArtefactEntry `json:"artifacts"`
 	Queries       []QueryEntry    `json:"queries"`
 	ExecutionPlan []ExecutionStep `json:"execution_plan,omitempty"`
 	Lint          []LintEntry     `json:"lint,omitempty"`
@@ -46,7 +46,7 @@ type DocumentEntry struct {
 	Name     string `json:"name"`
 }
 
-// ArtefactEntry represents a generated artefact in the build log.
+// ArtefactEntry represents a generated artifact in the build log.
 type ArtefactEntry struct {
 	Name  string `json:"name"`
 	PDF   string `json:"pdf"`
@@ -70,11 +70,6 @@ type QueryEntry struct {
 
 // queryIDCounter is used to generate unique query IDs.
 var queryIDCounter int
-
-// resetQueryIDCounter resets the query ID counter (for testing).
-func resetQueryIDCounter() {
-	queryIDCounter = 0
-}
 
 // BuildQueryEntry converts a QueryExecMeta to a QueryEntry.
 // If embedOpts.Enable is true and rows are available, CSV data is embedded.
@@ -129,7 +124,7 @@ func WriteJSONBuildLog(path string, log *JSONBuildLog) error {
 		return fmt.Errorf("marshal JSON build log: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // G306: build log files need standard read perms
 		return fmt.Errorf("write JSON build log to %s: %w", path, err)
 	}
 

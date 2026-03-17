@@ -145,7 +145,7 @@ func dropUserViews(ctx context.Context, db *sql.DB) error {
 	}
 
 	for _, name := range names {
-		if _, err := db.ExecContext(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS "%s"`, name)); err != nil {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS %q`, name)); err != nil {
 			return err
 		}
 	}

@@ -18,6 +18,7 @@ package httpserver
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -30,7 +31,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -118,10 +118,11 @@ type Config struct {
 // unbounded memory growth during long-running preview sessions.
 const maxContextCacheEntries = 100
 
-// contextCacheEntry holds cached HTML content with access tracking for LRU eviction.
+// contextCacheEntry holds cached HTML content for LRU eviction.
+// The entry stores its own path so the eviction loop can delete the map key.
 type contextCacheEntry struct {
-	html       []byte
-	lastAccess time.Time
+	path string
+	html []byte
 }
 
 // Server hosts the preview HTTP experience with CDN proxying support.
@@ -140,7 +141,9 @@ type Server struct {
 	// contextCache stores the latest context HTML per path for initial client fetch.
 	// This enables two-phase rendering where clients request context after SSE connects.
 	// Uses LRU eviction when maxContextCacheEntries is exceeded.
-	contextCache map[string]*contextCacheEntry
+	// The map provides O(1) lookup; the list maintains access order (front=oldest).
+	contextCache map[string]*list.Element
+	contextLRU   *list.List
 
 	assetMu     sync.RWMutex
 	localAssets map[string]LocalAsset
@@ -161,7 +164,7 @@ func New(cfg Config) (*Server, error) {
 		cfg.CDNBaseURL += "/"
 	}
 
-	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	listener, err := net.Listen("tcp", cfg.ListenAddr) //nolint:noctx // server startup, no context needed for listen
 	if err != nil {
 		return nil, fmt.Errorf("preview: listen on %s: %w", cfg.ListenAddr, err)
 	}
@@ -190,7 +193,7 @@ func New(cfg Config) (*Server, error) {
 		mux.Handle("/__explorer/", cfg.ExplorerHandler)
 	}
 
-	srv.httpServer = &http.Server{Handler: mux}
+	srv.httpServer = &http.Server{Handler: mux} //nolint:gosec // G112: local dev server on localhost, Slowloris not a concern
 	srv.contentFn = StaticContent([]byte("Hello world"), "text/plain; charset=utf-8")
 	return srv, nil
 }
@@ -253,31 +256,35 @@ func (s *Server) SetLocalAssets(assets []LocalAsset) {
 
 // BroadcastContent pushes the latest HTML for a route to connected SSE clients.
 // It also caches the content so clients can fetch it via /__preview/context on initial connect.
-func (s *Server) BroadcastContent(path string, html []byte) {
+func (s *Server) BroadcastContent(reqPath string, html []byte) {
 	if s == nil || len(html) == 0 {
 		return
 	}
-	if path == "" {
-		path = "/"
+	if reqPath == "" {
+		reqPath = "/"
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	if !strings.HasPrefix(reqPath, "/") {
+		reqPath = "/" + reqPath
 	}
 
 	// Store in context cache for initial client fetch
 	s.contentMu.Lock()
 	if s.contextCache == nil {
-		s.contextCache = make(map[string]*contextCacheEntry)
+		s.contextCache = make(map[string]*list.Element)
+		s.contextLRU = list.New()
 	}
-	now := time.Now()
-	s.contextCache[path] = &contextCacheEntry{
-		html:       append([]byte(nil), html...),
-		lastAccess: now,
+	if elem, ok := s.contextCache[reqPath]; ok {
+		// Update existing entry and move to back (most recently used)
+		e, _ := elem.Value.(*contextCacheEntry)
+		e.html = append([]byte(nil), html...)
+		s.contextLRU.MoveToBack(elem)
+	} else {
+		// Insert new entry at back
+		entry := &contextCacheEntry{path: reqPath, html: append([]byte(nil), html...)}
+		s.contextCache[reqPath] = s.contextLRU.PushBack(entry)
 	}
-	// Evict oldest entries if cache exceeds limit
-	if len(s.contextCache) > maxContextCacheEntries {
-		s.evictOldestCacheEntries()
-	}
+	// Evict oldest entries from front of list
+	s.evictOldestCacheEntries()
 	s.contentMu.Unlock()
 
 	// Broadcast to connected SSE clients
@@ -285,7 +292,7 @@ func (s *Server) BroadcastContent(path string, html []byte) {
 		return
 	}
 	payload := sseContentPayload{
-		Path:       path,
+		Path:       reqPath,
 		HTMLBase64: base64.StdEncoding.EncodeToString(html),
 	}
 	data, err := json.Marshal(payload)
@@ -316,33 +323,19 @@ func (s *Server) BroadcastRefreshDone() {
 }
 
 // evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
+// Entries are removed from the front of the LRU list (oldest first) in O(1) per entry.
 // Must be called with contentMu held.
 func (s *Server) evictOldestCacheEntries() {
-	// Find entries to evict (keep newest maxContextCacheEntries entries)
-	targetSize := maxContextCacheEntries - maxContextCacheEntries/10 // Evict ~10% to avoid frequent eviction
+	// Evict ~10% when over limit to avoid frequent eviction
+	targetSize := maxContextCacheEntries - maxContextCacheEntries/10
 	if targetSize < 1 {
 		targetSize = 1
 	}
-
-	// Collect paths with their access times
-	type pathTime struct {
-		path string
-		time time.Time
-	}
-	entries := make([]pathTime, 0, len(s.contextCache))
-	for p, entry := range s.contextCache {
-		entries = append(entries, pathTime{path: p, time: entry.lastAccess})
-	}
-
-	// Sort by access time (oldest first)
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].time.Before(entries[j].time)
-	})
-
-	// Delete oldest entries until we reach target size
-	toDelete := len(entries) - targetSize
-	for i := 0; i < toDelete && i < len(entries); i++ {
-		delete(s.contextCache, entries[i].path)
+	for s.contextLRU.Len() > targetSize {
+		oldest := s.contextLRU.Front()
+		entry, _ := oldest.Value.(*contextCacheEntry)
+		delete(s.contextCache, entry.path)
+		s.contextLRU.Remove(oldest)
 	}
 }
 
@@ -454,7 +447,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	// Create a compressed response writer for SSE
 	compType := selectCompression(r.Header.Get("Accept-Encoding"))
-	var writer http.ResponseWriter = w
+	writer := w
 	var cleanup func() error
 
 	if compType != compressionNone {
@@ -515,41 +508,44 @@ func (s *Server) handleContext(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the path from query param, defaulting to current page path
-	path := r.URL.Query().Get("path")
-	if path == "" {
-		path = "/"
+	reqPath := r.URL.Query().Get("path")
+	if reqPath == "" {
+		reqPath = "/"
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	if !strings.HasPrefix(reqPath, "/") {
+		reqPath = "/" + reqPath
 	}
 
 	s.contentMu.Lock()
-	entry, ok := s.contextCache[path]
-	if ok && entry != nil {
-		entry.lastAccess = time.Now() // Update access time for LRU
+	elem, ok := s.contextCache[reqPath]
+	var html []byte
+	if ok {
+		entry, _ := elem.Value.(*contextCacheEntry)
+		html = entry.html
+		s.contextLRU.MoveToBack(elem) // Mark as recently used
 	}
 	s.contentMu.Unlock()
 
-	if !ok || entry == nil || len(entry.html) == 0 {
+	if !ok || len(html) == 0 {
 		http.Error(w, "context not available", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	_, _ = w.Write(entry.html)
+	_, _ = w.Write(html)
 }
 
-func (s *Server) lookupContentFunc(path string) (ContentFunc, bool) {
+func (s *Server) lookupContentFunc(reqPath string) (ContentFunc, bool) {
 	s.contentMu.RLock()
 	defer s.contentMu.RUnlock()
-	if path == "" {
-		path = "/"
+	if reqPath == "" {
+		reqPath = "/"
 	}
-	if fn, ok := s.routes[path]; ok {
+	if fn, ok := s.routes[reqPath]; ok {
 		return fn, true
 	}
-	if len(s.routes) > 0 && path != "/" {
+	if len(s.routes) > 0 && reqPath != "/" {
 		return nil, false
 	}
 	if s.contentFn == nil {
@@ -558,16 +554,16 @@ func (s *Server) lookupContentFunc(path string) (ContentFunc, bool) {
 	if len(s.routes) == 0 {
 		return s.contentFn, true
 	}
-	return s.contentFn, path == "/"
+	return s.contentFn, reqPath == "/"
 }
 
-func (s *Server) lookupLocalAsset(path string) (LocalAsset, bool) {
+func (s *Server) lookupLocalAsset(reqPath string) (LocalAsset, bool) {
 	s.assetMu.RLock()
 	defer s.assetMu.RUnlock()
 	if s.localAssets == nil {
 		return LocalAsset{}, false
 	}
-	asset, ok := s.localAssets[path]
+	asset, ok := s.localAssets[reqPath]
 	return asset, ok
 }
 
@@ -612,7 +608,7 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 
 	// For other CDN files, use cache-first strategy
 	if localPath != "" && !disableCache {
-		_, statErr := os.Stat(localPath)
+		_, statErr := os.Stat(localPath) //nolint:gosec // G703: localPath is built from config CacheDir + known CDN paths
 		if statErr == nil {
 			http.ServeFile(w, r, localPath)
 			return nil
@@ -638,15 +634,15 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.WriteHeader(statusCode)
-	if _, err := w.Write(body); err != nil {
+	if _, err := w.Write(body); err != nil { //nolint:gosec // G705: proxying trusted CDN content, not user-supplied data
 		return fmt.Errorf("preview: write response body: %w", err)
 	}
 
 	if statusCode == http.StatusOK && localPath != "" && !disableCache {
-		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil { //nolint:gosec // G703: localPath is built from config CacheDir + known CDN paths
 			return fmt.Errorf("preview: ensure cache dir: %w", err)
 		}
-		if err := os.WriteFile(localPath, body, 0o644); err != nil {
+		if err := os.WriteFile(localPath, body, 0o644); err != nil { //nolint:gosec // G306: cache files need standard read perms
 			return fmt.Errorf("preview: write cache file: %w", err)
 		}
 	}
@@ -682,7 +678,7 @@ func (s *Server) serveLocalEngineFile(w http.ResponseWriter, r *http.Request, re
 	// For all other files, try local cache first
 	if s.cfg.CacheDir != "" {
 		localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
-		if _, err := os.Stat(localPath); err == nil {
+		if _, err := os.Stat(localPath); err == nil { //nolint:gosec // G703: localPath is built from config CacheDir + known engine paths
 			http.ServeFile(w, r, localPath)
 			return nil
 		}
@@ -709,17 +705,17 @@ func (s *Server) proxyFromCDN(w http.ResponseWriter, r *http.Request, relPath st
 	copyHeaders(w.Header(), headers, "Content-Type", "Content-Length")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.WriteHeader(statusCode)
-	if _, err := w.Write(body); err != nil {
+	if _, err := w.Write(body); err != nil { //nolint:gosec // G705: proxying trusted CDN content, not user-supplied data
 		return fmt.Errorf("preview: write response body: %w", err)
 	}
 
 	// Cache the file locally if requested
 	if cacheLocally && statusCode == http.StatusOK && s.cfg.CacheDir != "" {
 		localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
-		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil { //nolint:gosec // G703: localPath is built from config CacheDir + known CDN paths
 			return fmt.Errorf("preview: ensure cache dir: %w", err)
 		}
-		if err := os.WriteFile(localPath, body, 0o644); err != nil {
+		if err := os.WriteFile(localPath, body, 0o644); err != nil { //nolint:gosec // G306: cache files need standard read perms
 			return fmt.Errorf("preview: write cache file: %w", err)
 		}
 	}
@@ -727,12 +723,11 @@ func (s *Server) proxyFromCDN(w http.ResponseWriter, r *http.Request, relPath st
 	return nil
 }
 
-
 // fetchFromCDN attempts to fetch a file from the remote CDN.
 // Returns the body, headers, status code, and any error.
-func (s *Server) fetchFromCDN(ctx context.Context, relPath string) ([]byte, http.Header, int, error) {
+func (s *Server) fetchFromCDN(ctx context.Context, relPath string) (body []byte, headers http.Header, status int, err error) {
 	remoteURL := s.cfg.CDNBaseURL + relPath
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remoteURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remoteURL, http.NoBody) //nolint:gosec // G704: CDNBaseURL is a trusted server-configured value
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("preview: build upstream request: %w", err)
 	}
@@ -741,7 +736,7 @@ func (s *Server) fetchFromCDN(ctx context.Context, relPath string) ([]byte, http
 	if client == nil {
 		client = http.DefaultClient
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // G704: CDNBaseURL is a trusted server-configured value
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("preview: upstream request: %w", err)
 	}
@@ -751,7 +746,7 @@ func (s *Server) fetchFromCDN(ctx context.Context, relPath string) ([]byte, http
 		return nil, nil, 0, fmt.Errorf("preview: upstream body exceeded %d bytes", limit)
 	}
 
-	body, err := readUpstreamBody(resp.Body, s.maxCDNBytes)
+	body, err = readUpstreamBody(resp.Body, s.maxCDNBytes)
 	if err != nil {
 		return nil, nil, 0, err
 	}

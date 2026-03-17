@@ -42,7 +42,7 @@ func NewOutput(cfg OutputConfig) *Output {
 	// Determine TTY status
 	isTTY := false
 	if f, ok := stdout.(*os.File); ok {
-		isTTY = term.IsTerminal(int(f.Fd()))
+		isTTY = term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: fd value fits in int on all supported platforms
 	}
 
 	// Check CI environment

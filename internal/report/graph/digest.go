@@ -16,8 +16,8 @@ import (
 // rather than stored directly in attributes for security.
 // The ephemeral attribute is set to "true" for sources that will be refetched
 // on every build (databases, URLs, files outside workdir).
-func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) ([]byte, map[string]string, error) {
-	attrs := map[string]string{
+func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) (sum []byte, attrs map[string]string, err error) {
+	attrs = map[string]string{
 		"type": spec.Type,
 	}
 	var digests []filehash.FileDigest
@@ -72,9 +72,8 @@ func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) ([]by
 // Dependencies are resolved to DataSource nodes; missing ones are tracked
 // in attributes for warning output but do not cause errors.
 // External query files referenced via $file are included in the digest.
-func (b *builder) hashDataSet(doc config.Document, spec dataSetSpec) ([]byte, map[string]string, []string, error) {
-	attrs := make(map[string]string)
-	var depIDs []string
+func (b *builder) hashDataSet(doc config.Document, spec dataSetSpec) (sum []byte, attrs map[string]string, depIDs []string, err error) {
+	attrs = make(map[string]string)
 	var missing []string
 
 	for _, depName := range spec.Dependencies {

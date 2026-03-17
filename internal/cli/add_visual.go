@@ -146,7 +146,7 @@ A Table component displays data from a DataSet in a formatted table.
 				data.Name, err = promptGenericName(reader, out, manifests, "Table")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -162,7 +162,7 @@ A Table component displays data from a DataSet in a formatted table.
 				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -190,7 +190,7 @@ A Table component displays data from a DataSet in a formatted table.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Table", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -210,7 +210,7 @@ A Table component displays data from a DataSet in a formatted table.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -221,7 +221,7 @@ A Table component displays data from a DataSet in a formatted table.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -364,7 +364,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 				data.Name, err = promptGenericName(reader, out, manifests, "ChartStructure")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -380,7 +380,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -396,7 +396,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 					{Label: "radar", Description: "Radar/spider chart"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "Chart type", options, 0)
+				idx, err := addPromptSelect(reader, out, "Chart type", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -426,7 +426,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartStructure", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -446,7 +446,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -457,7 +457,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -588,7 +588,7 @@ ChartTime displays time-series data from a DataSet.
 				data.Name, err = promptGenericName(reader, out, manifests, "ChartTime")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -604,7 +604,7 @@ ChartTime displays time-series data from a DataSet.
 				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -632,7 +632,7 @@ ChartTime displays time-series data from a DataSet.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartTime", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -652,7 +652,7 @@ ChartTime displays time-series data from a DataSet.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -663,7 +663,7 @@ ChartTime displays time-series data from a DataSet.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -702,7 +702,7 @@ func promptDatasetSelection(reader *bufio.Reader, out io.Writer, manifests []Man
 	}
 
 	items := ManifestsToFuzzyItems(datasets)
-	item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items, false)
+	item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items)
 	if err != nil {
 		return "", err
 	}

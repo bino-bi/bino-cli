@@ -1,6 +1,7 @@
 package pathutil
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -644,7 +645,7 @@ func TestFindProjectRoot(t *testing.T) {
 		if err == nil {
 			t.Error("FindProjectRoot() should return error when bino.toml not found")
 		}
-		if err != ErrProjectRootNotFound {
+		if !errors.Is(err, ErrProjectRootNotFound) {
 			t.Errorf("FindProjectRoot() error = %v, want ErrProjectRootNotFound", err)
 		}
 	})
@@ -686,7 +687,7 @@ func TestFindProjectRoot(t *testing.T) {
 		// This test just verifies no error for empty input
 		_, err := FindProjectRoot("")
 		// Error is expected since we're likely not in a bino project
-		if err != nil && err != ErrProjectRootNotFound {
+		if err != nil && !errors.Is(err, ErrProjectRootNotFound) {
 			t.Errorf("FindProjectRoot(\"\") unexpected error = %v", err)
 		}
 	})

@@ -28,7 +28,7 @@ func inlinePayloadHash(payload json.RawMessage) string {
 //   - Any value is a nested object or array
 //
 // Empty arrays return CSV with no rows (and no columns).
-func inlineToCSV(payload json.RawMessage) ([]byte, []string, error) {
+func inlineToCSV(payload json.RawMessage) (csvData []byte, columns []string, err error) {
 	var rows []json.RawMessage
 	if err := json.Unmarshal(payload, &rows); err != nil {
 		return nil, nil, fmt.Errorf("inline content must be a JSON array: %w", err)
@@ -61,7 +61,7 @@ func inlineToCSV(payload json.RawMessage) ([]byte, []string, error) {
 	}
 
 	// Sort columns for deterministic output
-	columns := make([]string, 0, len(columnSet))
+	columns = make([]string, 0, len(columnSet))
 	for col := range columnSet {
 		columns = append(columns, col)
 	}
@@ -171,7 +171,7 @@ func buildInlineViewSQL(name, tempDir string, payload json.RawMessage) (string, 
 
 	// Handle empty inline array: create an empty view
 	if len(columns) == 0 {
-		return fmt.Sprintf("CREATE OR REPLACE VIEW \"%s\" AS SELECT 1 WHERE 1=0", name), nil
+		return fmt.Sprintf("CREATE OR REPLACE VIEW %q AS SELECT 1 WHERE 1=0", name), nil
 	}
 
 	// Write CSV to temp file
@@ -185,7 +185,7 @@ func buildInlineViewSQL(name, tempDir string, payload json.RawMessage) (string, 
 
 	// Build CREATE VIEW statement
 	return fmt.Sprintf(
-		"CREATE OR REPLACE VIEW \"%s\" AS SELECT * FROM read_csv_auto('%s', header=true)",
+		"CREATE OR REPLACE VIEW %q AS SELECT * FROM read_csv_auto('%s', header=true)",
 		name, escapeSQLString(csvPath),
 	), nil
 }

@@ -3,6 +3,7 @@
 package pathutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -221,14 +222,14 @@ func BaseDir(path string) string {
 // For URLs (paths containing "://"), it performs an HTTP GET request.
 // For local paths, it reads the file directly.
 // The baseDir is used to resolve relative local paths.
-func LoadContent(baseDir, path string) ([]byte, error) {
+func LoadContent(ctx context.Context, baseDir, path string) ([]byte, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return nil, fmt.Errorf("path cannot be empty")
 	}
 
 	if IsURL(trimmed) {
-		return loadRemoteContent(trimmed)
+		return loadRemoteContent(ctx, trimmed)
 	}
 
 	resolved, err := Resolve(baseDir, trimmed)
@@ -239,9 +240,13 @@ func LoadContent(baseDir, path string) ([]byte, error) {
 }
 
 // loadRemoteContent fetches content from a remote URL.
-func loadRemoteContent(url string) ([]byte, error) {
+func loadRemoteContent(ctx context.Context, url string) ([]byte, error) {
 	client := &http.Client{Timeout: DefaultHTTPTimeout}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create request for %s: %w", url, err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", url, err)
 	}

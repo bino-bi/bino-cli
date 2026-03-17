@@ -12,19 +12,19 @@ func TestValidateName(t *testing.T) {
 		name    string
 		wantErr bool
 	}{
-		"valid simple":            {name: "sales", wantErr: false},
-		"valid with underscore":   {name: "sales_data", wantErr: false},
-		"valid with number":       {name: "sales2024", wantErr: false},
-		"valid long":              {name: "this_is_a_very_long_but_still_valid_name", wantErr: false},
-		"empty":                   {name: "", wantErr: true},
-		"starts with number":      {name: "2024sales", wantErr: true},
-		"starts with underscore":  {name: "_sales", wantErr: true},
-		"contains hyphen":         {name: "sales-data", wantErr: true},
-		"contains uppercase":      {name: "salesData", wantErr: true},
-		"contains space":          {name: "sales data", wantErr: true},
-		"reserved prefix":         {name: "_inline_data", wantErr: true},
-		"too long":                {name: "a123456789012345678901234567890123456789012345678901234567890123456789", wantErr: true},
-		"exactly 64 chars":        {name: "a234567890123456789012345678901234567890123456789012345678901234", wantErr: false},
+		"valid simple":           {name: "sales", wantErr: false},
+		"valid with underscore":  {name: "sales_data", wantErr: false},
+		"valid with number":      {name: "sales2024", wantErr: false},
+		"valid long":             {name: "this_is_a_very_long_but_still_valid_name", wantErr: false},
+		"empty":                  {name: "", wantErr: true},
+		"starts with number":     {name: "2024sales", wantErr: true},
+		"starts with underscore": {name: "_sales", wantErr: true},
+		"contains hyphen":        {name: "sales-data", wantErr: true},
+		"contains uppercase":     {name: "salesData", wantErr: true},
+		"contains space":         {name: "sales data", wantErr: true},
+		"reserved prefix":        {name: "_inline_data", wantErr: true},
+		"too long":               {name: "a123456789012345678901234567890123456789012345678901234567890123456789", wantErr: true},
+		"exactly 64 chars":       {name: "a234567890123456789012345678901234567890123456789012345678901234", wantErr: false},
 	}
 
 	for name, tc := range tests {
@@ -42,15 +42,15 @@ func TestSuggestNameFix(t *testing.T) {
 		input string
 		want  string
 	}{
-		"already valid":          {input: "sales_data", want: "sales_data"},
-		"uppercase":              {input: "SalesData", want: "salesdata"},
-		"hyphens":                {input: "sales-data", want: "sales_data"},
-		"spaces":                 {input: "sales data", want: "sales_data"},
-		"mixed":                  {input: "Sales-Data 2024", want: "sales_data_2024"},
-		"starts with number":     {input: "2024sales", want: "ds_2024sales"},
-		"empty":                  {input: "", want: ""},
-		"only special chars":     {input: "---", want: "ds_"},
-		"trailing underscore":    {input: "sales_", want: "sales"},
+		"already valid":           {input: "sales_data", want: "sales_data"},
+		"uppercase":               {input: "SalesData", want: "salesdata"},
+		"hyphens":                 {input: "sales-data", want: "sales_data"},
+		"spaces":                  {input: "sales data", want: "sales_data"},
+		"mixed":                   {input: "Sales-Data 2024", want: "sales_data_2024"},
+		"starts with number":      {input: "2024sales", want: "ds_2024sales"},
+		"empty":                   {input: "", want: ""},
+		"only special chars":      {input: "---", want: "ds_"},
+		"trailing underscore":     {input: "sales_", want: "sales"},
 		"consecutive underscores": {input: "sales__data", want: "sales_data"},
 	}
 
@@ -69,18 +69,18 @@ func TestParseDataSourceType(t *testing.T) {
 		input string
 		want  DataSourceType
 	}{
-		"postgres":    {input: "postgres", want: DataSourceTypePostgres},
-		"postgresql":  {input: "postgresql", want: DataSourceTypePostgres},
-		"POSTGRES":    {input: "POSTGRES", want: DataSourceTypePostgres},
-		"mysql":       {input: "mysql", want: DataSourceTypeMySQL},
-		"csv":         {input: "csv", want: DataSourceTypeCSV},
-		"parquet":     {input: "parquet", want: DataSourceTypeParquet},
-		"excel":       {input: "excel", want: DataSourceTypeExcel},
-		"xlsx":        {input: "xlsx", want: DataSourceTypeExcel},
-		"json":        {input: "json", want: DataSourceTypeJSON},
-		"inline":      {input: "inline", want: DataSourceTypeInline},
-		"unknown":     {input: "unknown", want: DataSourceTypeNone},
-		"empty":       {input: "", want: DataSourceTypeNone},
+		"postgres":   {input: "postgres", want: DataSourceTypePostgres},
+		"postgresql": {input: "postgresql", want: DataSourceTypePostgres},
+		"POSTGRES":   {input: "POSTGRES", want: DataSourceTypePostgres},
+		"mysql":      {input: "mysql", want: DataSourceTypeMySQL},
+		"csv":        {input: "csv", want: DataSourceTypeCSV},
+		"parquet":    {input: "parquet", want: DataSourceTypeParquet},
+		"excel":      {input: "excel", want: DataSourceTypeExcel},
+		"xlsx":       {input: "xlsx", want: DataSourceTypeExcel},
+		"json":       {input: "json", want: DataSourceTypeJSON},
+		"inline":     {input: "inline", want: DataSourceTypeInline},
+		"unknown":    {input: "unknown", want: DataSourceTypeNone},
+		"empty":      {input: "", want: DataSourceTypeNone},
 	}
 
 	for name, tc := range tests {
@@ -568,13 +568,13 @@ func TestQuoteYAMLIfNeeded(t *testing.T) {
 		input string
 		want  string
 	}{
-		"no quoting needed":     {input: "simple", want: "simple"},
-		"colon needs quoting":   {input: "key: value", want: `"key: value"`},
-		"hash needs quoting":    {input: "# comment", want: `"# comment"`},
-		"leading space":         {input: " leading", want: `" leading"`},
-		"trailing space":        {input: "trailing ", want: `"trailing "`},
-		"brackets":              {input: "[value]", want: `"[value]"`},
-		"quotes in value":       {input: `say "hello"`, want: `"say \"hello\""`},
+		"no quoting needed":   {input: "simple", want: "simple"},
+		"colon needs quoting": {input: "key: value", want: `"key: value"`},
+		"hash needs quoting":  {input: "# comment", want: `"# comment"`},
+		"leading space":       {input: " leading", want: `" leading"`},
+		"trailing space":      {input: "trailing ", want: `"trailing "`},
+		"brackets":            {input: "[value]", want: `"[value]"`},
+		"quotes in value":     {input: `say "hello"`, want: `"say \"hello\""`},
 	}
 
 	for name, tc := range tests {

@@ -237,7 +237,7 @@ to avoid hardcoding sensitive values in manifest files.
 				data.Name, err = promptGenericName(reader, out, manifests, "ConnectionSecret")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -264,10 +264,10 @@ to avoid hardcoding sensitive values in manifest files.
 					{Label: "Azure Blob Storage", Description: "Azure storage credentials"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "What type of credentials?", options, 0)
+				idx, err := addPromptSelect(reader, out, "What type of credentials?", options)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -288,7 +288,7 @@ to avoid hardcoding sensitive values in manifest files.
 			// Type-specific prompts
 			if err := promptConnectionSecretDetails(reader, out, &data); err != nil {
 				if errors.Is(err, errAddCanceled) {
-					fmt.Fprintln(out, "\nCancelled.")
+					fmt.Fprintln(out, "\nCanceled.")
 					return nil
 				}
 				return RuntimeError(err)
@@ -310,7 +310,7 @@ to avoid hardcoding sensitive values in manifest files.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ConnectionSecret", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -330,7 +330,7 @@ to avoid hardcoding sensitive values in manifest files.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -341,7 +341,7 @@ to avoid hardcoding sensitive values in manifest files.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -384,9 +384,12 @@ func completeConnectionSecretTypes(_ *cobra.Command, _ []string, _ string) ([]st
 }
 
 func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *ConnectionSecretManifestData) error {
-	fmt.Fprintln(out.(interface{ Write(p []byte) (n int, err error) }), "\nCredential Configuration")
-	fmt.Fprintln(out.(interface{ Write(p []byte) (n int, err error) }), "For security, use environment variable references for sensitive values.")
-	fmt.Fprintln(out.(interface{ Write(p []byte) (n int, err error) }))
+	w, _ := out.(interface {
+		Write(p []byte) (n int, err error)
+	})
+	fmt.Fprintln(w, "\nCredential Configuration")
+	fmt.Fprintln(w, "For security, use environment variable references for sensitive values.")
+	fmt.Fprintln(w)
 
 	switch data.Type {
 	case ConnectionSecretTypePostgres, ConnectionSecretTypeMySQL:
@@ -408,10 +411,13 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 		}
 		if data.SecretEnv == "" {
 			defaultEnv := "AWS_SECRET_ACCESS_KEY"
-			if data.Type == ConnectionSecretTypeGCS {
+			switch data.Type {
+			case ConnectionSecretTypeGCS:
 				defaultEnv = "GCS_SECRET_KEY"
-			} else if data.Type == ConnectionSecretTypeR2 {
+			case ConnectionSecretTypeR2:
 				defaultEnv = "R2_SECRET_ACCESS_KEY"
+			default:
+				// S3 uses the initial defaultEnv value
 			}
 			var err error
 			data.SecretEnv, err = addPromptString(reader, out, "Secret key environment variable name", defaultEnv)
@@ -425,7 +431,7 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 			{Label: "Basic Auth", Description: "Username and password"},
 			{Label: "Bearer Token", Description: "Authorization header token"},
 		}
-		idx, err := addPromptSelect(reader, out, "Authentication type", options, 0)
+		idx, err := addPromptSelect(reader, out, "Authentication type", options)
 		if err != nil {
 			return err
 		}
@@ -451,7 +457,7 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 			{Label: "Connection String", Description: "Full connection string from Azure portal"},
 			{Label: "Account Key", Description: "Storage account access key"},
 		}
-		idx, err := addPromptSelect(reader, out, "Authentication method", options, 0)
+		idx, err := addPromptSelect(reader, out, "Authentication method", options)
 		if err != nil {
 			return err
 		}
@@ -467,6 +473,8 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 				return err
 			}
 		}
+
+	default:
 	}
 
 	return nil
@@ -503,6 +511,8 @@ func buildConnectionSecretDocument(data ConnectionSecretManifestData) *schema.Do
 	case ConnectionSecretTypeAzure:
 		spec.ConnectionStringFromEnv = data.ConnectionString
 		spec.AccountKeyFromEnv = data.AccountKey
+
+	default:
 	}
 
 	doc.Spec = spec

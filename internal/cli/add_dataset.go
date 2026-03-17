@@ -188,7 +188,7 @@ Modes:
 				data.Name, err = promptDataSetName(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -216,7 +216,7 @@ Modes:
 			if data.Query == "" && data.QueryFile == "" && data.PRQL == "" && data.PRQLFile == "" && data.Source == "" {
 				if err := promptQueryType(reader, out, workdir, manifests, &data); err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -228,7 +228,7 @@ Modes:
 				deps, err := promptDependencies(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -257,7 +257,7 @@ Modes:
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "DataSet", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -288,7 +288,7 @@ Modes:
 				return RuntimeError(err)
 			}
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -302,7 +302,7 @@ Modes:
 				editor := getEditor()
 				if editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -341,12 +341,12 @@ func completeDatasources(cmd *cobra.Command, _ []string, _ string) ([]string, co
 	ctx := cmd.Context()
 	workdir, err := pathutil.ResolveWorkdir(".")
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	manifests, err := ScanManifests(ctx, workdir)
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	sources := FilterByKind(manifests, "DataSource")
@@ -362,12 +362,12 @@ func completeDatasetsAndDatasources(cmd *cobra.Command, _ []string, _ string) ([
 	ctx := cmd.Context()
 	workdir, err := pathutil.ResolveWorkdir(".")
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	manifests, err := ScanManifests(ctx, workdir)
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	available := FilterByKind(manifests, "DataSet", "DataSource")
@@ -380,7 +380,7 @@ func completeDatasetsAndDatasources(cmd *cobra.Command, _ []string, _ string) ([
 
 // promptDataSetName prompts for a valid, unique DataSet name.
 func promptDataSetName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this DataSet", "", func(name string) error {
+	return addPromptAddString(reader, out, "Name for this DataSet", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -402,7 +402,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		{Label: "Pass-through", Description: "Use a DataSource directly without transformation"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "How do you want to define your data?", options, 0)
+	idx, err := addPromptSelect(reader, out, "How do you want to define your data?", options)
 	if err != nil {
 		return err
 	}
@@ -414,10 +414,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		if err != nil {
 			// Fallback to multiline input
 			fmt.Fprintln(out, "Editor not available. Enter SQL query (end with empty line):")
-			query, err = promptMultiline(reader, out)
-			if err != nil {
-				return err
-			}
+			query = promptMultiline(reader)
 		}
 		data.Query = strings.TrimSpace(query)
 		fmt.Fprintln(out, "\nQuery preview:")
@@ -436,10 +433,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		if err != nil {
 			// Fallback to multiline input
 			fmt.Fprintln(out, "Editor not available. Enter PRQL query (end with empty line):")
-			query, err = promptMultiline(reader, out)
-			if err != nil {
-				return err
-			}
+			query = promptMultiline(reader)
 		}
 		data.PRQL = strings.TrimSpace(query)
 		fmt.Fprintln(out, "\nQuery preview:")
@@ -478,7 +472,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 		options = options[1:] // Remove "Select existing" if no files
 	}
 
-	idx, err := addPromptSelect(reader, out, "File source", options, 0)
+	idx, err := addPromptSelect(reader, out, "File source", options)
 	if err != nil {
 		return "", err
 	}
@@ -491,7 +485,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 	switch idx {
 	case 0: // Select existing
 		items := FilesToFuzzyItems(files, ext+" file")
-		item, err := addPromptFuzzySearch(reader, out, "Select file", items, false)
+		item, err := addPromptFuzzySearch(reader, out, "Select file", items)
 		if err != nil {
 			return "", err
 		}
@@ -522,7 +516,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 			template = fmt.Sprintf("# DataSet: %s\n\nfrom your_table\n", datasetName)
 		}
 
-		if err := os.WriteFile(absPath, []byte(template), 0o644); err != nil {
+		if err := os.WriteFile(absPath, []byte(template), 0o644); err != nil { //nolint:gosec // G306: query files need standard read perms
 			return "", fmt.Errorf("create file: %w", err)
 		}
 
@@ -537,7 +531,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 			editor := getEditor()
 			if editor != "" {
 				args := buildEditorArgs(editor, absPath)
-				execCmd := exec.Command(args[0], args[1:]...)
+				execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 				execCmd.Stdin = os.Stdin
 				execCmd.Stdout = os.Stdout
 				execCmd.Stderr = os.Stderr
@@ -567,7 +561,7 @@ func promptDataSource(reader *bufio.Reader, out io.Writer, manifests []ManifestI
 	}
 
 	items := ManifestsToFuzzyItems(sources)
-	item, err := addPromptFuzzySearch(reader, out, "Select DataSource", items, false)
+	item, err := addPromptFuzzySearch(reader, out, "Select DataSource", items)
 	if err != nil {
 		return "", err
 	}
@@ -610,7 +604,7 @@ func promptDependencies(reader *bufio.Reader, out io.Writer, manifests []Manifes
 }
 
 // promptOutputLocation prompts for output file location.
-func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, manifests []ManifestInfo, kind, name string) (string, bool, error) {
+func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, manifests []ManifestInfo, kind, name string) (outputPath string, isNew bool, err error) {
 	// Load user preferences
 	cfg, _ := LoadAddConfig(workdir)
 	kindCfg := cfg.GetKindConfig(kind)
@@ -630,7 +624,7 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 	multiDocFiles := GetMultiDocFiles(manifests)
 
 	// Build options
-	var options []SelectOption
+	options := make([]SelectOption, 0, 2+len(multiDocFiles))
 	options = append(options, SelectOption{
 		Label:       fmt.Sprintf("Auto: %s", suggestedPath),
 		Description: "Recommended based on project pattern",
@@ -654,7 +648,7 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 		Description: "Enter a custom file path",
 	})
 
-	idx, err := addPromptSelect(reader, out, "Where to save the manifest?", options, 0)
+	idx, err := addPromptSelect(reader, out, "Where to save the manifest?", options)
 	if err != nil {
 		return "", false, err
 	}
@@ -732,9 +726,9 @@ func promptPostActions(reader *bufio.Reader, out io.Writer) error {
 		{Label: "Run preview", Description: "Start development preview server"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What next?", options, 0)
+	idx, err := addPromptSelect(reader, out, "What next?", options)
 	if err != nil {
-		return nil // Don't error on post-action failures
+		return nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	switch idx {
@@ -755,7 +749,7 @@ func promptPostActions(reader *bufio.Reader, out io.Writer) error {
 }
 
 // promptMultiline reads multiple lines until an empty line.
-func promptMultiline(reader *bufio.Reader, out io.Writer) (string, error) {
+func promptMultiline(reader *bufio.Reader) string {
 	var lines []string
 	for {
 		line, err := reader.ReadString('\n')
@@ -768,5 +762,5 @@ func promptMultiline(reader *bufio.Reader, out io.Writer) (string, error) {
 		}
 		lines = append(lines, trimmed)
 	}
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(lines, "\n")
 }

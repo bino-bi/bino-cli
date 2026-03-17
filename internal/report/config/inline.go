@@ -34,11 +34,11 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 			}
 		case "Tree":
 			if err := materializeTreeDocInlines(doc, registry); err != nil {
-				return nil, fmt.Errorf("Tree %q: %w", doc.Name, err)
+				return nil, fmt.Errorf("tree %q: %w", doc.Name, err)
 			}
 		case "Grid":
 			if err := materializeGridDocInlines(doc, registry); err != nil {
-				return nil, fmt.Errorf("Grid %q: %w", doc.Name, err)
+				return nil, fmt.Errorf("grid %q: %w", doc.Name, err)
 			}
 		case "DataSet":
 			if err := materializeDataSetInlines(doc, registry); err != nil {
@@ -248,7 +248,7 @@ type componentSpec struct {
 func materializeComponentInlines(doc *Document, registry *inlineRegistry) error {
 	var comp componentSpec
 	if err := json.Unmarshal(doc.Raw, &comp); err != nil {
-		return nil // Not a component with dataset field, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if !comp.Spec.Dataset.HasInline() {
@@ -298,9 +298,9 @@ func materializeComponentInlines(doc *Document, registry *inlineRegistry) error 
 // dataSetDocSpec is a minimal struct to parse DataSet documents.
 type dataSetDocSpec struct {
 	Spec struct {
-		Query        spec.QueryField     `json:"query"`
-		Prql         spec.QueryField     `json:"prql"`
-		Source       *spec.DataSourceRef `json:"source"`
+		Query        spec.QueryField      `json:"query"`
+		Prql         spec.QueryField      `json:"prql"`
+		Source       *spec.DataSourceRef  `json:"source"`
 		Dependencies []spec.DataSourceRef `json:"dependencies"`
 	} `json:"spec"`
 }
@@ -309,7 +309,7 @@ type dataSetDocSpec struct {
 func materializeDataSetInlines(doc *Document, registry *inlineRegistry) error {
 	var dsDoc dataSetDocSpec
 	if err := json.Unmarshal(doc.Raw, &dsDoc); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	hasInline := false
@@ -520,14 +520,12 @@ type childSpec struct {
 func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) error {
 	var layout layoutSpec
 	if err := json.Unmarshal(doc.Raw, &layout); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if len(layout.Spec.Children) == 0 {
 		return nil
 	}
-
-	modified := false
 
 	// Process each child
 	for i, child := range layout.Spec.Children {
@@ -591,7 +589,6 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 				if err := rewriteLayoutChildDataset(doc, i, resolvedNames); err != nil {
 					return fmt.Errorf("child[%d]: %w", i, err)
 				}
-				modified = true
 			}
 
 		case "Tree":
@@ -599,20 +596,13 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 			if err := materializeTreeNodesInlines(doc, i, child.Spec, registry); err != nil {
 				return fmt.Errorf("child[%d] (Tree): %w", i, err)
 			}
-			modified = true
 
 		case "Grid":
 			// Process Grid cells that may contain inline datasets
 			if err := materializeGridCellsInlines(doc, i, child.Spec, registry); err != nil {
 				return fmt.Errorf("child[%d] (Grid): %w", i, err)
 			}
-			modified = true
 		}
-	}
-
-	// Re-parse if modified to ensure consistency
-	if modified {
-		// Already modified in rewriteLayoutChildDataset
 	}
 
 	return nil
@@ -640,7 +630,7 @@ type treeDocSpec struct {
 func materializeTreeDocInlines(doc *Document, registry *inlineRegistry) error {
 	var treeDoc treeDocSpec
 	if err := json.Unmarshal(doc.Raw, &treeDoc); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if len(treeDoc.Spec.Nodes) == 0 {
@@ -768,7 +758,7 @@ type gridDocSpec struct {
 
 // gridChildSpec represents a child (cell) in a Grid.
 type gridChildSpec struct {
-	Row    any             `json:"row"` // string or int
+	Row    any             `json:"row"`    // string or int
 	Column any             `json:"column"` // string or int
 	Kind   string          `json:"kind"`
 	Ref    string          `json:"ref,omitempty"`
@@ -779,7 +769,7 @@ type gridChildSpec struct {
 func materializeGridDocInlines(doc *Document, registry *inlineRegistry) error {
 	var gridDoc gridDocSpec
 	if err := json.Unmarshal(doc.Raw, &gridDoc); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if len(gridDoc.Spec.Children) == 0 {
@@ -903,15 +893,12 @@ func rewriteGridDocChildDataset(doc *Document, childIndex int, resolvedNames []s
 func materializeTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
 	var treeSpec treeSpec
 	if err := json.Unmarshal(treeSpecRaw, &treeSpec); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if len(treeSpec.Nodes) == 0 {
 		return nil
 	}
-
-	// Track if any modifications were made
-	modified := false
 
 	// Process each node
 	for nodeIdx, node := range treeSpec.Nodes {
@@ -975,12 +962,10 @@ func materializeTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json
 				if err := rewriteTreeNodeDataset(doc, childIndex, nodeIdx, resolvedNames); err != nil {
 					return fmt.Errorf("node[%d]: %w", nodeIdx, err)
 				}
-				modified = true
 			}
 		}
 	}
 
-	_ = modified // Prevent unused variable warning
 	return nil
 }
 
@@ -1049,15 +1034,12 @@ func materializeGridCellsInlines(doc *Document, childIndex int, gridSpecRaw json
 		Children []gridChildSpec `json:"children"`
 	}
 	if err := json.Unmarshal(gridSpecRaw, &gSpec); err != nil {
-		return nil // Parse error, skip
+		return nil //nolint:nilerr // skip unparseable inline definition
 	}
 
 	if len(gSpec.Children) == 0 {
 		return nil
 	}
-
-	// Track if any modifications were made
-	modified := false
 
 	// Process each grid child
 	for gridChildIdx, gridChild := range gSpec.Children {
@@ -1121,12 +1103,10 @@ func materializeGridCellsInlines(doc *Document, childIndex int, gridSpecRaw json
 				if err := rewriteGridChildDataset(doc, childIndex, gridChildIdx, resolvedNames); err != nil {
 					return fmt.Errorf("children[%d]: %w", gridChildIdx, err)
 				}
-				modified = true
 			}
 		}
 	}
 
-	_ = modified // Prevent unused variable warning
 	return nil
 }
 

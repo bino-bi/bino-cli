@@ -47,7 +47,7 @@ func TestHandleMetadata(t *testing.T) {
 	sess := setupTestSession(t)
 	handler := Handler(sess)
 
-	req := httptest.NewRequest(http.MethodGet, "/__explorer/metadata", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/__explorer/metadata", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -76,7 +76,7 @@ func TestHandleQuery(t *testing.T) {
 	handler := Handler(sess)
 
 	body := `{"sql": "SELECT * FROM sales ORDER BY region", "limit": 10, "offset": 0}`
-	req := httptest.NewRequest(http.MethodPost, "/__explorer/query", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/query", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -110,7 +110,7 @@ func TestHandleQueryPagination(t *testing.T) {
 
 	// Get only first 2 rows
 	body := `{"sql": "SELECT * FROM sales ORDER BY region", "limit": 2, "offset": 0}`
-	req := httptest.NewRequest(http.MethodPost, "/__explorer/query", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/query", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -151,7 +151,7 @@ func TestHandleQueryRejectsWrites(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := `{"sql": "` + tt.sql + `"}`
-			req := httptest.NewRequest(http.MethodPost, "/__explorer/query", strings.NewReader(body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/query", strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -171,7 +171,7 @@ func TestHandleSummarize(t *testing.T) {
 	handler := Handler(sess)
 
 	body := `{"name": "sales"}`
-	req := httptest.NewRequest(http.MethodPost, "/__explorer/summarize", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/summarize", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -201,7 +201,7 @@ func TestHandleQueryEmptySQL(t *testing.T) {
 	handler := Handler(sess)
 
 	body := `{"sql": ""}`
-	req := httptest.NewRequest(http.MethodPost, "/__explorer/query", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/query", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

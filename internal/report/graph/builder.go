@@ -270,13 +270,13 @@ func (b *builder) buildLayouts(kind NodeKind, docs []config.Document) error {
 	return nil
 }
 
-func (b *builder) buildLayoutChildren(parentName, file string, children []layoutChild, path []int) ([]string, error) {
+func (b *builder) buildLayoutChildren(parentName, file string, children []layoutChild, indexPath []int) ([]string, error) {
 	if len(children) == 0 {
 		return nil, nil
 	}
 	deps := make([]string, 0, len(children))
 	for idx, child := range children {
-		childPath := append(append([]int(nil), path...), idx)
+		childPath := append(append([]int(nil), indexPath...), idx)
 		id, err := b.buildLayoutChild(parentName, file, child, childPath)
 		if err != nil {
 			return nil, err
@@ -288,7 +288,7 @@ func (b *builder) buildLayoutChildren(parentName, file string, children []layout
 	return deps, nil
 }
 
-func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, path []int) (string, error) {
+func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, indexPath []int) (string, error) {
 	// Resolve ref to get the effective spec (base from referenced doc + overrides from child).
 	effectiveSpec, effectiveFile, err := b.resolveChildSpec(parentName, child)
 	if err != nil {
@@ -315,7 +315,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 			}
 			spec = wrapper.Spec
 		}
-		name := fmt.Sprintf("%s#%s", parentName, pathKey(path))
+		name := fmt.Sprintf("%s#%s", parentName, pathKey(indexPath))
 		id := makeNodeID(NodeLayoutCard, name)
 		node := &Node{
 			ID:         id,
@@ -326,7 +326,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 			Attributes: map[string]string{"parent": parentName},
 			baseDigest: hashBytes(effectiveSpec),
 		}
-		children, err := b.buildLayoutChildren(parentName, effectiveFile, spec.Children, path)
+		children, err := b.buildLayoutChildren(parentName, effectiveFile, spec.Children, indexPath)
 		if err != nil {
 			return "", err
 		}
@@ -334,8 +334,8 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 		b.nodes[id] = node
 		return id, nil
 	case "Text", "Table", "ChartStructure", "ChartTime", "Tree", "Image":
-		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(path))
-		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(path)))
+		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(indexPath))
+		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)))
 		if err != nil {
 			return "", err
 		}
@@ -343,8 +343,8 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 		b.nodes[node.ID] = node
 		return node.ID, nil
 	case "Grid":
-		label := fmt.Sprintf("Grid %s#%s", parentName, pathKey(path))
-		nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(path))
+		label := fmt.Sprintf("Grid %s#%s", parentName, pathKey(indexPath))
+		nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(indexPath))
 		node, err := b.buildComponentNode("Grid", effectiveSpec, effectiveFile, label, nodeName)
 		if err != nil {
 			return "", err
@@ -366,7 +366,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, p
 			}
 		}
 		for i, gc := range gridPayload.Children {
-			childPath := append(append([]int(nil), path...), i)
+			childPath := append(append([]int(nil), indexPath...), i)
 			lc := layoutChild{
 				Kind:     gc.Kind,
 				Ref:      gc.Ref,
@@ -565,7 +565,7 @@ func (b *builder) buildReportArtefacts() error {
 			return err
 		}
 
-		// Parse the artefact spec to get layoutPages
+		// Parse the artifact spec to get layoutPages
 		spec, err := parseReportArtefactSpec(doc.Raw)
 		if err != nil {
 			// Fall back to old behavior if parsing fails
@@ -723,7 +723,7 @@ func (b *builder) buildDocumentArtefacts() error {
 		// Parse the document spec to extract source files
 		spec, err := parseDocumentArtefactSpec(doc.Raw)
 		if err != nil {
-			return fmt.Errorf("document artefact %s: %w", doc.Name, err)
+			return fmt.Errorf("document artifact %s: %w", doc.Name, err)
 		}
 
 		// Create markdown file nodes as dependencies

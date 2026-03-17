@@ -27,9 +27,9 @@ func TestBuildGraphFromExampleBundle(t *testing.T) {
 		t.Fatalf("Build returned error: %v", err)
 	}
 
-	// Check that the minimalReport artefact exists
+	// Check that the minimalReport artifact exists
 	if _, ok := g.ReportArtefactByName("minimalReport"); !ok {
-		t.Fatalf("expected artefact minimalReport to exist")
+		t.Fatalf("expected artifact minimalReport to exist")
 	}
 
 	// Check dataset ppl_ds with dependency on ppl datasource

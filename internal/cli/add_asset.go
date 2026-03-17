@@ -218,7 +218,7 @@ Common asset types:
 				data.Name, err = promptAssetName(reader, out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -246,7 +246,7 @@ Common asset types:
 				assetType, err := promptAssetType(reader, out)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -258,7 +258,7 @@ Common asset types:
 			if data.LocalPath == "" && data.RemoteURL == "" {
 				if err := promptAssetSource(reader, out, workdir, &data); err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -298,7 +298,7 @@ Common asset types:
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Asset", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -327,8 +327,8 @@ Common asset types:
 				return RuntimeError(err)
 			}
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
-				return nil
+				fmt.Fprintln(out, "\nCanceled.")
+				return nil //nolint:nilerr // best effort: non-fatal for suggestions
 			}
 
 			if err := writeAssetManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
@@ -339,7 +339,7 @@ Common asset types:
 				editor := getEditor()
 				if editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -379,7 +379,7 @@ func completeAssetTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra
 }
 
 func promptAssetName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this Asset", "", func(name string) error {
+	return addPromptAddString(reader, out, "Name for this Asset", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -398,7 +398,7 @@ func promptAssetType(reader *bufio.Reader, out io.Writer) (AssetType, error) {
 		{Label: "File", Description: "Generic file (PDF, etc.)"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What type of asset?", options, 0)
+	idx, err := addPromptSelect(reader, out, "What type of asset?", options)
 	if err != nil {
 		return AssetTypeNone, err
 	}
@@ -413,7 +413,7 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 		{Label: "Remote URL", Description: "Reference a file from a URL"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "Asset source", options, 0)
+	idx, err := addPromptSelect(reader, out, "Asset source", options)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 	switch idx {
 	case 0: // Local file
 		ext := getAssetExtension(data.Type)
-		files, _ := searchAssetFiles(workdir, ext)
+		files := searchAssetFiles(workdir, ext)
 
 		if len(files) > 0 {
 			subOptions := []SelectOption{
@@ -429,14 +429,14 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 				{Label: "Enter path manually", Description: "Type a file path"},
 			}
 
-			subIdx, err := addPromptSelect(reader, out, "File source", subOptions, 0)
+			subIdx, err := addPromptSelect(reader, out, "File source", subOptions)
 			if err != nil {
 				return err
 			}
 
 			if subIdx == 0 {
 				items := FilesToFuzzyItems(files, data.Type.String())
-				item, err := addPromptFuzzySearch(reader, out, "Select file", items, false)
+				item, err := addPromptFuzzySearch(reader, out, "Select file", items)
 				if err != nil {
 					return err
 				}
@@ -444,7 +444,7 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 					return errAddCanceled
 				}
 				data.LocalPath = item.Name
-				return nil
+				return nil //nolint:nilerr // best effort: non-fatal for suggestions
 			}
 		}
 
@@ -478,7 +478,7 @@ func getAssetExtension(t AssetType) []string {
 	}
 }
 
-func searchAssetFiles(dir string, exts []string) ([]string, error) {
+func searchAssetFiles(dir string, exts []string) []string {
 	var files []string
 
 	searchDirs := []string{".", "assets", "images", "fonts", "files"}
@@ -491,7 +491,7 @@ func searchAssetFiles(dir string, exts []string) ([]string, error) {
 
 		err := filepath.WalkDir(searchPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // best effort: non-fatal for suggestions
 			}
 			if d.IsDir() {
 				name := d.Name()
@@ -518,7 +518,7 @@ func searchAssetFiles(dir string, exts []string) ([]string, error) {
 		}
 	}
 
-	return files, nil
+	return files
 }
 
 func detectMediaType(data AssetManifestData) string {

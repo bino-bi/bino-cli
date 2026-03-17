@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -20,6 +21,7 @@ import (
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 const defaultServePort = 8080
@@ -84,13 +86,30 @@ Environment knobs:
 
 			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
+			// Create a shared DuckDB session for the lifetime of the serve process.
+			// Extensions are loaded once; views and queries reuse the session.
+			duckdbOpts, err := duckdb.DefaultOptions()
+			if err != nil {
+				return RuntimeError(err)
+			}
+			duckdbOpts.QueryLogger = queryLogger
+			sharedSession, err := duckdb.OpenSession(ctx, duckdbOpts)
+			if err != nil {
+				return RuntimeError(err)
+			}
+			defer sharedSession.Close()
+
+			if err := sharedSession.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
+				return RuntimeError(err)
+			}
+
 			// Load documents once at startup
 			docs, err := config.LoadDir(ctx, env.ProjectRoot)
 			if err != nil {
 				return ConfigError(err)
 			}
 
-			// Collect live artefacts and find the requested one
+			// Collect live artifacts and find the requested one
 			liveArtefacts, err := config.CollectLiveArtefacts(docs)
 			if err != nil {
 				return ConfigError(err)
@@ -108,7 +127,7 @@ Environment knobs:
 				return ConfigErrorf("LiveReportArtefact %q not found; available: %s", live, strings.Join(available, ", "))
 			}
 
-			// Collect all query param names from the live artefact to exclude from env var check
+			// Collect all query param names from the live artifact to exclude from env var check
 			// For select type params with static items, also exclude {name}_LABEL
 			excludeNames := make(map[string]struct{})
 			for _, route := range liveArtefact.Spec.Routes {
@@ -131,8 +150,8 @@ Environment knobs:
 				return ConfigError(err)
 			}
 
-			// Collect report artefacts for validation
-			artefacts, err := config.CollectArtefacts(docs)
+			// Collect report artifacts for validation
+			artifacts, err := config.CollectArtefacts(docs)
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -145,14 +164,14 @@ Environment knobs:
 				}
 			}
 
-			// Validate the live artefact
-			if err := config.ValidateLiveArtefact(*liveArtefact, artefacts, layoutPageNames); err != nil {
+			// Validate the live artifact
+			if err := config.ValidateLiveArtefact(*liveArtefact, artifacts, layoutPageNames); err != nil {
 				return ConfigError(err)
 			}
 
-			// Build artefact lookup map
-			artefactMap := make(map[string]config.Artefact, len(artefacts))
-			for _, a := range artefacts {
+			// Build artifact lookup map
+			artefactMap := make(map[string]config.Artifact, len(artifacts))
+			for _, a := range artifacts {
 				artefactMap[a.Document.Name] = a
 			}
 
@@ -190,6 +209,7 @@ Environment knobs:
 				BaseDocs:      docs,
 				QueryLogger:   queryLogger,
 				EngineVersion: env.EngineVersion,
+				Session:       sharedSession,
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -198,7 +218,7 @@ Environment knobs:
 			if routeSetup.RootContent != nil {
 				server.SetContentFunc(routeSetup.RootContent)
 			}
-			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion))
+			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion, sharedSession))
 
 			url := server.URL()
 			logger.Successf("Serving at %s", url)
@@ -238,6 +258,7 @@ func prepareServeRequest(
 	routeSpec config.LiveRouteSpec,
 	liveArtefact config.LiveArtefact,
 	routePath string,
+	session *duckdb.Session,
 ) (*serveRequestContext, []byte, error) {
 	reqInfo := previewhttp.GetRequestInfo(ctx)
 
@@ -246,7 +267,7 @@ func prepareServeRequest(
 
 	// If there are missing required params, return missing params HTML
 	if !validation.IsValid() {
-		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
+		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
 		html := buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
 		return nil, html, nil
 	}
@@ -277,7 +298,7 @@ func prepareServeRequest(
 // serveRouteConfig holds configuration for setting up serve routes.
 type serveRouteConfig struct {
 	LiveArtefact  config.LiveArtefact
-	ArtefactMap   map[string]config.Artefact
+	ArtefactMap   map[string]config.Artifact
 	HookRunner    *hooks.Runner
 	HookEnv       hooks.HookEnv
 	Logger        logx.Logger
@@ -285,6 +306,7 @@ type serveRouteConfig struct {
 	BaseDocs      []config.Document
 	QueryLogger   func(string)
 	EngineVersion string
+	Session       *duckdb.Session
 }
 
 // serveRouteSetup holds the results of route setup.
@@ -302,10 +324,10 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 		routePath := path
 		routeSpec := route
 
-		if route.Artefact != "" {
-			art, ok := cfg.ArtefactMap[route.Artefact]
+		if route.Artifact != "" {
+			art, ok := cfg.ArtefactMap[route.Artifact]
 			if !ok {
-				return nil, fmt.Errorf("route %q references unknown artefact %q", path, route.Artefact)
+				return nil, fmt.Errorf("route %q references unknown artifact %q", path, route.Artifact)
 			}
 			routeArt := art
 
@@ -315,7 +337,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				}
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
-					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion,
+					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 				)
 			}
 		} else {
@@ -327,7 +349,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				}
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
-					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion,
+					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 				)
 			}
 		}
@@ -338,15 +360,15 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	// Set default content function for root if "/" is in routes
 	if rootRoute, ok := cfg.LiveArtefact.Spec.Routes["/"]; ok {
 		rootSpec := rootRoute
-		if rootRoute.Artefact != "" {
-			rootArt := cfg.ArtefactMap[rootRoute.Artefact]
+		if rootRoute.Artifact != "" {
+			rootArt := cfg.ArtefactMap[rootRoute.Artifact]
 			setup.RootContent = func(reqCtx context.Context) ([]byte, string, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
 				}
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
-					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion,
+					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 				)
 			}
 		} else {
@@ -357,7 +379,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				}
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
-					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion,
+					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 				)
 			}
 		}
@@ -367,14 +389,17 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 }
 
 // collectServeAssets pre-renders routes to collect all local assets needed for serving.
-func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact config.LiveArtefact, artefactMap map[string]config.Artefact, watchDir string, docs []config.Document, engineVersion string) []previewhttp.LocalAsset {
+func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact config.LiveArtefact, artefactMap map[string]config.Artifact, watchDir string, docs []config.Document, engineVersion string, session *duckdb.Session) []previewhttp.LocalAsset {
 	allAssets := make([]previewhttp.LocalAsset, 0)
 	for _, route := range liveArtefact.Spec.Routes {
-		if route.Artefact != "" {
-			art := artefactMap[route.Artefact]
-			renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, watchDir, docs, art, nil, spec.ModeServe, engineVersion)
+		if route.Artifact != "" {
+			art := artefactMap[route.Artifact]
+			renderResult, err := pipeline.RenderArtefactFrameAndContextWithModeAndOptions(ctx, watchDir, docs, art, spec.ModeServe, pipeline.FrameRenderOptions{
+				EngineVersion: engineVersion,
+				Session:       session,
+			})
 			if err != nil {
-				logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
+				logger.Warnf("Could not pre-render artifact %s for asset collection: %v", art.Document.Name, err)
 				continue
 			}
 			allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
@@ -383,7 +408,7 @@ func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact co
 				Workdir:       watchDir,
 				Mode:          pipeline.RenderModeServe,
 				EngineVersion: engineVersion,
-				QueryLogger:   nil,
+				Session:       session,
 			})
 			if err != nil {
 				logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
@@ -433,13 +458,14 @@ func serveRenderHandler(
 	cache *serveRenderCache,
 	workdir string,
 	baseDocs []config.Document,
-	artefact config.Artefact,
+	artifact config.Artifact,
 	liveArtefact config.LiveArtefact,
 	routePath string,
 	routeSpec config.LiveRouteSpec,
 	queryLogger func(string),
 	engineVersion string,
-) ([]byte, string, error) {
+	session *duckdb.Session,
+) (body []byte, contentType string, err error) {
 	// Extract query parameters from request context
 	reqInfo := previewhttp.GetRequestInfo(ctx)
 
@@ -449,23 +475,23 @@ func serveRenderHandler(
 	// If there are missing required params, show the sidebar with error indicators
 	if !validation.IsValid() {
 		// Resolve dataset options for select parameters (needed for sidebar)
-		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec)
+		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
 		return buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
 
 	queryParams := validation.Params
 
-	// Build cache key from artefact name + sorted query params
-	cacheKey := buildCacheKey(artefact.Document.Name, queryParams)
+	// Build cache key from artifact name + sorted query params
+	cacheKey := buildCacheKey(artifact.Document.Name, queryParams)
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
+		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
 	// If we have query params, reload documents with query params as variables
 	docs := baseDocs
-	currentArtefact := artefact
+	currentArtefact := artifact
 	if len(queryParams) > 0 {
 		// Create a lookup that checks query params first, then falls back to env vars
 		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
@@ -475,41 +501,45 @@ func serveRenderHandler(
 			Lookup: lookup,
 		})
 		if err != nil {
-			logger.Errorf("Reload failed for %s with query params: %v", artefact.Document.Name, err)
+			logger.Errorf("Reload failed for %s with query params: %v", artifact.Document.Name, err)
 			return nil, "", err
 		}
 		docs = reloadedDocs
 
-		// Re-collect artefacts to get the one with expanded query params
-		artefacts, err := config.CollectArtefacts(docs)
+		// Re-collect artifacts to get the one with expanded query params
+		artifacts, err := config.CollectArtefacts(docs)
 		if err != nil {
-			logger.Errorf("Collect artefacts failed for %s: %v", artefact.Document.Name, err)
+			logger.Errorf("Collect artifacts failed for %s: %v", artifact.Document.Name, err)
 			return nil, "", err
 		}
 
-		// Find the matching artefact by name
+		// Find the matching artifact by name
 		found := false
-		for _, a := range artefacts {
-			if a.Document.Name == artefact.Document.Name {
+		for _, a := range artifacts {
+			if a.Document.Name == artifact.Document.Name {
 				currentArtefact = a
 				found = true
 				break
 			}
 		}
 		if !found {
-			logger.Errorf("Artefact %s not found after reload", artefact.Document.Name)
-			return nil, "", fmt.Errorf("artefact %s not found after reload", artefact.Document.Name)
+			logger.Errorf("Artifact %s not found after reload", artifact.Document.Name)
+			return nil, "", fmt.Errorf("artifact %s not found after reload", artifact.Document.Name)
 		}
 	}
 
-	// Render the artefact with serve mode for constraint evaluation
-	renderResult, err := pipeline.RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, currentArtefact, queryLogger, spec.ModeServe, engineVersion)
+	// Render the artifact with serve mode for constraint evaluation
+	renderResult, err := pipeline.RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, currentArtefact, spec.ModeServe, pipeline.FrameRenderOptions{
+		QueryLogger:   queryLogger,
+		EngineVersion: engineVersion,
+		Session:       session,
+	})
 	if err != nil {
-		logger.Errorf("Render failed for %s: %v", artefact.Document.Name, err)
+		logger.Errorf("Render failed for %s: %v", artifact.Document.Name, err)
 		return nil, "", err
 	}
 
-	pipeline.LogDiagnostics(logger.Channel("datasource").Channel(artefact.Document.Name), renderResult.Diagnostics)
+	pipeline.LogDiagnostics(logger.Channel("datasource").Channel(artifact.Document.Name), renderResult.Diagnostics)
 
 	// Apply serve styles
 	frameHTML := withServeStyles(renderResult.FrameHTML)
@@ -522,7 +552,7 @@ func serveRenderHandler(
 		assets:      renderResult.LocalAssets,
 	})
 
-	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs), "text/html; charset=utf-8", nil
+	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
 }
 
 // serveLayoutPagesHandler handles on-demand rendering for a route with layoutPages.
@@ -538,9 +568,10 @@ func serveLayoutPagesHandler(
 	routeSpec config.LiveRouteSpec,
 	queryLogger func(string),
 	engineVersion string,
-) ([]byte, string, error) {
+	session *duckdb.Session,
+) (body []byte, contentType string, err error) {
 	// Process query parameters and reload documents if needed
-	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath)
+	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session)
 	if err != nil {
 		return nil, "", err
 	}
@@ -553,7 +584,7 @@ func serveLayoutPagesHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs), "text/html; charset=utf-8", nil
+		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
@@ -566,6 +597,7 @@ func serveLayoutPagesHandler(
 		EngineVersion:    engineVersion,
 		QueryLogger:      queryLogger,
 		LayoutPageParams: reqCtx.QueryParams,
+		Session:          session,
 	})
 	if err != nil {
 		logger.Errorf("Render failed for layoutPages: %v", err)
@@ -585,7 +617,7 @@ func serveLayoutPagesHandler(
 		assets:      renderResult.LocalAssets,
 	})
 
-	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs), "text/html; charset=utf-8", nil
+	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 }
 
 // filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
@@ -616,12 +648,12 @@ func filterDocsForLayoutPages(docs []config.Document, layoutPages config.LayoutP
 // buildLayoutPagesCacheKey creates a cache key from layout page refs and sorted query params.
 func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[string]string) string {
 	// Build page+params strings and sort for consistent key
-	var pageKeys []string
+	pageKeys := make([]string, 0, len(layoutPages))
 	for _, ref := range layoutPages {
 		pageKey := ref.Page
 		if len(ref.Params) > 0 {
 			// Include params in the key
-			var paramParts []string
+			paramParts := make([]string, 0, len(ref.Params))
 			for k, v := range ref.Params {
 				paramParts = append(paramParts, k+"="+v)
 			}
@@ -644,7 +676,7 @@ func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[s
 	}
 	sort.Strings(keys)
 
-	var parts []string
+	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts = append(parts, k+"="+params[k])
 	}
@@ -684,8 +716,8 @@ func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	for name, defaultVal := range defaults {
 		result.Params[name] = defaultVal
 		// Add _LABEL for select params with static items
-		if spec, ok := paramSpecs[name]; ok && spec.Type == "select" && spec.Options != nil && len(spec.Options.Items) > 0 {
-			result.Params[name+"_LABEL"] = lookupLiveSelectLabel(spec.Options.Items, defaultVal)
+		if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
+			result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, defaultVal)
 		}
 	}
 
@@ -699,8 +731,8 @@ func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 		if values, ok := requestQuery[name]; ok && len(values) > 0 {
 			result.Params[name] = values[0]
 			// Add _LABEL for select params with static items
-			if spec, ok := paramSpecs[name]; ok && spec.Type == "select" && spec.Options != nil && len(spec.Options.Items) > 0 {
-				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(spec.Options.Items, values[0])
+			if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
+				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, values[0])
 			}
 		}
 	}
@@ -729,7 +761,7 @@ func lookupLiveSelectLabel(items []config.LiveQueryParamOptionItem, value string
 	return value // Value not found in items, use value as-is
 }
 
-// buildCacheKey creates a cache key from artefact name and sorted query params.
+// buildCacheKey creates a cache key from artifact name and sorted query params.
 func buildCacheKey(artefactName string, params map[string]string) string {
 	if len(params) == 0 {
 		return artefactName
@@ -756,14 +788,14 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 // buildServeHTML combines frame and context HTML with seamless navigation support.
 // Instead of replacing the placeholder, it keeps the loading state and embeds context
 // as data to be injected after the template engine is ready.
-func buildServeHTML(ctx context.Context, frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, workdir string, docs []config.Document) []byte {
+func buildServeHTML(ctx context.Context, frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, workdir string, docs []config.Document, session *duckdb.Session) []byte {
 	frameStr := string(frameHTML)
 
 	// Encode context HTML as base64 for safe embedding
 	contextBase64 := base64.StdEncoding.EncodeToString(contextHTML)
 
 	// Resolve dataset options for select parameters
-	datasetOptions := resolveDatasetOptions(ctx, workdir, docs, routeSpec)
+	datasetOptions := resolveDatasetOptions(ctx, workdir, docs, routeSpec, session)
 
 	// Inject the navigation script and embedded context before </head>
 	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, nil)
@@ -861,7 +893,7 @@ type queryParamOptionItem struct {
 
 // resolveDatasetOptions resolves select options from datasets for a route's query parameters.
 // Returns a map from parameter name to resolved options.
-func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Document, routeSpec config.LiveRouteSpec) map[string][]queryParamOptionItem {
+func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Document, routeSpec config.LiveRouteSpec, session *duckdb.Session) map[string][]queryParamOptionItem {
 	result := make(map[string][]queryParamOptionItem)
 
 	// Find parameters that need dataset resolution
@@ -877,7 +909,11 @@ func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Do
 	}
 
 	// Execute datasets
-	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, nil)
+	var execOpts *dataset.ExecuteOptions
+	if session != nil {
+		execOpts = &dataset.ExecuteOptions{Session: session}
+	}
+	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
 	if err != nil {
 		// Log error but continue - options will be empty
 		return result
@@ -939,7 +975,7 @@ func buildRoutesJSON(liveArtefact config.LiveArtefact) []byte {
 	for path, route := range liveArtefact.Spec.Routes {
 		title := route.Title
 		if title == "" {
-			title = route.Artefact
+			title = route.Artifact
 		}
 		routes[path] = title
 	}
@@ -1072,7 +1108,7 @@ func withServeStyles(frameHTML []byte) []byte {
 `)
 
 	// Find </head> and inject styles before it
-	headClose := strings.Index(string(frameHTML), "</head>")
+	headClose := bytes.Index(frameHTML, []byte("</head>"))
 	if headClose == -1 {
 		// No </head> found, prepend styles
 		return append(styleBlock, frameHTML...)

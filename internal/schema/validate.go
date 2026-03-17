@@ -3,6 +3,7 @@ package schema
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -19,7 +20,7 @@ var documentSchema []byte
 var (
 	schemaOnce sync.Once
 	schemaObj  *gojsonschema.Schema
-	schemaErr  error
+	errSchema  error
 )
 
 // ValidationError contains structured validation failure information.
@@ -59,9 +60,9 @@ func (v ValidationIssue) Format() string {
 
 	// Field path with visual indicator
 	if v.Path != "" && v.Path != "(root)" {
-		b.WriteString(fmt.Sprintf("  - %s: %s", v.Path, v.Message))
+		fmt.Fprintf(&b, "  - %s: %s", v.Path, v.Message)
 	} else {
-		b.WriteString(fmt.Sprintf("  - (root): %s", v.Message))
+		fmt.Fprintf(&b, "  - (root): %s", v.Message)
 	}
 
 	return b.String()
@@ -99,11 +100,11 @@ func ValidateJSON(jsonBytes []byte) error {
 	// Initialize schema once
 	schemaOnce.Do(func() {
 		loader := gojsonschema.NewBytesLoader(documentSchema)
-		schemaObj, schemaErr = gojsonschema.NewSchema(loader)
+		schemaObj, errSchema = gojsonschema.NewSchema(loader)
 	})
 
-	if schemaErr != nil {
-		return fmt.Errorf("load schema: %w", schemaErr)
+	if errSchema != nil {
+		return fmt.Errorf("load schema: %w", errSchema)
 	}
 
 	// Validate
@@ -183,14 +184,16 @@ func convertYAMLToJSON(v any) any {
 
 // IsValidationError checks if an error is a ValidationError.
 func IsValidationError(err error) bool {
-	_, ok := err.(*ValidationError)
+	validationError := &ValidationError{}
+	ok := errors.As(err, &validationError)
 	return ok
 }
 
 // GetValidationIssues extracts ValidationIssues from an error.
 // Returns nil if the error is not a ValidationError.
 func GetValidationIssues(err error) []ValidationIssue {
-	if ve, ok := err.(*ValidationError); ok {
+	ve := &ValidationError{}
+	if errors.As(err, &ve) {
 		return ve.Errors
 	}
 	return nil

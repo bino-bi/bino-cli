@@ -161,8 +161,12 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 			continue
 		}
 
-		// Skip if already attached
+		// Skip if already attached (within this call or a previous call on the same session)
 		if _, exists := attachedDBs[attachName]; exists {
+			continue
+		}
+		if session.IsDBAttached(attachName) {
+			attachedDBs[attachName] = struct{}{}
 			continue
 		}
 
@@ -190,6 +194,7 @@ func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.D
 			continue
 		}
 		attachedDBs[attachName] = struct{}{}
+		session.MarkDBAttached(attachName)
 	}
 
 	// Create views for each DataSource
@@ -279,7 +284,7 @@ func createView(ctx context.Context, db *sql.DB, session *duckdb.Session, v view
 	sourceSQL += sampleClause
 
 	// Use quoted identifier for the view name to handle special characters
-	viewSQL := fmt.Sprintf("CREATE OR REPLACE VIEW \"%s\" AS %s", v.name, sourceSQL)
+	viewSQL := fmt.Sprintf("CREATE OR REPLACE VIEW %q AS %s", v.name, sourceSQL)
 
 	session.LogQuery(viewSQL)
 	viewStart := time.Now()
@@ -513,7 +518,7 @@ func buildMySQLSourceSQL(spec sourceSpec) (string, error) {
 
 // buildAttachSQL returns the ATTACH statement for external database sources.
 // Returns (attachName, attachSQL). If the source doesn't need ATTACH, returns ("", "").
-func buildAttachSQL(spec sourceSpec) (string, string) {
+func buildAttachSQL(spec sourceSpec) (attachName string, attachSQL string) {
 	switch spec.Type {
 	case sourceTypePostgresQuery:
 		return buildPostgresAttachSQL(spec)
@@ -536,19 +541,19 @@ func mysqlAttachName(sourceName string) string {
 
 // buildPostgresAttachSQL builds ATTACH statement for PostgreSQL.
 // Per DuckDB docs: ATTACH 'connStr' AS name (TYPE postgres, SECRET secretName)
-func buildPostgresAttachSQL(spec sourceSpec) (string, string) {
+func buildPostgresAttachSQL(spec sourceSpec) (attachName string, attachSQL string) {
 	if spec.Connection == nil {
 		return "", ""
 	}
 
-	attachName := postgresAttachName(spec.Name)
+	attachName = postgresAttachName(spec.Name)
 	connStr := buildPostgresConnection(*spec.Connection)
 
 	if secretName := strings.TrimSpace(spec.Connection.Secret); secretName != "" {
 		// Use ATTACH with SECRET for authentication
 		// Quote the secret name to handle names with special characters like hyphens
 		return attachName, fmt.Sprintf(
-			"ATTACH '%s' AS %s (TYPE postgres, SECRET \"%s\")",
+			"ATTACH '%s' AS %s (TYPE postgres, SECRET %q)",
 			escapeSQLString(connStr),
 			attachName,
 			secretName,
@@ -565,19 +570,19 @@ func buildPostgresAttachSQL(spec sourceSpec) (string, string) {
 
 // buildMySQLAttachSQL builds ATTACH statement for MySQL.
 // Per DuckDB docs: ATTACH 'connStr' AS name (TYPE mysql, SECRET secretName)
-func buildMySQLAttachSQL(spec sourceSpec) (string, string) {
+func buildMySQLAttachSQL(spec sourceSpec) (attachName string, attachSQL string) {
 	if spec.Connection == nil {
 		return "", ""
 	}
 
-	attachName := mysqlAttachName(spec.Name)
+	attachName = mysqlAttachName(spec.Name)
 	connStr := buildMySQLConnection(*spec.Connection)
 
 	if secretName := strings.TrimSpace(spec.Connection.Secret); secretName != "" {
 		// Use ATTACH with SECRET for authentication
 		// Quote the secret name to handle names with special characters like hyphens
 		return attachName, fmt.Sprintf(
-			"ATTACH '%s' AS %s (TYPE mysql, SECRET \"%s\")",
+			"ATTACH '%s' AS %s (TYPE mysql, SECRET %q)",
 			escapeSQLString(connStr),
 			attachName,
 			secretName,
@@ -596,7 +601,7 @@ func buildMySQLAttachSQL(spec sourceSpec) (string, string) {
 // Use this after RegisterViews to fetch data for a DataSource.
 // If session is provided, query execution metadata will be logged.
 func QueryView(ctx context.Context, db *sql.DB, session *duckdb.Session, name string) (json.RawMessage, error) {
-	query := fmt.Sprintf("SELECT * FROM \"%s\"", name)
+	query := fmt.Sprintf("SELECT * FROM %q", name) //nolint:gosec // G201: name is an internal registered DuckDB view, not user input
 
 	queryStart := time.Now()
 	rows, err := db.QueryContext(ctx, query)

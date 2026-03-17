@@ -27,7 +27,7 @@ func newGraphCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "graph",
 		Short: "Inspect manifest dependencies and hashes",
-		Long: strings.TrimSpace(`Load the manifest bundle, build a dependency graph across report artefacts,
+		Long: strings.TrimSpace(`Load the manifest bundle, build a dependency graph across report artifacts,
 components, datasets, and datasources, and print the relationships in either
 a tree or flat table view.`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -47,7 +47,7 @@ a tree or flat table view.`),
 				return ConfigErrorf("no YAML documents found in %s", absDir)
 			}
 
-			artefacts, err := config.CollectArtefacts(docs)
+			artifacts, err := config.CollectArtefacts(docs)
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -57,7 +57,7 @@ a tree or flat table view.`),
 				return ConfigError(err)
 			}
 
-			if len(artefacts) == 0 && len(documentArtefacts) == 0 {
+			if len(artifacts) == 0 && len(documentArtefacts) == 0 {
 				return ConfigErrorf("no ReportArtefact or DocumentArtefact manifests found in %s", absDir)
 			}
 
@@ -65,11 +65,11 @@ a tree or flat table view.`),
 				Include: include,
 				Exclude: exclude,
 			}
-			selected := pipeline.FilterArtefacts(artefacts, filterOpts)
+			selected := pipeline.FilterArtefacts(artifacts, filterOpts)
 			selectedDocs := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
 
 			if len(selected) == 0 && len(selectedDocs) == 0 {
-				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
+				return ConfigErrorf("no artifacts selected (check --artifact / --exclude-artifact)")
 			}
 
 			g, err := reportgraph.Build(ctx, docs)
@@ -81,14 +81,14 @@ a tree or flat table view.`),
 			for _, art := range selected {
 				node, ok := g.ReportArtefactByName(art.Document.Name)
 				if !ok {
-					return RuntimeErrorf("graph: artefact node %s not found", art.Document.Name)
+					return RuntimeErrorf("graph: artifact node %s not found", art.Document.Name)
 				}
 				roots = append(roots, node)
 			}
 			for _, docArt := range selectedDocs {
 				node, ok := g.DocumentArtefactByName(docArt.Document.Name)
 				if !ok {
-					return RuntimeErrorf("graph: document artefact node %s not found", docArt.Document.Name)
+					return RuntimeErrorf("graph: document artifact node %s not found", docArt.Document.Name)
 				}
 				roots = append(roots, node)
 			}
@@ -104,7 +104,7 @@ a tree or flat table view.`),
 			}
 
 			if logger != nil {
-				logger.Successf("Rendered %s view for %d artefact(s)", view, len(roots))
+				logger.Successf("Rendered %s view for %d artifact(s)", view, len(roots))
 			}
 			return nil
 		},
@@ -113,8 +113,8 @@ a tree or flat table view.`),
 	}
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
-	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to include (default: all)")
-	cmd.Flags().StringSliceVar(&exclude, "exclude-artefact", nil, "metadata.name entries to skip")
+	cmd.Flags().StringSliceVar(&include, "artifact", nil, "metadata.name entries to include (default: all)")
+	cmd.Flags().StringSliceVar(&exclude, "exclude-artifact", nil, "metadata.name entries to skip")
 	cmd.Flags().StringVar(&view, "view", "tree", "Output format: tree or flat")
 
 	return cmd
@@ -129,11 +129,11 @@ func printGraphTree(out io.Writer, g *reportgraph.Graph, roots []*reportgraph.No
 			fmt.Fprintln(out)
 		}
 		fmt.Fprintln(out, formatNodeLine(root, base))
-		printTreeChildren(out, g, root, "", true, base, map[string]bool{})
+		printTreeChildren(out, g, root, "", base, map[string]bool{})
 	}
 }
 
-func printTreeChildren(out io.Writer, g *reportgraph.Graph, node *reportgraph.Node, prefix string, last bool, base string, stack map[string]bool) {
+func printTreeChildren(out io.Writer, g *reportgraph.Graph, node *reportgraph.Node, prefix string, base string, stack map[string]bool) {
 	if node == nil {
 		return
 	}
@@ -148,12 +148,12 @@ func printTreeChildren(out io.Writer, g *reportgraph.Graph, node *reportgraph.No
 		}
 		line := formatNodeLine(child, base)
 		if stack[child.ID] {
-			line = line + " [cycle]"
+			line += " [cycle]"
 			fmt.Fprintf(out, "%s%s %s\n", prefix, connector, line)
 			continue
 		}
 		fmt.Fprintf(out, "%s%s %s\n", prefix, connector, line)
-		printTreeChildren(out, g, child, nextPrefix, idx == len(children)-1, base, stack)
+		printTreeChildren(out, g, child, nextPrefix, base, stack)
 	}
 	delete(stack, node.ID)
 }

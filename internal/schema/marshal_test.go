@@ -49,11 +49,11 @@ func TestQueryField_MarshalYAML(t *testing.T) {
 
 func TestQueryField_UnmarshalYAML(t *testing.T) {
 	tests := []struct {
-		name         string
-		yaml         string
-		wantInline   string
-		wantFile     string
-		wantErr      bool
+		name       string
+		yaml       string
+		wantInline string
+		wantFile   string
+		wantErr    bool
 	}{
 		{
 			name:       "inline query string",

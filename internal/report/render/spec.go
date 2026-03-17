@@ -14,29 +14,29 @@ type dateString = reportspec.DateString
 
 // layoutPageSpec defines the structure for LayoutPage components.
 type layoutPageSpec struct {
-	TitleBusinessUnit   string     `json:"titleBusinessUnit"`
-	TitleNamespace      string     `json:"titleNamespace"`
-	TitleDateStart      dateString `json:"titleDateStart"`
-	TitleDateEnd        dateString `json:"titleDateEnd"`
+	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
+	TitleNamespace      string                   `json:"titleNamespace"`
+	TitleDateStart      dateString               `json:"titleDateStart"`
+	TitleDateEnd        dateString               `json:"titleDateEnd"`
 	TitleDateFormat     string                   `json:"titleDateFormat"`
 	TitleDateLink       string                   `json:"titleDateLink"`
 	TitleMeasures       reportspec.MeasureList   `json:"titleMeasures"`
 	TitleScenarios      reportspec.StringOrSlice `json:"titleScenarios"`
 	TitleVariances      reportspec.StringOrSlice `json:"titleVariances"`
-	TitleOrder          string                 `json:"titleOrder"`
-	TitleOrderDirection string                 `json:"titleOrderDirection"`
-	PageLayout          string                 `json:"pageLayout"`
-	PageCustomTemplate  string                 `json:"pageCustomTemplate"`
-	PageGridGap         string                 `json:"pageGridGap"`
-	PageFormat          string                 `json:"pageFormat"`
-	PageOrientation     string                 `json:"pageOrientation"`
-	PageNumber          string                 `json:"pageNumber"`
-	MessageText         string                 `json:"messageText"`
-	MessageImage        string                 `json:"messageImage"`
-	FooterText          string                 `json:"footerText"`
-	PageFitToContent    *bool                  `json:"pageFitToContent"`
-	FooterDisplayNumber *bool                  `json:"footerDisplayPageNumber"`
-	Children            []layoutChild          `json:"children"`
+	TitleOrder          string                   `json:"titleOrder"`
+	TitleOrderDirection string                   `json:"titleOrderDirection"`
+	PageLayout          string                   `json:"pageLayout"`
+	PageCustomTemplate  string                   `json:"pageCustomTemplate"`
+	PageGridGap         string                   `json:"pageGridGap"`
+	PageFormat          string                   `json:"pageFormat"`
+	PageOrientation     string                   `json:"pageOrientation"`
+	PageNumber          string                   `json:"pageNumber"`
+	MessageText         string                   `json:"messageText"`
+	MessageImage        string                   `json:"messageImage"`
+	FooterText          string                   `json:"footerText"`
+	PageFitToContent    *bool                    `json:"pageFitToContent"`
+	FooterDisplayNumber *bool                    `json:"footerDisplayPageNumber"`
+	Children            []layoutChild            `json:"children"`
 }
 
 func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
@@ -75,21 +75,21 @@ type layoutCardSpec struct {
 	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
 	TitleScenarios      reportspec.StringOrSlice `json:"titleScenarios"`
 	TitleVariances      reportspec.StringOrSlice `json:"titleVariances"`
-	TitleOrder          string                 `json:"titleOrder"`
-	TitleOrderDirection string                 `json:"titleOrderDirection"`
-	TitleMeasures       reportspec.MeasureList `json:"titleMeasures"`
-	TitleDateStart      dateString             `json:"titleDateStart"`
-	TitleDateEnd        dateString             `json:"titleDateEnd"`
-	TitleDateFormat     string                 `json:"titleDateFormat"`
-	TitleDateLink       string                 `json:"titleDateLink"`
-	TitleNamespace      string                 `json:"titleNamespace"`
-	FooterText          string                 `json:"footerText"`
-	CardLayout          string                 `json:"cardLayout"`
-	CardCustomTemplate  string                 `json:"cardCustomTemplate"`
-	CardGridGap         string                 `json:"cardGridGap"`
-	CardFitToContent    *bool                  `json:"cardFitToContent"`
-	CardShowBorder      *bool                  `json:"cardShowBorder"`
-	Children            []layoutChild          `json:"children"`
+	TitleOrder          string                   `json:"titleOrder"`
+	TitleOrderDirection string                   `json:"titleOrderDirection"`
+	TitleMeasures       reportspec.MeasureList   `json:"titleMeasures"`
+	TitleDateStart      dateString               `json:"titleDateStart"`
+	TitleDateEnd        dateString               `json:"titleDateEnd"`
+	TitleDateFormat     string                   `json:"titleDateFormat"`
+	TitleDateLink       string                   `json:"titleDateLink"`
+	TitleNamespace      string                   `json:"titleNamespace"`
+	FooterText          string                   `json:"footerText"`
+	CardLayout          string                   `json:"cardLayout"`
+	CardCustomTemplate  string                   `json:"cardCustomTemplate"`
+	CardGridGap         string                   `json:"cardGridGap"`
+	CardFitToContent    *bool                    `json:"cardFitToContent"`
+	CardShowBorder      *bool                    `json:"cardShowBorder"`
+	Children            []layoutChild            `json:"children"`
 }
 
 func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
@@ -134,8 +134,8 @@ type layoutChildMeta struct {
 
 // textSpec defines the structure for Text components.
 type textSpec struct {
-	Value   string                 `json:"value"`
-	Dataset reportspec.DatasetList `json:"dataset"`
+	Value   string                   `json:"value"`
+	Dataset reportspec.DatasetList   `json:"dataset"`
 	Scale   reportspec.StringOrFloat `json:"scale,omitempty"`
 }
 
@@ -195,34 +195,34 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 
 // chartTimeSpec defines the structure for ChartTime components.
 type chartTimeSpec struct {
-	Dataset                         reportspec.DatasetList   `json:"dataset"`
-	ChartTitle                      string                   `json:"chartTitle"`
-	ChartMode                       string                   `json:"chartMode"`
-	AxisLabelsMode                  string                   `json:"axisLabelsMode"`
-	DateInterval                    string                   `json:"dateInterval"`
-	Filter                          string                   `json:"filter"`
-	Level                           string                   `json:"level"`
-	Order                           string                   `json:"order"`
-	OrderDirection                  string                   `json:"orderDirection"`
-	MeasureScale                    string                   `json:"measureScale"`
-	MeasureUnit                     string                   `json:"measureUnit"`
-	Internationalisation            string                   `json:"internationalisation"`
-	InternationalisationMode        string                   `json:"internationalisationMode"`
-	Translation                     string                   `json:"translation"`
-	ShowCategories                  *bool                    `json:"showCategories"`
-	ShowMeasureScale                *bool                    `json:"showMeasureScale"`
-	ShowOverlayAvg                  *bool                    `json:"showOverlayAvg"`
-	ShowOverlayMedian               *bool                    `json:"showOverlayMedian"`
-	Limit                           *int                     `json:"limit"`
-	MaxBars                         *int                     `json:"maxBars"`
-	LineFullWidth                   *bool                    `json:"lineFullWidth"`
-	IntervalSpanLimit               *int                     `json:"intervalSpanLimit"`
-	PercentageScaling               reportspec.StringOrFloat `json:"percentageScaling"`
-	UnitScaling                     reportspec.StringOrFloat `json:"unitScaling"`
-	SyncSpaceLeft                   *float64                 `json:"syncSpaceLeft"`
-	Scenarios                       []string                 `json:"scenarios"`
-	Variances                       []string                 `json:"variances"`
-	Stack                           *stackConfig             `json:"stack,omitempty"`
+	Dataset                  reportspec.DatasetList   `json:"dataset"`
+	ChartTitle               string                   `json:"chartTitle"`
+	ChartMode                string                   `json:"chartMode"`
+	AxisLabelsMode           string                   `json:"axisLabelsMode"`
+	DateInterval             string                   `json:"dateInterval"`
+	Filter                   string                   `json:"filter"`
+	Level                    string                   `json:"level"`
+	Order                    string                   `json:"order"`
+	OrderDirection           string                   `json:"orderDirection"`
+	MeasureScale             string                   `json:"measureScale"`
+	MeasureUnit              string                   `json:"measureUnit"`
+	Internationalisation     string                   `json:"internationalisation"`
+	InternationalisationMode string                   `json:"internationalisationMode"`
+	Translation              string                   `json:"translation"`
+	ShowCategories           *bool                    `json:"showCategories"`
+	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
+	ShowOverlayAvg           *bool                    `json:"showOverlayAvg"`
+	ShowOverlayMedian        *bool                    `json:"showOverlayMedian"`
+	Limit                    *int                     `json:"limit"`
+	MaxBars                  *int                     `json:"maxBars"`
+	LineFullWidth            *bool                    `json:"lineFullWidth"`
+	IntervalSpanLimit        *int                     `json:"intervalSpanLimit"`
+	PercentageScaling        reportspec.StringOrFloat `json:"percentageScaling"`
+	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
+	SyncSpaceLeft            *float64                 `json:"syncSpaceLeft"`
+	Scenarios                []string                 `json:"scenarios"`
+	Variances                []string                 `json:"variances"`
+	Stack                    *stackConfig             `json:"stack,omitempty"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -266,7 +266,7 @@ type treeSpec struct {
 	NodeSpacing   *float64        `json:"nodeSpacing"`
 	EdgeStyle     string          `json:"edgeStyle"`
 	ShowOperators *bool           `json:"showOperators"`
-	Nodes         []treeNode `json:"nodes"`
+	Nodes         []treeNode      `json:"nodes"`
 }
 
 // treeNode defines a node in a tree.

@@ -155,7 +155,7 @@ Text components can display:
 				data.Name, err = promptGenericName(reader, out, manifests, "Text")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -177,10 +177,10 @@ Text components can display:
 					{Label: "From DataSet", Description: "Dynamic text from a DataSet value"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "Text source", options, 0)
+				idx, err := addPromptSelect(reader, out, "Text source", options)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -196,9 +196,12 @@ Text components can display:
 					if len(datasets) == 0 {
 						fmt.Fprintln(out, "No DataSets found. Enter a name manually.")
 						data.Dataset, err = addPromptString(reader, out, "DataSet name", "")
+						if err != nil {
+							return RuntimeError(err)
+						}
 					} else {
 						items := ManifestsToFuzzyItems(datasets)
-						item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items, false)
+						item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items)
 						if err != nil {
 							return RuntimeError(err)
 						}
@@ -225,7 +228,7 @@ Text components can display:
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Text", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -245,7 +248,7 @@ Text components can display:
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -256,7 +259,7 @@ Text components can display:
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -377,7 +380,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				data.Name, err = promptGenericName(reader, out, manifests, "ComponentStyle")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -409,7 +412,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ComponentStyle", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -428,7 +431,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -545,7 +548,7 @@ Internationalization manifests define translations for a specific locale.
 				data.Name, err = promptGenericName(reader, out, manifests, "Internationalization")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -566,7 +569,7 @@ Internationalization manifests define translations for a specific locale.
 					{Label: "Other", Description: "Enter custom code"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "Locale code", options, 0)
+				idx, err := addPromptSelect(reader, out, "Locale code", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -588,7 +591,7 @@ Internationalization manifests define translations for a specific locale.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Internationalization", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -607,7 +610,7 @@ Internationalization manifests define translations for a specific locale.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -660,7 +663,7 @@ func completeLocaleCodes(_ *cobra.Command, _ []string, _ string) ([]string, cobr
 // Helper functions
 
 func promptGenericName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo, kind string) (string, error) {
-	return addPromptAddString(reader, out, fmt.Sprintf("Name for this %s", kind), "", func(name string) error {
+	return addPromptAddString(reader, out, fmt.Sprintf("Name for this %s", kind), func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}

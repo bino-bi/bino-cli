@@ -41,29 +41,6 @@ func rawDoc(kind, name string, specData map[string]any) json.RawMessage {
 	return data
 }
 
-// Helper to create a raw JSON document with labels and constraints.
-func rawDocWithMeta(kind, name string, labels map[string]string, constraints []string, specData map[string]any) json.RawMessage {
-	metadata := map[string]any{
-		"name": name,
-	}
-	if labels != nil {
-		metadata["labels"] = labels
-	}
-	if constraints != nil {
-		metadata["constraints"] = constraints
-	}
-	doc := map[string]any{
-		"apiVersion": "bino.bi/v1",
-		"kind":       kind,
-		"metadata":   metadata,
-	}
-	if specData != nil {
-		doc["spec"] = specData
-	}
-	data, _ := json.Marshal(doc)
-	return data
-}
-
 func TestReportArtefactRequired_NoArtefact(t *testing.T) {
 	docs := []Document{
 		{File: "/test/data.yaml", Position: 1, Kind: "DataSet", Name: "sales", Raw: rawDoc("DataSet", "sales", nil)},
@@ -75,8 +52,8 @@ func TestReportArtefactRequired_NoArtefact(t *testing.T) {
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings))
 	}
-	if findings[0].RuleID != "report-artefact-required" {
-		t.Errorf("expected rule ID 'report-artefact-required', got %q", findings[0].RuleID)
+	if findings[0].RuleID != "report-artifact-required" {
+		t.Errorf("expected rule ID 'report-artifact-required', got %q", findings[0].RuleID)
 	}
 }
 
@@ -126,7 +103,7 @@ func TestArtefactLayoutPageRequired_NoMatchingPage(t *testing.T) {
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings))
 	}
-	if findings[0].RuleID != "artefact-layoutpage-required" {
+	if findings[0].RuleID != "artifact-layoutpage-required" {
 		t.Errorf("expected rule ID 'artefact-layoutpage-required', got %q", findings[0].RuleID)
 	}
 }
@@ -436,8 +413,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 	rules := DefaultRules()
 
 	expectedIDs := []string{
-		"report-artefact-required",
-		"artefact-layoutpage-required",
+		"report-artifact-required",
+		"artifact-layoutpage-required",
 		"text-content-required",
 		"dataset-required",
 		"page-layout-slots-used",

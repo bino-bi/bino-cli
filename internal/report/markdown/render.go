@@ -408,9 +408,9 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 		Locale:        locale,
 		EngineVersion: engineVersion,
 		Title:         opts.Title,
-		PageCSS:       htmltemplate.CSS(pageCSS),
-		CustomCSS:     htmltemplate.CSS(customCSS),
-		ContextBody:   htmltemplate.HTML(contextBody.String()),
+		PageCSS:       htmltemplate.CSS(pageCSS),               //nolint:gosec // G203: generated from trusted format/orientation values
+		CustomCSS:     htmltemplate.CSS(customCSS),             //nolint:gosec // G203: stylesheet is from trusted manifest config
+		ContextBody:   htmltemplate.HTML(contextBody.String()), //nolint:gosec // G203: content is rendered from trusted template engine output
 	}
 
 	var buf bytes.Buffer
@@ -711,8 +711,8 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
 </html>
 `)
 
-func mustParseTemplate(name, text string) *htmltemplate.Template {
-	t, err := htmltemplate.New(name).Parse(text)
+func mustParseTemplate(name, textVal string) *htmltemplate.Template {
+	t, err := htmltemplate.New(name).Parse(textVal)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse template %s: %v", name, err))
 	}
@@ -721,7 +721,7 @@ func mustParseTemplate(name, text string) *htmltemplate.Template {
 
 // RenderComponentHTML renders a component from its document spec.
 // This is used by :ref[Kind:name] to inline component HTML.
-// It delegates to render.RenderComponentFromSpec to ensure consistent HTML output
+// It delegates to render.ComponentFromSpec to ensure consistent HTML output
 // between DocumentArtefact and ReportArtefact rendering.
 func RenderComponentHTML(doc config.Document, assetURLs map[string]string) (string, error) {
 	var payload struct {
@@ -730,7 +730,7 @@ func RenderComponentHTML(doc config.Document, assetURLs map[string]string) (stri
 	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
 		return "", fmt.Errorf("parse %s %s: %w", doc.Kind, doc.Name, err)
 	}
-	return render.RenderComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
+	return render.ComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
 }
 
 // NewRefExtensionWithContext creates a goldmark extension that renders :ref[Kind:name]
@@ -782,7 +782,7 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 		return ast.WalkContinue, nil
 	}
 
-	n := node.(*RefNode)
+	n, _ := node.(*RefNode)
 	kind := n.RefKind
 	name := n.RefName
 	caption := n.Caption

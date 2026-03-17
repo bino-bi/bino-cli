@@ -52,25 +52,25 @@ func formatSchemaError(err SchemaError) string {
 
 	// Field path with visual indicator
 	if err.Field != "" && err.Field != "(root)" {
-		b.WriteString(fmt.Sprintf("  ✗ %s\n", err.Field))
+		fmt.Fprintf(&b, "  ✗ %s\n", err.Field)
 	} else {
 		b.WriteString("  ✗ (document root)\n")
 	}
 
 	// Description
-	b.WriteString(fmt.Sprintf("    %s\n", err.Description))
+	fmt.Fprintf(&b, "    %s\n", err.Description)
 
 	// Show problematic value if available and small
 	if err.Value != nil {
 		valStr := fmt.Sprintf("%v", err.Value)
 		if len(valStr) <= 50 {
-			b.WriteString(fmt.Sprintf("    got: %s\n", valStr))
+			fmt.Fprintf(&b, "    got: %s\n", valStr)
 		}
 	}
 
 	// Add suggestions for common issues
 	if suggestion := getSuggestion(err); suggestion != "" {
-		b.WriteString(fmt.Sprintf("    hint: %s\n", suggestion))
+		fmt.Fprintf(&b, "    hint: %s\n", suggestion)
 	}
 
 	return b.String()

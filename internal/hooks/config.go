@@ -7,7 +7,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 )
 
-// ValidCheckpoints is the set of recognised hook checkpoint names.
+// ValidCheckpoints is the set of recognized hook checkpoint names.
 var ValidCheckpoints = map[string]struct{}{
 	"pre-build":      {},
 	"pre-datasource": {},

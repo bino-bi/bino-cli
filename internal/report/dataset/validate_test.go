@@ -184,8 +184,8 @@ func TestValidateRows_ValidDateFormat(t *testing.T) {
 
 func TestValidateRows_MissingDependentRequired(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        json.RawMessage
+		name         string
+		data         json.RawMessage
 		missingField string
 	}{
 		{"rowGroup-without-index", json.RawMessage(`[{"rowGroup": "Revenue"}]`), "rowGroupIndex"},

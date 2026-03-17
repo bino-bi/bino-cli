@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -121,7 +122,7 @@ func TestCompressionMiddleware_Brotli(t *testing.T) {
 		w.Write([]byte(testBody))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "br")
 
 	rec := httptest.NewRecorder()
@@ -159,7 +160,7 @@ func TestCompressionMiddleware_Gzip(t *testing.T) {
 		w.Write([]byte(testBody))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	rec := httptest.NewRecorder()
@@ -198,7 +199,7 @@ func TestCompressionMiddleware_NoCompression(t *testing.T) {
 		w.Write([]byte(testBody))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	// No Accept-Encoding header
 
 	rec := httptest.NewRecorder()
@@ -226,7 +227,7 @@ func TestCompressionMiddleware_NonCompressibleContentType(t *testing.T) {
 		w.Write(testBody)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "br, gzip")
 
 	rec := httptest.NewRecorder()
@@ -310,7 +311,7 @@ func TestCompressionMiddleware_LargeBody(t *testing.T) {
 		w.Write([]byte(testBody))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "br")
 
 	rec := httptest.NewRecorder()
@@ -340,7 +341,7 @@ func TestCompressionMiddleware_JSON(t *testing.T) {
 		w.Write([]byte(testBody))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Accept-Encoding", "br")
 
 	rec := httptest.NewRecorder()

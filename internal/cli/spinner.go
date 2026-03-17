@@ -40,7 +40,7 @@ func NewSpinner(cfg SpinnerConfig) *Spinner {
 	// Determine TTY status
 	isTTY := false
 	if f, ok := stdout.(*os.File); ok {
-		isTTY = term.IsTerminal(int(f.Fd()))
+		isTTY = term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: fd value fits in int on all supported platforms
 	}
 
 	// Check CI environment - disable spinner in CI
@@ -61,7 +61,7 @@ func NewSpinner(cfg SpinnerConfig) *Spinner {
 		// Create spinner with dots pattern for modern look
 		sp := spinner.New(spinner.CharSets[14], 80*time.Millisecond, spinner.WithWriter(stdout))
 		if !style.NoColor {
-			sp.Color("cyan")
+			_ = sp.Color("cyan")
 		}
 		s.spinner = sp
 	}

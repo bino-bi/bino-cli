@@ -197,12 +197,12 @@ func TestBuildCSVSourceSQL(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		spec       sourceSpec
-		wantPrefix string // check that output starts with this
-		wantSuffix string // check that output ends with this
+		name         string
+		spec         sourceSpec
+		wantPrefix   string // check that output starts with this
+		wantSuffix   string // check that output ends with this
 		wantContains []string
-		wantErr    bool
+		wantErr      bool
 	}{
 		{
 			name: "no options uses read_csv_auto",
@@ -221,7 +221,7 @@ func TestBuildCSVSourceSQL(t *testing.T) {
 				BaseDir:   tmpDir,
 				Delimiter: ";",
 			},
-			wantPrefix: "SELECT * FROM read_csv('",
+			wantPrefix:   "SELECT * FROM read_csv('",
 			wantContains: []string{"delim = ';'"},
 		},
 		{

@@ -212,8 +212,8 @@ func runAddKindSelector(cmd *cobra.Command) error {
 	).WithTheme(getHuhTheme())
 
 	if err := form.Run(); err != nil {
-		if err == huh.ErrUserAborted {
-			fmt.Fprintln(cmd.OutOrStdout(), "Cancelled.")
+		if errors.Is(err, huh.ErrUserAborted) {
+			fmt.Fprintln(cmd.OutOrStdout(), "Canceled.")
 			return nil
 		}
 		return err
