@@ -257,12 +257,7 @@ func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io
 	}
 
 	// First pass: use lenient mode to gather documents but track validation errors
-	diagnostics, err := validateDirectory(ctx, absDir, executeQueries)
-	if err != nil {
-		result.Error = fmt.Sprintf("validation failed: %v", err)
-		result.Valid = false
-		return outputJSON(out, result)
-	}
+	diagnostics := validateDirectory(ctx, absDir, executeQueries)
 
 	result.Diagnostics = diagnostics
 	result.Valid = len(diagnostics) == 0
@@ -273,14 +268,14 @@ func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io
 // validateDirectory performs validation on all bino documents in a directory
 // and returns structured diagnostics for any issues found.
 // If executeQueries is true, datasets are executed and data is validated.
-func validateDirectory(ctx context.Context, dir string, executeQueries bool) ([]LSPDiagnostic, error) {
+func validateDirectory(ctx context.Context, dir string, executeQueries bool) []LSPDiagnostic {
 	var diagnostics []LSPDiagnostic
 
 	// Load documents in strict mode first to catch schema errors
 	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false})
 	if err != nil {
 		// Parse the error to extract diagnostic info
-		diag := parseValidationError(err, dir)
+		diag := parseValidationError(err)
 		diagnostics = append(diagnostics, diag...)
 
 		// If strict loading failed, also try lenient to get the document list
@@ -303,7 +298,7 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) ([]
 
 	// Validate document uniqueness (ReportArtefact names)
 	if err := config.ValidateDocuments(docs); err != nil {
-		diag := parseValidationError(err, dir)
+		diag := parseValidationError(err)
 		diagnostics = append(diagnostics, diag...)
 	}
 
@@ -361,11 +356,11 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) ([]
 		}
 	}
 
-	return diagnostics, nil
+	return diagnostics
 }
 
 // parseValidationError converts a validation error into LSPDiagnostic entries.
-func parseValidationError(err error, baseDir string) []LSPDiagnostic {
+func parseValidationError(err error) []LSPDiagnostic {
 	var diagnostics []LSPDiagnostic
 
 	errStr := err.Error()
@@ -436,7 +431,7 @@ func parseFileError(errStr string) (file string, position int, message string) {
 			}
 		}
 		if posStr != "" {
-			fmt.Sscanf(posStr, "%d", &position)
+			_, _ = fmt.Sscanf(posStr, "%d", &position)
 		}
 		return file, position, message
 	}
@@ -462,7 +457,7 @@ func parseFileError(errStr string) (file string, position int, message string) {
 			}
 		}
 		if posStr != "" {
-			fmt.Sscanf(posStr, "%d", &position)
+			_, _ = fmt.Sscanf(posStr, "%d", &position)
 		}
 		return file, position, message
 	}
@@ -559,7 +554,7 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 }
 
 // executeRowsPreview runs a query against a DataSource or DataSet and returns limited rows.
-func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []config.Document, limit int) ([]string, []map[string]any, bool, error) {
+func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []config.Document, limit int) (cols []string, rowData []map[string]any, isTruncated bool, err error) {
 	// Open a DuckDB session
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
@@ -592,7 +587,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 	switch doc.Kind {
 	case "DataSource":
 		// DataSource is already a view, just select from it
-		query = fmt.Sprintf("SELECT * FROM \"%s\" LIMIT %d", doc.Name, limit+1)
+		query = fmt.Sprintf("SELECT * FROM %q LIMIT %d", doc.Name, limit+1)
 
 	case "DataSet":
 		// DataSet has a custom query (SQL or PRQL)
@@ -606,18 +601,19 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 			return nil, nil, false, fmt.Errorf("parse dataset spec: %w", err)
 		}
 
-		if payload.Spec.Prql != "" {
+		switch {
+		case payload.Spec.Prql != "":
 			// Load PRQL extension for PRQL queries
 			if err := session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions()); err != nil {
 				return nil, nil, false, fmt.Errorf("load prql extension: %w", err)
 			}
 			// For PRQL, wrap the query with a LIMIT
 			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", payload.Spec.Prql, limit+1)
-		} else if payload.Spec.Query != "" {
+		case payload.Spec.Query != "":
 			// Strip trailing semicolons to avoid syntax errors when wrapping
 			sqlQuery := strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
 			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", sqlQuery, limit+1)
-		} else {
+		default:
 			return nil, nil, false, fmt.Errorf("dataset has no query or prql")
 		}
 
@@ -715,7 +711,7 @@ func newLSPGraphDepsCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&kind, "kind", "", "Node kind: ReportArtefact, DataSet, DataSource, LayoutPage, LayoutCard, Component")
-	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., dataset name, artefact name)")
+	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., dataset name, artifact name)")
 	cmd.Flags().StringVar(&direction, "direction", "both", "Traversal direction: in (dependents), out (dependencies), both")
 	cmd.Flags().IntVar(&maxDepth, "max-depth", 0, "Maximum traversal depth (0 = unlimited)")
 

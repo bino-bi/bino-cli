@@ -69,17 +69,20 @@ func TestCollectInlineAndPathSources(t *testing.T) {
 	}
 
 	inlineRows := decodeRows(t, results[0].Data)
-	if len(inlineRows) != 1 || inlineRows[0]["bean"].(string) != "Mokka" {
+	inlineBean, ok := inlineRows[0]["bean"].(string)
+	if len(inlineRows) != 1 || !ok || inlineBean != "Mokka" {
 		t.Fatalf("unexpected inline rows: %#v", inlineRows)
 	}
 
 	directRows := decodeRows(t, results[1].Data)
-	if directRows[0]["bean"].(string) != "Guji" {
+	directBean, ok := directRows[0]["bean"].(string)
+	if !ok || directBean != "Guji" {
 		t.Fatalf("unexpected direct rows: %#v", directRows)
 	}
 
 	stringRows := decodeRows(t, results[2].Data)
-	if stringRows[0]["bean"].(string) != "Kochere" {
+	stringBean, ok := stringRows[0]["bean"].(string)
+	if !ok || stringBean != "Kochere" {
 		t.Fatalf("unexpected string rows: %#v", stringRows)
 	}
 
@@ -87,7 +90,8 @@ func TestCollectInlineAndPathSources(t *testing.T) {
 	if len(fileRows) != 2 {
 		t.Fatalf("unexpected file rows: %#v", fileRows)
 	}
-	if fileRows[0]["drink"].(string) != "espresso" {
+	fileDrink, ok := fileRows[0]["drink"].(string)
+	if !ok || fileDrink != "espresso" {
 		t.Fatalf("unexpected first drink: %#v", fileRows[0])
 	}
 }

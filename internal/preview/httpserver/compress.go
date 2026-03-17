@@ -153,13 +153,13 @@ func (c *compressedResponseWriter) writeHeader(statusCode int) {
 	case compressionBrotli:
 		c.ResponseWriter.Header().Set("Content-Encoding", "br")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		bw := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
 		bw.Reset(c.ResponseWriter)
 		c.writer = bw
 	case compressionGzip:
 		c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		gw := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(c.ResponseWriter)
 		c.writer = gw
 	default:
@@ -190,6 +190,7 @@ func (c *compressedResponseWriter) Close() error {
 			gzipWriterPool.Put(gw)
 			return err
 		}
+	default:
 	}
 	return nil
 }
@@ -211,6 +212,7 @@ func (c *compressedResponseWriter) Flush() {
 		if gw, ok := c.writer.(*gzip.Writer); ok {
 			_ = gw.Flush()
 		}
+	default:
 	}
 
 	// Flush the underlying response writer
@@ -233,28 +235,6 @@ func (c *compressedResponseWriter) Push(target string, opts *http.PushOptions) e
 		return pusher.Push(target, opts)
 	}
 	return http.ErrNotSupported
-}
-
-// compressionMiddleware wraps an http.Handler with compression support.
-func compressionMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Determine compression type from Accept-Encoding header
-		compType := selectCompression(r.Header.Get("Accept-Encoding"))
-
-		if compType == compressionNone {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		cw := &compressedResponseWriter{
-			ResponseWriter: w,
-			compType:       compType,
-			writer:         w, // Default to original writer until header is written
-		}
-		defer cw.Close()
-
-		next.ServeHTTP(cw, r)
-	})
 }
 
 // compressionHandlerFunc wraps an http.HandlerFunc with compression support.
@@ -304,13 +284,13 @@ func newSSECompressedWriter(w http.ResponseWriter, compType compressionType) *ss
 	case compressionBrotli:
 		w.Header().Set("Content-Encoding", "br")
 		w.Header().Add("Vary", "Accept-Encoding")
-		bw := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
 		bw.Reset(w)
 		sw.writer = bw
 	case compressionGzip:
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Add("Vary", "Accept-Encoding")
-		gw := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(w)
 		sw.writer = gw
 	default:
@@ -337,6 +317,7 @@ func (s *sseCompressedWriter) Flush() {
 		if gw, ok := s.writer.(*gzip.Writer); ok {
 			_ = gw.Flush()
 		}
+	default:
 	}
 
 	// Flush the underlying response writer
@@ -366,6 +347,7 @@ func (s *sseCompressedWriter) Close() error {
 			gzipWriterPool.Put(gw)
 			return err
 		}
+	default:
 	}
 	return nil
 }

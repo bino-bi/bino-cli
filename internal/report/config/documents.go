@@ -11,16 +11,16 @@ import (
 // Document captures the minimal metadata needed by the CLI to orchestrate
 // downstream stages without committing to a full internal representation yet.
 type Document struct {
-	File           string             // Absolute path to the YAML file that produced this document.
-	Position       int                // 1-based index within the source file for multi-doc manifests.
-	Kind           string             // Kind extracted from the manifest header.
-	Name           string             // metadata.name value.
-	Labels         map[string]string  // metadata.labels for constraint evaluation.
-	Constraints    []*spec.Constraint // metadata.constraints for conditional inclusion (parsed).
+	File           string                // Absolute path to the YAML file that produced this document.
+	Position       int                   // 1-based index within the source file for multi-doc manifests.
+	Kind           string                // Kind extracted from the manifest header.
+	Name           string                // metadata.name value.
+	Labels         map[string]string     // metadata.labels for constraint evaluation.
+	Constraints    []*spec.Constraint    // metadata.constraints for conditional inclusion (parsed).
 	Params         []LayoutPageParamSpec // metadata.params for LayoutPage parameter definitions.
-	Raw            json.RawMessage    // Validated JSON payload for downstream consumers.
-	OriginalRaw    json.RawMessage    // Original JSON before param expansion (for LayoutPages with params).
-	MissingEnvVars []string           // Environment variables referenced but not set (no default).
+	Raw            json.RawMessage       // Validated JSON payload for downstream consumers.
+	OriginalRaw    json.RawMessage       // Original JSON before param expansion (for LayoutPages with params).
+	MissingEnvVars []string              // Environment variables referenced but not set (no default).
 }
 
 type documentHeader struct {

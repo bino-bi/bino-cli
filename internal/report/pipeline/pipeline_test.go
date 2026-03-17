@@ -27,7 +27,7 @@ func parseConstraints(t *testing.T, strs ...string) []*spec.Constraint {
 }
 
 func TestFilterDocsByConstraints(t *testing.T) {
-	// Create an artefact document
+	// Create an artifact document
 	artefactRaw, _ := json.Marshal(map[string]any{
 		"apiVersion": "bino.bi/v1alpha1",
 		"kind":       "ReportArtefact",
@@ -35,7 +35,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 		"spec":       map[string]any{"format": "a4"},
 	})
 
-	artefact := config.Artefact{
+	artifact := config.Artifact{
 		Document: config.Document{
 			Kind: "ReportArtefact",
 			Name: "testArtefact",
@@ -50,7 +50,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "DataSource", Name: "data", Constraints: nil},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "Asset", Name: "logo_build", Constraints: parseConstraints(t, "mode==build")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -83,7 +83,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "Asset", Name: "logo_build", Constraints: parseConstraints(t, "mode==build")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModePreview)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModePreview)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "Asset", Name: "logo_dev", Constraints: parseConstraints(t, "labels.env==dev")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "LayoutPage", Name: "page_xga", Constraints: parseConstraints(t, "spec.format==xga")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "ReportArtefact", Name: "artefact1", Constraints: parseConstraints(t, "mode==preview")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -151,7 +151,7 @@ func TestFilterDocsByConstraints(t *testing.T) {
 			{Kind: "Asset", Name: "logo2", Constraints: parseConstraints(t, "mode==preview", "labels.env==prod")},
 		}
 
-		filtered, err := filterDocsByConstraints(docs, artefact, spec.ModeBuild)
+		filtered, err := filterDocsByConstraints(docs, artifact, spec.ModeBuild)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

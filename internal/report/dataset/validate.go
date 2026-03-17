@@ -64,15 +64,15 @@ type DataValidationResult struct {
 
 // dependentRequiredPairs defines field pairs where one requires the other.
 var dependentRequiredPairs = map[string]string{
-	"rowGroup":          "rowGroupIndex",
-	"rowGroupIndex":     "rowGroup",
-	"category":          "categoryIndex",
-	"categoryIndex":     "category",
-	"subCategory":       "subCategoryIndex",
-	"subCategoryIndex":  "subCategory",
-	"columnGroup":       "columnGroupIndex",
-	"columnGroupIndex":  "columnGroup",
-	"columnSubGroup":    "columnSubGroupIndex",
+	"rowGroup":            "rowGroupIndex",
+	"rowGroupIndex":       "rowGroup",
+	"category":            "categoryIndex",
+	"categoryIndex":       "category",
+	"subCategory":         "subCategoryIndex",
+	"subCategoryIndex":    "subCategory",
+	"columnGroup":         "columnGroupIndex",
+	"columnGroupIndex":    "columnGroup",
+	"columnSubGroup":      "columnSubGroupIndex",
 	"columnSubGroupIndex": "columnSubGroup",
 }
 
@@ -90,15 +90,15 @@ var stringFields = map[string]bool{
 
 // numberFields are fields that should be numbers.
 var numberFields = map[string]bool{
-	"rowGroupIndex":     true,
-	"categoryIndex":     true,
-	"subCategoryIndex":  true,
-	"columnGroupIndex":  true,
+	"rowGroupIndex":       true,
+	"categoryIndex":       true,
+	"subCategoryIndex":    true,
+	"columnGroupIndex":    true,
 	"columnSubGroupIndex": true,
-	"ac1":  true, "pp1": true, "fc1": true, "pl1": true,
-	"ac2":  true, "pp2": true, "fc2": true, "pl2": true,
-	"ac3":  true, "pp3": true, "fc3": true, "pl3": true,
-	"ac4":  true, "pp4": true, "fc4": true, "pl4": true,
+	"ac1":                 true, "pp1": true, "fc1": true, "pl1": true,
+	"ac2": true, "pp2": true, "fc2": true, "pl2": true,
+	"ac3": true, "pp3": true, "fc3": true, "pl3": true,
+	"ac4": true, "pp4": true, "fc4": true, "pl4": true,
 }
 
 // datePattern matches ISO 8601 dates (YYYY-MM-DD) and datetimes
@@ -250,11 +250,11 @@ func validateRow(rowIndex int, row map[string]any) []DataValidationError {
 // Strings with comma decimal separators (e.g., "936,6667") are accepted since
 // CSV data loaded through DuckDB may preserve locale-specific number formatting.
 func isNumber(v any) bool {
-	switch v.(type) {
+	switch v := v.(type) {
 	case float64, float32, int, int32, int64, uint, uint32, uint64, json.Number:
 		return true
 	case string:
-		s := v.(string)
+		s := v
 		// Try parsing directly (handles "123", "1.5", "-3.14")
 		if _, err := strconv.ParseFloat(s, 64); err == nil {
 			return true
@@ -327,11 +327,11 @@ func FormatValidationErrors(result DataValidationResult) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Dataset %q: %d validation error(s) in %d/%d rows sampled:\n",
-		result.DataSet, len(result.Errors), result.SampleSize, result.TotalRows))
+	fmt.Fprintf(&sb, "Dataset %q: %d validation error(s) in %d/%d rows sampled:\n",
+		result.DataSet, len(result.Errors), result.SampleSize, result.TotalRows)
 
 	for _, err := range result.Errors {
-		sb.WriteString(fmt.Sprintf("  - %s\n", err.String()))
+		fmt.Fprintf(&sb, "  - %s\n", err.String())
 	}
 
 	return sb.String()

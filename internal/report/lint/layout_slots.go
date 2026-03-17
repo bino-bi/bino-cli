@@ -31,7 +31,7 @@ var renderableChildKinds = map[string]bool{
 	"Table":          true,
 	"ChartStructure": true,
 	"ChartTime":      true,
-	"Tree":      true,
+	"Tree":           true,
 	"Grid":           true,
 	"Image":          true,
 }
@@ -129,8 +129,8 @@ var pageLayoutSlotsUsed = Rule{
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 
-		// Collect artefacts and pages
-		var artefacts []Document
+		// Collect artifacts and pages
+		var artifacts []Document
 		pages := make(map[string]Document) // name -> doc
 		cards := make(map[string]Document) // name -> doc
 		components := make(map[string]Document)
@@ -138,7 +138,7 @@ var pageLayoutSlotsUsed = Rule{
 		for _, doc := range docs {
 			switch doc.Kind {
 			case "ReportArtefact":
-				artefacts = append(artefacts, doc)
+				artifacts = append(artifacts, doc)
 			case "LayoutPage":
 				pages[doc.Name] = doc
 			case "LayoutCard":
@@ -148,26 +148,26 @@ var pageLayoutSlotsUsed = Rule{
 			}
 		}
 
-		// If no artefacts, skip (report-artefact-required handles this)
-		if len(artefacts) == 0 {
+		// If no artifacts, skip (report-artifact-required handles this)
+		if len(artifacts) == 0 {
 			return nil
 		}
 
-		// Track which (artefact, page) pairs we've checked to avoid duplicates
+		// Track which (artifact, page) pairs we've checked to avoid duplicates
 		checked := make(map[string]struct{})
 
-		// For each artefact, check matching pages
-		for _, artefact := range artefacts {
-			artefactFormat := getArtefactFormat(artefact.Raw)
+		// For each artifact, check matching pages
+		for _, artifact := range artifacts {
+			artefactFormat := getArtefactFormat(artifact.Raw)
 
 			for _, page := range pages {
-				// Check if page matches this artefact
-				if !pageMatchesArtefact(page, artefact, artefactFormat) {
+				// Check if page matches this artifact
+				if !pageMatchesArtefact(page, artifact, artefactFormat) {
 					continue
 				}
 
-				// Avoid duplicate findings for same page/artefact combo
-				key := fmt.Sprintf("%s:%s", artefact.Name, page.Name)
+				// Avoid duplicate findings for same page/artifact combo
+				key := fmt.Sprintf("%s:%s", artifact.Name, page.Name)
 				if _, ok := checked[key]; ok {
 					continue
 				}
@@ -185,7 +185,7 @@ var pageLayoutSlotsUsed = Rule{
 				expected := expectedSlots(pageSpec.Spec.PageLayout, pageSpec.Spec.PageCustomTemplate)
 
 				// Count effective children after constraints
-				specMap, err := spec.SpecToMap(artefact.Raw)
+				specMap, err := spec.ToMap(artifact.Raw)
 				if err != nil {
 					continue
 				}
@@ -196,7 +196,7 @@ var pageLayoutSlotsUsed = Rule{
 
 				for _, mode := range []spec.Mode{spec.ModeBuild, spec.ModePreview} {
 					ctx := &spec.ConstraintContext{
-						Labels: artefact.Labels,
+						Labels: artifact.Labels,
 						Spec:   specMap,
 						Mode:   mode,
 					}
@@ -205,7 +205,6 @@ var pageLayoutSlotsUsed = Rule{
 						pageSpec.Spec.Children,
 						ctx,
 						page,
-						artefact.Name,
 						cards,
 						components,
 						"spec.children",
@@ -224,8 +223,8 @@ var pageLayoutSlotsUsed = Rule{
 				// Check slot count
 				if effectiveCount != expected {
 					msg := fmt.Sprintf(
-						"pageLayout %q expects %d slot(s) but page has %d effective children (for artefact %q)",
-						pageSpec.Spec.PageLayout, expected, effectiveCount, artefact.Name,
+						"pageLayout %q expects %d slot(s) but page has %d effective children (for artifact %q)",
+						pageSpec.Spec.PageLayout, expected, effectiveCount, artifact.Name,
 					)
 					findings = append(findings, Finding{
 						RuleID:  "page-layout-slots-used",
@@ -250,8 +249,8 @@ var cardLayoutSlotsUsed = Rule{
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 
-		// Collect artefacts, pages, and cards
-		var artefacts []Document
+		// Collect artifacts, pages, and cards
+		var artifacts []Document
 		pages := make(map[string]Document)
 		cards := make(map[string]Document)
 		components := make(map[string]Document)
@@ -259,7 +258,7 @@ var cardLayoutSlotsUsed = Rule{
 		for _, doc := range docs {
 			switch doc.Kind {
 			case "ReportArtefact":
-				artefacts = append(artefacts, doc)
+				artifacts = append(artifacts, doc)
 			case "LayoutPage":
 				pages[doc.Name] = doc
 			case "LayoutCard":
@@ -269,25 +268,25 @@ var cardLayoutSlotsUsed = Rule{
 			}
 		}
 
-		// If no artefacts, skip
-		if len(artefacts) == 0 {
+		// If no artifacts, skip
+		if len(artifacts) == 0 {
 			return nil
 		}
 
-		// Track checked (artefact, card) pairs
+		// Track checked (artifact, card) pairs
 		checked := make(map[string]struct{})
 
-		// For each artefact, find matching pages, then validate cards used in those pages
-		for _, artefact := range artefacts {
-			artefactFormat := getArtefactFormat(artefact.Raw)
+		// For each artifact, find matching pages, then validate cards used in those pages
+		for _, artifact := range artifacts {
+			artefactFormat := getArtefactFormat(artifact.Raw)
 
-			specMap, err := spec.SpecToMap(artefact.Raw)
+			specMap, err := spec.ToMap(artifact.Raw)
 			if err != nil {
 				continue
 			}
 
 			for _, page := range pages {
-				if !pageMatchesArtefact(page, artefact, artefactFormat) {
+				if !pageMatchesArtefact(page, artifact, artefactFormat) {
 					continue
 				}
 
@@ -304,7 +303,7 @@ var cardLayoutSlotsUsed = Rule{
 
 				// Validate each card
 				for _, cardDoc := range cardRefs {
-					key := fmt.Sprintf("%s:%s", artefact.Name, cardDoc.Name)
+					key := fmt.Sprintf("%s:%s", artifact.Name, cardDoc.Name)
 					if _, ok := checked[key]; ok {
 						continue
 					}
@@ -327,7 +326,7 @@ var cardLayoutSlotsUsed = Rule{
 
 					for _, mode := range []spec.Mode{spec.ModeBuild, spec.ModePreview} {
 						ctx := &spec.ConstraintContext{
-							Labels: artefact.Labels,
+							Labels: artifact.Labels,
 							Spec:   specMap,
 							Mode:   mode,
 						}
@@ -336,7 +335,6 @@ var cardLayoutSlotsUsed = Rule{
 							cardSpec.Spec.Children,
 							ctx,
 							cardDoc,
-							artefact.Name,
 							cards,
 							components,
 							"spec.children",
@@ -352,8 +350,8 @@ var cardLayoutSlotsUsed = Rule{
 
 					if effectiveCount != expected {
 						msg := fmt.Sprintf(
-							"cardLayout %q expects %d slot(s) but card has %d effective children (for artefact %q)",
-							cardSpec.Spec.CardLayout, expected, effectiveCount, artefact.Name,
+							"cardLayout %q expects %d slot(s) but card has %d effective children (for artifact %q)",
+							cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
 						)
 						findings = append(findings, Finding{
 							RuleID:  "card-layout-slots-used",
@@ -378,7 +376,6 @@ func countEffectiveChildren(
 	children []layoutChildSpec,
 	ctx *spec.ConstraintContext,
 	parentDoc Document,
-	artefactName string,
 	cards map[string]Document,
 	components map[string]Document,
 	basePath string,
@@ -402,7 +399,8 @@ func countEffectiveChildren(
 		}
 
 		// Check if child will render
-		if child.Ref != "" {
+		switch {
+		case child.Ref != "":
 			// Reference to another document
 			refName := child.Ref
 
@@ -428,10 +426,7 @@ func countEffectiveChildren(
 			}
 
 			if !found {
-				if child.Optional {
-					// Optional ref missing - this is OK, just don't count it
-					// No finding needed for optional refs that are gracefully skipped
-				} else {
+				if !child.Optional {
 					// Required ref missing - this is an error
 					findings = append(findings, Finding{
 						RuleID:  "missing-required-reference",
@@ -447,7 +442,7 @@ func countEffectiveChildren(
 
 			// Valid ref
 			count++
-		} else if len(child.Spec) > 0 {
+		case len(child.Spec) > 0:
 			// Inline spec
 			if !renderableChildKinds[child.Kind] {
 				findings = append(findings, Finding{
@@ -460,7 +455,7 @@ func countEffectiveChildren(
 				continue
 			}
 			count++
-		} else {
+		default:
 			// No ref and no spec - this child won't render
 			findings = append(findings, Finding{
 				RuleID:  "page-layout-slots-used",

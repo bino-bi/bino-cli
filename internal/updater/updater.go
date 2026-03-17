@@ -18,8 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"bino.bi/bino/internal/version"
 	"github.com/blang/semver"
+
+	"bino.bi/bino/internal/version"
 )
 
 const (
@@ -31,7 +32,7 @@ const (
 var baseURL = fmt.Sprintf("https://github.com/%s/%s/releases", repoOwner, repoName)
 
 // versionRegex extracts version from GitHub release URL.
-var versionRegex = regexp.MustCompile(`/download/(v[0-9]+\.[0-9]+\.[0-9]+)/`)
+var versionRegex = regexp.MustCompile(`/download/(v\d+\.\d+\.\d+)/`)
 
 // CheckResult holds the result of an update check.
 type CheckResult struct {
@@ -54,8 +55,7 @@ func getAssetName() string {
 	}
 
 	archName := runtime.GOARCH
-	switch archName {
-	case "amd64":
+	if archName == "amd64" {
 		archName = "x86_64"
 	}
 
@@ -85,7 +85,7 @@ func resolveLatestVersion(ctx context.Context) (latestVersion string, downloadUR
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, latestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, latestURL, http.NoBody)
 	if err != nil {
 		return "", "", fmt.Errorf("creating request: %w", err)
 	}
@@ -141,8 +141,7 @@ func CheckForUpdate(ctx context.Context) (*CheckResult, error) {
 	vStr := strings.TrimPrefix(version.Version, "v")
 	currentVersion, err := semver.Parse(vStr)
 	if err != nil {
-		// If current version is invalid (e.g. "dev"), we can't reliably compare.
-		return nil, nil
+		return nil, nil //nolint:nilerr // dev builds cannot be compared
 	}
 
 	latestVersion, err := semver.Parse(strings.TrimPrefix(latestVersionStr, "v"))
@@ -228,7 +227,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		Timeout: 5 * time.Minute,
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
@@ -302,7 +301,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 	tmpFile.Close()
 
 	// Make the new binary executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
+	if err := os.Chmod(tmpPath, 0o755); err != nil {
 		return fmt.Errorf("chmod: %w", err)
 	}
 
@@ -336,7 +335,7 @@ func fetchExpectedChecksum(ctx context.Context, versionTag, assetName string) (s
 		Timeout: 30 * time.Second,
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, http.NoBody)
 	if err != nil {
 		return "", fmt.Errorf("creating request: %w", err)
 	}
@@ -422,7 +421,7 @@ func extractBinaryFromTarGz(r io.Reader, w io.Writer) error {
 		// Look for the bino binary (could be "bino" or "bino.exe" on Windows)
 		if header.Typeflag == tar.TypeReg &&
 			(header.Name == "bino" || header.Name == "bino.exe") {
-			if _, err := io.Copy(w, tr); err != nil {
+			if _, err := io.Copy(w, tr); err != nil { //nolint:gosec // G110: decompressing trusted signed release archives
 				return fmt.Errorf("extracting binary: %w", err)
 			}
 			return nil
@@ -442,18 +441,21 @@ func extractBinaryFromZip(archivePath string, w io.Writer) error {
 
 	for _, f := range r.File {
 		// Look for the bino binary
-		if f.Name == "bino" || f.Name == "bino.exe" {
-			rc, err := f.Open()
-			if err != nil {
-				return fmt.Errorf("opening file in zip: %w", err)
-			}
-			defer rc.Close()
-
-			if _, err := io.Copy(w, rc); err != nil {
-				return fmt.Errorf("extracting binary: %w", err)
-			}
-			return nil
+		if f.Name != "bino" && f.Name != "bino.exe" {
+			continue
 		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("opening file in zip: %w", err)
+		}
+
+		_, copyErr := io.Copy(w, rc) //nolint:gosec // G110: decompressing trusted signed release archives
+		rc.Close()
+		if copyErr != nil {
+			return fmt.Errorf("extracting binary: %w", copyErr)
+		}
+		return nil
 	}
 
 	return errors.New("bino binary not found in archive")

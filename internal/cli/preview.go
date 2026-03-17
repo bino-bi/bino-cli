@@ -16,12 +16,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/preview/explorer"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
-	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
@@ -29,6 +29,7 @@ import (
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/watchers"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 const defaultPreviewPort = 45678
@@ -90,6 +91,24 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
+			// Create a shared DuckDB session for the lifetime of the preview process.
+			// Extensions are loaded once; views are re-registered on each refresh
+			// via CREATE OR REPLACE VIEW.
+			duckdbOpts, err := duckdb.DefaultOptions()
+			if err != nil {
+				return RuntimeError(err)
+			}
+			duckdbOpts.QueryLogger = queryLogger
+			sharedSession, err := duckdb.OpenSession(ctx, duckdbOpts)
+			if err != nil {
+				return RuntimeError(err)
+			}
+			defer sharedSession.Close()
+
+			if err := sharedSession.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
+				return RuntimeError(err)
+			}
+
 			// Resolve data validation mode
 			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
 			dataValidationMode, err := resolveDataValidationMode(dataValidation)
@@ -119,6 +138,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				DataValidationSampleSize: dataValidationSampleSize,
 				HookRunner:               env.HookRunner,
 				HookEnv:                  previewHookEnv,
+				Session:                  sharedSession,
 			}
 
 			refresh := func(reason string) error {
@@ -137,29 +157,6 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				defer server.BroadcastRefreshDone()
 				return refreshPreviewContent(ctx, reason, server, explorerSession, &refreshCfg)
 			}
-
-			refreshCh := make(chan string, 16)
-			enqueue := func(reason string) {
-				select {
-				case refreshCh <- reason:
-				default:
-				}
-			}
-
-			watchLog := logger.Channel("watcher")
-			watcher, err := watchers.NewWatcher(watchers.Config{
-				Root:   env.ProjectRoot,
-				Logger: watchLog,
-				Handler: func(evt watchers.Event) {
-					watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
-					enqueue(fmt.Sprintf("change %s", evt.RelativePath))
-				},
-			})
-			if err != nil {
-				return RuntimeError(err)
-			}
-			defer watcher.Close()
-			go watcher.Run(ctx)
 
 			// Create explorer session for data exploration
 			explorerSession, err = explorer.NewSession(ctx, logger.Channel("explorer"))
@@ -186,9 +183,38 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				return RuntimeError(err)
 			}
 
+			// Initial refresh collects visited directories so the watcher can
+			// register them without a redundant filesystem walk.
+			var visitedDirs []string
+			refreshCfg.CollectedDirs = &visitedDirs
 			if err := refresh("initial load"); err != nil {
 				return err
 			}
+			refreshCfg.CollectedDirs = nil // subsequent refreshes skip collection
+
+			refreshCh := make(chan string, 16)
+			enqueue := func(reason string) {
+				select {
+				case refreshCh <- reason:
+				default:
+				}
+			}
+
+			watchLog := logger.Channel("watcher")
+			watcher, err := watchers.NewWatcher(watchers.Config{
+				Root:   env.ProjectRoot,
+				Dirs:   visitedDirs,
+				Logger: watchLog,
+				Handler: func(evt watchers.Event) {
+					watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
+					enqueue(fmt.Sprintf("change %s", evt.RelativePath))
+				},
+			})
+			if err != nil {
+				return RuntimeError(err)
+			}
+			defer watcher.Close()
+			go watcher.Run(ctx)
 
 			go func() {
 				debounce := time.NewTimer(0)
@@ -220,7 +246,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			url := server.URL()
 			logger.Successf("Serving preview at %s", url)
 
-			if err := openBrowser(url); err != nil {
+			if err := openBrowser(ctx, url); err != nil {
 				logger.Warnf("Unable to open browser automatically: %v", err)
 			}
 
@@ -253,9 +279,18 @@ type previewRefreshConfig struct {
 	DataValidationSampleSize int
 	HookRunner               *hooks.Runner
 	HookEnv                  hooks.HookEnv
+
+	// CollectedDirs, when non-nil, receives directories visited during LoadDir.
+	// This is set for the initial refresh and cleared afterwards so subsequent
+	// refreshes skip the overhead of collecting directories.
+	CollectedDirs *[]string
+
+	// Session is a shared DuckDB session reused across refreshes.
+	// Extensions are loaded once; views are re-registered on each refresh.
+	Session *duckdb.Session
 }
 
-// refreshPreviewContent loads manifests, renders all artefacts, and updates the
+// refreshPreviewContent loads manifests, renders all artifacts, and updates the
 // preview server. It is the core logic extracted from the preview refresh closure.
 func refreshPreviewContent(ctx context.Context, reason string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig) error {
 	logger := cfg.Logger
@@ -270,7 +305,8 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	}
 
 	logger.Infof("Rendering report (%s)", reason)
-	docs, err := config.LoadDir(ctx, watchDir)
+	loadOpts := config.LoadOptions{CollectedDirs: cfg.CollectedDirs}
+	docs, err := config.LoadDirWithOptions(ctx, watchDir, loadOpts)
 	if err != nil {
 		logger.Errorf("Render failed (%s): %v", reason, err)
 		return RuntimeError(err)
@@ -303,12 +339,12 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		}
 	}
 
-	artefacts, err := config.CollectArtefacts(docs)
+	artifacts, err := config.CollectArtefacts(docs)
 	if err != nil {
-		logger.Errorf("Artefact scan failed (%s): %v", reason, err)
+		logger.Errorf("Artifact scan failed (%s): %v", reason, err)
 		return RuntimeError(err)
 	}
-	pipeline.LogArtefactWarnings(logger, artefacts)
+	pipeline.LogArtefactWarnings(logger, artifacts)
 
 	documentArtefacts, err := config.CollectDocumentArtefacts(docs)
 	if err != nil {
@@ -317,9 +353,9 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	}
 	pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
 
-	// Build artefact info list for header dropdown
-	artefactInfos := make([]previewArtefactInfo, 0, len(artefacts)+len(documentArtefacts))
-	for _, art := range artefacts {
+	// Build artifact info list for header dropdown
+	artefactInfos := make([]previewArtefactInfo, 0, len(artifacts)+len(documentArtefacts))
+	for _, art := range artifacts {
 		artefactInfos = append(artefactInfos, previewArtefactInfo{
 			Name:   art.Document.Name,
 			Title:  art.Spec.Title,
@@ -352,14 +388,14 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		})
 	}
 
-	// Build dependency graph for artefact graph visualization
+	// Build dependency graph for artifact graph visualization
 	g, graphErr := reportgraph.Build(ctx, docs)
 	if graphErr != nil {
 		logger.Warnf("Graph build skipped: %v", graphErr)
 	}
 
 	// Always render "All Pages" view for "/" route - this is the default view
-	// that shows all LayoutPages without any artefact filtering
+	// that shows all LayoutPages without any artifact filtering
 	allPagesResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
 		Workdir:                  watchDir,
 		Language:                 "de",
@@ -368,6 +404,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		QueryLogger:              cfg.QueryLogger,
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
+		Session:                  cfg.Session,
 	})
 	if err != nil {
 		policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
@@ -381,63 +418,65 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	}
 	pipeline.LogDiagnostics(logger.Channel("datasource"), allPagesResult.Diagnostics)
 
-	routeMap := make(map[string]previewhttp.ContentFunc, len(artefacts)+len(documentArtefacts)+1)
+	routeMap := make(map[string]previewhttp.ContentFunc, len(artifacts)+len(documentArtefacts)+1)
 	allAssets := make([]previewhttp.LocalAsset, 0)
 	type artefactPayload struct {
 		path        string
 		contextHTML []byte
 	}
-	payloads := make([]artefactPayload, 0, len(artefacts)+1)
+	payloads := make([]artefactPayload, 0, len(artifacts)+1)
 
 	// Add "All Pages" route (default "/" view)
 	allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
-	pageMeta := buildPageMetadata(docs, artefacts)
+	pageMeta := buildPageMetadata(docs, artifacts)
 	allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
 	allAssets = append(allAssets, pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)...)
 	payloads = append(payloads, artefactPayload{path: "/", contextHTML: allPagesContextHTML})
 
 	// Render each ReportArtefact
-	for _, art := range artefacts {
+	for _, art := range artifacts {
 		renderResult, err := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
 			QueryLogger:              cfg.QueryLogger,
 			EngineVersion:            cfg.EngineVersion,
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			Session:                  cfg.Session,
 		})
 		if err != nil {
 			if pipeline.IsInvalidRootError(err) {
-				logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)
+				logger.Errorf("Render blocked for artifact %s (%s): %v", art.Document.Name, reason, err)
 				continue
 			}
 			logger.Errorf("Render failed for %s (%s): %v", art.Document.Name, reason, err)
 			return RuntimeError(err)
 		}
 		pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
-		path := "/" + art.Document.Name
+		artPath := "/" + art.Document.Name
 		var artGraph *previewGraphData
 		if g != nil {
 			if rootNode, ok := g.ReportArtefactByName(art.Document.Name); ok {
 				artGraph = buildPreviewGraphData(g, rootNode)
 			}
 		}
-		frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, path, artGraph)
+		frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, artPath, artGraph)
 		contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
 		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-		routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
-		payloads = append(payloads, artefactPayload{path: path, contextHTML: contextHTML})
+		routeMap[artPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		payloads = append(payloads, artefactPayload{path: artPath, contextHTML: contextHTML})
 	}
 
 	// Render each DocumentArtefact
 	for _, docArt := range documentArtefacts {
 		renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion: cfg.EngineVersion,
+			Session:       cfg.Session,
 		})
 		if err != nil {
 			logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
 			continue
 		}
 		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
-		path := "/doc/" + docArt.Document.Name
+		docPath := "/doc/" + docArt.Document.Name
 		var docGraph *previewGraphData
 		if g != nil {
 			if rootNode, ok := g.DocumentArtefactByName(docArt.Document.Name); ok {
@@ -445,8 +484,8 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			}
 		}
 		// DocumentArtefacts get header injected too
-		frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, path, docGraph)
-		routeMap[path] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, docPath, docGraph)
+		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 	}
 
 	server.SetLocalAssets(allAssets)
@@ -459,7 +498,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	return nil
 }
 
-// previewArtefactInfo holds metadata about an artefact for the preview header dropdown.
+// previewArtefactInfo holds metadata about an artifact for the preview header dropdown.
 type previewArtefactInfo struct {
 	Name   string `json:"name"`
 	Title  string `json:"title"`
@@ -480,7 +519,7 @@ type previewDocumentInfo struct {
 type previewPageMeta struct {
 	Name        string   `json:"name"`
 	Constraints []string `json:"constraints,omitempty"`
-	Artefacts   []string `json:"artefacts,omitempty"`
+	Artifacts   []string `json:"artifacts,omitempty"`
 }
 
 // previewGraphNode is a serializable graph node for the frontend dependency graph.
@@ -491,7 +530,7 @@ type previewGraphNode struct {
 	DependsOn []string `json:"dependsOn,omitempty"`
 }
 
-// previewGraphData holds the dependency subgraph for a single artefact.
+// previewGraphData holds the dependency subgraph for a single artifact.
 type previewGraphData struct {
 	Nodes  map[string]previewGraphNode `json:"nodes"`
 	RootID string                      `json:"rootId"`
@@ -526,8 +565,8 @@ func buildPreviewGraphData(g *reportgraph.Graph, root *reportgraph.Node) *previe
 	}
 }
 
-// buildPageMetadata computes per-page metadata (constraints and artefact usage) for the "All Pages" view.
-func buildPageMetadata(docs []config.Document, artefacts []config.Artefact) []previewPageMeta {
+// buildPageMetadata computes per-page metadata (constraints and artifact usage) for the "All Pages" view.
+func buildPageMetadata(docs []config.Document, artifacts []config.Artifact) []previewPageMeta {
 	// Collect LayoutPage names and their constraints
 	type pageInfo struct {
 		name        string
@@ -545,9 +584,9 @@ func buildPageMetadata(docs []config.Document, artefacts []config.Artefact) []pr
 		pages = append(pages, pageInfo{name: doc.Name, constraints: cs})
 	}
 
-	// Build page-name → artefact-names mapping
+	// Build page-name → artifact-names mapping
 	pageArtefacts := make(map[string][]string)
-	for _, art := range artefacts {
+	for _, art := range artifacts {
 		refs := art.Spec.LayoutPages
 		if len(refs) == 0 {
 			// No layoutPages specified means all pages are included
@@ -581,7 +620,7 @@ func buildPageMetadata(docs []config.Document, artefacts []config.Artefact) []pr
 		result = append(result, previewPageMeta{
 			Name:        p.name,
 			Constraints: p.constraints,
-			Artefacts:   pageArtefacts[p.name],
+			Artifacts:   pageArtefacts[p.name],
 		})
 	}
 	return result
@@ -621,12 +660,12 @@ func appendUnique(slice []string, val string) []string {
 }
 
 // buildPreviewHeader generates the HTML for the sticky preview toolbar and error panel Web Components.
-func buildPreviewHeader(artefacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) string {
-	artefactsJSON, _ := json.Marshal(artefacts)
+func buildPreviewHeader(artifacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) string {
+	artefactsJSON, _ := json.Marshal(artifacts)
 	documentsJSON, _ := json.Marshal(documents)
 
 	var b strings.Builder
-	b.WriteString(`<bino-toolbar artefacts='`)
+	b.WriteString(`<bino-toolbar artifacts='`)
 	b.WriteString(html.EscapeString(string(artefactsJSON)))
 	b.WriteString(`' documents='`)
 	b.WriteString(html.EscapeString(string(documentsJSON)))
@@ -647,7 +686,7 @@ func buildPreviewHeader(artefacts []previewArtefactInfo, documents []previewDocu
 }
 
 // withPreviewHeader injects the preview header into the HTML document after <body>.
-func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) []byte {
+func withPreviewHeader(doc []byte, artifacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) []byte {
 	if len(doc) == 0 {
 		return doc
 	}
@@ -673,7 +712,7 @@ func withPreviewHeader(doc []byte, artefacts []previewArtefactInfo, documents []
 		return doc
 	}
 
-	header := buildPreviewHeader(artefacts, documents, currentPath, graphData)
+	header := buildPreviewHeader(artifacts, documents, currentPath, graphData)
 
 	updated := make([]byte, 0, len(doc)+len(header))
 	updated = append(updated, doc[:insertAt]...)
@@ -699,7 +738,7 @@ func buildPreviewErrorPage(message, hint string) []byte {
 		message = "An invalid layout configuration prevented preview rendering."
 	}
 	if hint == "" {
-		hint = "Ensure at least one LayoutPage is defined and referenced by your report artefact."
+		hint = "Ensure at least one LayoutPage is defined and referenced by your report artifact."
 	}
 	var b strings.Builder
 	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Rainbow Preview Error</title>\n  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#fef2f2; color:#7f1d1d; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; } bn-context { display:flex; align-items:center; justify-content:center; width:100%; } .card { background:#fff; border:1px solid #fecaca; border-radius:12px; padding:2rem; max-width:520px; box-shadow:0 10px 30px rgba(185, 28, 28, 0.15);} h1 { margin-top:0; font-size:1.5rem;} p { line-height:1.5; } </style>\n</head>\n<body>\n  <bn-context>\n    <div class=\"card\">\n      <h1>Cannot Render Preview</h1>\n      <p>")
@@ -761,7 +800,7 @@ func withPreviewContextStyles(ctx []byte) []byte {
 	return ctx
 }
 
-// withPreviewPageMetadata injects page metadata (constraints and artefact usage) into
+// withPreviewPageMetadata injects page metadata (constraints and artifact usage) into
 // the "All Pages" context HTML. The metadata is stored as a data-page-meta attribute
 // on the <bn-context> element itself. This ensures it survives the DOM replacement
 // performed by swapContext and is accessible even if bn-context uses Shadow DOM.
@@ -788,7 +827,7 @@ func withPreviewPageMetadata(ctx []byte, pageMeta []previewPageMeta) []byte {
 	return updated
 }
 
-func openBrowser(url string) error {
+func openBrowser(ctx context.Context, url string) error {
 	// Validate URL to prevent command injection
 	if err := validateBrowserURL(url); err != nil {
 		return err
@@ -797,11 +836,11 @@ func openBrowser(url string) error {
 	var command *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		command = exec.Command("open", url)
+		command = exec.CommandContext(ctx, "open", url)
 	case "windows":
-		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		command = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		command = exec.Command("xdg-open", url)
+		command = exec.CommandContext(ctx, "xdg-open", url)
 	}
 
 	return command.Start()
@@ -829,10 +868,6 @@ func validateBrowserURL(url string) error {
 	}
 
 	return nil
-}
-
-func previewCacheDir() (string, error) {
-	return pathutil.CacheDir("cdn")
 }
 
 // explorerHandler returns the explorer HTTP handler if the session is available.

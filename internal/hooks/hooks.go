@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,8 +23,8 @@ type HookEnv struct {
 	ReportID      string
 	Hook          string // checkpoint name, set automatically by Run
 	Verbose       bool
-	ArtefactName  string // artefact-scoped hooks only
-	ArtefactKind  string // artefact-scoped hooks only
+	ArtefactName  string // artifact-scoped hooks only
+	ArtefactKind  string // artifact-scoped hooks only
 	OutputDir     string // build only
 	Include       string // build only (comma-separated)
 	Exclude       string // build only (comma-separated)
@@ -35,8 +36,8 @@ type HookEnv struct {
 
 // Runner executes hook commands for resolved checkpoints.
 type Runner struct {
-	cfg    *Config
-	logger logx.Logger
+	cfg     *Config
+	logger  logx.Logger
 	workdir string
 }
 
@@ -92,7 +93,8 @@ func (r *Runner) execCommand(ctx context.Context, cmdStr string, extraEnv []stri
 	}
 
 	// Check for skip exit code
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	exitErr := &exec.ExitError{}
+	if errors.As(err, &exitErr) {
 		code := exitErr.ExitCode()
 		if code == ExitCodeSkip {
 			r.logger.Infof("[hook:%s] skipped (exit 78)", cmd.Args)
@@ -126,10 +128,10 @@ func buildEnvSlice(env HookEnv) []string {
 		pairs = append(pairs, "BINO_VERBOSE=0")
 	}
 	if env.ArtefactName != "" {
-		pairs = append(pairs, "BINO_ARTEFACT_NAME="+env.ArtefactName)
+		pairs = append(pairs, "BINO_ARTIFACT_NAME="+env.ArtefactName)
 	}
 	if env.ArtefactKind != "" {
-		pairs = append(pairs, "BINO_ARTEFACT_KIND="+env.ArtefactKind)
+		pairs = append(pairs, "BINO_ARTIFACT_KIND="+env.ArtefactKind)
 	}
 	if env.OutputDir != "" {
 		pairs = append(pairs, "BINO_OUTPUT_DIR="+env.OutputDir)
@@ -150,7 +152,7 @@ func buildEnvSlice(env HookEnv) []string {
 		pairs = append(pairs, "BINO_REFRESH_REASON="+env.RefreshReason)
 	}
 	if env.LiveArtefact != "" {
-		pairs = append(pairs, "BINO_LIVE_ARTEFACT="+env.LiveArtefact)
+		pairs = append(pairs, "BINO_LIVE_ARTIFACT="+env.LiveArtefact)
 	}
 	return pairs
 }

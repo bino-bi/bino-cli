@@ -55,8 +55,7 @@ func LoadAddConfig(dir string) (*AddConfig, error) {
 
 	var cfg AddConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		// Return empty config if file is malformed
-		return &AddConfig{}, nil
+		return &AddConfig{}, nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}
 
 	return &cfg, nil
@@ -76,7 +75,7 @@ func SaveAddConfig(dir string, cfg *AddConfig) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o644) //nolint:gosec // G306: config files need standard read perms
 }
 
 // GetKindConfig returns the config for a specific kind, or nil if not set.

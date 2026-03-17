@@ -48,7 +48,7 @@ func ValidateDocuments(docs []Document) error {
 	return nil
 }
 
-// ValidateArtefactNames checks that all included documents for a specific artefact
+// ValidateArtefactNames checks that all included documents for a specific artifact
 // have unique names per kind. This should be called after constraint filtering.
 // Returns an error if duplicate names are found within the same kind.
 func ValidateArtefactNames(artefactName string, docs []Document) error {
@@ -69,7 +69,7 @@ func ValidateArtefactNames(artefactName string, docs []Document) error {
 
 		if existing, found := byKind[doc.Kind][doc.Name]; found {
 			return fmt.Errorf(
-				"artefact %q: duplicate %s name %q - defined in %s #%d and %s #%d (after applying constraints)",
+				"artifact %q: duplicate %s name %q - defined in %s #%d and %s #%d (after applying constraints)",
 				artefactName,
 				doc.Kind,
 				doc.Name,
@@ -89,9 +89,9 @@ func ValidateArtefactNames(artefactName string, docs []Document) error {
 // It checks:
 //   - Root route "/" is present
 //   - All route paths are unique and valid
-//   - Each route has either artefact or layoutPages (not both, not neither)
-//   - All referenced artefacts and layoutPages exist
-func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact, layoutPageNames map[string]struct{}) error {
+//   - Each route has either artifact or layoutPages (not both, not neither)
+//   - All referenced artifacts and layoutPages exist
+func ValidateLiveArtefact(live LiveArtefact, artifacts []Artifact, layoutPageNames map[string]struct{}) error {
 	spec := live.Spec
 
 	// Check for mandatory root route
@@ -99,9 +99,9 @@ func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact, layoutPageNam
 		return fmt.Errorf("LiveReportArtefact %q: missing mandatory root route \"/\"", live.Document.Name)
 	}
 
-	// Build set of valid artefact names
-	artefactNames := make(map[string]struct{}, len(artefacts))
-	for _, a := range artefacts {
+	// Build set of valid artifact names
+	artefactNames := make(map[string]struct{}, len(artifacts))
+	for _, a := range artifacts {
 		artefactNames[a.Document.Name] = struct{}{}
 	}
 
@@ -115,21 +115,21 @@ func ValidateLiveArtefact(live LiveArtefact, artefacts []Artefact, layoutPageNam
 			return fmt.Errorf("LiveReportArtefact %q: route path %q must start with \"/\"", live.Document.Name, path)
 		}
 
-		// Check that exactly one of artefact or layoutPages is set
-		hasArtefact := route.Artefact != ""
+		// Check that exactly one of artifact or layoutPages is set
+		hasArtefact := route.Artifact != ""
 		hasLayoutPages := len(route.LayoutPages) > 0
 
 		if hasArtefact && hasLayoutPages {
-			return fmt.Errorf("LiveReportArtefact %q: route %q has both artefact and layoutPages; only one is allowed", live.Document.Name, path)
+			return fmt.Errorf("LiveReportArtefact %q: route %q has both artifact and layoutPages; only one is allowed", live.Document.Name, path)
 		}
 		if !hasArtefact && !hasLayoutPages {
-			return fmt.Errorf("LiveReportArtefact %q: route %q must have either artefact or layoutPages", live.Document.Name, path)
+			return fmt.Errorf("LiveReportArtefact %q: route %q must have either artifact or layoutPages", live.Document.Name, path)
 		}
 
-		// Validate referenced artefact exists
+		// Validate referenced artifact exists
 		if hasArtefact {
-			if _, ok := artefactNames[route.Artefact]; !ok {
-				return fmt.Errorf("LiveReportArtefact %q: route %q references unknown ReportArtefact %q", live.Document.Name, path, route.Artefact)
+			if _, ok := artefactNames[route.Artifact]; !ok {
+				return fmt.Errorf("LiveReportArtefact %q: route %q references unknown ReportArtefact %q", live.Document.Name, path, route.Artifact)
 			}
 		}
 

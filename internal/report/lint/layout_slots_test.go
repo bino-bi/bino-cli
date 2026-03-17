@@ -135,7 +135,7 @@ func TestCountDistinctAreaTokens(t *testing.T) {
 }
 
 // Helper to create a LayoutPage document with children.
-func rawLayoutPage(name string, layout string, customTemplate string, children []map[string]any) json.RawMessage {
+func rawLayoutPage(layout string, customTemplate string, children []map[string]any) json.RawMessage {
 	spec := map[string]any{
 		"pageLayout": layout,
 	}
@@ -145,7 +145,7 @@ func rawLayoutPage(name string, layout string, customTemplate string, children [
 	if children != nil {
 		spec["children"] = children
 	}
-	return rawDoc("LayoutPage", name, spec)
+	return rawDoc("LayoutPage", "page1", spec)
 }
 
 // Helper to create a LayoutCard document with children.
@@ -178,7 +178,7 @@ func TestPageLayoutSlotsUsed_ExactMatch(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "2x2", "", []map[string]any{
+			Raw: rawLayoutPage("2x2", "", []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "a"}},
 				{"kind": "Text", "spec": map[string]any{"value": "b"}},
 				{"kind": "Text", "spec": map[string]any{"value": "c"}},
@@ -209,7 +209,7 @@ func TestPageLayoutSlotsUsed_TooFewChildren(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "2x2", "", []map[string]any{
+			Raw: rawLayoutPage("2x2", "", []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "a"}},
 				{"kind": "Text", "spec": map[string]any{"value": "b"}},
 			}),
@@ -239,7 +239,7 @@ func TestPageLayoutSlotsUsed_TooManyChildren(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "full", "", []map[string]any{
+			Raw: rawLayoutPage("full", "", []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "a"}},
 				{"kind": "Text", "spec": map[string]any{"value": "b"}},
 				{"kind": "Text", "spec": map[string]any{"value": "c"}},
@@ -270,7 +270,7 @@ func TestPageLayoutSlotsUsed_CustomTemplate(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "custom-template", `"a a" "b c"`, []map[string]any{
+			Raw: rawLayoutPage("custom-template", `"a a" "b c"`, []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "1"}},
 				{"kind": "Text", "spec": map[string]any{"value": "2"}},
 				{"kind": "Text", "spec": map[string]any{"value": "3"}},
@@ -300,7 +300,7 @@ func TestPageLayoutSlotsUsed_CustomTemplateMismatch(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "custom-template", `"aa aa" "bb bb"`, []map[string]any{
+			Raw: rawLayoutPage("custom-template", `"aa aa" "bb bb"`, []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "1"}},
 				{"kind": "Text", "spec": map[string]any{"value": "2"}},
 				{"kind": "Text", "spec": map[string]any{"value": "3"}},
@@ -331,7 +331,7 @@ func TestPageLayoutSlotsUsed_MissingRefDoesNotCount(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "2x2", "", []map[string]any{
+			Raw: rawLayoutPage("2x2", "", []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "a"}},
 				{"kind": "Text", "spec": map[string]any{"value": "b"}},
 				{"kind": "Text", "ref": "missing-text-1"}, // Missing ref
@@ -391,7 +391,7 @@ func TestPageLayoutSlotsUsed_ValidRefCounts(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "split-horizontal", "", []map[string]any{
+			Raw: rawLayoutPage("split-horizontal", "", []map[string]any{
 				{"kind": "Text", "ref": "text1"},
 				{"kind": "Text", "ref": "text2"},
 			}),
@@ -422,7 +422,7 @@ func TestPageLayoutSlotsUsed_ConstrainedChildSkipped(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "2x2", "", []map[string]any{
+			Raw: rawLayoutPage("2x2", "", []map[string]any{
 				{"kind": "Text", "spec": map[string]any{"value": "a"}},
 				{"kind": "Text", "spec": map[string]any{"value": "b"}},
 				{"kind": "Text", "metadata": map[string]any{"constraints": []string{"labels.env==dev"}}, "spec": map[string]any{"value": "c"}},
@@ -464,7 +464,7 @@ func TestCardLayoutSlotsUsed_ExactMatch(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "full", "", []map[string]any{
+			Raw: rawLayoutPage("full", "", []map[string]any{
 				{"kind": "LayoutCard", "ref": "card1"},
 			}),
 		},
@@ -502,7 +502,7 @@ func TestCardLayoutSlotsUsed_TooFewChildren(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "full", "", []map[string]any{
+			Raw: rawLayoutPage("full", "", []map[string]any{
 				{"kind": "LayoutCard", "ref": "card1"},
 			}),
 		},
@@ -541,7 +541,7 @@ func TestCardLayoutSlotsUsed_CustomTemplate(t *testing.T) {
 			Position: 1,
 			Kind:     "LayoutPage",
 			Name:     "page1",
-			Raw: rawLayoutPage("page1", "full", "", []map[string]any{
+			Raw: rawLayoutPage("full", "", []map[string]any{
 				{"kind": "LayoutCard", "ref": "card1"},
 			}),
 		},

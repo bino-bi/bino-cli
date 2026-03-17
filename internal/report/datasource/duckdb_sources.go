@@ -20,22 +20,26 @@ func defaultGlobForType(sourceType string) string {
 // buildPostgresConnection builds a connection string for postgres_query.
 // Credentials are not embedded; they come from DuckDB secrets.
 func buildPostgresConnection(conn sqlConnection) string {
-	var parts []string
-	parts = append(parts, formatConnKV("host", conn.Host))
-	parts = append(parts, formatConnKV("port", fmt.Sprintf("%d", conn.Port)))
-	parts = append(parts, formatConnKV("dbname", conn.Database))
-	parts = append(parts, formatConnKV("user", conn.User))
+	parts := make([]string, 0, 4)
+	parts = append(parts,
+		formatConnKV("host", conn.Host),
+		formatConnKV("port", fmt.Sprintf("%d", conn.Port)),
+		formatConnKV("dbname", conn.Database),
+		formatConnKV("user", conn.User),
+	)
 	return strings.Join(parts, " ")
 }
 
 // buildMySQLConnection builds a connection string for mysql_query.
 // Credentials are not embedded; they come from DuckDB secrets.
 func buildMySQLConnection(conn sqlConnection) string {
-	var parts []string
-	parts = append(parts, formatConnKV("host", conn.Host))
-	parts = append(parts, formatConnKV("port", fmt.Sprintf("%d", conn.Port)))
-	parts = append(parts, formatConnKV("user", conn.User))
-	parts = append(parts, formatConnKV("database", conn.Database))
+	parts := make([]string, 0, 4)
+	parts = append(parts,
+		formatConnKV("host", conn.Host),
+		formatConnKV("port", fmt.Sprintf("%d", conn.Port)),
+		formatConnKV("user", conn.User),
+		formatConnKV("database", conn.Database),
+	)
 	return strings.Join(parts, " ")
 }
 

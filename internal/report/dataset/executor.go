@@ -58,6 +58,12 @@ type ExecuteOptions struct {
 	// DataValidationSampleSize limits how many rows are validated.
 	// Default (0) uses GetDataValidationSampleSize() which reads from env.
 	DataValidationSampleSize int
+
+	// Session is an optional pre-existing DuckDB session to reuse.
+	// When set, dataset execution skips opening a new session and reuses this one.
+	// The caller is responsible for closing the session.
+	// Extension loading and view registration are idempotent on a reused session.
+	Session *duckdb.Session
 }
 
 // dataSetSpec mirrors the new minimal DataSet spec structure.
@@ -420,36 +426,44 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		return nil, nil, err
 	}
 
-	duckdbOpts, err := duckdb.DefaultOptions()
-	if err != nil {
-		return nil, nil, fmt.Errorf("duckdb options: %w", err)
+	// Reuse a caller-provided session or create a fresh one.
+	var session *duckdb.Session
+	if opts != nil && opts.Session != nil {
+		session = opts.Session
+	} else {
+		duckdbOpts, err := duckdb.DefaultOptions()
+		if err != nil {
+			return nil, nil, fmt.Errorf("duckdb options: %w", err)
+		}
+		if opts != nil && opts.QueryLogger != nil {
+			duckdbOpts.QueryLogger = opts.QueryLogger
+		}
+		if opts != nil && opts.QueryExecLogger != nil {
+			duckdbOpts.QueryExecLogger = opts.QueryExecLogger
+		}
+		s, err := duckdb.OpenSession(ctx, duckdbOpts)
+		if err != nil {
+			return nil, nil, fmt.Errorf("duckdb open: %w", err)
+		}
+		defer s.Close()
+		session = s
 	}
-
-	// Wire up query logger if provided
-	if opts != nil && opts.QueryLogger != nil {
-		duckdbOpts.QueryLogger = opts.QueryLogger
-	}
-	if opts != nil && opts.QueryExecLogger != nil {
-		duckdbOpts.QueryExecLogger = opts.QueryExecLogger
-	}
-
-	session, err := duckdb.OpenSession(ctx, duckdbOpts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("duckdb open: %w", err)
-	}
-	defer session.Close()
 
 	var (
 		results  []Result
 		warnings []Warning
 	)
 
-	// Create temp directory for inline datasource CSV files
+	// Create temp directory for inline datasource CSV files.
+	// When reusing a shared session the temp dir must persist (the views reference it),
+	// so we only remove it for one-shot sessions.
 	tempDir := filepath.Join(workdir, ".bncache", "datasources")
 	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create datasources temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	if opts == nil || opts.Session == nil {
+		defer os.RemoveAll(tempDir)
+	}
 
 	// Register all DataSources as views first
 	viewDiags, err := datasource.RegisterViews(ctx, session, allDocs, &datasource.ViewsOptions{
@@ -519,7 +533,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 
 		// Write to cache (skip for ephemeral sources where cachePath is empty)
 		if job.cachePath != "" {
-			if err := os.WriteFile(job.cachePath, data, 0o644); err != nil {
+			if err := os.WriteFile(job.cachePath, data, 0o644); err != nil { //nolint:gosec // G306: cache files need standard read perms
 				warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("cache write: %v", err)})
 			}
 		}
@@ -544,15 +558,16 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	var err error
 
 	// Check for source pass-through first - this creates a simple SELECT * FROM
-	if job.spec.Source != "" {
+	switch {
+	case job.spec.Source != "":
 		// Source pass-through: SELECT * FROM the referenced DataSource
-		query = fmt.Sprintf(`SELECT * FROM "%s"`, job.spec.Source)
-	} else if !job.spec.Prql.IsEmpty() {
+		query = fmt.Sprintf("SELECT * FROM %q", job.spec.Source)
+	case !job.spec.Prql.IsEmpty():
 		query, err = job.spec.Prql.ResolveQuery(baseDir)
 		if err != nil {
 			return nil, fmt.Errorf("resolve prql: %w", err)
 		}
-	} else {
+	default:
 		query, err = job.spec.Query.ResolveQuery(baseDir)
 		if err != nil {
 			return nil, fmt.Errorf("resolve query: %w", err)
@@ -634,14 +649,13 @@ type rowScanner interface {
 
 // rowsToJSONWithMeta serializes rows to JSON and also returns column names and rows as strings
 // for CSV embedding in build logs.
-func rowsToJSONWithMeta(rows rowScanner) (json.RawMessage, []string, [][]string, error) {
+func rowsToJSONWithMeta(rows rowScanner) (data json.RawMessage, columns []string, rowStrings [][]string, err error) {
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	var results []map[string]any
-	var rowStrings [][]string
 	values := make([]any, len(cols))
 	valuePtrs := make([]any, len(cols))
 	for i := range values {
@@ -666,7 +680,7 @@ func rowsToJSONWithMeta(rows rowScanner) (json.RawMessage, []string, [][]string,
 		results = []map[string]any{}
 	}
 
-	data, err := json.Marshal(results)
+	data, err = json.Marshal(results)
 	return data, cols, rowStrings, err
 }
 

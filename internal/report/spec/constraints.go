@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,11 +13,11 @@ import (
 type Mode string
 
 const (
-	// ModeBuild is used when building artefacts for production output.
+	// ModeBuild is used when building artifacts for production output.
 	ModeBuild Mode = "build"
-	// ModePreview is used when previewing artefacts during development.
+	// ModePreview is used when previewing artifacts during development.
 	ModePreview Mode = "preview"
-	// ModeServe is used when serving artefacts via bino serve.
+	// ModeServe is used when serving artifacts via bino serve.
 	ModeServe Mode = "serve"
 )
 
@@ -29,7 +30,7 @@ type ConstraintContext struct {
 	Spec map[string]any
 	// Mode is the current execution mode (build or preview)
 	Mode Mode
-	// ArtefactKind is the kind of artefact being evaluated: "report", "screenshot", "document", or "livereport"
+	// ArtefactKind is the kind of artifact being evaluated: "report", "screenshot", "document", or "livereport"
 	ArtefactKind string
 }
 
@@ -46,14 +47,14 @@ func (e *ConstraintError) Error() string {
 	var b strings.Builder
 	b.WriteString("constraint error")
 	if e.Kind != "" || e.Name != "" {
-		b.WriteString(fmt.Sprintf(" in %s %q", e.Kind, e.Name))
+		fmt.Fprintf(&b, " in %s %q", e.Kind, e.Name)
 	}
-	b.WriteString(fmt.Sprintf(": %s", e.Reason))
+	fmt.Fprintf(&b, ": %s", e.Reason)
 	if e.Constraint != "" {
-		b.WriteString(fmt.Sprintf("\n  constraint: %s", e.Constraint))
+		fmt.Fprintf(&b, "\n  constraint: %s", e.Constraint)
 	}
 	if e.Hint != "" {
-		b.WriteString(fmt.Sprintf("\n  hint: %s", e.Hint))
+		fmt.Fprintf(&b, "\n  hint: %s", e.Hint)
 	}
 	return b.String()
 }
@@ -380,7 +381,7 @@ func (c *Constraint) Evaluate(ctx *ConstraintContext) (bool, error) {
 		if ctx.Labels == nil {
 			return false, &ConstraintError{
 				Constraint: c.Raw,
-				Reason:     fmt.Sprintf("label %q not found (artefact has no labels)", key),
+				Reason:     fmt.Sprintf("label %q not found (artifact has no labels)", key),
 				Hint:       "add 'metadata.labels' to the target ReportArtefact",
 			}
 		}
@@ -388,7 +389,7 @@ func (c *Constraint) Evaluate(ctx *ConstraintContext) (bool, error) {
 		if !ok {
 			return false, &ConstraintError{
 				Constraint: c.Raw,
-				Reason:     fmt.Sprintf("label %q not defined on artefact", key),
+				Reason:     fmt.Sprintf("label %q not defined on artifact", key),
 				Hint:       fmt.Sprintf("add 'labels.%s' to the ReportArtefact's metadata", key),
 			}
 		}
@@ -525,7 +526,8 @@ func EvaluateConstraintsWithContext(constraints []string, ctx *ConstraintContext
 	for _, expr := range constraints {
 		c, err := ParseConstraint(expr)
 		if err != nil {
-			if ce, ok := err.(*ConstraintError); ok {
+			ce := &ConstraintError{}
+			if errors.As(err, &ce) {
 				ce.Kind = kind
 				ce.Name = name
 			}
@@ -534,7 +536,8 @@ func EvaluateConstraintsWithContext(constraints []string, ctx *ConstraintContext
 
 		match, err := c.Evaluate(ctx)
 		if err != nil {
-			if ce, ok := err.(*ConstraintError); ok {
+			ce := &ConstraintError{}
+			if errors.As(err, &ce) {
 				ce.Kind = kind
 				ce.Name = name
 			}
@@ -549,8 +552,8 @@ func EvaluateConstraintsWithContext(constraints []string, ctx *ConstraintContext
 	return true, nil
 }
 
-// SpecToMap converts a JSON-encoded spec to a map for constraint evaluation.
-func SpecToMap(raw json.RawMessage) (map[string]any, error) {
+// ToMap converts a JSON-encoded spec to a map for constraint evaluation.
+func ToMap(raw json.RawMessage) (map[string]any, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
@@ -646,6 +649,7 @@ func ParseConstraintFromAny(v any) (*Constraint, error) {
 // ConstraintStringsFromRaw extracts constraints as strings from a JSON-encoded document.
 // This is for backward compatibility with code that expects []string.
 // It only works with string-format constraints; structured constraints will cause an error.
+//
 // Deprecated: Use ConstraintsFromRaw instead for full support of both formats.
 func ConstraintStringsFromRaw(raw json.RawMessage) ([]string, error) {
 	if len(raw) == 0 {
@@ -695,7 +699,8 @@ func EvaluateParsedConstraintsWithContext(constraints []*Constraint, ctx *Constr
 	for _, c := range constraints {
 		match, err := c.Evaluate(ctx)
 		if err != nil {
-			if ce, ok := err.(*ConstraintError); ok {
+			ce := &ConstraintError{}
+			if errors.As(err, &ce) {
 				ce.Kind = kind
 				ce.Name = name
 			}

@@ -3,7 +3,6 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -342,19 +341,4 @@ func printLintFindings(out *Output, findings []lint.Finding, baseDir string) {
 		}
 		out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
 	}
-}
-
-// runLint runs lint rules on the given documents and returns findings.
-// This is a helper for use in build and preview commands.
-func runLint(ctx *cobra.Command, docs []config.Document) []lint.Finding {
-	lintDocs := configDocsToLintDocs(docs)
-	runner := lint.NewDefaultRunner()
-	return runner.Run(ctx.Context(), lintDocs)
-}
-
-// outputJSON writes a value as JSON to the given writer.
-func outputJSONToWriter(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }

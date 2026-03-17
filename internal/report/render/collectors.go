@@ -1,15 +1,15 @@
 package render
 
 import (
-"bytes"
-"encoding/json"
-"fmt"
-"net/url"
-"os"
-"path/filepath"
-"strings"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 
-"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/config"
 )
 
 // fontAsset represents a font resource to be linked in the HTML.
@@ -118,10 +118,10 @@ func collectInternationalizations(docs []config.Document) ([]internationalizatio
 			return nil, fmt.Errorf("render: internationalization %s: %w", doc.Name, err)
 		}
 		entries = append(entries, internationalization{
-code:      payload.Spec.Code,
-namespace: payload.Spec.Namespace,
-value:     value,
-})
+			code:      payload.Spec.Code,
+			namespace: payload.Spec.Namespace,
+			value:     value,
+		})
 	}
 	return entries, nil
 }
@@ -151,10 +151,10 @@ func collectComponentStyles(docs []config.Document) ([]componentStyle, error) {
 // collectAssets extracts font and file assets from documents.
 func collectAssets(docs []config.Document) ([]fontAsset, []assetComponent, []LocalAsset, error) {
 	var (
-fonts  []fontAsset
-assets []assetComponent
-locals []LocalAsset
-)
+		fonts  []fontAsset
+		assets []assetComponent
+		locals []LocalAsset
+	)
 	for _, doc := range docs {
 		if doc.Kind != "Asset" {
 			continue

@@ -32,6 +32,12 @@ type Config struct {
 	Root    string
 	Logger  logx.Logger
 	Handler Handler
+
+	// Dirs, when non-empty, provides a pre-collected list of directories to watch.
+	// This avoids a redundant filesystem walk when the caller already walked the tree
+	// (e.g., config.LoadDirWithOptions with CollectedDirs). When empty, the watcher
+	// walks the Root directory tree itself.
+	Dirs []string
 }
 
 // Watcher monitors a directory tree for file changes and emits events for relevant files.
@@ -71,9 +77,17 @@ func NewWatcher(cfg Config) (*Watcher, error) {
 		fw.Close()
 		return nil, err
 	}
-	if err := yw.addTree(cfg.Root); err != nil {
-		fw.Close()
-		return nil, err
+	if len(cfg.Dirs) > 0 {
+		// Use pre-collected directories instead of walking the tree again.
+		if err := yw.registerDirs(cfg.Dirs); err != nil {
+			fw.Close()
+			return nil, err
+		}
+	} else {
+		if err := yw.addTree(cfg.Root); err != nil {
+			fw.Close()
+			return nil, err
+		}
 	}
 
 	cfg.Logger.Infof("Watching %s for changes", cfg.Root)
@@ -106,6 +120,20 @@ func (y *Watcher) Run(ctx context.Context) {
 			y.cfg.Logger.Errorf("watcher: %v", err)
 		}
 	}
+}
+
+// registerDirs registers a pre-collected list of directories with the fsnotify watcher,
+// skipping any that match ignore patterns. This is O(n) in the number of directories.
+func (y *Watcher) registerDirs(dirs []string) error {
+	for _, d := range dirs {
+		if y.shouldIgnorePath(d, true) && d != y.cfg.Root {
+			continue
+		}
+		if err := y.watcher.Add(d); err != nil {
+			return fmt.Errorf("watcher: add %s: %w", d, err)
+		}
+	}
+	return nil
 }
 
 func (y *Watcher) addTree(root string) error {

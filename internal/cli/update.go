@@ -3,12 +3,12 @@ package cli
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/updater"
 	"bino.bi/bino/internal/version"
-	"github.com/spf13/cobra"
 )
 
 func newUpdateCommand() *cobra.Command {
@@ -46,11 +46,7 @@ func newUpdateCommand() *cobra.Command {
 			}
 
 			// Update template engine
-			if err := updateTemplateEngine(cmd, sp); err != nil {
-				return err
-			}
-
-			return nil
+			return updateTemplateEngine(cmd, sp)
 		},
 	}
 }

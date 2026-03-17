@@ -30,11 +30,11 @@ func TestResolveSourceFiles(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		sources       []string
-		wantCount     int
-		wantErr       bool
-		errContains   string
+		name        string
+		sources     []string
+		wantCount   int
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:      "single file",

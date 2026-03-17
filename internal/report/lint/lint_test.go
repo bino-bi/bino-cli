@@ -19,7 +19,7 @@ func TestRunnerWithRule(t *testing.T) {
 		Name:        "Test Rule",
 		Description: "A rule for testing.",
 		Check: func(_ context.Context, docs []Document) []Finding {
-			var findings []Finding
+			findings := make([]Finding, 0, len(docs))
 			for _, doc := range docs {
 				findings = append(findings, Finding{
 					RuleID:  "test-rule",

@@ -9,7 +9,7 @@ func TestClassifyInvalidLayout(t *testing.T) {
 	tests := []struct {
 		name             string
 		err              error
-		mode             RenderMode
+		mode             Mode
 		wantInvalid      bool
 		wantMessage      string
 		wantHintNonEmpty bool
@@ -17,19 +17,19 @@ func TestClassifyInvalidLayout(t *testing.T) {
 		{
 			name:        "nil error",
 			err:         nil,
-			mode:        RenderModeBuild,
+			mode:        ModeBuild,
 			wantInvalid: false,
 		},
 		{
 			name:        "unrelated error",
 			err:         fmt.Errorf("some other error"),
-			mode:        RenderModePreview,
+			mode:        ModePreview,
 			wantInvalid: false,
 		},
 		{
 			name:             "direct InvalidRootError build mode",
 			err:              &InvalidRootError{Kind: "LayoutCard", Name: "card"},
-			mode:             RenderModeBuild,
+			mode:             ModeBuild,
 			wantInvalid:      true,
 			wantMessage:      "document card of kind LayoutCard cannot render as root; define a LayoutPage instead",
 			wantHintNonEmpty: true,
@@ -37,7 +37,7 @@ func TestClassifyInvalidLayout(t *testing.T) {
 		{
 			name:             "direct InvalidRootError preview mode",
 			err:              &InvalidRootError{Kind: "Text", Name: "intro"},
-			mode:             RenderModePreview,
+			mode:             ModePreview,
 			wantInvalid:      true,
 			wantMessage:      "document intro of kind Text cannot render as root; define a LayoutPage instead",
 			wantHintNonEmpty: true,
@@ -45,7 +45,7 @@ func TestClassifyInvalidLayout(t *testing.T) {
 		{
 			name:             "wrapped InvalidRootError",
 			err:              fmt.Errorf("render failed: %w", &InvalidRootError{Kind: "Chart", Name: "sales"}),
-			mode:             RenderModeBuild,
+			mode:             ModeBuild,
 			wantInvalid:      true,
 			wantMessage:      "document sales of kind Chart cannot render as root; define a LayoutPage instead",
 			wantHintNonEmpty: true,
@@ -53,7 +53,7 @@ func TestClassifyInvalidLayout(t *testing.T) {
 		{
 			name:             "InvalidRootError without name",
 			err:              &InvalidRootError{Kind: "LayoutCard"},
-			mode:             RenderModePreview,
+			mode:             ModePreview,
 			wantInvalid:      true,
 			wantMessage:      "document kind LayoutCard cannot render as root; define a LayoutPage instead",
 			wantHintNonEmpty: true,
@@ -87,11 +87,11 @@ func TestClassifyInvalidLayout(t *testing.T) {
 	}
 }
 
-func TestRenderModeConstants(t *testing.T) {
-	if RenderModeBuild != "build" {
-		t.Errorf("RenderModeBuild = %q, want %q", RenderModeBuild, "build")
+func TestModeConstants(t *testing.T) {
+	if ModeBuild != "build" {
+		t.Errorf("ModeBuild = %q, want %q", ModeBuild, "build")
 	}
-	if RenderModePreview != "preview" {
-		t.Errorf("RenderModePreview = %q, want %q", RenderModePreview, "preview")
+	if ModePreview != "preview" {
+		t.Errorf("ModePreview = %q, want %q", ModePreview, "preview")
 	}
 }

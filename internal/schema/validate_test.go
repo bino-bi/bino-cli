@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -139,7 +140,8 @@ metadata:
 				t.Fatal("expected error, got nil")
 			}
 
-			ve, ok := err.(*ValidationError)
+			ve := &ValidationError{}
+			ok := errors.As(err, &ve)
 			if !ok {
 				t.Fatalf("expected *ValidationError, got %T", err)
 			}
@@ -204,7 +206,8 @@ spec:
 				t.Fatal("expected error, got nil")
 			}
 
-			ve, ok := err.(*ValidationError)
+			ve := &ValidationError{}
+			ok := errors.As(err, &ve)
 			if !ok {
 				t.Fatalf("expected *ValidationError, got %T", err)
 			}
@@ -239,7 +242,8 @@ spec:
 		t.Fatal("expected error for unknown kind, got nil")
 	}
 
-	ve, ok := err.(*ValidationError)
+	ve := &ValidationError{}
+	ok := errors.As(err, &ve)
 	if !ok {
 		t.Fatalf("expected *ValidationError, got %T", err)
 	}
@@ -269,7 +273,8 @@ this is not: valid: yaml: syntax
 		t.Fatal("expected error for invalid YAML, got nil")
 	}
 
-	ve, ok := err.(*ValidationError)
+	ve := &ValidationError{}
+	ok := errors.As(err, &ve)
 	if !ok {
 		t.Fatalf("expected *ValidationError, got %T", err)
 	}

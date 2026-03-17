@@ -54,11 +54,11 @@ type LiveReportArtefactSpec struct {
 }
 
 // LiveRouteSpec defines a route mapping in a LiveReportArtefact.
-// Either Artefact or LayoutPages must be set, but not both.
+// Either Artifact or LayoutPages must be set, but not both.
 type LiveRouteSpec struct {
-	// Artefact is a reference to a ReportArtefact manifest.
+	// Artifact is a reference to a ReportArtefact manifest.
 	// Rendered with a $ prefix in YAML (e.g., $report_name).
-	Artefact string `yaml:"artefact,omitempty" json:"artefact,omitempty"`
+	Artifact string `yaml:"artifact,omitempty" json:"artifact,omitempty"`
 
 	// LayoutPages lists LayoutPage names to render for this route.
 	// Each name is rendered with a $ prefix in YAML.

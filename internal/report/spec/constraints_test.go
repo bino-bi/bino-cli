@@ -391,7 +391,7 @@ func TestEvaluateConstraints(t *testing.T) {
 func TestConstraintErrorFormat(t *testing.T) {
 	err := &ConstraintError{
 		Constraint: "labels.env==prod",
-		Reason:     "label \"env\" not defined on artefact",
+		Reason:     "label \"env\" not defined on artifact",
 		Hint:       "add 'labels.env' to the ReportArtefact's metadata",
 		Kind:       "DataSet",
 		Name:       "sales_data",

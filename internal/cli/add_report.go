@@ -41,7 +41,7 @@ type LiveReportArtefactManifestData struct {
 
 // LiveRoute represents a route in a LiveReportArtefact.
 type LiveRoute struct {
-	Artefact    string
+	Artifact    string
 	LayoutPages []string
 }
 
@@ -168,7 +168,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 				data.Name, err = promptGenericName(reader, out, manifests, "ReportArtefact")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -196,7 +196,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 					{Label: "pdf", Description: "PDF document"},
 					{Label: "xga", Description: "XGA format (screen)"},
 				}
-				idx, err := addPromptSelect(reader, out, "Output format", options, 0)
+				idx, err := addPromptSelect(reader, out, "Output format", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -210,7 +210,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 					{Label: "portrait", Description: "Vertical orientation"},
 					{Label: "landscape", Description: "Horizontal orientation"},
 				}
-				idx, err := addPromptSelect(reader, out, "Page orientation", options, 0)
+				idx, err := addPromptSelect(reader, out, "Page orientation", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -233,7 +233,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 					}
 					if addPages {
 						// Get params info for all pages
-						pageParams, _ := getPageParamsInfo(workdir, manifests)
+						pageParams := getPageParamsInfo(manifests)
 
 						items := ManifestsToFuzzyItems(pages)
 						selected, err := addPromptMultiFuzzySearch(reader, out, "Select LayoutPages", items)
@@ -300,7 +300,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ReportArtefact", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -325,12 +325,12 @@ including the filename, format, orientation, and which LayoutPages to include.
 			fmt.Fprintln(out, "===============")
 
 			if len(data.LayoutPageRefs) > 0 {
-				fmt.Fprintf(out, "\nNote: This artefact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
+				fmt.Fprintf(out, "\nNote: This artifact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
 			}
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -341,7 +341,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 			if flagOpenEditor {
 				if editor := getEditor(); editor != "" {
 					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...)
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
 					execCmd.Stdin = os.Stdin
 					execCmd.Stdout = os.Stdout
 					execCmd.Stderr = os.Stderr
@@ -475,7 +475,7 @@ IMPORTANT: A root route "/" is required.
 				data.Name, err = promptGenericName(reader, out, manifests, "LiveReportArtefact")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -494,29 +494,29 @@ IMPORTANT: A root route "/" is required.
 			// Root route
 			fmt.Fprintln(out, "\nConfiguring the root route \"/\" (required):")
 
-			artefacts := FilterByKind(manifests, "ReportArtefact")
+			artifacts := FilterByKind(manifests, "ReportArtefact")
 			pages := FilterByKind(manifests, "LayoutPage")
 
 			rootRoute := LiveRoute{}
 
-			if len(artefacts) > 0 {
+			if len(artifacts) > 0 {
 				options := []SelectOption{
 					{Label: "Use ReportArtefact", Description: "Reference an existing ReportArtefact"},
 					{Label: "Use LayoutPages", Description: "Specify LayoutPages directly"},
 				}
-				idx, err := addPromptSelect(reader, out, "Root route content", options, 0)
+				idx, err := addPromptSelect(reader, out, "Root route content", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
 
 				if idx == 0 {
-					items := ManifestsToFuzzyItems(artefacts)
-					item, err := addPromptFuzzySearch(reader, out, "Select ReportArtefact", items, false)
+					items := ManifestsToFuzzyItems(artifacts)
+					item, err := addPromptFuzzySearch(reader, out, "Select ReportArtefact", items)
 					if err != nil {
 						return RuntimeError(err)
 					}
 					if item != nil {
-						rootRoute.Artefact = item.Name
+						rootRoute.Artifact = item.Name
 					}
 				} else if len(pages) > 0 {
 					items := ManifestsToFuzzyItems(pages)
@@ -557,7 +557,7 @@ IMPORTANT: A root route "/" is required.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LiveReportArtefact", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -578,7 +578,7 @@ IMPORTANT: A root route "/" is required.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -699,7 +699,7 @@ digitally sign PDF reports.
 				data.Name, err = promptGenericName(reader, out, manifests, "SigningProfile")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -741,7 +741,7 @@ digitally sign PDF reports.
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "SigningProfile", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
-						fmt.Fprintln(out, "\nCancelled.")
+						fmt.Fprintln(out, "\nCanceled.")
 						return nil
 					}
 					return RuntimeError(err)
@@ -761,7 +761,7 @@ digitally sign PDF reports.
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
 			if !confirmed {
-				fmt.Fprintln(out, "\nCancelled.")
+				fmt.Fprintln(out, "\nCanceled.")
 				return nil
 			}
 
@@ -905,15 +905,19 @@ func buildReportArtefactDocumentWithParams(data ReportArtefactManifestData) map[
 
 	// Add description if present
 	if data.Description != "" {
-		doc["metadata"].(map[string]any)["description"] = data.Description
+		if m, ok := doc["metadata"].(map[string]any); ok {
+			m["description"] = data.Description
+		}
 	}
 
 	// Add constraints if present
 	if len(data.Constraints) > 0 {
-		doc["metadata"].(map[string]any)["constraints"] = data.Constraints
+		if m, ok := doc["metadata"].(map[string]any); ok {
+			m["constraints"] = data.Constraints
+		}
 	}
 
-	spec := doc["spec"].(map[string]any)
+	spec, _ := doc["spec"].(map[string]any)
 
 	// Add spec fields
 	if data.Filename != "" {
@@ -933,7 +937,7 @@ func buildReportArtefactDocumentWithParams(data ReportArtefactManifestData) map[
 	}
 
 	// Build mixed layoutPages array
-	var layoutPages []any
+	layoutPages := make([]any, 0, len(data.LayoutPages)+len(data.LayoutPageRefs))
 
 	// Add simple string refs first
 	for _, page := range data.LayoutPages {
@@ -972,8 +976,8 @@ func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schem
 	routes := make(map[string]schema.LiveRouteSpec)
 	for path, route := range data.Routes {
 		routeSpec := schema.LiveRouteSpec{}
-		if route.Artefact != "" {
-			routeSpec.Artefact = "$" + route.Artefact
+		if route.Artifact != "" {
+			routeSpec.Artifact = "$" + route.Artifact
 		}
 		if len(route.LayoutPages) > 0 {
 			layoutPages := make([]string, len(route.LayoutPages))

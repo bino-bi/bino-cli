@@ -33,8 +33,8 @@ const defaultLayoutPageFormat = "xga"
 
 // reportArtefactRequired ensures at least one ReportArtefact document exists.
 var reportArtefactRequired = Rule{
-	ID:          "report-artefact-required",
-	Name:        "Report Artefact Required",
+	ID:          "report-artifact-required",
+	Name:        "Report Artifact Required",
 	Description: "At least one ReportArtefact document must be defined.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		for _, doc := range docs {
@@ -49,7 +49,7 @@ var reportArtefactRequired = Rule{
 			file = docs[0].File
 		}
 		return []Finding{{
-			RuleID:  "report-artefact-required",
+			RuleID:  "report-artifact-required",
 			Message: "no ReportArtefact document found; at least one is required to build a report",
 			File:    file,
 		}}
@@ -62,47 +62,47 @@ var reportArtefactRequired = Rule{
 // 1. Its constraints pass for either build OR preview mode (smart: no false-positive for mode-specific pages)
 // 2. Its pageFormat matches the artefact's format (or both default to "xga")
 var artefactLayoutPageRequired = Rule{
-	ID:          "artefact-layoutpage-required",
-	Name:        "Artefact LayoutPage Required",
+	ID:          "artifact-layoutpage-required",
+	Name:        "Artifact LayoutPage Required",
 	Description: "Each ReportArtefact must have at least one LayoutPage that matches its constraints and format.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 
-		// Collect artefacts and layout pages
-		var artefacts []Document
+		// Collect artifacts and layout pages
+		var artifacts []Document
 		var layoutPages []Document
 		for _, doc := range docs {
 			switch doc.Kind {
 			case "ReportArtefact":
-				artefacts = append(artefacts, doc)
+				artifacts = append(artifacts, doc)
 			case "LayoutPage":
 				layoutPages = append(layoutPages, doc)
 			}
 		}
 
-		// If no artefacts, report-artefact-required rule handles it
-		if len(artefacts) == 0 {
+		// If no artifacts, report-artifact-required rule handles it
+		if len(artifacts) == 0 {
 			return nil
 		}
 
-		// Check each artefact
-		for _, artefact := range artefacts {
-			artefactFormat := getArtefactFormat(artefact.Raw)
+		// Check each artifact
+		for _, artifact := range artifacts {
+			artefactFormat := getArtefactFormat(artifact.Raw)
 			matchingPages := 0
 
 			for _, page := range layoutPages {
-				// Check if page matches artefact in at least one mode (build or preview)
-				if pageMatchesArtefact(page, artefact, artefactFormat) {
+				// Check if page matches artifact in at least one mode (build or preview)
+				if pageMatchesArtefact(page, artifact, artefactFormat) {
 					matchingPages++
 				}
 			}
 
 			if matchingPages == 0 {
 				findings = append(findings, Finding{
-					RuleID:  "artefact-layoutpage-required",
-					Message: "no LayoutPage matches this artefact after applying constraints and format filtering",
-					File:    artefact.File,
-					DocIdx:  artefact.Position,
+					RuleID:  "artifact-layoutpage-required",
+					Message: "no LayoutPage matches this artifact after applying constraints and format filtering",
+					File:    artifact.File,
+					DocIdx:  artifact.Position,
 					Path:    "metadata.name",
 				})
 			}
@@ -192,12 +192,12 @@ var datasetRequired = Rule{
 	},
 }
 
-// pageMatchesArtefact checks if a LayoutPage matches an artefact.
+// pageMatchesArtefact checks if a LayoutPage matches an artifact.
 // It evaluates constraints for BOTH build and preview modes (matching if either passes)
 // and checks format compatibility.
-func pageMatchesArtefact(page, artefact Document, artefactFormat string) bool {
-	// Build constraint context from artefact
-	specMap, err := spec.SpecToMap(artefact.Raw)
+func pageMatchesArtefact(page, artifact Document, artefactFormat string) bool {
+	// Build constraint context from artifact
+	specMap, err := spec.ToMap(artifact.Raw)
 	if err != nil {
 		return false
 	}
@@ -206,7 +206,7 @@ func pageMatchesArtefact(page, artefact Document, artefactFormat string) bool {
 	constraintMatch := false
 	for _, mode := range []spec.Mode{spec.ModeBuild, spec.ModePreview} {
 		ctx := &spec.ConstraintContext{
-			Labels: artefact.Labels,
+			Labels: artifact.Labels,
 			Spec:   specMap,
 			Mode:   mode,
 		}

@@ -1,5 +1,5 @@
 // Package pipeline provides shared build/preview/serve logic for manifest loading,
-// artefact selection, and HTML rendering. Both CLI build and preview commands
+// artifact selection, and HTML rendering. Both CLI build and preview commands
 // use these helpers to ensure consistent behavior and options.
 package pipeline
 
@@ -27,12 +27,12 @@ import (
 type LoadResult struct {
 	Workdir         string
 	Documents       []config.Document
-	Artefacts       []config.Artefact
+	Artifacts       []config.Artifact
 	SigningProfiles map[string]config.SigningProfile
 }
 
 // LoadManifests loads and validates all manifest documents from the given workdir.
-// It returns collected artefacts and signing profiles ready for further processing.
+// It returns collected artifacts and signing profiles ready for further processing.
 func LoadManifests(ctx context.Context, workdir string) (LoadResult, error) {
 	absDir, err := ResolveWorkdir(workdir)
 	if err != nil {
@@ -47,9 +47,9 @@ func LoadManifests(ctx context.Context, workdir string) (LoadResult, error) {
 		return LoadResult{}, fmt.Errorf("no YAML documents found in %s", absDir)
 	}
 
-	artefacts, err := config.CollectArtefacts(docs)
+	artifacts, err := config.CollectArtefacts(docs)
 	if err != nil {
-		return LoadResult{}, fmt.Errorf("collect artefacts: %w", err)
+		return LoadResult{}, fmt.Errorf("collect artifacts: %w", err)
 	}
 
 	signingProfiles, err := config.CollectSigningProfiles(docs)
@@ -60,12 +60,12 @@ func LoadManifests(ctx context.Context, workdir string) (LoadResult, error) {
 	return LoadResult{
 		Workdir:         absDir,
 		Documents:       docs,
-		Artefacts:       artefacts,
+		Artifacts:       artifacts,
 		SigningProfiles: signingProfiles,
 	}, nil
 }
 
-// FilterOptions specifies which artefacts to include or exclude from processing.
+// FilterOptions specifies which artifacts to include or exclude from processing.
 type FilterOptions struct {
 	// Include lists specific metadata.name entries to process (empty means all).
 	Include []string
@@ -73,12 +73,12 @@ type FilterOptions struct {
 	Exclude []string
 }
 
-// FilterArtefacts selects artefacts based on include/exclude rules.
+// FilterArtefacts selects artifacts based on include/exclude rules.
 // If Include is non-empty, only those names are selected (in order).
 // Exclude names are always removed from the result.
-// Names in Include that don't match any artefact are skipped (they may be ScreenshotArtefact names).
+// Names in Include that don't match any artifact are skipped (they may be ScreenshotArtefact names).
 // Use ValidateArtefactNames to check that all include names exist before calling this function.
-func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefact {
+func FilterArtefacts(all []config.Artifact, opts FilterOptions) []config.Artifact {
 	excludeSet := make(map[string]struct{})
 	for _, name := range opts.Exclude {
 		name = strings.TrimSpace(name)
@@ -89,12 +89,12 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefac
 	}
 
 	if len(opts.Include) > 0 {
-		index := make(map[string]config.Artefact, len(all))
+		index := make(map[string]config.Artifact, len(all))
 		for _, art := range all {
 			index[art.Document.Name] = art
 		}
 		seen := make(map[string]struct{})
-		var filtered []config.Artefact
+		var filtered []config.Artifact
 		for _, raw := range opts.Include {
 			name := strings.TrimSpace(raw)
 			if name == "" {
@@ -117,7 +117,7 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefac
 		return filtered
 	}
 
-	filtered := make([]config.Artefact, 0, len(all))
+	filtered := make([]config.Artifact, 0, len(all))
 	for _, art := range all {
 		if _, blocked := excludeSet[art.Document.Name]; blocked {
 			continue
@@ -127,7 +127,7 @@ func FilterArtefacts(all []config.Artefact, opts FilterOptions) []config.Artefac
 	return filtered
 }
 
-// FilterDocumentArtefacts selects document artefacts based on include/exclude rules.
+// FilterDocumentArtefacts selects document artifacts based on include/exclude rules.
 // If Include is non-empty, only those names are selected (in order).
 // Exclude names are always removed from the result.
 func FilterDocumentArtefacts(all []config.DocumentArtefact, opts FilterOptions) []config.DocumentArtefact {
@@ -157,7 +157,7 @@ func FilterDocumentArtefacts(all []config.DocumentArtefact, opts FilterOptions) 
 			}
 			art, ok := index[name]
 			if !ok {
-				// Skip - may be another artefact type
+				// Skip - may be another artifact type
 				continue
 			}
 			if _, blocked := excludeSet[name]; blocked {
@@ -179,7 +179,7 @@ func FilterDocumentArtefacts(all []config.DocumentArtefact, opts FilterOptions) 
 	return filtered
 }
 
-// FilterScreenshotArtefacts selects screenshot artefacts based on include/exclude rules.
+// FilterScreenshotArtefacts selects screenshot artifacts based on include/exclude rules.
 // If Include is non-empty, only those names are selected (in order).
 // Exclude names are always removed from the result.
 // Unlike FilterArtefacts, this function does not error when an include name is not found,
@@ -235,19 +235,19 @@ func FilterScreenshotArtefacts(all []config.ScreenshotArtefact, opts FilterOptio
 
 // ValidateArtefactNames checks that all include names exist in either the ReportArtefact
 // or ScreenshotArtefact lists.
-func ValidateArtefactNames(artefacts []config.Artefact, screenshots []config.ScreenshotArtefact, include []string) error {
-	return ValidateAllArtefactNames(artefacts, screenshots, nil, include)
+func ValidateArtefactNames(artifacts []config.Artifact, screenshots []config.ScreenshotArtefact, include []string) error {
+	return ValidateAllArtefactNames(artifacts, screenshots, nil, include)
 }
 
-// ValidateAllArtefactNames checks that all include names exist in any of the artefact type lists.
-func ValidateAllArtefactNames(artefacts []config.Artefact, screenshots []config.ScreenshotArtefact, documents []config.DocumentArtefact, include []string) error {
+// ValidateAllArtefactNames checks that all include names exist in any of the artifact type lists.
+func ValidateAllArtefactNames(artifacts []config.Artifact, screenshots []config.ScreenshotArtefact, documents []config.DocumentArtefact, include []string) error {
 	if len(include) == 0 {
 		return nil
 	}
 
-	// Build a set of all known artefact names
+	// Build a set of all known artifact names
 	known := make(map[string]struct{})
-	for _, art := range artefacts {
+	for _, art := range artifacts {
 		known[art.Document.Name] = struct{}{}
 	}
 	for _, ss := range screenshots {
@@ -264,40 +264,40 @@ func ValidateAllArtefactNames(artefacts []config.Artefact, screenshots []config.
 			continue
 		}
 		if _, ok := known[name]; !ok {
-			return fmt.Errorf("artefact %q not found", name)
+			return fmt.Errorf("artifact %q not found", name)
 		}
 	}
 	return nil
 }
 
-// EnsureSigningProfiles verifies that all artefacts referencing a signing profile
+// EnsureSigningProfiles verifies that all artifacts referencing a signing profile
 // have that profile available in the provided map.
-func EnsureSigningProfiles(artefacts []config.Artefact, profiles map[string]config.SigningProfile) error {
-	for _, art := range artefacts {
+func EnsureSigningProfiles(artifacts []config.Artifact, profiles map[string]config.SigningProfile) error {
+	for _, art := range artifacts {
 		ref := strings.TrimSpace(art.Spec.SigningProfile)
 		if ref == "" {
 			continue
 		}
 		if _, ok := profiles[ref]; !ok {
-			return fmt.Errorf("artefact %s references unknown SigningProfile %q", art.Document.Name, ref)
+			return fmt.Errorf("artifact %s references unknown SigningProfile %q", art.Document.Name, ref)
 		}
 	}
 	return nil
 }
 
-// LogArtefactWarnings logs any warnings collected during artefact validation.
-func LogArtefactWarnings(logger logx.Logger, artefacts []config.Artefact) {
+// LogArtefactWarnings logs any warnings collected during artifact validation.
+func LogArtefactWarnings(logger logx.Logger, artifacts []config.Artifact) {
 	if logger == nil {
 		return
 	}
-	for _, art := range artefacts {
+	for _, art := range artifacts {
 		for _, warn := range art.Warnings {
 			logger.Warnf(warn)
 		}
 	}
 }
 
-// RenderOptions configures HTML rendering for a single artefact or preview.
+// RenderOptions configures HTML rendering for a single artifact or preview.
 type RenderOptions struct {
 	// Workdir is the working directory for dataset execution. Required for datasets.
 	Workdir string
@@ -334,6 +334,10 @@ type RenderOptions struct {
 	// LayoutPageParams provides override values for LayoutPage parameters.
 	// Used by serve mode to pass URL query params as LayoutPage param values.
 	LayoutPageParams map[string]string
+	// Session is an optional pre-existing DuckDB session to reuse across renders.
+	// When set, dataset execution reuses this session instead of creating a fresh one.
+	// The caller is responsible for closing the session.
+	Session *duckdb.Session
 }
 
 // RenderResult captures the outcome of rendering HTML from documents.
@@ -377,6 +381,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 			EmbedOptions:             opts.EmbedOptions,
 			DataValidation:           opts.DataValidation,
 			DataValidationSampleSize: opts.DataValidationSampleSize,
+			Session:                  opts.Session,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
 
@@ -422,7 +427,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 	}, nil
 }
 
-// RenderArtefactOptions configures HTML rendering for a specific artefact.
+// RenderArtefactOptions configures HTML rendering for a specific artifact.
 type RenderArtefactOptions struct {
 	// EngineVersion specifies the template engine version to use (e.g., "v1.2.3").
 	EngineVersion string
@@ -440,39 +445,39 @@ type RenderArtefactOptions struct {
 	DataValidationSampleSize int
 }
 
-// RenderArtefactHTML generates HTML for a specific artefact using its spec settings.
-// It uses RenderModeBuild by default since artefacts are typically rendered for PDF generation.
+// RenderArtefactHTML generates HTML for a specific artifact using its spec settings.
+// It uses RenderModeBuild by default since artifacts are typically rendered for PDF generation.
 // For preview rendering, use RenderArtefactHTMLForPreview instead.
 // The workdir parameter is required for dataset execution.
-func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, opts RenderArtefactOptions) (RenderResult, error) {
+func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts RenderArtefactOptions) (RenderResult, error) {
 	// Select LayoutPages by refs (before constraint filtering)
-	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+		return RenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
 	}
 
-	// Build constraint context from artefact
-	constraintCtx, err := buildConstraintContext(artefact, spec.ModeBuild)
+	// Build constraint context from artifact
+	constraintCtx, err := buildConstraintContext(artifact, spec.ModeBuild)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
-	// Filter documents by constraints for this artefact
+	// Filter documents by constraints for this artifact
 	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
 		return RenderResult{}, err
 	}
 
 	return RenderHTML(ctx, filtered, RenderOptions{
 		Workdir:                  workdir,
-		Language:                 artefact.Spec.Language,
-		Orientation:              artefact.Spec.Orientation,
-		Format:                   artefact.Spec.Format,
+		Language:                 artifact.Spec.Language,
+		Orientation:              artifact.Spec.Orientation,
+		Format:                   artifact.Spec.Format,
 		Mode:                     RenderModeBuild,
 		EngineVersion:            opts.EngineVersion,
 		QueryLogger:              opts.QueryLogger,
@@ -486,40 +491,40 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	})
 }
 
-// RenderArtefactHTMLForPreview generates HTML for a specific artefact in preview mode.
+// RenderArtefactHTMLForPreview generates HTML for a specific artifact in preview mode.
 // Unlike RenderArtefactHTML, this does not include build-specific attributes like render-orientation.
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (RenderResult, error) {
+func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), engineVersion string) (RenderResult, error) {
 	// Select LayoutPages by refs (before constraint filtering)
-	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return RenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+		return RenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
 	}
 
-	// Build constraint context from artefact
-	constraintCtx, err := buildConstraintContext(artefact, spec.ModePreview)
+	// Build constraint context from artifact
+	constraintCtx, err := buildConstraintContext(artifact, spec.ModePreview)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
-	// Filter documents by constraints for this artefact
+	// Filter documents by constraints for this artifact
 	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
 		return RenderResult{}, err
 	}
 
 	return RenderHTML(ctx, filtered, RenderOptions{
 		Workdir:           workdir,
-		Language:          artefact.Spec.Language,
-		Orientation:       artefact.Spec.Orientation,
-		Format:            artefact.Spec.Format,
+		Language:          artifact.Spec.Language,
+		Orientation:       artifact.Spec.Orientation,
+		Format:            artifact.Spec.Format,
 		Mode:              RenderModePreview,
 		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
@@ -528,7 +533,7 @@ func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []co
 	})
 }
 
-// RenderScreenshotArtefactOptions configures screenshot artefact HTML rendering.
+// RenderScreenshotArtefactOptions configures screenshot artifact HTML rendering.
 type RenderScreenshotArtefactOptions struct {
 	EngineVersion            string
 	QueryLogger              func(string)
@@ -543,28 +548,28 @@ type RenderScreenshotArtefactOptions struct {
 // It renders the specified layout pages and their dependencies.
 // When layoutPages is empty, pages are auto-discovered from refs.
 // The workdir parameter is required for dataset execution.
-func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artefact config.ScreenshotArtefact, opts RenderScreenshotArtefactOptions) (RenderResult, error) {
-	// Build constraint context from screenshot artefact
-	constraintCtx, err := buildScreenshotConstraintContext(artefact, spec.ModeBuild)
+func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.ScreenshotArtefact, opts RenderScreenshotArtefactOptions) (RenderResult, error) {
+	// Build constraint context from screenshot artifact
+	constraintCtx, err := buildScreenshotConstraintContext(artifact, spec.ModeBuild)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
-	// Filter documents by constraints for this artefact
+	// Filter documents by constraints for this artifact
 	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
 	// Determine which layout pages to render
-	layoutPages := artefact.Spec.LayoutPages
+	layoutPages := artifact.Spec.LayoutPages
 	if len(layoutPages) == 0 {
 		// Auto-discover pages containing the referenced components,
 		// and synthesize wrapper pages for standalone components not on any page.
 		var syntheticDocs []config.Document
-		layoutPages, syntheticDocs, err = resolveScreenshotRefs(filtered, artefact.Spec.Refs, artefact.Spec.Format, artefact.Spec.Orientation)
+		layoutPages, syntheticDocs, err = resolveScreenshotRefs(filtered, artifact.Spec.Refs, artifact.Spec.Format, artifact.Spec.Orientation)
 		if err != nil {
-			return RenderResult{}, fmt.Errorf("screenshot artefact %s: %w", artefact.Document.Name, err)
+			return RenderResult{}, fmt.Errorf("screenshot artifact %s: %w", artifact.Document.Name, err)
 		}
 		if len(syntheticDocs) > 0 {
 			filtered = append(filtered, syntheticDocs...)
@@ -579,9 +584,9 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 
 	return RenderHTML(ctx, filtered, RenderOptions{
 		Workdir:                  workdir,
-		Language:                 artefact.Spec.Language,
-		Orientation:              artefact.Spec.Orientation,
-		Format:                   artefact.Spec.Format,
+		Language:                 artifact.Spec.Language,
+		Orientation:              artifact.Spec.Orientation,
+		Format:                   artifact.Spec.Format,
 		Mode:                     RenderModeBuild,
 		EngineVersion:            opts.EngineVersion,
 		QueryLogger:              opts.QueryLogger,
@@ -595,48 +600,18 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 	})
 }
 
-// buildScreenshotConstraintContext creates a constraint context from a screenshot artefact.
-func buildScreenshotConstraintContext(artefact config.ScreenshotArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
-	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+// buildScreenshotConstraintContext creates a constraint context from a screenshot artifact.
+func buildScreenshotConstraintContext(artifact config.ScreenshotArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.ToMap(artifact.Document.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("screenshot artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
+		return nil, fmt.Errorf("screenshot artifact %s: parse spec for constraints: %w", artifact.Document.Name, err)
 	}
 
 	return &spec.ConstraintContext{
-		Labels:       artefact.Labels,
+		Labels:       artifact.Labels,
 		Spec:         specMap,
 		Mode:         mode,
 		ArtefactKind: "screenshot",
-	}, nil
-}
-
-// buildDocumentConstraintContext creates a constraint context from a document artefact.
-func buildDocumentConstraintContext(artefact config.DocumentArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
-	specMap, err := spec.SpecToMap(artefact.Document.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("document artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
-	}
-
-	return &spec.ConstraintContext{
-		Labels:       artefact.Labels,
-		Spec:         specMap,
-		Mode:         mode,
-		ArtefactKind: "document",
-	}, nil
-}
-
-// buildLiveConstraintContext creates a constraint context from a live artefact.
-func buildLiveConstraintContext(artefact config.LiveArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
-	specMap, err := spec.SpecToMap(artefact.Document.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("live artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
-	}
-
-	return &spec.ConstraintContext{
-		Labels:       nil, // LiveArtefact doesn't have labels field
-		Spec:         specMap,
-		Mode:         mode,
-		ArtefactKind: "livereport",
 	}, nil
 }
 
@@ -800,10 +775,10 @@ type SelectedLayoutPage struct {
 // - For select params, ${PARAM_LABEL} is also available with the label from the option item
 // - A unique name suffix based on the param values (e.g., "page#REGION=EU,YEAR=2024")
 // If both params is empty and doc has no params defined, returns the original document unchanged.
-func expandLayoutPageWithParams(doc config.Document, params map[string]string) (config.Document, error) {
+func expandLayoutPageWithParams(doc config.Document, params map[string]string) config.Document {
 	// If no explicit params and no defined params, return unchanged
 	if len(params) == 0 && len(doc.Params) == 0 {
-		return doc, nil
+		return doc
 	}
 
 	envLookup := config.EnvLookup()
@@ -873,7 +848,7 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) (
 		Params:         doc.Params,
 		Raw:            []byte(expandedContent),
 		MissingEnvVars: nil, // Params should have resolved any missing vars
-	}, nil
+	}
 }
 
 // lookupSelectLabel finds the label for a given value in a list of select option items.
@@ -896,31 +871,25 @@ func lookupSelectLabel(items []config.LayoutPageParamOptionItem, value string) s
 // Non-LayoutPage documents are preserved at the beginning of the result in their original order.
 // If refs is empty or contains only "*", the function returns docs unchanged (default behavior).
 // LayoutPages with defined params are expanded with default values even without explicit params.
-func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRefs) ([]config.Document, []SelectedLayoutPage, error) {
+func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRefs) ([]config.Document, error) {
 	// Check if using default pattern (select all)
 	if len(refs) == 0 || (len(refs) == 1 && refs[0].Page == "*" && len(refs[0].Params) == 0) {
 		// Return all LayoutPages, expanding those with params using defaults
 		var expandedDocs []config.Document
-		var layoutPages []SelectedLayoutPage
 		for _, doc := range docs {
 			if doc.Kind == "LayoutPage" {
 				// Expand with defaults if the page has params defined
 				if len(doc.Params) > 0 {
-					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
-					if err != nil {
-						return nil, nil, fmt.Errorf("expand defaults for %q: %w", doc.Name, err)
-					}
+					expandedDoc := expandLayoutPageWithParams(doc, nil)
 					expandedDocs = append(expandedDocs, expandedDoc)
-					layoutPages = append(layoutPages, SelectedLayoutPage{Doc: expandedDoc})
 				} else {
 					expandedDocs = append(expandedDocs, doc)
-					layoutPages = append(layoutPages, SelectedLayoutPage{Doc: doc})
 				}
 			} else {
 				expandedDocs = append(expandedDocs, doc)
 			}
 		}
-		return expandedDocs, layoutPages, nil
+		return expandedDocs, nil
 	}
 
 	// Separate LayoutPage documents from others
@@ -945,7 +914,6 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 	// For explicit refs with params: allow same page multiple times with different params
 	seenGlob := make(map[string]bool)
 	var selectedDocs []config.Document
-	var selectedPages []SelectedLayoutPage
 
 	for _, ref := range refs {
 		pageName := strings.TrimSpace(ref.Page)
@@ -957,7 +925,7 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 		if ref.IsGlob() {
 			// Validate pattern syntax
 			if _, err := path.Match(pageName, ""); err != nil {
-				return nil, nil, fmt.Errorf("invalid layoutPages pattern %q: %w", pageName, err)
+				return nil, fmt.Errorf("invalid layoutPages pattern %q: %w", pageName, err)
 			}
 
 			// Find all matching pages
@@ -981,15 +949,10 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 			// Expand pages with params using their defaults
 			for _, doc := range matches {
 				if len(doc.Params) > 0 {
-					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
-					if err != nil {
-						return nil, nil, fmt.Errorf("expand defaults for %q: %w", doc.Name, err)
-					}
+					expandedDoc := expandLayoutPageWithParams(doc, nil)
 					selectedDocs = append(selectedDocs, expandedDoc)
-					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc})
 				} else {
 					selectedDocs = append(selectedDocs, doc)
-					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
 				}
 				seenGlob[doc.Name] = true
 			}
@@ -1011,24 +974,15 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 				seenGlob[pageName] = true
 				// Expand with defaults if the page has params defined
 				if len(doc.Params) > 0 {
-					expandedDoc, err := expandLayoutPageWithParams(doc, nil)
-					if err != nil {
-						return nil, nil, fmt.Errorf("expand defaults for %q: %w", pageName, err)
-					}
+					expandedDoc := expandLayoutPageWithParams(doc, nil)
 					selectedDocs = append(selectedDocs, expandedDoc)
-					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc})
 				} else {
 					selectedDocs = append(selectedDocs, doc)
-					selectedPages = append(selectedPages, SelectedLayoutPage{Doc: doc})
 				}
 			} else {
 				// Expand params into document to create unique instance
-				expandedDoc, err := expandLayoutPageWithParams(doc, ref.Params)
-				if err != nil {
-					return nil, nil, fmt.Errorf("expand params for %q: %w", pageName, err)
-				}
+				expandedDoc := expandLayoutPageWithParams(doc, ref.Params)
 				selectedDocs = append(selectedDocs, expandedDoc)
-				selectedPages = append(selectedPages, SelectedLayoutPage{Doc: expandedDoc, Params: ref.Params})
 			}
 		}
 	}
@@ -1038,7 +992,7 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 	result = append(result, others...)
 	result = append(result, selectedDocs...)
 
-	return result, selectedPages, nil
+	return result, nil
 }
 
 // selectLayoutPagesByPatterns filters and orders LayoutPage documents by name patterns.
@@ -1046,6 +1000,7 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 // Returns pages in pattern order; within each pattern, pages are sorted alphabetically by name.
 // Non-LayoutPage documents are preserved at the beginning of the result in their original order.
 // If patterns is empty or contains only "*", the function returns docs unchanged (default behavior).
+//
 // Deprecated: Use selectLayoutPagesByRefs for full LayoutPagesOrRefs support.
 func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]config.Document, error) {
 	// Convert string patterns to LayoutPagesOrRefs
@@ -1053,8 +1008,7 @@ func selectLayoutPagesByPatterns(docs []config.Document, patterns []string) ([]c
 	for i, p := range patterns {
 		refs[i] = config.LayoutPageRef{Page: p}
 	}
-	result, _, err := selectLayoutPagesByRefs(docs, refs)
-	return result, err
+	return selectLayoutPagesByRefs(docs, refs)
 }
 
 // RenderHTMLFrameAndContext generates a two-phase render output for preview mode.
@@ -1066,10 +1020,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 	expandedDocs := make([]config.Document, 0, len(docs))
 	for _, doc := range docs {
 		if doc.Kind == "LayoutPage" && len(doc.Params) > 0 {
-			expandedDoc, err := expandLayoutPageWithParams(doc, opts.LayoutPageParams)
-			if err != nil {
-				return FrameRenderResult{}, fmt.Errorf("expand params for %q: %w", doc.Name, err)
-			}
+			expandedDoc := expandLayoutPageWithParams(doc, opts.LayoutPageParams)
 			expandedDocs = append(expandedDocs, expandedDoc)
 		} else {
 			expandedDocs = append(expandedDocs, doc)
@@ -1086,6 +1037,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 			QueryLogger:              opts.QueryLogger,
 			DataValidation:           opts.DataValidation,
 			DataValidationSampleSize: opts.DataValidationSampleSize,
+			Session:                  opts.Session,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
 		if err != nil {
@@ -1123,51 +1075,53 @@ type FrameRenderOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// Session is an optional pre-existing DuckDB session to reuse across renders.
+	Session *duckdb.Session
 }
 
-// RenderArtefactFrameAndContext generates a two-phase render for a specific artefact in preview mode.
+// RenderArtefactFrameAndContext generates a two-phase render for a specific artifact in preview mode.
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), engineVersion string) (FrameRenderResult, error) {
-	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artefact, queryLogger, spec.ModePreview, engineVersion)
+func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), engineVersion string) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artifact, queryLogger, spec.ModePreview, engineVersion)
 }
 
-// RenderArtefactFrameAndContextWithOptions generates a two-phase render for a specific artefact in preview mode with options.
+// RenderArtefactFrameAndContextWithOptions generates a two-phase render for a specific artifact in preview mode with options.
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
-func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, opts FrameRenderOptions) (FrameRenderResult, error) {
-	return RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, artefact, spec.ModePreview, opts)
+func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts FrameRenderOptions) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, artifact, spec.ModePreview, opts)
 }
 
-// RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artefact with a specified mode.
+// RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artifact with a specified mode.
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
 // The queryLogger parameter is optional and can be used to log SQL queries.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 // The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
+func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
 	// Select LayoutPages by refs (before constraint filtering)
-	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+		return FrameRenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
 	}
 
-	// Build constraint context from artefact
-	constraintCtx, err := buildConstraintContext(artefact, mode)
+	// Build constraint context from artifact
+	constraintCtx, err := buildConstraintContext(artifact, mode)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
 
-	// Filter documents by constraints for this artefact
+	// Filter documents by constraints for this artifact
 	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
 		return FrameRenderResult{}, err
 	}
 
@@ -1184,8 +1138,8 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 
 	return RenderHTMLFrameAndContext(ctx, filtered, RenderOptions{
 		Workdir:           workdir,
-		Language:          artefact.Spec.Language,
-		Format:            artefact.Spec.Format,
+		Language:          artifact.Spec.Language,
+		Format:            artifact.Spec.Format,
 		Mode:              renderMode,
 		EngineVersion:     engineVersion,
 		QueryLogger:       queryLogger,
@@ -1194,31 +1148,31 @@ func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, 
 	})
 }
 
-// RenderArtefactFrameAndContextWithModeAndOptions generates a two-phase render for a specific artefact with a specified mode and options.
+// RenderArtefactFrameAndContextWithModeAndOptions generates a two-phase render for a specific artifact with a specified mode and options.
 // It returns a lightweight frame HTML and context HTML for SSE delivery.
 // The workdir parameter is required for dataset execution.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
-func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artefact config.Artefact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
+func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
 	// Select LayoutPages by refs (before constraint filtering)
-	filtered, _, err := selectLayoutPagesByRefs(docs, artefact.Spec.LayoutPages)
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artefact.Document.Name, err)
+		return FrameRenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
 	}
 
-	// Build constraint context from artefact
-	constraintCtx, err := buildConstraintContext(artefact, mode)
+	// Build constraint context from artifact
+	constraintCtx, err := buildConstraintContext(artifact, mode)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
 
-	// Filter documents by constraints for this artefact
+	// Filter documents by constraints for this artifact
 	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
 		return FrameRenderResult{}, err
 	}
 
@@ -1235,8 +1189,8 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 
 	return RenderHTMLFrameAndContext(ctx, filtered, RenderOptions{
 		Workdir:                  workdir,
-		Language:                 artefact.Spec.Language,
-		Format:                   artefact.Spec.Format,
+		Language:                 artifact.Spec.Language,
+		Format:                   artifact.Spec.Format,
 		Mode:                     renderMode,
 		EngineVersion:            opts.EngineVersion,
 		QueryLogger:              opts.QueryLogger,
@@ -1244,18 +1198,19 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		Session:                  opts.Session,
 	})
 }
 
-// buildConstraintContext creates a constraint context from an artefact and mode.
-func buildConstraintContext(artefact config.Artefact, mode spec.Mode) (*spec.ConstraintContext, error) {
-	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+// buildConstraintContext creates a constraint context from an artifact and mode.
+func buildConstraintContext(artifact config.Artifact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.ToMap(artifact.Document.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("artefact %s: parse spec for constraints: %w", artefact.Document.Name, err)
+		return nil, fmt.Errorf("artifact %s: parse spec for constraints: %w", artifact.Document.Name, err)
 	}
 
 	return &spec.ConstraintContext{
-		Labels:       artefact.Labels,
+		Labels:       artifact.Labels,
 		Spec:         specMap,
 		Mode:         mode,
 		ArtefactKind: "report",
@@ -1263,8 +1218,8 @@ func buildConstraintContext(artefact config.Artefact, mode spec.Mode) (*spec.Con
 }
 
 // filterDocsByConstraints filters documents based on the artefact's labels, spec, and the mode.
-func filterDocsByConstraints(docs []config.Document, artefact config.Artefact, mode spec.Mode) ([]config.Document, error) {
-	constraintCtx, err := buildConstraintContext(artefact, mode)
+func filterDocsByConstraints(docs []config.Document, artifact config.Artifact, mode spec.Mode) ([]config.Document, error) {
+	constraintCtx, err := buildConstraintContext(artifact, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -1322,15 +1277,15 @@ func IsInvalidRootError(err error) bool {
 }
 
 // RenderMode describes the caller context for rendering.
-type RenderMode = render.RenderMode
+type RenderMode = render.Mode
 
 const (
 	// RenderModeBuild indicates a build (PDF generation) context.
-	RenderModeBuild RenderMode = render.RenderModeBuild
+	RenderModeBuild RenderMode = render.ModeBuild
 	// RenderModePreview indicates a live preview (HTTP server) context.
-	RenderModePreview RenderMode = render.RenderModePreview
+	RenderModePreview RenderMode = render.ModePreview
 	// RenderModeServe indicates a production serve (bino serve) context.
-	RenderModeServe RenderMode = render.RenderModeServe
+	RenderModeServe RenderMode = render.ModeServe
 )
 
 // InvalidLayoutPolicy describes how callers should react to an invalid layout error.
@@ -1341,13 +1296,13 @@ func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
 	return render.ClassifyInvalidLayout(err, mode)
 }
 
-// DocumentArtefactResult captures the outcome of rendering a document artefact.
+// DocumentArtefactResult captures the outcome of rendering a document artifact.
 type DocumentArtefactResult struct {
 	HTML        []byte
 	LocalAssets []render.LocalAsset
 }
 
-// DocumentArtefactRenderOptions configures document artefact rendering.
+// DocumentArtefactRenderOptions configures document artifact rendering.
 type DocumentArtefactRenderOptions struct {
 	// EngineVersion is the template engine version to use (e.g., "v1.2.3").
 	// If empty, a default version is used.
@@ -1355,55 +1310,61 @@ type DocumentArtefactRenderOptions struct {
 	// TOCPageNumbers maps heading IDs to page numbers (from two-pass rendering).
 	// If provided and TableOfContents is enabled, page numbers are included in the TOC.
 	TOCPageNumbers map[string]int
+	// Session is an optional pre-existing DuckDB session to reuse.
+	Session *duckdb.Session
 }
 
 // RenderDocumentArtefactHTML generates HTML from markdown files for a DocumentArtefact.
 // It reads the specified source markdown files, converts them to HTML using goldmark,
 // and wraps them in a full bino HTML document with template engine, bn-context, datasources, etc.
-func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
+func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
 	logger := logx.FromContext(ctx).Channel("document")
-	spec := artefact.Spec
+	s := artifact.Spec
 
 	// Load all documents from the workdir
 	docs, err := config.LoadDir(ctx, workdir)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: load manifests: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: load manifests: %w", artifact.Document.Name, err)
 	}
 
 	// Execute datasets and collect datasources
-	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, nil)
+	var execOpts *dataset.ExecuteOptions
+	if opts.Session != nil {
+		execOpts = &dataset.ExecuteOptions{Session: opts.Session}
+	}
+	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: execute datasets: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: execute datasets: %w", artifact.Document.Name, err)
 	}
 
 	datasourceResults, _, err := datasource.Collect(ctx, docs)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: collect datasources: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: collect datasources: %w", artifact.Document.Name, err)
 	}
 
 	// Get the manifest file's directory to resolve relative paths
-	manifestDir := filepath.Dir(artefact.Document.File)
+	manifestDir := filepath.Dir(artifact.Document.File)
 	if manifestDir == "" {
 		manifestDir = workdir
 	}
 
-	logger.Debugf("Rendering DocumentArtefact %s with %d source pattern(s)", artefact.Document.Name, len(spec.Sources))
+	logger.Debugf("Rendering DocumentArtefact %s with %d source pattern(s)", artifact.Document.Name, len(s.Sources))
 
 	// Resolve source files (expand globs, filter .md files, sort)
-	files, err := markdown.ResolveSourceFiles(manifestDir, spec.Sources)
+	files, err := markdown.ResolveSourceFiles(manifestDir, s.Sources)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
 	}
 
 	logger.Debugf("Resolved %d markdown file(s) from sources", len(files))
 
 	// Load custom stylesheet if specified
 	var customCSS string
-	if spec.Stylesheet != "" {
+	if s.Stylesheet != "" {
 		var err error
-		customCSS, err = markdown.LoadStylesheet(manifestDir, spec.Stylesheet)
+		customCSS, err = markdown.LoadStylesheet(manifestDir, s.Stylesheet)
 		if err != nil {
-			return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+			return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
 		}
 	}
 
@@ -1416,7 +1377,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 	// Resolve asset URLs for asset: image references in markdown
 	assetURLs, assetLocals, err := render.ResolveAssetURLs(docs)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Create render context with documents, datasets, and datasources
@@ -1424,64 +1385,64 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artefact co
 	renderCtx.AssetURLs = assetURLs
 
 	// Render markdown files to HTML content with full context
-	mathEnabled := spec.MathEnabled()
+	mathEnabled := s.MathEnabled()
 	content, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
 		RenderOptions: markdown.RenderOptions{
 			BaseDir:               manifestDir,
-			Stylesheet:            spec.Stylesheet,
-			TableOfContents:       spec.TableOfContents,
-			PageBreakBetweenFiles: spec.PageBreakBetweenSources,
+			Stylesheet:            s.Stylesheet,
+			TableOfContents:       s.TableOfContents,
+			PageBreakBetweenFiles: s.PageBreakBetweenSources,
 			Math:                  mathEnabled,
 		},
 		RenderContext:  renderCtx,
-		Locale:         spec.Locale,
+		Locale:         s.Locale,
 		TOCPageNumbers: opts.TOCPageNumbers,
 		Math:           mathEnabled,
 	})
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Wrap in full bino HTML document with template engine, bn-context, etc.
 	html := markdown.WrapDocumentWithContext(content, markdown.FullDocumentOptions{
 		DocumentOptions: markdown.DocumentOptions{
-			Title:       spec.Title,
-			Author:      spec.Author,
-			Subject:     spec.Subject,
-			Keywords:    spec.Keywords,
-			Format:      spec.Format,
-			Orientation: spec.Orientation,
+			Title:       s.Title,
+			Author:      s.Author,
+			Subject:     s.Subject,
+			Keywords:    s.Keywords,
+			Format:      s.Format,
+			Orientation: s.Orientation,
 			Stylesheet:  customCSS,
 		},
-		Locale:        spec.Locale,
+		Locale:        s.Locale,
 		RenderContext: renderCtx,
 	})
 
 	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals}, nil
 }
 
-// LogDocumentArtefactWarnings logs any warnings collected during document artefact validation.
-func LogDocumentArtefactWarnings(logger logx.Logger, artefacts []config.DocumentArtefact) {
+// LogDocumentArtefactWarnings logs any warnings collected during document artifact validation.
+func LogDocumentArtefactWarnings(logger logx.Logger, artifacts []config.DocumentArtefact) {
 	if logger == nil {
 		return
 	}
-	for _, art := range artefacts {
+	for _, art := range artifacts {
 		for _, warn := range art.Warnings {
 			logger.Warnf(warn)
 		}
 	}
 }
 
-// EnsureDocumentSigningProfiles verifies that all document artefacts referencing a signing profile
+// EnsureDocumentSigningProfiles verifies that all document artifacts referencing a signing profile
 // have that profile available in the provided map.
-func EnsureDocumentSigningProfiles(artefacts []config.DocumentArtefact, profiles map[string]config.SigningProfile) error {
-	for _, art := range artefacts {
+func EnsureDocumentSigningProfiles(artifacts []config.DocumentArtefact, profiles map[string]config.SigningProfile) error {
+	for _, art := range artifacts {
 		ref := strings.TrimSpace(art.Spec.SigningProfile)
 		if ref == "" {
 			continue
 		}
 		if _, ok := profiles[ref]; !ok {
-			return fmt.Errorf("document artefact %s references unknown SigningProfile %q", art.Document.Name, ref)
+			return fmt.Errorf("document artifact %s references unknown SigningProfile %q", art.Document.Name, ref)
 		}
 	}
 	return nil

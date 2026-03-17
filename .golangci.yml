@@ -52,6 +52,10 @@ linters:
         - G304
     misspell:
       locale: US
+      ignore-words:
+        - artefact
+        - cancelled
+        - recognised
     revive:
       rules:
         - name: blank-imports

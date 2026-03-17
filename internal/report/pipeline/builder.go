@@ -71,8 +71,8 @@ func (b *Builder) logger() logx.Logger {
 // ---------------------------------------------------------------------------
 
 // RenderArtefactHTML generates HTML for a specific ReportArtefact.
-func (b *Builder) RenderArtefactHTML(ctx context.Context, docs []config.Document, artefact config.Artefact) (RenderResult, error) {
-	return RenderArtefactHTML(ctx, b.Workdir, docs, artefact, RenderArtefactOptions{
+func (b *Builder) RenderArtefactHTML(ctx context.Context, docs []config.Document, artifact config.Artifact) (RenderResult, error) {
+	return RenderArtefactHTML(ctx, b.Workdir, docs, artifact, RenderArtefactOptions{
 		EngineVersion:            b.EngineVersion,
 		QueryLogger:              b.QueryLogger,
 		QueryExecLogger:          b.QueryExecLogger,
@@ -84,8 +84,8 @@ func (b *Builder) RenderArtefactHTML(ctx context.Context, docs []config.Document
 }
 
 // RenderScreenshotHTML generates HTML for a ScreenshotArtefact.
-func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Document, artefact config.ScreenshotArtefact) (RenderResult, error) {
-	return RenderScreenshotArtefactHTML(ctx, b.Workdir, docs, artefact, RenderScreenshotArtefactOptions{
+func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Document, artifact config.ScreenshotArtefact) (RenderResult, error) {
+	return RenderScreenshotArtefactHTML(ctx, b.Workdir, docs, artifact, RenderScreenshotArtefactOptions{
 		EngineVersion:            b.EngineVersion,
 		QueryLogger:              b.QueryLogger,
 		QueryExecLogger:          b.QueryExecLogger,
@@ -97,11 +97,11 @@ func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Docume
 }
 
 // RenderDocumentHTML generates HTML for a DocumentArtefact.
-func (b *Builder) RenderDocumentHTML(ctx context.Context, artefact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
+func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
 	if opts.EngineVersion == "" {
 		opts.EngineVersion = b.EngineVersion
 	}
-	return RenderDocumentArtefactHTML(ctx, b.Workdir, artefact, opts)
+	return RenderDocumentArtefactHTML(ctx, b.Workdir, artifact, opts)
 }
 
 // RenderPreviewFrame generates a two-phase frame+context render for preview mode.
@@ -117,9 +117,9 @@ func (b *Builder) RenderPreviewFrame(ctx context.Context, docs []config.Document
 	})
 }
 
-// RenderArtefactPreviewFrame generates a two-phase artefact frame+context for preview.
-func (b *Builder) RenderArtefactPreviewFrame(ctx context.Context, docs []config.Document, artefact config.Artefact) (FrameRenderResult, error) {
-	return RenderArtefactFrameAndContextWithOptions(ctx, b.Workdir, docs, artefact, FrameRenderOptions{
+// RenderArtefactPreviewFrame generates a two-phase artifact frame+context for preview.
+func (b *Builder) RenderArtefactPreviewFrame(ctx context.Context, docs []config.Document, artifact config.Artifact) (FrameRenderResult, error) {
+	return RenderArtefactFrameAndContextWithOptions(ctx, b.Workdir, docs, artifact, FrameRenderOptions{
 		QueryLogger:              b.QueryLogger,
 		EngineVersion:            b.EngineVersion,
 		DataValidation:           b.DataValidation,

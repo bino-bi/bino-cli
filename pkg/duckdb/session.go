@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/duckdb/duckdb-go/v2"
+	_ "github.com/duckdb/duckdb-go/v2" // register duckdb database driver
 )
 
 var standardExtensions = []string{"excel", "postgres", "mysql", "httpfs"}
@@ -64,6 +64,8 @@ type Session struct {
 	cacheDir        string
 	queryLogger     QueryLogger
 	queryExecLogger QueryExecLogger
+	loadedExts      map[string]struct{} // tracks loaded extensions for idempotent reloading
+	attachedDBs     map[string]struct{} // tracks ATTACHed databases for session reuse
 }
 
 // Options capture how a DuckDB session should be created.
@@ -114,7 +116,7 @@ func OpenSession(ctx context.Context, opts Options) (*Session, error) {
 		return nil, fmt.Errorf("ping duckdb: %w", err)
 	}
 
-	s := &Session{db: db, cacheDir: opts.CacheDir, queryLogger: opts.QueryLogger, queryExecLogger: opts.QueryExecLogger}
+	s := &Session{db: db, cacheDir: opts.CacheDir, queryLogger: opts.QueryLogger, queryExecLogger: opts.QueryExecLogger, loadedExts: make(map[string]struct{}), attachedDBs: make(map[string]struct{})}
 	if err := s.configureExtensionDirectory(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -166,6 +168,28 @@ func (s *Session) LogQueryExec(meta QueryExecMeta) {
 	if s != nil && s.queryExecLogger != nil {
 		s.queryExecLogger(meta)
 	}
+}
+
+// IsDBAttached reports whether a database with the given attach-name has
+// already been ATTACHed in this session. Used by datasource.RegisterViews
+// to skip duplicate ATTACH statements when reusing a long-lived session.
+func (s *Session) IsDBAttached(name string) bool {
+	if s == nil {
+		return false
+	}
+	_, ok := s.attachedDBs[name]
+	return ok
+}
+
+// MarkDBAttached records that a database has been ATTACHed in this session.
+func (s *Session) MarkDBAttached(name string) {
+	if s == nil {
+		return
+	}
+	if s.attachedDBs == nil {
+		s.attachedDBs = make(map[string]struct{})
+	}
+	s.attachedDBs[name] = struct{}{}
 }
 
 var extensionNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
@@ -254,6 +278,11 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 			return fmt.Errorf("invalid DuckDB extension name: %s", name)
 		}
 
+		// Skip if already loaded in this session (avoids repeated INSTALL+LOAD on reuse).
+		if _, loaded := s.loadedExts[name]; loaded {
+			continue
+		}
+
 		install := fmt.Sprintf("INSTALL %s;", name)
 		if _, err := s.db.ExecContext(ctx, install); err != nil {
 			return fmt.Errorf("install extension %s: %w", name, err)
@@ -263,6 +292,8 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 		if _, err := s.db.ExecContext(ctx, load); err != nil {
 			return fmt.Errorf("load extension %s: %w", name, err)
 		}
+
+		s.loadedExts[name] = struct{}{}
 	}
 
 	return nil
@@ -293,7 +324,12 @@ func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names [
 			return fmt.Errorf("invalid DuckDB extension name: %s", name)
 		}
 
-		install := fmt.Sprintf("INSTALL %s FROM community;", name)
+		// Skip if already loaded in this session (avoids repeated INSTALL+LOAD on reuse).
+		if _, loaded := s.loadedExts[name]; loaded {
+			continue
+		}
+
+		install := fmt.Sprintf("INSTALL %s FROM community;", name) //nolint:gosec // G201: name is validated by extensionNamePattern regex above
 		if _, err := s.db.ExecContext(ctx, install); err != nil {
 			return fmt.Errorf("install community extension %s: %w", name, err)
 		}
@@ -302,6 +338,8 @@ func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names [
 		if _, err := s.db.ExecContext(ctx, load); err != nil {
 			return fmt.Errorf("load community extension %s: %w", name, err)
 		}
+
+		s.loadedExts[name] = struct{}{}
 	}
 
 	return nil

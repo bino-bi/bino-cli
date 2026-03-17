@@ -222,7 +222,7 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 	defer os.Remove(tmpPath)
 
 	// Download the zip file
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
 	if err != nil {
 		tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("create request: %w", err)
@@ -294,9 +294,7 @@ func (m *Manager) extractZip(zipPath, destDir string) error {
 		name := f.Name
 
 		// Strip the bn-template-engine/ prefix
-		if strings.HasPrefix(name, prefix) {
-			name = strings.TrimPrefix(name, prefix)
-		}
+		name = strings.TrimPrefix(name, prefix)
 
 		if name == "" {
 			continue
@@ -342,13 +340,13 @@ func extractFile(f *zip.File, destPath string) error {
 	}
 	defer dst.Close()
 
-	_, err = io.Copy(dst, src)
+	_, err = io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
 	return err
 }
 
 // FetchLatestRemoteVersion queries GitHub for the latest release tag.
 func (m *Manager) FetchLatestRemoteVersion(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, GitHubLatestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, GitHubLatestURL, http.NoBody)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}

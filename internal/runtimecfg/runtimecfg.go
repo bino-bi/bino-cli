@@ -111,7 +111,7 @@ func load() Config {
 	return cfg
 }
 
-func readIntEnv(name string, def, min, max int, warn func(string)) int {
+func readIntEnv(name string, def, lo, hi int, warn func(string)) int {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
@@ -121,18 +121,18 @@ func readIntEnv(name string, def, min, max int, warn func(string)) int {
 		warn(fmt.Sprintf("%s: invalid integer %q, using default %d", name, raw, def))
 		return def
 	}
-	if max > 0 && value > max {
-		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, max))
-		return max
+	if hi > 0 && value > hi {
+		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, hi))
+		return hi
 	}
-	if value < min {
-		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, min))
-		return min
+	if value < lo {
+		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, lo))
+		return lo
 	}
 	return value
 }
 
-func readInt64Env(name string, def, min, max int64, warn func(string)) int64 {
+func readInt64Env(name string, def, lo, hi int64, warn func(string)) int64 {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
@@ -142,18 +142,18 @@ func readInt64Env(name string, def, min, max int64, warn func(string)) int64 {
 		warn(fmt.Sprintf("%s: invalid integer %q, using default %d", name, raw, def))
 		return def
 	}
-	if max > 0 && value > max {
-		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, max))
-		return max
+	if hi > 0 && value > hi {
+		warn(fmt.Sprintf("%s: value %d exceeds maximum %d, clamped", name, value, hi))
+		return hi
 	}
-	if value < min {
-		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, min))
-		return min
+	if value < lo {
+		warn(fmt.Sprintf("%s: value %d below minimum %d, clamped", name, value, lo))
+		return lo
 	}
 	return value
 }
 
-func readDurationMsEnv(name string, def, min, max time.Duration, warn func(string)) time.Duration {
+func readDurationMsEnv(name string, def, lo, hi time.Duration, warn func(string)) time.Duration {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return def
@@ -164,13 +164,13 @@ func readDurationMsEnv(name string, def, min, max time.Duration, warn func(strin
 		return def
 	}
 	duration := time.Duration(value) * time.Millisecond
-	if max > 0 && duration > max {
-		warn(fmt.Sprintf("%s: value %dms exceeds maximum %dms, clamped", name, duration.Milliseconds(), max.Milliseconds()))
-		return max
+	if hi > 0 && duration > hi {
+		warn(fmt.Sprintf("%s: value %dms exceeds maximum %dms, clamped", name, duration.Milliseconds(), hi.Milliseconds()))
+		return hi
 	}
-	if duration < min {
-		warn(fmt.Sprintf("%s: value %dms below minimum %dms, clamped", name, duration.Milliseconds(), min.Milliseconds()))
-		return min
+	if duration < lo {
+		warn(fmt.Sprintf("%s: value %dms below minimum %dms, clamped", name, duration.Milliseconds(), lo.Milliseconds()))
+		return lo
 	}
 	return duration
 }

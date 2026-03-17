@@ -51,6 +51,11 @@ type LoadOptions struct {
 	// Lookup is an optional custom variable lookup function for ${VAR} expansion.
 	// If nil, os.LookupEnv is used. Use ChainLookup to combine multiple lookups.
 	Lookup LookupFunc
+
+	// CollectedDirs, when non-nil, receives the absolute paths of all directories
+	// visited during the walk. This allows callers to reuse the directory list
+	// (e.g., for file-watcher registration) without a second walk.
+	CollectedDirs *[]string
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -90,6 +95,9 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 			if shouldIgnorePath(dir, path, true, ignore) {
 				return filepath.SkipDir
+			}
+			if opts.CollectedDirs != nil {
+				*opts.CollectedDirs = append(*opts.CollectedDirs, path)
 			}
 			return nil
 		}
@@ -150,10 +158,6 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	}
 
 	return docs, nil
-}
-
-func loadFile(ctx context.Context, path string, maxDocs int, lenient bool) ([]Document, error) {
-	return loadFileWithLookup(ctx, path, maxDocs, lenient, EnvLookup())
 }
 
 func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc) ([]Document, error) {

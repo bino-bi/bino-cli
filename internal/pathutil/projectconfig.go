@@ -82,7 +82,7 @@ func (c CommandArgs) GetInt(key string) (int, bool) {
 }
 
 // GetBool returns the bool value for a key, or false if not found or not a bool.
-func (c CommandArgs) GetBool(key string) (bool, bool) {
+func (c CommandArgs) GetBool(key string) (val bool, ok bool) {
 	if c == nil {
 		return false, false
 	}
@@ -179,7 +179,7 @@ func WriteProjectConfig(dir, reportID, engineVersion string) error {
 	}
 
 	configPath := ProjectConfigPath(dir)
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+	if err := os.WriteFile(configPath, data, 0o644); err != nil { //nolint:gosec // G306: config files need standard read perms
 		return fmt.Errorf("write %s: %w", configPath, err)
 	}
 

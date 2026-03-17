@@ -609,13 +609,13 @@ func TestExecutionPlan_ThreadSafety(t *testing.T) {
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
-		go func(workerID int) {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < stepsPerGoroutine; j++ {
 				stepID := plan.StartStep("step", "phase")
 				plan.EndStep(stepID, nil)
 			}
-		}(i)
+		}()
 	}
 
 	wg.Wait()
@@ -769,7 +769,7 @@ func TestWriteJSONBuildLog_Success(t *testing.T) {
 		Documents: []buildlog.DocumentEntry{
 			{File: "report.yaml", Position: 0, Kind: "report", Name: "monthly-report"},
 		},
-		Artefacts: []buildlog.ArtefactEntry{
+		Artifacts: []buildlog.ArtefactEntry{
 			{Name: "monthly-report", PDF: "output.pdf", Graph: "graph.svg"},
 		},
 		Queries: []buildlog.QueryEntry{
@@ -807,8 +807,8 @@ func TestWriteJSONBuildLog_Success(t *testing.T) {
 	if len(parsed.Documents) != 1 {
 		t.Errorf("Documents count = %d, want 1", len(parsed.Documents))
 	}
-	if len(parsed.Artefacts) != 1 {
-		t.Errorf("Artefacts count = %d, want 1", len(parsed.Artefacts))
+	if len(parsed.Artifacts) != 1 {
+		t.Errorf("Artifacts count = %d, want 1", len(parsed.Artifacts))
 	}
 	if len(parsed.Queries) != 1 {
 		t.Errorf("Queries count = %d, want 1", len(parsed.Queries))

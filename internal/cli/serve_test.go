@@ -305,18 +305,18 @@ func TestBuildRoutesJSON(t *testing.T) {
 			liveArtefact: config.LiveArtefact{
 				Spec: config.LiveReportArtefactSpec{
 					Routes: map[string]config.LiveRouteSpec{
-						"/dashboard": {Title: "Dashboard", Artefact: "main-report"},
+						"/dashboard": {Title: "Dashboard", Artifact: "main-report"},
 					},
 				},
 			},
 			wantRoutes: map[string]string{"/dashboard": "Dashboard"},
 		},
 		{
-			name: "route without title uses artefact",
+			name: "route without title uses artifact",
 			liveArtefact: config.LiveArtefact{
 				Spec: config.LiveReportArtefactSpec{
 					Routes: map[string]config.LiveRouteSpec{
-						"/report": {Artefact: "main-report"},
+						"/report": {Artifact: "main-report"},
 					},
 				},
 			},
@@ -327,9 +327,9 @@ func TestBuildRoutesJSON(t *testing.T) {
 			liveArtefact: config.LiveArtefact{
 				Spec: config.LiveReportArtefactSpec{
 					Routes: map[string]config.LiveRouteSpec{
-						"/":        {Title: "Home", Artefact: "home"},
-						"/sales":   {Title: "Sales", Artefact: "sales-report"},
-						"/metrics": {Artefact: "metrics-report"},
+						"/":        {Title: "Home", Artifact: "home"},
+						"/sales":   {Title: "Sales", Artifact: "sales-report"},
+						"/metrics": {Artifact: "metrics-report"},
 					},
 				},
 			},

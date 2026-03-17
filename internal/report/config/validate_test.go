@@ -27,8 +27,8 @@ func TestValidateDocumentsAllowsUnique(t *testing.T) {
 }
 
 func TestValidateDocumentsAllowsDuplicatesAcrossKinds(t *testing.T) {
-	// With per-artefact uniqueness, duplicate names across kinds are now allowed
-	// at the global level. They will be validated per-artefact after constraint filtering.
+	// With per-artifact uniqueness, duplicate names across kinds are now allowed
+	// at the global level. They will be validated per-artifact after constraint filtering.
 	docs := []Document{
 		{File: "source.yaml", Position: 1, Kind: "DataSource", Name: "shared_name"},
 		{File: "dataset.yaml", Position: 2, Kind: "DataSet", Name: "shared_name"},
@@ -41,7 +41,7 @@ func TestValidateDocumentsAllowsDuplicatesAcrossKinds(t *testing.T) {
 }
 
 func TestValidateDocumentsAllowsDuplicateAssetsAndLayouts(t *testing.T) {
-	// With per-artefact uniqueness, duplicate names are allowed at global level
+	// With per-artifact uniqueness, duplicate names are allowed at global level
 	docs := []Document{
 		{File: "asset.yaml", Position: 1, Kind: "Asset", Name: "logo"},
 		{File: "another.yaml", Position: 3, Kind: "LayoutPage", Name: "logo"},
@@ -71,7 +71,7 @@ func TestValidateDocumentsDetectsReportArtefactConflicts(t *testing.T) {
 }
 
 func TestValidateArtefactNamesDetectsConflicts(t *testing.T) {
-	// Per-artefact name validation catches duplicates within the same kind
+	// Per-artifact name validation catches duplicates within the same kind
 	docs := []Document{
 		{File: "source1.yaml", Position: 1, Kind: "DataSource", Name: "shared_name"},
 		{File: "source2.yaml", Position: 2, Kind: "DataSource", Name: "shared_name"},
@@ -79,11 +79,11 @@ func TestValidateArtefactNamesDetectsConflicts(t *testing.T) {
 
 	err := ValidateArtefactNames("testArtefact", docs)
 	if err == nil {
-		t.Fatal("expected validation error for duplicate names within artefact")
+		t.Fatal("expected validation error for duplicate names within artifact")
 	}
 	msg := err.Error()
 	if !strings.Contains(msg, "testArtefact") || !strings.Contains(msg, "shared_name") {
-		t.Fatalf("expected artefact and duplicate name reference, got %v", err)
+		t.Fatalf("expected artifact and duplicate name reference, got %v", err)
 	}
 }
 
@@ -101,24 +101,24 @@ func TestValidateArtefactNamesAllowsDifferentKinds(t *testing.T) {
 }
 
 func TestValidateLiveArtefact(t *testing.T) {
-	artefacts := []Artefact{
+	artifacts := []Artifact{
 		{Document: Document{Name: "main-report"}},
 		{Document: Document{Name: "sales-report"}},
 	}
 	layoutPageNames := make(map[string]struct{})
 
-	t.Run("valid live artefact", func(t *testing.T) {
+	t.Run("valid live artifact", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/":      {Artefact: "main-report"},
-					"/sales": {Artefact: "sales-report"},
+					"/":      {Artifact: "main-report"},
+					"/sales": {Artifact: "sales-report"},
 				},
 			},
 		}
-		if err := ValidateLiveArtefact(live, artefacts, layoutPageNames); err != nil {
+		if err := ValidateLiveArtefact(live, artifacts, layoutPageNames); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
@@ -129,11 +129,11 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/sales": {Artefact: "sales-report"},
+					"/sales": {Artifact: "sales-report"},
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for missing root route")
 		}
@@ -148,12 +148,12 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/":     {Artefact: "main-report"},
-					"sales": {Artefact: "sales-report"},
+					"/":     {Artifact: "main-report"},
+					"sales": {Artifact: "sales-report"},
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for route without leading slash")
 		}
@@ -162,19 +162,19 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown artefact reference", func(t *testing.T) {
+	t.Run("unknown artifact reference", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/": {Artefact: "unknown-report"},
+					"/": {Artifact: "unknown-report"},
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
-			t.Fatal("expected error for unknown artefact")
+			t.Fatal("expected error for unknown artifact")
 		}
 		if !strings.Contains(err.Error(), "unknown ReportArtefact") {
 			t.Fatalf("unexpected error: %v", err)
@@ -188,7 +188,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
 					"/": {
-						Artefact: "main-report",
+						Artifact: "main-report",
 						QueryParams: []LiveQueryParamSpec{
 							{Name: "YEAR"},
 							{Name: "YEAR"},
@@ -197,7 +197,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
 			t.Fatal("expected error for duplicate query param names")
 		}
@@ -220,7 +220,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateLiveArtefact(live, artefacts, lpNames); err != nil {
+		if err := ValidateLiveArtefact(live, artifacts, lpNames); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
@@ -238,7 +238,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, lpNames)
+		err := ValidateLiveArtefact(live, artifacts, lpNames)
 		if err == nil {
 			t.Fatal("expected error for unknown layoutPage")
 		}
@@ -247,7 +247,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 	})
 
-	t.Run("route with both artefact and layoutPages", func(t *testing.T) {
+	t.Run("route with both artifact and layoutPages", func(t *testing.T) {
 		lpNames := map[string]struct{}{
 			"page1": {},
 		}
@@ -256,20 +256,20 @@ func TestValidateLiveArtefact(t *testing.T) {
 			Spec: LiveReportArtefactSpec{
 				Title: "Dashboard",
 				Routes: map[string]LiveRouteSpec{
-					"/": {Artefact: "main-report", LayoutPages: LayoutPagesOrRefs{{Page: "page1"}}},
+					"/": {Artifact: "main-report", LayoutPages: LayoutPagesOrRefs{{Page: "page1"}}},
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, lpNames)
+		err := ValidateLiveArtefact(live, artifacts, lpNames)
 		if err == nil {
-			t.Fatal("expected error for route with both artefact and layoutPages")
+			t.Fatal("expected error for route with both artifact and layoutPages")
 		}
-		if !strings.Contains(err.Error(), "both artefact and layoutPages") {
+		if !strings.Contains(err.Error(), "both artifact and layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("route with neither artefact nor layoutPages", func(t *testing.T) {
+	t.Run("route with neither artifact nor layoutPages", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
@@ -279,11 +279,11 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artefacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
-			t.Fatal("expected error for route with neither artefact nor layoutPages")
+			t.Fatal("expected error for route with neither artifact nor layoutPages")
 		}
-		if !strings.Contains(err.Error(), "must have either artefact or layoutPages") {
+		if !strings.Contains(err.Error(), "must have either artifact or layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

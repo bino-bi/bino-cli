@@ -25,9 +25,8 @@ func (d *DateString) UnmarshalJSON(data []byte) error {
 
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
-		// Fallback to raw string
 		*d = DateString(string(data))
-		return nil
+		return nil //nolint:nilerr // fallback to raw string on parse failure
 	}
 
 	// Normalize only midnight UTC datetimes (YAML artifact) to date-only.

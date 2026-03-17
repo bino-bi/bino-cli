@@ -80,7 +80,7 @@ type BuildOptions struct {
 }
 
 // Build constructs a Graph from validated manifest documents.
-// This is a convenience wrapper that builds for all artefacts without constraint filtering.
+// This is a convenience wrapper that builds for all artifacts without constraint filtering.
 func Build(ctx context.Context, docs []config.Document) (*Graph, error) {
 	b := newBuilder(ctx, docs, BuildOptions{Mode: spec.ModeBuild})
 	return b.Build()
@@ -93,7 +93,7 @@ func BuildWithOptions(ctx context.Context, docs []config.Document, opts BuildOpt
 }
 
 // FilterDocumentsByConstraints filters documents based on their metadata.constraints
-// against the given constraint context (artefact labels, spec, and mode).
+// against the given constraint context (artifact labels, spec, and mode).
 // ReportArtefact documents are never filtered.
 // Returns the filtered documents and an error if any constraint evaluation fails.
 func FilterDocumentsByConstraints(docs []config.Document, ctx *spec.ConstraintContext) ([]config.Document, error) {
@@ -129,17 +129,17 @@ func FilterDocumentsByConstraints(docs []config.Document, ctx *spec.ConstraintCo
 	return result, nil
 }
 
-// BuildForArtefact constructs a Graph for a specific artefact, applying constraint filtering.
+// BuildForArtefact constructs a Graph for a specific artifact, applying constraint filtering.
 // Only documents whose constraints match the artefact's context are included.
-func BuildForArtefact(ctx context.Context, docs []config.Document, artefact config.Artefact, mode spec.Mode) (*Graph, error) {
-	// Build constraint context from artefact
-	specMap, err := spec.SpecToMap(artefact.Document.Raw)
+func BuildForArtefact(ctx context.Context, docs []config.Document, artifact config.Artifact, mode spec.Mode) (*Graph, error) {
+	// Build constraint context from artifact
+	specMap, err := spec.ToMap(artifact.Document.Raw)
 	if err != nil {
 		return nil, err
 	}
 
 	constraintCtx := &spec.ConstraintContext{
-		Labels: artefact.Labels,
+		Labels: artifact.Labels,
 		Spec:   specMap,
 		Mode:   mode,
 	}
@@ -150,8 +150,8 @@ func BuildForArtefact(ctx context.Context, docs []config.Document, artefact conf
 		return nil, err
 	}
 
-	// Validate name uniqueness for this artefact after filtering
-	if err := config.ValidateArtefactNames(artefact.Document.Name, filtered); err != nil {
+	// Validate name uniqueness for this artifact after filtering
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
 		return nil, err
 	}
 
