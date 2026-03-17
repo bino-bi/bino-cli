@@ -173,12 +173,12 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
         });
       }
 
-      if (meta.artefacts && meta.artefacts.length > 0) {
+      if (meta.artifacts && meta.artifacts.length > 0) {
         var alabel = document.createElement('span');
         alabel.className = 'bn-page-info-label';
         alabel.textContent = 'used in:';
         overlay.appendChild(alabel);
-        meta.artefacts.forEach(function (a) {
+        meta.artifacts.forEach(function (a) {
           var pill = document.createElement('span');
           pill.className = 'bn-page-info-pill artefact';
           pill.textContent = a;
