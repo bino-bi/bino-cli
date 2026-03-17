@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'lit';
 
 class BinoToolbar extends LitElement {
   static properties = {
-    artefacts: { type: Array },
+    artifacts: { type: Array },
     documents: { type: Array },
     graph: { type: Object },
     currentPath: { type: String, attribute: 'current-path' },
@@ -131,7 +131,7 @@ class BinoToolbar extends LitElement {
 
   constructor() {
     super();
-    this.artefacts = [];
+    this.artifacts = [];
     this.documents = [];
     this.graph = null;
     this.currentPath = '/';
@@ -164,12 +164,12 @@ class BinoToolbar extends LitElement {
   render() {
     var self = this;
     var currentPath = this.currentPath || '/';
-    var artefacts = this.artefacts || [];
+    var artifacts = this.artifacts || [];
 
     // Separate ReportArtefacts and DocumentArtefacts
     var reportArts = [];
     var docArts = [];
-    artefacts.forEach(function(art) {
+    artifacts.forEach(function(art) {
       if (art.isDoc) {
         docArts.push(art);
       } else {
