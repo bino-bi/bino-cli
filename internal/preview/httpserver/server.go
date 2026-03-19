@@ -132,7 +132,7 @@ type Server struct {
 	httpServer  *http.Server
 	httpClient  *http.Client
 	maxCDNBytes int64
-	sse         *sseHub
+	sse         *SSEHub
 
 	contentMu sync.RWMutex
 	contentFn ContentFunc
@@ -180,7 +180,7 @@ func New(cfg Config) (*Server, error) {
 		listener:    listener,
 		httpClient:  client,
 		maxCDNBytes: runtimeCfg.MaxCDNBytes,
-		sse:         newSSEHub(),
+		sse:         NewSSEHub(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", compressionHandlerFunc(srv.handleRoot))
@@ -300,7 +300,7 @@ func (s *Server) BroadcastContent(reqPath string, html []byte) {
 		s.cfg.Logger.Warnf("preview: marshal sse payload: %v", err)
 		return
 	}
-	s.sse.Broadcast(formatSSE("content", data))
+	s.sse.Broadcast(FormatSSE("content", data))
 }
 
 // BroadcastRefreshing notifies connected SSE clients that a content refresh has started.
@@ -311,7 +311,7 @@ func (s *Server) BroadcastRefreshing(reason string) {
 	payload, _ := json.Marshal(struct {
 		Reason string `json:"reason"`
 	}{Reason: reason})
-	s.sse.Broadcast(formatSSE("refreshing", payload))
+	s.sse.Broadcast(FormatSSE("refreshing", payload))
 }
 
 // BroadcastRefreshDone notifies connected SSE clients that the content refresh has completed.
@@ -319,7 +319,7 @@ func (s *Server) BroadcastRefreshDone() {
 	if s == nil || s.sse == nil {
 		return
 	}
-	s.sse.Broadcast(formatSSE("refresh-done", []byte(`{}`)))
+	s.sse.Broadcast(FormatSSE("refresh-done", []byte(`{}`)))
 }
 
 // evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
@@ -470,7 +470,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	clientCh := s.sse.Subscribe()
 	defer s.sse.Unsubscribe(clientCh)
 
-	if _, err := writer.Write(formatSSE("ready", []byte(`{}`))); err != nil {
+	if _, err := writer.Write(FormatSSE("ready", []byte(`{}`))); err != nil {
 		return
 	}
 	flusher.Flush()
@@ -817,16 +817,19 @@ type sseContentPayload struct {
 	HTMLBase64 string `json:"htmlBase64"`
 }
 
-type sseHub struct {
+// SSEHub manages Server-Sent Event client connections and broadcasts.
+type SSEHub struct {
 	mu      sync.RWMutex
 	clients map[chan []byte]struct{}
 }
 
-func newSSEHub() *sseHub {
-	return &sseHub{clients: make(map[chan []byte]struct{})}
+// NewSSEHub creates a new SSE hub.
+func NewSSEHub() *SSEHub {
+	return &SSEHub{clients: make(map[chan []byte]struct{})}
 }
 
-func (h *sseHub) Subscribe() chan []byte {
+// Subscribe registers a new SSE client and returns its channel.
+func (h *SSEHub) Subscribe() chan []byte {
 	ch := make(chan []byte, 4)
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
@@ -834,7 +837,8 @@ func (h *sseHub) Subscribe() chan []byte {
 	return ch
 }
 
-func (h *sseHub) Unsubscribe(ch chan []byte) {
+// Unsubscribe removes an SSE client.
+func (h *SSEHub) Unsubscribe(ch chan []byte) {
 	if ch == nil {
 		return
 	}
@@ -846,7 +850,8 @@ func (h *sseHub) Unsubscribe(ch chan []byte) {
 	h.mu.Unlock()
 }
 
-func (h *sseHub) Broadcast(msg []byte) {
+// Broadcast sends a message to all connected SSE clients.
+func (h *SSEHub) Broadcast(msg []byte) {
 	if len(msg) == 0 {
 		return
 	}
@@ -862,7 +867,7 @@ func (h *sseHub) Broadcast(msg []byte) {
 
 // Close disconnects all SSE clients by closing their channels.
 // This causes handleEvents to return, allowing graceful HTTP shutdown.
-func (h *sseHub) Close() {
+func (h *SSEHub) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.clients {
@@ -871,7 +876,15 @@ func (h *sseHub) Close() {
 	}
 }
 
-func formatSSE(event string, data []byte) []byte {
+// ClientCount returns the number of currently connected SSE clients.
+func (h *SSEHub) ClientCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
+
+// FormatSSE encodes an event name and data payload as an SSE frame.
+func FormatSSE(event string, data []byte) []byte {
 	var buf bytes.Buffer
 	if event != "" {
 		buf.WriteString("event: ")

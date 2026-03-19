@@ -337,9 +337,9 @@ func TestFormatSSE(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatSSE(tt.event, tt.data)
+			got := FormatSSE(tt.event, tt.data)
 			if string(got) != tt.want {
-				t.Errorf("formatSSE(%q, %q) = %q, want %q", tt.event, tt.data, string(got), tt.want)
+				t.Errorf("FormatSSE(%q, %q) = %q, want %q", tt.event, tt.data, string(got), tt.want)
 			}
 		})
 	}
@@ -980,7 +980,7 @@ func TestBroadcastContent(t *testing.T) {
 
 func TestSSEHub(t *testing.T) {
 	t.Run("subscribe and unsubscribe", func(t *testing.T) {
-		hub := newSSEHub()
+		hub := NewSSEHub()
 		ch := hub.Subscribe()
 		if ch == nil {
 			t.Fatal("Subscribe returned nil channel")
@@ -996,19 +996,19 @@ func TestSSEHub(t *testing.T) {
 	})
 
 	t.Run("double unsubscribe is safe", func(t *testing.T) {
-		hub := newSSEHub()
+		hub := NewSSEHub()
 		ch := hub.Subscribe()
 		hub.Unsubscribe(ch)
 		hub.Unsubscribe(ch) // Should not panic
 	})
 
 	t.Run("unsubscribe nil is safe", func(t *testing.T) {
-		hub := newSSEHub()
+		hub := NewSSEHub()
 		hub.Unsubscribe(nil) // Should not panic
 	})
 
 	t.Run("broadcast to multiple clients", func(t *testing.T) {
-		hub := newSSEHub()
+		hub := NewSSEHub()
 		ch1 := hub.Subscribe()
 		ch2 := hub.Subscribe()
 		defer hub.Unsubscribe(ch1)
@@ -1036,7 +1036,7 @@ func TestSSEHub(t *testing.T) {
 	})
 
 	t.Run("empty broadcast is ignored", func(t *testing.T) {
-		hub := newSSEHub()
+		hub := NewSSEHub()
 		ch := hub.Subscribe()
 		defer hub.Unsubscribe(ch)
 

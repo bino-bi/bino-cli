@@ -403,6 +403,11 @@
           "type": "number",
           "default": 3000,
           "description": "Port number for the bino preview server."
+        },
+        "bino.daemon.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable persistent background daemon for faster indexing, validation, and data introspection. The daemon shares a single DuckDB session across operations."
         }
       }
     }
