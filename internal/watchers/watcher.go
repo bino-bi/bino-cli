@@ -250,6 +250,11 @@ func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
 		return true
 	}
 
+	// Always ignore daemon port file (built-in, not configurable)
+	if rel == ".bino-daemon.json" {
+		return true
+	}
+
 	y.ignoreMu.RLock()
 	ignore := y.ignore
 	y.ignoreMu.RUnlock()

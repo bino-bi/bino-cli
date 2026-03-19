@@ -161,6 +161,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newCacheCommand())
 	cmd.AddCommand(newUpdateCommand())
 	cmd.AddCommand(newAddCommand())
+	cmd.AddCommand(newDaemonCommand())
 
 	return cmd
 }
