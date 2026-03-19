@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
+import { DaemonClient } from './daemonClient';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -14,6 +15,8 @@ export class BinoPreviewManager {
     private statusBarItem: vscode.StatusBarItem;
     private previewPanel: vscode.WebviewPanel | undefined;
     private indexer: WorkspaceIndexer | undefined;
+    private daemonClient: DaemonClient | undefined;
+    private usingDaemonPreview = false;
 
     // Event emitter for status changes
     private _onStatusChange = new vscode.EventEmitter<PreviewStatus>();
@@ -33,6 +36,11 @@ export class BinoPreviewManager {
     /** Set the workspace indexer for source navigation */
     setIndexer(indexer: WorkspaceIndexer): void {
         this.indexer = indexer;
+    }
+
+    /** Set the daemon client for preview management */
+    setDaemonClient(client: DaemonClient | undefined): void {
+        this.daemonClient = client;
     }
 
     /** Get the configured bino CLI path */
@@ -98,11 +106,36 @@ export class BinoPreviewManager {
 
     /** Start the preview server */
     async startPreview(): Promise<void> {
-        if (this.previewProcess) {
+        if (this.previewProcess || this.usingDaemonPreview) {
             vscode.window.showInformationMessage('Preview is already running');
             return;
         }
 
+        const port = this.getPreviewPort();
+
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            this.setStatus('starting');
+            this.outputChannel.appendLine(`[Preview] Starting via daemon on port ${port}...`);
+            try {
+                const result = await this.daemonClient.startPreview(port);
+                if (result && result.status !== 'error') {
+                    this.usingDaemonPreview = true;
+                    if (result.status === 'running') {
+                        this.setStatus('running');
+                    }
+                    // Status updates come via SSE preview-status events
+                    return;
+                }
+                if (result?.error) {
+                    this.outputChannel.appendLine(`[Preview] Daemon error: ${result.error}`);
+                }
+            } catch {
+                this.outputChannel.appendLine('[Preview] Daemon start failed, falling back to subprocess');
+            }
+        }
+
+        // Fallback to subprocess
         const workDir = this.getWorkspaceRoot();
         if (!workDir) {
             vscode.window.showWarningMessage('No workspace folder open');
@@ -110,7 +143,6 @@ export class BinoPreviewManager {
         }
 
         const binPath = this.getBinoPath();
-        const port = this.getPreviewPort();
 
         this.setStatus('starting');
         this.outputChannel.appendLine(`[Preview] Starting preview server on port ${port}...`);
@@ -167,6 +199,15 @@ export class BinoPreviewManager {
 
     /** Stop the preview server */
     stopPreview(): void {
+        // Stop daemon-managed preview
+        if (this.usingDaemonPreview) {
+            this.outputChannel.appendLine('[Preview] Stopping via daemon...');
+            this.daemonClient?.stopPreview().catch(() => {});
+            this.usingDaemonPreview = false;
+            this.setStatus('stopped');
+            return;
+        }
+
         if (!this.previewProcess) {
             vscode.window.showInformationMessage('Preview is not running');
             return;
@@ -426,6 +467,32 @@ export class BinoPreviewManager {
 
     /** Run build command */
     async runBuild(): Promise<boolean> {
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            this.outputChannel.appendLine('[Build] Starting build via daemon...');
+            this.outputChannel.show(true);
+            try {
+                const result = await this.daemonClient.build();
+                if (result) {
+                    if (result.output) {
+                        this.outputChannel.append(result.output);
+                    }
+                    if (result.exitCode === 0) {
+                        this.outputChannel.appendLine('[Build] Completed successfully (daemon)');
+                        vscode.window.showInformationMessage('Build completed successfully');
+                        return true;
+                    } else {
+                        this.outputChannel.appendLine(`[Build] Failed with code ${result.exitCode} (daemon)`);
+                        vscode.window.showErrorMessage('Build failed - see output for details');
+                        return false;
+                    }
+                }
+            } catch {
+                this.outputChannel.appendLine('[Build] Daemon build failed, falling back to subprocess');
+            }
+        }
+
+        // Fallback to subprocess
         const workDir = this.getWorkspaceRoot();
         if (!workDir) {
             vscode.window.showWarningMessage('No workspace folder open');
@@ -461,7 +528,7 @@ export class BinoPreviewManager {
                 }
 
                 this.outputChannel.appendLine('[Build] Completed successfully');
-                vscode.window.showInformationMessage('✓ Build completed successfully');
+                vscode.window.showInformationMessage('Build completed successfully');
                 resolve(true);
             });
         });
@@ -502,6 +569,26 @@ export class BinoPreviewManager {
             this.stopPreview();
         } else if (selection.label.includes('Start')) {
             await this.startPreview();
+        }
+    }
+
+    /** Handle SSE preview-status events from daemon */
+    handlePreviewStatusEvent(data: { status: string; url?: string; port?: number }): void {
+        if (!this.usingDaemonPreview) {
+            return;
+        }
+        switch (data.status) {
+            case 'running':
+                this.setStatus('running');
+                break;
+            case 'stopped':
+                this.usingDaemonPreview = false;
+                this.setStatus('stopped');
+                break;
+            case 'error':
+                this.usingDaemonPreview = false;
+                this.setStatus('error');
+                break;
         }
     }
 

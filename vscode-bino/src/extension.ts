@@ -18,6 +18,7 @@ import { RowsPreviewManager } from './rowsPreview';
 import { PreviewTreeProvider } from './previewTree';
 import { ActionsTreeProvider } from './actionsTree';
 import { EnvironmentTreeProvider } from './environmentTree';
+import { DaemonClient } from './daemonClient';
 
 let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
@@ -25,6 +26,8 @@ let previewManager: BinoPreviewManager | undefined;
 let rowsPreviewManager: RowsPreviewManager | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
+let daemonClient: DaemonClient | undefined;
+let daemonStatusBarItem: vscode.StatusBarItem | undefined;
 
 // Schema URI for bino manifests
 const BINO_SCHEMA = 'bino-schema';
@@ -107,6 +110,63 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize preview manager with indexer for click-to-source navigation
     previewManager = new BinoPreviewManager(outputChannel, indexer);
     context.subscriptions.push({ dispose: () => previewManager?.dispose() });
+
+    // Initialize daemon client (if enabled)
+    const binoConfig = vscode.workspace.getConfiguration('bino');
+    const daemonEnabled = binoConfig.get<boolean>('daemon.enabled', true);
+
+    if (daemonEnabled) {
+        daemonClient = new DaemonClient(outputChannel);
+        context.subscriptions.push({ dispose: () => daemonClient?.dispose() });
+
+        // Pass daemon client to indexer, validator, and preview manager
+        indexer.setDaemonClient(daemonClient);
+        validator.setDaemonClient(daemonClient);
+        previewManager.setDaemonClient(daemonClient);
+
+        // Listen for SSE push events
+        context.subscriptions.push(
+            daemonClient.on('index-updated', async () => {
+                outputChannel.appendLine('[Daemon] Index updated via SSE push');
+                await indexer?.refreshIndex();
+            }),
+            daemonClient.on('diagnostics', async () => {
+                outputChannel.appendLine('[Daemon] Diagnostics updated via SSE push');
+                await validator?.validateWorkspace();
+            }),
+            daemonClient.on('preview-status', (data: any) => {
+                previewManager?.handlePreviewStatusEvent(data);
+            })
+        );
+
+        // Create daemon status bar item
+        daemonStatusBarItem = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Left,
+            97
+        );
+        daemonStatusBarItem.tooltip = 'Bino Daemon status';
+        updateDaemonStatusBar();
+        daemonStatusBarItem.show();
+        context.subscriptions.push(daemonStatusBarItem);
+
+        context.subscriptions.push(
+            daemonClient.onStatusChange(() => updateDaemonStatusBar())
+        );
+
+        // Connect to daemon in background
+        const projectRoot = indexer.getProjectRootForUri();
+        if (projectRoot) {
+            daemonClient.connect(projectRoot).then(connected => {
+                if (connected) {
+                    outputChannel.appendLine('[Daemon] Connected successfully');
+                    // Re-index using daemon for faster initial load
+                    indexer?.refreshIndex();
+                } else {
+                    outputChannel.appendLine('[Daemon] Connection failed, using subprocess fallback');
+                }
+            });
+        }
+    }
 
     // Register schema provider with RedHat YAML extension
     await registerSchemaProvider(context);
@@ -531,9 +591,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Validate on save (if enabled)
+    // Validate on save (if enabled).
+    // Skip when daemon is connected — it pushes diagnostics via SSE on file change.
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(async (document) => {
+            if (daemonClient?.isConnected) {
+                return; // Daemon handles validation via SSE push
+            }
             const config = vscode.workspace.getConfiguration('bino');
             const validateOnSave = config.get<boolean>('validateOnSave');
 
@@ -545,19 +609,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Watch for file changes to invalidate cache
+    // Watch for file changes to invalidate cache.
+    // When the daemon is connected, its server-side watcher handles this
+    // and pushes SSE events, so we skip local invalidation to avoid double work.
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.{yaml,yml}');
 
     watcher.onDidChange(uri => {
-        indexer?.invalidateFile(uri.fsPath);
+        if (!daemonClient?.isConnected) {
+            indexer?.invalidateFile(uri.fsPath);
+        }
     });
 
     watcher.onDidCreate(() => {
-        indexer?.invalidateIndex();
+        if (!daemonClient?.isConnected) {
+            indexer?.invalidateIndex();
+        }
     });
 
     watcher.onDidDelete(() => {
-        indexer?.invalidateIndex();
+        if (!daemonClient?.isConnected) {
+            indexer?.invalidateIndex();
+        }
     });
 
     context.subscriptions.push(watcher);
@@ -1013,14 +1085,45 @@ async function showColumnsForCurrentDataset(indexer: WorkspaceIndexer | undefine
     }
 }
 
+/** Update the daemon status bar item */
+function updateDaemonStatusBar(): void {
+    if (!daemonStatusBarItem || !daemonClient) {
+        return;
+    }
+    switch (daemonClient.getStatus()) {
+        case 'connected':
+            daemonStatusBarItem.text = '$(zap) Bino Daemon';
+            daemonStatusBarItem.backgroundColor = undefined;
+            break;
+        case 'connecting':
+            daemonStatusBarItem.text = '$(sync~spin) Bino Daemon';
+            daemonStatusBarItem.backgroundColor = undefined;
+            break;
+        case 'error':
+            daemonStatusBarItem.text = '$(warning) Bino Daemon';
+            daemonStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            break;
+        case 'disconnected':
+            daemonStatusBarItem.text = '$(circle-slash) Bino Daemon';
+            daemonStatusBarItem.backgroundColor = undefined;
+            break;
+    }
+}
+
 export function deactivate(): void {
+    // Send SIGTERM to daemon — synchronous, guaranteed to run before VS Code exits.
+    // The daemon's Go signal handler cleans up: removes port file, stops preview, closes DuckDB.
+    daemonClient?.shutdown();
     previewManager?.dispose();
     validator?.dispose();
     indexerStatusBarItem?.dispose();
     validationStatusBarItem?.dispose();
+    daemonStatusBarItem?.dispose();
+    daemonClient = undefined;
     indexer = undefined;
     validator = undefined;
     previewManager = undefined;
     indexerStatusBarItem = undefined;
     validationStatusBarItem = undefined;
+    daemonStatusBarItem = undefined;
 }

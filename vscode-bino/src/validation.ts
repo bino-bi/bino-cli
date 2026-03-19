@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { DaemonClient } from './daemonClient';
 
 /** The project configuration filename that marks a bino project root */
 const PROJECT_CONFIG_FILE = 'bino.toml';
@@ -54,9 +55,16 @@ export class BinoValidator {
         return this._validating;
     }
 
+    private daemonClient: DaemonClient | undefined;
+
     constructor(outputChannel: vscode.OutputChannel) {
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('bino');
         this.outputChannel = outputChannel;
+    }
+
+    /** Set the daemon client for fast validation */
+    setDaemonClient(client: DaemonClient | undefined): void {
+        this.daemonClient = client;
     }
 
     /**
@@ -257,12 +265,28 @@ export class BinoValidator {
         this.diagnosticCollection.clear();
 
         try {
-            const args = ['lsp-helper', 'validate', workDir];
-            if (options.executeQueries) {
-                args.push('--execute-queries');
+            let result: LSPValidateResult | undefined;
+
+            // Try daemon first
+            if (this.daemonClient?.isConnected) {
+                const daemonResult = options.executeQueries
+                    ? await this.daemonClient.validateWithQueries()
+                    : await this.daemonClient.getValidation();
+                if (daemonResult) {
+                    result = daemonResult as LSPValidateResult;
+                    this.outputChannel.appendLine('[Validate] Using daemon response');
+                }
             }
-            const output = await this.execBino(args);
-            const result: LSPValidateResult = JSON.parse(output);
+
+            // Fallback to subprocess
+            if (!result) {
+                const args = ['lsp-helper', 'validate', workDir];
+                if (options.executeQueries) {
+                    args.push('--execute-queries');
+                }
+                const output = await this.execBino(args);
+                result = JSON.parse(output) as LSPValidateResult;
+            }
 
             if (result.error) {
                 this.outputChannel.appendLine(`[Validate] Error: ${result.error}`);

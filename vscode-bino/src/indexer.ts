@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { DaemonClient } from './daemonClient';
 
 /** The project configuration filename that marks a bino project root */
 const PROJECT_CONFIG_FILE = 'bino.toml';
@@ -102,6 +103,7 @@ export class WorkspaceIndexer {
     readonly onDidFinishIndex: vscode.Event<void> = this._onDidFinishIndex.event;
 
     private _isIndexing = false;
+    private daemonClient: DaemonClient | undefined;
 
     /** Returns true if indexing is currently in progress */
     get isIndexing(): boolean {
@@ -115,6 +117,11 @@ export class WorkspaceIndexer {
         context.subscriptions.push(this._onDidUpdateIndex);
         context.subscriptions.push(this._onDidStartIndex);
         context.subscriptions.push(this._onDidFinishIndex);
+    }
+
+    /** Set the daemon client for fast operations */
+    setDaemonClient(client: DaemonClient | undefined): void {
+        this.daemonClient = client;
     }
 
     /** Get the configured bino CLI path */
@@ -264,6 +271,18 @@ export class WorkspaceIndexer {
         this._onDidStartIndex.fire();
 
         try {
+            // Try daemon first for faster indexing
+            if (this.daemonClient?.isConnected) {
+                const result = await this.daemonClient.getIndex();
+                if (result && !result.error) {
+                    this.documents = result.documents;
+                    this.outputChannel.appendLine(`Indexed ${this.documents.length} documents (daemon)`);
+                    this._onDidUpdateIndex.fire();
+                    return;
+                }
+            }
+
+            // Fallback to subprocess
             const output = await this.execBino(['lsp-helper', 'index', workDir]);
             const result: LSPIndexResult = JSON.parse(output);
 
@@ -340,6 +359,23 @@ export class WorkspaceIndexer {
             return cached.columns;
         }
 
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            try {
+                const result = await this.daemonClient.getColumns(name);
+                if (result && !result.error) {
+                    this.columnsCache.set(name, { columns: result.columns, timestamp: now });
+                    return result.columns;
+                }
+                if (result?.error) {
+                    this.outputChannel.appendLine(`Columns error for ${name} (daemon): ${result.error}`);
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+
+        // Fallback to subprocess
         const workDir = this.getWorkspaceRoot();
         if (!workDir) {
             return [];
@@ -379,6 +415,19 @@ export class WorkspaceIndexer {
         direction: GraphDirection = 'both',
         maxDepth: number = 0
     ): Promise<LSPGraphDepsResult | undefined> {
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            try {
+                const result = await this.daemonClient.getGraphDeps(kind, name, direction, maxDepth);
+                if (result && !result.error) {
+                    return result as LSPGraphDepsResult;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+
+        // Fallback to subprocess
         const workDir = this.getWorkspaceRoot();
         if (!workDir) {
             return undefined;
@@ -417,6 +466,19 @@ export class WorkspaceIndexer {
      * @param limit Maximum number of rows to return
      */
     async getRows(name: string, limit: number = 100): Promise<LSPRowsResult | undefined> {
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            try {
+                const result = await this.daemonClient.getRows(name, limit);
+                if (result) {
+                    return result as LSPRowsResult;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+
+        // Fallback to subprocess
         const workDir = this.getWorkspaceRoot();
         if (!workDir) {
             return undefined;
