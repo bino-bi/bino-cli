@@ -385,3 +385,95 @@ spec:
 ```
 
 See [ComponentStyle](/reference/component-style/) for all available grid styling options.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Grid`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.chartTitle` | string | no | `""` | Title displayed at the top-left of the grid. | `chartTitle: "Sales Matrix"` |
+| `spec.rowHeaders` | array | yes | — | Row header definitions. Simple strings (IDs auto-generated as 0, 1, 2…) or objects with `label` and `id`. | `rowHeaders: [North, South]` |
+| `spec.columnHeaders` | array | yes | — | Column header definitions. Simple strings or objects with `label` and `id`. | `columnHeaders: [Q1, Q2, Q3]` |
+| `spec.showRowHeaders` | boolean | no | `true` | Display the row headers column. | `showRowHeaders: true` |
+| `spec.showColumnHeaders` | boolean | no | `true` | Display the column headers row. | `showColumnHeaders: true` |
+| `spec.showBorders` | boolean | no | `true` | Display border/divider lines between cells. | `showBorders: false` |
+| `spec.rowHeaderWidth` | string | no | `"auto"` | CSS width of the row header column. | `rowHeaderWidth: "120px"` |
+| `spec.cellGap` | string | no | `"0px"` | CSS gap between grid cells. | `cellGap: "8px"` |
+| `spec.children` | array | yes | — | Array of grid child definitions specifying position and content. | see below |
+
+#### Header formats
+
+**Simple format** — labels only, IDs are auto-generated:
+
+```yaml
+spec:
+  rowHeaders: [Electronics, Apparel, Home]
+  columnHeaders: [Q1, Q2, Q3]
+```
+
+**Explicit format** — custom IDs for child references:
+
+```yaml
+spec:
+  rowHeaders:
+    - label: Electronics
+      id: electronics
+    - label: Apparel
+      id: apparel
+  columnHeaders:
+    - label: Q1 2024
+      id: q1
+    - label: Q2 2024
+      id: q2
+```
+
+#### Grid child object
+
+```yaml
+spec:
+  children:
+    - row: electronics        # must match rowHeaders ID
+      column: q1              # must match columnHeaders ID
+      kind: ChartStructure    # Text | Table | ChartStructure | ChartTime | Tree | Image
+      ref: my-chart           # optional reference to standalone document
+      optional: false         # skip gracefully if ref is missing
+      spec:                   # inline spec or override for ref
+        chartTitle: "Q1 Sales"
+      metadata:               # optional metadata
+        name: cell-name
+        constraints:
+          - mode==build
+```
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `children[].row` | string or integer | yes | — | Row identifier matching a row ID from `rowHeaders`. |
+| `children[].column` | string or integer | yes | — | Column identifier matching a column ID from `columnHeaders`. |
+| `children[].kind` | string | yes | — | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `Tree`, `Image`. |
+| `children[].ref` | string | no | — | Reference to standalone document by name. |
+| `children[].optional` | boolean | no | `false` | Skip gracefully if `ref` is missing. |
+| `children[].spec` | object | conditional | — | Component specification. Required for inline children, optional override for `ref` children. |
+| `children[].metadata` | object | no | — | Optional metadata including `name` and `constraints`. |
+
+:::note[Template Engine]
+The `bn-grid` component in the template engine uses the following mixins:
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withStyled** — integrates Styletron CSS-in-JS styling.
+- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected). Grid-specific styles are configured in the `bn-grid` section of ComponentStyle.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-grid` component accepts `rowHeaders` and `columnHeaders` as JSON strings. In the YAML manifest, prefer the YAML array form which the CLI serializes to JSON for the template engine.
+:::

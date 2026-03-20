@@ -15,6 +15,7 @@ import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
+import { TreeTableEditorManager } from './treeTableEditor';
 import { PreviewTreeProvider } from './previewTree';
 import { ActionsTreeProvider } from './actionsTree';
 import { EnvironmentTreeProvider } from './environmentTree';
@@ -24,6 +25,7 @@ let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
 let previewManager: BinoPreviewManager | undefined;
 let rowsPreviewManager: RowsPreviewManager | undefined;
+let treeTableEditorManager: TreeTableEditorManager | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
 let daemonClient: DaemonClient | undefined;
@@ -218,6 +220,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize rows preview manager
     rowsPreviewManager = new RowsPreviewManager(indexer, outputChannel);
     context.subscriptions.push({ dispose: () => rowsPreviewManager?.dispose() });
+
+    // Initialize tree-table editor manager
+    treeTableEditorManager = new TreeTableEditorManager(indexer, context.extensionPath);
+    context.subscriptions.push({ dispose: () => treeTableEditorManager?.dispose() });
 
     // Register rename provider for document identifiers
     registerRenameProvider(context, indexer);
@@ -458,6 +464,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (doc && rowsPreviewManager) {
                 await rowsPreviewManager.showPreview(doc);
             }
+        })
+    );
+
+    // Tree-table editor command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.openTreeEditor', () => {
+            treeTableEditorManager?.openPanel();
         })
     );
 
@@ -1114,6 +1127,7 @@ export function deactivate(): void {
     // Send SIGTERM to daemon — synchronous, guaranteed to run before VS Code exits.
     // The daemon's Go signal handler cleans up: removes port file, stops preview, closes DuckDB.
     daemonClient?.shutdown();
+    treeTableEditorManager?.dispose();
     previewManager?.dispose();
     validator?.dispose();
     indexerStatusBarItem?.dispose();
@@ -1122,6 +1136,7 @@ export function deactivate(): void {
     daemonClient = undefined;
     indexer = undefined;
     validator = undefined;
+    treeTableEditorManager = undefined;
     previewManager = undefined;
     indexerStatusBarItem = undefined;
     validationStatusBarItem = undefined;

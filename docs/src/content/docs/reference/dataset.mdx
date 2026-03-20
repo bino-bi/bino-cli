@@ -528,3 +528,60 @@ This means inline definitions are fully compatible with caching, the dependency 
 ### Naming restrictions
 
 User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `DataSet`. |
+| `metadata.name` | string | yes | — | Unique identifier. Pattern: `^[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$`. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+Exactly one of `query`, `prql`, or `source` is required. They are mutually exclusive.
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.query` | string or object | conditional | — | SQL query, inline or from external file. Required if `prql` and `source` are not set. | `query: SELECT * FROM sales` |
+| `spec.prql` | string or object | conditional | — | PRQL query, inline or from external file. Required if `query` and `source` are not set. | `prql: from sales_csv` |
+| `spec.source` | string or object | conditional | — | Direct DataSource pass-through. A string name or inline DataSource definition. Required if `query` and `prql` are not set. | `source: sales_csv` |
+| `spec.dependencies` | array | no | — | List of DataSource references or inline definitions. Referenced in queries via `@inline(N)` syntax. | see below |
+
+#### External file reference
+
+```yaml
+spec:
+  query:
+    $file: ./queries/sales_summary.sql
+```
+
+#### Dependencies with inline DataSources
+
+```yaml
+spec:
+  dependencies:
+    - sales_csv                    # named reference
+    - type: csv                    # inline definition
+      path: ./data/extra.csv
+  query: |
+    SELECT * FROM sales_csv
+    UNION ALL
+    SELECT * FROM @inline(1)
+```
+
+:::note[Template Engine]
+The `bn-dataset` component in the template engine uses the following mixins:
+- **withDatasource** — subscribes to raw datasources via the `datasources` attribute (comma-separated list).
+- **withBodyObserver** — observes changes to the component's text content (the SQL/data payload).
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-dataset` component accepts these props directly: `name` (from `metadata.name`), `datasources` (comma-separated datasource list), `static` (bypass AlaSQL, defaults to `false`), and `raw` (controlled internally by the CLI, defaults to `true`).
+:::

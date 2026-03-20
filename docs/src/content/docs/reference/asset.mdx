@@ -141,3 +141,37 @@ metadata:
 spec:
   value: "![Logo](asset:companyLogo) **ACME Corp**"
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Asset`. |
+| `metadata.name` | string | yes | — | Unique asset identifier. Used to reference this asset from layouts. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description of this asset. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.type` | string | yes | — | Asset type. Values: `image`, `file`, `font`. | `type: image` |
+| `spec.mediaType` | string | yes | — | MIME type of the asset. | `mediaType: image/png` |
+| `spec.source` | object | yes | — | Asset source. Exactly one of `inlineBase64`, `localPath`, or `remoteURL`. | see below |
+| `spec.source.inlineBase64` | string | conditional | — | Base64-encoded content embedded in the manifest. | `inlineBase64: iVBORw0KGgo...` |
+| `spec.source.localPath` | string | conditional | — | Relative or absolute file path to the asset. | `localPath: ./assets/logo.png` |
+| `spec.source.remoteURL` | string | conditional | — | HTTP/HTTPS URL pointing to a remote asset. | `remoteURL: https://example.com/logo.png` |
+
+:::note[Template Engine]
+The `bn-asset` component in the template engine uses the following mixins:
+- **withBodyObserver** — observes changes to the component's text content (the asset data).
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-asset` component accepts the `name` prop directly (mapped from `metadata.name`).
+:::
