@@ -483,3 +483,91 @@ spec:
 ```
 
 For more details on inline definitions and the `@inline(N)` syntax, see [DataSet - Inline DataSet definitions](/reference/dataset/#inline-dataset-definitions).
+
+## Attribute Reference
+
+### Common Metadata
+
+All document kinds share these metadata fields.
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `DataSource`. |
+| `metadata.name` | string | yes | — | Unique identifier. For DataSource must match `^[a-z_][a-z0-9_]*$` (SQL identifier). |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.type` | string | yes | — | Data source type. Values: `inline`, `excel`, `csv`, `parquet`, `postgres_query`, `mysql_query`. | `type: csv` |
+| `spec.inline` | object | conditional | — | Inline data container. Required when `type: inline` and `content` is not set. | see below |
+| `spec.content` | array or string | conditional | — | Inline data as array or JSON string. Required when `type: inline` and `inline` is not set. | see below |
+| `spec.path` | string | conditional | — | File path, directory, or glob pattern. Required when type is `excel`, `csv`, or `parquet`. | `path: ./data/*.csv` |
+| `spec.connection` | object | conditional | — | Database connection details. Required when type is `postgres_query` or `mysql_query`. | see below |
+| `spec.query` | string | conditional | — | SQL query string. Required when type is `postgres_query` or `mysql_query`. | `query: SELECT * FROM sales` |
+| `spec.ephemeral` | boolean | no | varies | Controls caching. Defaults depend on source type. | `ephemeral: false` |
+| `spec.sample` | number, string, or object | no | — | Row sampling via DuckDB `USING SAMPLE`. | `sample: 1000` |
+| `spec.delimiter` | string | no | auto | CSV field delimiter (max 4 chars). | `delimiter: ";"` |
+| `spec.header` | boolean | no | `true` | Whether the first row defines column names (CSV only). | `header: false` |
+| `spec.skipRows` | integer | no | `0` | Number of lines to skip before reading data. | `skipRows: 2` |
+| `spec.thousands` | string | no | — | Thousands separator in numeric values (max 1 char). | `thousands: "."` |
+| `spec.decimalSeparator` | string | no | — | Decimal point character (max 1 char). | `decimalSeparator: ","` |
+| `spec.dateFormat` | string | no | — | Date format using DuckDB strftime specifiers. | `dateFormat: "%d/%m/%Y"` |
+| `spec.columnNames` | string[] | no | — | Explicit column names. Mutually exclusive with `columns`. | `columnNames: [date, region, amount]` |
+| `spec.columns` | object | no | — | Column name to DuckDB type mapping. Mutually exclusive with `columnNames`. | see below |
+
+#### Inline content
+
+```yaml
+spec:
+  type: inline
+  inline:
+    content:
+      - { label: "Revenue", value: 123.45 }
+```
+
+#### Connection object
+
+```yaml
+spec:
+  connection:
+    host: db.example.com
+    port: 5432
+    database: analytics
+    schema: public
+    user: reporting
+    secret: myConnectionSecret
+```
+
+#### Column types
+
+```yaml
+spec:
+  columns:
+    ts: "TIMESTAMP"
+    device_id: "INTEGER"
+    reading: "DECIMAL(8,3)"
+```
+
+#### Sample object form
+
+```yaml
+spec:
+  sample:
+    size: 10000
+    method: reservoir  # bernoulli | system | reservoir
+```
+
+:::note[Template Engine]
+The `bn-datasource` component in the template engine uses the following mixins:
+- **withBodyObserver** — observes changes to the component's text content (the raw data payload).
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-datasource` component accepts two props directly: `name` (mapped from `metadata.name`) and `raw` (controlled internally by the CLI, defaults to `true`).
+:::

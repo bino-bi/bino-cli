@@ -176,3 +176,35 @@ spec:
         value: "Sales Overview Report"
         scale: auto
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Text`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.value` | string | yes | — | Text content. Supports Markdown syntax and template expressions `${data.<dataset>[0].field}` and `${t('key')}`. | `value: "**Revenue** grew by *12%*"` |
+| `spec.dataset` | string or array | no | — | Dataset reference for template interpolation. Single name or array of names. Provided by the **withDataset** mixin. | `dataset: kpi_summary` |
+| `spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: explicit factor. When omitted, auto-scales and emits a warning. | `scale: auto` |
+
+:::note[Template Engine]
+The `bn-text` component in the template engine uses the following mixins:
+- **withDataset** — subscribes to one or more datasets via the `datasets` HTML attribute (comma-separated). Maps from `spec.dataset` in the manifest.
+- **withTranslation** — provides the `t(key)` function for i18n lookups via the `namespace` HTML attribute.
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withStyled** — integrates Styletron CSS-in-JS styling.
+- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected).
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+:::

@@ -179,3 +179,91 @@ spec:
 | `none` | No scaling. The table renders at its base font size regardless of available space. |
 | `auto` | Auto-scale to fit the parent width silently (no warning). |
 | `0.5`, `1.2`, … | Fixed factor applied to the base font size. All dimensions scale proportionally. |
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Table`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_by_customer` |
+| `spec.tableTitle` | string | no | `""` | Descriptive title displayed above the table. | `tableTitle: "Top customers"` |
+| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows before rendering. | `filter: "region = 'DE'"` |
+| `spec.order` | string | no | `category` | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`. | `order: ac1` |
+| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `orderDirection: desc` |
+| `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
+| `spec.measureType` | string | no | `volume` | Measure interpretation. Values: `volume`, `currency`. | `measureType: currency` |
+| `spec.measureUnit` | string | no | `""` | Unit string displayed in headers. | `measureUnit: "EUR"` |
+| `spec.categoryWidth` | string | no | `w15` | Width of the category column. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w50`, `inf`. | `categoryWidth: w25` |
+| `spec.dataFormat` | string | no | `decimal` | Number formatting. Values: `percent`, `decimal`. | `dataFormat: decimal` |
+| `spec.dataFormatDigitsDecimal` | integer | no | `1` | Number of decimal digits in table cells. | `dataFormatDigitsDecimal: 2` |
+| `spec.dataFormatDigitsPercent` | integer | no | `2` | Number of percent digits in table cells. | `dataFormatDigitsPercent: 1` |
+| `spec.grouped` | boolean | no | `false` | Group rows by `rowGroup` dimension. | `grouped: true` |
+| `spec.showGroupTitle` | boolean | no | `true` | Show group header rows when grouped. | `showGroupTitle: true` |
+| `spec.showMeasureScale` | boolean | no | `false` | Toggle measure unit in table header. | `showMeasureScale: true` |
+| `spec.limit` | integer | no | `0` | Maximum rows per group. Extra rows are cumulated as REST. `0` means unlimited. | `limit: 10` |
+| `spec.type` | string | no | `list` | Table type. Values: `list`, `sum`, `opt`, `sumnototal`, `optnototal`. | `type: sum` |
+| `spec.scenarios` | string or array | no | — | Scenario measures to display. Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. | `scenarios: ["ac1", "py1"]` |
+| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `variances: ["dpy1_ac1_pos"]` |
+| `spec.barColumns` | string or array | no | — | Column names to render as inline IBCS-compliant bar/pin charts. | `barColumns: ["dac1_pp1_pos"]` |
+| `spec.barColumnWidth` | string | no | `w10` | Maximum width of inline bar chart columns. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w30`, `w40`, `w60`, `w80`, `w100`. | `barColumnWidth: w20` |
+| `spec.unitScaling` | number | no | `0.01` | Pixels per unit for absolute variance bars (`d_` prefix columns). | `unitScaling: 0.02` |
+| `spec.percentageScaling` | number | no | `0.5` | Pixels per percentage point for relative variance pins (`dr_` prefix columns). | `percentageScaling: 1` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling of the entire table. `""` or omitted: auto-scale with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.internationalisation` | string | no | — | i18n namespace for the table. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
+| `spec.internationalisationMode` | string | no | — | i18n mode. Maps to the `internationalisation-mode` HTML attribute. | `internationalisationMode: "default"` |
+| `spec.translation` | string | no | — | Translation key prefix for table labels. | `translation: "table.revenue"` |
+| `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level). | see below |
+| `spec.partof` | string or array | no | `[]` | Part-of groupings (category level). | see below |
+| `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration. | see below |
+
+#### Thereof (drilldown rows)
+
+```yaml
+spec:
+  thereof:
+    - rowGroup: "Revenue"
+      category: "Applications"
+      subCategory: "Applications-A"
+```
+
+#### Partof (category groupings)
+
+```yaml
+spec:
+  partof:
+    - rowGroup: "Revenue"
+      category: "Applications"
+```
+
+#### Columnthereof (column drilldown)
+
+```yaml
+spec:
+  columnthereof:
+    - scenario: "ac1"
+      name: "DE"
+      subGroups: ["Berlin", "Hamburg"]
+```
+
+:::note[Template Engine]
+The `bn-table` component in the template engine uses the following mixins:
+- **withDataset** — subscribes to one or more datasets via the `datasets` HTML attribute (comma-separated). Maps from `spec.dataset`.
+- **withTranslation** — provides i18n support via the `namespace` HTML attribute. Mapped from `spec.internationalisation`.
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withStyled** — integrates Styletron CSS-in-JS styling.
+- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected).
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+:::

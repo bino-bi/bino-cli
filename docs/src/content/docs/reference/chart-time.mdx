@@ -245,3 +245,77 @@ spec:
     by: scenarios
     mode: absolute
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ChartTime`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_daily` |
+| `spec.chartTitle` | string | no | `""` | Custom chart title. | `chartTitle: "Daily revenue"` |
+| `spec.chartMode` | string | no | `bar` | Rendering mode. Values: `bar`, `line`, `auto`. When `auto`, switches to line when data points exceed `maxBars`. | `chartMode: line` |
+| `spec.maxBars` | integer | no | `28` | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1. | `maxBars: 15` |
+| `spec.lineFullWidth` | boolean | no | `true` | Stretch line charts to fill full parent width. Has no effect in bar mode. | `lineFullWidth: true` |
+| `spec.axisLabelsMode` | string | no | — | Axis label rendering. Values: `smart` (context-aware), `long`, `short`. | `axisLabelsMode: smart` |
+| `spec.dateInterval` | string | no | auto-detect | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. | `dateInterval: month` |
+| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
+| `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowcategory`, `category`, `subcategory`, `auto`. | `level: category` |
+| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`. | `order: ac1` |
+| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `orderDirection: desc` |
+| `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
+| `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
+| `spec.unitScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-unit factor. Numeric values enable overdrive bars on overflow. | `unitScaling: 0.05` |
+| `spec.percentageScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-percentage factor. | `percentageScaling: 50` |
+| `spec.syncSpaceLeft` | number | no | `-1` | Synchronize left axis space across charts (pixels). `-1` disables. | `syncSpaceLeft: 80` |
+| `spec.showCategories` | boolean | no | `true` | Show category labels. | `showCategories: false` |
+| `spec.showMeasureScale` | boolean | no | `false` | Show measure unit in chart header. | `showMeasureScale: true` |
+| `spec.showOverlayAvg` | boolean | no | `true` | Show average overlay line. | `showOverlayAvg: true` |
+| `spec.showOverlayMedian` | boolean | no | `false` | Show median overlay line. | `showOverlayMedian: true` |
+| `spec.limit` | integer | no | `0` | Column stack limit. `0` means unlimited. | `limit: 12` |
+| `spec.intervalSpanLimit` | integer | no | `28` | Controls how many columns drive automatic date interval selection. | `intervalSpanLimit: 50` |
+| `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. | `scenarios: ["ac1", "fc1"]` |
+| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `variances: ["dfc1_ac1_pos"]` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `""` or omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.internationalisation` | string | no | — | i18n namespace. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
+| `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |
+| `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue.time"` |
+| `spec.stack` | object | no | — | Stacked rendering configuration. When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces stacked area chart. | see below |
+
+#### Stack configuration
+
+```yaml
+spec:
+  stack:
+    by: scenarios       # scenarios | dimensions
+    mode: absolute      # absolute | relative | absolute-relative
+    order: dataset      # asc | desc | dataset
+```
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `stack.by` | string | yes | — | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives from `level` prop. |
+| `stack.mode` | string | no | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
+| `stack.order` | string | no | `dataset` | Segment order within each stack. Values: `asc`, `desc`, `dataset`. |
+
+:::note[Template Engine]
+The `bn-chart-time` component in the template engine uses the following mixins:
+- **withDataset** — subscribes to one or more datasets via the `datasets` HTML attribute (comma-separated). Maps from `spec.dataset`.
+- **withTranslation** — provides i18n support via the `namespace` HTML attribute. Mapped from `spec.internationalisation`.
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withStyled** — integrates Styletron CSS-in-JS styling.
+- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected).
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+:::

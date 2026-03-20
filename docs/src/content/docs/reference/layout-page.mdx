@@ -711,3 +711,78 @@ Parameters and constraints serve different purposes:
 | Syntax | `${PARAM}` in spec | `metadata.constraints` |
 
 You can combine both: use constraints to filter which pages are included, and parameters to customize the included pages.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `LayoutPage`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| `metadata.params` | array | no | — | Typed parameters for page reuse. See [LayoutPage Parameters](#layoutpage-parameters). |
+
+### Spec Attributes — Title Section
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the title header. | `titleBusinessUnit: "Sales"` |
+| `spec.titleNamespace` | string | no | `"_system"` | i18n namespace for the title. | `titleNamespace: _system` |
+| `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
+| `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
+| `spec.titleDateFormat` | string | no | `none` | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`. | `titleDateFormat: quarter` |
+| `spec.titleDateLink` | string | no | `none` | Date linking style. Values: `avg`, `interval`, `cum`, `start`, `end`, `ytd`, `ytg`, `mat`, `none`. | `titleDateLink: interval` |
+| `spec.titleMeasures` | array or string | no | — | Measures displayed in the title. Array of `{name, unit}` objects or JSON string. | see below |
+| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the title. Values: `ac`, `fc`, `py`, `pl`. | `titleScenarios: ["ac", "fc", "py"]` |
+| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dac_ac_pos"]` |
+| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac`, `fc`, `py`, `pl`. | `titleOrder: category` |
+| `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `titleOrderDirection: asc` |
+
+### Spec Attributes — Page Layout
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.pageLayout` | string | no | `full` | Grid layout preset. Values: `full`, `split-horizontal`, `split-vertical`, `2x2`, `3x3`, `4x4`, `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`, `custom-template`. | `pageLayout: 2x2` |
+| `spec.pageCustomTemplate` | string | no | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `pageLayout: custom-template`. | see [Page layouts](#page-layouts) |
+| `spec.pageGridGap` | string | no | `"0"` | Gap between grid cells in pixels. | `pageGridGap: "8"` |
+| `spec.pageFormat` | string | no | `xga` | Page size. Values: `xga`, `hd`, `full-hd`, `4k`, `4k2k`, `a4`, `a3`, `a2`, `a1`, `a0`, `letter`, `legal`. | `pageFormat: a4` |
+| `spec.pageOrientation` | string | no | — | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
+| `spec.pageFitToContent` | boolean | no | `true` | Shrink to content height or stretch to fill available height. | `pageFitToContent: true` |
+
+### Spec Attributes — Footer and Message
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.pageNumber` | string | no | — | Page number displayed in the footer. | `pageNumber: "1"` |
+| `spec.footerDisplayPageNumber` | boolean | no | `true` | Show or hide the page number in the footer. | `footerDisplayPageNumber: true` |
+| `spec.footerText` | string | no | — | Footer text. | `footerText: "Internal use only"` |
+| `spec.messageImage` | string | no | `""` | URL or asset name for the message row image. | `messageImage: "debug/concordia.png"` |
+| `spec.messageText` | string | no | `""` | Message text displayed above the title. | `messageText: "Draft"` |
+
+### Spec Attributes — Children
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.children` | array | yes | — | Array of layout child objects (minimum 1). Each child specifies a `kind`, optional `ref`, optional `spec`, and optional `metadata` with constraints. | see [Referencing standalone components](#referencing-standalone-components) |
+
+#### Title measures
+
+```yaml
+spec:
+  titleMeasures:
+    - name: "Revenue"
+      unit: "mEUR"
+    - name: "EBIT"
+      unit: "mEUR"
+```
+
+:::note[Template Engine]
+The `bn-layout-page` component in the template engine uses the **withHasError** mixin to manage validation errors/warnings via the `has-error` attribute.
+
+Internally it composes `bn-page`, `bn-title`, `bn-body`, `bn-footer`, and `bn-message` sub-components. Title section attributes (e.g., `titleBusinessUnit`, `titleScenarios`) are mapped to `bn-title` props. Page frame attributes (e.g., `pageFormat`, `pageOrientation`) are mapped to `bn-page` props. The layout grid is controlled by `pageLayout` and `pageCustomTemplate`.
+:::
