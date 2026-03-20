@@ -333,3 +333,52 @@ spec:
   content: >-
     {"global":{"fontSizePx":12,"fontFamily":"'Roboto', sans-serif"}}
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ComponentStyle`. |
+| `metadata.name` | string | yes | — | Unique style identifier. Use `_default` for global defaults. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.content` | object or string | yes | — | Style definitions as a YAML object or JSON string. Contains component-specific style sections. | see sections above |
+
+#### Content structure
+
+| Section | Description |
+|---------|-------------|
+| `content.global` | Global typography and color settings (inherited by all components). |
+| `content.bn-text` | Style settings for text components. |
+| `content.bn-chart-time` | Style settings for time/column charts. |
+| `content.bn-chart-structure` | Style settings for structure/bar charts. |
+| `content.bn-tree` | Style settings for hierarchical tree diagrams. |
+| `content.bn-grid` | Style settings for grid layouts. |
+
+#### Global style properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `global.fontSizePx` | number | `13.3333` | Base font size in pixels. Scale factors multiply this value. |
+| `global.fontFamily` | string | `'Noto Sans', sans-serif` | CSS font-family value. |
+| `global.fontColor` | string | `#000000` | Primary text color (CSS color). |
+| `global.fontBackgroundColor` | string | `#ffffff` | Background color for text elements (CSS color). |
+
+:::note[Template Engine]
+The `bn-component-style` component in the template engine uses the following mixins:
+- **withBodyObserver** — observes changes to the component's text content (the style payload).
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-component-style` component accepts the `name` prop directly (mapped from `metadata.name`, defaults to `"_default"`). Components that consume styles use the **withComponentStyle** mixin, which provides a three-layer merge strategy: `_system` → `_default` → `selected-style`. Components can query styles via `componentStyle(s => s.table.headerBg)`.
+:::

@@ -385,3 +385,85 @@ spec:
       spec:
         limit: 5  # Override: show only top 5
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Tree`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.edges` | array or string | yes | — | Edge definitions connecting nodes. JSON string or YAML array. | see below |
+| `spec.direction` | string | no | `ltr` | Tree layout direction. Values: `ltr` (left-to-right), `rtl` (right-to-left), `ttb` (top-to-bottom), `btt` (bottom-to-top). | `direction: ttb` |
+| `spec.levelSpacing` | number | no | `60` | Spacing between hierarchy levels in pixels. Minimum: 0. | `levelSpacing: 80` |
+| `spec.nodeSpacing` | number | no | `20` | Spacing between sibling nodes in pixels. Minimum: 0. | `nodeSpacing: 30` |
+| `spec.edgeStyle` | string | no | `orthogonal` | Style of connection lines. Values: `straight`, `orthogonal`, `curved`. | `edgeStyle: curved` |
+| `spec.showOperators` | boolean | no | `true` | Display operator symbols between sibling nodes. | `showOperators: true` |
+| `spec.nodes` | array | no | — | Node definitions specifying what component to render at each position. | see below |
+
+#### Edge object
+
+```yaml
+spec:
+  edges:
+    - from: "roi"
+      to: "ros"
+      operator: "x"        # * | / | + | - | x | ÷ | none
+      label: ""             # optional custom label instead of operator
+      style:                # optional custom styling
+        color: "#ff0000"
+        width: 2
+        dasharray: "5,5"
+```
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `edges[].from` | string | yes | — | Source node ID. |
+| `edges[].to` | string | yes | — | Target node ID. |
+| `edges[].operator` | string | no | — | Operator symbol. Values: `*`, `/`, `+`, `-`, `x`, `÷`, `none`. |
+| `edges[].label` | string | no | — | Custom label displayed instead of operator. |
+| `edges[].style` | object | no | — | Custom edge styling (`color`, `width`, `dasharray`). |
+
+#### Node object
+
+```yaml
+spec:
+  nodes:
+    - id: roi
+      kind: Label           # Label | Table | ChartStructure | ChartTime | Image
+      spec:
+        value: "<strong>ROI</strong><br/>12.5%"
+    - id: detail
+      kind: Table
+      ref: my_table         # reference to standalone document
+      spec:
+        limit: 5            # optional override
+```
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `nodes[].id` | string | yes | — | Unique identifier matching `from`/`to` values in edges. |
+| `nodes[].kind` | string | yes | — | Component type. Values: `Label`, `Table`, `ChartStructure`, `ChartTime`, `Image`. |
+| `nodes[].ref` | string | no | — | Reference to standalone document by name (not supported for Label). |
+| `nodes[].spec` | object | conditional | — | Inline component spec. Required if no `ref` is provided. |
+
+:::note[Template Engine]
+The `bn-tree` component in the template engine uses the following mixins:
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withStyled** — integrates Styletron CSS-in-JS styling.
+- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected). Tree-specific styles are configured in the `bn-tree` section of ComponentStyle.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-tree` component accepts the `edges` prop as a JSON string. In the YAML manifest, prefer the YAML array form which the CLI serializes to JSON for the template engine.
+:::

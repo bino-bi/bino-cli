@@ -59,3 +59,52 @@ spec:
 ```
 
 You can organize translations by language, business domain, or report, as long as namespaces and keys stay consistent with layout conventions.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `Internationalization`. |
+| `metadata.name` | string | yes | — | Unique identifier for this translation set. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.code` | string | yes | — | Locale code (BCP 47 tag). | `code: de-DE` |
+| `spec.namespace` | string | no | — | Optional lookup namespace for the translation block. Components reference translations by namespace. | `namespace: _system` |
+| `spec.content` | object or string | yes | — | Key-value map of translations. Can be a YAML object or a JSON string. | see below |
+
+#### Content as YAML object
+
+```yaml
+spec:
+  content:
+    report.title: "Sales Overview"
+    card.title.revenue: "Revenue"
+    card.title.ebit: "EBIT"
+```
+
+#### Content as JSON string
+
+```yaml
+spec:
+  content: >-
+    {"report.title":"Sales Overview","card.title.revenue":"Revenue"}
+```
+
+:::note[Template Engine]
+The `bn-internationalization` component in the template engine uses the following mixins:
+- **withBodyObserver** — observes changes to the component's text content (the translation payload).
+- **withComponentStatus** — tracks render lifecycle in the global component register.
+- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
+
+The `bn-internationalization` component accepts two props directly: `code` (language code, from `spec.code`) and `namespace` (from `spec.namespace`). Components that consume translations use the **withTranslation** mixin, which provides a `t(key, data?)` function. Keys starting with `.` are expanded to `<component-tag>.key`. If a key is not found in the component's namespace, the `_system` namespace is used as a fallback. Mustache-style interpolation (`{{variable}}`) is supported in translation values.
+:::

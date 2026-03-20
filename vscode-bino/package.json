@@ -38,10 +38,26 @@
     },
     "views": {
       "bino": [
-        { "id": "binoDocuments", "name": "Documents", "when": "bino.projectDetected" },
-        { "id": "binoPreview", "name": "Preview & Build", "when": "bino.projectDetected" },
-        { "id": "binoActions", "name": "Scaffolding", "when": "bino.projectDetected" },
-        { "id": "binoEnvironment", "name": "Environment", "when": "bino.projectDetected" }
+        {
+          "id": "binoDocuments",
+          "name": "Documents",
+          "when": "bino.projectDetected"
+        },
+        {
+          "id": "binoPreview",
+          "name": "Preview & Build",
+          "when": "bino.projectDetected"
+        },
+        {
+          "id": "binoActions",
+          "name": "Scaffolding",
+          "when": "bino.projectDetected"
+        },
+        {
+          "id": "binoEnvironment",
+          "name": "Environment",
+          "when": "bino.projectDetected"
+        }
       ]
     },
     "viewsWelcome": [
@@ -173,6 +189,12 @@
         "title": "Preview Rows (100 rows)",
         "category": "Bino",
         "icon": "$(preview)"
+      },
+      {
+        "command": "bino.openTreeEditor",
+        "title": "Open Tree Editor",
+        "category": "Bino",
+        "icon": "$(list-tree)"
       },
       {
         "command": "bino.initProject",
@@ -363,6 +385,13 @@
           "group": "graph@3"
         }
       ],
+      "editor/title": [
+        {
+          "command": "bino.openTreeEditor",
+          "when": "editorLangId == yaml && bino.projectDetected",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "bino.openPrqlEditor",
@@ -430,5 +459,8 @@
     "esbuild": "^0.25.0",
     "eslint": "^8.54.0",
     "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
   }
 }
