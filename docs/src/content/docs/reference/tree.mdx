@@ -458,12 +458,3 @@ spec:
 | `nodes[].ref` | string | no | — | Reference to standalone document by name (not supported for Label). |
 | `nodes[].spec` | object | conditional | — | Inline component spec. Required if no `ref` is provided. |
 
-:::note[Template Engine]
-The `bn-tree` component in the template engine uses the following mixins:
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withStyled** — integrates Styletron CSS-in-JS styling.
-- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected). Tree-specific styles are configured in the `bn-tree` section of ComponentStyle.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-tree` component accepts the `edges` prop as a JSON string. In the YAML manifest, prefer the YAML array form which the CLI serializes to JSON for the template engine.
-:::

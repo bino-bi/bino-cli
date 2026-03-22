@@ -576,12 +576,3 @@ spec:
     SELECT * FROM @inline(1)
 ```
 
-:::note[Template Engine]
-The `bn-dataset` component in the template engine uses the following mixins:
-- **withDatasource** — subscribes to raw datasources via the `datasources` attribute (comma-separated list).
-- **withBodyObserver** — observes changes to the component's text content (the SQL/data payload).
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-dataset` component accepts these props directly: `name` (from `metadata.name`), `datasources` (comma-separated datasource list), `static` (bypass AlaSQL, defaults to `false`), and `raw` (controlled internally by the CLI, defaults to `true`).
-:::

@@ -310,12 +310,3 @@ spec:
 | `stack.mode` | string | no | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
 | `stack.order` | string | no | `dataset` | Segment order within each stack. Values: `asc`, `desc`, `dataset`. |
 
-:::note[Template Engine]
-The `bn-chart-time` component in the template engine uses the following mixins:
-- **withDataset** — subscribes to one or more datasets via the `datasets` HTML attribute (comma-separated). Maps from `spec.dataset`.
-- **withTranslation** — provides i18n support via the `namespace` HTML attribute. Mapped from `spec.internationalisation`.
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withStyled** — integrates Styletron CSS-in-JS styling.
-- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected).
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-:::

@@ -167,11 +167,3 @@ spec:
 | `spec.source.localPath` | string | conditional | — | Relative or absolute file path to the asset. | `localPath: ./assets/logo.png` |
 | `spec.source.remoteURL` | string | conditional | — | HTTP/HTTPS URL pointing to a remote asset. | `remoteURL: https://example.com/logo.png` |
 
-:::note[Template Engine]
-The `bn-asset` component in the template engine uses the following mixins:
-- **withBodyObserver** — observes changes to the component's text content (the asset data).
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-asset` component accepts the `name` prop directly (mapped from `metadata.name`).
-:::

@@ -781,8 +781,3 @@ spec:
       unit: "mEUR"
 ```
 
-:::note[Template Engine]
-The `bn-layout-page` component in the template engine uses the **withHasError** mixin to manage validation errors/warnings via the `has-error` attribute.
-
-Internally it composes `bn-page`, `bn-title`, `bn-body`, `bn-footer`, and `bn-message` sub-components. Title section attributes (e.g., `titleBusinessUnit`, `titleScenarios`) are mapped to `bn-title` props. Page frame attributes (e.g., `pageFormat`, `pageOrientation`) are mapped to `bn-page` props. The layout grid is controlled by `pageLayout` and `pageCustomTemplate`.
-:::

@@ -374,11 +374,3 @@ spec:
 | `global.fontColor` | string | `#000000` | Primary text color (CSS color). |
 | `global.fontBackgroundColor` | string | `#ffffff` | Background color for text elements (CSS color). |
 
-:::note[Template Engine]
-The `bn-component-style` component in the template engine uses the following mixins:
-- **withBodyObserver** — observes changes to the component's text content (the style payload).
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-component-style` component accepts the `name` prop directly (mapped from `metadata.name`, defaults to `"_default"`). Components that consume styles use the **withComponentStyle** mixin, which provides a three-layer merge strategy: `_system` → `_default` → `selected-style`. Components can query styles via `componentStyle(s => s.table.headerBg)`.
-:::
