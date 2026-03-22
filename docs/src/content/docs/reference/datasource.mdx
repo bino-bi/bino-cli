@@ -563,11 +563,3 @@ spec:
     method: reservoir  # bernoulli | system | reservoir
 ```
 
-:::note[Template Engine]
-The `bn-datasource` component in the template engine uses the following mixins:
-- **withBodyObserver** — observes changes to the component's text content (the raw data payload).
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-datasource` component accepts two props directly: `name` (mapped from `metadata.name`) and `raw` (controlled internally by the CLI, defaults to `true`).
-:::

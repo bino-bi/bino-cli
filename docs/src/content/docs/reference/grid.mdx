@@ -468,12 +468,3 @@ spec:
 | `children[].spec` | object | conditional | — | Component specification. Required for inline children, optional override for `ref` children. |
 | `children[].metadata` | object | no | — | Optional metadata including `name` and `constraints`. |
 
-:::note[Template Engine]
-The `bn-grid` component in the template engine uses the following mixins:
-- **withComponentStatus** — tracks render lifecycle in the global component register.
-- **withStyled** — integrates Styletron CSS-in-JS styling.
-- **withComponentStyle** — provides themed styling via three-layer merge (system → default → selected). Grid-specific styles are configured in the `bn-grid` section of ComponentStyle.
-- **withHasError** — manages validation errors/warnings via the `has-error` attribute.
-
-The `bn-grid` component accepts `rowHeaders` and `columnHeaders` as JSON strings. In the YAML manifest, prefer the YAML array form which the CLI serializes to JSON for the template engine.
-:::

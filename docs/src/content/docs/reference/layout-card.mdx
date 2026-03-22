@@ -254,8 +254,3 @@ spec:
       unit: "mEUR"
 ```
 
-:::note[Template Engine]
-The `bn-layout-card` component in the template engine uses the **withHasError** mixin to manage validation errors/warnings via the `has-error` attribute.
-
-Internally it composes `bn-card`, `bn-title`, `bn-body`, and `bn-footer` sub-components. Title section attributes (e.g., `titleBusinessUnit`, `titleScenarios`, `titleImage`) are mapped to `bn-title` props. Card layout attributes (e.g., `cardLayout`, `cardGridGap`) control the internal CSS grid. The card border is controlled by `cardShowBorder`.
-:::
