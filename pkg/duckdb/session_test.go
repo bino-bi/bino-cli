@@ -8,14 +8,22 @@ import (
 
 func TestDefaultExtensions(t *testing.T) {
 	ext := DefaultExtensions()
-	if len(ext) != len(standardExtensions) {
-		t.Errorf("DefaultExtensions() returned %d extensions, want %d", len(ext), len(standardExtensions))
+
+	// excel and httpfs should always be present
+	has := make(map[string]bool)
+	for _, e := range ext {
+		has[e] = true
+	}
+	if !has["excel"] || !has["httpfs"] {
+		t.Errorf("DefaultExtensions() missing required extensions, got %v", ext)
 	}
 
-	// Verify it returns a copy, not the original slice
-	ext[0] = "modified"
-	if standardExtensions[0] == "modified" {
-		t.Error("DefaultExtensions() should return a copy, not the original slice")
+	// Verify it returns a new slice each call
+	ext2 := DefaultExtensions()
+	ext2[0] = "modified"
+	fresh := DefaultExtensions()
+	if fresh[0] == "modified" {
+		t.Error("DefaultExtensions() should return a new slice each call")
 	}
 }
 

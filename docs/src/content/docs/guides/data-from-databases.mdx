@@ -3,8 +3,14 @@ title: Using database data
 description: Query PostgreSQL or MySQL databases via datasources and secrets.
 ---
 
+import { Aside } from "@astrojs/starlight/components";
+
 This guide shows how to connect bino to PostgreSQL and MySQL.
 You will define a `ConnectionSecret`, a `DataSource` with a SQL query, and a small layout consuming the data.
+
+<Aside type="caution">
+  PostgreSQL and MySQL connections are not available on Windows. The required DuckDB extensions (`postgres` and `mysql`) are currently not supported on that platform.
+</Aside>
 
 ## 1. PostgreSQL connection secret
 

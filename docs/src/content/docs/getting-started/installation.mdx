@@ -48,6 +48,10 @@ Prefer the two-step flow if you want to review the script before execution.
   Requires Windows 10 or later with PowerShell 5.1+.
 </Aside>
 
+<Aside type="caution">
+  PostgreSQL and MySQL database connections are not available on Windows. The required DuckDB extensions are currently not supported on that platform. CSV, Excel, and other file-based data sources work normally.
+</Aside>
+
 Run directly in PowerShell (one-liner):
 
 ```powershell
