@@ -296,6 +296,12 @@ try {
         $destPath = Join-Path $InstallDir $BinaryName
         Copy-Item -Path $binPath.FullName -Destination $destPath -Force
 
+        # Copy DuckDB DLL if present (required for Windows)
+        $dllPath = Get-ChildItem -Path $extractDir -Filter "duckdb.dll" -Recurse | Select-Object -First 1
+        if ($dllPath) {
+            Copy-Item -Path $dllPath.FullName -Destination (Join-Path $InstallDir "duckdb.dll") -Force
+        }
+
         # Add to PATH if needed and user confirmed
         if ($addToPathAfterInstall) {
             if (Add-ToPath -Directory $InstallDir) {

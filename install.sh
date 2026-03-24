@@ -324,11 +324,14 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
+DLL_PATH="$(find "$WORKDIR" -type f -name duckdb.dll | head -n 1 || true)"
+
 if [ ! -w "$INSTALL_DIR" ]; then
   if [ "$ASSUME_YES" -eq 0 ]; then
     if confirm "Install requires sudo to write to $INSTALL_DIR. Continue?"; then
       sudo cp "$BIN_PATH" "$INSTALL_DIR/"
       sudo chmod +x "$INSTALL_DIR/$BIN_NAME"
+      [ -n "$DLL_PATH" ] && sudo cp "$DLL_PATH" "$INSTALL_DIR/"
     else
       echo "Aborted by user."
       exit 5
@@ -336,10 +339,12 @@ if [ ! -w "$INSTALL_DIR" ]; then
   else
     sudo cp "$BIN_PATH" "$INSTALL_DIR/"
     sudo chmod +x "$INSTALL_DIR/$BIN_NAME"
+    [ -n "$DLL_PATH" ] && sudo cp "$DLL_PATH" "$INSTALL_DIR/"
   fi
 else
   cp "$BIN_PATH" "$INSTALL_DIR/"
   chmod +x "$INSTALL_DIR/$BIN_NAME"
+  [ -n "$DLL_PATH" ] && cp "$DLL_PATH" "$INSTALL_DIR/"
 fi
 
 echo "Installation complete."

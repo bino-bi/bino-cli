@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -323,6 +324,15 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 	// Remove the backup
 	_ = os.Remove(backupPath)
 
+	// On Windows, also extract and update duckdb.dll alongside the binary
+	if runtime.GOOS == "windows" {
+		execDir := filepath.Dir(execPath)
+		if err := extractDLLFromZip(archivePath, execDir); err != nil {
+			// Non-fatal: binary was updated successfully, DLL extraction is best-effort
+			onProgress("Warning: could not update duckdb.dll")
+		}
+	}
+
 	return nil
 }
 
@@ -459,4 +469,41 @@ func extractBinaryFromZip(archivePath string, w io.Writer) error {
 	}
 
 	return errors.New("bino binary not found in archive")
+}
+
+// extractDLLFromZip extracts duckdb.dll from a zip archive to the target directory.
+func extractDLLFromZip(archivePath, targetDir string) error {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("opening zip archive: %w", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if f.Name != "duckdb.dll" {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("opening duckdb.dll in zip: %w", err)
+		}
+
+		dllPath := filepath.Join(targetDir, "duckdb.dll")
+		out, err := os.Create(dllPath) //nolint:gosec // G304: writing to known install directory
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("creating duckdb.dll: %w", err)
+		}
+
+		_, copyErr := io.Copy(out, rc) //nolint:gosec // G110: decompressing trusted signed release archives
+		out.Close()
+		rc.Close()
+		if copyErr != nil {
+			return fmt.Errorf("extracting duckdb.dll: %w", copyErr)
+		}
+		return nil
+	}
+
+	return nil // DLL not in archive is OK (non-Windows builds)
 }
