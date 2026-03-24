@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -70,6 +71,22 @@ there is a fatal error loading manifests.`),
 				return ConfigError(err)
 			}
 
+			// Load plugins if declared.
+			var kindProvider config.KindProvider
+			var pluginLinters lint.PluginLinterRegistry
+			projectCfg, cfgErr := pathutil.LoadProjectConfig(projectRoot)
+			if cfgErr == nil && len(projectCfg.Plugins) > 0 {
+				mgr := plugin.NewManager(logger.Channel("plugin"))
+				mgr.SetVerbose(logx.DebugEnabled(ctx))
+				if err := mgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
+					logger.Warnf("Failed to load plugins: %v", err)
+				} else {
+					defer mgr.ShutdownAll(ctx)
+					kindProvider = mgr.Registry()
+					pluginLinters = plugin.NewLinterRegistry(mgr.Registry())
+				}
+			}
+
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
 				return err
@@ -78,7 +95,7 @@ there is a fatal error loading manifests.`),
 			// Step 1: Load and validate manifests
 			out.Step("Loading manifests...")
 			loadStart := time.Now()
-			documents, err := config.LoadDir(ctx, projectRoot)
+			documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider})
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -96,6 +113,13 @@ there is a fatal error loading manifests.`),
 			lintStart := time.Now()
 			runner := lint.NewDefaultRunner()
 			findings := runner.Run(ctx, lintDocs)
+
+			// Run plugin linters.
+			if pluginLinters != nil {
+				pluginFindings := lint.RunPluginLinters(ctx, lintDocs, pluginLinters)
+				findings = append(findings, pluginFindings...)
+			}
+
 			out.StepDone(fmt.Sprintf("Checked %d rule(s)", len(runner.Rules())), time.Since(lintStart))
 
 			// Step 3: Execute queries and validate data (optional)

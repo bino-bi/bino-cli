@@ -729,6 +729,9 @@ function updateValidationStatusBar(): void {
  * Register a custom schema provider with the RedHat YAML extension.
  * This allows us to dynamically associate the bino schema only with files
  * that contain `apiVersion: bino.bi/v1alpha1`.
+ *
+ * The schema is fetched from the daemon (which merges built-in + plugin schemas).
+ * Falls back to the static embedded schema if the daemon is unavailable.
  */
 async function registerSchemaProvider(context: vscode.ExtensionContext): Promise<void> {
     const yamlExtension = vscode.extensions.getExtension('redhat.vscode-yaml');
@@ -746,15 +749,42 @@ async function registerSchemaProvider(context: vscode.ExtensionContext): Promise
         return;
     }
 
-    // Get the schema file path and load content
+    // Load embedded schema as fallback
     const schemaFilePath = path.join(context.extensionPath, 'schema', 'document.schema.json');
-    let schemaContent: string;
+    let fallbackSchema: string = '{}';
 
     try {
-        schemaContent = fs.readFileSync(schemaFilePath, 'utf8');
+        fallbackSchema = fs.readFileSync(schemaFilePath, 'utf8');
     } catch (err) {
-        console.error('Failed to load bino schema:', err);
-        return;
+        console.error('Failed to load fallback bino schema:', err);
+    }
+
+    // Cache the daemon schema to avoid fetching on every request.
+    // Refreshed when daemon connects or index updates.
+    let cachedDaemonSchema: string | undefined;
+
+    const refreshDaemonSchema = async () => {
+        if (daemonClient?.isConnected) {
+            const schema = await daemonClient.getSchema();
+            if (schema) {
+                cachedDaemonSchema = schema;
+                console.log('Refreshed schema from daemon (includes plugin kinds)');
+            }
+        }
+    };
+
+    // Refresh schema when daemon connects or index updates (plugins may change).
+    if (daemonClient) {
+        daemonClient.onStatusChange(async (status) => {
+            if (status === 'connected') {
+                await refreshDaemonSchema();
+            }
+        });
+        daemonClient.on('index-updated', async () => {
+            await refreshDaemonSchema();
+        });
+        // Try immediately if already connected
+        await refreshDaemonSchema();
     }
 
     // Register our schema contributor
@@ -770,8 +800,8 @@ async function registerSchemaProvider(context: vscode.ExtensionContext): Promise
             return undefined;
         },
         (uri: string) => {
-            // Return the actual schema JSON content
-            return schemaContent;
+            // Prefer daemon schema (includes plugin kinds), fall back to embedded
+            return cachedDaemonSchema || fallbackSchema;
         },
         // Label: only apply to files containing this pattern
         'apiVersion: bino.bi'

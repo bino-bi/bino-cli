@@ -9,6 +9,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/watchers"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -64,6 +65,10 @@ func newDaemonCommand() *cobra.Command {
 				return RuntimeError(err)
 			}
 			defer state.Close()
+			if env.PluginRegistry != nil {
+				state.SetKindProvider(env.PluginRegistry)
+				state.SetPluginLinters(plugin.NewLinterRegistry(env.PluginRegistry))
+			}
 
 			// Initial refresh
 			if err := state.Refresh(ctx); err != nil {
@@ -76,10 +81,15 @@ func newDaemonCommand() *cobra.Command {
 				listenAddr = fmt.Sprintf("127.0.0.1:%d", port)
 			}
 
+			if env.PluginManager != nil {
+				defer env.PluginManager.ShutdownAll(ctx)
+			}
+
 			server, err := daemon.NewServer(daemon.ServerConfig{
-				ListenAddr: listenAddr,
-				State:      state,
-				Logger:     logger.Channel("server"),
+				ListenAddr:     listenAddr,
+				State:          state,
+				Logger:         logger.Channel("server"),
+				PluginRegistry: env.PluginRegistry,
 			})
 			if err != nil {
 				return RuntimeError(err)
@@ -198,7 +208,7 @@ func newDaemonCommand() *cobra.Command {
 
 			logger.Infof("Daemon ready * press Ctrl+C to stop")
 
-			// Block until context cancelled, shutdown requested, or server error
+			// Block until context canceled, shutdown requested, or server error
 			select {
 			case <-ctx.Done():
 				// External cancellation (SIGTERM/SIGINT)
@@ -228,4 +238,3 @@ func coalesceRefreshReasons(reasons []string) string {
 	}
 	return fmt.Sprintf("%s (+%d more)", reasons[0], len(reasons)-1)
 }
-

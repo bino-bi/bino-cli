@@ -1,0 +1,241 @@
+---
+title: Plugins
+description: Extend bino with custom data sources, components, lint rules, and more using the plugin system.
+---
+
+import { Aside, Steps, Tabs, TabItem, Card, CardGrid } from "@astrojs/starlight/components";
+
+<Aside type="caution" title="Early access">
+  The plugin system is in early access and subject to change. There is no plugin
+  marketplace or automated distribution yet. Plugins are installed manually by
+  placing binaries in a known location.
+</Aside>
+
+Plugins let you extend bino with capabilities that go beyond what YAML manifests
+and SQL queries can express. A single plugin binary can provide any combination of:
+
+<CardGrid>
+  <Card title="Custom DataSources" icon="document">
+    Pull data from SaaS APIs, proprietary databases, or any custom source. Data
+    flows into DuckDB just like built-in sources.
+  </Card>
+  <Card title="Visual Components" icon="puzzle">
+    Ship Web Component JS/CSS and generate HTML for custom chart types, widgets,
+    or layout elements.
+  </Card>
+  <Card title="Lint Rules" icon="warning">
+    Validate manifests with domain-specific rules. Lint rules can access datasets
+    and query the host's DuckDB.
+  </Card>
+  <Card title="Pipeline Hooks" icon="setting">
+    React to pipeline events (post-load, post-dataset, post-render) to
+    transform data, inject content, or collect telemetry.
+  </Card>
+</CardGrid>
+
+## How plugins work
+
+Plugins are standalone executables that communicate with the bino CLI over gRPC.
+bino launches each plugin as a subprocess, sends an `Init` call, and then invokes
+RPCs as the pipeline progresses. When the command finishes, plugins are shut down
+gracefully.
+
+This architecture means plugins can be written in any language that supports gRPC,
+though the official [Plugin SDK](https://github.com/bino-bi/bino-plugin-sdk) is
+for Go.
+
+## Installing a plugin
+
+<Steps>
+
+1. **Build the plugin binary**
+
+   ```bash
+   cd my-bino-plugin
+   go build -o bino-plugin-myplugin .
+   ```
+
+2. **Place it where bino can find it**
+
+   bino searches for plugins in this order:
+
+   | Priority | Location | Example |
+   |----------|----------|---------|
+   | 1 | Explicit path in `bino.toml` | `path = "./bin/bino-plugin-myplugin"` |
+   | 2 | Project-local | `<project>/.bino/plugins/bino-plugin-myplugin` |
+   | 3 | User-global | `~/.bino/plugins/bino-plugin-myplugin` |
+   | 4 | System PATH | Any directory in `$PATH` |
+
+   The binary **must** be named `bino-plugin-<name>` where `<name>` matches the
+   key in `bino.toml`.
+
+3. **Declare it in `bino.toml`**
+
+   ```toml
+   [plugins.myplugin]
+   # path = ".bino/plugins/bino-plugin-myplugin"  # optional, if not on PATH
+   [plugins.myplugin.config]
+   api_key = "${MY_API_KEY}"
+   ```
+
+4. **Verify**
+
+   ```bash
+   bino plugin list
+   ```
+
+</Steps>
+
+### Platform-specific binaries
+
+<Aside type="tip" title="Windows users">
+  On Windows, plugin binaries must have the `.exe` extension. bino automatically
+  appends `.exe` when searching for plugins. If you provide an explicit `path` in
+  `bino.toml`, you can omit the extension — bino will try both `<path>` and
+  `<path>.exe`.
+</Aside>
+
+Since plugins are native executables, you need a separate binary per
+platform. The naming convention is:
+
+| Platform | Binary name |
+|----------|-------------|
+| macOS / Linux | `bino-plugin-myplugin` |
+| Windows | `bino-plugin-myplugin.exe` |
+
+On macOS, you may need to sign the binary before it can run:
+
+```bash
+codesign --force --sign - bino-plugin-myplugin
+```
+
+## Plugin configuration
+
+Plugins receive their configuration from `bino.toml` at startup:
+
+```toml
+[plugins.salesforce]
+path = ".bino/plugins/bino-plugin-salesforce"   # optional explicit path
+version = "1.2.0"                                # optional version pin (future)
+
+[plugins.salesforce.config]
+instance_url = "https://myorg.salesforce.com"
+api_version = "58.0"
+```
+
+The `config` map is passed to the plugin's `Init` RPC as key-value pairs.
+Environment variable substitution (`${VAR}`) works in config values.
+
+## What plugins can do
+
+### Custom DataSources
+
+A plugin can register new `kind` values that behave like built-in DataSources.
+When bino encounters a document with a plugin-provided kind, it calls the
+plugin's `CollectDataSource` RPC to fetch data.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: SalesforceDataSource          # provided by plugin
+metadata:
+  name: opportunities
+spec:
+  object: Opportunity
+  query: "SELECT Id, Name, Amount FROM Opportunity WHERE StageName = 'Closed Won'"
+```
+
+Plugins can return data as JSON rows (registered as a DuckDB view) or as a
+DuckDB SQL expression (e.g., `read_parquet('s3://...')`).
+
+### Custom Components
+
+Plugins can ship Web Components and render custom HTML for visual kinds:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ExampleChart                  # provided by plugin
+metadata:
+  name: revenue_chart
+spec:
+  dataset: monthly_revenue
+  chartType: bar
+  title: Monthly Revenue
+```
+
+The plugin generates HTML (e.g., `<bn-example-chart ...>`) and provides the
+JS/CSS assets that implement the Web Component.
+
+### Lint rules
+
+Plugin lint rules run alongside bino's built-in rules during `bino lint`,
+`bino build`, and `bino preview` (with `--lint`):
+
+```bash
+bino lint
+# ✓ Checked 12 rule(s) (including 3 plugin rules)
+# ⚠ salesforce/deprecated-api-version: ...
+```
+
+### Pipeline hooks
+
+Plugins subscribe to pipeline checkpoints:
+
+- `post-load` — after manifests are loaded
+- `post-dataset-execute` — after SQL queries run
+- `post-render-html` — after HTML is generated
+- `post-render-pdf` — after PDF is rendered
+
+Hooks can inspect and modify the pipeline payload (e.g., transform HTML,
+validate datasets, collect metrics).
+
+### CLI commands
+
+Plugins can add subcommands to bino:
+
+```bash
+bino plugin exec salesforce:auth --instance https://myorg.salesforce.com
+bino plugin exec salesforce:sync --object Account
+```
+
+### Host access (bidirectional)
+
+Plugin callbacks can query the host's state:
+
+- **QueryDuckDB** — run SQL against the host's DuckDB engine
+- **GetDocument** — fetch a specific manifest document
+- **GetDatasetResult** — retrieve pre-computed dataset results
+- **ListDocuments** — list all loaded documents
+
+This enables data-aware plugins that make decisions based on the current
+report's data and configuration.
+
+## Building a plugin
+
+See the [Plugin SDK documentation](https://github.com/bino-bi/bino-plugin-sdk)
+for a complete guide to building plugins with Go, including the API reference
+and a working sample plugin.
+
+A minimal plugin looks like:
+
+```go
+package main
+
+import sdk "github.com/bino-bi/bino-plugin-sdk"
+
+func main() {
+    sdk.Serve(&sdk.PluginOpts{
+        Name:    "myplugin",
+        Version: "0.1.0",
+        // ... register capabilities
+    })
+}
+```
+
+## Limitations
+
+- **No marketplace**: Plugins are distributed manually. Copy the binary to the
+  project or install it on PATH.
+- **No automatic updates**: Version pinning is declared but not enforced yet.
+- **Platform-specific**: Each target OS/architecture needs its own binary.
+- **Early access**: The plugin API may change between bino releases. Pin your
+  SDK dependency to a specific version.

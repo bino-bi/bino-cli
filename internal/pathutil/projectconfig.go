@@ -21,6 +21,12 @@ type ProjectConfig struct {
 	// If not specified, the latest locally installed version is used.
 	EngineVersion string `toml:"engine-version,omitempty"`
 
+	// Plugins declares plugin binaries and their configuration.
+	Plugins map[string]PluginDeclaration `toml:"plugins,omitempty"`
+
+	// Lint configures linting behavior.
+	Lint LintConfig `toml:"lint,omitempty"`
+
 	// Hooks contains shared lifecycle hooks that apply to all commands
 	// unless overridden per-command.
 	Hooks HooksConfig `toml:"hooks,omitempty"`
@@ -33,6 +39,20 @@ type ProjectConfig struct {
 
 	// Serve contains default arguments and environment variables for the 'bino serve' command.
 	Serve CommandConfig `toml:"serve,omitempty"`
+}
+
+// PluginDeclaration describes a single plugin entry in bino.toml.
+type PluginDeclaration struct {
+	Version     string            `toml:"version,omitempty"`      // Optional semver pin
+	Path        string            `toml:"path,omitempty"`         // Optional explicit binary path
+	HookTimeout string            `toml:"hook_timeout,omitempty"` // Optional, e.g., "60s"
+	Config      map[string]string `toml:"config,omitempty"`       // Plugin-specific key-value config
+}
+
+// LintConfig configures linting behavior.
+type LintConfig struct {
+	Disable  []string          `toml:"disable,omitempty"`  // Rule IDs to disable
+	Severity map[string]string `toml:"severity,omitempty"` // Rule ID -> severity override
 }
 
 // CommandConfig holds default arguments and environment variables for a CLI command.

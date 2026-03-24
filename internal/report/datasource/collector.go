@@ -27,6 +27,37 @@ import (
 type Result struct {
 	Name string
 	Data json.RawMessage
+	// DuckDBExpression is a SQL expression to register as a view directly.
+	// When set, Data is empty and the caller should create a view from this expression.
+	DuckDBExpression string
+}
+
+// PluginCollectResult holds the response from a plugin datasource collection.
+type PluginCollectResult struct {
+	JSONRows         []byte
+	ColumnTypes      map[string]string
+	Ephemeral        bool
+	DuckDBExpression string // SQL expression to register as view directly (overrides JSONRows)
+}
+
+// PluginCollector can collect data from a plugin-provided datasource.
+type PluginCollector interface {
+	CollectDataSource(ctx context.Context, name string, rawSpec []byte, env map[string]string, projectRoot string) (*PluginCollectResult, error)
+}
+
+// PluginRouter finds the plugin responsible for a given datasource kind.
+type PluginRouter interface {
+	DataSourcePlugin(kindName string) (PluginCollector, bool)
+}
+
+// CollectOptions configures the Collect function.
+type CollectOptions struct {
+	// PluginRouter routes plugin datasource kinds to the owning plugin.
+	// May be nil when no plugins are loaded.
+	PluginRouter PluginRouter
+
+	// ProjectRoot is the project root directory, passed to plugins.
+	ProjectRoot string
 }
 
 // Collect evaluates all DataSource documents. Inline sources are returned
@@ -42,7 +73,7 @@ type Result struct {
 //
 // The DuckDB session is closed when the function returns, regardless of
 // whether it completed normally or was canceled.
-func Collect(ctx context.Context, docs []config.Document) ([]Result, []Diagnostic, error) {
+func Collect(ctx context.Context, docs []config.Document, opts *CollectOptions) ([]Result, []Diagnostic, error) {
 	// Check for cancellation at entry
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -55,9 +86,36 @@ func Collect(ctx context.Context, docs []config.Document) ([]Result, []Diagnosti
 		needsDuckDB  bool
 	)
 
+	// Plugin expression results that need DuckDB to resolve.
+	type pluginExprResult struct {
+		name       string
+		expression string
+	}
+	var pluginExprResults []pluginExprResult
+
 	// Collect all DataSource documents and separate inline from external
 	for _, doc := range docs {
+		// Route plugin datasource kinds to their owning plugin.
 		if doc.Kind != "DataSource" {
+			if opts != nil && opts.PluginRouter != nil {
+				if p, ok := opts.PluginRouter.DataSourcePlugin(doc.Kind); ok {
+					result, err := collectFromPlugin(ctx, p, doc, opts.ProjectRoot)
+					if err != nil {
+						diags = append(diags, diagnostic(doc.Name, "plugin", err))
+						continue
+					}
+					if result.DuckDBExpression != "" {
+						// Plugin returned a SQL expression — needs DuckDB to resolve.
+						needsDuckDB = true
+						pluginExprResults = append(pluginExprResults, pluginExprResult{
+							name:       result.Name,
+							expression: result.DuckDBExpression,
+						})
+					} else {
+						results = append(results, result)
+					}
+				}
+			}
 			continue
 		}
 
@@ -101,12 +159,12 @@ func Collect(ctx context.Context, docs []config.Document) ([]Result, []Diagnosti
 		return results, diags, err
 	}
 
-	opts, err := duckdb.DefaultOptions()
+	dbOpts, err := duckdb.DefaultOptions()
 	if err != nil {
 		return results, diags, fmt.Errorf("duckdb options: %w", err)
 	}
 
-	session, err := duckdb.OpenSession(ctx, opts)
+	session, err := duckdb.OpenSession(ctx, dbOpts)
 	if err != nil {
 		return results, diags, fmt.Errorf("duckdb open: %w", err)
 	}
@@ -149,6 +207,24 @@ func Collect(ctx context.Context, docs []config.Document) ([]Result, []Diagnosti
 		results = append(results, Result{Name: ds.name, Data: data})
 	}
 
+	// Register and query plugin DuckDB expression views.
+	for _, pe := range pluginExprResults {
+		if err := ctx.Err(); err != nil {
+			return results, diags, err
+		}
+		viewSQL := fmt.Sprintf("CREATE OR REPLACE VIEW %q AS SELECT * FROM (%s)", pe.name, pe.expression) //nolint:gosec // G201: expression is from trusted plugin, not user input
+		if _, err := db.ExecContext(ctx, viewSQL); err != nil {
+			diags = append(diags, diagnostic(pe.name, "plugin-expression", err))
+			continue
+		}
+		data, err := QueryView(ctx, db, session, pe.name)
+		if err != nil {
+			diags = append(diags, diagnostic(pe.name, "plugin-expression-query", err))
+			continue
+		}
+		results = append(results, Result{Name: pe.name, Data: data})
+	}
+
 	return results, diags, nil
 }
 
@@ -156,4 +232,32 @@ type datasourceItem struct {
 	name string
 	spec sourceSpec
 	doc  config.Document
+}
+
+// collectFromPlugin calls a plugin's CollectDataSource RPC and returns the result.
+func collectFromPlugin(ctx context.Context, p PluginCollector, doc config.Document, projectRoot string) (Result, error) {
+	var parsed struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(doc.Raw, &parsed); err != nil {
+		return Result{}, fmt.Errorf("extracting spec: %w", err)
+	}
+
+	collectResult, err := p.CollectDataSource(ctx, doc.Name, parsed.Spec, nil, projectRoot)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// If the plugin returned a DuckDB expression, execute it to get rows.
+	if collectResult.DuckDBExpression != "" {
+		return Result{
+			Name:             doc.Name,
+			DuckDBExpression: collectResult.DuckDBExpression,
+		}, nil
+	}
+
+	return Result{
+		Name: doc.Name,
+		Data: json.RawMessage(collectResult.JSONRows),
+	}, nil
 }

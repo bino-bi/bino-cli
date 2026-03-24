@@ -11,7 +11,9 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/version"
 )
 
 // commandEnv holds common state produced by initCommandEnv. The build, preview,
@@ -32,6 +34,10 @@ type commandEnv struct {
 	HookRunner *hooks.Runner
 	// Resolver resolves CLI flag values with bino.toml defaults.
 	Resolver *pathutil.ArgResolver
+	// PluginManager manages plugin lifecycle. May be nil if no plugins are declared.
+	PluginManager *plugin.Manager
+	// PluginRegistry holds loaded plugins. May be nil if no plugins are declared.
+	PluginRegistry *plugin.PluginRegistry
 }
 
 // initCommandEnv performs the initialization sequence shared by build, preview,
@@ -85,6 +91,21 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 	engineVersion = engineInfo.Version
 	logger.Infof("Using template engine %s", engineVersion)
 
+	// Load plugins if declared in bino.toml.
+	var pluginMgr *plugin.Manager
+	var pluginReg *plugin.PluginRegistry
+	if len(projectCfg.Plugins) > 0 {
+		pluginMgr = plugin.NewManager(logger.Channel("plugin"))
+		pluginMgr.SetVerbose(logx.DebugEnabled(ctx))
+		if err := pluginMgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
+			logger.Warnf("Failed to load plugins: %v", err)
+			// Continue without plugins — don't block the command.
+			pluginMgr = nil
+		} else {
+			pluginReg = pluginMgr.Registry()
+		}
+	}
+
 	return &commandEnv{
 		ProjectRoot:         projectRoot,
 		ProjectCfg:          projectCfg,
@@ -93,6 +114,8 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		EngineVersionPinned: engineVersionPinned,
 		HookRunner:          hookRunner,
 		Resolver:            resolver,
+		PluginManager:       pluginMgr,
+		PluginRegistry:      pluginReg,
 	}, nil
 }
 

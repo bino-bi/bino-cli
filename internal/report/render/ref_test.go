@@ -211,7 +211,7 @@ func TestRenderLayoutChildWithConstraintFilteredRef(t *testing.T) {
 	docs := []config.Document{layoutPageDoc} // Chart is filtered out
 
 	// Use the full function to pass allDocs
-	result, _, err := GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, "de", "", "", ModePreview, nil, nil, "v1.0.0", allDocs)
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, "de", "", "", ModePreview, nil, nil, "v1.0.0", allDocs, nil)
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocumentsWithDatasets should not error on constraint-filtered ref: %v", err)
 	}
