@@ -33,13 +33,14 @@ type LoadResult struct {
 
 // LoadManifests loads and validates all manifest documents from the given workdir.
 // It returns collected artifacts and signing profiles ready for further processing.
-func LoadManifests(ctx context.Context, workdir string) (LoadResult, error) {
+// The kindProvider parameter is optional and enables plugin kind validation.
+func LoadManifests(ctx context.Context, workdir string, kindProvider config.KindProvider) (LoadResult, error) {
 	absDir, err := ResolveWorkdir(workdir)
 	if err != nil {
 		return LoadResult{}, err
 	}
 
-	docs, err := config.LoadDir(ctx, absDir)
+	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{KindProvider: kindProvider})
 	if err != nil {
 		return LoadResult{}, fmt.Errorf("load manifests: %w", err)
 	}
@@ -292,7 +293,7 @@ func LogArtefactWarnings(logger logx.Logger, artifacts []config.Artifact) {
 	}
 	for _, art := range artifacts {
 		for _, warn := range art.Warnings {
-			logger.Warnf(warn)
+			logger.Warnf("%s", warn)
 		}
 	}
 }
@@ -338,6 +339,25 @@ type RenderOptions struct {
 	// When set, dataset execution reuses this session instead of creating a fresh one.
 	// The caller is responsible for closing the session.
 	Session *duckdb.Session
+
+	// PluginOptions carries plugin integration state (datasource routing, extra head markup).
+	// May be nil when no plugins are loaded.
+	PluginOptions *render.PluginOptions
+
+	// PostRenderHTMLHook is called after HTML generation with the rendered markup.
+	// Returns potentially modified HTML. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+
+	// PostDatasetHook is called after dataset execution with the dataset results.
+	// Receives dataset name/JSONRows/columns tuples. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
+}
+
+// DatasetPayload carries dataset results through pipeline hooks.
+type DatasetPayload struct {
+	Name     string
+	JSONRows []byte
+	Columns  []string
 }
 
 // RenderResult captures the outcome of rendering HTML from documents.
@@ -402,6 +422,17 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 				Err:        fmt.Errorf("%s", w.Message),
 			})
 		}
+
+		// Dispatch post-dataset hook if set.
+		if opts.PostDatasetHook != nil {
+			payloads := make([]DatasetPayload, len(datasetResults))
+			for i, r := range datasetResults {
+				payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+			}
+			if hookErr := opts.PostDatasetHook(ctx, payloads); hookErr != nil {
+				logx.FromContext(ctx).Warnf("post-dataset hook error: %v", hookErr)
+			}
+		}
 	}
 
 	// Track render step if execution plan is enabled
@@ -410,7 +441,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions)
 
 	// End render step
 	if opts.ExecutionPlan != nil {
@@ -420,6 +451,17 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 	if err != nil {
 		return RenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
+
+	// Dispatch post-render-html hook.
+	if opts.PostRenderHTMLHook != nil {
+		modifiedHTML, hookErr := opts.PostRenderHTMLHook(ctx, result.HTML)
+		if hookErr != nil {
+			logx.FromContext(ctx).Warnf("post-render-html hook error: %v", hookErr)
+		} else {
+			result.HTML = modifiedHTML
+		}
+	}
+
 	return RenderResult{
 		HTML:        result.HTML,
 		LocalAssets: result.LocalAssets,
@@ -443,6 +485,12 @@ type RenderArtefactOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// PluginOptions carries plugin integration state. May be nil.
+	PluginOptions *render.PluginOptions
+	// PostRenderHTMLHook is called after HTML generation. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	// PostDatasetHook is called after dataset execution. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
 }
 
 // RenderArtefactHTML generates HTML for a specific artifact using its spec settings.
@@ -469,7 +517,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return RenderResult{}, err
 	}
 
@@ -488,48 +536,9 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
-	})
-}
-
-// RenderArtefactHTMLForPreview generates HTML for a specific artifact in preview mode.
-// Unlike RenderArtefactHTML, this does not include build-specific attributes like render-orientation.
-// The workdir parameter is required for dataset execution.
-// The queryLogger parameter is optional and can be used to log SQL queries.
-// The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), engineVersion string) (RenderResult, error) {
-	// Select LayoutPages by refs (before constraint filtering)
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return RenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
-	}
-
-	// Build constraint context from artifact
-	constraintCtx, err := buildConstraintContext(artifact, spec.ModePreview)
-	if err != nil {
-		return RenderResult{}, err
-	}
-
-	// Filter documents by constraints for this artifact
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
-	if err != nil {
-		return RenderResult{}, err
-	}
-
-	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
-		return RenderResult{}, err
-	}
-
-	return RenderHTML(ctx, filtered, RenderOptions{
-		Workdir:           workdir,
-		Language:          artifact.Spec.Language,
-		Orientation:       artifact.Spec.Orientation,
-		Format:            artifact.Spec.Format,
-		Mode:              RenderModePreview,
-		EngineVersion:     engineVersion,
-		QueryLogger:       queryLogger,
-		ConstraintContext: constraintCtx,
-		AllDocs:           docs,
+		PluginOptions:            opts.PluginOptions,
+		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
+		PostDatasetHook:          opts.PostDatasetHook,
 	})
 }
 
@@ -542,6 +551,9 @@ type RenderScreenshotArtefactOptions struct {
 	ExecutionPlan            *buildlog.ExecutionPlan
 	DataValidation           dataset.DataValidationMode
 	DataValidationSampleSize int
+	PluginOptions            *render.PluginOptions
+	PostRenderHTMLHook       func(ctx context.Context, html []byte) ([]byte, error)
+	PostDatasetHook          func(ctx context.Context, datasets []DatasetPayload) error
 }
 
 // RenderScreenshotArtefactHTML generates HTML for capturing screenshots.
@@ -597,6 +609,9 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		PluginOptions:            opts.PluginOptions,
+		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
+		PostDatasetHook:          opts.PostDatasetHook,
 	})
 }
 
@@ -1051,9 +1066,20 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 				Err:        fmt.Errorf("%s", w.Message),
 			})
 		}
+
+		// Dispatch post-dataset hook if set.
+		if opts.PostDatasetHook != nil {
+			payloads := make([]DatasetPayload, len(datasetResults))
+			for i, r := range datasetResults {
+				payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+			}
+			if hookErr := opts.PostDatasetHook(ctx, payloads); hookErr != nil {
+				logx.FromContext(ctx).Warnf("post-dataset hook error: %v", hookErr)
+			}
+		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
@@ -1077,15 +1103,12 @@ type FrameRenderOptions struct {
 	DataValidationSampleSize int
 	// Session is an optional pre-existing DuckDB session to reuse across renders.
 	Session *duckdb.Session
-}
-
-// RenderArtefactFrameAndContext generates a two-phase render for a specific artifact in preview mode.
-// It returns a lightweight frame HTML and context HTML for SSE delivery.
-// The workdir parameter is required for dataset execution.
-// The queryLogger parameter is optional and can be used to log SQL queries.
-// The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), engineVersion string) (FrameRenderResult, error) {
-	return RenderArtefactFrameAndContextWithMode(ctx, workdir, docs, artifact, queryLogger, spec.ModePreview, engineVersion)
+	// PluginOptions carries plugin integration state. May be nil.
+	PluginOptions *render.PluginOptions
+	// PostRenderHTMLHook is called after HTML generation. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	// PostDatasetHook is called after dataset execution. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
 }
 
 // RenderArtefactFrameAndContextWithOptions generates a two-phase render for a specific artifact in preview mode with options.
@@ -1093,59 +1116,6 @@ func RenderArtefactFrameAndContext(ctx context.Context, workdir string, docs []c
 // The workdir parameter is required for dataset execution.
 func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts FrameRenderOptions) (FrameRenderResult, error) {
 	return RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, artifact, spec.ModePreview, opts)
-}
-
-// RenderArtefactFrameAndContextWithMode generates a two-phase render for a specific artifact with a specified mode.
-// It returns a lightweight frame HTML and context HTML for SSE delivery.
-// The workdir parameter is required for dataset execution.
-// The queryLogger parameter is optional and can be used to log SQL queries.
-// The mode parameter controls constraint evaluation (preview, serve, or build).
-// The engineVersion parameter specifies which template engine version to use.
-func RenderArtefactFrameAndContextWithMode(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, queryLogger func(string), mode spec.Mode, engineVersion string) (FrameRenderResult, error) {
-	// Select LayoutPages by refs (before constraint filtering)
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return FrameRenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
-	}
-
-	// Build constraint context from artifact
-	constraintCtx, err := buildConstraintContext(artifact, mode)
-	if err != nil {
-		return FrameRenderResult{}, err
-	}
-
-	// Filter documents by constraints for this artifact
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
-	if err != nil {
-		return FrameRenderResult{}, err
-	}
-
-	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
-		return FrameRenderResult{}, err
-	}
-
-	// Map spec.Mode to RenderMode
-	var renderMode RenderMode
-	switch mode {
-	case spec.ModeBuild:
-		renderMode = RenderModeBuild
-	case spec.ModeServe:
-		renderMode = RenderModeServe
-	default:
-		renderMode = RenderModePreview
-	}
-
-	return RenderHTMLFrameAndContext(ctx, filtered, RenderOptions{
-		Workdir:           workdir,
-		Language:          artifact.Spec.Language,
-		Format:            artifact.Spec.Format,
-		Mode:              renderMode,
-		EngineVersion:     engineVersion,
-		QueryLogger:       queryLogger,
-		ConstraintContext: constraintCtx,
-		AllDocs:           docs,
-	})
 }
 
 // RenderArtefactFrameAndContextWithModeAndOptions generates a two-phase render for a specific artifact with a specified mode and options.
@@ -1172,7 +1142,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 	}
 
 	// Validate name uniqueness after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return FrameRenderResult{}, err
 	}
 
@@ -1199,6 +1169,9 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
 		Session:                  opts.Session,
+		PluginOptions:            opts.PluginOptions,
+		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
+		PostDatasetHook:          opts.PostDatasetHook,
 	})
 }
 
@@ -1267,7 +1240,7 @@ func LogDiagnostics(logger logx.Logger, diags []datasource.Diagnostic) {
 		return
 	}
 	for _, diag := range diags {
-		logger.Errorf(diag.Error())
+		logger.Errorf("%s", diag.Error())
 	}
 }
 
@@ -1312,6 +1285,14 @@ type DocumentArtefactRenderOptions struct {
 	TOCPageNumbers map[string]int
 	// Session is an optional pre-existing DuckDB session to reuse.
 	Session *duckdb.Session
+	// PluginOptions carries plugin integration state. May be nil.
+	PluginOptions *render.PluginOptions
+	// KindProvider enables plugin kind validation. May be nil.
+	KindProvider config.KindProvider
+	// PostRenderHTMLHook is called after HTML generation. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	// PostDatasetHook is called after dataset execution. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
 }
 
 // RenderDocumentArtefactHTML generates HTML from markdown files for a DocumentArtefact.
@@ -1322,7 +1303,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	s := artifact.Spec
 
 	// Load all documents from the workdir
-	docs, err := config.LoadDir(ctx, workdir)
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{KindProvider: opts.KindProvider})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: load manifests: %w", artifact.Document.Name, err)
 	}
@@ -1337,7 +1318,22 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: execute datasets: %w", artifact.Document.Name, err)
 	}
 
-	datasourceResults, _, err := datasource.Collect(ctx, docs)
+	// Dispatch post-dataset hook if set.
+	if opts.PostDatasetHook != nil {
+		payloads := make([]DatasetPayload, len(datasetResults))
+		for i, r := range datasetResults {
+			payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+		}
+		if hookErr := opts.PostDatasetHook(ctx, payloads); hookErr != nil {
+			logx.FromContext(ctx).Warnf("post-dataset hook error: %v", hookErr)
+		}
+	}
+
+	var collectOpts *datasource.CollectOptions
+	if opts.PluginOptions != nil {
+		collectOpts = opts.PluginOptions.CollectOptions
+	}
+	datasourceResults, _, err := datasource.Collect(ctx, docs, collectOpts)
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: collect datasources: %w", artifact.Document.Name, err)
 	}
@@ -1418,6 +1414,16 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		RenderContext: renderCtx,
 	})
 
+	// Dispatch post-render-html hook.
+	if opts.PostRenderHTMLHook != nil {
+		modifiedHTML, hookErr := opts.PostRenderHTMLHook(ctx, html)
+		if hookErr != nil {
+			logx.FromContext(ctx).Warnf("post-render-html hook error: %v", hookErr)
+		} else {
+			html = modifiedHTML
+		}
+	}
+
 	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals}, nil
 }
 
@@ -1428,7 +1434,7 @@ func LogDocumentArtefactWarnings(logger logx.Logger, artifacts []config.Document
 	}
 	for _, art := range artifacts {
 		for _, warn := range art.Warnings {
-			logger.Warnf(warn)
+			logger.Warnf("%s", warn)
 		}
 	}
 }

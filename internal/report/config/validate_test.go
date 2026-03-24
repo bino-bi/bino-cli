@@ -77,7 +77,7 @@ func TestValidateArtefactNamesDetectsConflicts(t *testing.T) {
 		{File: "source2.yaml", Position: 2, Kind: "DataSource", Name: "shared_name"},
 	}
 
-	err := ValidateArtefactNames("testArtefact", docs)
+	err := ValidateArtefactNames("testArtefact", docs, nil)
 	if err == nil {
 		t.Fatal("expected validation error for duplicate names within artifact")
 	}
@@ -94,9 +94,113 @@ func TestValidateArtefactNamesAllowsDifferentKinds(t *testing.T) {
 		{File: "dataset.yaml", Position: 2, Kind: "DataSet", Name: "data"},
 	}
 
-	err := ValidateArtefactNames("testArtefact", docs)
+	err := ValidateArtefactNames("testArtefact", docs, nil)
 	if err != nil {
 		t.Fatalf("expected no error for same name across kinds, got %v", err)
+	}
+}
+
+// mockKindProvider implements KindProvider for testing.
+type mockKindProvider struct {
+	kinds map[string]KindInfo
+}
+
+func (m *mockKindProvider) PluginKindNames() []string {
+	names := make([]string, 0, len(m.kinds))
+	for name := range m.kinds {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (m *mockKindProvider) GetKind(name string) (KindInfo, bool) {
+	k, ok := m.kinds[name]
+	return k, ok
+}
+
+func TestUniqueNameKinds_NilProvider(t *testing.T) {
+	kinds := UniqueNameKinds(nil)
+	if _, ok := kinds["DataSource"]; !ok {
+		t.Fatal("expected DataSource in built-in kinds")
+	}
+	if _, ok := kinds["SalesforceDataSource"]; ok {
+		t.Fatal("SalesforceDataSource should not be in built-in kinds")
+	}
+}
+
+func TestUniqueNameKinds_WithPluginKinds(t *testing.T) {
+	provider := &mockKindProvider{
+		kinds: map[string]KindInfo{
+			"SalesforceDataSource": {KindName: "SalesforceDataSource", Category: KindCategoryDataSource},
+		},
+	}
+	kinds := UniqueNameKinds(provider)
+	if _, ok := kinds["DataSource"]; !ok {
+		t.Fatal("expected DataSource in kinds")
+	}
+	if _, ok := kinds["SalesforceDataSource"]; !ok {
+		t.Fatal("expected SalesforceDataSource in kinds")
+	}
+}
+
+func TestValidateArtefactNames_PluginKindTracked(t *testing.T) {
+	provider := &mockKindProvider{
+		kinds: map[string]KindInfo{
+			"SalesforceDataSource": {KindName: "SalesforceDataSource", Category: KindCategoryDataSource},
+		},
+	}
+	docs := []Document{
+		{File: "a.yaml", Position: 1, Kind: "SalesforceDataSource", Name: "dup"},
+		{File: "b.yaml", Position: 2, Kind: "SalesforceDataSource", Name: "dup"},
+	}
+	err := ValidateArtefactNames("test", docs, provider)
+	if err == nil {
+		t.Fatal("expected duplicate error for plugin kind")
+	}
+}
+
+func TestIsDataSourceKind(t *testing.T) {
+	provider := &mockKindProvider{
+		kinds: map[string]KindInfo{
+			"SalesforceDataSource": {KindName: "SalesforceDataSource", Category: KindCategoryDataSource},
+			"SalesforceConfig":     {KindName: "SalesforceConfig", Category: 2},
+		},
+	}
+
+	tests := []struct {
+		kind string
+		want bool
+	}{
+		{"DataSource", true},
+		{"SalesforceDataSource", true},
+		{"SalesforceConfig", false},
+		{"CustomDataSource", true}, // suffix fallback
+		{"LayoutPage", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			got := IsDataSourceKind(tt.kind, provider)
+			if got != tt.want {
+				t.Fatalf("IsDataSourceKind(%q) = %v, want %v", tt.kind, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPluginKind(t *testing.T) {
+	provider := &mockKindProvider{
+		kinds: map[string]KindInfo{
+			"SalesforceDataSource": {},
+		},
+	}
+	if !IsPluginKind("SalesforceDataSource", provider) {
+		t.Fatal("expected SalesforceDataSource to be a plugin kind")
+	}
+	if IsPluginKind("DataSource", provider) {
+		t.Fatal("DataSource should not be a plugin kind")
+	}
+	if IsPluginKind("Anything", nil) {
+		t.Fatal("nil provider should return false")
 	}
 }
 

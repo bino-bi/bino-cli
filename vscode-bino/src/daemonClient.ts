@@ -108,6 +108,27 @@ export class DaemonClient {
         return this.fetchJSON('/validate', 'POST');
     }
 
+    /** GET /schema — returns merged JSON schema (built-in + plugin kinds) */
+    async getSchema(): Promise<string | undefined> {
+        if (!this.isConnected || !this.port) {
+            return undefined;
+        }
+        return new Promise<string | undefined>((resolve) => {
+            const req = http.get(`http://127.0.0.1:${this.port}/schema`, (res) => {
+                if (res.statusCode !== 200) {
+                    resolve(undefined);
+                    res.resume();
+                    return;
+                }
+                const chunks: Buffer[] = [];
+                res.on('data', (chunk: Buffer) => chunks.push(chunk));
+                res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+            });
+            req.on('error', () => resolve(undefined));
+            req.setTimeout(5000, () => { req.destroy(); resolve(undefined); });
+        });
+    }
+
     /** GET /columns?name=X */
     async getColumns(name: string): Promise<{ name: string; columns: string[]; error?: string } | undefined> {
         return this.fetchJSON(`/columns?name=${encodeURIComponent(name)}`);

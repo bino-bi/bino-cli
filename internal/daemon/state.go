@@ -12,8 +12,8 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
-	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/spec"
@@ -22,14 +22,16 @@ import (
 
 // State holds the shared daemon state with cached documents and diagnostics.
 type State struct {
-	mu          sync.RWMutex
-	projectRoot string
-	session     *duckdb.Session
-	documents   []config.Document
-	diagnostics []Diagnostic
-	lastIndexAt time.Time
-	logger      logx.Logger
-	tempDir     string
+	mu            sync.RWMutex
+	projectRoot   string
+	session       *duckdb.Session
+	documents     []config.Document
+	diagnostics   []Diagnostic
+	lastIndexAt   time.Time
+	logger        logx.Logger
+	tempDir       string
+	kindProvider  config.KindProvider
+	pluginLinters lint.PluginLinterRegistry
 }
 
 // NewState creates a new daemon state.
@@ -63,7 +65,7 @@ func (s *State) Refresh(ctx context.Context) error {
 	}
 
 	// Load documents in lenient mode
-	docs, err := config.LoadDirWithOptions(ctx, s.projectRoot, config.LoadOptions{Lenient: true})
+	docs, err := config.LoadDirWithOptions(ctx, s.projectRoot, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider})
 	if err != nil {
 		return fmt.Errorf("load documents: %w", err)
 	}
@@ -117,6 +119,16 @@ func (s *State) ProjectRoot() string {
 	return s.projectRoot
 }
 
+// SetKindProvider sets the KindProvider for plugin kind validation.
+func (s *State) SetKindProvider(kp config.KindProvider) {
+	s.kindProvider = kp
+}
+
+// SetPluginLinters sets the plugin linter registry for validation.
+func (s *State) SetPluginLinters(linters lint.PluginLinterRegistry) {
+	s.pluginLinters = linters
+}
+
 // validateDocs runs full validation and returns diagnostics.
 // Must be called with s.mu held.
 func (s *State) validateDocs(ctx context.Context) []Diagnostic {
@@ -124,12 +136,12 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	dir := s.projectRoot
 
 	// Load documents in strict mode to catch schema errors
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false})
+	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider})
 	if err != nil {
 		diag := parseValidationError(err)
 		diagnostics = append(diagnostics, diag...)
 		// Use the lenient docs already loaded (s.documents may not be set yet)
-		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true})
+		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider})
 	}
 
 	// Check for missing environment variables
@@ -165,6 +177,10 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	}
 	runner := lint.NewDefaultRunner()
 	findings := runner.Run(ctx, lintDocs)
+	if s.pluginLinters != nil {
+		pluginFindings := lint.RunPluginLinters(ctx, lintDocs, s.pluginLinters)
+		findings = append(findings, pluginFindings...)
+	}
 	for _, f := range findings {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     f.File,

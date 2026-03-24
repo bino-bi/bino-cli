@@ -1,8 +1,30 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-var uniqueNameKinds = map[string]struct{}{
+// KindProvider provides additional kind names from plugins.
+// This interface avoids an import cycle between config/ and plugin/.
+type KindProvider interface {
+	PluginKindNames() []string
+	GetKind(kindName string) (KindInfo, bool)
+}
+
+// KindInfo describes a plugin-registered kind. Mirrors plugin.KindRegistration
+// without importing the plugin package.
+type KindInfo struct {
+	KindName       string
+	Category       int // 0=DataSource, 1=Component, 2=Config, 3=Artifact
+	DataSourceType string
+	PluginName     string
+}
+
+// KindCategoryDataSource is the category value for DataSource kinds.
+const KindCategoryDataSource = 0
+
+var builtinUniqueNameKinds = map[string]struct{}{
 	"DataSource":           {},
 	"DataSet":              {},
 	"ConnectionSecret":     {},
@@ -16,6 +38,43 @@ var uniqueNameKinds = map[string]struct{}{
 	"SigningProfile":       {},
 	"ComponentStyle":       {},
 	"Internationalization": {},
+}
+
+// UniqueNameKinds returns the set of kinds that require unique names.
+// It merges built-in kinds with any kinds registered by plugins.
+func UniqueNameKinds(provider KindProvider) map[string]struct{} {
+	kinds := make(map[string]struct{}, len(builtinUniqueNameKinds)+10)
+	for k, v := range builtinUniqueNameKinds {
+		kinds[k] = v
+	}
+	if provider != nil {
+		for _, name := range provider.PluginKindNames() {
+			kinds[name] = struct{}{}
+		}
+	}
+	return kinds
+}
+
+// IsPluginKind returns true if the kind is registered by a plugin.
+func IsPluginKind(kind string, provider KindProvider) bool {
+	if provider == nil {
+		return false
+	}
+	_, ok := provider.GetKind(kind)
+	return ok
+}
+
+// IsDataSourceKind returns true if the kind represents a DataSource.
+func IsDataSourceKind(kind string, provider KindProvider) bool {
+	if kind == "DataSource" {
+		return true
+	}
+	if provider != nil {
+		if info, ok := provider.GetKind(kind); ok {
+			return info.Category == KindCategoryDataSource
+		}
+	}
+	return strings.HasSuffix(kind, "DataSource")
 }
 
 // ValidateDocuments performs basic validation on loaded documents.
@@ -50,13 +109,15 @@ func ValidateDocuments(docs []Document) error {
 
 // ValidateArtefactNames checks that all included documents for a specific artifact
 // have unique names per kind. This should be called after constraint filtering.
+// The provider parameter is optional (nil uses built-in kinds only).
 // Returns an error if duplicate names are found within the same kind.
-func ValidateArtefactNames(artefactName string, docs []Document) error {
+func ValidateArtefactNames(artefactName string, docs []Document, provider KindProvider) error {
 	// Group by kind, then check name uniqueness within each kind
 	byKind := make(map[string]map[string]Document)
+	tracked := UniqueNameKinds(provider)
 
 	for _, doc := range docs {
-		if _, tracked := uniqueNameKinds[doc.Kind]; !tracked {
+		if _, ok := tracked[doc.Kind]; !ok {
 			continue
 		}
 		if doc.Name == "" {

@@ -57,6 +57,15 @@ type Builder struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+
+	// PluginOptions carries plugin integration state. May be nil.
+	PluginOptions *render.PluginOptions
+	// PostRenderHTMLHook is called after HTML generation. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	// PostDatasetHook is called after dataset execution. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
+	// KindProvider enables plugin kind validation. May be nil.
+	KindProvider config.KindProvider
 }
 
 func (b *Builder) logger() logx.Logger {
@@ -80,6 +89,9 @@ func (b *Builder) RenderArtefactHTML(ctx context.Context, docs []config.Document
 		ExecutionPlan:            b.ExecutionPlan,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostRenderHTMLHook:       b.PostRenderHTMLHook,
+		PostDatasetHook:          b.PostDatasetHook,
 	})
 }
 
@@ -93,6 +105,9 @@ func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Docume
 		ExecutionPlan:            b.ExecutionPlan,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostRenderHTMLHook:       b.PostRenderHTMLHook,
+		PostDatasetHook:          b.PostDatasetHook,
 	})
 }
 
@@ -100,6 +115,18 @@ func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Docume
 func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
 	if opts.EngineVersion == "" {
 		opts.EngineVersion = b.EngineVersion
+	}
+	if opts.PluginOptions == nil {
+		opts.PluginOptions = b.PluginOptions
+	}
+	if opts.PostRenderHTMLHook == nil {
+		opts.PostRenderHTMLHook = b.PostRenderHTMLHook
+	}
+	if opts.PostDatasetHook == nil {
+		opts.PostDatasetHook = b.PostDatasetHook
+	}
+	if opts.KindProvider == nil {
+		opts.KindProvider = b.KindProvider
 	}
 	return RenderDocumentArtefactHTML(ctx, b.Workdir, artifact, opts)
 }
@@ -114,6 +141,9 @@ func (b *Builder) RenderPreviewFrame(ctx context.Context, docs []config.Document
 		QueryLogger:              b.QueryLogger,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostRenderHTMLHook:       b.PostRenderHTMLHook,
+		PostDatasetHook:          b.PostDatasetHook,
 	})
 }
 
@@ -124,6 +154,9 @@ func (b *Builder) RenderArtefactPreviewFrame(ctx context.Context, docs []config.
 		EngineVersion:            b.EngineVersion,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostRenderHTMLHook:       b.PostRenderHTMLHook,
+		PostDatasetHook:          b.PostDatasetHook,
 	})
 }
 

@@ -151,7 +151,7 @@ func BuildForArtefact(ctx context.Context, docs []config.Document, artifact conf
 	}
 
 	// Validate name uniqueness for this artifact after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered); err != nil {
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return nil, err
 	}
 

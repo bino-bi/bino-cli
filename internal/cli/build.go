@@ -15,12 +15,14 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/version"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -101,6 +103,9 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 			if err != nil {
 				return err
 			}
+			if env.PluginManager != nil {
+				defer env.PluginManager.ShutdownAll(ctx)
+			}
 
 			outDir = env.Resolver.ResolveString("out-dir", "out-dir", outDir)
 			chromePath = env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath)
@@ -123,7 +128,11 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 			}
 
 			// Step 1: Load, validate, and filter manifests
-			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph)
+			var pluginLinters lint.PluginLinterRegistry
+			if env.PluginRegistry != nil {
+				pluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
+			}
+			manifests, err := loadBuildManifests(ctx, out, logger, env.ProjectRoot, include, exclude, noLint, noGraph, env.PluginRegistry, pluginLinters)
 			if err != nil {
 				return err
 			}
@@ -222,6 +231,38 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 				return RuntimeError(err)
 			}
 
+			// Set up plugin integration for the build pipeline.
+			var pluginOpts *render.PluginOptions
+			var postRenderHTMLHook func(context.Context, []byte) ([]byte, error)
+			var postDatasetHook func(context.Context, []pipeline.DatasetPayload) error
+			var hostSvc *plugin.BinoHostServer
+			if env.PluginManager != nil {
+				hostSvc = env.PluginManager.HostService()
+			}
+			if env.PluginRegistry != nil {
+				pluginOpts = plugin.BuildRenderOptions(ctx, env.PluginRegistry, env.ProjectRoot, "build")
+				hookBus := plugin.NewHookBus(env.PluginRegistry, logger.Channel("plugin-hooks"))
+				postRenderHTMLHook = func(hookCtx context.Context, html []byte) ([]byte, error) {
+					modified, _, err := hookBus.DispatchPostRenderHTML(hookCtx, html)
+					return modified, err
+				}
+				postDatasetHook = func(hookCtx context.Context, datasets []pipeline.DatasetPayload) error {
+					pluginDatasets := make([]plugin.DatasetPayload, len(datasets))
+					for i, ds := range datasets {
+						pluginDatasets[i] = plugin.DatasetPayload{Name: ds.Name, JSONRows: ds.JSONRows, Columns: ds.Columns}
+					}
+					if hostSvc != nil {
+						hostSvc.SetDatasets(pluginDatasets)
+					}
+					_, _, err := hookBus.DispatchPostDatasetExecute(hookCtx, pluginDatasets)
+					return err
+				}
+				if hostSvc != nil {
+					hostSvc.SetDocuments(plugin.DocumentsFromConfig(manifests.Documents))
+					hostSvc.SetDefaultDuckDBOpener()
+				}
+			}
+
 			// Step 2: Build all artifacts
 			builder := &pipeline.Builder{
 				Workdir:                  env.ProjectRoot,
@@ -234,6 +275,10 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 				ExecutionPlan:            execPlan,
 				DataValidation:           dataValidationMode,
 				DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+				PluginOptions:            pluginOpts,
+				PostRenderHTMLHook:       postRenderHTMLHook,
+				PostDatasetHook:          postDatasetHook,
+				KindProvider:             env.PluginRegistry,
 			}
 
 			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
@@ -1022,10 +1067,10 @@ type buildManifestData struct {
 
 // loadBuildManifests loads YAML documents, validates them, collects and filters
 // artifacts, and builds the dependency graph. It prints progress to out.
-func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, projectRoot string, include, exclude []string, noLint, noGraph bool) (*buildManifestData, error) {
+func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, projectRoot string, include, exclude []string, noLint, noGraph bool, kindProvider config.KindProvider, pluginLinters lint.PluginLinterRegistry) (*buildManifestData, error) {
 	out.Step("Loading manifests...")
 	loadStart := time.Now()
-	documents, err := config.LoadDir(ctx, projectRoot)
+	documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider})
 	if err != nil {
 		return nil, ConfigError(err)
 	}
@@ -1057,6 +1102,13 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 		lintDocs := configDocsToLintDocs(documents)
 		runner := lint.NewDefaultRunner()
 		lintFindings = runner.Run(ctx, lintDocs)
+
+		// Run plugin linters.
+		if pluginLinters != nil {
+			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, pluginLinters)
+			lintFindings = append(lintFindings, pluginFindings...)
+		}
+
 		if len(lintFindings) > 0 {
 			printLintFindings(out, lintFindings, projectRoot)
 			out.Blank()
