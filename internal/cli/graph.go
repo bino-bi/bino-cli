@@ -11,9 +11,11 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/version"
 )
 
 func newGraphCommand() *cobra.Command {
@@ -39,7 +41,18 @@ a tree or flat table view.`),
 				return ConfigError(err)
 			}
 
-			docs, err := config.LoadDir(ctx, absDir)
+			// Load plugins for kind validation.
+			var kindProvider config.KindProvider
+			projectCfg, cfgErr := pathutil.LoadProjectConfig(absDir)
+			if cfgErr == nil && len(projectCfg.Plugins) > 0 {
+				mgr := plugin.NewManager(logger.Channel("plugin"))
+				if err := mgr.LoadAll(ctx, projectCfg, absDir, version.Version); err == nil {
+					defer mgr.KillAll()
+					kindProvider = mgr.Registry()
+				}
+			}
+
+			docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{KindProvider: kindProvider})
 			if err != nil {
 				return ConfigError(err)
 			}

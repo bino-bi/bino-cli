@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/plugin"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -65,6 +66,9 @@ Environment knobs:
 			if err != nil {
 				return err
 			}
+			if env.PluginManager != nil {
+				defer env.PluginManager.ShutdownAll(ctx)
+			}
 
 			port = env.Resolver.ResolveInt("port", "port", port)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
@@ -104,7 +108,7 @@ Environment knobs:
 			}
 
 			// Load documents once at startup
-			docs, err := config.LoadDir(ctx, env.ProjectRoot)
+			docs, err := config.LoadDirWithOptions(ctx, env.ProjectRoot, config.LoadOptions{KindProvider: env.PluginRegistry})
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -198,18 +202,53 @@ Environment knobs:
 				return RuntimeError(err)
 			}
 
+			// Set up plugin integration for serve pipeline.
+			var servePluginOpts *render.PluginOptions
+			var servePostRenderHook func(context.Context, []byte) ([]byte, error)
+			var servePostDatasetHook func(context.Context, []pipeline.DatasetPayload) error
+			var serveHostSvcRef *plugin.BinoHostServer
+			if env.PluginManager != nil {
+				serveHostSvcRef = env.PluginManager.HostService()
+				serveHostSvcRef.SetDocuments(plugin.DocumentsFromConfig(docs))
+				serveHostSvcRef.SetDefaultDuckDBOpener()
+			}
+			if env.PluginRegistry != nil {
+				servePluginOpts = plugin.BuildRenderOptions(ctx, env.PluginRegistry, env.ProjectRoot, "preview")
+				hookBus := plugin.NewHookBus(env.PluginRegistry, logger.Channel("plugin-hooks"))
+				servePostRenderHook = func(hookCtx context.Context, htmlData []byte) ([]byte, error) {
+					modified, _, err := hookBus.DispatchPostRenderHTML(hookCtx, htmlData)
+					return modified, err
+				}
+				servePostDatasetHook = func(hookCtx context.Context, datasets []pipeline.DatasetPayload) error {
+					pluginDatasets := make([]plugin.DatasetPayload, len(datasets))
+					for i, ds := range datasets {
+						pluginDatasets[i] = plugin.DatasetPayload{Name: ds.Name, JSONRows: ds.JSONRows, Columns: ds.Columns}
+					}
+					if serveHostSvcRef != nil {
+						serveHostSvcRef.SetDatasets(pluginDatasets)
+					}
+					_, _, err := hookBus.DispatchPostDatasetExecute(hookCtx, pluginDatasets)
+					return err
+				}
+			}
+
 			// Set up routes and assets
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
-				LiveArtefact:  *liveArtefact,
-				ArtefactMap:   artefactMap,
-				HookRunner:    env.HookRunner,
-				HookEnv:       serveHookEnv,
-				Logger:        logger,
-				Workdir:       env.ProjectRoot,
-				BaseDocs:      docs,
-				QueryLogger:   queryLogger,
-				EngineVersion: env.EngineVersion,
-				Session:       sharedSession,
+				LiveArtefact:       *liveArtefact,
+				ArtefactMap:        artefactMap,
+				HookRunner:         env.HookRunner,
+				HookEnv:            serveHookEnv,
+				Logger:             logger,
+				Workdir:            env.ProjectRoot,
+				BaseDocs:           docs,
+				QueryLogger:        queryLogger,
+				EngineVersion:      env.EngineVersion,
+				Session:            sharedSession,
+				KindProvider:       env.PluginRegistry,
+				PluginOptions:      servePluginOpts,
+				PostRenderHTMLHook: servePostRenderHook,
+				PostDatasetHook:    servePostDatasetHook,
+				HostService:        serveHostSvcRef,
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -218,7 +257,7 @@ Environment knobs:
 			if routeSetup.RootContent != nil {
 				server.SetContentFunc(routeSetup.RootContent)
 			}
-			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion, sharedSession))
+			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion, sharedSession, servePluginOpts, servePostRenderHook, servePostDatasetHook))
 
 			url := server.URL()
 			logger.Successf("Serving at %s", url)
@@ -259,6 +298,7 @@ func prepareServeRequest(
 	liveArtefact config.LiveArtefact,
 	routePath string,
 	session *duckdb.Session,
+	kindProvider config.KindProvider,
 ) (*serveRequestContext, []byte, error) {
 	reqInfo := previewhttp.GetRequestInfo(ctx)
 
@@ -279,7 +319,8 @@ func prepareServeRequest(
 	if len(queryParams) > 0 {
 		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
 		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup: lookup,
+			Lookup:       lookup,
+			KindProvider: kindProvider,
 		})
 		if err != nil {
 			logger.Errorf("Reload failed with query params: %v", err)
@@ -297,16 +338,21 @@ func prepareServeRequest(
 
 // serveRouteConfig holds configuration for setting up serve routes.
 type serveRouteConfig struct {
-	LiveArtefact  config.LiveArtefact
-	ArtefactMap   map[string]config.Artifact
-	HookRunner    *hooks.Runner
-	HookEnv       hooks.HookEnv
-	Logger        logx.Logger
-	Workdir       string
-	BaseDocs      []config.Document
-	QueryLogger   func(string)
-	EngineVersion string
-	Session       *duckdb.Session
+	LiveArtefact       config.LiveArtefact
+	ArtefactMap        map[string]config.Artifact
+	HookRunner         *hooks.Runner
+	HookEnv            hooks.HookEnv
+	Logger             logx.Logger
+	Workdir            string
+	BaseDocs           []config.Document
+	QueryLogger        func(string)
+	EngineVersion      string
+	Session            *duckdb.Session
+	KindProvider       config.KindProvider
+	PluginOptions      *render.PluginOptions
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	PostDatasetHook    func(ctx context.Context, datasets []pipeline.DatasetPayload) error
+	HostService        *plugin.BinoHostServer
 }
 
 // serveRouteSetup holds the results of route setup.
@@ -338,6 +384,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		} else {
@@ -350,6 +397,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		}
@@ -369,6 +417,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		} else {
@@ -380,6 +429,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		}
@@ -389,14 +439,23 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 }
 
 // collectServeAssets pre-renders routes to collect all local assets needed for serving.
-func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact config.LiveArtefact, artefactMap map[string]config.Artifact, watchDir string, docs []config.Document, engineVersion string, session *duckdb.Session) []previewhttp.LocalAsset {
+func collectServeAssets(
+	ctx context.Context, logger logx.Logger, liveArtefact config.LiveArtefact,
+	artefactMap map[string]config.Artifact, watchDir string, docs []config.Document,
+	engineVersion string, session *duckdb.Session, pluginOpts *render.PluginOptions,
+	postRenderHook func(context.Context, []byte) ([]byte, error),
+	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
+) []previewhttp.LocalAsset {
 	allAssets := make([]previewhttp.LocalAsset, 0)
 	for _, route := range liveArtefact.Spec.Routes {
 		if route.Artifact != "" {
 			art := artefactMap[route.Artifact]
 			renderResult, err := pipeline.RenderArtefactFrameAndContextWithModeAndOptions(ctx, watchDir, docs, art, spec.ModeServe, pipeline.FrameRenderOptions{
-				EngineVersion: engineVersion,
-				Session:       session,
+				EngineVersion:      engineVersion,
+				Session:            session,
+				PluginOptions:      pluginOpts,
+				PostRenderHTMLHook: postRenderHook,
+				PostDatasetHook:    postDatasetHook,
 			})
 			if err != nil {
 				logger.Warnf("Could not pre-render artifact %s for asset collection: %v", art.Document.Name, err)
@@ -405,10 +464,13 @@ func collectServeAssets(ctx context.Context, logger logx.Logger, liveArtefact co
 			allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 		} else {
 			renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
-				Workdir:       watchDir,
-				Mode:          pipeline.RenderModeServe,
-				EngineVersion: engineVersion,
-				Session:       session,
+				Workdir:            watchDir,
+				Mode:               pipeline.RenderModeServe,
+				EngineVersion:      engineVersion,
+				Session:            session,
+				PluginOptions:      pluginOpts,
+				PostRenderHTMLHook: postRenderHook,
+				PostDatasetHook:    postDatasetHook,
 			})
 			if err != nil {
 				logger.Warnf("Could not pre-render layoutPages route for asset collection: %v", err)
@@ -465,6 +527,11 @@ func serveRenderHandler(
 	queryLogger func(string),
 	engineVersion string,
 	session *duckdb.Session,
+	kindProvider config.KindProvider,
+	pluginOpts *render.PluginOptions,
+	postRenderHook func(context.Context, []byte) ([]byte, error),
+	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
+	hostService *plugin.BinoHostServer,
 ) (body []byte, contentType string, err error) {
 	// Extract query parameters from request context
 	reqInfo := previewhttp.GetRequestInfo(ctx)
@@ -498,13 +565,19 @@ func serveRenderHandler(
 
 		// Reload documents with the custom lookup
 		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup: lookup,
+			Lookup:       lookup,
+			KindProvider: kindProvider,
 		})
 		if err != nil {
 			logger.Errorf("Reload failed for %s with query params: %v", artifact.Document.Name, err)
 			return nil, "", err
 		}
 		docs = reloadedDocs
+
+		// Update host service with reloaded documents.
+		if hostService != nil {
+			hostService.SetDocuments(plugin.DocumentsFromConfig(docs))
+		}
 
 		// Re-collect artifacts to get the one with expanded query params
 		artifacts, err := config.CollectArtefacts(docs)
@@ -530,9 +603,12 @@ func serveRenderHandler(
 
 	// Render the artifact with serve mode for constraint evaluation
 	renderResult, err := pipeline.RenderArtefactFrameAndContextWithModeAndOptions(ctx, workdir, docs, currentArtefact, spec.ModeServe, pipeline.FrameRenderOptions{
-		QueryLogger:   queryLogger,
-		EngineVersion: engineVersion,
-		Session:       session,
+		QueryLogger:        queryLogger,
+		EngineVersion:      engineVersion,
+		Session:            session,
+		PluginOptions:      pluginOpts,
+		PostRenderHTMLHook: postRenderHook,
+		PostDatasetHook:    postDatasetHook,
 	})
 	if err != nil {
 		logger.Errorf("Render failed for %s: %v", artifact.Document.Name, err)
@@ -569,14 +645,24 @@ func serveLayoutPagesHandler(
 	queryLogger func(string),
 	engineVersion string,
 	session *duckdb.Session,
+	kindProvider config.KindProvider,
+	pluginOpts *render.PluginOptions,
+	postRenderHook func(context.Context, []byte) ([]byte, error),
+	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
+	hostService *plugin.BinoHostServer,
 ) (body []byte, contentType string, err error) {
 	// Process query parameters and reload documents if needed
-	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session)
+	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)
 	if err != nil {
 		return nil, "", err
 	}
 	if missingParamsHTML != nil {
 		return missingParamsHTML, "text/html; charset=utf-8", nil
+	}
+
+	// Update host service with reloaded documents (when query params caused a reload).
+	if hostService != nil && len(reqCtx.QueryParams) > 0 {
+		hostService.SetDocuments(plugin.DocumentsFromConfig(reqCtx.Docs))
 	}
 
 	// Build cache key from layout pages + sorted query params
@@ -592,12 +678,15 @@ func serveLayoutPagesHandler(
 
 	// Render the layout pages directly, passing query params as LayoutPage param overrides
 	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
-		Workdir:          workdir,
-		Mode:             pipeline.RenderModeServe,
-		EngineVersion:    engineVersion,
-		QueryLogger:      queryLogger,
-		LayoutPageParams: reqCtx.QueryParams,
-		Session:          session,
+		Workdir:            workdir,
+		Mode:               pipeline.RenderModeServe,
+		EngineVersion:      engineVersion,
+		QueryLogger:        queryLogger,
+		LayoutPageParams:   reqCtx.QueryParams,
+		Session:            session,
+		PluginOptions:      pluginOpts,
+		PostRenderHTMLHook: postRenderHook,
+		PostDatasetHook:    postDatasetHook,
 	})
 	if err != nil {
 		logger.Errorf("Render failed for layoutPages: %v", err)

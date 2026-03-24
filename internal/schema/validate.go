@@ -17,6 +17,11 @@ import (
 //go:embed jsonschema/document.schema.json
 var documentSchema []byte
 
+// DocumentSchemaBytes returns the raw embedded JSON Schema bytes.
+func DocumentSchemaBytes() []byte {
+	return documentSchema
+}
+
 var (
 	schemaOnce sync.Once
 	schemaObj  *gojsonschema.Schema

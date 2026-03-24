@@ -89,6 +89,19 @@ var contextTemplate = strings.TrimSpace(`<bn-context%s locale='%s'>
 </bn-context>
 `)
 
+// PluginOptions bundles plugin-related parameters for rendering.
+// All fields are optional — nil means no plugin integration.
+type PluginOptions struct {
+	// CollectOptions routes plugin datasource kinds to the owning plugin.
+	CollectOptions *datasource.CollectOptions
+
+	// ExtraHeadMarkup is additional HTML to inject into <head> (e.g., plugin assets).
+	ExtraHeadMarkup string
+
+	// ComponentRenderer renders HTML for plugin-provided component kinds.
+	ComponentRenderer PluginComponentRenderer
+}
+
 // Result captures the rendered HTML alongside metadata about local assets that must be proxied by the preview server.
 type Result struct {
 	HTML        []byte
@@ -147,7 +160,7 @@ type LocalAsset struct {
 // Datasource diagnostics and local assets that need HTTP proxying are returned alongside the rendered markup.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrientation string, renderFormat string, mode Mode, engineVersion string) (Result, []datasource.Diagnostic, error) {
-	docs, err := config.LoadDir(ctx, workdir)
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{})
 	if err != nil {
 		return Result{}, nil, fmt.Errorf("render: load manifests: %w", err)
 	}
@@ -168,14 +181,14 @@ func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrie
 		})
 	}
 
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion, nil)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion, nil, nil)
 }
 
 // GenerateHTMLFromDocuments renders HTML using an already loaded set of manifests.
 // The mode parameter determines whether build-specific attributes like render-orientation are included.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode Mode, engineVersion string) (Result, []datasource.Diagnostic, error) {
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil, nil)
 }
 
 // GenerateHTMLFromDocumentsWithDatasets renders HTML using loaded manifests and pre-executed dataset results.
@@ -183,13 +196,27 @@ func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, loca
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 // The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
-func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (Result, []datasource.Diagnostic, error) {
+func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
 	targetFormat := strings.TrimSpace(renderFormat)
 
-	sources, diags, err := datasource.Collect(ctx, docs)
+	var collectOpts *datasource.CollectOptions
+	var extraHeadMarkup string
+	var pluginRenderer PluginComponentRenderer
+	if pluginOpts != nil {
+		collectOpts = pluginOpts.CollectOptions
+		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
+		pluginRenderer = pluginOpts.ComponentRenderer
+	}
+
+	renderModeStr := "build"
+	if mode == ModePreview {
+		renderModeStr = "preview"
+	}
+
+	sources, diags, err := datasource.Collect(ctx, docs, collectOpts)
 	if err != nil {
 		return Result{}, append(existingDiags, diags...), fmt.Errorf("render: collect datasources: %w", err)
 	}
@@ -237,7 +264,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -277,7 +304,8 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			orientationAttr = fmt.Sprintf(" render-orientation='%s'", html.EscapeString(trimmed))
 		}
 	}
-	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, fontMarkup, orientationAttr, html.EscapeString(locale), body.String())
+	headMarkup := fontMarkup + extraHeadMarkup
+	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, headMarkup, orientationAttr, html.EscapeString(locale), body.String())
 	return Result{HTML: []byte(markup), LocalAssets: localAssets}, diags, nil
 }
 
@@ -289,13 +317,22 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 // The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
-func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document) (FrameResult, []datasource.Diagnostic, error) {
+func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions) (FrameResult, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
 	targetFormat := strings.TrimSpace(renderFormat)
 
-	sources, diags, err := datasource.Collect(ctx, docs)
+	var collectOpts *datasource.CollectOptions
+	var extraHeadMarkup string
+	var pluginRenderer PluginComponentRenderer
+	if pluginOpts != nil {
+		collectOpts = pluginOpts.CollectOptions
+		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
+		pluginRenderer = pluginOpts.ComponentRenderer
+	}
+
+	sources, diags, err := datasource.Collect(ctx, docs, collectOpts)
 	if err != nil {
 		return FrameResult{}, append(existingDiags, diags...), fmt.Errorf("render: collect datasources: %w", err)
 	}
@@ -342,7 +379,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	}
 
 	// Create render context for layout children ref resolution.
-	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap)
+	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 
 	for _, doc := range docs {
 		switch doc.Kind {
@@ -375,7 +412,8 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	fontMarkup := renderFontLinks(fontAssets)
 
 	// Frame: lightweight shell with template engine and loading placeholder
-	frameMarkup := fmt.Sprintf(frameTemplate, html.EscapeString(locale), engineVersion, engineVersion, fontMarkup, html.EscapeString(locale))
+	frameHeadMarkup := fontMarkup + extraHeadMarkup
+	frameMarkup := fmt.Sprintf(frameTemplate, html.EscapeString(locale), engineVersion, engineVersion, frameHeadMarkup, html.EscapeString(locale))
 
 	// Context: standalone <bn-context> block for SSE delivery
 	// No render-orientation in preview mode

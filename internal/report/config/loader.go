@@ -56,6 +56,11 @@ type LoadOptions struct {
 	// visited during the walk. This allows callers to reuse the directory list
 	// (e.g., for file-watcher registration) without a second walk.
 	CollectedDirs *[]string
+
+	// KindProvider supplies plugin-registered kinds. Plugin kinds bypass the
+	// built-in JSON schema validation (they are validated by the plugin's own schema).
+	// May be nil when no plugins are loaded.
+	KindProvider KindProvider
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -126,7 +131,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
@@ -160,7 +165,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc) ([]Document, error) {
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider) ([]Document, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -258,6 +263,36 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 				MissingEnvVars: filteredMissingVars,
 			})
 			continue
+		}
+
+		// Check if this is a plugin kind — if so, skip built-in schema validation.
+		// Plugin kinds are validated by their own JSON Schema via the schema aggregator.
+		if kindProvider != nil {
+			var peek struct {
+				Kind string `json:"kind"`
+			}
+			if json.Unmarshal(rawJSON, &peek) == nil && IsPluginKind(peek.Kind, kindProvider) {
+				var header documentHeader
+				if err := json.Unmarshal(rawJSON, &header); err != nil {
+					return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
+				}
+				constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
+				if err != nil {
+					return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err)
+				}
+				docs = append(docs, Document{
+					File:           path,
+					Position:       index,
+					Kind:           header.Kind,
+					Name:           header.Metadata.Name,
+					Labels:         header.Metadata.Labels,
+					Constraints:    constraints,
+					Params:         header.Metadata.Params,
+					Raw:            rawJSON,
+					MissingEnvVars: filteredMissingVars,
+				})
+				continue
+			}
 		}
 
 		if err := spec.ValidateDocument(rawJSON); err != nil {

@@ -18,6 +18,11 @@ import (
 	"bino.bi/bino/internal/report/spec"
 )
 
+// PluginComponentRenderer renders HTML for plugin-provided component kinds.
+type PluginComponentRenderer interface {
+	RenderComponent(ctx context.Context, kind, name string, spec []byte, renderMode string) (string, error)
+}
+
 // renderCtx holds context needed for rendering layout children with ref support.
 type renderCtx struct {
 	ctx           context.Context
@@ -30,20 +35,26 @@ type renderCtx struct {
 	globalIndex map[string]config.Document
 	// assetURLs maps asset name to resolved URL for asset: image references in markdown.
 	assetURLs map[string]string
+	// pluginRenderer delegates rendering of plugin component kinds.
+	pluginRenderer PluginComponentRenderer
+	// renderMode is "build" or "preview".
+	renderMode string
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
 // The allDocs parameter is the unfiltered document set used to distinguish constraint-filtered
 // refs from genuinely missing refs. If nil, docs is used (treating all missing refs as errors).
 // The assetURLs parameter maps asset names to resolved URLs for asset: image references in markdown.
-func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext, allDocs []config.Document, assetURLs map[string]string) *renderCtx {
+func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *spec.ConstraintContext, allDocs []config.Document, assetURLs map[string]string, pluginRenderer PluginComponentRenderer, renderMode string) *renderCtx {
 	rc := &renderCtx{
-		ctx:           ctx,
-		docs:          docs,
-		constraintCtx: constraintCtx,
-		docIndex:      make(map[string]config.Document, len(docs)),
-		globalIndex:   make(map[string]config.Document),
-		assetURLs:     assetURLs,
+		ctx:            ctx,
+		docs:           docs,
+		constraintCtx:  constraintCtx,
+		docIndex:       make(map[string]config.Document, len(docs)),
+		globalIndex:    make(map[string]config.Document),
+		assetURLs:      assetURLs,
+		pluginRenderer: pluginRenderer,
+		renderMode:     renderMode,
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
@@ -598,7 +609,16 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		}
 		component = renderImageComponent(s)
 	default:
-		return "", false, fmt.Errorf("unsupported child kind %q", child.Kind)
+		// Try plugin component renderer for unknown kinds.
+		if rc.pluginRenderer != nil {
+			htmlFragment, err := rc.pluginRenderer.RenderComponent(rc.ctx, child.Kind, child.Ref, effectiveSpec, rc.renderMode)
+			if err != nil {
+				return "", false, fmt.Errorf("plugin render %s: %w", child.Kind, err)
+			}
+			component = htmlFragment
+		} else {
+			return "", false, fmt.Errorf("unsupported child kind %q", child.Kind)
+		}
 	}
 
 	return indentBlock(component, 4), false, nil

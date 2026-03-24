@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/plugin"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/graph"
 )
@@ -42,14 +43,15 @@ type indexDocument struct {
 
 // Server is the daemon HTTP server.
 type Server struct {
-	state      *State
-	sse        *previewhttp.SSEHub
-	listener   net.Listener
-	httpServer *http.Server
-	logger     logx.Logger
-	startedAt  time.Time
-	shutdownCh   chan struct{}
-	shutdownOnce sync.Once
+	state          *State
+	sse            *previewhttp.SSEHub
+	listener       net.Listener
+	httpServer     *http.Server
+	logger         logx.Logger
+	startedAt      time.Time
+	shutdownCh     chan struct{}
+	shutdownOnce   sync.Once
+	pluginRegistry *plugin.PluginRegistry
 
 	// Preview subprocess management
 	previewMu     sync.Mutex
@@ -65,9 +67,10 @@ type Server struct {
 
 // ServerConfig controls daemon server construction.
 type ServerConfig struct {
-	ListenAddr string
-	State      *State
-	Logger     logx.Logger
+	ListenAddr     string
+	State          *State
+	Logger         logx.Logger
+	PluginRegistry *plugin.PluginRegistry
 }
 
 // NewServer constructs a daemon HTTP server.
@@ -85,16 +88,18 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	}
 
 	srv := &Server{
-		state:      cfg.State,
-		sse:        previewhttp.NewSSEHub(),
-		listener:   listener,
-		logger:     cfg.Logger,
-		startedAt:  time.Now(),
-		shutdownCh: make(chan struct{}),
+		state:          cfg.State,
+		sse:            previewhttp.NewSSEHub(),
+		listener:       listener,
+		logger:         cfg.Logger,
+		startedAt:      time.Now(),
+		shutdownCh:     make(chan struct{}),
+		pluginRegistry: cfg.PluginRegistry,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", srv.handleHealth)
+	mux.HandleFunc("GET /schema", srv.handleSchema)
 	mux.HandleFunc("GET /index", srv.handleIndex)
 	mux.HandleFunc("GET /validate", srv.handleValidateGet)
 	mux.HandleFunc("POST /validate", srv.handleValidatePost)
@@ -114,7 +119,11 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 
 // Port returns the port the server is listening on.
 func (s *Server) Port() int {
-	return s.listener.Addr().(*net.TCPAddr).Port
+	addr, ok := s.listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0
+	}
+	return addr.Port
 }
 
 // ClientCount returns the number of connected SSE clients.
@@ -181,6 +190,36 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		resp["session"] = true
 	}
 	s.writeJSON(w, resp)
+}
+
+func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
+	// Build merged schema (built-in + plugin kinds).
+	registry := s.pluginRegistry
+	if registry == nil {
+		registry = plugin.NewRegistry()
+	}
+	aggregator := plugin.NewSchemaAggregator(registry)
+	if err := aggregator.Build(r.Context()); err != nil {
+		http.Error(w, fmt.Sprintf("building schema: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	kindFilter := r.URL.Query().Get("kind")
+	var schemaBytes json.RawMessage
+	if kindFilter != "" {
+		kindSchema, ok := aggregator.SchemaForKind(kindFilter)
+		if !ok {
+			http.Error(w, fmt.Sprintf("unknown kind: %s", kindFilter), http.StatusNotFound)
+			return
+		}
+		schemaBytes = kindSchema
+	} else {
+		schemaBytes = aggregator.MergedSchema()
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(schemaBytes) //nolint:errcheck,gosec // G705: schema is generated internally, not user tainted
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
@@ -474,7 +513,7 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 		port = defaultPreviewPort
 	}
 
-	cmd := exec.Command(exe, "preview", "--port", strconv.Itoa(port), "--work-dir", s.state.ProjectRoot()) //nolint:gosec // G204: exe is our own binary
+	cmd := exec.CommandContext(context.Background(), exe, "preview", "--port", strconv.Itoa(port), "--work-dir", s.state.ProjectRoot()) //nolint:gosec // G204: exe is our own binary
 	cmd.Env = append(os.Environ(), "BINO_DISABLE_UPDATE_CHECK=1", "NO_COLOR=1")
 
 	stdout, err := cmd.StdoutPipe()
@@ -595,7 +634,7 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		s.buildMu.Unlock()
 	}()
 
-	var req struct {
+	var req struct { //nolint:misspell // backward-compatible JSON API field name
 		Artefact string `json:"artefact"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
@@ -607,8 +646,8 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	args := []string{"build", "--work-dir", s.state.ProjectRoot()}
-	if req.Artefact != "" {
-		args = append(args, "--artefact", req.Artefact)
+	if req.Artefact != "" { //nolint:misspell // backward-compatible JSON API field name
+		args = append(args, "--artefact", req.Artefact) //nolint:misspell // backward-compatible CLI flag
 	}
 
 	s.BroadcastEvent("build-progress", map[string]string{"status": "started"})
@@ -743,4 +782,3 @@ func traverseGraph(
 		}
 	}
 }
-

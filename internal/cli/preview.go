@@ -20,6 +20,7 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/preview/explorer"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
@@ -27,6 +28,7 @@ import (
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/watchers"
 	"bino.bi/bino/pkg/duckdb"
@@ -76,6 +78,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			if err != nil {
 				return err
 			}
+			if env.PluginManager != nil {
+				defer env.PluginManager.ShutdownAll(ctx)
+			}
 
 			port = env.Resolver.ResolveInt("port", "port", port)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
@@ -124,6 +129,37 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				Verbose:  logx.DebugEnabled(ctx),
 			}
 
+			// Set up plugin integration for the preview pipeline.
+			var pluginOpts *render.PluginOptions
+			var postRenderHTMLHook func(context.Context, []byte) ([]byte, error)
+			var postDatasetHook func(context.Context, []pipeline.DatasetPayload) error
+			var pluginLinters lint.PluginLinterRegistry
+			if env.PluginRegistry != nil {
+				pluginOpts = plugin.BuildRenderOptions(ctx, env.PluginRegistry, env.ProjectRoot, "preview")
+				hookBus := plugin.NewHookBus(env.PluginRegistry, logger.Channel("plugin-hooks"))
+				postRenderHTMLHook = func(hookCtx context.Context, htmlData []byte) ([]byte, error) {
+					modified, _, err := hookBus.DispatchPostRenderHTML(hookCtx, htmlData)
+					return modified, err
+				}
+				var hostSvc *plugin.BinoHostServer
+				if env.PluginManager != nil {
+					hostSvc = env.PluginManager.HostService()
+					hostSvc.SetDefaultDuckDBOpener()
+				}
+				postDatasetHook = func(hookCtx context.Context, datasets []pipeline.DatasetPayload) error {
+					pluginDatasets := make([]plugin.DatasetPayload, len(datasets))
+					for i, ds := range datasets {
+						pluginDatasets[i] = plugin.DatasetPayload{Name: ds.Name, JSONRows: ds.JSONRows, Columns: ds.Columns}
+					}
+					if hostSvc != nil {
+						hostSvc.SetDatasets(pluginDatasets)
+					}
+					_, _, err := hookBus.DispatchPostDatasetExecute(hookCtx, pluginDatasets)
+					return err
+				}
+				pluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
+			}
+
 			refreshMu := &sync.Mutex{}
 			var server *previewhttp.Server
 			var explorerSession *explorer.Session
@@ -139,6 +175,14 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				HookRunner:               env.HookRunner,
 				HookEnv:                  previewHookEnv,
 				Session:                  sharedSession,
+				KindProvider:             env.PluginRegistry,
+				PluginOptions:            pluginOpts,
+				PostRenderHTMLHook:       postRenderHTMLHook,
+				PostDatasetHook:          postDatasetHook,
+				PluginLinters:            pluginLinters,
+			}
+			if env.PluginManager != nil {
+				refreshCfg.HostService = env.PluginManager.HostService()
 			}
 
 			refresh := func(reason string) error {
@@ -288,6 +332,20 @@ type previewRefreshConfig struct {
 	// Session is a shared DuckDB session reused across refreshes.
 	// Extensions are loaded once; views are re-registered on each refresh.
 	Session *duckdb.Session
+
+	// KindProvider supplies plugin-registered kinds for document validation.
+	KindProvider config.KindProvider
+
+	// PluginOptions carries plugin integration state. May be nil.
+	PluginOptions *render.PluginOptions
+	// PostRenderHTMLHook is called after HTML generation. May be nil.
+	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
+	// PostDatasetHook is called after dataset execution. May be nil.
+	PostDatasetHook func(ctx context.Context, datasets []pipeline.DatasetPayload) error
+	// PluginLinters runs plugin lint rules alongside built-in rules. May be nil.
+	PluginLinters lint.PluginLinterRegistry
+	// HostService is the shared BinoHost server for updating documents. May be nil.
+	HostService *plugin.BinoHostServer
 }
 
 // refreshPreviewContent loads manifests, renders all artifacts, and updates the
@@ -305,11 +363,16 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	}
 
 	logger.Infof("Rendering report (%s)", reason)
-	loadOpts := config.LoadOptions{CollectedDirs: cfg.CollectedDirs}
+	loadOpts := config.LoadOptions{CollectedDirs: cfg.CollectedDirs, KindProvider: cfg.KindProvider}
 	docs, err := config.LoadDirWithOptions(ctx, watchDir, loadOpts)
 	if err != nil {
 		logger.Errorf("Render failed (%s): %v", reason, err)
 		return RuntimeError(err)
+	}
+
+	// Update host service with loaded documents for bidirectional plugin queries.
+	if cfg.HostService != nil {
+		cfg.HostService.SetDocuments(plugin.DocumentsFromConfig(docs))
 	}
 
 	// Warn about unresolved environment variables (preview continues with empty values)
@@ -329,6 +392,10 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		lintDocs := configDocsToLintDocs(docs)
 		runner := lint.NewDefaultRunner()
 		findings := runner.Run(ctx, lintDocs)
+		if cfg.PluginLinters != nil {
+			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, cfg.PluginLinters)
+			findings = append(findings, pluginFindings...)
+		}
 		for _, f := range findings {
 			relPath := pathutil.RelPath(watchDir, f.File)
 			loc := relPath
@@ -405,6 +472,9 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
 		Session:                  cfg.Session,
+		PluginOptions:            cfg.PluginOptions,
+		PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
+		PostDatasetHook:          cfg.PostDatasetHook,
 	})
 	if err != nil {
 		policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModePreview)
@@ -441,6 +511,9 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
 			Session:                  cfg.Session,
+			PluginOptions:            cfg.PluginOptions,
+			PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
+			PostDatasetHook:          cfg.PostDatasetHook,
 		})
 		if err != nil {
 			if pipeline.IsInvalidRootError(err) {
@@ -468,8 +541,12 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	// Render each DocumentArtefact
 	for _, docArt := range documentArtefacts {
 		renderResult, err := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
-			EngineVersion: cfg.EngineVersion,
-			Session:       cfg.Session,
+			EngineVersion:      cfg.EngineVersion,
+			Session:            cfg.Session,
+			PluginOptions:      cfg.PluginOptions,
+			KindProvider:       cfg.KindProvider,
+			PostRenderHTMLHook: cfg.PostRenderHTMLHook,
+			PostDatasetHook:    cfg.PostDatasetHook,
 		})
 		if err != nil {
 			logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)

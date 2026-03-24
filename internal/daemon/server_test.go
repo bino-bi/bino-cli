@@ -25,7 +25,7 @@ func newTestServer(t *testing.T) *Server {
 func TestHealthEndpoint(t *testing.T) {
 	srv := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 
 	srv.handleHealth(w, req)
@@ -50,7 +50,7 @@ func TestShutdownEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/shutdown", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/shutdown", nil)
 	w := httptest.NewRecorder()
 
 	srv.handleShutdown(w, req)

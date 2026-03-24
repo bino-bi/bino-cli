@@ -56,7 +56,7 @@ func TestCollectInlineAndPathSources(t *testing.T) {
 		{Kind: "DataSource", Name: "orders", File: filepath.Join(tmpDir, "file.yaml"), Raw: fileRaw},
 	}
 
-	results, diags, err := Collect(ctx, docs)
+	results, diags, err := Collect(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestCollectContinuesOnMissingSources(t *testing.T) {
 		{Kind: "DataSource", Name: "folder_missing", File: filepath.Join(tmpDir, "missing.yaml"), Raw: missingRaw},
 	}
 
-	results, diags, err := Collect(ctx, docs)
+	results, diags, err := Collect(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
