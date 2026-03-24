@@ -8,18 +8,28 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2" // register duckdb database driver
 )
 
-var standardExtensions = []string{"excel", "postgres", "mysql", "httpfs"}
+// standardExtensions returns the base set of DuckDB extensions.
+// On Windows, postgres and mysql are excluded because the DuckDB
+// extensions are not available for that platform.
+func defaultStandardExtensions() []string {
+	base := []string{"excel", "httpfs"}
+	if runtime.GOOS != "windows" {
+		base = append(base, "postgres", "mysql")
+	}
+	return base
+}
 var communityExtensions = []string{"prql", "webdavfs"}
 
 // DefaultExtensions returns the built-in set of DuckDB extensions required by the CLI.
 func DefaultExtensions() []string {
-	return append([]string(nil), standardExtensions...)
+	return defaultStandardExtensions()
 }
 
 // CommunityExtensions returns DuckDB community extensions installed via FROM community.
