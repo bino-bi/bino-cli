@@ -283,9 +283,11 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 			continue
 		}
 
-		install := fmt.Sprintf("INSTALL %s;", name)
-		if _, err := s.db.ExecContext(ctx, install); err != nil {
-			return fmt.Errorf("install extension %s: %w", name, err)
+		if !staticBuild {
+			install := fmt.Sprintf("INSTALL %s;", name)
+			if _, err := s.db.ExecContext(ctx, install); err != nil {
+				return fmt.Errorf("install extension %s: %w", name, err)
+			}
 		}
 
 		load := fmt.Sprintf("LOAD %s;", name)

@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# DuckDB version MUST match the duckdb-go driver version in go.mod.
+# duckdb-go v2.5.5 → duckdb-go-bindings v0.3.3 → DuckDB v1.4.4
+env:
+  DUCKDB_VERSION: "v1.4.4"
+
 jobs:
   # Resolve tag for both push and workflow_dispatch triggers
   resolve-tag:
@@ -107,10 +112,74 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }}
 
-  # Build binaries on native runners for each platform (CGO required for duckdb-go)
+  # Build DuckDB from source with embedded extensions (Linux and Windows).
+  # This produces libduckdb_bundle.a which is linked into the Go binary via
+  # the duckdb_use_static_lib build tag, avoiding runtime extension downloads
+  # that fail on windows_amd64_mingw.
+  build-duckdb:
+    name: Build DuckDB (${{ matrix.target }})
+    needs: [test, resolve-tag]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            cc: gcc
+            cxx: g++
+            vcpkg_triplet: x64-linux
+          - target: windows-amd64
+            cc: x86_64-w64-mingw32-gcc
+            cxx: x86_64-w64-mingw32-g++
+            vcpkg_triplet: x64-mingw-static
+    steps:
+      - name: Install MinGW (Windows cross-compilation)
+        if: matrix.target == 'windows-amd64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+
+      - name: Clone DuckDB
+        run: git clone --depth 1 --branch ${{ env.DUCKDB_VERSION }} https://github.com/duckdb/duckdb.git duckdb-src
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+          echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg/installed
+            vcpkg/packages
+            vcpkg/downloads
+          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ env.DUCKDB_VERSION }}
+
+      - name: Build libduckdb_bundle.a
+        working-directory: duckdb-src
+        run: |
+          CC=${{ matrix.cc }} \
+          CXX=${{ matrix.cxx }} \
+          DUCKDB_PLATFORM=any \
+          BUILD_EXTENSIONS="autocomplete;excel;postgres;mysql;httpfs" \
+          USE_MERGED_VCPKG_MANIFEST=1 \
+          VCPKG_TOOLCHAIN_PATH=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
+          VCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }} \
+          make bundle-library
+
+      - name: Upload DuckDB static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-${{ matrix.target }}
+          path: duckdb-src/build/release/libduckdb_bundle.a
+          retention-days: 1
+
+  # Build binaries for each platform (CGO required for duckdb-go).
+  # Linux and Windows use the static DuckDB bundle with embedded extensions.
+  # macOS uses the default duckdb-go-bindings (extensions installed at runtime).
   build:
     name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
-    needs: [test, resolve-tag]
+    needs: [test, resolve-tag, build-duckdb]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -119,18 +188,23 @@ jobs:
           - goos: darwin
             goarch: amd64
             runner: macos-15-intel
+            static: false
           - goos: darwin
             goarch: arm64
             runner: macos-15
+            static: false
           - goos: linux
             goarch: amd64
             runner: ubuntu-24.04
+            static: true
           # - goos: linux
           #   goarch: arm64
           #   runner: ubuntu-24.04-arm
+          #   static: true
           - goos: windows
             goarch: amd64
-            runner: windows-latest
+            runner: ubuntu-24.04
+            static: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -144,10 +218,27 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install MinGW (Windows cross-compilation)
+        if: matrix.goos == 'windows'
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+
+      - name: Download DuckDB static library
+        if: matrix.static
+        uses: actions/download-artifact@v4
+        with:
+          name: duckdb-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: duckdb-lib
+
+      - name: Verify DuckDB static library
+        if: matrix.static
+        run: |
+          test -f duckdb-lib/libduckdb_bundle.a || { echo "ERROR: libduckdb_bundle.a not found"; exit 1; }
+          ls -lh duckdb-lib/libduckdb_bundle.a
+
       - name: Build binary
         shell: bash
         env:
-          CGO_ENABLED: 1
+          CGO_ENABLED: "1"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
@@ -160,33 +251,48 @@ jobs:
           LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Commit=${COMMIT}'"
           LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Date=${DATE}'"
 
+          BUILD_TAGS=""
+          DUCKDB_LIB_DIR="${{ github.workspace }}/duckdb-lib"
+
+          # Static DuckDB build: link against libduckdb_bundle.a with embedded extensions
+          if [ "${{ matrix.static }}" = "true" ]; then
+            BUILD_TAGS="-tags duckdb_use_static_lib"
+            export CGO_CPPFLAGS="-DDUCKDB_STATIC_BUILD"
+
+            if [ "${{ matrix.goos }}" = "linux" ]; then
+              export CGO_LDFLAGS="-L${DUCKDB_LIB_DIR} -lduckdb_bundle -lstdc++ -lm -ldl"
+            elif [ "${{ matrix.goos }}" = "windows" ]; then
+              export CC=x86_64-w64-mingw32-gcc
+              export CXX=x86_64-w64-mingw32-g++
+              export CGO_LDFLAGS="-L${DUCKDB_LIB_DIR} -lduckdb_bundle -lws2_32 -lwsock32 -lrstrtmgr -lstdc++ -lm --static"
+            fi
+          fi
+
           mkdir -p dist
 
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            go build -ldflags "${LDFLAGS}" -o dist/bino.exe ./cmd/bino
+            go build ${BUILD_TAGS} -ldflags "${LDFLAGS}" -o dist/bino.exe ./cmd/bino
           else
-            go build -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
+            go build ${BUILD_TAGS} -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
           fi
 
-      - name: Create archive (Unix)
-        if: matrix.goos != 'windows'
+      - name: Create archive
+        shell: bash
         run: |
           cd dist
           ARCH=${{ matrix.goarch }}
           if [ "$ARCH" = "amd64" ]; then
             ARCH="x86_64"
           fi
-          OS=$(echo "${{ matrix.goos }}" | sed 's/darwin/Darwin/;s/linux/Linux/')
-          tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
-          rm bino
 
-      - name: Create archive (Windows)
-        if: matrix.goos == 'windows'
-        shell: pwsh
-        run: |
-          cd dist
-          Compress-Archive -Path bino.exe -DestinationPath bino-cli_Windows_x86_64.zip
-          Remove-Item bino.exe
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip bino-cli_Windows_${ARCH}.zip bino.exe
+            rm bino.exe
+          else
+            OS=$(echo "${{ matrix.goos }}" | sed 's/darwin/Darwin/;s/linux/Linux/')
+            tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
+            rm bino
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
