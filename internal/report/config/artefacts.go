@@ -61,7 +61,7 @@ func CollectArtefacts(docs []Document) ([]Artifact, error) {
 			return nil, fmt.Errorf("parse ReportArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("report artifact missing metadata.name")
+			return nil, fmt.Errorf("report artefact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple ReportArtefact documents share metadata.name %q", doc.Name)
@@ -115,7 +115,7 @@ type LiveReportArtefactSpec struct {
 // LiveRouteSpec defines a route mapping to a ReportArtefact or LayoutPages.
 // Either Artifact or LayoutPages must be set, but not both.
 type LiveRouteSpec struct {
-	Artifact    string               `json:"artifact,omitempty"`
+	Artifact    string               `json:"artefact,omitempty"`
 	LayoutPages LayoutPagesOrRefs    `json:"layoutPages,omitempty"` // one or more LayoutPage names with optional params
 	Title       string               `json:"title,omitempty"`
 	QueryParams []LiveQueryParamSpec `json:"queryParams,omitempty"`
@@ -295,7 +295,7 @@ func CollectLiveArtefacts(docs []Document) ([]LiveArtefact, error) {
 			return nil, fmt.Errorf("parse LiveReportArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("live report artifact missing metadata.name")
+			return nil, fmt.Errorf("live report artefact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple LiveReportArtefact documents share metadata.name %q", doc.Name)
@@ -399,7 +399,7 @@ func CollectScreenshotArtefacts(docs []Document) ([]ScreenshotArtefact, error) {
 			return nil, fmt.Errorf("parse ScreenshotArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("screenshot artifact missing metadata.name")
+			return nil, fmt.Errorf("screenshot artefact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple ScreenshotArtefact documents share metadata.name %q", doc.Name)
@@ -552,7 +552,7 @@ func CollectDocumentArtefacts(docs []Document) ([]DocumentArtefact, error) {
 			return nil, fmt.Errorf("parse DocumentArtefact %s: %w", doc.Name, err)
 		}
 		if doc.Name == "" {
-			return nil, fmt.Errorf("document artifact missing metadata.name")
+			return nil, fmt.Errorf("document artefact missing metadata.name")
 		}
 		if _, ok := seen[doc.Name]; ok {
 			return nil, fmt.Errorf("multiple DocumentArtefact documents share metadata.name %q", doc.Name)

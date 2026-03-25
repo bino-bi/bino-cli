@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
@@ -32,7 +33,7 @@ const componentReadyConsolePrefix = "componentRegisterIsRendered:"
 // newBuildCommand creates the build subcommand.
 // The build command respects context cancellation at multiple checkpoints:
 //   - Before loading manifests
-//   - Before building each artifact
+//   - Before building each artefact
 //   - During datasource collection (queries)
 //   - During PDF rendering via Chrome headless shell
 //
@@ -67,16 +68,16 @@ func newBuildCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "Validate manifests and render report artifacts to PDF",
+		Short: "Validate manifests and render report artefacts to PDF",
 		Long: strings.TrimSpace(`Validate the manifest bundle, collect data, and render every ReportArtefact to PDF.
 Tweak manifest scan limits via environment variables:
   - BNR_MAX_MANIFEST_FILES (default 500)
   - BNR_MAX_MANIFEST_DOCS (default 10 per file)
   - BNR_MAX_MANIFEST_BYTES (default 10 MB total)
 
-Use --artifact/--exclude-artifact to control which metadata.name entries produce output.`),
+Use --artefact/--exclude-artefact to control which metadata.name entries produce output.`),
 		Example: strings.TrimSpace(`  bino build
-  bino build --work-dir ./reports --artifact weekly --artifact monthly --out-dir dist`),
+  bino build --work-dir ./reports --artefact weekly --artefact monthly --out-dir dist`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("build")
@@ -119,8 +120,8 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 			embedDataBase64 = env.Resolver.ResolveBool("embed-data-base64", "embed-data-base64", embedDataBase64)
 			embedDataRedact = env.Resolver.ResolveBool("embed-data-redact", "embed-data-redact", embedDataRedact)
 			detailedExecutionPlan = env.Resolver.ResolveBool("detailed-execution-plan", "detailed-execution-plan", detailedExecutionPlan)
-			include = env.Resolver.ResolveStringSlice("artifact", "artifact", include)
-			exclude = env.Resolver.ResolveStringSlice("exclude-artifact", "exclude-artifact", exclude)
+			include = env.Resolver.ResolveStringSlice("artefact", "artefact", include)
+			exclude = env.Resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
 
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
@@ -341,9 +342,9 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 	}
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
-	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for generated artifacts")
-	cmd.Flags().StringSliceVar(&include, "artifact", nil, "metadata.name entries to build (default: all)")
-	cmd.Flags().StringSliceVar(&exclude, "exclude-artifact", nil, "metadata.name entries to skip")
+	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for generated artefacts")
+	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to build (default: all)")
+	cmd.Flags().StringSliceVar(&exclude, "exclude-artefact", nil, "metadata.name entries to skip")
 	cmd.Flags().StringVar(&chromePath, "chrome-path", "", "Path to chrome-headless-shell binary (default: auto-detected or CHROME_PATH env)")
 	cmd.Flags().BoolVar(&noGraph, "no-graph", false, "Skip writing .bngraph dependency summaries next to PDFs")
 	cmd.Flags().BoolVar(&noLint, "no-lint", false, "Skip running lint rules")
@@ -372,6 +373,17 @@ Use --artifact/--exclude-artifact to control which metadata.name entries produce
 	// Data validation
 	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
+
+	// Accept both UK and US spellings for artefact flags
+	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		switch name {
+		case "artifact":
+			return pflag.NormalizedName("artefact")
+		case "exclude-artifact":
+			return pflag.NormalizedName("exclude-artefact")
+		}
+		return pflag.NormalizedName(name)
+	})
 
 	return cmd
 }
@@ -425,7 +437,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
 			}
-			return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
 	}
 
@@ -441,7 +453,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
 		}
-		return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	// Run pre-render hook (after HTML rendered, before PDF generation)
@@ -450,7 +462,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
 			}
-			return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
 	}
 
@@ -471,7 +483,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to resolve PDF path for %s", artefactName))
 		}
-		return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	// Update spinner for PDF generation
@@ -493,7 +505,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
-		return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	graphPath, err := writeGraphReport(cfg.Graph, cfg.GraphRoot, pdfPath, cfg.GraphBase)
@@ -501,7 +513,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to write graph for %s", artefactName))
 		}
-		return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+		return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 	}
 
 	// Check for cancellation before signing
@@ -521,14 +533,14 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Signing profile missing for %s", artefactName))
 			}
-			return artefactResult{}, fmt.Errorf("artifact %s: signing profile %s missing", artefactName, ref)
+			return artefactResult{}, fmt.Errorf("artefact %s: signing profile %s missing", artefactName, ref)
 		}
 		logger.Debugf("Signing PDF %s with profile %s", pdfPath, ref)
 		if err := cfg.Builder.SignPDF(ctx, pdfPath, profile); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
 			}
-			return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
 	}
 
@@ -540,7 +552,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Hook failed for %s", artefactName))
 			}
-			return artefactResult{}, fmt.Errorf("artifact %s: %w", artefactName, err)
+			return artefactResult{}, fmt.Errorf("artefact %s: %w", artefactName, err)
 		}
 	}
 
@@ -682,7 +694,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
-		return documentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artefactName, err)
+		return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
 	}
 
 	// Check for cancellation before signing
@@ -701,14 +713,14 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Signing profile not found for %s", artefactName))
 			}
-			return documentArtefactResult{}, fmt.Errorf("document artifact %s: signing profile %s missing", artefactName, ref)
+			return documentArtefactResult{}, fmt.Errorf("document artefact %s: signing profile %s missing", artefactName, ref)
 		}
 		logger.Debugf("Signing PDF %s with profile %s", pdfPath, ref)
 		if err := cfg.Builder.SignPDF(ctx, pdfPath, profile); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to sign %s", artefactName))
 			}
-			return documentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artefactName, err)
+			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
 		}
 	}
 
@@ -779,7 +791,7 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 	}
 	fmt.Fprintln(file)
 
-	fmt.Fprintf(file, "ARTIFACTS (%d)\n", len(results))
+	fmt.Fprintf(file, "ARTEFACTS (%d)\n", len(results))
 	fmt.Fprintf(file, "--------------\n")
 	for _, res := range results {
 		fmt.Fprintf(file, "  - %s\n", res.Name)
@@ -791,7 +803,7 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 
 	if len(docResults) > 0 {
 		fmt.Fprintln(file)
-		fmt.Fprintf(file, "DOCUMENT ARTIFACTS (%d)\n", len(docResults))
+		fmt.Fprintf(file, "DOCUMENT ARTEFACTS (%d)\n", len(docResults))
 		fmt.Fprintf(file, "-----------------------\n")
 		for _, res := range docResults {
 			fmt.Fprintf(file, "  - %s\n", res.Name)
@@ -850,14 +862,14 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	if spinner != nil {
 		spinner.Start(fmt.Sprintf("Rendering %s", artefactName))
 	}
-	logger.Debugf("Rendering HTML for screenshot artifact %s", artefactName)
+	logger.Debugf("Rendering HTML for screenshot artefact %s", artefactName)
 
 	renderResult, err := cfg.Builder.RenderScreenshotHTML(ctx, cfg.Docs, cfg.Artifact)
 	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
 		}
-		return nil, fmt.Errorf("screenshot artifact %s: %w", artefactName, err)
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
 	}
 
 	// Check for cancellation before screenshot capture
@@ -904,7 +916,7 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to capture screenshots for %s", artefactName))
 		}
-		return nil, fmt.Errorf("screenshot artifact %s: %w", artefactName, err)
+		return nil, fmt.Errorf("screenshot artefact %s: %w", artefactName, err)
 	}
 
 	// Convert Builder results to CLI result type
@@ -951,7 +963,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 	spinnerCfg := SpinnerConfig{Stdout: cfg.Stdout, NoColor: cfg.NoColor}
 
 	// Build report artifacts
-	out.Step(fmt.Sprintf("Building %d artifact(s)...", len(manifests.Selected)))
+	out.Step(fmt.Sprintf("Building %d artefact(s)...", len(manifests.Selected)))
 	results := make([]artefactResult, 0, len(manifests.Selected))
 	for _, artifact := range manifests.Selected {
 		if err := ctx.Err(); err != nil {
@@ -962,7 +974,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 		if manifests.Graph != nil {
 			node, ok := manifests.Graph.ReportArtefactByName(artifact.Document.Name)
 			if !ok {
-				return nil, RuntimeErrorf("graph: artifact node %s not found", artifact.Document.Name)
+				return nil, RuntimeErrorf("graph: artefact node %s not found", artifact.Document.Name)
 			}
 			root = node
 		}
@@ -1000,7 +1012,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 	// Build screenshot artifacts
 	var screenshotResults []screenshotArtefactResult
 	if len(manifests.SelectedScreenshots) > 0 {
-		out.Step(fmt.Sprintf("Capturing %d screenshot artifact(s)...", len(manifests.SelectedScreenshots)))
+		out.Step(fmt.Sprintf("Capturing %d screenshot artefact(s)...", len(manifests.SelectedScreenshots)))
 		for _, ssArtefact := range manifests.SelectedScreenshots {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -1025,7 +1037,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 	// Build document artifacts
 	var documentResults []documentArtefactResult
 	if len(manifests.SelectedDocuments) > 0 {
-		out.Step(fmt.Sprintf("Building %d document artifact(s)...", len(manifests.SelectedDocuments)))
+		out.Step(fmt.Sprintf("Building %d document artefact(s)...", len(manifests.SelectedDocuments)))
 		for _, docArtefact := range manifests.SelectedDocuments {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -1153,7 +1165,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 	selectedDocuments := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
 
 	if len(selected) == 0 && len(selectedScreenshots) == 0 && len(selectedDocuments) == 0 {
-		return nil, ConfigErrorf("no artifacts selected (check --artifact / --exclude-artifact)")
+		return nil, ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 	}
 	pipeline.LogArtefactWarnings(logger, selected)
 	pipeline.LogDocumentArtefactWarnings(logger, selectedDocuments)
@@ -1261,7 +1273,7 @@ func printBuildSummary(ctx context.Context, out *Output, projectRoot string, res
 		}
 		resultItems = append(resultItems, item)
 	}
-	out.Summary(fmt.Sprintf("Generated %d artifact(s):", len(results)), resultItems)
+	out.Summary(fmt.Sprintf("Generated %d artefact(s):", len(results)), resultItems)
 
 	if len(screenshotResults) > 0 {
 		out.Blank()

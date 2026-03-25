@@ -50,7 +50,7 @@ func LoadManifests(ctx context.Context, workdir string, kindProvider config.Kind
 
 	artifacts, err := config.CollectArtefacts(docs)
 	if err != nil {
-		return LoadResult{}, fmt.Errorf("collect artifacts: %w", err)
+		return LoadResult{}, fmt.Errorf("collect artefacts: %w", err)
 	}
 
 	signingProfiles, err := config.CollectSigningProfiles(docs)
@@ -265,7 +265,7 @@ func ValidateAllArtefactNames(artifacts []config.Artifact, screenshots []config.
 			continue
 		}
 		if _, ok := known[name]; !ok {
-			return fmt.Errorf("artifact %q not found", name)
+			return fmt.Errorf("artefact %q not found", name)
 		}
 	}
 	return nil
@@ -280,7 +280,7 @@ func EnsureSigningProfiles(artifacts []config.Artifact, profiles map[string]conf
 			continue
 		}
 		if _, ok := profiles[ref]; !ok {
-			return fmt.Errorf("artifact %s references unknown SigningProfile %q", art.Document.Name, ref)
+			return fmt.Errorf("artefact %s references unknown SigningProfile %q", art.Document.Name, ref)
 		}
 	}
 	return nil
@@ -501,7 +501,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	// Select LayoutPages by refs (before constraint filtering)
 	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return RenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
+		return RenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Build constraint context from artifact
@@ -581,7 +581,7 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 		var syntheticDocs []config.Document
 		layoutPages, syntheticDocs, err = resolveScreenshotRefs(filtered, artifact.Spec.Refs, artifact.Spec.Format, artifact.Spec.Orientation)
 		if err != nil {
-			return RenderResult{}, fmt.Errorf("screenshot artifact %s: %w", artifact.Document.Name, err)
+			return RenderResult{}, fmt.Errorf("screenshot artefact %s: %w", artifact.Document.Name, err)
 		}
 		if len(syntheticDocs) > 0 {
 			filtered = append(filtered, syntheticDocs...)
@@ -619,7 +619,7 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 func buildScreenshotConstraintContext(artifact config.ScreenshotArtefact, mode spec.Mode) (*spec.ConstraintContext, error) {
 	specMap, err := spec.ToMap(artifact.Document.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("screenshot artifact %s: parse spec for constraints: %w", artifact.Document.Name, err)
+		return nil, fmt.Errorf("screenshot artefact %s: parse spec for constraints: %w", artifact.Document.Name, err)
 	}
 
 	return &spec.ConstraintContext{
@@ -1126,7 +1126,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 	// Select LayoutPages by refs (before constraint filtering)
 	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
 	if err != nil {
-		return FrameRenderResult{}, fmt.Errorf("artifact %s: %w", artifact.Document.Name, err)
+		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Build constraint context from artifact
@@ -1179,7 +1179,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 func buildConstraintContext(artifact config.Artifact, mode spec.Mode) (*spec.ConstraintContext, error) {
 	specMap, err := spec.ToMap(artifact.Document.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("artifact %s: parse spec for constraints: %w", artifact.Document.Name, err)
+		return nil, fmt.Errorf("artefact %s: parse spec for constraints: %w", artifact.Document.Name, err)
 	}
 
 	return &spec.ConstraintContext{
@@ -1305,7 +1305,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	// Load all documents from the workdir
 	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{KindProvider: opts.KindProvider})
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: load manifests: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: load manifests: %w", artifact.Document.Name, err)
 	}
 
 	// Execute datasets and collect datasources
@@ -1315,7 +1315,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	}
 	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: execute datasets: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: execute datasets: %w", artifact.Document.Name, err)
 	}
 
 	// Dispatch post-dataset hook if set.
@@ -1335,7 +1335,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	}
 	datasourceResults, _, err := datasource.Collect(ctx, docs, collectOpts)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: collect datasources: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: collect datasources: %w", artifact.Document.Name, err)
 	}
 
 	// Get the manifest file's directory to resolve relative paths
@@ -1349,7 +1349,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	// Resolve source files (expand globs, filter .md files, sort)
 	files, err := markdown.ResolveSourceFiles(manifestDir, s.Sources)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	logger.Debugf("Resolved %d markdown file(s) from sources", len(files))
@@ -1360,7 +1360,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		var err error
 		customCSS, err = markdown.LoadStylesheet(manifestDir, s.Stylesheet)
 		if err != nil {
-			return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
+			return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 		}
 	}
 
@@ -1373,7 +1373,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	// Resolve asset URLs for asset: image references in markdown
 	assetURLs, assetLocals, err := render.ResolveAssetURLs(docs)
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Create render context with documents, datasets, and datasources
@@ -1396,7 +1396,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		Math:           mathEnabled,
 	})
 	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artifact %s: %w", artifact.Document.Name, err)
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Wrap in full bino HTML document with template engine, bn-context, etc.
@@ -1448,7 +1448,7 @@ func EnsureDocumentSigningProfiles(artifacts []config.DocumentArtefact, profiles
 			continue
 		}
 		if _, ok := profiles[ref]; !ok {
-			return fmt.Errorf("document artifact %s references unknown SigningProfile %q", art.Document.Name, ref)
+			return fmt.Errorf("document artefact %s references unknown SigningProfile %q", art.Document.Name, ref)
 		}
 	}
 	return nil

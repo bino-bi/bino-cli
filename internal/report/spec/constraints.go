@@ -381,7 +381,7 @@ func (c *Constraint) Evaluate(ctx *ConstraintContext) (bool, error) {
 		if ctx.Labels == nil {
 			return false, &ConstraintError{
 				Constraint: c.Raw,
-				Reason:     fmt.Sprintf("label %q not found (artifact has no labels)", key),
+				Reason:     fmt.Sprintf("label %q not found (artefact has no labels)", key),
 				Hint:       "add 'metadata.labels' to the target ReportArtefact",
 			}
 		}
@@ -389,7 +389,7 @@ func (c *Constraint) Evaluate(ctx *ConstraintContext) (bool, error) {
 		if !ok {
 			return false, &ConstraintError{
 				Constraint: c.Raw,
-				Reason:     fmt.Sprintf("label %q not defined on artifact", key),
+				Reason:     fmt.Sprintf("label %q not defined on artefact", key),
 				Hint:       fmt.Sprintf("add 'labels.%s' to the ReportArtefact's metadata", key),
 			}
 		}

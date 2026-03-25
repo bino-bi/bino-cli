@@ -320,7 +320,7 @@ func extractCoreMessage(err error) string {
 	msg := err.Error()
 
 	// Try to extract the innermost meaningful message
-	// Skip generic prefixes like "artifact X: " or "build: "
+	// Skip generic prefixes like "artefact X: " or "build: "
 	parts := strings.Split(msg, ": ")
 	if len(parts) > 2 {
 		// Return the last two parts for context

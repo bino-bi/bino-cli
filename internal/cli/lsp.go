@@ -711,7 +711,7 @@ func newLSPGraphDepsCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&kind, "kind", "", "Node kind: ReportArtefact, DataSet, DataSource, LayoutPage, LayoutCard, Component")
-	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., dataset name, artifact name)")
+	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., dataset name, artefact name)")
 	cmd.Flags().StringVar(&direction, "direction", "both", "Traversal direction: in (dependents), out (dependencies), both")
 	cmd.Flags().IntVar(&maxDepth, "max-depth", 0, "Maximum traversal depth (0 = unlimited)")
 

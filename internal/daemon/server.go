@@ -634,8 +634,8 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		s.buildMu.Unlock()
 	}()
 
-	var req struct { //nolint:misspell // backward-compatible JSON API field name
-		Artefact string `json:"artefact"`
+	var req struct {
+		Artefact string `json:"artefact"` //nolint:misspell // UK spelling is intentional
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
@@ -646,8 +646,8 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	args := []string{"build", "--work-dir", s.state.ProjectRoot()}
-	if req.Artefact != "" { //nolint:misspell // backward-compatible JSON API field name
-		args = append(args, "--artifact", req.Artefact)
+	if req.Artefact != "" {
+		args = append(args, "--artefact", req.Artefact)
 	}
 
 	s.BroadcastEvent("build-progress", map[string]string{"status": "started"})

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // ResolveSourceFiles expands a list of source paths (which may include glob patterns)
@@ -39,7 +41,7 @@ func ResolveSourceFiles(baseDir string, sources []string) ([]string, error) {
 
 		// Check if it's a glob pattern
 		if isGlobPattern(pattern) {
-			matches, err := filepath.Glob(pattern)
+			matches, err := doublestar.FilepathGlob(pattern)
 			if err != nil {
 				return nil, fmt.Errorf("invalid glob pattern %q: %w", source, err)
 			}

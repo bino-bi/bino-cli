@@ -32,7 +32,7 @@ const (
 type ExecutionStep struct {
 	ID         string    `json:"id"`                // unique step ID (e.g., "step-001")
 	Name       string    `json:"name"`              // step name (e.g., "collect_datasources")
-	Phase      string    `json:"phase"`             // parent phase (e.g., "artifact:monthly-report")
+	Phase      string    `json:"phase"`             // parent phase (e.g., "artefact:monthly-report")
 	StartTime  time.Time `json:"start_time"`        // when step started
 	EndTime    time.Time `json:"end_time"`          // when step ended
 	DurationMs int64     `json:"duration_ms"`       // duration in milliseconds

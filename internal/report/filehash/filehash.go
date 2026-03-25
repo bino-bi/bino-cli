@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
+
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
 )
@@ -118,7 +120,7 @@ func ResolveAndHashFiles(baseDir, path, sourceType string) ([]FileDigest, error)
 	}
 
 	// Expand glob pattern
-	matches, err := filepath.Glob(search)
+	matches, err := doublestar.FilepathGlob(search)
 	if err != nil {
 		return nil, err
 	}

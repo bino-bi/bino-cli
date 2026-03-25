@@ -325,7 +325,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 			fmt.Fprintln(out, "===============")
 
 			if len(data.LayoutPageRefs) > 0 {
-				fmt.Fprintf(out, "\nNote: This artifact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
+				fmt.Fprintf(out, "\nNote: This artefact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
 			}
 
 			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)

@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
@@ -82,7 +83,7 @@ a tree or flat table view.`),
 			selectedDocs := pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
 
 			if len(selected) == 0 && len(selectedDocs) == 0 {
-				return ConfigErrorf("no artifacts selected (check --artifact / --exclude-artifact)")
+				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
 
 			g, err := reportgraph.Build(ctx, docs)
@@ -94,14 +95,14 @@ a tree or flat table view.`),
 			for _, art := range selected {
 				node, ok := g.ReportArtefactByName(art.Document.Name)
 				if !ok {
-					return RuntimeErrorf("graph: artifact node %s not found", art.Document.Name)
+					return RuntimeErrorf("graph: artefact node %s not found", art.Document.Name)
 				}
 				roots = append(roots, node)
 			}
 			for _, docArt := range selectedDocs {
 				node, ok := g.DocumentArtefactByName(docArt.Document.Name)
 				if !ok {
-					return RuntimeErrorf("graph: document artifact node %s not found", docArt.Document.Name)
+					return RuntimeErrorf("graph: document artefact node %s not found", docArt.Document.Name)
 				}
 				roots = append(roots, node)
 			}
@@ -117,7 +118,7 @@ a tree or flat table view.`),
 			}
 
 			if logger != nil {
-				logger.Successf("Rendered %s view for %d artifact(s)", view, len(roots))
+				logger.Successf("Rendered %s view for %d artefact(s)", view, len(roots))
 			}
 			return nil
 		},
@@ -126,9 +127,20 @@ a tree or flat table view.`),
 	}
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
-	cmd.Flags().StringSliceVar(&include, "artifact", nil, "metadata.name entries to include (default: all)")
-	cmd.Flags().StringSliceVar(&exclude, "exclude-artifact", nil, "metadata.name entries to skip")
+	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to include (default: all)")
+	cmd.Flags().StringSliceVar(&exclude, "exclude-artefact", nil, "metadata.name entries to skip")
 	cmd.Flags().StringVar(&view, "view", "tree", "Output format: tree or flat")
+
+	// Accept both UK and US spellings for artefact flags
+	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		switch name {
+		case "artifact":
+			return pflag.NormalizedName("artefact")
+		case "exclude-artifact":
+			return pflag.NormalizedName("exclude-artefact")
+		}
+		return pflag.NormalizedName(name)
+	})
 
 	return cmd
 }

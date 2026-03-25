@@ -40,6 +40,6 @@ func ClassifyInvalidLayout(err error, mode Mode) InvalidLayoutPolicy {
 	return InvalidLayoutPolicy{
 		IsInvalidRoot: true,
 		Message:       target.Error(),
-		Hint:          "Ensure at least one LayoutPage is defined and referenced by your report artifact.",
+		Hint:          "Ensure at least one LayoutPage is defined and referenced by your report artefact.",
 	}
 }

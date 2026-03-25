@@ -128,10 +128,10 @@ func buildEnvSlice(env HookEnv) []string {
 		pairs = append(pairs, "BINO_VERBOSE=0")
 	}
 	if env.ArtefactName != "" {
-		pairs = append(pairs, "BINO_ARTIFACT_NAME="+env.ArtefactName)
+		pairs = append(pairs, "BINO_ARTIFACT_NAME="+env.ArtefactName, "BINO_ARTEFACT_NAME="+env.ArtefactName)
 	}
 	if env.ArtefactKind != "" {
-		pairs = append(pairs, "BINO_ARTIFACT_KIND="+env.ArtefactKind)
+		pairs = append(pairs, "BINO_ARTIFACT_KIND="+env.ArtefactKind, "BINO_ARTEFACT_KIND="+env.ArtefactKind)
 	}
 	if env.OutputDir != "" {
 		pairs = append(pairs, "BINO_OUTPUT_DIR="+env.OutputDir)
@@ -152,7 +152,7 @@ func buildEnvSlice(env HookEnv) []string {
 		pairs = append(pairs, "BINO_REFRESH_REASON="+env.RefreshReason)
 	}
 	if env.LiveArtefact != "" {
-		pairs = append(pairs, "BINO_LIVE_ARTIFACT="+env.LiveArtefact)
+		pairs = append(pairs, "BINO_LIVE_ARTIFACT="+env.LiveArtefact, "BINO_LIVE_ARTEFACT="+env.LiveArtefact)
 	}
 	return pairs
 }

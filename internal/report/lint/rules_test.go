@@ -52,8 +52,8 @@ func TestReportArtefactRequired_NoArtefact(t *testing.T) {
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings))
 	}
-	if findings[0].RuleID != "report-artifact-required" {
-		t.Errorf("expected rule ID 'report-artifact-required', got %q", findings[0].RuleID)
+	if findings[0].RuleID != "report-artefact-required" {
+		t.Errorf("expected rule ID 'report-artefact-required', got %q", findings[0].RuleID)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestArtefactLayoutPageRequired_NoMatchingPage(t *testing.T) {
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings))
 	}
-	if findings[0].RuleID != "artifact-layoutpage-required" {
+	if findings[0].RuleID != "artefact-layoutpage-required" {
 		t.Errorf("expected rule ID 'artefact-layoutpage-required', got %q", findings[0].RuleID)
 	}
 }
@@ -413,8 +413,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 	rules := DefaultRules()
 
 	expectedIDs := []string{
-		"report-artifact-required",
-		"artifact-layoutpage-required",
+		"report-artefact-required",
+		"artefact-layoutpage-required",
 		"text-content-required",
 		"dataset-required",
 		"page-layout-slots-used",

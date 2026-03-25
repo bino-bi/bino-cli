@@ -517,7 +517,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		})
 		if err != nil {
 			if pipeline.IsInvalidRootError(err) {
-				logger.Errorf("Render blocked for artifact %s (%s): %v", art.Document.Name, reason, err)
+				logger.Errorf("Render blocked for artefact %s (%s): %v", art.Document.Name, reason, err)
 				continue
 			}
 			logger.Errorf("Render failed for %s (%s): %v", art.Document.Name, reason, err)
@@ -815,7 +815,7 @@ func buildPreviewErrorPage(message, hint string) []byte {
 		message = "An invalid layout configuration prevented preview rendering."
 	}
 	if hint == "" {
-		hint = "Ensure at least one LayoutPage is defined and referenced by your report artifact."
+		hint = "Ensure at least one LayoutPage is defined and referenced by your report artefact."
 	}
 	var b strings.Builder
 	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Rainbow Preview Error</title>\n  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#fef2f2; color:#7f1d1d; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; } bn-context { display:flex; align-items:center; justify-content:center; width:100%; } .card { background:#fff; border:1px solid #fecaca; border-radius:12px; padding:2rem; max-width:520px; box-shadow:0 10px 30px rgba(185, 28, 28, 0.15);} h1 { margin-top:0; font-size:1.5rem;} p { line-height:1.5; } </style>\n</head>\n<body>\n  <bn-context>\n    <div class=\"card\">\n      <h1>Cannot Render Preview</h1>\n      <p>")

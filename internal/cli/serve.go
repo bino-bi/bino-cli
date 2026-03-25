@@ -373,7 +373,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 		if route.Artifact != "" {
 			art, ok := cfg.ArtefactMap[route.Artifact]
 			if !ok {
-				return nil, fmt.Errorf("route %q references unknown artifact %q", path, route.Artifact)
+				return nil, fmt.Errorf("route %q references unknown artefact %q", path, route.Artifact)
 			}
 			routeArt := art
 
@@ -458,7 +458,7 @@ func collectServeAssets(
 				PostDatasetHook:    postDatasetHook,
 			})
 			if err != nil {
-				logger.Warnf("Could not pre-render artifact %s for asset collection: %v", art.Document.Name, err)
+				logger.Warnf("Could not pre-render artefact %s for asset collection: %v", art.Document.Name, err)
 				continue
 			}
 			allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
@@ -582,7 +582,7 @@ func serveRenderHandler(
 		// Re-collect artifacts to get the one with expanded query params
 		artifacts, err := config.CollectArtefacts(docs)
 		if err != nil {
-			logger.Errorf("Collect artifacts failed for %s: %v", artifact.Document.Name, err)
+			logger.Errorf("Collect artefacts failed for %s: %v", artifact.Document.Name, err)
 			return nil, "", err
 		}
 
@@ -596,8 +596,8 @@ func serveRenderHandler(
 			}
 		}
 		if !found {
-			logger.Errorf("Artifact %s not found after reload", artifact.Document.Name)
-			return nil, "", fmt.Errorf("artifact %s not found after reload", artifact.Document.Name)
+			logger.Errorf("Artefact %s not found after reload", artifact.Document.Name)
+			return nil, "", fmt.Errorf("artefact %s not found after reload", artifact.Document.Name)
 		}
 	}
 

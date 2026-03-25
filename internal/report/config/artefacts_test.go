@@ -32,11 +32,11 @@ func TestCollectArtefacts(t *testing.T) {
 		t.Fatalf("CollectArtefacts returned error: %v", err)
 	}
 	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+		t.Fatalf("expected 1 artefact, got %d", len(artifacts))
 	}
 	got := artifacts[0]
 	if got.Document.Name != "weekly" {
-		t.Fatalf("unexpected artifact name %q", got.Document.Name)
+		t.Fatalf("unexpected artefact name %q", got.Document.Name)
 	}
 	if got.Spec.Filename != "weekly.pdf" {
 		t.Fatalf("unexpected filename %q", got.Spec.Filename)
@@ -138,7 +138,7 @@ func TestReportArtefactSpecLayoutPages(t *testing.T) {
 			}
 
 			if len(artifacts) != 1 {
-				t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+				t.Fatalf("expected 1 artefact, got %d", len(artifacts))
 			}
 
 			if len(artifacts[0].Spec.LayoutPages) != tt.expectedLen {
@@ -159,7 +159,7 @@ func TestCollectLiveArtefacts(t *testing.T) {
 			"title": "Dashboard",
 			"routes": map[string]any{
 				"/": map[string]any{
-					"artifact": "main-report",
+					"artefact": "main-report",
 					"queryParams": []any{
 						map[string]any{
 							"name":        "REGION",
@@ -173,7 +173,7 @@ func TestCollectLiveArtefacts(t *testing.T) {
 					},
 				},
 				"/sales": map[string]any{
-					"artifact": "sales-report",
+					"artefact": "sales-report",
 					"title":    "Sales",
 				},
 			},
@@ -196,7 +196,7 @@ func TestCollectLiveArtefacts(t *testing.T) {
 		t.Fatalf("CollectLiveArtefacts returned error: %v", err)
 	}
 	if len(liveArtefacts) != 1 {
-		t.Fatalf("expected 1 live artifact, got %d", len(liveArtefacts))
+		t.Fatalf("expected 1 live artefact, got %d", len(liveArtefacts))
 	}
 	live := liveArtefacts[0]
 	if live.Document.Name != "dashboard" {
@@ -209,7 +209,7 @@ func TestCollectLiveArtefacts(t *testing.T) {
 		t.Fatalf("expected 2 routes, got %d", len(live.Spec.Routes))
 	}
 	if live.Spec.Routes["/"].Artifact != "main-report" {
-		t.Fatalf("unexpected root artifact %q", live.Spec.Routes["/"].Artifact)
+		t.Fatalf("unexpected root artefact %q", live.Spec.Routes["/"].Artifact)
 	}
 	if len(live.Spec.Routes["/"].QueryParams) != 2 {
 		t.Fatalf("expected 2 query params on root route, got %d", len(live.Spec.Routes["/"].QueryParams))
@@ -267,7 +267,7 @@ func TestFindLiveArtefact(t *testing.T) {
 
 	notFound := FindLiveArtefact(artifacts, "gamma")
 	if notFound != nil {
-		t.Fatalf("expected nil for non-existent artifact")
+		t.Fatalf("expected nil for non-existent artefact")
 	}
 }
 
@@ -400,7 +400,7 @@ func TestCollectDocumentArtefacts(t *testing.T) {
 			}
 
 			if len(artifacts) != 1 {
-				t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+				t.Fatalf("expected 1 artefact, got %d", len(artifacts))
 			}
 
 			if len(artifacts[0].Spec.Sources) != tt.expectedCount {
