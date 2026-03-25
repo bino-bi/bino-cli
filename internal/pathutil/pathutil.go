@@ -155,13 +155,13 @@ func EnsureDir(path string) error {
 }
 
 // CacheDir returns a cache directory path within the user's home directory.
-// The path is constructed as ~/.bn/<subdir>.
+// The path is constructed as ~/.bino/<subdir>.
 func CacheDir(subdir string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".bn", subdir), nil
+	return filepath.Join(home, ".bino", subdir), nil
 }
 
 // IsURL returns true if the given path looks like a remote URL (contains "://").

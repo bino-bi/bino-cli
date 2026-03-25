@@ -31,6 +31,7 @@ var ignoredDirNames = map[string]struct{}{
 	".svn":         {},
 	".idea":        {},
 	".vscode":      {},
+	".bino":        {},
 	".ds_store":    {},
 	"node_modules": {},
 	"vendor":       {},

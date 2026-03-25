@@ -37,10 +37,10 @@ func newCacheCleanCommand() *cobra.Command {
 		Short: "Remove cached data",
 		Long: `Remove cached dataset results and other cached data.
 
-By default, removes the .bncache directory in the current working directory
+By default, removes the .bino/cache directory in the current working directory
 (or the directory specified by --work-dir).
 
-Use --global to also remove the global cache directory (~/.bn/).`,
+Use --global to also remove the global cache directory (~/.bino/).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			logger := logx.FromContext(cmd.Context())
 
@@ -51,8 +51,13 @@ Use --global to also remove the global cache directory (~/.bn/).`,
 			}
 
 			// Clean local cache
-			localCacheDir := filepath.Join(resolvedWorkdir, ".bncache")
+			localCacheDir := filepath.Join(resolvedWorkdir, ".bino", "cache")
 			if err := cleanCacheDir(logger, localCacheDir, "local"); err != nil {
+				return err
+			}
+			// Clean legacy local cache (.bncache) if it still exists
+			legacyLocalDir := filepath.Join(resolvedWorkdir, ".bncache")
+			if err := cleanCacheDir(logger, legacyLocalDir, "legacy local"); err != nil {
 				return err
 			}
 
@@ -65,6 +70,14 @@ Use --global to also remove the global cache directory (~/.bn/).`,
 				if err := cleanCacheDir(logger, globalCacheDir, "global"); err != nil {
 					return err
 				}
+				// Clean legacy global cache (~/.bn) if it still exists
+				home, err := os.UserHomeDir()
+				if err == nil {
+					legacyGlobalDir := filepath.Join(home, ".bn")
+					if err := cleanCacheDir(logger, legacyGlobalDir, "legacy global"); err != nil {
+						return err
+					}
+				}
 			}
 
 			logger.Infof("Cache cleaned successfully")
@@ -72,8 +85,8 @@ Use --global to also remove the global cache directory (~/.bn/).`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing .bncache")
-	cmd.Flags().BoolVar(&global, "global", false, "Also remove global cache (~/.bn/)")
+	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing .bino/cache")
+	cmd.Flags().BoolVar(&global, "global", false, "Also remove global cache (~/.bino/)")
 	cmd.Flags().BoolVar(&global, "all", false, "Alias for --global")
 	_ = cmd.Flags().MarkHidden("all") // Keep --all working but prefer --global in docs
 
@@ -107,5 +120,5 @@ func globalCachePath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".bn"), nil
+	return filepath.Join(home, ".bino"), nil
 }

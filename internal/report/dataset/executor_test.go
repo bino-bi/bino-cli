@@ -15,7 +15,7 @@ func TestExecute_CachesResults(t *testing.T) {
 
 	ctx := context.Background()
 	workdir := t.TempDir()
-	cacheDir := filepath.Join(workdir, ".bncache", "datasets")
+	cacheDir := filepath.Join(workdir, ".bino", "cache", "datasets")
 
 	// Create a simple dataset document with no dependencies
 	datasetYAML := `

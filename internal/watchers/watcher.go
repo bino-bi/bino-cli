@@ -245,13 +245,8 @@ func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
 	}
 	rel = filepath.ToSlash(rel)
 
-	// Always ignore .bncache directory (built-in, not configurable)
-	if rel == ".bncache" || strings.HasPrefix(rel, ".bncache/") {
-		return true
-	}
-
-	// Always ignore daemon port file (built-in, not configurable)
-	if rel == ".bino-daemon.json" {
+	// Always ignore .bino directory (cache, daemon state, plugins, config — built-in, not configurable)
+	if rel == ".bino" || strings.HasPrefix(rel, ".bino/") {
 		return true
 	}
 

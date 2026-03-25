@@ -357,9 +357,9 @@ func TestCacheDir(t *testing.T) {
 			if !filepath.IsAbs(got) {
 				t.Errorf("CacheDir() returned non-absolute path: %q", got)
 			}
-			// Verify .bn is in the path
-			if filepath.Base(filepath.Dir(got)) != ".bn" && tt.subdir != "" {
-				t.Errorf("CacheDir() path should contain .bn: %q", got)
+			// Verify .bino is in the path
+			if filepath.Base(filepath.Dir(got)) != ".bino" && tt.subdir != "" {
+				t.Errorf("CacheDir() path should contain .bino: %q", got)
 			}
 		})
 	}

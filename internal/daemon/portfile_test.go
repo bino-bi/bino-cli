@@ -15,7 +15,7 @@ func TestWriteAndReadPortFile(t *testing.T) {
 	}
 
 	// Verify file exists
-	path := filepath.Join(dir, portFileName)
+	path := PortFilePath(dir)
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("port file should exist: %v", err)
 	}
@@ -61,8 +61,12 @@ func TestReadPortFile_StalePID(t *testing.T) {
 
 	// Write a port file with PID 1 (init — can't be killed) vs a dead PID
 	// Use a very high PID that is almost certainly not running
+	stalePath := PortFilePath(dir)
+	if err := os.MkdirAll(filepath.Dir(stalePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(
-		filepath.Join(dir, portFileName),
+		stalePath,
 		[]byte(`{"pid": 2000000000, "port": 9999, "startedAt": "2026-01-01T00:00:00Z"}`),
 		0o644,
 	); err != nil {
@@ -78,7 +82,7 @@ func TestReadPortFile_StalePID(t *testing.T) {
 	}
 
 	// Verify the stale file was cleaned up
-	if _, err := os.Stat(filepath.Join(dir, portFileName)); !os.IsNotExist(err) {
+	if _, err := os.Stat(PortFilePath(dir)); !os.IsNotExist(err) {
 		t.Error("stale port file should be removed")
 	}
 }

@@ -33,7 +33,7 @@ func newInitCommand() *cobra.Command {
 		Use:   "init",
 		Short: "Create a starter report workspace with sample manifests",
 		Long: strings.TrimSpace(`bino init bootstraps a report bundle with example YAML manifests,
-an inline datasource, and a .bnignore file so you can run bino preview/build immediately.`),
+an inline datasource, and a .bnignore file so you can run bino build or bino preview immediately.`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			answers := initAnswers{
 				Directory:   flagDir,
@@ -405,9 +405,9 @@ spec:
         dataset: $%s
 `, d.LayoutName, d.ReportTitle, d.DataSourceName, d.DataSourceName)
 
-	bnignore := "# Bino build output\ndist/\n.bncache/\n"
+	bnignore := "# Bino build output\ndist/\n.bino/cache/\n"
 
-	gitignore := "# Bino build output\n.bncache/\ndist/\n"
+	gitignore := "# Bino build output\n.bino/\ndist/\n"
 
 	// Generate a new UUID for the report-id
 	// Try to get the latest locally installed engine version

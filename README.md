@@ -224,7 +224,7 @@ A **workdir** is the root directory of a report bundle. It typically contains:
 - YAML manifests defining reports, data, layouts, etc.
 - Data files such as CSV or Excel.
 - The build output directory (e.g. `dist/`).
-- Bino's local cache (e.g. `.bncache`).
+- Bino's local cache (e.g. `.bino/cache`).
 - A `bino.toml` project configuration file.
 
 Most commands accept `--work-dir` to point bino at the correct directory. If omitted, bino uses the current directory.
@@ -246,7 +246,7 @@ engine-version = "v1.2.3"
 **Fields:**
 
 - `report-id` – A unique identifier for the report bundle. Generated automatically by `bino init`.
-- `engine-version` – The version of the template engine to use for rendering. If not specified, bino uses the latest version available locally. Versions are downloaded from GitHub releases and cached in `~/.bn/cdn/bn-template-engine/<version>/`.
+- `engine-version` – The version of the template engine to use for rendering. If not specified, bino uses the latest version available locally. Versions are downloaded from GitHub releases and cached in `~/.bino/cdn/bn-template-engine/<version>/`.
 
 **Template Engine Behavior:**
 
@@ -589,7 +589,7 @@ Install or update Chrome headless shell and the template engine used for PDF ren
 Clean bino's caches.
 
 - Common flags:
-  - `--work-dir` – workdir whose local cache (`.bncache`) should be removed.
+  - `--work-dir` – workdir whose local cache (`.bino/cache`) should be removed.
   - `--all` – remove both the local cache and the global cache (e.g. in your home directory).
 - Example:
 
@@ -616,7 +616,7 @@ Typically you run this once per machine or environment:
 bino setup
 ```
 
-This downloads the latest stable `chrome-headless-shell` binary from the Chrome for Testing infrastructure and caches it in `~/.bn/chrome-headless-shell/`.
+This downloads the latest stable `chrome-headless-shell` binary from the Chrome for Testing infrastructure and caches it in `~/.bino/chrome-headless-shell/`.
 
 ### Custom Chrome binary
 
@@ -772,7 +772,7 @@ This section maps common symptoms to likely causes and fixes.
   bino setup
   ```
 
-- Ensure that the setup command has network access and can write to its cache directory (`~/.bn/chrome-headless-shell/`).
+- Ensure that the setup command has network access and can write to its cache directory (`~/.bino/chrome-headless-shell/`).
 - Alternatively, set the `CHROME_PATH` environment variable to point to an existing Chrome or Chromium binary.
 
 ### "No template engine versions installed"
