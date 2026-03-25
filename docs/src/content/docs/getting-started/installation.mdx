@@ -70,6 +70,25 @@ Installer parameters: `-Repo`, `-Tag`, `-InstallDir`, `-DryRun`, `-Yes`.
 
 The installer places `bino.exe` in `%LOCALAPPDATA%\bino` and adds it to your user PATH. You may need to restart your terminal for PATH changes to take effect.
 
+### Windows (Installer)
+
+For a graphical installation experience, download the setup wizard:
+
+[bino-cli_Windows_x86_64_setup.exe](https://github.com/bino-bi/bino-cli-releases/releases/latest/download/bino-cli_Windows_x86_64_setup.exe)
+
+The installer will:
+1. Show the license agreement
+2. Let you choose the install directory (default: `%LOCALAPPDATA%\bino`)
+3. Install `bino.exe` and `duckdb.dll`
+4. Add the install directory to your user PATH
+5. Run `bino setup` to download the browser runtime
+
+To uninstall, use **Add or Remove Programs** in Windows Settings.
+
+<Aside type="tip">
+  The installer also supports silent mode for scripted deployments: `bino-cli_Windows_x86_64_setup.exe /SILENT`
+</Aside>
+
 ## Install via Homebrew (macOS and Linux)
 
 If you use [Homebrew](https://brew.sh/), you can install bino from our tap:

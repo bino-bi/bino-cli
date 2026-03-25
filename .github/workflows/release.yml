@@ -206,11 +206,27 @@ jobs:
           tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
           rm bino
 
+      - name: Copy DuckDB DLL to dist (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: Copy-Item "${{ github.workspace }}\duckdb-lib\duckdb.dll" dist\
+
+      - name: Install Inno Setup (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Windows installer
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ needs.resolve-tag.outputs.version }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$VERSION installer\bino-setup.iss
+
       - name: Create archive (Windows)
         if: matrix.goos == 'windows'
         shell: pwsh
         run: |
-          Copy-Item "${{ github.workspace }}\duckdb-lib\duckdb.dll" dist\
           cd dist
           Compress-Archive -Path bino.exe, duckdb.dll -DestinationPath bino-cli_Windows_x86_64.zip
           Remove-Item bino.exe, duckdb.dll
@@ -259,7 +275,7 @@ jobs:
       - name: Generate checksums
         working-directory: dist
         run: |
-          sha256sum *.tar.gz *.zip *.vsix install.sh install.ps1 > checksums.txt
+          sha256sum *.tar.gz *.zip *_setup.exe *.vsix install.sh install.ps1 > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -276,6 +292,7 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*_setup.exe
             dist/*.vsix
             dist/install.sh
             dist/install.ps1
