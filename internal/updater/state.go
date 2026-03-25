@@ -16,6 +16,15 @@ type State struct {
 
 // getStatePath returns the path to the state file.
 func getStatePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".bino", "state.json"), nil
+}
+
+// legacyStatePath returns the old state file location for migration.
+func legacyStatePath() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
@@ -32,7 +41,13 @@ func LoadState() (*State, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return &State{}, nil
+		// Try legacy location (~/.config/bino/state.json)
+		if legacyPath, lerr := legacyStatePath(); lerr == nil {
+			data, err = os.ReadFile(legacyPath)
+		}
+		if os.IsNotExist(err) || data == nil {
+			return &State{}, nil
+		}
 	}
 	if err != nil {
 		return nil, err

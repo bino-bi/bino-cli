@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// CacheSubdir is the subdirectory under ~/.bn/ where chrome-headless-shell versions are cached.
+	// CacheSubdir is the subdirectory under ~/.bino/ where chrome-headless-shell versions are cached.
 	CacheSubdir = "chrome-headless-shell"
 
 	// lastKnownGoodURL is the Chrome for Testing endpoint that returns the latest stable version.
@@ -55,7 +55,7 @@ type Manager struct {
 	httpClient *http.Client
 }
 
-// NewManager creates a new Manager with the default cache location (~/.bn/chrome-headless-shell/).
+// NewManager creates a new Manager with the default cache location (~/.bino/chrome-headless-shell/).
 func NewManager() (*Manager, error) {
 	cacheDir, err := pathutil.CacheDir(CacheSubdir)
 	if err != nil {
@@ -351,7 +351,7 @@ func (m *Manager) LatestLocalVersion() (VersionInfo, error) {
 // ResolveExecPath returns the path to the chrome-headless-shell binary using the
 // following priority:
 //  1. CHROME_PATH environment variable
-//  2. Latest locally cached version from ~/.bn/chrome-headless-shell/
+//  2. Latest locally cached version from ~/.bino/chrome-headless-shell/
 //
 // Returns an error if no binary can be found.
 func (m *Manager) ResolveExecPath() (string, error) {

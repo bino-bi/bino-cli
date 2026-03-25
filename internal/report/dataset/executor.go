@@ -1,7 +1,7 @@
 // Package dataset provides execution and caching for DataSet manifests.
 //
 // A DataSet executes a SQL query against DuckDB, referencing DataSource
-// manifests which are registered as views. Results are cached under .bncache/datasets/
+// manifests which are registered as views. Results are cached under .bino/cache/datasets/
 // in the working directory and invalidated when the dataset definition changes
 // or when any dependent datasource files are modified.
 //
@@ -140,7 +140,7 @@ func (q queryField) ResolveQuery(baseDir string) (string, error) {
 }
 
 // Execute evaluates all DataSet documents, using cached results when available.
-// Results are cached under workdir/.bncache/datasets/ and invalidated when the
+// Results are cached under workdir/.bino/cache/datasets/ and invalidated when the
 // dataset definition (query or dependencies) changes, or when any dependent
 // datasource files are modified.
 //
@@ -159,7 +159,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 		return nil, nil, err
 	}
 
-	cacheDir := filepath.Join(workdir, ".bncache", "datasets")
+	cacheDir := filepath.Join(workdir, ".bino", "cache", "datasets")
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create cache dir: %w", err)
 	}
@@ -457,7 +457,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 	// Create temp directory for inline datasource CSV files.
 	// When reusing a shared session the temp dir must persist (the views reference it),
 	// so we only remove it for one-shot sessions.
-	tempDir := filepath.Join(workdir, ".bncache", "datasources")
+	tempDir := filepath.Join(workdir, ".bino", "cache", "datasources")
 	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create datasources temp dir: %w", err)
 	}

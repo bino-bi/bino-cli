@@ -131,7 +131,7 @@ func defaultCacheDir() (string, error) {
 		return "", fmt.Errorf("detect home dir: %w", err)
 	}
 
-	return filepath.Join(home, ".bn", "cache", "duckdb", "extensions"), nil
+	return filepath.Join(home, ".bino", "cache", "duckdb", "extensions"), nil
 }
 
 func (s *Session) configureExtensionDirectory(ctx context.Context) error {

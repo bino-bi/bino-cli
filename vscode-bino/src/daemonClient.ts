@@ -208,7 +208,7 @@ export class DaemonClient {
     }
 
     private readPortFile(projectRoot: string): PortFile | undefined {
-        const filePath = path.join(projectRoot, '.bino-daemon.json');
+        const filePath = path.join(projectRoot, '.bino', 'daemon.json');
         try {
             const data = fs.readFileSync(filePath, 'utf8');
             return JSON.parse(data) as PortFile;

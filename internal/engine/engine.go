@@ -26,7 +26,7 @@ const (
 	// GitHubLatestURL is the URL to resolve the latest release version.
 	GitHubLatestURL = "https://github.com/bino-bi/bn-template-engine-releases/releases/latest"
 
-	// CacheSubdir is the subdirectory under ~/.bn/ where engine versions are cached.
+	// CacheSubdir is the subdirectory under ~/.bino/ where engine versions are cached.
 	CacheSubdir = "cdn/bn-template-engine"
 
 	// EntryPoint is the main JavaScript file in the template engine bundle.
@@ -59,7 +59,7 @@ type Manager struct {
 	httpClient *http.Client
 }
 
-// NewManager creates a new Manager with the default cache location (~/.bn/cdn/bn-template-engine/).
+// NewManager creates a new Manager with the default cache location (~/.bino/cdn/bn-template-engine/).
 func NewManager() (*Manager, error) {
 	cacheDir, err := pathutil.CacheDir(CacheSubdir)
 	if err != nil {

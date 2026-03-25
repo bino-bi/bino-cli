@@ -10,8 +10,8 @@ Use it when schema changes, data locations change, or caches get too large.
 
 Bino uses two cache directories:
 
-- **Local cache (`.bncache/`)** – project-specific dataset results, stored in the workdir.
-- **Global cache (`~/.bn/`)** – shared resources like preview CDN files and DuckDB extensions.
+- **Local cache (`.bino/cache/`)** – project-specific dataset results, stored in the workdir.
+- **Global cache (`~/.bino/`)** – shared resources like preview CDN files and DuckDB extensions.
 
 ## Usage
 
@@ -21,8 +21,8 @@ bino cache clean [flags]
 
 Common flags:
 
-- `--work-dir`, `-w` – workdir whose local cache (`.bncache/`) should be removed (default: `.`).
-- `--global` – also remove the global cache (`~/.bn/`).
+- `--work-dir`, `-w` – workdir whose local cache (`.bino/cache/`) should be removed (default: `.`).
+- `--global` – also remove the global cache (`~/.bino/`).
 
 ## Examples
 

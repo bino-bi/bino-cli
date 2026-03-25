@@ -52,13 +52,13 @@ bino setup --dry-run
 
 ## Chrome headless shell
 
-Chrome headless shell (`chrome-headless-shell`) is a lightweight Chrome binary purpose-built for headless rendering. It is downloaded from Google's Chrome for Testing infrastructure and cached in `~/.bn/chrome-headless-shell/`.
+Chrome headless shell (`chrome-headless-shell`) is a lightweight Chrome binary purpose-built for headless rendering. It is downloaded from Google's Chrome for Testing infrastructure and cached in `~/.bino/chrome-headless-shell/`.
 
 If you need to use a custom Chrome or Chromium installation, set the `CHROME_PATH` environment variable to point to the binary. This takes priority over the cached version.
 
 ## Template engine
 
-The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from Chrome headless shell and cached in `~/.bn/cdn/bn-template-engine/`.
+The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from Chrome headless shell and cached in `~/.bino/cdn/bn-template-engine/`.
 
 Multiple versions can be installed side by side. By default, bino uses the latest locally installed version unless a specific version is pinned in `bino.toml` via the `engine-version` field. See [Project configuration](/concepts/project-configuration) for more details.
 
