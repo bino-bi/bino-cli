@@ -281,6 +281,20 @@ func TestRegistry_PluginKindNames(t *testing.T) {
 	}
 }
 
+func TestNilRegistry_KindProviderMethods(t *testing.T) {
+	var r *PluginRegistry // nil
+
+	// GetKind must not panic on nil receiver.
+	if _, ok := r.GetKind("Anything"); ok {
+		t.Fatal("nil registry should return false")
+	}
+
+	// PluginKindNames must not panic on nil receiver.
+	if names := r.PluginKindNames(); names != nil {
+		t.Fatalf("nil registry should return nil, got %v", names)
+	}
+}
+
 func TestRegistry_AllKinds(t *testing.T) {
 	r := NewRegistry()
 	r.Register(newMock("alpha", withKinds(

@@ -7,6 +7,9 @@ var _ config.KindProvider = (*PluginRegistry)(nil)
 
 // GetKind returns a config.KindInfo for the given kind name, satisfying config.KindProvider.
 func (r *PluginRegistry) GetKind(kindName string) (config.KindInfo, bool) {
+	if r == nil {
+		return config.KindInfo{}, false
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
