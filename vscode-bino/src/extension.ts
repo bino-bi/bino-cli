@@ -573,7 +573,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 title: 'Bino: Build Artefact',
             });
             if (picked) {
-                runInTerminal(`build --artefact ${picked.label}`);
+                runInTerminal(`build --artifact ${picked.label}`);
             }
         })
     );
