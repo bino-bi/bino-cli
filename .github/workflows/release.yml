@@ -112,62 +112,12 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: vsce publish -p "$VSCE_PAT" ${{ needs.resolve-tag.outputs.version }}
 
-  # Build DuckDB from source with embedded extensions (Linux only).
-  # This produces libduckdb_bundle.a which is linked into the Go binary via
-  # the duckdb_use_static_lib build tag.
-  build-duckdb:
-    name: Build DuckDB (linux-amd64)
-    needs: [test, resolve-tag]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
-          sparse-checkout: .github/duckdb
-
-      - name: Clone DuckDB
-        run: git clone --depth 1 --branch ${{ env.DUCKDB_VERSION }} https://github.com/duckdb/duckdb.git duckdb-src
-
-      - name: Setup vcpkg
-        run: |
-          git clone https://github.com/Microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.sh
-          echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
-
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            vcpkg/installed
-            vcpkg/packages
-            vcpkg/downloads
-          key: vcpkg-x64-linux-${{ env.DUCKDB_VERSION }}
-
-      - name: Build libduckdb_bundle.a
-        working-directory: duckdb-src
-        run: |
-          DUCKDB_PLATFORM=any \
-          EXTENSION_CONFIGS="${{ github.workspace }}/.github/duckdb/extension_config.cmake" \
-          USE_MERGED_VCPKG_MANIFEST=1 \
-          VCPKG_TOOLCHAIN_PATH=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
-          VCPKG_TARGET_TRIPLET=x64-linux \
-          make bundle-library
-
-      - name: Upload DuckDB static library
-        uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-linux-amd64
-          path: duckdb-src/build/release/libduckdb_bundle.a
-          retention-days: 1
-
   # Build binaries for each platform (CGO required for duckdb-go).
-  # Linux uses the static DuckDB bundle with embedded extensions.
+  # macOS and Linux use the default duckdb-go-bindings (extensions installed at runtime).
   # Windows links the pre-built DuckDB DLL from GitHub releases.
-  # macOS uses the default duckdb-go-bindings (extensions installed at runtime).
   build:
     name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
-    needs: [test, resolve-tag, build-duckdb]
+    needs: [test, resolve-tag]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -176,23 +126,18 @@ jobs:
           - goos: darwin
             goarch: amd64
             runner: macos-15-intel
-            static: false
           - goos: darwin
             goarch: arm64
             runner: macos-15
-            static: false
           - goos: linux
             goarch: amd64
             runner: ubuntu-24.04
-            static: true
           # - goos: linux
           #   goarch: arm64
           #   runner: ubuntu-24.04-arm
-          #   static: true
           - goos: windows
             goarch: amd64
             runner: windows-latest
-            static: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -205,19 +150,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Download DuckDB static library (Linux)
-        if: matrix.static
-        uses: actions/download-artifact@v4
-        with:
-          name: duckdb-linux-amd64
-          path: duckdb-lib
-
-      - name: Verify DuckDB static library
-        if: matrix.static
-        run: |
-          test -f duckdb-lib/libduckdb_bundle.a || { echo "ERROR: libduckdb_bundle.a not found"; exit 1; }
-          ls -lh duckdb-lib/libduckdb_bundle.a
 
       - name: Download pre-built DuckDB library (Windows)
         if: matrix.goos == 'windows'
@@ -245,15 +177,10 @@ jobs:
           LDFLAGS="${LDFLAGS} -X 'bino.bi/bino/internal/version.Date=${DATE}'"
 
           BUILD_TAGS=""
-          DUCKDB_LIB_DIR="${{ github.workspace }}/duckdb-lib"
 
-          # Linux: static DuckDB build with embedded extensions
-          if [ "${{ matrix.static }}" = "true" ]; then
-            BUILD_TAGS="-tags duckdb_use_static_lib"
-            export CGO_CPPFLAGS="-DDUCKDB_STATIC_BUILD"
-            export CGO_LDFLAGS="-L${DUCKDB_LIB_DIR} -lduckdb_bundle -lstdc++ -lm -ldl"
           # Windows: link pre-built DuckDB DLL
-          elif [ "${{ matrix.goos }}" = "windows" ]; then
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            DUCKDB_LIB_DIR="${{ github.workspace }}/duckdb-lib"
             BUILD_TAGS="-tags duckdb_use_lib"
             export CGO_LDFLAGS="-L${DUCKDB_LIB_DIR} -lduckdb"
             export CGO_CFLAGS="-I${DUCKDB_LIB_DIR}"
@@ -264,7 +191,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             go build ${BUILD_TAGS} -ldflags "${LDFLAGS}" -o dist/bino.exe ./cmd/bino
           else
-            go build ${BUILD_TAGS} -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
+            go build -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
           fi
 
       - name: Create archive

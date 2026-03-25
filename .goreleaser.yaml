@@ -18,53 +18,23 @@ before:
     - go generate ./...
 
 builds:
-  # macOS: uses default duckdb-go-bindings (extensions installed at runtime)
-  - id: darwin
+  - id: bino
     main: ./cmd/bino
     binary: bino
     env:
       - CGO_ENABLED=1
+    # Local builds only - use --single-target flag
+    # CI builds use native runners per platform (see .github/workflows/release.yml)
     goos:
       - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - "-s -w -X 'bino.bi/bino/internal/version.Version={{ .Version }}' -X 'bino.bi/bino/internal/version.Commit={{ .Commit }}' -X 'bino.bi/bino/internal/version.Date={{ .Date }}'"
-
-  # Linux: links against libduckdb_bundle.a with embedded extensions.
-  # Requires DUCKDB_LIB_LINUX env var pointing to the directory containing libduckdb_bundle.a.
-  - id: linux-amd64
-    main: ./cmd/bino
-    binary: bino
-    tags:
-      - duckdb_use_static_lib
-    env:
-      - CGO_ENABLED=1
-      - CGO_CPPFLAGS=-DDUCKDB_STATIC_BUILD
-      - CGO_LDFLAGS=-L{{ .Env.DUCKDB_LIB_LINUX }} -lduckdb_bundle -lstdc++ -lm -ldl
-    goos:
       - linux
-    goarch:
-      - amd64
-    ldflags:
-      - "-s -w -X 'bino.bi/bino/internal/version.Version={{ .Version }}' -X 'bino.bi/bino/internal/version.Commit={{ .Commit }}' -X 'bino.bi/bino/internal/version.Date={{ .Date }}'"
-
-  # Windows: links pre-built DuckDB DLL.
-  # Requires DUCKDB_LIB_WINDOWS env var pointing to the directory containing duckdb.dll.
-  - id: windows-amd64
-    main: ./cmd/bino
-    binary: bino
-    tags:
-      - duckdb_use_lib
-    env:
-      - CGO_ENABLED=1
-      - CGO_CFLAGS=-I{{ .Env.DUCKDB_LIB_WINDOWS }}
-      - CGO_LDFLAGS=-L{{ .Env.DUCKDB_LIB_WINDOWS }} -lduckdb
-    goos:
       - windows
     goarch:
       - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
     ldflags:
       - "-s -w -X 'bino.bi/bino/internal/version.Version={{ .Version }}' -X 'bino.bi/bino/internal/version.Commit={{ .Commit }}' -X 'bino.bi/bino/internal/version.Date={{ .Date }}'"
 
