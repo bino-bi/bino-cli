@@ -194,24 +194,26 @@ jobs:
             go build -ldflags "${LDFLAGS}" -o dist/bino ./cmd/bino
           fi
 
-      - name: Create archive
-        shell: bash
+      - name: Create archive (Unix)
+        if: matrix.goos != 'windows'
         run: |
           cd dist
           ARCH=${{ matrix.goarch }}
           if [ "$ARCH" = "amd64" ]; then
             ARCH="x86_64"
           fi
+          OS=$(echo "${{ matrix.goos }}" | sed 's/darwin/Darwin/;s/linux/Linux/')
+          tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
+          rm bino
 
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            cp "${{ github.workspace }}/duckdb-lib/duckdb.dll" .
-            zip bino-cli_Windows_${ARCH}.zip bino.exe duckdb.dll
-            rm bino.exe duckdb.dll
-          else
-            OS=$(echo "${{ matrix.goos }}" | sed 's/darwin/Darwin/;s/linux/Linux/')
-            tar -czvf bino-cli_${OS}_${ARCH}.tar.gz bino
-            rm bino
-          fi
+      - name: Create archive (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          Copy-Item "${{ github.workspace }}\duckdb-lib\duckdb.dll" dist\
+          cd dist
+          Compress-Archive -Path bino.exe, duckdb.dll -DestinationPath bino-cli_Windows_x86_64.zip
+          Remove-Item bino.exe, duckdb.dll
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
