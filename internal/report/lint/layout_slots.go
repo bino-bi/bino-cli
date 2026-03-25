@@ -223,7 +223,7 @@ var pageLayoutSlotsUsed = Rule{
 				// Check slot count
 				if effectiveCount != expected {
 					msg := fmt.Sprintf(
-						"pageLayout %q expects %d slot(s) but page has %d effective children (for artifact %q)",
+						"pageLayout %q expects %d slot(s) but page has %d effective children (for artefact %q)",
 						pageSpec.Spec.PageLayout, expected, effectiveCount, artifact.Name,
 					)
 					findings = append(findings, Finding{
@@ -350,7 +350,7 @@ var cardLayoutSlotsUsed = Rule{
 
 					if effectiveCount != expected {
 						msg := fmt.Sprintf(
-							"cardLayout %q expects %d slot(s) but card has %d effective children (for artifact %q)",
+							"cardLayout %q expects %d slot(s) but card has %d effective children (for artefact %q)",
 							cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
 						)
 						findings = append(findings, Finding{

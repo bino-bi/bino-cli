@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
+
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/pkg/duckdb"
@@ -374,7 +376,7 @@ func buildFileSourceSQLWithParams(spec sourceSpec, readerFn string, extraParams 
 	if pathutil.HasGlob(resolved) {
 		// read_xlsx doesn't support globs, so we need to expand and UNION ALL
 		if readerFn == "read_xlsx" {
-			matches, err := filepath.Glob(resolved)
+			matches, err := doublestar.FilepathGlob(resolved)
 			if err != nil {
 				return "", fmt.Errorf("expand glob %s: %w", resolved, err)
 			}

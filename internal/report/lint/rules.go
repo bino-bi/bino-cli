@@ -33,8 +33,8 @@ const defaultLayoutPageFormat = "xga"
 
 // reportArtefactRequired ensures at least one ReportArtefact document exists.
 var reportArtefactRequired = Rule{
-	ID:          "report-artifact-required",
-	Name:        "Report Artifact Required",
+	ID:          "report-artefact-required",
+	Name:        "Report Artefact Required",
 	Description: "At least one ReportArtefact document must be defined.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		for _, doc := range docs {
@@ -49,7 +49,7 @@ var reportArtefactRequired = Rule{
 			file = docs[0].File
 		}
 		return []Finding{{
-			RuleID:  "report-artifact-required",
+			RuleID:  "report-artefact-required",
 			Message: "no ReportArtefact document found; at least one is required to build a report",
 			File:    file,
 		}}
@@ -62,8 +62,8 @@ var reportArtefactRequired = Rule{
 // 1. Its constraints pass for either build OR preview mode (smart: no false-positive for mode-specific pages)
 // 2. Its pageFormat matches the artefact's format (or both default to "xga")
 var artefactLayoutPageRequired = Rule{
-	ID:          "artifact-layoutpage-required",
-	Name:        "Artifact LayoutPage Required",
+	ID:          "artefact-layoutpage-required",
+	Name:        "Artefact LayoutPage Required",
 	Description: "Each ReportArtefact must have at least one LayoutPage that matches its constraints and format.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
@@ -99,8 +99,8 @@ var artefactLayoutPageRequired = Rule{
 
 			if matchingPages == 0 {
 				findings = append(findings, Finding{
-					RuleID:  "artifact-layoutpage-required",
-					Message: "no LayoutPage matches this artifact after applying constraints and format filtering",
+					RuleID:  "artefact-layoutpage-required",
+					Message: "no LayoutPage matches this artefact after applying constraints and format filtering",
 					File:    artifact.File,
 					DocIdx:  artifact.Position,
 					Path:    "metadata.name",

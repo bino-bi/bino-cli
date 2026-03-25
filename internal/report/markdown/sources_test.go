@@ -12,8 +12,9 @@ func TestResolveSourceFiles(t *testing.T) {
 
 	// Create test files
 	docsDir := filepath.Join(tmpDir, "docs")
-	if err := os.MkdirAll(docsDir, 0755); err != nil {
-		t.Fatalf("create docs dir: %v", err)
+	subDir := filepath.Join(docsDir, "sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("create sub dir: %v", err)
 	}
 
 	files := []string{
@@ -22,6 +23,7 @@ func TestResolveSourceFiles(t *testing.T) {
 		filepath.Join(docsDir, "chapter1.md"),
 		filepath.Join(docsDir, "chapter2.md"),
 		filepath.Join(docsDir, "notes.txt"), // non-md file
+		filepath.Join(subDir, "nested.md"),
 	}
 	for _, f := range files {
 		if err := os.WriteFile(f, []byte("# Test"), 0644); err != nil {
@@ -77,6 +79,11 @@ func TestResolveSourceFiles(t *testing.T) {
 			sources:     []string{"nonexistent.md"},
 			wantErr:     true,
 			errContains: "does not exist",
+		},
+		{
+			name:      "doublestar recursive glob",
+			sources:   []string{"docs/**/*.md"},
+			wantCount: 4, // intro.md, chapter1.md, chapter2.md, sub/nested.md
 		},
 		{
 			name:        "empty glob match",

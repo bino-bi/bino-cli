@@ -19,7 +19,7 @@ type JSONBuildLog struct {
 	DurationMs    int64           `json:"duration_ms"`
 	Workdir       string          `json:"workdir"`
 	Documents     []DocumentEntry `json:"documents"`
-	Artifacts     []ArtefactEntry `json:"artifacts"`
+	Artifacts     []ArtefactEntry `json:"artefacts"`
 	Queries       []QueryEntry    `json:"queries"`
 	ExecutionPlan []ExecutionStep `json:"execution_plan,omitempty"`
 	Lint          []LintEntry     `json:"lint,omitempty"`

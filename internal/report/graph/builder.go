@@ -723,7 +723,7 @@ func (b *builder) buildDocumentArtefacts() error {
 		// Parse the document spec to extract source files
 		spec, err := parseDocumentArtefactSpec(doc.Raw)
 		if err != nil {
-			return fmt.Errorf("document artifact %s: %w", doc.Name, err)
+			return fmt.Errorf("document artefact %s: %w", doc.Name, err)
 		}
 
 		// Create markdown file nodes as dependencies

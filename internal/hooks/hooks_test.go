@@ -192,7 +192,7 @@ func TestRunArtefactEnvVars(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &Config{Hooks: pathutil.HooksConfig{
 		"pre-datasource": {
-			`test "$BINO_ARTIFACT_NAME" = "monthly" && test "$BINO_ARTIFACT_KIND" = "report"`,
+			`test "$BINO_ARTIFACT_NAME" = "monthly" && test "$BINO_ARTIFACT_KIND" = "report" && test "$BINO_ARTEFACT_NAME" = "monthly" && test "$BINO_ARTEFACT_KIND" = "report"`,
 		},
 	}}
 	logger := &testLogger{}
@@ -205,7 +205,7 @@ func TestRunArtefactEnvVars(t *testing.T) {
 		ArtefactKind: "report",
 	})
 	if err != nil {
-		t.Fatalf("artifact env var check failed: %v", err)
+		t.Fatalf("artefact env var check failed: %v", err)
 	}
 }
 
@@ -282,6 +282,8 @@ func TestBuildEnvSlice(t *testing.T) {
 		"BINO_OUTPUT_DIR":    "/dist",
 		"BINO_ARTIFACT_NAME": "report1",
 		"BINO_ARTIFACT_KIND": "report",
+		"BINO_ARTEFACT_NAME": "report1",
+		"BINO_ARTEFACT_KIND": "report",
 		"BINO_INCLUDE":       "a,b",
 		"BINO_EXCLUDE":       "c",
 		"BINO_PDF_PATH":      "/dist/report1.pdf",

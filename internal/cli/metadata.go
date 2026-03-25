@@ -11,7 +11,7 @@ var AppMetadata = struct {
 	License     string
 }{
 	Name:        "bino",
-	Description: "A Go-based CLI that validates YAML report bundles, runs DuckDB-backed data pipelines, and renders HTML/PDF artifacts via chromedp.",
+	Description: "A Go-based CLI that validates YAML report bundles, runs DuckDB-backed data pipelines, and renders HTML/PDF artefacts via chromedp.",
 	URL:         "https://github.com/bino-bi/bino-cli",
 	Author:      "Sven Herrmann",
 	Email:       "sven@bino.bi",

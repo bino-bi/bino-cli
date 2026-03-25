@@ -58,7 +58,7 @@ type LiveReportArtefactSpec struct {
 type LiveRouteSpec struct {
 	// Artifact is a reference to a ReportArtefact manifest.
 	// Rendered with a $ prefix in YAML (e.g., $report_name).
-	Artifact string `yaml:"artifact,omitempty" json:"artifact,omitempty"`
+	Artifact string `yaml:"artefact,omitempty" json:"artefact,omitempty"`
 
 	// LayoutPages lists LayoutPage names to render for this route.
 	// Each name is rendered with a $ prefix in YAML.

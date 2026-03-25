@@ -52,10 +52,15 @@ linters:
         - G304
     misspell:
       locale: US
-      ignore-words:
-        - artefact
-        - cancelled
-        - recognised
+      extra-words:
+        - typo: "artefact"
+          correction: "artefact"
+        - typo: "artefacts"
+          correction: "artefacts"
+        - typo: "cancelled"
+          correction: "cancelled"
+        - typo: "recognised"
+          correction: "recognised"
     revive:
       rules:
         - name: blank-imports

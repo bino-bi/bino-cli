@@ -27,8 +27,8 @@ func TestValidateDocumentsAllowsUnique(t *testing.T) {
 }
 
 func TestValidateDocumentsAllowsDuplicatesAcrossKinds(t *testing.T) {
-	// With per-artifact uniqueness, duplicate names across kinds are now allowed
-	// at the global level. They will be validated per-artifact after constraint filtering.
+	// With per-artefact uniqueness, duplicate names across kinds are now allowed
+	// at the global level. They will be validated per-artefact after constraint filtering.
 	docs := []Document{
 		{File: "source.yaml", Position: 1, Kind: "DataSource", Name: "shared_name"},
 		{File: "dataset.yaml", Position: 2, Kind: "DataSet", Name: "shared_name"},
@@ -41,7 +41,7 @@ func TestValidateDocumentsAllowsDuplicatesAcrossKinds(t *testing.T) {
 }
 
 func TestValidateDocumentsAllowsDuplicateAssetsAndLayouts(t *testing.T) {
-	// With per-artifact uniqueness, duplicate names are allowed at global level
+	// With per-artefact uniqueness, duplicate names are allowed at global level
 	docs := []Document{
 		{File: "asset.yaml", Position: 1, Kind: "Asset", Name: "logo"},
 		{File: "another.yaml", Position: 3, Kind: "LayoutPage", Name: "logo"},
@@ -71,7 +71,7 @@ func TestValidateDocumentsDetectsReportArtefactConflicts(t *testing.T) {
 }
 
 func TestValidateArtefactNamesDetectsConflicts(t *testing.T) {
-	// Per-artifact name validation catches duplicates within the same kind
+	// Per-artefact name validation catches duplicates within the same kind
 	docs := []Document{
 		{File: "source1.yaml", Position: 1, Kind: "DataSource", Name: "shared_name"},
 		{File: "source2.yaml", Position: 2, Kind: "DataSource", Name: "shared_name"},
@@ -79,11 +79,11 @@ func TestValidateArtefactNamesDetectsConflicts(t *testing.T) {
 
 	err := ValidateArtefactNames("testArtefact", docs, nil)
 	if err == nil {
-		t.Fatal("expected validation error for duplicate names within artifact")
+		t.Fatal("expected validation error for duplicate names within artefact")
 	}
 	msg := err.Error()
 	if !strings.Contains(msg, "testArtefact") || !strings.Contains(msg, "shared_name") {
-		t.Fatalf("expected artifact and duplicate name reference, got %v", err)
+		t.Fatalf("expected artefact and duplicate name reference, got %v", err)
 	}
 }
 
@@ -211,7 +211,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 	}
 	layoutPageNames := make(map[string]struct{})
 
-	t.Run("valid live artifact", func(t *testing.T) {
+	t.Run("valid live artefact", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
@@ -266,7 +266,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown artifact reference", func(t *testing.T) {
+	t.Run("unknown artefact reference", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
@@ -278,7 +278,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
-			t.Fatal("expected error for unknown artifact")
+			t.Fatal("expected error for unknown artefact")
 		}
 		if !strings.Contains(err.Error(), "unknown ReportArtefact") {
 			t.Fatalf("unexpected error: %v", err)
@@ -351,7 +351,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 	})
 
-	t.Run("route with both artifact and layoutPages", func(t *testing.T) {
+	t.Run("route with both artefact and layoutPages", func(t *testing.T) {
 		lpNames := map[string]struct{}{
 			"page1": {},
 		}
@@ -366,14 +366,14 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 		err := ValidateLiveArtefact(live, artifacts, lpNames)
 		if err == nil {
-			t.Fatal("expected error for route with both artifact and layoutPages")
+			t.Fatal("expected error for route with both artefact and layoutPages")
 		}
-		if !strings.Contains(err.Error(), "both artifact and layoutPages") {
+		if !strings.Contains(err.Error(), "both artefact and layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("route with neither artifact nor layoutPages", func(t *testing.T) {
+	t.Run("route with neither artefact nor layoutPages", func(t *testing.T) {
 		live := LiveArtefact{
 			Document: Document{Name: "dashboard"},
 			Spec: LiveReportArtefactSpec{
@@ -385,9 +385,9 @@ func TestValidateLiveArtefact(t *testing.T) {
 		}
 		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
 		if err == nil {
-			t.Fatal("expected error for route with neither artifact nor layoutPages")
+			t.Fatal("expected error for route with neither artefact nor layoutPages")
 		}
-		if !strings.Contains(err.Error(), "must have either artifact or layoutPages") {
+		if !strings.Contains(err.Error(), "must have either artefact or layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

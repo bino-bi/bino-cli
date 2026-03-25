@@ -438,7 +438,7 @@ func getPageParamsInfo(manifests []ManifestInfo) map[string][]config.LayoutPageP
 func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) error {
 	content, err := os.ReadFile(artefactPath)
 	if err != nil {
-		return fmt.Errorf("read artifact file: %w", err)
+		return fmt.Errorf("read artefact file: %w", err)
 	}
 
 	// Parse multi-document YAML
@@ -508,7 +508,7 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 	encoder.Close()
 
 	if err := os.WriteFile(artefactPath, []byte(buf.String()), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
-		return fmt.Errorf("write artifact file: %w", err)
+		return fmt.Errorf("write artefact file: %w", err)
 	}
 
 	return nil
@@ -529,7 +529,7 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 
 	// Select artifact(s)
 	items := ManifestsToFuzzyItems(artifacts)
-	selected, err := huhMultiFuzzySelect("Select artifact(s)", items)
+	selected, err := huhMultiFuzzySelect("Select artefact(s)", items)
 	if err != nil {
 		return err
 	}
