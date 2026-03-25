@@ -647,7 +647,7 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 
 	args := []string{"build", "--work-dir", s.state.ProjectRoot()}
 	if req.Artefact != "" { //nolint:misspell // backward-compatible JSON API field name
-		args = append(args, "--artefact", req.Artefact) //nolint:misspell // backward-compatible CLI flag
+		args = append(args, "--artifact", req.Artefact)
 	}
 
 	s.BroadcastEvent("build-progress", map[string]string{"status": "started"})
