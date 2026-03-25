@@ -148,6 +148,9 @@ func (r *PluginRegistry) PluginsForHook(checkpoint string) []Plugin {
 // PluginKindNames returns all kind names contributed by plugins.
 // Used by validate.go to extend the uniqueNameKinds map.
 func (r *PluginRegistry) PluginKindNames() []string {
+	if r == nil {
+		return nil
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
