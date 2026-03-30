@@ -25,8 +25,8 @@ spec:
   titleDateFormat: quarter
   titleDateLink: interval
   titleMeasures: []
-  titleScenarios: ["ac", "fc", "py"]
-  titleVariances: ["dac_ac_pos"]
+  titleScenarios: ["ac1", "fc1", "pp1"]
+  titleVariances: ["dpp1_ac1_pos"]
   titleOrder: category
   titleOrderDirection: asc
   pageLayout: 2x2
@@ -87,7 +87,7 @@ spec:
   titleMeasures:
     - name: "Revenue"
       unit: "mEUR"
-  titleScenarios: ["ac", "fc", "py"]
+  titleScenarios: ["ac1", "fc1", "pp1"]
   pageLayout: 2x2
   pageFormat: a4
   pageOrientation: landscape
@@ -738,9 +738,9 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.titleDateFormat` | string | no | `none` | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`. | `titleDateFormat: quarter` |
 | `spec.titleDateLink` | string | no | `none` | Date linking style. Values: `avg`, `interval`, `cum`, `start`, `end`, `ytd`, `ytg`, `mat`, `none`. | `titleDateLink: interval` |
 | `spec.titleMeasures` | array or string | no | — | Measures displayed in the title. Array of `{name, unit}` objects or JSON string. | see below |
-| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the title. Values: `ac`, `fc`, `py`, `pl`. | `titleScenarios: ["ac", "fc", "py"]` |
-| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dac_ac_pos"]` |
-| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac`, `fc`, `py`, `pl`. | `titleOrder: category` |
+| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the title. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
+| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dpp1_ac1_pos"]` |
+| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleOrder: ac1` |
 | `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `titleOrderDirection: asc` |
 
 ### Spec Attributes — Page Layout

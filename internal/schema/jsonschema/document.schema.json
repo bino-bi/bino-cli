@@ -2362,7 +2362,7 @@
           ]
         },
         "titleScenarios": {
-          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac, fc, py, pl.",
+          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac1-ac4, fc1-fc4, pp1-pp4, pl1-pl4.",
           "oneOf": [
             { "type": "string" },
             { "type": "array", "items": { "type": "string" } }
@@ -2377,7 +2377,7 @@
         },
         "titleOrder": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac", "fc", "py", "pl"],
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
           "default": "category",
           "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. If empty, the order arrow is omitted."
         },
@@ -2455,7 +2455,7 @@
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted."
         },
         "titleScenarios": {
-          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac, fc, py, pl.",
+          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac1-ac4, fc1-fc4, pp1-pp4, pl1-pl4.",
           "oneOf": [
             { "type": "string" },
             { "type": "array", "items": { "type": "string" } }
@@ -2470,7 +2470,7 @@
         },
         "titleOrder": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac", "fc", "py", "pl"],
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
           "default": "category",
           "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list."
         },
