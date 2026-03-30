@@ -20,8 +20,8 @@ metadata:
 spec:
   titleImage: "debug/concordia.png"
   titleBusinessUnit: "Sales"
-  titleScenarios: ["ac", "fc", "py"]
-  titleVariances: ["dpy_ac_pos"]
+  titleScenarios: ["ac1", "fc1", "pp1"]
+  titleVariances: ["dpp1_ac1_pos"]
   titleOrder: category
   titleOrderDirection: desc
   titleMeasures:
@@ -212,9 +212,9 @@ For the full constraint syntax and operators, see [Inline child constraints](/re
 |-----------|------|----------|---------|-------------|--------|
 | `spec.titleImage` | string | no | `""` | URL or asset name for the card title image. | `titleImage: "debug/concordia.png"` |
 | `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. | `titleBusinessUnit: "Sales"` |
-| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac`, `fc`, `py`, `pl`. | `titleScenarios: ["ac", "fc", "py"]` |
-| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dpy_ac_pos"]` |
-| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac`, `fc`, `py`, `pl`. | `titleOrder: category` |
+| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
+| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dpp1_ac1_pos"]` |
+| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleOrder: ac1` |
 | `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `titleOrderDirection: desc` |
 | `spec.titleMeasures` | array or string | no | — | Measures displayed in the card header. Array of `{name, unit}` objects or JSON string. | see below |
 | `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
