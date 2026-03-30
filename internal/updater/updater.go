@@ -507,4 +507,3 @@ func extractDLLFromZip(archivePath, targetDir string) error {
 
 	return nil // DLL not in archive is OK (non-Windows builds)
 }
-
