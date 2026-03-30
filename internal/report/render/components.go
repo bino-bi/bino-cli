@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	"bino.bi/bino/internal/logx"
@@ -758,7 +759,10 @@ func renderMarkdown(s string, assetURLs map[string]string) string {
 	if s == "" {
 		return ""
 	}
-	opts := []goldmark.Option{goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe())}
+	opts := []goldmark.Option{
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+	}
 	if len(assetURLs) > 0 {
 		opts = append(opts, goldmark.WithExtensions(NewAssetExtension(assetURLs)))
 	}
