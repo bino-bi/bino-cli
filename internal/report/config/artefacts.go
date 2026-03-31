@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	reportspec "bino.bi/bino/internal/report/spec"
@@ -587,4 +588,70 @@ func applyDocumentArtefactDefaults(name string, spec *DocumentArtefactSpec) []st
 		spec.PageBreakBetweenSources = true
 	}
 	return warnings
+}
+
+// PresentationConfig holds presentation settings extracted from ReportArtefact labels.
+// All fields have sensible defaults; labels are optional fine-tuning knobs for reveal.js.
+type PresentationConfig struct {
+	Theme           string
+	Transition      string
+	TransitionSpeed string
+	AutoSlide       int
+	Loop            bool
+	Controls        bool
+	Progress        bool
+	Hash            bool
+	CustomCSS       string
+	Format          string // slide dimensions format; falls back to artifact's spec.format
+}
+
+// ExtractPresentationConfig reads pres.* labels from a ReportArtefact and returns
+// a PresentationConfig with sensible defaults applied. defaultFormat is used when
+// pres.format is not set (typically the artifact's spec.format).
+func ExtractPresentationConfig(labels map[string]string, defaultFormat string) PresentationConfig {
+	cfg := PresentationConfig{
+		Theme:           "white",
+		Transition:      "slide",
+		TransitionSpeed: "default",
+		Controls:        true,
+		Progress:        true,
+		Hash:            true,
+		Format:          defaultFormat,
+	}
+	if cfg.Format == "" {
+		cfg.Format = "hd"
+	}
+	if v, ok := labels["presentation.theme"]; ok && v != "" {
+		cfg.Theme = v
+	}
+	if v, ok := labels["presentation.transition"]; ok && v != "" {
+		cfg.Transition = v
+	}
+	if v, ok := labels["presentation.transitionSpeed"]; ok && v != "" {
+		cfg.TransitionSpeed = v
+	}
+	if v, ok := labels["presentation.autoSlide"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.AutoSlide = n
+		}
+	}
+	if v, ok := labels["presentation.loop"]; ok {
+		cfg.Loop = v == "true"
+	}
+	if v, ok := labels["presentation.controls"]; ok {
+		cfg.Controls = v != "false"
+	}
+	if v, ok := labels["presentation.progress"]; ok {
+		cfg.Progress = v != "false"
+	}
+	if v, ok := labels["presentation.hash"]; ok {
+		cfg.Hash = v != "false"
+	}
+	if v, ok := labels["presentation.customCSS"]; ok && v != "" {
+		cfg.CustomCSS = v
+	}
+	if v, ok := labels["presentation.format"]; ok && v != "" {
+		cfg.Format = v
+	}
+	return cfg
 }

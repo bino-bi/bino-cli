@@ -1208,7 +1208,7 @@ func filterDocsByConstraintsWithContext(docs []config.Document, constraintCtx *s
 	// Filter documents by constraints
 	result := make([]config.Document, 0, len(docs))
 	for _, doc := range docs {
-		// ReportArtefacts are never filtered by constraints
+		// Artefact kinds are never filtered by constraints
 		if doc.Kind == "ReportArtefact" {
 			result = append(result, doc)
 			continue
@@ -1452,4 +1452,178 @@ func EnsureDocumentSigningProfiles(artifacts []config.DocumentArtefact, profiles
 		}
 	}
 	return nil
+}
+
+// PresentationArtefactRenderOptions configures presentation artifact HTML rendering.
+type PresentationArtefactRenderOptions struct {
+	EngineVersion            string
+	QueryLogger              func(string)
+	QueryExecLogger          duckdb.QueryExecLogger
+	DataValidation           dataset.DataValidationMode
+	DataValidationSampleSize int
+	PluginOptions            *render.PluginOptions
+	PostDatasetHook          func(ctx context.Context, datasets []DatasetPayload) error
+	// Session is an optional pre-existing DuckDB session to reuse (e.g., from preview).
+	Session *duckdb.Session
+}
+
+// PresentationArtefactResult captures the rendered presentation HTML.
+type PresentationArtefactResult struct {
+	HTML        []byte
+	LocalAssets []render.LocalAsset
+}
+
+// RenderPresentationArtefactHTML generates Reveal.js HTML for a ReportArtefact (build mode, standalone).
+func RenderPresentationArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions) (PresentationArtefactResult, error) {
+	return renderPresentationArtefactHTML(ctx, workdir, docs, artifact, opts, spec.ModeBuild, true)
+}
+
+// RenderPresentationArtefactHTMLForPreview generates Reveal.js HTML for preview mode (server-relative CDN paths).
+func RenderPresentationArtefactHTMLForPreview(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions) (PresentationArtefactResult, error) {
+	return renderPresentationArtefactHTML(ctx, workdir, docs, artifact, opts, spec.ModePreview, false)
+}
+
+// PresentationFrameRenderResult captures a two-phase render for presentation preview.
+type PresentationFrameRenderResult struct {
+	FrameHTML   []byte
+	ContextHTML []byte
+	LocalAssets []render.LocalAsset
+}
+
+// RenderPresentationFrameAndContext generates a two-phase render for preview mode with SSE support.
+func RenderPresentationFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions) (PresentationFrameRenderResult, error) {
+	// Select LayoutPages by refs
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
+	if err != nil {
+		return PresentationFrameRenderResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
+	}
+
+	constraintCtx, err := buildPresentationConstraintContext(artifact, spec.ModePreview)
+	if err != nil {
+		return PresentationFrameRenderResult{}, err
+	}
+
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	if err != nil {
+		return PresentationFrameRenderResult{}, err
+	}
+
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
+		return PresentationFrameRenderResult{}, err
+	}
+
+	execOpts := &dataset.ExecuteOptions{
+		QueryLogger:              opts.QueryLogger,
+		DataValidation:           opts.DataValidation,
+		DataValidationSampleSize: opts.DataValidationSampleSize,
+		Session:                  opts.Session,
+	}
+	datasetResults, _, err := dataset.Execute(ctx, workdir, filtered, execOpts)
+	if err != nil {
+		return PresentationFrameRenderResult{}, fmt.Errorf("presentation for artefact %s: execute datasets: %w", artifact.Document.Name, err)
+	}
+
+	if opts.PostDatasetHook != nil {
+		payloads := make([]DatasetPayload, len(datasetResults))
+		for i, r := range datasetResults {
+			payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+		}
+		if hookErr := opts.PostDatasetHook(ctx, payloads); hookErr != nil {
+			logx.FromContext(ctx).Warnf("post-dataset hook error: %v", hookErr)
+		}
+	}
+
+	presCfg := config.ExtractPresentationConfig(artifact.Labels, artifact.Spec.Format)
+	result, _, err := render.GeneratePresentationFrameAndContext(ctx, filtered, datasetResults, artifact, presCfg, nil, constraintCtx, opts.EngineVersion, docs, opts.PluginOptions)
+	if err != nil {
+		return PresentationFrameRenderResult{}, fmt.Errorf("presentation for artefact %s: render: %w", artifact.Document.Name, err)
+	}
+
+	return PresentationFrameRenderResult{
+		FrameHTML:   result.FrameHTML,
+		ContextHTML: result.ContextHTML,
+		LocalAssets: result.LocalAssets,
+	}, nil
+}
+
+func renderPresentationArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions, mode spec.Mode, standalone bool) (PresentationArtefactResult, error) {
+	// Select LayoutPages by refs
+	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
+	if err != nil {
+		return PresentationArtefactResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
+	}
+
+	// Build constraint context
+	constraintCtx, err := buildPresentationConstraintContext(artifact, mode)
+	if err != nil {
+		return PresentationArtefactResult{}, err
+	}
+
+	// Filter documents by constraints
+	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	if err != nil {
+		return PresentationArtefactResult{}, err
+	}
+
+	// Validate name uniqueness after filtering
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
+		return PresentationArtefactResult{}, err
+	}
+
+	// Execute datasets
+	execOpts := &dataset.ExecuteOptions{
+		QueryLogger:              opts.QueryLogger,
+		DataValidation:           opts.DataValidation,
+		DataValidationSampleSize: opts.DataValidationSampleSize,
+		Session:                  opts.Session,
+	}
+	if opts.QueryExecLogger != nil {
+		execOpts.QueryExecLogger = opts.QueryExecLogger
+	}
+	datasetResults, _, err := dataset.Execute(ctx, workdir, filtered, execOpts)
+	if err != nil {
+		return PresentationArtefactResult{}, fmt.Errorf("presentation for artefact %s: execute datasets: %w", artifact.Document.Name, err)
+	}
+
+	// Dispatch post-dataset hook
+	if opts.PostDatasetHook != nil {
+		payloads := make([]DatasetPayload, len(datasetResults))
+		for i, r := range datasetResults {
+			payloads[i] = DatasetPayload{Name: r.Name, JSONRows: r.Data}
+		}
+		if hookErr := opts.PostDatasetHook(ctx, payloads); hookErr != nil {
+			logx.FromContext(ctx).Warnf("post-dataset hook error: %v", hookErr)
+		}
+	}
+
+	var presOpts *render.PresentationOptions
+	if standalone {
+		presOpts = &render.PresentationOptions{Standalone: true}
+	}
+
+	presCfg := config.ExtractPresentationConfig(artifact.Labels, artifact.Spec.Format)
+	result, _, err := render.GeneratePresentationHTML(ctx, filtered, datasetResults, artifact, presCfg, nil, constraintCtx, opts.EngineVersion, docs, opts.PluginOptions, presOpts)
+	if err != nil {
+		return PresentationArtefactResult{}, fmt.Errorf("presentation for artefact %s: render: %w", artifact.Document.Name, err)
+	}
+
+	return PresentationArtefactResult{
+		HTML:        result.HTML,
+		LocalAssets: result.LocalAssets,
+	}, nil
+}
+
+// buildPresentationConstraintContext builds a constraint evaluation context for a presentation view of a ReportArtefact.
+func buildPresentationConstraintContext(artifact config.Artifact, mode spec.Mode) (*spec.ConstraintContext, error) {
+	specMap, err := spec.ToMap(artifact.Document.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("presentation for artefact %s: parse spec for constraints: %w", artifact.Document.Name, err)
+	}
+
+	return &spec.ConstraintContext{
+		Labels:       artifact.Labels,
+		Spec:         specMap,
+		Mode:         mode,
+		ArtefactKind: "report",
+	}, nil
 }
