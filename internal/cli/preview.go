@@ -427,7 +427,6 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			Name:   art.Document.Name,
 			Title:  art.Spec.Title,
 			Format: art.Spec.Format,
-			IsDoc:  false,
 		})
 	}
 	for _, docArt := range documentArtefacts {
@@ -563,6 +562,29 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		// DocumentArtefacts get header injected too
 		frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+	}
+
+	// Render presentation view for each ReportArtefact at /pres/{name}
+	for _, art := range artifacts {
+		renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, watchDir, docs, art, pipeline.PresentationArtefactRenderOptions{
+			EngineVersion:            cfg.EngineVersion,
+			QueryLogger:              cfg.QueryLogger,
+			DataValidation:           cfg.DataValidationMode,
+			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			PluginOptions:            cfg.PluginOptions,
+			PostDatasetHook:          cfg.PostDatasetHook,
+			Session:                  cfg.Session,
+		})
+		if err != nil {
+			logger.Errorf("Render failed for presentation of %s (%s): %v", art.Document.Name, reason, err)
+			continue
+		}
+		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
+		presPath := "/pres/" + art.Document.Name
+		// Inject preview SSE client + import map so context swap works (no toolbar/error markers)
+		frameHTML := withPreviewStyles(renderResult.FrameHTML)
+		routeMap[presPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		payloads = append(payloads, artefactPayload{path: presPath, contextHTML: renderResult.ContextHTML})
 	}
 
 	server.SetLocalAssets(allAssets)
@@ -762,7 +784,6 @@ func buildPreviewHeader(artifacts []previewArtefactInfo, documents []previewDocu
 	return b.String()
 }
 
-// withPreviewHeader injects the preview header into the HTML document after <body>.
 func withPreviewHeader(doc []byte, artifacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) []byte {
 	if len(doc) == 0 {
 		return doc

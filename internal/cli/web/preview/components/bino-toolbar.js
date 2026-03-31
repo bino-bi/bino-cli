@@ -95,6 +95,27 @@ class BinoToolbar extends LitElement {
     .assets-icon, .graph-icon, .explorer-icon {
       font-size: var(--bino-font-size-md);
     }
+    .present-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bino-space-xs);
+      padding: var(--bino-space-xs) 0.625rem;
+      border-radius: 999px;
+      background: #22c55e;
+      border: 1px solid #16a34a;
+      color: #fff;
+      font-size: var(--bino-font-size-sm);
+      font-weight: 600;
+      font-family: var(--bino-font-sans);
+      cursor: pointer;
+      user-select: none;
+    }
+    .present-btn:hover {
+      background: #16a34a;
+    }
+    .present-icon {
+      font-size: var(--bino-font-size-md);
+    }
     .spacer {
       flex: 1;
     }
@@ -177,6 +198,10 @@ class BinoToolbar extends LitElement {
       }
     });
 
+    // Show Present button only when a specific ReportArtefact is selected
+    var isReportArt = currentPath !== '/' && !currentPath.startsWith('/doc/') && !currentPath.startsWith('/pres/');
+    var presURL = isReportArt ? '/pres' + currentPath : null;
+
     return html`
       <span class="title">bino preview</span>
       <select id="artefact-select" @change=${this._onSelectChange}>
@@ -219,6 +244,12 @@ class BinoToolbar extends LitElement {
         <span class="explorer-icon">\u2636</span>
         <span>Explorer</span>
       </button>
+      ${presURL ? html`
+        <button class="present-btn" title="Open presentation" @click=${function() { window.open(presURL, '_blank'); }}>
+          <span class="present-icon">\u25B6</span>
+          <span>Present</span>
+        </button>
+      ` : ''}
       <span class="spacer"></span>
       <slot></slot>
       <div class="progress-bar ${this._refreshing ? 'active' : ''}"></div>

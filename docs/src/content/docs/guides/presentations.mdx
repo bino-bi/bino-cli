@@ -1,0 +1,248 @@
+---
+title: Presentations
+description: Turn any ReportArtefact into an interactive Reveal.js slide deck using labels.
+---
+
+Every `ReportArtefact` can be viewed as an interactive presentation powered by [Reveal.js](https://revealjs.com). Each `LayoutPage` in the artefact becomes one slide. No additional manifest kind is needed -- presentations are controlled entirely through optional `metadata.labels`.
+
+## Quick start
+
+No configuration is required. In **preview mode**, select a ReportArtefact from the dropdown and click the green **Present** button in the toolbar. A new browser tab opens with your report pages rendered as slides.
+
+Use the arrow keys or swipe gestures to navigate between slides.
+
+## Presentation labels on ReportArtefact
+
+Add `presentation.*` labels to a `ReportArtefact` to customise the slide deck. All labels are optional and have sensible defaults.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: quarterly-review
+  labels:
+    presentation.theme: moon
+    presentation.transition: fade
+    presentation.transitionSpeed: fast
+spec:
+  format: hd
+  layoutPages:
+    - cover
+    - highlights
+    - regional-*
+    - summary
+  filename: quarterly-review.pdf
+  title: "Quarterly Review"
+```
+
+### Available labels
+
+| Label | Default | Description |
+|---|---|---|
+| `presentation.theme` | `white` | Reveal.js theme. See [Themes](#themes) below. |
+| `presentation.transition` | `slide` | Default slide transition effect. See [Transitions](#transitions) below. |
+| `presentation.transitionSpeed` | `default` | Transition speed: `default`, `fast`, or `slow`. |
+| `presentation.autoSlide` | `0` | Auto-advance interval in milliseconds. `0` disables auto-advance. |
+| `presentation.loop` | `false` | Loop back to the first slide after the last. |
+| `presentation.controls` | `true` | Show navigation arrows at the bottom-right. |
+| `presentation.progress` | `true` | Show a progress bar at the bottom. |
+| `presentation.hash` | `true` | Enable hash-based navigation (`#/2` in the URL). |
+| `presentation.format` | _(from spec.format)_ | Override slide dimensions. Uses the same format values as `spec.format` (e.g. `hd`, `full-hd`, `4k`). |
+| `presentation.customCSS` | _(none)_ | Path to a custom CSS file for additional styling (relative to the manifest). |
+
+### Themes
+
+The `presentation.theme` label accepts any built-in Reveal.js theme:
+
+`black` `white` `league` `beige` `night` `moon` `serif` `simple` `solarized` `blood` `sky` `dracula`
+
+### Transitions
+
+The `presentation.transition` label accepts:
+
+`none` `fade` `slide` `convex` `concave` `zoom`
+
+### Slide format
+
+By default, the slide dimensions match the artefact's `spec.format`. Use `presentation.format` to override this. Common choices for presentations:
+
+| Format | Resolution | Use case |
+|---|---|---|
+| `hd` | 1280 x 720 | Standard 16:9 presentations |
+| `full-hd` | 1920 x 1080 | High-resolution displays |
+| `4k` | 3840 x 2160 | Ultra-high-resolution |
+| `xga` | 1024 x 768 | Classic 4:3 ratio |
+| `a4` | 1123 x 794 | A4 landscape |
+
+## Per-slide labels on LayoutPage
+
+Individual slides can be customised with `presentation.slide.*` labels on the `LayoutPage` manifest. These override the artefact-level defaults for that specific slide.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: cover
+  labels:
+    presentation.slide.transition: zoom
+    presentation.slide.backgroundColor: "#1a1a2e"
+    presentation.slide.notes: "Welcome the audience and introduce the agenda."
+spec:
+  pageFormat: hd
+  pageOrientation: landscape
+  children:
+    - kind: Text
+      spec:
+        value: "Quarterly Business Review"
+```
+
+### Available slide labels
+
+| Label | Description |
+|---|---|
+| `presentation.slide.transition` | Override the transition effect for this slide. |
+| `presentation.slide.transitionSpeed` | Override transition speed for this slide. |
+| `presentation.slide.backgroundColor` | Set a background colour (CSS value, e.g. `#1a1a2e` or `rgb(26,26,46)`). |
+| `presentation.slide.backgroundImage` | URL or path to a background image. |
+| `presentation.slide.backgroundVideo` | URL or path to a background video. |
+| `presentation.slide.backgroundSize` | CSS `background-size` value (e.g. `cover`, `contain`). |
+| `presentation.slide.backgroundOpacity` | Opacity of the background (e.g. `0.5`). |
+| `presentation.slide.autoAnimate` | Set to `true` to enable auto-animation between this slide and the next. |
+| `presentation.slide.autoAnimateId` | Group slides for auto-animation by giving them the same ID. |
+| `presentation.slide.visibility` | Set to `hidden` to skip this slide during navigation (useful for backup slides). |
+| `presentation.slide.notes` | Speaker notes displayed in the Reveal.js speaker view (press `S` to open). |
+
+## Speaker notes
+
+Add notes to any slide with the `presentation.slide.notes` label. Press **S** during the presentation to open the speaker view, which shows the current slide, next slide, elapsed time, and your notes.
+
+```yaml
+metadata:
+  name: financial-summary
+  labels:
+    presentation.slide.notes: |
+      Key talking points:
+      - Revenue grew 12% YoY
+      - APAC strongest region
+      - Outlook remains positive
+```
+
+## Auto-animated slides
+
+Use `presentation.slide.autoAnimate: "true"` on consecutive slides to let Reveal.js automatically animate matching elements between them. Give related slides the same `presentation.slide.autoAnimateId` to group them.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: revenue-q1
+  labels:
+    presentation.slide.autoAnimate: "true"
+    presentation.slide.autoAnimateId: revenue
+spec:
+  children:
+    - kind: ChartStructure
+      spec:
+        dataset: revenue-q1
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: revenue-q2
+  labels:
+    presentation.slide.autoAnimate: "true"
+    presentation.slide.autoAnimateId: revenue
+spec:
+  children:
+    - kind: ChartStructure
+      spec:
+        dataset: revenue-q2
+```
+
+## Hidden / backup slides
+
+Set `presentation.slide.visibility: hidden` on a LayoutPage to include it in the deck without showing it during normal navigation. These slides can still be accessed via the URL hash.
+
+```yaml
+metadata:
+  name: appendix-methodology
+  labels:
+    presentation.slide.visibility: hidden
+```
+
+## Keyboard shortcuts
+
+During a presentation, Reveal.js provides these shortcuts:
+
+| Key | Action |
+|---|---|
+| Arrow keys | Navigate slides |
+| `Space` | Next slide |
+| `Esc` | Overview mode |
+| `S` | Speaker notes |
+| `F` | Fullscreen |
+| `B` / `.` | Pause (black screen) |
+| `?` | Show keyboard help |
+
+## Example: complete presentation
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: quarterly-review
+  labels:
+    presentation.theme: moon
+    presentation.transition: fade
+    presentation.transitionSpeed: fast
+    presentation.controls: "true"
+    presentation.progress: "true"
+    presentation.format: hd
+spec:
+  format: hd
+  orientation: landscape
+  layoutPages:
+    - cover
+    - agenda
+    - financial-*
+    - regional-summary
+    - outlook
+    - appendix-*
+  filename: quarterly-review.pdf
+  title: "Q1 2026 Business Review"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: cover
+  labels:
+    presentation.slide.transition: zoom
+    presentation.slide.backgroundColor: "#0f172a"
+    presentation.slide.notes: "Welcome everyone. Today we review Q1 performance."
+spec:
+  pageFormat: hd
+  pageOrientation: landscape
+  children:
+    - kind: Text
+      spec:
+        value: "Q1 2026 Business Review"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: appendix-methodology
+  labels:
+    presentation.slide.visibility: hidden
+    presentation.slide.notes: "Only show if someone asks about methodology."
+spec:
+  pageFormat: hd
+  pageOrientation: landscape
+  children:
+    - kind: Text
+      spec:
+        value: "Methodology & Data Sources"
+```
+
+The same manifests produce both a PDF report (via `bino build`) and an interactive presentation (via the **Present** button in `bino preview`).
