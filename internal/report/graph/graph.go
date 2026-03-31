@@ -103,7 +103,7 @@ func FilterDocumentsByConstraints(docs []config.Document, ctx *spec.ConstraintCo
 
 	result := make([]config.Document, 0, len(docs))
 	for _, doc := range docs {
-		// ReportArtefacts are never filtered by constraints
+		// Artefact kinds are never filtered by constraints
 		if doc.Kind == "ReportArtefact" {
 			result = append(result, doc)
 			continue

@@ -131,6 +131,32 @@ func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.Docume
 	return RenderDocumentArtefactHTML(ctx, b.Workdir, artifact, opts)
 }
 
+// RenderPresentationHTML generates Reveal.js HTML for a ReportArtefact's presentation view.
+func (b *Builder) RenderPresentationHTML(ctx context.Context, docs []config.Document, artifact config.Artifact) (PresentationArtefactResult, error) {
+	return RenderPresentationArtefactHTML(ctx, b.Workdir, docs, artifact, PresentationArtefactRenderOptions{
+		EngineVersion:            b.EngineVersion,
+		QueryLogger:              b.QueryLogger,
+		QueryExecLogger:          b.QueryExecLogger,
+		DataValidation:           b.DataValidation,
+		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostDatasetHook:          b.PostDatasetHook,
+	})
+}
+
+// RenderPresentationPreviewHTML generates Reveal.js HTML for preview mode (server-relative CDN, shared session).
+func (b *Builder) RenderPresentationPreviewHTML(ctx context.Context, docs []config.Document, artifact config.Artifact, session *duckdb.Session) (PresentationArtefactResult, error) {
+	return RenderPresentationArtefactHTMLForPreview(ctx, b.Workdir, docs, artifact, PresentationArtefactRenderOptions{
+		EngineVersion:            b.EngineVersion,
+		QueryLogger:              b.QueryLogger,
+		DataValidation:           b.DataValidation,
+		DataValidationSampleSize: b.DataValidationSampleSize,
+		PluginOptions:            b.PluginOptions,
+		PostDatasetHook:          b.PostDatasetHook,
+		Session:                  session,
+	})
+}
+
 // RenderPreviewFrame generates a two-phase frame+context render for preview mode.
 func (b *Builder) RenderPreviewFrame(ctx context.Context, docs []config.Document) (FrameRenderResult, error) {
 	return RenderHTMLFrameAndContext(ctx, docs, RenderOptions{

@@ -951,7 +951,6 @@ type buildExecutionConfig struct {
 	HookEnv    hooks.HookEnv
 }
 
-// buildAllResults holds the results from building all artifact types.
 type buildAllResults struct {
 	Reports     []artefactResult
 	Screenshots []screenshotArtefactResult

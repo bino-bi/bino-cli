@@ -164,6 +164,5 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newDaemonCommand())
 	cmd.AddCommand(newSchemaCommand())
 	cmd.AddCommand(newPluginCommand())
-
 	return cmd
 }
