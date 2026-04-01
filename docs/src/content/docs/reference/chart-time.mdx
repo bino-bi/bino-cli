@@ -246,6 +246,32 @@ spec:
     mode: absolute
 ```
 
+## Inherited props
+
+Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
+
+| Value | Resolves from |
+|-------|---------------|
+| `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage` |
+| `inherited-page` | Nearest ancestor `LayoutPage` only (skips cards) |
+
+The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. If no ancestor is found, the component falls back to its normal auto-detection logic.
+
+```yaml
+children:
+  - kind: ChartTime
+    spec:
+      dataset: revenue_trend
+      dateInterval: month
+      level: category
+      scenarios: inherited-page       # uses page's titleScenarios
+      variances: inherited-page       # uses page's titleVariances
+      order: inherited-page
+      orderDirection: inherited-page
+```
+
+See the [ChartStructure inherited props](/reference/chart-structure/#inherited-props) section for full examples.
+
 ## Attribute Reference
 
 ### Common Metadata
@@ -273,8 +299,8 @@ spec:
 | `spec.dateInterval` | string | no | auto-detect | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. | `dateInterval: month` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
 | `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowcategory`, `category`, `subcategory`, `auto`. | `level: category` |
-| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`. | `order: ac1` |
-| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `orderDirection: desc` |
+| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `order: ac1` |
+| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
 | `spec.unitScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-unit factor. Numeric values enable overdrive bars on overflow. | `unitScaling: 0.05` |
@@ -286,8 +312,8 @@ spec:
 | `spec.showOverlayMedian` | boolean | no | `false` | Show median overlay line. | `showOverlayMedian: true` |
 | `spec.limit` | integer | no | `0` | Column stack limit. `0` means unlimited. | `limit: 12` |
 | `spec.intervalSpanLimit` | integer | no | `28` | Controls how many columns drive automatic date interval selection. | `intervalSpanLimit: 50` |
-| `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. | `scenarios: ["ac1", "fc1"]` |
-| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `variances: ["dfc1_ac1_pos"]` |
+| `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "fc1"]` |
+| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dfc1_ac1_pos"]` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `""` or omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
 | `spec.internationalisation` | string | no | — | i18n namespace. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
 | `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |

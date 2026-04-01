@@ -157,6 +157,66 @@ spec:
     mode: relative
 ```
 
+## Inherited props
+
+Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
+
+| Value | Resolves from |
+|-------|---------------|
+| `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage` (whichever is closer in the DOM) |
+| `inherited-page` | Nearest ancestor `LayoutPage` only (skips cards) |
+
+The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. If no ancestor is found, the component falls back to its normal auto-detection logic.
+
+### Example: inherit everything from the page
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: revenue_page
+spec:
+  titleScenarios: ["ac1", "fc1"]
+  titleVariances: ["dac1_fc1_pos"]
+  titleOrder: ac1
+  titleOrderDirection: desc
+  pageLayout: split-vertical
+  children:
+    - kind: ChartStructure
+      spec:
+        dataset: revenue_by_region
+        level: category
+        scenarios: inherited-page
+        variances: inherited-page
+        order: inherited-page
+        orderDirection: inherited-page
+        unitScaling: 0.001
+    - kind: Table
+      spec:
+        dataset: revenue_by_region
+        scenarios: inherited-page
+        variances: inherited-page
+```
+
+### Example: inherit from the closest card
+
+```yaml
+children:
+  - kind: LayoutCard
+    spec:
+      titleScenarios: ["ac1", "pp1"]
+      titleVariances: ["dac1_pp1_pos"]
+      cardLayout: full
+      children:
+        - kind: ChartStructure
+          spec:
+            dataset: revenue_data
+            level: category
+            scenarios: inherited-closest   # resolves to ac1,pp1 from the card
+            variances: inherited-closest   # resolves to dac1_pp1_pos
+```
+
 ## Attribute Reference
 
 ### Common Metadata
@@ -179,8 +239,8 @@ spec:
 | `spec.chartTitle` | string | no | `""` | Custom chart title. | `chartTitle: "Revenue by region"` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
 | `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowcategory`, `category`, `subcategory`, `auto`. When `auto`, detected silently. When blank, detected with a warning. | `level: category` |
-| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`. | `order: ac1` |
-| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `orderDirection: desc` |
+| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `order: ac1` |
+| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
 | `spec.unitScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-unit factor. Numeric values enable overdrive bars on overflow. | `unitScaling: 0.003` |
@@ -189,8 +249,8 @@ spec:
 | `spec.showCategories` | boolean | no | `true` | Show category labels on bars. | `showCategories: true` |
 | `spec.showMeasureScale` | boolean | no | `false` | Show measure unit in chart header. | `showMeasureScale: true` |
 | `spec.limit` | integer | no | `0` | Maximum bars per group. Extra rows are cumulated as REST. `0` means unlimited. | `limit: 10` |
-| `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. | `scenarios: ["ac1", "py1"]` |
-| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `variances: ["dpy1_ac1_pos"]` |
+| `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "py1"]` |
+| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dpy1_ac1_pos"]` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `""` or omitted: auto-scale to fit parent height with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
 | `spec.internationalisation` | string | no | — | i18n namespace. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
 | `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |

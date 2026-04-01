@@ -192,6 +192,43 @@ spec:
 
 For the full constraint syntax and operators, see [Inline child constraints](/reference/layout-page/#inline-child-constraints) and [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).
 
+## Inherited props
+
+### Card inherits from page
+
+A `LayoutCard` can inherit `titleScenarios`, `titleVariances`, `titleOrder`, and `titleOrderDirection` from its parent `LayoutPage` by setting the value to `inherited-page`. The resolved value is used both in the card's own title and made available to child components.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: quarterly_report
+spec:
+  titleScenarios: ["ac1", "fc1"]
+  titleVariances: ["dac1_fc1_pos"]
+  titleOrder: ac1
+  titleOrderDirection: desc
+  pageLayout: 2x2
+  children:
+    - kind: LayoutCard
+      spec:
+        titleBusinessUnit: "Sales"
+        titleScenarios: inherited-page     # inherits ac1,fc1 from page
+        titleVariances: inherited-page     # inherits dac1_fc1_pos from page
+        cardLayout: full
+        children:
+          - kind: Table
+            spec:
+              dataset: revenue_data
+              scenarios: inherited-closest  # resolves from the card
+              variances: inherited-closest
+```
+
+### Child components inherit from card
+
+Child components inside a card can use `inherited-closest` to resolve from the nearest card or page, or `inherited-page` to skip the card and resolve directly from the page. See the [ChartStructure inherited props](/reference/chart-structure/#inherited-props) section for details.
+
 ## Attribute Reference
 
 ### Common Metadata
@@ -212,10 +249,10 @@ For the full constraint syntax and operators, see [Inline child constraints](/re
 |-----------|------|----------|---------|-------------|--------|
 | `spec.titleImage` | string | no | `""` | URL or asset name for the card title image. | `titleImage: "debug/concordia.png"` |
 | `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. | `titleBusinessUnit: "Sales"` |
-| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
-| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dpp1_ac1_pos"]` |
-| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleOrder: ac1` |
-| `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`. | `titleOrderDirection: desc` |
+| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `inherited-page`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
+| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, or `inherited-page`. | `titleVariances: ["dpp1_ac1_pos"]` |
+| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-page`. | `titleOrder: ac1` |
+| `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-page`. | `titleOrderDirection: desc` |
 | `spec.titleMeasures` | array or string | no | — | Measures displayed in the card header. Array of `{name, unit}` objects or JSON string. | see below |
 | `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
 | `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
