@@ -752,7 +752,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.pageGridGap` | string | no | `"0"` | Gap between grid cells in pixels. | `pageGridGap: "8"` |
 | `spec.pageFormat` | string | no | `xga` | Page size. Values: `xga`, `hd`, `full-hd`, `4k`, `4k2k`, `a4`, `a3`, `a2`, `a1`, `a0`, `letter`, `legal`. | `pageFormat: a4` |
 | `spec.pageOrientation` | string | no | — | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
-| `spec.pageFitToContent` | boolean | no | `true` | Shrink to content height or stretch to fill available height. | `pageFitToContent: true` |
+| `spec.pageFitToContent` | boolean | no | `false` | When `true`, the page body height shrinks to fit content. When `false` (default), it stretches to fill the full page height. Use `false` when the page contains auto-scaling components. | `pageFitToContent: false` |
 
 ### Spec Attributes — Footer and Message
 

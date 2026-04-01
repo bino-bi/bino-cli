@@ -36,7 +36,7 @@ spec:
   cardLayout: split-horizontal
   cardCustomTemplate: '"a b" "c d"'
   cardGridGap: "0.5rem"
-  cardFitToContent: true
+  cardFitToContent: false
   cardShowBorder: true
   children:
     - kind: ChartStructure
@@ -273,7 +273,7 @@ Child components inside a card can use `inherited-closest` to resolve from the n
 | `spec.cardLayout` | string | no | `full` | Grid layout preset. Values: `full`, `split-horizontal`, `split-vertical`, `2x2`, `3x3`, `4x4`, `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`, `custom-template`. | `cardLayout: split-horizontal` |
 | `spec.cardCustomTemplate` | string | no | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `cardLayout: custom-template`. | `cardCustomTemplate: '"a b" "c d"'` |
 | `spec.cardGridGap` | string | no | `"0"` | Gap between grid cells. | `cardGridGap: "0.5rem"` |
-| `spec.cardFitToContent` | boolean | no | `true` | Shrink to content height or stretch to fill available height. | `cardFitToContent: true` |
+| `spec.cardFitToContent` | boolean | no | `false` | When `true`, the card shrinks to fit its content. When `false` (default), it stretches to fill its parent. Use `false` when the card contains auto-scaling components (e.g. `unitScaling: auto`). | `cardFitToContent: false` |
 | `spec.cardShowBorder` | boolean | no | `true` | Display a border around the card. | `cardShowBorder: true` |
 
 ### Spec Attributes — Children
