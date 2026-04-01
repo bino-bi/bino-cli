@@ -2455,14 +2455,14 @@
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted."
         },
         "titleScenarios": {
-          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac1-ac4, fc1-fc4, pp1-pp4, pl1-pl4.",
+          "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac1-ac4, fc1-fc4, pp1-pp4, pl1-pl4. Set to 'inherited-page' to inherit from the parent LayoutPage's titleScenarios.",
           "oneOf": [
             { "type": "string" },
             { "type": "array", "items": { "type": "string" } }
           ]
         },
         "titleVariances": {
-          "description": "List of variances calculated from the given scenarios. Can be a YAML array or a comma-separated string. The scenarios used in the variances must also be defined in the scenarios property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu].",
+          "description": "List of variances calculated from the given scenarios. Can be a YAML array or a comma-separated string. The scenarios used in the variances must also be defined in the scenarios property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Set to 'inherited-page' to inherit from the parent LayoutPage's titleVariances.",
           "oneOf": [
             { "type": "string" },
             { "type": "array", "items": { "type": "string" } }
@@ -2470,15 +2470,15 @@
         },
         "titleOrder": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-page"],
           "default": "category",
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list."
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-page' to inherit from the parent LayoutPage."
         },
         "titleOrderDirection": {
           "type": "string",
-          "enum": ["asc", "desc"],
+          "enum": ["asc", "desc", "inherited-page"],
           "default": "asc",
-          "description": "Sets the sorting order direction."
+          "description": "Sets the sorting order direction. Set to 'inherited-page' to inherit from the parent LayoutPage."
         },
         "titleMeasures": {
           "description": "Array of measure objects with name and unit. Can be a YAML array or a JSON string. Example: [{\"name\": \"Bruttoumsatz\", \"unit\": \"mEUR\"}]",
@@ -2782,13 +2782,13 @@
         },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list."
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
-          "enum": ["asc", "desc"],
-          "description": "Sets the sorting order direction."
+          "enum": ["asc", "desc", "inherited-closest", "inherited-page"],
+          "description": "Sets the sorting order direction. Set to 'inherited-closest' or 'inherited-page' to inherit from an ancestor LayoutCard or LayoutPage."
         },
         "measureScale": {
           "type": "string",
@@ -2828,7 +2828,7 @@
         },
         "pixelPerUnit": { "type": "number", "minimum": 0 },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {
@@ -2838,7 +2838,7 @@
           ]
         },
         "variances": {
-          "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string.",
+          "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {
@@ -2900,13 +2900,13 @@
         },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list."
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
-          "enum": ["asc", "desc"],
-          "description": "Sets the sorting order direction."
+          "enum": ["asc", "desc", "inherited-closest", "inherited-page"],
+          "description": "Sets the sorting order direction. Set to 'inherited-closest' or 'inherited-page' to inherit from an ancestor LayoutCard or LayoutPage."
         },
         "measureScale": {
           "type": "string",
@@ -2956,7 +2956,7 @@
           "description": "Left side offset for horizontal sync."
         },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {
@@ -2966,7 +2966,7 @@
           ]
         },
         "variances": {
-          "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string.",
+          "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {
@@ -3394,13 +3394,13 @@
         "filter": { "type": "string" },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list."
+          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
-          "enum": ["asc", "desc"],
-          "description": "Sets the sorting order direction."
+          "enum": ["asc", "desc", "inherited-closest", "inherited-page"],
+          "description": "Sets the sorting order direction. Set to 'inherited-closest' or 'inherited-page' to inherit from an ancestor LayoutCard or LayoutPage."
         },
         "measureScale": {
           "type": "string",
@@ -3462,7 +3462,7 @@
           "description": "Sets the table type."
         },
         "scenarios": {
-          "description": "List of scenarios displayed in the table. Can be a YAML array or a JSON string.",
+          "description": "List of scenarios displayed in the table. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {
@@ -3472,7 +3472,7 @@
           ]
         },
         "variances": {
-          "description": "List of variances calculated from the given scenarios. The scenarios used must be defined in the 'scenarios' property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string.",
+          "description": "List of variances calculated from the given scenarios. The scenarios used must be defined in the 'scenarios' property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string" },
             {

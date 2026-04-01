@@ -294,3 +294,52 @@ spec:
                 Growth Leader: **Eastern Europe** (+20.8%)
 
                 FY Forecast: **EUR 28.5m**
+---
+# ─── Inherited Props Demo ───────────────────────────────────────────
+# Scenarios and variances are defined once on the page and inherited
+# by child components via "inherited-page", avoiding repetition.
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: inherited-props-demo
+spec:
+  titleBusinessUnit: "Inherited Props Demo"
+  titleScenarios: ["ac1", "pp1"]
+  titleVariances: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  titleOrder: ac1
+  titleOrderDirection: desc
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: ytd
+  pageLayout: split-vertical
+  footerText: "Inherited Props Demo"
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: inherited_chart
+      spec:
+        dataset: revenue_by_region
+        chartTitle: "Revenue by Region"
+        level: category
+        # These four props are inherited from the page's title* fields:
+        scenarios: inherited-page       # resolves to [ac1, pp1]
+        variances: inherited-page       # resolves to [dac1_pp1_pos, drac1_pp1_pos]
+        order: inherited-page           # resolves to ac1
+        orderDirection: inherited-page  # resolves to desc
+        unitScaling: 0.001
+        percentageScaling: 25
+        limit: 10
+    - kind: Table
+      metadata:
+        name: inherited_table
+      spec:
+        dataset: financial_summary
+        # Same inheritance — no need to duplicate scenario config:
+        scenarios: inherited-page
+        variances: inherited-page
+        order: inherited-page
+        orderDirection: inherited-page
+        grouped: true
