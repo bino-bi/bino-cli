@@ -99,6 +99,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			// Create a shared DuckDB session for the lifetime of the preview process.
 			// Extensions are loaded once; views are re-registered on each refresh
 			// via CREATE OR REPLACE VIEW.
+			logger.Infof("Initializing DuckDB engine...")
 			duckdbOpts, err := duckdb.DefaultOptions()
 			if err != nil {
 				return RuntimeError(err)
@@ -229,6 +230,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			// Initial refresh collects visited directories so the watcher can
 			// register them without a redundant filesystem walk.
+			logger.Infof("Loading manifests and executing datasets...")
 			var visitedDirs []string
 			refreshCfg.CollectedDirs = &visitedDirs
 			if err := refresh("initial load"); err != nil {
@@ -564,27 +566,11 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 	}
 
-	// Render presentation view for each ReportArtefact at /pres/{name}
+	// Register lazy presentation view for each ReportArtefact at /pres/{name}.
+	// Presentation rendering re-executes datasets, so defer it until first access.
 	for _, art := range artifacts {
-		renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, watchDir, docs, art, pipeline.PresentationArtefactRenderOptions{
-			EngineVersion:            cfg.EngineVersion,
-			QueryLogger:              cfg.QueryLogger,
-			DataValidation:           cfg.DataValidationMode,
-			DataValidationSampleSize: cfg.DataValidationSampleSize,
-			PluginOptions:            cfg.PluginOptions,
-			PostDatasetHook:          cfg.PostDatasetHook,
-			Session:                  cfg.Session,
-		})
-		if err != nil {
-			logger.Errorf("Render failed for presentation of %s (%s): %v", art.Document.Name, reason, err)
-			continue
-		}
-		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 		presPath := "/pres/" + art.Document.Name
-		// Inject preview SSE client + import map so context swap works (no toolbar/error markers)
-		frameHTML := withPreviewStyles(renderResult.FrameHTML)
-		routeMap[presPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
-		payloads = append(payloads, artefactPayload{path: presPath, contextHTML: renderResult.ContextHTML})
+		routeMap[presPath] = lazyPresentationContent(watchDir, docs, art, cfg, server, presPath)
 	}
 
 	server.SetLocalAssets(allAssets)
@@ -595,6 +581,38 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 	}
 	logger.Successf("Content refreshed (%s)", reason)
 	return nil
+}
+
+// lazyPresentationContent returns a ContentFunc that renders the presentation view
+// on first access, caching the result for subsequent requests.
+func lazyPresentationContent(workdir string, docs []config.Document, art config.Artifact, cfg *previewRefreshConfig, server *previewhttp.Server, presPath string) previewhttp.ContentFunc {
+	var once sync.Once
+	var cachedBody []byte
+	var cachedCT string
+	var cachedErr error
+
+	return func(ctx context.Context) ([]byte, string, error) {
+		once.Do(func() {
+			renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, workdir, docs, art, pipeline.PresentationArtefactRenderOptions{
+				EngineVersion:            cfg.EngineVersion,
+				QueryLogger:              cfg.QueryLogger,
+				DataValidation:           cfg.DataValidationMode,
+				DataValidationSampleSize: cfg.DataValidationSampleSize,
+				PluginOptions:            cfg.PluginOptions,
+				PostDatasetHook:          cfg.PostDatasetHook,
+				Session:                  cfg.Session,
+			})
+			if err != nil {
+				cachedErr = err
+				return
+			}
+			frameHTML := withPreviewStyles(renderResult.FrameHTML)
+			cachedBody = append([]byte(nil), frameHTML...)
+			cachedCT = "text/html; charset=utf-8"
+			server.BroadcastContent(presPath, renderResult.ContextHTML)
+		})
+		return cachedBody, cachedCT, cachedErr
+	}
 }
 
 // previewArtefactInfo holds metadata about an artifact for the preview header dropdown.

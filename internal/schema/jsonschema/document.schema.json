@@ -2418,7 +2418,7 @@
           "enum": ["landscape", "portrait"],
           "description": "Defines page orientation. Default is based on the given format."
         },
-        "pageFitToContent": { "type": "boolean", "default": true, "description": "When true, the page body height shrinks to fit content. When false, the body stretches to fill the full page height." },
+        "pageFitToContent": { "type": "boolean", "default": false, "description": "When true, the page body height shrinks to fit content. When false (default), the body stretches to fill the full page height. Use false when the page contains auto-scaling components." },
         "pageNumber": { "type": "string", "description": "Page number displayed in the footer." },
         "footerDisplayPageNumber": { "type": "boolean", "default": true, "description": "Whether to display the page number in the footer." },
         "footerText": { "type": "string" },
@@ -2559,8 +2559,8 @@
         },
         "cardFitToContent": {
           "type": "boolean",
-          "default": true,
-          "description": "Whether the card should fit to its content size."
+          "default": false,
+          "description": "When true, the card shrinks to fit its content. When false (default), it stretches to fill its parent. Use false when the card contains auto-scaling components."
         },
         "cardShowBorder": {
           "type": "boolean",
