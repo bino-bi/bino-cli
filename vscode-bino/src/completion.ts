@@ -66,6 +66,11 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             return this.getSigningProfileCompletions();
         }
 
+        // Check for unitScaling/percentageScaling field → suggest ScalingGroup names
+        if (this.isUnitScalingField(linePrefix) || this.isPercentageScalingField(linePrefix)) {
+            return this.getScalingGroupCompletions();
+        }
+
         // Check for kind field completion
         if (this.isKindField(linePrefix)) {
             return this.getKindCompletions();
@@ -136,6 +141,16 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
     private isSigningProfileField(linePrefix: string): boolean {
         const trimmed = linePrefix.trim();
         return trimmed === 'signingProfile:' || trimmed.startsWith('signingProfile: ');
+    }
+
+    private isUnitScalingField(linePrefix: string): boolean {
+        const trimmed = linePrefix.trim();
+        return trimmed === 'unitScaling:' || trimmed.startsWith('unitScaling: ');
+    }
+
+    private isPercentageScalingField(linePrefix: string): boolean {
+        const trimmed = linePrefix.trim();
+        return trimmed === 'percentageScaling:' || trimmed.startsWith('percentageScaling: ');
     }
 
     private isKindField(linePrefix: string): boolean {
@@ -215,6 +230,22 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
         }
 
         return undefined;
+    }
+
+    private getScalingGroupCompletions(): vscode.CompletionItem[] {
+        const names = this.indexer.getDocumentNames(['ScalingGroup']);
+        const items: vscode.CompletionItem[] = names.map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Reference);
+            item.detail = 'ScalingGroup';
+            item.documentation = new vscode.MarkdownString(`Reference to ScalingGroup \`${name}\``);
+            return item;
+        });
+        // Also offer "auto" as a built-in option
+        const autoItem = new vscode.CompletionItem('auto', vscode.CompletionItemKind.Keyword);
+        autoItem.detail = 'Auto-fit scaling';
+        autoItem.documentation = new vscode.MarkdownString('Auto-fit to available space');
+        items.unshift(autoItem);
+        return items;
     }
 
     private getSigningProfileCompletions(): vscode.CompletionItem[] {
@@ -334,6 +365,7 @@ export class BinoCompletionProvider implements vscode.CompletionItemProvider {
             { name: 'Table', description: 'Tabular data display' },
             { name: 'ComponentStyle', description: 'Design tokens/CSS variables' },
             { name: 'Internationalization', description: 'Locale-specific translations' },
+            { name: 'ScalingGroup', description: 'Shared scaling value for charts/tables' },
             { name: 'ReportArtefact', description: 'Output PDF definition' },
             { name: 'LiveReportArtefact', description: 'Interactive web report with routes' },
             { name: 'SigningProfile', description: 'PDF digital signing config' }

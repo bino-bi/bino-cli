@@ -175,6 +175,7 @@ Three interaction modes are supported:
 	cmd.AddCommand(newAddAssetCommand())
 	cmd.AddCommand(newAddComponentStyleCommand())
 	cmd.AddCommand(newAddInternationalizationCommand())
+	cmd.AddCommand(newAddScalingGroupCommand())
 
 	// Reports
 	cmd.AddCommand(newAddReportArtefactCommand())

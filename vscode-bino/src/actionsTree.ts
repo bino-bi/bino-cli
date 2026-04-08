@@ -66,6 +66,7 @@ const SCAFFOLD_CATEGORIES: { id: string; label: string; items: ScaffoldEntry[] }
             { label: 'Add Asset', commandId: 'bino.addAsset', icon: 'file-media' },
             { label: 'Add ComponentStyle', commandId: 'bino.addComponentStyle', icon: 'paintcan' },
             { label: 'Add Internationalization', commandId: 'bino.addInternationalization', icon: 'globe' },
+            { label: 'Add ScalingGroup', commandId: 'bino.addScalingGroup', icon: 'symbol-ruler' },
         ]
     },
     {

@@ -272,6 +272,19 @@ func TestDocumentRoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name: "ScalingGroup",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindScalingGroup,
+				Metadata: Metadata{
+					Name: "revenue_scale",
+				},
+				Spec: &ScalingGroupSpec{
+					Value: 0.05,
+				},
+			},
+		},
+		{
 			name: "ReportArtefact",
 			doc: &Document{
 				APIVersion: APIVersion,

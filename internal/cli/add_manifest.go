@@ -170,6 +170,8 @@ func defaultDirectoryForKind(kind string) string {
 		return "styles"
 	case "Internationalization":
 		return "i18n"
+	case "ScalingGroup":
+		return "scaling"
 	case "ReportArtefact", "LiveReportArtefact":
 		return "reports"
 	case "SigningProfile":

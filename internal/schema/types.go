@@ -43,6 +43,7 @@ const (
 	KindLiveReportArtefact   = "LiveReportArtefact"
 	KindDocumentArtefact     = "DocumentArtefact"
 	KindSigningProfile       = "SigningProfile"
+	KindScalingGroup         = "ScalingGroup"
 )
 
 // NewDocument creates a new Document with the given kind and name.

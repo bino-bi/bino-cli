@@ -126,6 +126,35 @@ func collectInternationalizations(docs []config.Document) ([]internationalizatio
 	return entries, nil
 }
 
+// scalingGroup represents a named scaling value for synchronized chart/table scaling.
+type scalingGroup struct {
+	name  string
+	value float64
+}
+
+// scalingGroupSpec defines the structure for ScalingGroup manifests.
+type scalingGroupSpec struct {
+	Value float64 `json:"value"`
+}
+
+// collectScalingGroups extracts scaling group entries from documents.
+func collectScalingGroups(docs []config.Document) ([]scalingGroup, error) {
+	var groups []scalingGroup
+	for _, doc := range docs {
+		if doc.Kind != "ScalingGroup" {
+			continue
+		}
+		var payload struct {
+			Spec scalingGroupSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, fmt.Errorf("render: parse scaling group %s: %w", doc.Name, err)
+		}
+		groups = append(groups, scalingGroup{name: doc.Name, value: payload.Spec.Value})
+	}
+	return groups, nil
+}
+
 // collectComponentStyles extracts component style configurations from documents.
 func collectComponentStyles(docs []config.Document) ([]componentStyle, error) {
 	var styles []componentStyle

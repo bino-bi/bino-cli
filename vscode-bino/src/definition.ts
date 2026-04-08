@@ -51,7 +51,16 @@ const REFERENCE_PATTERNS: ReferencePattern[] = [
     {
         keyPattern: /^\s*artefact:\s*/,
         kinds: ['ReportArtefact']
-    }
+    },
+    // unitScaling/percentageScaling can reference ScalingGroup names
+    {
+        keyPattern: /^\s*unitScaling:\s*/,
+        kinds: ['ScalingGroup']
+    },
+    {
+        keyPattern: /^\s*percentageScaling:\s*/,
+        kinds: ['ScalingGroup']
+    },
     // Note: ref: is handled specially in provideDefinition to use child's kind field
     // Note: layoutPages is handled specially to skip glob patterns
 ];

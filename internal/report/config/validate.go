@@ -38,6 +38,7 @@ var builtinUniqueNameKinds = map[string]struct{}{
 	"SigningProfile":       {},
 	"ComponentStyle":       {},
 	"Internationalization": {},
+	"ScalingGroup":         {},
 }
 
 // UniqueNameKinds returns the set of kinds that require unique names.
