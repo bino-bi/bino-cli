@@ -1,0 +1,163 @@
+---
+title: ScalingGroup
+description: Define named scaling factors to synchronize bar and pin sizes across multiple charts and tables.
+---
+
+`ScalingGroup` manifests define named scaling values that multiple chart and table
+components can reference. When several components share the same scaling group name,
+their bar widths (absolute variances) or pin lengths (relative variances) are
+guaranteed to use the same pixels-per-unit factor, making visual comparisons across
+components meaningful.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: revenue_scale
+spec:
+  value: 0.001
+```
+
+## Fields
+
+- `value` – required. The scaling factor applied to every component that references
+  this group. The meaning depends on the consumer attribute:
+  - When referenced by `unitScaling` – pixels per data unit for absolute variance bars.
+  - When referenced by `percentageScaling` – pixels per percentage point for relative variance pins.
+
+## How it works
+
+1. Define one or more `ScalingGroup` manifests with a unique `metadata.name` and a
+   numeric `value`.
+2. On consumer components (`Table`, `ChartTime`, `ChartStructure`), set
+   `unitScaling` and/or `percentageScaling` to the scaling group name instead of a
+   hard-coded number.
+3. Every consumer that references the same name resolves to the same numeric factor.
+   Changing the `ScalingGroup` value updates all consumers at once.
+
+## Example: Synchronized table and chart
+
+A table and a structure chart that share the same absolute and relative scaling:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: revenue_abs
+spec:
+  value: 0.001
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: revenue_pct
+spec:
+  value: 0.5
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_by_segment
+  tableTitle: "Revenue by segment"
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  barColumns: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  unitScaling: revenue_abs
+  percentageScaling: revenue_pct
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: revenue_chart
+spec:
+  dataset: revenue_by_segment
+  chartTitle: "Revenue by segment"
+  level: category
+  order: ac1
+  orderDirection: desc
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos"]
+  unitScaling: revenue_abs
+  percentageScaling: revenue_pct
+```
+
+Both components render bars at exactly `0.001` pixels per unit and pins at `0.5`
+pixels per percentage point. A revenue delta of 5 000 always produces the same bar
+length regardless of which component it appears in.
+
+## Example: Multiple pages with shared scaling
+
+Use a single scaling group across components on different layout pages:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: cost_scale
+spec:
+  value: 0.002
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: overview_page
+spec:
+  pageLayout: split-vertical
+  children:
+    - kind: ChartTime
+      spec:
+        dataset: cost_monthly
+        chartTitle: "Monthly cost"
+        dateInterval: month
+        scenarios: ["ac1", "fc1"]
+        variances: ["dac1_fc1_pos"]
+        unitScaling: cost_scale
+    - kind: Table
+      spec:
+        dataset: cost_by_department
+        tableTitle: "Cost by department"
+        scenarios: ["ac1", "fc1"]
+        variances: ["dac1_fc1_pos"]
+        barColumns: ["dac1_fc1_pos"]
+        unitScaling: cost_scale
+```
+
+## Scaling group vs. numeric value
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Numeric (`unitScaling: 0.001`) | Simple, self-contained | Must update every component individually when tuning the scale |
+| Scaling group (`unitScaling: cost_scale`) | Single source of truth; all consumers stay in sync | Requires an extra manifest |
+
+Use scaling groups when two or more components should be visually comparable.
+Use a plain number when a component stands alone.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ScalingGroup`. |
+| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling` or `percentageScaling`. The name `auto` is reserved and cannot be used. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.value` | number | yes | — | Scaling factor. Meaning depends on context: pixels per data unit (for `unitScaling`) or pixels per percentage point (for `percentageScaling`). | `value: 0.001` |
