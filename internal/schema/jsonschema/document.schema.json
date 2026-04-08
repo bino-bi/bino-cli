@@ -1756,6 +1756,11 @@
           "default": false,
           "description": "If true, generates a table of contents from markdown headings."
         },
+        "tocNumbering": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, adds hierarchical chapter numbers to TOC entries (e.g. 1, 1.1, 1.1.1). Only applies when tableOfContents is enabled."
+        },
         "math": {
           "type": "boolean",
           "default": true,
