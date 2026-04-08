@@ -29,6 +29,7 @@ spec:
     - ./docs/configuration.md
   stylesheet: ./styles/manual.css
   tableOfContents: true
+  tocNumbering: true
   math: true
   pageBreakBetweenSources: true
   displayHeaderFooter: true
@@ -77,6 +78,7 @@ Files are deduplicated if patterns overlap, and sorted alphabetically within eac
 ### Table of contents
 
 - `spec.tableOfContents` – Generate a table of contents from headings. Default: `false`.
+- `spec.tocNumbering` – Add hierarchical chapter numbers to TOC entries (e.g. `1`, `1.1`, `1.1.1`, `1.1.1 a`). Only applies when `tableOfContents` is enabled. Default: `true`.
 
 When enabled, the table of contents is automatically generated from all `h1`-`h6` headings
 that have an `id` attribute (standard Markdown headings get IDs automatically). The TOC

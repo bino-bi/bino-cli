@@ -562,7 +562,8 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			}
 		}
 		// DocumentArtefacts get header injected too
-		frameHTML := withPreviewHeader(renderResult.HTML, artefactInfos, documentInfos, docPath, docGraph)
+		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
+		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 	}
 
@@ -906,6 +907,43 @@ func withPreviewStyles(doc []byte) []byte {
 	updated = append(updated, block...)
 	updated = append(updated, doc[idx:]...)
 	return updated
+}
+
+// withDocumentPageWidth injects a CSS custom property with the page width
+// derived from the document's format and orientation so the preview can
+// size the page container accordingly.
+func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
+	width := documentPageWidth(format, orientation)
+	tag := []byte(fmt.Sprintf(`<style>:root{--bn-doc-page-width:%s}</style>`, width))
+	headClose := []byte("</head>")
+	idx := bytes.Index(doc, headClose)
+	if idx == -1 {
+		return doc
+	}
+	out := make([]byte, 0, len(doc)+len(tag))
+	out = append(out, doc[:idx]...)
+	out = append(out, tag...)
+	out = append(out, doc[idx:]...)
+	return out
+}
+
+// documentPageWidth returns the CSS width for the given page format and orientation.
+func documentPageWidth(format, orientation string) string {
+	type dims struct{ portrait, landscape string }
+	formats := map[string]dims{
+		"a4":     {"210mm", "297mm"},
+		"a5":     {"148mm", "210mm"},
+		"letter": {"215.9mm", "279.4mm"},
+		"legal":  {"215.9mm", "355.6mm"},
+	}
+	d, ok := formats[format]
+	if !ok {
+		d = formats["a4"]
+	}
+	if orientation == "landscape" {
+		return d.landscape
+	}
+	return d.portrait
 }
 
 // withPreviewContextStyles returns the context HTML as-is for SSE delivery.

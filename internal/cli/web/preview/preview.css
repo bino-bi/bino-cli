@@ -87,6 +87,15 @@ bn-layout-page {
   font-size: 10px;
   margin-left: 4px;
 }
+/* Document artefact preview - page-like container */
+bn-context:has(.bn-document-content) {
+  display: block;
+  max-width: var(--bn-doc-page-width, 210mm);
+  margin: 0 auto;
+  background: var(--bino-surface);
+  box-shadow: var(--bino-shadow-page);
+  padding: 2cm;
+}
 /* Error indicator badges on components with has-error/has-errors attributes */
 [has-error]::before, [has-errors]::before {
   content: "\26A0";
