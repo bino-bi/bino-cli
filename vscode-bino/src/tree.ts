@@ -117,6 +117,8 @@ export class BinoTreeItem extends vscode.TreeItem {
                 return new vscode.ThemeIcon('graph');
             case 'ComponentStyle':
                 return new vscode.ThemeIcon('paintcan');
+            case 'ScalingGroup':
+                return new vscode.ThemeIcon('symbol-ruler');
             case 'Internationalization':
                 return new vscode.ThemeIcon('globe');
             case 'ConnectionSecret':
@@ -237,6 +239,7 @@ export class BinoTreeProvider implements vscode.TreeDataProvider<BinoTreeItem> {
             'ChartTime',
             'Asset',
             'ComponentStyle',
+            'ScalingGroup',
             'Internationalization',
             'SigningProfile',
             'ConnectionSecret'

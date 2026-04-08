@@ -92,6 +92,15 @@ type InternationalizationSpec struct {
 	Content map[string]string `yaml:"content,omitempty" json:"content,omitempty"`
 }
 
+// ScalingGroupSpec represents the spec section of a ScalingGroup manifest.
+// ScalingGroup defines a named scaling value that chart and table components
+// can reference via their unitScaling or percentageScaling attributes,
+// allowing synchronized scaling across multiple components.
+type ScalingGroupSpec struct {
+	// Value is the scaling factor (pixels per data unit or pixels per percentage point).
+	Value float64 `yaml:"value" json:"value"`
+}
+
 // AssetType is the type of asset.
 type AssetType string
 

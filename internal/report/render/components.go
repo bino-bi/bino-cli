@@ -344,6 +344,23 @@ func renderComponentStyles(styles []componentStyle) []string {
 	return segments
 }
 
+// renderScalingGroups generates bn-scaling-group elements.
+func renderScalingGroups(groups []scalingGroup) []string {
+	if len(groups) == 0 {
+		return nil
+	}
+	segments := make([]string, 0, len(groups))
+	for _, group := range groups {
+		var b strings.Builder
+		b.WriteString("<bn-scaling-group")
+		writeAttr(&b, "name", group.name)
+		writeAttr(&b, "value", fmt.Sprintf("%g", group.value))
+		b.WriteString("></bn-scaling-group>")
+		segments = append(segments, b.String())
+	}
+	return segments
+}
+
 // renderAssetComponents generates bn-asset elements for file assets.
 func renderAssetComponents(assets []assetComponent) []string {
 	if len(assets) == 0 {

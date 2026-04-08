@@ -238,12 +238,20 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 		return Result{}, diags, err
 	}
 
+	scalingGroups, err := collectScalingGroups(docs)
+	if err != nil {
+		return Result{}, diags, err
+	}
+
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
+	}
+	if sg := renderScalingGroups(scalingGroups); len(sg) > 0 {
+		segments = append(segments, sg...)
 	}
 	// Filter datasources to only include those directly referenced by components via $ prefix.
 	referencedSources := collectReferencedDatasources(docs, allDocs)
@@ -353,6 +361,11 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		return FrameResult{}, diags, err
 	}
 
+	scalingGroups, err := collectScalingGroups(docs)
+	if err != nil {
+		return FrameResult{}, diags, err
+	}
+
 	// Build context body segments (everything inside <bn-context>)
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
@@ -360,6 +373,9 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
+	}
+	if sg := renderScalingGroups(scalingGroups); len(sg) > 0 {
+		segments = append(segments, sg...)
 	}
 	// Filter datasources to only include those directly referenced by components via $ prefix.
 	referencedSources := collectReferencedDatasources(docs, allDocs)

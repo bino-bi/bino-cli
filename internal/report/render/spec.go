@@ -168,6 +168,7 @@ type chartStructureSpec struct {
 	Scenarios                []string                 `json:"scenarios"`
 	Variances                []string                 `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
+	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -191,6 +192,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
 	writeStackAttr(b, "stack", s.Stack)
+	writeAttr(b, "scale", s.Scale.String())
 }
 
 // chartTimeSpec defines the structure for ChartTime components.
@@ -223,6 +225,7 @@ type chartTimeSpec struct {
 	Scenarios                []string                 `json:"scenarios"`
 	Variances                []string                 `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
+	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -254,6 +257,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeCSVAttr(b, "scenarios", s.Scenarios)
 	writeCSVAttr(b, "variances", s.Variances)
 	writeStackAttr(b, "stack", s.Stack)
+	writeAttr(b, "scale", s.Scale.String())
 }
 
 // treeSpec defines the structure for Tree components.

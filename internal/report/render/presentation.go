@@ -273,6 +273,11 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		return PresentationResult{}, diags, err
 	}
 
+	scalingGroups, err := collectScalingGroups(docs)
+	if err != nil {
+		return PresentationResult{}, diags, err
+	}
+
 	// Build context body segments (datasources, datasets, i18n, styles, assets)
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
@@ -280,6 +285,9 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
+	}
+	if sg := renderScalingGroups(scalingGroups); len(sg) > 0 {
+		segments = append(segments, sg...)
 	}
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)
@@ -395,12 +403,20 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 		return PresentationFrameResult{}, diags, err
 	}
 
+	scalingGroups, err := collectScalingGroups(docs)
+	if err != nil {
+		return PresentationFrameResult{}, diags, err
+	}
+
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
+	}
+	if sg := renderScalingGroups(scalingGroups); len(sg) > 0 {
+		segments = append(segments, sg...)
 	}
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)

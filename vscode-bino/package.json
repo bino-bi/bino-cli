@@ -277,6 +277,11 @@
         "category": "Bino"
       },
       {
+        "command": "bino.addScalingGroup",
+        "title": "Add ScalingGroup",
+        "category": "Bino"
+      },
+      {
         "command": "bino.cacheClean",
         "title": "Clean Cache",
         "category": "Bino"

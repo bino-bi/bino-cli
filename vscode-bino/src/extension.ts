@@ -521,6 +521,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ['bino.addAsset', 'add asset'],
         ['bino.addComponentStyle', 'add componentstyle'],
         ['bino.addInternationalization', 'add internationalization'],
+        ['bino.addScalingGroup', 'add scalinggroup'],
     ];
     for (const [cmdId, binoArgs] of addCommands) {
         context.subscriptions.push(

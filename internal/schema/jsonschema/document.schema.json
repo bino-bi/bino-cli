@@ -28,6 +28,7 @@
         "Table",
         "ComponentStyle",
         "Internationalization",
+        "ScalingGroup",
         "ReportArtefact",
         "LiveReportArtefact",
         "ScreenshotArtefact",
@@ -210,6 +211,18 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/internationalizationSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ScalingGroup" }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/scalingGroupSpec" }
         }
       }
     },
@@ -1905,6 +1918,18 @@
         }
       }
     },
+    "scalingGroupSpec": {
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Scaling factor (pixels per data unit or pixels per percentage point). Referenced by chart/table components via unit-scaling or percentage-scaling attributes.",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "componentStyleSpec": {
       "type": "object",
       "required": ["content"],
@@ -2827,6 +2852,11 @@
           "description": "Maximum number of bars for each group. 0 means no limit. Rows cut by the limit are cumulated as REST."
         },
         "pixelPerUnit": { "type": "number", "minimum": 0 },
+        "scale": {
+          "type": ["string", "number"],
+          "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
+        },
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
@@ -2954,6 +2984,11 @@
         "syncSpaceLeft": {
           "type": "number",
           "description": "Left side offset for horizontal sync."
+        },
+        "scale": {
+          "type": ["string", "number"],
+          "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
         },
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",

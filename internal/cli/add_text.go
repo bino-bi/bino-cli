@@ -773,3 +773,189 @@ func buildInternationalizationDocument(data InternationalizationManifestData) *s
 func renderInternationalizationManifest(doc *schema.Document) ([]byte, error) {
 	return yaml.Marshal(doc)
 }
+
+// ScalingGroupManifestData holds data for rendering a ScalingGroup manifest.
+type ScalingGroupManifestData struct {
+	Name        string
+	Description string
+	Constraints []string
+	Value       float64
+}
+
+func newAddScalingGroupCommand() *cobra.Command {
+	var (
+		flagValue      float64
+		flagConstraint []string
+		flagOutput     string
+		flagAppendTo   string
+		flagDesc       string
+		flagNoPrompt   bool
+	)
+
+	cmd := &cobra.Command{
+		Use:     "scalinggroup [name]",
+		Aliases: []string{"sg"},
+		Short:   "Create a ScalingGroup manifest",
+		Long: strings.TrimSpace(`
+Create a new ScalingGroup manifest for synchronized scaling.
+
+ScalingGroup defines a named scaling value that chart and table components
+can reference via their unitScaling or percentageScaling attributes.
+`),
+		Example: strings.TrimSpace(`
+  # Interactive wizard
+  bino add scalinggroup
+
+  # Non-interactive
+  bino add scalinggroup revenue_scale \
+    --value 0.05 \
+    --output scaling/revenue.yaml \
+    --no-prompt
+`),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			workdir, err := pathutil.ResolveWorkdir(".")
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			nonInteractive := flagNoPrompt || !isInteractive()
+
+			var name string
+			if len(args) > 0 {
+				name = args[0]
+			}
+
+			if nonInteractive {
+				var missing []string
+				if name == "" {
+					missing = append(missing, "name (as argument)")
+				}
+				if flagValue <= 0 {
+					missing = append(missing, "--value (positive number)")
+				}
+				if flagOutput == "" && flagAppendTo == "" {
+					missing = append(missing, "--output or --append-to")
+				}
+				if len(missing) > 0 {
+					return ConfigError(fmt.Errorf("missing required values in non-interactive mode:\n  %s", strings.Join(missing, "\n  ")))
+				}
+			}
+
+			manifests, err := ScanManifests(ctx, workdir)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("scan manifests: %w", err))
+			}
+
+			data := ScalingGroupManifestData{
+				Name:        name,
+				Description: flagDesc,
+				Constraints: flagConstraint,
+				Value:       flagValue,
+			}
+
+			var outputPath string
+			var appendMode bool
+			if flagAppendTo != "" {
+				outputPath = flagAppendTo
+				appendMode = true
+			} else if flagOutput != "" {
+				outputPath = flagOutput
+			}
+
+			if nonInteractive {
+				return writeScalingGroupManifest(cmd, workdir, data, outputPath, appendMode)
+			}
+
+			reader := bufio.NewReader(cmd.InOrStdin())
+			out := cmd.OutOrStdout()
+
+			fmt.Fprintln(out, "Create a new ScalingGroup manifest.")
+			fmt.Fprintln(out)
+
+			if data.Name == "" {
+				data.Name, err = promptGenericName(reader, out, manifests, "ScalingGroup")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			if data.Description == "" {
+				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+			}
+
+			if data.Value <= 0 {
+				valStr, _ := addPromptString(reader, out, "Value (positive number, e.g. 0.05)", "")
+				var val float64
+				if _, err := fmt.Sscanf(valStr, "%f", &val); err != nil || val <= 0 {
+					return ConfigError(fmt.Errorf("value must be a positive number, got %q", valStr))
+				}
+				data.Value = val
+			}
+
+			if outputPath == "" {
+				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ScalingGroup", data.Name)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			doc := buildScalingGroupDocument(data)
+			manifestBytes, err := yaml.Marshal(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "=== Preview ===")
+			fmt.Fprintln(out, string(manifestBytes))
+			fmt.Fprintln(out, "===============")
+
+			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			if !confirmed {
+				fmt.Fprintln(out, "\nCanceled.")
+				return nil
+			}
+
+			return writeScalingGroupManifest(cmd, workdir, data, outputPath, appendMode)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().Float64Var(&flagValue, "value", 0, "Scaling value (pixels per unit)")
+	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
+	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
+	cmd.Flags().StringVar(&flagDesc, "description", "", "Description text")
+	cmd.Flags().BoolVar(&flagNoPrompt, "no-prompt", false, "Non-interactive mode")
+
+	return cmd
+}
+
+func writeScalingGroupManifest(cmd *cobra.Command, workdir string, data ScalingGroupManifestData, outputPath string, appendMode bool) error {
+	doc := buildScalingGroupDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
+}
+
+func buildScalingGroupDocument(data ScalingGroupManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindScalingGroup, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
+
+	spec := &schema.ScalingGroupSpec{
+		Value: data.Value,
+	}
+
+	doc.Spec = spec
+	return doc
+}
