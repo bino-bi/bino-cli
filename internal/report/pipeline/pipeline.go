@@ -1273,6 +1273,9 @@ func ClassifyInvalidLayout(err error, mode RenderMode) InvalidLayoutPolicy {
 type DocumentArtefactResult struct {
 	HTML        []byte
 	LocalAssets []render.LocalAsset
+	// HeadingIDs contains heading anchor IDs extracted from the TOC tree.
+	// Populated when TableOfContents is enabled in the spec.
+	HeadingIDs []string
 }
 
 // DocumentArtefactRenderOptions configures document artifact rendering.
@@ -1283,6 +1286,12 @@ type DocumentArtefactRenderOptions struct {
 	// TOCPageNumbers maps heading IDs to page numbers (from two-pass rendering).
 	// If provided and TableOfContents is enabled, page numbers are included in the TOC.
 	TOCPageNumbers map[string]int
+	// ExcludeTOC suppresses TOC rendering even if the spec enables it.
+	// Used to render content-only HTML for the split-PDF pipeline.
+	ExcludeTOC bool
+	// TOCOnly renders only the TOC section without content body.
+	// Used to render the TOC as a separate PDF with Roman numeral page numbers.
+	TOCOnly bool
 	// Session is an optional pre-existing DuckDB session to reuse.
 	Session *duckdb.Session
 	// PluginOptions carries plugin integration state. May be nil.
@@ -1382,7 +1391,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 
 	// Render markdown files to HTML content with full context
 	mathEnabled := s.MathEnabled()
-	content, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
+	mdResult, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
 		RenderOptions: markdown.RenderOptions{
 			BaseDir:               manifestDir,
 			Stylesheet:            s.Stylesheet,
@@ -1394,13 +1403,16 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		Locale:         s.Locale,
 		TOCPageNumbers: opts.TOCPageNumbers,
 		Math:           mathEnabled,
+		ExcludeTOC:     opts.ExcludeTOC,
+		TOCOnly:        opts.TOCOnly,
+		TOCNumbering:   s.TOCNumberingEnabled(),
 	})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Wrap in full bino HTML document with template engine, bn-context, etc.
-	html := markdown.WrapDocumentWithContext(content, markdown.FullDocumentOptions{
+	html := markdown.WrapDocumentWithContext(mdResult.HTML, markdown.FullDocumentOptions{
 		DocumentOptions: markdown.DocumentOptions{
 			Title:       s.Title,
 			Author:      s.Author,
@@ -1424,7 +1436,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		}
 	}
 
-	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals}, nil
+	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals, HeadingIDs: mdResult.HeadingIDs}, nil
 }
 
 // LogDocumentArtefactWarnings logs any warnings collected during document artifact validation.
