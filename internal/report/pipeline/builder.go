@@ -9,10 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"bino.bi/bino/internal/chrome"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/pdf"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
@@ -244,39 +246,28 @@ func (b *Builder) RenderPDF(ctx context.Context, html []byte, assets []render.Lo
 	return nil
 }
 
-// CollectHeadingPages starts an ephemeral server with the given HTML and uses
-// Chrome to collect heading page numbers for table-of-contents generation.
-// Returns a map from heading ID to page number.
-func (b *Builder) CollectHeadingPages(ctx context.Context, html []byte, assets []render.LocalAsset, opts PDFRenderOptions) (map[string]int, error) {
-	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets))
+// RenderPDFToTempFile renders HTML to a temporary PDF file and returns its
+// path. The caller is responsible for removing the temp file.
+func (b *Builder) RenderPDFToTempFile(ctx context.Context, html []byte, assets []render.LocalAsset, opts PDFRenderOptions) (string, error) {
+	tmpFile, err := os.CreateTemp("", "bino-doc-*.pdf")
 	if err != nil {
-		return nil, fmt.Errorf("start ephemeral server: %w", err)
+		return "", fmt.Errorf("create temp pdf file: %w", err)
 	}
-	defer srv.Close()
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
 
-	pdfOpts := chrome.PDFOptions{
-		URL:                 srv.URL(),
-		ChromePath:          opts.ChromePath,
-		Format:              opts.Format,
-		Orientation:         opts.Orientation,
-		Timeout:             2 * time.Minute,
-		Debug:               opts.Debug,
-		DisplayHeaderFooter: opts.DisplayHeaderFooter,
-		HeaderTemplate:      opts.HeaderTemplate,
-		FooterTemplate:      opts.FooterTemplate,
-		MarginTop:           opts.MarginTop,
-		MarginBottom:        opts.MarginBottom,
+	renderOpts := opts
+	renderOpts.PDFPath = tmpPath
+	if err := b.RenderPDF(ctx, html, assets, renderOpts); err != nil {
+		os.Remove(tmpPath)
+		return "", err
 	}
-	headings, err := chrome.CollectHeadingPages(ctx, pdfOpts)
-	if err != nil {
-		return nil, err
-	}
+	return tmpPath, nil
+}
 
-	result := make(map[string]int, len(headings))
-	for _, h := range headings {
-		result[h.ID] = h.PageNum
-	}
-	return result, nil
+// MergePDFs concatenates multiple PDF files into a single output file.
+func (b *Builder) MergePDFs(_ context.Context, inFiles []string, outFile string) error {
+	return pdf.MergeFiles(inFiles, outFile)
 }
 
 // ---------------------------------------------------------------------------

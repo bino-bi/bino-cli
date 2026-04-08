@@ -477,6 +477,10 @@ type DocumentArtefactSpec struct {
 	// Math enables LaTeX math rendering via KaTeX ($...$, $$...$$).
 	// Pointer to distinguish unset (nil -> default true) from explicit false.
 	Math *bool `json:"math,omitempty"`
+	// TOCNumbering enables hierarchical chapter numbering in the table of contents
+	// (e.g. 1, 1.1, 1.1.1, 1.1.1 a). Defaults to true when tableOfContents is enabled.
+	// Pointer to distinguish unset (nil -> default true) from explicit false.
+	TOCNumbering *bool `json:"tocNumbering,omitempty"`
 }
 
 // MathEnabled returns whether math rendering is enabled (defaults to true).
@@ -485,6 +489,14 @@ func (s *DocumentArtefactSpec) MathEnabled() bool {
 		return true // default
 	}
 	return *s.Math
+}
+
+// TOCNumberingEnabled returns whether hierarchical numbering in the TOC is enabled (defaults to true).
+func (s *DocumentArtefactSpec) TOCNumberingEnabled() bool {
+	if s.TOCNumbering == nil {
+		return true // default
+	}
+	return *s.TOCNumbering
 }
 
 // SourcesOrStrings is a flexible type for document sources that supports both:

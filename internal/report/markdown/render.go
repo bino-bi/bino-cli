@@ -142,11 +142,29 @@ type FullRenderOptions struct {
 	TOCPageNumbers map[string]int
 	// Math enables LaTeX math rendering via KaTeX ($...$, $$...$$).
 	Math bool
+	// ExcludeTOC suppresses TOC generation even if TableOfContents is true.
+	// Used to render content-only HTML for the split-PDF pipeline.
+	ExcludeTOC bool
+	// TOCOnly renders only the TOC section without the content body.
+	// Used to render the TOC as a separate PDF with Roman numeral page numbers.
+	TOCOnly bool
+	// TOCNumbering enables hierarchical chapter numbers in the TOC
+	// (e.g. 1, 1.1, 1.1.1, 1.1.1 a).
+	TOCNumbering bool
+}
+
+// RenderResult holds the output of RenderFilesWithContext.
+type RenderResult struct {
+	// HTML is the rendered HTML content.
+	HTML []byte
+	// HeadingIDs contains heading anchor IDs extracted from the TOC tree.
+	// These are used for page number extraction from the content PDF.
+	HeadingIDs []string
 }
 
 // RenderFilesWithContext converts multiple markdown files to HTML with full bino context.
 // This includes resolving :ref[Kind:name] to actual component HTML.
-func RenderFilesWithContext(ctx context.Context, files []string, opts FullRenderOptions) ([]byte, error) {
+func RenderFilesWithContext(ctx context.Context, files []string, opts FullRenderOptions) (RenderResult, error) {
 	logger := logx.FromContext(ctx).Channel("markdown")
 	rc := opts.RenderContext
 
@@ -184,9 +202,12 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 	var tocBuf bytes.Buffer
 	tocTree := &toc.TOC{}
 
+	// Always extract the TOC tree when TableOfContents is enabled (needed for heading IDs).
+	extractTOC := opts.TableOfContents
+
 	for i, file := range files {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return RenderResult{}, err
 		}
 
 		absPath := file
@@ -198,17 +219,17 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 
 		content, err := os.ReadFile(absPath)
 		if err != nil {
-			return nil, fmt.Errorf("read markdown file %s: %w", absPath, err)
+			return RenderResult{}, fmt.Errorf("read markdown file %s: %w", absPath, err)
 		}
 
 		// Add page break between files (except before the first one)
-		if i > 0 && opts.PageBreakBetweenFiles {
+		if !opts.TOCOnly && i > 0 && opts.PageBreakBetweenFiles {
 			contentBuf.WriteString(`<div class='bn-page-break'></div>`)
 			contentBuf.WriteString("\n")
 		}
 
 		// Parse for TOC extraction
-		if opts.TableOfContents {
+		if extractTOC {
 			reader := text.NewReader(content)
 			doc := md.Parser().Parse(reader)
 			fileTOC, err := toc.Inspect(doc, content)
@@ -219,16 +240,26 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 			}
 		}
 
-		// Render markdown to HTML
-		if err := md.Convert(content, &contentBuf); err != nil {
-			return nil, fmt.Errorf("convert markdown %s: %w", absPath, err)
+		// Render markdown to HTML (skip if TOCOnly)
+		if !opts.TOCOnly {
+			if err := md.Convert(content, &contentBuf); err != nil {
+				return RenderResult{}, fmt.Errorf("convert markdown %s: %w", absPath, err)
+			}
 		}
 	}
 
-	// Render TOC if enabled and has items
-	if opts.TableOfContents && len(tocTree.Items) > 0 {
+	// Collect heading IDs from the TOC tree.
+	var headingIDs []string
+	if extractTOC {
+		headingIDs = collectHeadingIDs(tocTree.Items)
+	}
+
+	// Render TOC HTML if enabled and not excluded.
+	renderTOC := opts.TableOfContents && !opts.ExcludeTOC && len(tocTree.Items) > 0
+	if renderTOC {
 		tocBuf.WriteString(`<nav class='bn-toc'><h2>Table of Contents</h2>`)
-		renderTOCWithPageNumbers(&tocBuf, tocTree.Items, opts.TOCPageNumbers)
+		counters := make([]int, 0, 6) // tracks numbering state per depth level
+		renderTOCItems(&tocBuf, tocTree.Items, opts.TOCPageNumbers, opts.TOCNumbering, counters, 0)
 		tocBuf.WriteString(`</nav>`)
 	}
 
@@ -236,21 +267,63 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 	var finalBuf bytes.Buffer
 	if tocBuf.Len() > 0 {
 		finalBuf.Write(tocBuf.Bytes())
-		finalBuf.WriteString("\n")
+		if !opts.TOCOnly {
+			finalBuf.WriteString("\n")
+		}
 	}
-	finalBuf.Write(contentBuf.Bytes())
+	if !opts.TOCOnly {
+		finalBuf.Write(contentBuf.Bytes())
+	}
 
-	return finalBuf.Bytes(), nil
+	return RenderResult{
+		HTML:       finalBuf.Bytes(),
+		HeadingIDs: headingIDs,
+	}, nil
 }
 
-// renderTOCWithPageNumbers renders TOC items as HTML with optional page numbers.
-// If pageNumbers is nil or empty, page numbers are omitted.
-func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]int) {
+// collectHeadingIDs recursively collects heading IDs from TOC items.
+func collectHeadingIDs(items toc.Items) []string {
+	var ids []string
+	for _, item := range items {
+		if len(item.ID) > 0 {
+			ids = append(ids, string(item.ID))
+		}
+		if len(item.Items) > 0 {
+			ids = append(ids, collectHeadingIDs(item.Items)...)
+		}
+	}
+	return ids
+}
+
+// renderTOCItems renders TOC items as HTML with optional page numbers and
+// hierarchical chapter numbering.
+//
+// Numbering scheme by depth:
+//
+//	depth 0 (h1): 1, 2, 3
+//	depth 1 (h2): 1.1, 1.2, 2.1
+//	depth 2 (h3): 1.1.1, 1.1.2
+//	depth 3 (h4): 1.1.1 a), 1.1.1 b)
+//	depth 4+ (h5+): 1.1.1 a) i), 1.1.1 a) ii)
+func renderTOCItems(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]int, numbering bool, counters []int, depth int) {
 	if len(items) == 0 {
 		return
 	}
+
+	// Ensure counters slice has enough depth.
+	for len(counters) <= depth {
+		counters = append(counters, 0)
+	}
+	// Reset all deeper counters when entering a new level.
+	counters[depth] = 0
+	for i := depth + 1; i < len(counters); i++ {
+		counters[i] = 0
+	}
+
 	buf.WriteString("<ul>")
 	for _, item := range items {
+		counters[depth]++
+
 		buf.WriteString("<li>")
 		itemID := string(item.ID)
 
@@ -263,11 +336,16 @@ func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers ma
 			}
 		}
 
-		// Write the link with title
+		// Write the link with optional chapter number prefix
 		if len(item.ID) > 0 {
 			buf.WriteString(`<a href='#`)
 			buf.WriteString(html.EscapeString(itemID))
 			buf.WriteString(`'>`)
+		}
+		if numbering {
+			buf.WriteString(`<span class='bn-toc-num'>`)
+			buf.WriteString(formatChapterNumber(counters, depth))
+			buf.WriteString(`</span> `)
 		}
 		buf.WriteString(html.EscapeString(string(item.Title)))
 		if len(item.ID) > 0 {
@@ -276,11 +354,77 @@ func renderTOCWithPageNumbers(buf *bytes.Buffer, items toc.Items, pageNumbers ma
 
 		// Recurse for children
 		if len(item.Items) > 0 {
-			renderTOCWithPageNumbers(buf, item.Items, pageNumbers)
+			renderTOCItems(buf, item.Items, pageNumbers, numbering, counters, depth+1)
 		}
 		buf.WriteString("</li>")
 	}
 	buf.WriteString("</ul>")
+}
+
+// formatChapterNumber builds the hierarchical number string for a TOC entry.
+func formatChapterNumber(counters []int, depth int) string {
+	if depth <= 2 {
+		// Levels 0-2: dotted numbers (1, 1.1, 1.1.1)
+		var b strings.Builder
+		for i := 0; i <= depth; i++ {
+			if i > 0 {
+				b.WriteByte('.')
+			}
+			fmt.Fprintf(&b, "%d", counters[i])
+		}
+		return b.String()
+	}
+
+	// Build the numeric prefix from levels 0-2
+	var b strings.Builder
+	limit := 2
+	if depth < limit {
+		limit = depth
+	}
+	for i := 0; i <= limit; i++ {
+		if i > 0 {
+			b.WriteByte('.')
+		}
+		fmt.Fprintf(&b, "%d", counters[i])
+	}
+
+	// Level 3: append letter suffix  a), b), c)
+	if depth >= 3 {
+		idx := counters[3] - 1
+		if idx < 0 {
+			idx = 0
+		}
+		if idx > 25 {
+			idx = 25
+		}
+		fmt.Fprintf(&b, " %c)", 'a'+rune(idx)) //nolint:gosec // idx is clamped to [0,25]
+	}
+
+	// Level 4+: append Roman numeral suffix  i), ii), iii)
+	if depth >= 4 {
+		b.WriteByte(' ')
+		b.WriteString(toLowerRoman(counters[4]))
+		b.WriteByte(')')
+	}
+
+	return b.String()
+}
+
+// toLowerRoman converts a small integer to a lowercase Roman numeral.
+func toLowerRoman(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	vals := []int{10, 9, 5, 4, 1}
+	syms := []string{"x", "ix", "v", "iv", "i"}
+	var b strings.Builder
+	for i, v := range vals {
+		for n >= v {
+			b.WriteString(syms[i])
+			n -= v
+		}
+	}
+	return b.String()
 }
 
 // FullDocumentOptions extends DocumentOptions for full rendering with bino context.
@@ -643,6 +787,13 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
     .bn-toc-page {
       color: #666;
       float: right;
+    }
+
+    .bn-toc-num {
+      color: #444;
+      font-weight: 500;
+      min-width: 2.5em;
+      display: inline-block;
     }
 
     /* Page breaks */

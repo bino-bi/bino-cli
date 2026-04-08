@@ -320,7 +320,7 @@ End of document.
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			html := string(result)
+			html := string(result.HTML)
 			for _, want := range tt.contains {
 				if !strings.Contains(html, want) {
 					t.Errorf("result should contain %q", want)
