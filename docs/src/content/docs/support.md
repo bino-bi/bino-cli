@@ -7,9 +7,7 @@ Need help with BinoBI? We're here to assist you!
 
 ## Licensing
 
-BinoBI CLI is free for **internal and personal use**. You can use it within your organization or for personal projects without charge.
-
-For full details, please refer to the [LICENSE](https://raw.githubusercontent.com/bino-bi/bino-cli-releases/refs/heads/main/LICENCE).
+BinoBI CLI is free and open-source software, licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://github.com/bino-bi/bino-cli/blob/main/LICENCE). You are free to use, modify, and distribute it under the terms of this license.
 
 ## Community Support
 
@@ -33,7 +31,7 @@ Found a bug or running into unexpected behavior? Please let us know by opening a
 
 ## Commercial Support & Licensing
 
-If you need commercial or enterprise support, or if you wish to use BinoBI CLI to create a commercial service or product (e.g., a SaaS solution, paid reporting service), you will need a commercial license.
+BinoBI CLI is available under the AGPL-3.0, which permits all use — including commercial and SaaS — as long as you comply with its terms (notably, sharing modifications with your users). If you need AGPL-free licensing terms or enterprise support, we offer commercial options.
 
 Please contact us at [sven@bino.bi](mailto:sven@bino.bi) to:
 
