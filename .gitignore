@@ -12,3 +12,6 @@ skills-lock.json
 # Internal
 INTERNAL.md
 __INTERNAL/
+
+# Environment files
+.env*

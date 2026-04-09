@@ -15,8 +15,8 @@ var AppMetadata = struct {
 	URL:         "https://github.com/bino-bi/bino-cli",
 	Author:      "Sven Herrmann",
 	Email:       "sven@bino.bi",
-	Years:       "2024–2025",
-	License:     "Apache-2.0",
+	Years:       "2024–2026",
+	License:     "AGPL-3.0-or-later",
 }
 
 // DependencyInfo describes an external Go module dependency.
