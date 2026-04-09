@@ -165,8 +165,8 @@ type chartStructureSpec struct {
 	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
 	Limit                    *int                     `json:"limit"`
 	PixelPerUnit             *float64                 `json:"pixelPerUnit"`
-	Scenarios                []string                 `json:"scenarios"`
-	Variances                []string                 `json:"variances"`
+	Scenarios                reportspec.StringOrSlice `json:"scenarios"`
+	Variances                reportspec.StringOrSlice `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 }
@@ -189,8 +189,8 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
 	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
-	writeCSVAttr(b, "scenarios", s.Scenarios)
-	writeCSVAttr(b, "variances", s.Variances)
+	writeAttr(b, "scenarios", s.Scenarios.String())
+	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 }
@@ -222,8 +222,8 @@ type chartTimeSpec struct {
 	PercentageScaling        reportspec.StringOrFloat `json:"percentageScaling"`
 	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
 	SyncSpaceLeft            *float64                 `json:"syncSpaceLeft"`
-	Scenarios                []string                 `json:"scenarios"`
-	Variances                []string                 `json:"variances"`
+	Scenarios                reportspec.StringOrSlice `json:"scenarios"`
+	Variances                reportspec.StringOrSlice `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 }
@@ -254,8 +254,8 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeFloatAttr(b, "sync-space-left", s.SyncSpaceLeft)
-	writeCSVAttr(b, "scenarios", s.Scenarios)
-	writeCSVAttr(b, "variances", s.Variances)
+	writeAttr(b, "scenarios", s.Scenarios.String())
+	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 }
@@ -323,8 +323,8 @@ type tableSpec struct {
 	ShowMeasureScale         *bool                        `json:"showMeasureScale"`
 	Limit                    *int                         `json:"limit"`
 	Type                     string                       `json:"type"`
-	Scenarios                []string                     `json:"scenarios"`
-	Variances                []string                     `json:"variances"`
+	Scenarios                reportspec.StringOrSlice     `json:"scenarios"`
+	Variances                reportspec.StringOrSlice     `json:"variances"`
 	BarColumns               []string                     `json:"barColumns"`
 	BarColumnWidth           string                       `json:"barColumnWidth"`
 	UnitScaling              *float64                     `json:"unitScaling"`
@@ -356,8 +356,8 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
 	writeAttr(b, "type", s.Type)
-	writeCSVAttr(b, "scenarios", s.Scenarios)
-	writeCSVAttr(b, "variances", s.Variances)
+	writeAttr(b, "scenarios", s.Scenarios.String())
+	writeAttr(b, "variances", s.Variances.String())
 	writeCSVAttr(b, "bar-columns", s.BarColumns)
 	writeAttr(b, "bar-column-width", s.BarColumnWidth)
 	writeFloatAttr(b, "unit-scaling", s.UnitScaling)

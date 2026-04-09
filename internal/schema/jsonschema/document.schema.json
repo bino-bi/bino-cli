@@ -2865,7 +2865,7 @@
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
@@ -2875,7 +2875,7 @@
         "variances": {
           "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
@@ -2998,7 +2998,7 @@
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
@@ -3008,7 +3008,7 @@
         "variances": {
           "description": "List of variances calculated from the given scenarios. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
@@ -3504,7 +3504,7 @@
         "scenarios": {
           "description": "List of scenarios displayed in the table. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
@@ -3514,7 +3514,7 @@
         "variances": {
           "description": "List of variances calculated from the given scenarios. The scenarios used must be defined in the 'scenarios' property. Pattern: d[scenarioB]_[scenarioA]_[pos/neg/neu]. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
-            { "type": "string" },
+            { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
               "type": "array",
               "items": { "type": "string" }
