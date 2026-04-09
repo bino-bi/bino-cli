@@ -3,6 +3,7 @@
   "displayName": "Bino Reports",
   "description": "Enhanced YAML editing for Bino report manifests with intelligent autocompletion",
   "version": "0.25.0",
+  "license": "AGPL-3.0-or-later",
   "publisher": "BinoBI",
   "repository": {
     "type": "git",

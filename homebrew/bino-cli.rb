@@ -6,7 +6,7 @@
 class BinoCli < Formula
   desc "CLI tool for building pixel-perfect PDF reports from YAML manifests and SQL queries"
   homepage "https://cli.bino.bi"
-  license "BSAL"
+  license "AGPL-3.0-or-later"
   version "VERSION_PLACEHOLDER"
 
   on_macos do
