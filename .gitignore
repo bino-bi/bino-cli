@@ -1,3 +1,14 @@
 .DS_Store
 dist/
+
+# AI development tools
+CLAUDE.md
+.claude/
+.agents/
+.cursorrules
+.cursorignore
+skills-lock.json
+
+# Internal
 INTERNAL.md
+__INTERNAL/
