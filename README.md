@@ -32,6 +32,9 @@
 > [!WARNING]
 > bino is under active development. Configuration and CLI APIs are not yet stable — expect breaking changes between releases.
 
+> [!NOTE]
+> bino is currently tightly coupled to [bn-template-engine](https://github.com/bino-bi/bn-template-engine) as its visualization engine. This coupling will be removed in a future release, making the Viz Engine pluggable.
+
 ## What is bino?
 
 bino is a command-line tool that turns declarative YAML manifests and SQL queries into production-ready PDF reports. It uses [DuckDB](https://duckdb.org/) as an embedded SQL engine and Chrome headless shell for pixel-perfect PDF rendering.
