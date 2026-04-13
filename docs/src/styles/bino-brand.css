@@ -1,0 +1,73 @@
+/* ============================================================
+   Bino brand accents — global overrides on top of Nova theme.
+   Mirrors the visual language of https://www.bino.bi
+   ============================================================ */
+
+/* ---- 1. Yellow highlighter marker on every h2 ---- */
+/*
+ * Scope: any <h2> rendered inside Starlight's markdown content wrapper,
+ * which covers both:
+ *   - normal `## Heading` in .md/.mdx content pages
+ *   - <h2> emitted by the <LandingSection /> component (it's imported
+ *     into index.mdx so it lives inside .sl-markdown-content too)
+ *
+ * Excluded automatically:
+ *   - sidebar nav, ToC, search modal (they live outside .sl-markdown-content)
+ *   - the hero <h1> (different element)
+ *   - anything tagged .not-content (cards, callouts that opt out)
+ */
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  display: inline-block;
+  position: relative;
+  padding: 0.2em 0.7em 0.3em;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 80' preserveAspectRatio='none'><path d='M15,40 C15,15 80,8 150,10 C230,12 290,22 288,42 C286,62 220,72 145,70 C70,68 12,62 16,38 C20,18 90,12 160,14' fill='none' stroke='%23FFD93D' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.85'/><path d='M20,42 C25,20 95,14 155,15 C225,17 285,26 285,44 C284,60 215,68 150,66' fill='none' stroke='%23FFD93D' stroke-width='3' stroke-linecap='round' opacity='0.55'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+
+/* ---- 2. Pink section dividers ---- */
+/* Content pages: thin pink rule above every h2 except the very first. */
+.sl-markdown-content h2:not(:first-of-type):not(:where(.not-content *)) {
+  margin-top: 4rem;
+  border-top: 2px solid #FF4FA3;
+  padding-top: 2.5rem;
+}
+
+/* Landing page: pink divider between adjacent <section> elements inside
+   <LandingSection />. Uses a structural selector that doesn't collide
+   with the component's scoped data attributes. */
+.sl-markdown-content .landing-section > section + section {
+  position: relative;
+  padding-top: 6rem;
+}
+.sl-markdown-content .landing-section > section + section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(80%, 600px);
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #FF4FA3 20%, #FF4FA3 80%, transparent);
+}
+
+/* ---- 3. Teal/cyan hero accent ---- */
+/* Only the splash hero gets the glow — scoped via [data-has-hero] on <html>. */
+:root[data-has-hero] .hero {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(93, 211, 220, 0.18), transparent 60%),
+    radial-gradient(ellipse at 80% 60%, rgba(93, 211, 220, 0.10), transparent 55%);
+  border-radius: 1rem;
+  padding-inline: clamp(1rem, 3vw, 3rem);
+}
+
+/* In light mode the same teal needs slightly more alpha to stay visible. */
+:root[data-theme='light'][data-has-hero] .hero {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(93, 211, 220, 0.30), transparent 60%),
+    radial-gradient(ellipse at 80% 60%, rgba(93, 211, 220, 0.18), transparent 55%);
+}

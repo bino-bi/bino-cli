@@ -10,6 +10,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
+			customCss: ['./src/styles/bino-brand.css'],
 			components: {
 				Footer: './src/components/Footer.astro',
 			},
