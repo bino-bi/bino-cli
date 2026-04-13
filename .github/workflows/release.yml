@@ -390,15 +390,15 @@ jobs:
           context: ./docs
           push: true
           tags: |
-            ${{ vars.DOCKER_REGISTRY }}/bino/cli-docs:${{ needs.resolve-tag.outputs.version }}
-            ${{ vars.DOCKER_REGISTRY }}/bino/cli-docs:latest
+            ${{ secrets.DOCKER_REGISTRY }}/bino/cli-docs:${{ needs.resolve-tag.outputs.version }}
+            ${{ secrets.DOCKER_REGISTRY }}/bino/cli-docs:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Update stack
         uses: fjogeleit/http-request-action@v1
         with:
-          url: ${{ vars.DEPLOY_URL }}
+          url: ${{ secrets.DEPLOY_URL }}
           bearerToken: ${{ secrets.DEPLOY_TOKEN }}
           timeout: 60000
           data: |
