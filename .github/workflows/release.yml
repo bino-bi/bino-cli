@@ -29,6 +29,11 @@ jobs:
       tag: ${{ steps.vars.outputs.tag }}
       version: ${{ steps.vars.outputs.version }}
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Resolve tag
         id: vars
         run: |
@@ -46,6 +51,11 @@ jobs:
     needs: [resolve-tag]
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -73,6 +83,11 @@ jobs:
     needs: [resolve-tag, test]
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -139,6 +154,11 @@ jobs:
             goarch: amd64
             runner: windows-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -246,7 +266,13 @@ jobs:
       contents: write
       packages: write
       id-token: write
+      attestations: write
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -272,14 +298,35 @@ jobs:
           cp install.sh dist/
           cp install.ps1 dist/
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/bino-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
       - name: Generate checksums
         working-directory: dist
         run: |
-          sha256sum *.tar.gz *.zip *_setup.exe *.vsix install.sh install.ps1 > checksums.txt
+          sha256sum *.tar.gz *.zip *_setup.exe *.vsix install.sh install.ps1 bino-sbom.spdx.json > checksums.txt
           cat checksums.txt
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*_setup.exe
+            dist/*.vsix
+            dist/install.sh
+            dist/install.ps1
+            dist/bino-sbom.spdx.json
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           repository: bino-bi/bino-cli-releases
           token: ${{ secrets.BINO_CLI_RELEASES_TOKEN }}
@@ -289,6 +336,11 @@ jobs:
             ## Bino CLI ${{ needs.resolve-tag.outputs.tag }}
 
             **Commit:** `${{ github.sha }}`
+
+            Artifacts carry a SLSA v1.0 build-provenance attestation. Verify with:
+            ```
+            gh attestation verify <file> --repo bino-bi/bino-cli
+            ```
           files: |
             dist/*.tar.gz
             dist/*.zip
@@ -296,6 +348,7 @@ jobs:
             dist/*.vsix
             dist/install.sh
             dist/install.ps1
+            dist/bino-sbom.spdx.json
             dist/checksums.txt
           fail_on_unmatched_files: true
 
@@ -311,6 +364,11 @@ jobs:
     needs: [release, resolve-tag]
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -376,16 +434,28 @@ jobs:
     needs: [release, resolve-tag]
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve-tag.outputs.tag }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to Docker registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push docs image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ./docs
           push: true
@@ -396,7 +466,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Update stack
-        uses: fjogeleit/http-request-action@v1
+        uses: fjogeleit/http-request-action@c0b95d02a088b47c1f2f4db04fd8af8bd19eee54 # v1.16.6
         with:
           url: ${{ secrets.DEPLOY_URL }}
           bearerToken: ${{ secrets.DEPLOY_TOKEN }}
