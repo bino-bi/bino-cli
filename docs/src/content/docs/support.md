@@ -9,6 +9,8 @@ Need help with BinoBI? We're here to assist you!
 
 BinoBI CLI is free and open-source software, licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://github.com/bino-bi/bino-cli/blob/main/LICENCE). You are free to use, modify, and distribute it under the terms of this license.
 
+Commercial licenses are available for use cases that do not fit AGPLv3 (closed-source products, proprietary SaaS, etc.). See [Licensing & Contributing](/appendix/licensing/) for the full terms, when a commercial license is required, and details of the Contributor License Agreement (CLA).
+
 ## Community Support
 
 For free community support, we use GitHub.
@@ -38,3 +40,5 @@ Please contact us at [sven@bino.bi](mailto:sven@bino.bi) to:
 - Request commercial/enterprise support
   - including Data Engineering, Information Design, Reporting Infrastructure, Consulting, Training, and more
 - Discuss commercial licensing options
+
+For the full licensing model and CLA details, see [Licensing & Contributing](/appendix/licensing/).

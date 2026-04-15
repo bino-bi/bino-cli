@@ -1,0 +1,56 @@
+---
+title: Licensing & Contributing
+description: How bino is licensed, how commercial licenses work, and what contributors agree to via the CLA.
+---
+
+bino is **dual-licensed**: free and open-source under AGPLv3, and also available under separate commercial terms for customers whose use case does not fit AGPLv3.
+
+## Open-source license (AGPLv3)
+
+bino is distributed under the [GNU Affero General Public License v3.0](https://github.com/bino-bi/bino-cli/blob/main/LICENCE). The AGPL is a strong copyleft license with one notable property beyond the GPL:
+
+- If you modify bino and offer it as a **network service** (for example, a hosted SaaS that lets users generate reports), you must make the **source code of your modified version available** to the users of that service.
+
+For most users — running bino locally, in CI, or inside infrastructure you control to produce PDFs for internal use — AGPLv3 imposes no practical obligations beyond attribution.
+
+The VS Code extension shipped in `vscode-bino/` is licensed separately under the **MIT License**.
+
+## When you need a commercial license
+
+You likely need a commercial license if any of the following apply:
+
+- You want to embed bino in a **closed-source product** you distribute.
+- You operate a **SaaS or hosted service** built on bino and cannot or do not want to release the source of your modifications under AGPLv3.
+- Your organization's policy prohibits AGPL-licensed code.
+- You need **warranty, indemnification, or SLAs** that the AGPL explicitly disclaims.
+
+Contact **[sven@bino.bi](mailto:sven@bino.bi)** for commercial licensing terms and quotes.
+
+## Contributor License Agreement
+
+To keep the dual-licensing model workable, every contributor to bino signs a **Contributor License Agreement (CLA)** before their pull request is merged.
+
+### Why a CLA is required
+
+Without a CLA, each contributor's code would be licensed to the project under AGPLv3 only — and the project owner could not legally redistribute that code under commercial terms. The CLA grants the project owner the broad rights needed to offer bino under both AGPLv3 and commercial licenses.
+
+**You retain copyright in your contributions.** The CLA is a license grant, not a copyright assignment.
+
+### Signing the CLA
+
+- **Individuals:** the [CLA Assistant](https://cla-assistant.io/) bot will comment on your first pull request with a link to read and accept the [Individual CLA](https://github.com/bino-bi/bino-cli/blob/main/CLA.md). Your acceptance is recorded against your GitHub account and covers all future contributions.
+- **Companies:** if you contribute in the course of employment, an authorized officer of your company must also sign the [Corporate CLA](https://github.com/bino-bi/bino-cli/blob/main/CCLA.md) and list authorized contributors in Schedule A. Email the signed document to **[sven@bino.bi](mailto:sven@bino.bi)**.
+
+### What the CLA grants
+
+By signing, you grant the project owner:
+
+1. **Copyright license** — perpetual, worldwide, royalty-free rights to reproduce, modify, distribute, and sublicense your contributions under any license terms, including AGPLv3 and commercial terms.
+2. **Patent license** — a patent grant covering any claims of yours that your contribution necessarily infringes.
+3. **Representations** that the contribution is your original work and that you have the right to make the grant (including employer waivers where applicable).
+
+See the full text in [CLA.md](https://github.com/bino-bi/bino-cli/blob/main/CLA.md) and [CCLA.md](https://github.com/bino-bi/bino-cli/blob/main/CCLA.md) in the main repository.
+
+## Third-party dependencies
+
+Run `bino about` to list all direct dependencies with their licenses and upstream URLs. Contributions that introduce dependencies under licenses incompatible with AGPLv3 will be rejected.
