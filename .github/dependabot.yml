@@ -11,6 +11,12 @@ updates:
     groups:
       go-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Pin duckdb-go to v2.5.5 — later versions require matching DuckDB
+      # native libraries and extension compatibility (see release.yml).
+      - dependency-name: "github.com/duckdb/duckdb-go/v2"
+      - dependency-name: "github.com/duckdb/duckdb-go-bindings"
+      - dependency-name: "github.com/duckdb/duckdb-go-bindings/*"
 
   - package-ecosystem: npm
     directory: /vscode-bino
