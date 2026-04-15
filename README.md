@@ -170,8 +170,6 @@ To report a vulnerability, please see our [Security Policy](SECURITY.md).
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** — see the [LICENCE](LICENCE) file for details.
 
-The VS Code extension in `vscode-bino/` is licensed separately under the **MIT License** (see [`vscode-bino/LICENSE`](vscode-bino/LICENSE)).
-
 ### Commercial licensing
 
 bino/bino-cli is also available under separate commercial terms for customers who cannot comply with AGPLv3 (e.g., closed-source SaaS deployments or embedding bino in proprietary products). Contact **sven@bino.bi** for a commercial license quote.
