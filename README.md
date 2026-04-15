@@ -172,6 +172,12 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 
 The VS Code extension in `vscode-bino/` is licensed separately under the **MIT License** (see [`vscode-bino/LICENSE`](vscode-bino/LICENSE)).
 
+### Commercial licensing
+
+bino/bino-cli is also available under separate commercial terms for customers who cannot comply with AGPLv3 (e.g., closed-source SaaS deployments or embedding bino in proprietary products). Contact **sven@bino.bi** for a commercial license quote.
+
+All contributions are accepted under a [Contributor License Agreement](CLA.md) that permits this dual-licensing model.
+
 ## Third-Party Dependencies
 
 Run `bino about` to list all direct dependencies with their licenses and upstream URLs.
