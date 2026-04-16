@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "bino-cli-claude-code-plugins",
+  "version": "1.0.0",
+  "description": "Bundled plugins for Claude Code to interact with the bino-cli tool.",
+  "owner": {
+    "name": "Sven Herrmann",
+    "email": "sven@bino.bi"
+  },
+  "plugins": [
+    {
+      "name": "bino-reporting",
+      "description": "Author, build, debug, and preview bino-cli PDF reports. Skills cover manifest authoring, data exploration via bino lsp-helper, error diagnosis, and the build/preview/serve lifecycle. Includes /bino-init, /bino-lint, /bino-build, /bino-preview, /bino-graph slash commands and bino-report-architect / bino-data-analyst subagents.",
+      "category": "development",
+      "source": "./agents/plugins/bino-reporting",
+      "homepage": "https://github.com/bino-bi/bino-cli/tree/main/agents/plugins/bino-reporting",
+      "author": {
+        "name": "Sven Herrmann",
+        "email": "sven@bino.bi"
+      }
+    }
+  ]
+}
