@@ -1,0 +1,10 @@
+{
+  "name": "bino-reporting",
+  "description": "Author, build, debug, and preview bino-cli PDF reports. Skills cover manifest authoring, data exploration via bino lsp-helper, error diagnosis, and the build/preview/serve lifecycle. Includes /bino-init, /bino-lint, /bino-build, /bino-preview, /bino-graph slash commands and bino-report-architect / bino-data-analyst subagents.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sven Herrmann",
+    "email": "sven@bino.bi"
+  },
+  "homepage": "https://github.com/bino-bi/bino-cli/tree/main/agents/plugins/bino-reporting"
+}
