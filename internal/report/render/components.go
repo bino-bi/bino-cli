@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net/url"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -17,6 +18,21 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/spec"
+)
+
+// Data delivery modes for renderDatasources / renderDatasets.
+const (
+	// DataModeInline embeds gzip+base64 payload bodies directly in the HTML.
+	DataModeInline = "inline"
+	// DataModeURL emits an HTTP URL body that fetches the JSON from
+	// previewhttp.Server. The caller must register payloads on the server.
+	DataModeURL = "url"
+
+	// EmittedKindDatasource and EmittedKindDataset match the URL path segment
+	// served by previewhttp.Server (/__bino/data/{datasource|dataset}/…) and
+	// the value used by previewhttp.PutDatasource / PutDataset.
+	EmittedKindDatasource = "datasource"
+	EmittedKindDataset    = "dataset"
 )
 
 // PluginComponentRenderer renders HTML for plugin-provided component kinds.
@@ -246,59 +262,160 @@ func filterDatasourcesByRefs(results []datasource.Result, referenced map[string]
 }
 
 // renderDatasources generates bn-datasource elements for collected data.
-// Data is gzip-compressed and base64-encoded to reduce HTML size and enable
-// hash-based change detection in the template engine.
-func renderDatasources(results []datasource.Result) []string {
+//
+// In DataModeInline, payload bodies are gzip+base64 inlined into the element
+// (raw="false" indicates compressed content).
+//
+// In DataModeURL, the body is a URL pointing at previewhttp.Server (absolute
+// when dataBaseURL is non-empty, otherwise a same-origin path starting with
+// "/__bino/data/…"). The returned EmittedData entries must be registered on
+// the server with PutDatasource(name, hash, body) before the HTML is served.
+//
+// dataMode "" is treated as DataModeInline.
+//
+// Duplicate names (which can happen when manifests define multiple
+// constraint-gated variants and the caller didn't filter them) collapse to a
+// single element — last definition wins, matching DuckDB cache write order.
+// In url mode the duplicate would otherwise race in the browser:
+// disconnectedCallback on one instance drops the AlaSQL table and aborts the
+// in-flight fetch of the other.
+func renderDatasources(results []datasource.Result, dataMode, dataBaseURL string) ([]string, []EmittedData) {
 	if len(results) == 0 {
-		return nil
+		return nil, nil
 	}
+	results = dedupeDatasourceResultsByName(results)
+	useURL := dataMode == DataModeURL
 	segments := make([]string, 0, len(results))
+	var emitted []EmittedData
+	if useURL {
+		emitted = make([]EmittedData, 0, len(results))
+	}
 	for _, res := range results {
 		var b strings.Builder
 		b.WriteString("<bn-datasource")
 		writeAttr(&b, "name", res.Name)
-		writeAttr(&b, "raw", "false")
-		b.WriteString(">")
-		compressed, err := CompressContent(res.Data)
-		if err != nil {
-			// Fall back to plain JSON on compression failure.
-			b.WriteString(html.EscapeString(string(res.Data)))
+		if useURL {
+			b.WriteString(">")
+			hash := ContentHash(res.Data)
+			b.WriteString(html.EscapeString(buildDataURL(dataBaseURL, EmittedKindDatasource, res.Name, hash)))
+			b.WriteString("</bn-datasource>")
+			emitted = append(emitted, EmittedData{
+				Kind: EmittedKindDatasource,
+				Name: res.Name,
+				Hash: hash,
+				Body: res.Data,
+			})
 		} else {
-			b.WriteString(compressed)
+			writeAttr(&b, "raw", "false")
+			b.WriteString(">")
+			compressed, err := CompressContent(res.Data)
+			if err != nil {
+				// Fall back to plain JSON on compression failure.
+				b.WriteString(html.EscapeString(string(res.Data)))
+			} else {
+				b.WriteString(compressed)
+			}
+			b.WriteString("</bn-datasource>")
 		}
-		b.WriteString("</bn-datasource>")
 		segments = append(segments, b.String())
 	}
-	return segments
+	return segments, emitted
 }
 
 // renderDatasets generates bn-dataset elements for evaluated DataSet results.
 // Each dataset is rendered with static="true" indicating pre-computed data.
-// Data is gzip-compressed and base64-encoded (raw="false") to reduce HTML size
-// and enable hash-based change detection in the template engine.
-func renderDatasets(results []dataset.Result) []string {
+// Mode semantics match renderDatasources, including duplicate-name dedup.
+func renderDatasets(results []dataset.Result, dataMode, dataBaseURL string) ([]string, []EmittedData) {
 	if len(results) == 0 {
-		return nil
+		return nil, nil
 	}
+	results = dedupeDatasetResultsByName(results)
+	useURL := dataMode == DataModeURL
 	segments := make([]string, 0, len(results))
+	var emitted []EmittedData
+	if useURL {
+		emitted = make([]EmittedData, 0, len(results))
+	}
 	for _, res := range results {
 		var b strings.Builder
 		b.WriteString("<bn-dataset")
 		writeAttr(&b, "name", res.Name)
 		writeAttr(&b, "static", "true")
-		writeAttr(&b, "raw", "false")
-		b.WriteString(">")
-		compressed, err := CompressContent(res.Data)
-		if err != nil {
-			// Fall back to plain JSON on compression failure.
-			b.WriteString(html.EscapeString(string(res.Data)))
+		if useURL {
+			b.WriteString(">")
+			hash := ContentHash(res.Data)
+			b.WriteString(html.EscapeString(buildDataURL(dataBaseURL, EmittedKindDataset, res.Name, hash)))
+			b.WriteString("</bn-dataset>")
+			emitted = append(emitted, EmittedData{
+				Kind: EmittedKindDataset,
+				Name: res.Name,
+				Hash: hash,
+				Body: res.Data,
+			})
 		} else {
-			b.WriteString(compressed)
+			writeAttr(&b, "raw", "false")
+			b.WriteString(">")
+			compressed, err := CompressContent(res.Data)
+			if err != nil {
+				b.WriteString(html.EscapeString(string(res.Data)))
+			} else {
+				b.WriteString(compressed)
+			}
+			b.WriteString("</bn-dataset>")
 		}
-		b.WriteString("</bn-dataset>")
 		segments = append(segments, b.String())
 	}
-	return segments
+	return segments, emitted
+}
+
+// buildDataURL composes the URL the template engine will fetch in url mode.
+// When baseURL is empty, returns a same-origin path; otherwise an absolute URL.
+// Path segments are escaped to allow names with spaces or special characters.
+func buildDataURL(baseURL, kind, name, hash string) string {
+	base := strings.TrimRight(baseURL, "/")
+	return fmt.Sprintf("%s/__bino/data/%s/%s?hash=%s",
+		base, kind, url.PathEscape(name), url.QueryEscape(hash))
+}
+
+// dedupeDatasetResultsByName collapses duplicate-name entries to the last
+// occurrence, preserving the original ordering of unique names. Same-name
+// duplicates can arise when a manifest defines multiple constraint-gated
+// DataSet variants and the caller hasn't filtered them — every variant
+// reaches dataset.Execute and every result reaches the renderer.
+func dedupeDatasetResultsByName(results []dataset.Result) []dataset.Result {
+	if len(results) <= 1 {
+		return results
+	}
+	seen := make(map[string]int, len(results))
+	out := make([]dataset.Result, 0, len(results))
+	for _, r := range results {
+		if idx, ok := seen[r.Name]; ok {
+			out[idx] = r
+			continue
+		}
+		seen[r.Name] = len(out)
+		out = append(out, r)
+	}
+	return out
+}
+
+// dedupeDatasourceResultsByName mirrors dedupeDatasetResultsByName for
+// datasource.Result.
+func dedupeDatasourceResultsByName(results []datasource.Result) []datasource.Result {
+	if len(results) <= 1 {
+		return results
+	}
+	seen := make(map[string]int, len(results))
+	out := make([]datasource.Result, 0, len(results))
+	for _, r := range results {
+		if idx, ok := seen[r.Name]; ok {
+			out[idx] = r
+			continue
+		}
+		seen[r.Name] = len(out)
+		out = append(out, r)
+	}
+	return out
 }
 
 // renderInternationalizations generates bn-internationalization elements.

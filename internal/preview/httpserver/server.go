@@ -147,6 +147,8 @@ type Server struct {
 
 	assetMu     sync.RWMutex
 	localAssets map[string]LocalAsset
+
+	data *dataStore
 }
 
 // New constructs a Server ready to start accepting requests.
@@ -181,6 +183,7 @@ func New(cfg Config) (*Server, error) {
 		httpClient:  client,
 		maxCDNBytes: runtimeCfg.MaxCDNBytes,
 		sse:         NewSSEHub(),
+		data:        newDataStore(defaultDataKeep),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", compressionHandlerFunc(srv.handleRoot))
@@ -188,6 +191,8 @@ func New(cfg Config) (*Server, error) {
 	mux.Handle("/cdn/", compressionHandlerFunc(srv.handleCDN))
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
+	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
+	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
 		mux.Handle("/__explorer/", cfg.ExplorerHandler)
@@ -238,6 +243,67 @@ func (s *Server) SetContentRoutes(routes map[string]ContentFunc) {
 	s.contentMu.Lock()
 	s.routes = normalized
 	s.contentMu.Unlock()
+}
+
+// PutDatasource registers a JSON body for a bn-datasource component under
+// (name, hash). The renderer emits a body URL of the form
+// /__bino/data/datasource/<name>?hash=<hash> that resolves to this body.
+func (s *Server) PutDatasource(name, hash string, body []byte) {
+	if s == nil || s.data == nil {
+		return
+	}
+	s.data.Put(DataKindDatasource, name, hash, body)
+}
+
+// PutDataset registers a JSON body for a bn-dataset component under
+// (name, hash). The renderer emits a body URL of the form
+// /__bino/data/dataset/<name>?hash=<hash> that resolves to this body.
+func (s *Server) PutDataset(name, hash string, body []byte) {
+	if s == nil || s.data == nil {
+		return
+	}
+	s.data.Put(DataKindDataset, name, hash, body)
+}
+
+// handleData returns an http.HandlerFunc that serves registered JSON payloads
+// for the given kind ("datasource" or "dataset"). The "name" path segment and
+// "hash" query parameter together identify the payload; if either is missing
+// or the lookup fails, the handler responds with 404 and a small JSON error
+// body.
+func (s *Server) handleData(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		hash := r.URL.Query().Get("hash")
+		if name == "" || hash == "" {
+			writeDataNotFound(w, "missing name or hash")
+			return
+		}
+		body, ok := s.data.Get(kind, name, hash)
+		if !ok {
+			writeDataNotFound(w, fmt.Sprintf("no %s %q at hash %q", kind, name, hash))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		// The URL changes whenever the content changes, so the body at a given
+		// URL is immutable. Encourage caches to retain it indefinitely.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}
+}
+
+func writeDataNotFound(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	// JSON-marshal the message to safely escape any quote/backslash/control
+	// characters that could come from the request URL.
+	body, err := json.Marshal(struct {
+		Error string `json:"error"`
+	}{Error: message})
+	if err != nil {
+		body = []byte(`{"error":"unknown"}`)
+	}
+	_, _ = w.Write(body)
 }
 
 // SetLocalAssets updates the set of files that should be served under the /assets/ prefix.

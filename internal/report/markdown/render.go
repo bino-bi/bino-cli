@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	htmltemplate "html/template"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +46,13 @@ type RenderContext struct {
 	EngineVersion string
 	// AssetURLs maps asset names to resolved URLs for asset: image references.
 	AssetURLs map[string]string
+	// DataMode selects how datasource/dataset payloads are delivered. "" or
+	// "inline" embeds gzip+base64; "url" emits URLs and populates the
+	// EmittedData return value of WrapDocumentWithContext.
+	DataMode string
+	// DataBaseURL is the absolute base URL for url mode (e.g.
+	// "http://127.0.0.1:45678").
+	DataBaseURL string
 	// docIndex maps kind:name to documents for ref resolution.
 	docIndex map[string]config.Document
 }
@@ -438,12 +446,25 @@ type FullDocumentOptions struct {
 
 // WrapDocumentWithContext wraps rendered HTML content in a full bino HTML document.
 // This includes the template engine, bn-context, datasources, datasets, i18n, etc.
-func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
+//
+// When RenderContext.DataMode == "url", the returned []render.EmittedData
+// describes the bodies that must be registered on previewhttp.Server before
+// the HTML becomes reachable to the browser. In inline mode it is nil.
+func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, []render.EmittedData) {
 	rc := opts.RenderContext
 	locale := opts.Locale
 	if locale == "" {
 		locale = "de"
 	}
+
+	dataMode := ""
+	dataBaseURL := ""
+	if rc != nil {
+		dataMode = rc.DataMode
+		dataBaseURL = rc.DataBaseURL
+	}
+	useURL := dataMode == render.DataModeURL
+	var emitted []render.EmittedData
 
 	// Build context segments (datasources, datasets, i18n, styles)
 	var segments []string
@@ -481,41 +502,67 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 		}
 	}
 
-	// Render datasources (compressed with raw="false")
+	// Render datasources (deduped by name; see render.dedupeDatasourceResultsByName).
 	if rc != nil {
-		for _, res := range rc.DatasourceResults {
+		for _, res := range dedupeDatasourceResultsByName(rc.DatasourceResults) {
 			var b strings.Builder
 			b.WriteString("<bn-datasource")
 			writeAttr(&b, "name", res.Name)
-			writeAttr(&b, "raw", "false")
-			b.WriteString(">")
-			compressed, err := render.CompressContent(res.Data)
-			if err != nil {
-				b.WriteString(html.EscapeString(string(res.Data)))
+			if useURL {
+				b.WriteString(">")
+				hash := render.ContentHash(res.Data)
+				b.WriteString(html.EscapeString(buildMarkdownDataURL(dataBaseURL, render.EmittedKindDatasource, res.Name, hash)))
+				b.WriteString("</bn-datasource>")
+				emitted = append(emitted, render.EmittedData{
+					Kind: render.EmittedKindDatasource,
+					Name: res.Name,
+					Hash: hash,
+					Body: res.Data,
+				})
 			} else {
-				b.WriteString(compressed)
+				writeAttr(&b, "raw", "false")
+				b.WriteString(">")
+				compressed, err := render.CompressContent(res.Data)
+				if err != nil {
+					b.WriteString(html.EscapeString(string(res.Data)))
+				} else {
+					b.WriteString(compressed)
+				}
+				b.WriteString("</bn-datasource>")
 			}
-			b.WriteString("</bn-datasource>")
 			segments = append(segments, b.String())
 		}
 	}
 
-	// Render datasets (compressed with raw="false")
+	// Render datasets (deduped by name; see render.dedupeDatasetResultsByName).
 	if rc != nil {
-		for _, res := range rc.DatasetResults {
+		for _, res := range dedupeDatasetResultsByName(rc.DatasetResults) {
 			var b strings.Builder
 			b.WriteString("<bn-dataset")
 			writeAttr(&b, "name", res.Name)
 			writeAttr(&b, "static", "true")
-			writeAttr(&b, "raw", "false")
-			b.WriteString(">")
-			compressed, err := render.CompressContent(res.Data)
-			if err != nil {
-				b.WriteString(html.EscapeString(string(res.Data)))
+			if useURL {
+				b.WriteString(">")
+				hash := render.ContentHash(res.Data)
+				b.WriteString(html.EscapeString(buildMarkdownDataURL(dataBaseURL, render.EmittedKindDataset, res.Name, hash)))
+				b.WriteString("</bn-dataset>")
+				emitted = append(emitted, render.EmittedData{
+					Kind: render.EmittedKindDataset,
+					Name: res.Name,
+					Hash: hash,
+					Body: res.Data,
+				})
 			} else {
-				b.WriteString(compressed)
+				writeAttr(&b, "raw", "false")
+				b.WriteString(">")
+				compressed, err := render.CompressContent(res.Data)
+				if err != nil {
+					b.WriteString(html.EscapeString(string(res.Data)))
+				} else {
+					b.WriteString(compressed)
+				}
+				b.WriteString("</bn-dataset>")
 			}
-			b.WriteString("</bn-dataset>")
 			segments = append(segments, b.String())
 		}
 	}
@@ -572,7 +619,53 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) []byte {
 		buf.WriteString("</bn-context></body></html>")
 	}
 
-	return buf.Bytes()
+	return buf.Bytes(), emitted
+}
+
+// buildMarkdownDataURL composes the URL the template engine fetches in url
+// mode. Path segments are escaped to allow names with special characters.
+func buildMarkdownDataURL(baseURL, kind, name, hash string) string {
+	base := strings.TrimRight(baseURL, "/")
+	return fmt.Sprintf("%s/__bino/data/%s/%s?hash=%s",
+		base, kind, neturl.PathEscape(name), neturl.QueryEscape(hash))
+}
+
+// dedupeDatasetResultsByName collapses duplicate-name entries to the last
+// occurrence (mirrors render.dedupeDatasetResultsByName — see comment there).
+func dedupeDatasetResultsByName(results []dataset.Result) []dataset.Result {
+	if len(results) <= 1 {
+		return results
+	}
+	seen := make(map[string]int, len(results))
+	out := make([]dataset.Result, 0, len(results))
+	for _, r := range results {
+		if idx, ok := seen[r.Name]; ok {
+			out[idx] = r
+			continue
+		}
+		seen[r.Name] = len(out)
+		out = append(out, r)
+	}
+	return out
+}
+
+// dedupeDatasourceResultsByName mirrors dedupeDatasetResultsByName for
+// datasource.Result.
+func dedupeDatasourceResultsByName(results []datasource.Result) []datasource.Result {
+	if len(results) <= 1 {
+		return results
+	}
+	seen := make(map[string]int, len(results))
+	out := make([]datasource.Result, 0, len(results))
+	for _, r := range results {
+		if idx, ok := seen[r.Name]; ok {
+			out[idx] = r
+			continue
+		}
+		seen[r.Name] = len(out)
+		out = append(out, r)
+	}
+	return out
 }
 
 // writeAttr writes an HTML attribute if the value is non-empty.

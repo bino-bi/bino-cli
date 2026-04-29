@@ -365,6 +365,9 @@ type RenderResult struct {
 	HTML        []byte
 	LocalAssets []render.LocalAsset
 	Diagnostics []datasource.Diagnostic
+	// EmittedData carries dataset/datasource bodies that must be registered on
+	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	EmittedData []render.EmittedData
 }
 
 // FrameRenderResult captures the outcome of a two-phase (frame + context) render.
@@ -378,6 +381,9 @@ type FrameRenderResult struct {
 	LocalAssets []render.LocalAsset
 	// Diagnostics contains any warnings or errors from datasource/dataset processing.
 	Diagnostics []datasource.Diagnostic
+	// EmittedData carries dataset/datasource bodies that must be registered on
+	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	EmittedData []render.EmittedData
 }
 
 // RenderHTML generates HTML from the provided documents using the given options.
@@ -466,6 +472,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		HTML:        result.HTML,
 		LocalAssets: result.LocalAssets,
 		Diagnostics: renderDiags,
+		EmittedData: result.EmittedData,
 	}, nil
 }
 
@@ -1088,6 +1095,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		ContextHTML: result.ContextHTML,
 		LocalAssets: result.LocalAssets,
 		Diagnostics: renderDiags,
+		EmittedData: result.EmittedData,
 	}, nil
 }
 
@@ -1276,6 +1284,10 @@ type DocumentArtefactResult struct {
 	// HeadingIDs contains heading anchor IDs extracted from the TOC tree.
 	// Populated when TableOfContents is enabled in the spec.
 	HeadingIDs []string
+	// EmittedData carries the dataset/datasource bodies that must be
+	// registered on previewhttp.Server when the renderer ran in url mode.
+	// Nil in inline mode.
+	EmittedData []render.EmittedData
 }
 
 // DocumentArtefactRenderOptions configures document artifact rendering.
@@ -1388,6 +1400,10 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	// Create render context with documents, datasets, and datasources
 	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
 	renderCtx.AssetURLs = assetURLs
+	if opts.PluginOptions != nil {
+		renderCtx.DataMode = opts.PluginOptions.DataMode
+		renderCtx.DataBaseURL = opts.PluginOptions.DataBaseURL
+	}
 
 	// Render markdown files to HTML content with full context
 	mathEnabled := s.MathEnabled()
@@ -1412,7 +1428,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	}
 
 	// Wrap in full bino HTML document with template engine, bn-context, etc.
-	html := markdown.WrapDocumentWithContext(mdResult.HTML, markdown.FullDocumentOptions{
+	html, emitted := markdown.WrapDocumentWithContext(mdResult.HTML, markdown.FullDocumentOptions{
 		DocumentOptions: markdown.DocumentOptions{
 			Title:       s.Title,
 			Author:      s.Author,
@@ -1436,7 +1452,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		}
 	}
 
-	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals, HeadingIDs: mdResult.HeadingIDs}, nil
+	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals, HeadingIDs: mdResult.HeadingIDs, EmittedData: emitted}, nil
 }
 
 // LogDocumentArtefactWarnings logs any warnings collected during document artifact validation.
@@ -1483,6 +1499,9 @@ type PresentationArtefactRenderOptions struct {
 type PresentationArtefactResult struct {
 	HTML        []byte
 	LocalAssets []render.LocalAsset
+	// EmittedData carries dataset/datasource bodies that must be registered on
+	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	EmittedData []render.EmittedData
 }
 
 // RenderPresentationArtefactHTML generates Reveal.js HTML for a ReportArtefact (build mode, standalone).
@@ -1500,6 +1519,9 @@ type PresentationFrameRenderResult struct {
 	FrameHTML   []byte
 	ContextHTML []byte
 	LocalAssets []render.LocalAsset
+	// EmittedData carries dataset/datasource bodies that must be registered on
+	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	EmittedData []render.EmittedData
 }
 
 // RenderPresentationFrameAndContext generates a two-phase render for preview mode with SSE support.
@@ -1555,6 +1577,7 @@ func RenderPresentationFrameAndContext(ctx context.Context, workdir string, docs
 		FrameHTML:   result.FrameHTML,
 		ContextHTML: result.ContextHTML,
 		LocalAssets: result.LocalAssets,
+		EmittedData: result.EmittedData,
 	}, nil
 }
 
@@ -1622,6 +1645,7 @@ func renderPresentationArtefactHTML(ctx context.Context, workdir string, docs []
 	return PresentationArtefactResult{
 		HTML:        result.HTML,
 		LocalAssets: result.LocalAssets,
+		EmittedData: result.EmittedData,
 	}, nil
 }
 

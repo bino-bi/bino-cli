@@ -54,6 +54,7 @@ func newPreviewCommand() *cobra.Command {
 		logSQL         bool
 		enableLint     bool
 		dataValidation string
+		dataMode       string
 	)
 
 	cmd := &cobra.Command{
@@ -123,6 +124,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 			dataValidationSampleSize := dataset.GetDataValidationSampleSize()
 
+			// Resolve data delivery mode
+			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
+			resolvedDataMode, err := normalizeDataMode(dataMode)
+			if err != nil {
+				return RuntimeError(err)
+			}
+
 			previewHookEnv := hooks.HookEnv{
 				Mode:     "preview",
 				Workdir:  env.ProjectRoot,
@@ -159,6 +167,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return err
 				}
 				pluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
+			}
+			if resolvedDataMode == render.DataModeURL {
+				if pluginOpts == nil {
+					pluginOpts = &render.PluginOptions{}
+				}
+				pluginOpts.DataMode = render.DataModeURL
+				// Same-origin relative URLs work for the long-lived preview server.
 			}
 
 			refreshMu := &sync.Mutex{}
@@ -220,6 +235,15 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			})
 			if err != nil {
 				return RuntimeError(err)
+			}
+
+			// In url mode, emit absolute URLs so older template-engine builds
+			// (which only treat http:// or https:// bodies as URLs) still
+			// fetch them correctly. Same-origin relative paths would also
+			// work, but only with template-engine builds that include the
+			// "/" prefix in isUrl().
+			if resolvedDataMode == render.DataModeURL && refreshCfg.PluginOptions != nil {
+				refreshCfg.PluginOptions.DataBaseURL = server.URL()
 			}
 
 			// Run pre-preview hook (once, before initial refresh)
@@ -310,6 +334,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	cmd.Flags().BoolVar(&enableLint, "lint", false, "Run lint rules on each refresh")
 	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
+	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
+		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
 
 	return cmd
 }
@@ -488,6 +514,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 		return RuntimeError(err)
 	}
 	pipeline.LogDiagnostics(logger.Channel("datasource"), allPagesResult.Diagnostics)
+	registerEmittedData(server, allPagesResult.EmittedData)
 
 	routeMap := make(map[string]previewhttp.ContentFunc, len(artifacts)+len(documentArtefacts)+1)
 	allAssets := make([]previewhttp.LocalAsset, 0)
@@ -525,6 +552,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			return RuntimeError(err)
 		}
 		pipeline.LogDiagnostics(logger.Channel("datasource").Channel(art.Document.Name), renderResult.Diagnostics)
+		registerEmittedData(server, renderResult.EmittedData)
 		artPath := "/" + art.Document.Name
 		var artGraph *previewGraphData
 		if g != nil {
@@ -553,6 +581,7 @@ func refreshPreviewContent(ctx context.Context, reason string, server *previewht
 			logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, err)
 			continue
 		}
+		registerEmittedData(server, renderResult.EmittedData)
 		allAssets = append(allAssets, pipeline.ConvertLocalAssets(renderResult.LocalAssets)...)
 		docPath := "/doc/" + docArt.Document.Name
 		var docGraph *previewGraphData
@@ -607,6 +636,7 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 				cachedErr = err
 				return
 			}
+			registerEmittedData(server, renderResult.EmittedData)
 			frameHTML := withPreviewStyles(renderResult.FrameHTML)
 			cachedBody = append([]byte(nil), frameHTML...)
 			cachedCT = "text/html; charset=utf-8"

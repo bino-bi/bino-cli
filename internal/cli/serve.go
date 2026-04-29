@@ -35,11 +35,12 @@ const defaultServePort = 8080
 //   - Serves a single LiveReportArtefact with navigation
 func newServeCommand() *cobra.Command {
 	var (
-		port    int
-		workdir string
-		live    string
-		logSQL  bool
-		addr    string
+		port     int
+		workdir  string
+		live     string
+		logSQL   bool
+		addr     string
+		dataMode string
 	)
 
 	cmd := &cobra.Command{
@@ -73,6 +74,11 @@ Environment knobs:
 			port = env.Resolver.ResolveInt("port", "port", port)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			live = env.Resolver.ResolveString("live", "live", live)
+			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
+			resolvedDataMode, err := normalizeDataMode(dataMode)
+			if err != nil {
+				return RuntimeError(err)
+			}
 
 			// Determine listen address
 			if addr == "" {
@@ -231,6 +237,15 @@ Environment knobs:
 					return err
 				}
 			}
+			if resolvedDataMode == render.DataModeURL {
+				if servePluginOpts == nil {
+					servePluginOpts = &render.PluginOptions{}
+				}
+				servePluginOpts.DataMode = render.DataModeURL
+				// Emit absolute URLs so older template-engine builds (which
+				// only fetch http:// or https:// bodies) still resolve them.
+				servePluginOpts.DataBaseURL = server.URL()
+			}
 
 			// Set up routes and assets
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
@@ -249,6 +264,7 @@ Environment knobs:
 				PostRenderHTMLHook: servePostRenderHook,
 				PostDatasetHook:    servePostDatasetHook,
 				HostService:        serveHostSvcRef,
+				Server:             server,
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -275,6 +291,8 @@ Environment knobs:
 	cmd.Flags().StringVar(&live, "live", "", "Name of the LiveReportArtefact to serve (required)")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().StringVar(&addr, "addr", "", "Full listen address (overrides --port, e.g. 0.0.0.0:8080)")
+	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
+		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
 
 	return cmd
 }
@@ -353,6 +371,9 @@ type serveRouteConfig struct {
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	PostDatasetHook    func(ctx context.Context, datasets []pipeline.DatasetPayload) error
 	HostService        *plugin.BinoHostServer
+	// Server is used to register dataset/datasource payloads when the
+	// renderer runs in url mode. May be nil in inline mode.
+	Server *previewhttp.Server
 }
 
 // serveRouteSetup holds the results of route setup.
@@ -384,7 +405,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
 				)
 			}
 		} else {
@@ -397,7 +418,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
 				)
 			}
 		}
@@ -417,7 +438,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
 				)
 			}
 		} else {
@@ -429,7 +450,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
 				)
 			}
 		}
@@ -492,6 +513,11 @@ type serveRenderEntry struct {
 	frameHTML   []byte
 	contextHTML []byte
 	assets      []render.LocalAsset
+	// emitted is the set of dataset/datasource bodies that need to be
+	// registered on the previewhttp.Server's data store for url-mode fetches.
+	// Re-registered on every cache hit because the store retains only the
+	// last N hashes per (kind,name).
+	emitted []render.EmittedData
 }
 
 func newServeRenderCache() *serveRenderCache {
@@ -532,6 +558,7 @@ func serveRenderHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
+	server *previewhttp.Server,
 ) (body []byte, contentType string, err error) {
 	// Extract query parameters from request context
 	reqInfo := previewhttp.GetRequestInfo(ctx)
@@ -553,6 +580,10 @@ func serveRenderHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
+		// Re-register payloads on every hit: the data store retains only the
+		// last N hashes per (kind,name), so a long-lived cached HTML can
+		// outlive its data registration.
+		registerEmittedData(server, entry.emitted)
 		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
@@ -616,6 +647,7 @@ func serveRenderHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource").Channel(artifact.Document.Name), renderResult.Diagnostics)
+	registerEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
 	frameHTML := withServeStyles(renderResult.FrameHTML)
@@ -626,6 +658,7 @@ func serveRenderHandler(
 		frameHTML:   frameHTML,
 		contextHTML: contextHTML,
 		assets:      renderResult.LocalAssets,
+		emitted:     renderResult.EmittedData,
 	})
 
 	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
@@ -650,6 +683,7 @@ func serveLayoutPagesHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
+	server *previewhttp.Server,
 ) (body []byte, contentType string, err error) {
 	// Process query parameters and reload documents if needed
 	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)
@@ -670,6 +704,7 @@ func serveLayoutPagesHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
+		registerEmittedData(server, entry.emitted)
 		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
@@ -694,6 +729,7 @@ func serveLayoutPagesHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
+	registerEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
 	frameHTML := withServeStyles(renderResult.FrameHTML)
@@ -704,6 +740,7 @@ func serveLayoutPagesHandler(
 		frameHTML:   frameHTML,
 		contextHTML: contextHTML,
 		assets:      renderResult.LocalAssets,
+		emitted:     renderResult.EmittedData,
 	})
 
 	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil

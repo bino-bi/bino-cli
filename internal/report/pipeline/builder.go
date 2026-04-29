@@ -213,7 +213,14 @@ type PDFRenderOptions struct {
 // then uses Chrome headless shell to capture a PDF. The server is shut down
 // automatically after the PDF is generated (or on error/cancellation).
 func (b *Builder) RenderPDF(ctx context.Context, html []byte, assets []render.LocalAsset, opts PDFRenderOptions) error {
-	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets))
+	return b.RenderPDFWithData(ctx, html, assets, nil, opts)
+}
+
+// RenderPDFWithData is RenderPDF that additionally registers dataset/datasource
+// payloads on the ephemeral server's data store. Pass the EmittedData returned
+// by the renderer when DataMode == "url"; pass nil for inline mode.
+func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []render.LocalAsset, emitted []render.EmittedData, opts PDFRenderOptions) error {
+	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted)
 	if err != nil {
 		return fmt.Errorf("start ephemeral server: %w", err)
 	}
@@ -249,6 +256,12 @@ func (b *Builder) RenderPDF(ctx context.Context, html []byte, assets []render.Lo
 // RenderPDFToTempFile renders HTML to a temporary PDF file and returns its
 // path. The caller is responsible for removing the temp file.
 func (b *Builder) RenderPDFToTempFile(ctx context.Context, html []byte, assets []render.LocalAsset, opts PDFRenderOptions) (string, error) {
+	return b.RenderPDFToTempFileWithData(ctx, html, assets, nil, opts)
+}
+
+// RenderPDFToTempFileWithData mirrors RenderPDFToTempFile but registers
+// EmittedData on the ephemeral server when the renderer ran in url mode.
+func (b *Builder) RenderPDFToTempFileWithData(ctx context.Context, html []byte, assets []render.LocalAsset, emitted []render.EmittedData, opts PDFRenderOptions) (string, error) {
 	tmpFile, err := os.CreateTemp("", "bino-doc-*.pdf")
 	if err != nil {
 		return "", fmt.Errorf("create temp pdf file: %w", err)
@@ -258,7 +271,7 @@ func (b *Builder) RenderPDFToTempFile(ctx context.Context, html []byte, assets [
 
 	renderOpts := opts
 	renderOpts.PDFPath = tmpPath
-	if err := b.RenderPDF(ctx, html, assets, renderOpts); err != nil {
+	if err := b.RenderPDFWithData(ctx, html, assets, emitted, renderOpts); err != nil {
 		os.Remove(tmpPath)
 		return "", err
 	}
@@ -306,7 +319,13 @@ type ScreenshotRenderOptions struct {
 // assets, then uses Chrome headless shell to capture screenshots of the
 // specified elements. The server is shut down automatically.
 func (b *Builder) CaptureScreenshots(ctx context.Context, html []byte, assets []render.LocalAsset, opts ScreenshotRenderOptions) ([]ScreenshotCaptureResult, error) {
-	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets))
+	return b.CaptureScreenshotsWithData(ctx, html, assets, nil, opts)
+}
+
+// CaptureScreenshotsWithData is CaptureScreenshots that registers EmittedData
+// on the ephemeral server when the renderer ran in url mode.
+func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, assets []render.LocalAsset, emitted []render.EmittedData, opts ScreenshotRenderOptions) ([]ScreenshotCaptureResult, error) {
+	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted)
 	if err != nil {
 		return nil, fmt.Errorf("start ephemeral server: %w", err)
 	}
@@ -376,7 +395,7 @@ type ephemeralServer struct {
 	errCh  chan error
 }
 
-func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []previewhttp.LocalAsset) (*ephemeralServer, error) {
+func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []previewhttp.LocalAsset, emitted []render.EmittedData) (*ephemeralServer, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -390,6 +409,16 @@ func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger
 		return nil, fmt.Errorf("create server: %w", err)
 	}
 	srv.SetLocalAssets(assets)
+	// Register dataset/datasource payloads BEFORE installing the HTML so the
+	// browser can never hit /__bino/data/... before the data is available.
+	for _, e := range emitted {
+		switch e.Kind {
+		case render.EmittedKindDatasource:
+			srv.PutDatasource(e.Name, e.Hash, e.Body)
+		case render.EmittedKindDataset:
+			srv.PutDataset(e.Name, e.Hash, e.Body)
+		}
+	}
 	srv.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), html...), "text/html; charset=utf-8"))
 
 	runCtx, cancel := context.WithCancel(ctx)
