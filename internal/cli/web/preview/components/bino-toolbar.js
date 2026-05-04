@@ -9,6 +9,7 @@ class BinoToolbar extends LitElement {
     _errorCount: { state: true },
     _badgeVisible: { state: true },
     _refreshing: { state: true },
+    _refreshError: { state: true },
   };
 
   static styles = css`
@@ -144,9 +145,35 @@ class BinoToolbar extends LitElement {
       border-radius: 1px;
       animation: progress-slide 1.2s ease-in-out infinite;
     }
+    .progress-bar.error {
+      opacity: 1;
+      height: 3px;
+    }
+    .progress-bar.error::after {
+      width: 100%;
+      background: #dc2626;
+      animation: none;
+    }
     @keyframes progress-slide {
       0% { transform: translateX(-100%); }
       100% { transform: translateX(350%); }
+    }
+    .refresh-error-msg {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bino-space-xs);
+      padding: var(--bino-space-xs) 0.625rem;
+      border-radius: 999px;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      font-size: var(--bino-font-size-sm);
+      font-weight: 600;
+      max-width: 32rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: help;
     }
   `;
 
@@ -159,11 +186,14 @@ class BinoToolbar extends LitElement {
     this._errorCount = 0;
     this._badgeVisible = false;
     this._refreshing = false;
+    this._refreshError = '';
     this._panelDismissed = false;
     this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
     this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
     this._boundOnRefreshing = this._onRefreshing.bind(this);
     this._boundOnRefreshDone = this._onRefreshDone.bind(this);
+    this._boundOnRefreshError = this._onRefreshError.bind(this);
+    this._boundOnNoPayload = this._onNoPayload.bind(this);
   }
 
   connectedCallback() {
@@ -172,6 +202,8 @@ class BinoToolbar extends LitElement {
     document.addEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
     document.addEventListener('bn-preview:refreshing', this._boundOnRefreshing);
     document.addEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
+    document.addEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
+    document.addEventListener('bn-preview:no-payload', this._boundOnNoPayload);
   }
 
   disconnectedCallback() {
@@ -180,6 +212,8 @@ class BinoToolbar extends LitElement {
     document.removeEventListener('bino-panel-dismissed', this._boundOnPanelDismissed);
     document.removeEventListener('bn-preview:refreshing', this._boundOnRefreshing);
     document.removeEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
+    document.removeEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
+    document.removeEventListener('bn-preview:no-payload', this._boundOnNoPayload);
   }
 
   render() {
@@ -251,8 +285,14 @@ class BinoToolbar extends LitElement {
         </button>
       ` : ''}
       <span class="spacer"></span>
+      ${this._refreshError ? html`
+        <span class="refresh-error-msg" title=${this._refreshError}>
+          <span>⚠</span>
+          <span>Refresh failed</span>
+        </span>
+      ` : ''}
       <slot></slot>
-      <div class="progress-bar ${this._refreshing ? 'active' : ''}"></div>
+      <div class="progress-bar ${this._refreshError ? 'error' : (this._refreshing ? 'active' : '')}"></div>
     `;
   }
 
@@ -310,10 +350,35 @@ class BinoToolbar extends LitElement {
   }
 
   _onRefreshing() {
+    console.debug('bino-toolbar: refreshing → _refreshing=true');
     this._refreshing = true;
+    // Clear any prior error as soon as a new refresh starts.
+    this._refreshError = '';
   }
 
   _onRefreshDone() {
+    console.debug('bino-toolbar: refresh-done → _refreshing=false');
+    this._refreshing = false;
+  }
+
+  _onRefreshError(e) {
+    var message = (e && e.detail && e.detail.message) || 'Refresh failed';
+    console.debug('bino-toolbar: refresh-error', message);
+    this._refreshError = String(message);
+    this._refreshing = false;
+  }
+
+  _onNoPayload(e) {
+    // Server completed a refresh but did NOT broadcast content for this
+    // view. Most common cause: the artefact at this path failed to render
+    // (see CLI log for "Render blocked"/"Render failed" messages) or the
+    // route no longer exists. If a per-path refresh-error already arrived,
+    // keep that message; otherwise show a generic hint.
+    if (this._refreshError) return;
+    var path = (e && e.detail && e.detail.path) || '';
+    this._refreshError =
+      'No content was broadcast for ' + path +
+      '. Check the bino terminal for "Render blocked" or "Render failed" messages.';
     this._refreshing = false;
   }
 }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"container/list"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,6 +244,30 @@ func (s *Server) SetContentRoutes(routes map[string]ContentFunc) {
 	s.contentMu.Unlock()
 }
 
+// UpdateContentRoutes merges the supplied entries into the existing route map
+// without dropping unspecified routes. Used by selective preview refreshes
+// where only a subset of artefacts has been re-rendered. Empty paths and nil
+// functions are skipped; paths are normalised to begin with a leading slash.
+func (s *Server) UpdateContentRoutes(partial map[string]ContentFunc) {
+	if len(partial) == 0 {
+		return
+	}
+	s.contentMu.Lock()
+	defer s.contentMu.Unlock()
+	if s.routes == nil {
+		s.routes = make(map[string]ContentFunc, len(partial))
+	}
+	for p, fn := range partial {
+		if fn == nil || p == "" {
+			continue
+		}
+		if !strings.HasPrefix(p, "/") {
+			p = "/" + p
+		}
+		s.routes[p] = fn
+	}
+}
+
 // PutDatasource registers a JSON body for a bn-datasource component under
 // (name, hash). The renderer emits a body URL of the form
 // /__bino/data/datasource/<name>?hash=<hash> that resolves to this body.
@@ -320,8 +343,13 @@ func (s *Server) SetLocalAssets(assets []LocalAsset) {
 	s.assetMu.Unlock()
 }
 
-// BroadcastContent pushes the latest HTML for a route to connected SSE clients.
-// It also caches the content so clients can fetch it via /__preview/context on initial connect.
+// BroadcastContent caches the latest HTML for a route and notifies connected
+// SSE clients that the content has changed. The notification carries only the
+// path, not the HTML body — clients fetch fresh content via
+// /__preview/context?path=<path> on demand. This keeps SSE messages small
+// (one per path, dozens of bytes) so a refresh that touches many routes
+// cannot exhaust the per-client SSE channel buffer and drop the trailing
+// refresh-done event.
 func (s *Server) BroadcastContent(reqPath string, html []byte) {
 	if s == nil || len(html) == 0 {
 		return
@@ -333,40 +361,34 @@ func (s *Server) BroadcastContent(reqPath string, html []byte) {
 		reqPath = "/" + reqPath
 	}
 
-	// Store in context cache for initial client fetch
+	// Store in context cache so /__preview/context can serve it.
 	s.contentMu.Lock()
 	if s.contextCache == nil {
 		s.contextCache = make(map[string]*list.Element)
 		s.contextLRU = list.New()
 	}
 	if elem, ok := s.contextCache[reqPath]; ok {
-		// Update existing entry and move to back (most recently used)
 		e, _ := elem.Value.(*contextCacheEntry)
 		e.html = append([]byte(nil), html...)
 		s.contextLRU.MoveToBack(elem)
 	} else {
-		// Insert new entry at back
 		entry := &contextCacheEntry{path: reqPath, html: append([]byte(nil), html...)}
 		s.contextCache[reqPath] = s.contextLRU.PushBack(entry)
 	}
-	// Evict oldest entries from front of list
 	s.evictOldestCacheEntries()
 	s.contentMu.Unlock()
 
-	// Broadcast to connected SSE clients
 	if s.sse == nil {
 		return
 	}
-	payload := sseContentPayload{
-		Path:       reqPath,
-		HTMLBase64: base64.StdEncoding.EncodeToString(html),
-	}
-	data, err := json.Marshal(payload)
+	data, err := json.Marshal(struct {
+		Path string `json:"path"`
+	}{Path: reqPath})
 	if err != nil {
 		s.cfg.Logger.Warnf("preview: marshal sse payload: %v", err)
 		return
 	}
-	s.sse.Broadcast(FormatSSE("content", data))
+	s.sse.Broadcast(FormatSSE("path-changed", data))
 }
 
 // BroadcastRefreshing notifies connected SSE clients that a content refresh has started.
@@ -380,12 +402,46 @@ func (s *Server) BroadcastRefreshing(reason string) {
 	s.sse.Broadcast(FormatSSE("refreshing", payload))
 }
 
-// BroadcastRefreshDone notifies connected SSE clients that the content refresh has completed.
-func (s *Server) BroadcastRefreshDone() {
+// BroadcastRefreshDone notifies connected SSE clients that the content
+// refresh has completed. The paths slice lists every route that received a
+// fresh content event during this cycle so each client can detect when its
+// own view was not part of the refresh (typically because that artefact's
+// render failed or the route does not exist).
+func (s *Server) BroadcastRefreshDone(paths []string) {
 	if s == nil || s.sse == nil {
 		return
 	}
-	s.sse.Broadcast(FormatSSE("refresh-done", []byte(`{}`)))
+	if paths == nil {
+		paths = []string{}
+	}
+	payload, err := json.Marshal(struct {
+		Paths []string `json:"paths"`
+	}{Paths: paths})
+	if err != nil {
+		payload = []byte(`{"paths":[]}`)
+	}
+	s.sse.Broadcast(FormatSSE("refresh-done", payload))
+}
+
+// BroadcastRefreshError notifies connected SSE clients that the content
+// refresh has failed. Pass an empty path to broadcast a global error that
+// every client should surface; pass a route path (e.g. "/myArt") to scope
+// the error to clients viewing that path. Without this signal a failed
+// refresh is invisible in the browser: BroadcastRefreshDone still fires,
+// and the DOM is left in its previous state because no `content` event
+// arrives.
+func (s *Server) BroadcastRefreshError(path, message string) {
+	if s == nil || s.sse == nil {
+		return
+	}
+	payload, err := json.Marshal(struct {
+		Path    string `json:"path,omitempty"`
+		Message string `json:"message"`
+	}{Path: path, Message: message})
+	if err != nil {
+		payload = []byte(`{"message":"unknown"}`)
+	}
+	s.sse.Broadcast(FormatSSE("refresh-error", payload))
 }
 
 // evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
@@ -878,11 +934,6 @@ func copyHeaders(dst, src http.Header, keys ...string) {
 
 var keepAliveFrame = []byte(": keep-alive\n\n")
 
-type sseContentPayload struct {
-	Path       string `json:"path"`
-	HTMLBase64 string `json:"htmlBase64"`
-}
-
 // SSEHub manages Server-Sent Event client connections and broadcasts.
 type SSEHub struct {
 	mu      sync.RWMutex
@@ -895,8 +946,15 @@ func NewSSEHub() *SSEHub {
 }
 
 // Subscribe registers a new SSE client and returns its channel.
+//
+// The buffer is sized to absorb a full refresh cycle (refreshing +
+// path-changed × N + refresh-done) without falling back to the non-blocking
+// drop path in Broadcast. With path-changed events being just a path
+// fragment, even reports with hundreds of artefacts comfortably fit; the
+// previous 4-slot buffer used to drop refresh-done when many large
+// content events were broadcast in succession.
 func (h *SSEHub) Subscribe() chan []byte {
-	ch := make(chan []byte, 4)
+	ch := make(chan []byte, 256)
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
 	h.mu.Unlock()
