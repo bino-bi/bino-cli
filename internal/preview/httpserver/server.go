@@ -608,9 +608,9 @@ func (s *Server) serveCDNProxy(w http.ResponseWriter, r *http.Request) error {
 
 	// For other CDN files, use cache-first strategy
 	if localPath != "" && !disableCache {
-		_, statErr := os.Stat(localPath) //nolint:gosec // G703: localPath is built from config CacheDir + known CDN paths
+		_, statErr := os.Stat(localPath) //nolint:gosec // G304: localPath is built from config CacheDir + sanitized CDN path
 		if statErr == nil {
-			http.ServeFile(w, r, localPath)
+			http.ServeFile(w, r, localPath) //nolint:gosec // G703: localPath built from config CacheDir + sanitized relPath (sanitizeCDNPath rejects ..)
 			return nil
 		}
 		if !errors.Is(statErr, os.ErrNotExist) {
@@ -678,8 +678,8 @@ func (s *Server) serveLocalEngineFile(w http.ResponseWriter, r *http.Request, re
 	// For all other files, try local cache first
 	if s.cfg.CacheDir != "" {
 		localPath := filepath.Join(s.cfg.CacheDir, filepath.FromSlash(relPath))
-		if _, err := os.Stat(localPath); err == nil { //nolint:gosec // G703: localPath is built from config CacheDir + known engine paths
-			http.ServeFile(w, r, localPath)
+		if _, err := os.Stat(localPath); err == nil { //nolint:gosec // G304: localPath is built from config CacheDir + sanitized engine path
+			http.ServeFile(w, r, localPath) //nolint:gosec // G703: localPath built from config CacheDir + sanitized relPath (sanitizeCDNPath rejects ..)
 			return nil
 		}
 	}
