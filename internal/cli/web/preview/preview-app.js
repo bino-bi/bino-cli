@@ -14,7 +14,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
   // Bumped on each user-visible runtime change so a quick devtools check
   // confirms whether the page is on the latest preview-app.js. Increment
   // when fixing a hot-reload bug here.
-  console.info('bn preview runtime v9 (upstream idiomorph via esm.sh, no custom-element ids)');
+  console.info('bn preview runtime v10 (bundled idiomorph + lit)');
 
   var parser = new DOMParser();
   var normalizedPath = normalizePath(window.location.pathname || '/');

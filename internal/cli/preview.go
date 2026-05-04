@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/http"
 	"os/exec"
 	"path"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
@@ -1081,17 +1081,14 @@ func buildPreviewErrorPage(message, hint string) []byte {
 var previewStyleMarker = []byte("bn-preview-style")
 
 func previewStyleBlock() []byte {
-	var b strings.Builder
-	b.WriteString("\n\t<link id=\"bn-preview-style\" rel=\"stylesheet\" href=\"/__bino/shared/tokens.css\">\n")
-	b.WriteString("\t<link rel=\"stylesheet\" href=\"/__bino/preview/preview.css\">\n")
-	b.WriteString("\t<script type=\"module\" src=\"/__bino/preview/preview-app.js\"></script>\n")
-	return []byte(b.String())
+	return []byte(
+		"\n\t<link id=\"bn-preview-style\" rel=\"stylesheet\" href=\"/__bino/shared/tokens.css\">\n" +
+			"\t<link rel=\"stylesheet\" href=\"/__bino/preview/preview.css\">\n" +
+			"\t<script type=\"module\" src=\"/__bino/static/preview.js\"></script>\n",
+	)
 }
 
-// withPreviewStyles injects a lightweight set of layout styles so preview pages are centered
-// and readable without relying on external assets. The import map is placed before the first
-// <script> tag so that Firefox (which strictly enforces the HTML spec) processes it before
-// any module scripts begin loading.
+// withPreviewStyles injects layout styles and the preview module bundle before </head>.
 func withPreviewStyles(doc []byte) []byte {
 	if len(doc) == 0 || bytes.Contains(doc, previewStyleMarker) {
 		return doc
@@ -1102,20 +1099,12 @@ func withPreviewStyles(doc []byte) []byte {
 		return doc
 	}
 	block := previewStyleBlock()
-	importMap := []byte(web.ImportMapScript() + "\n  ")
-	updated := make([]byte, 0, len(doc)+len(block)+len(importMap))
-
-	// Inject the import map before the first <script> tag so it is parsed
-	// before any module scripts. Firefox requires this ordering.
-	scriptIdx := bytes.Index(doc, []byte("<script"))
-	if scriptIdx != -1 {
-		updated = append(updated, doc[:scriptIdx]...)
-		updated = append(updated, importMap...)
-		updated = append(updated, doc[scriptIdx:idx]...)
-	} else {
-		updated = append(updated, doc[:idx]...)
-		updated = append(updated, importMap...)
+	extra := len(block)
+	if len(doc) > math.MaxInt-extra {
+		return doc
 	}
+	updated := make([]byte, 0, len(doc)+extra)
+	updated = append(updated, doc[:idx]...)
 	updated = append(updated, block...)
 	updated = append(updated, doc[idx:]...)
 	return updated
@@ -1132,7 +1121,11 @@ func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
 	if idx == -1 {
 		return doc
 	}
-	out := make([]byte, 0, len(doc)+len(tag))
+	extra := len(tag)
+	if len(doc) > math.MaxInt-extra {
+		return doc
+	}
+	out := make([]byte, 0, len(doc)+extra)
 	out = append(out, doc[:idx]...)
 	out = append(out, tag...)
 	out = append(out, doc[idx:]...)

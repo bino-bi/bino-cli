@@ -1,0 +1,9 @@
+{
+  "name": "bino-web",
+  "private": true,
+  "description": "Source dependencies for the embedded preview/serve UIs. Bundled at build time by ./bundle.go via esbuild's Go API.",
+  "dependencies": {
+    "lit": "3.2.1",
+    "idiomorph": "0.7.4"
+  }
+}

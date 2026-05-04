@@ -99,3 +99,38 @@ jobs:
       - name: Compile extension
         working-directory: vscode-bino
         run: npm run compile
+
+  bundle-web:
+    name: Web Bundles
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: internal/cli/web/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: internal/cli/web
+        run: npm ci
+
+      - name: Regenerate bundles
+        run: go generate ./internal/cli/web/...
+
+      - name: Verify bundles are up to date
+        run: git diff --exit-code -- internal/cli/web/static/
