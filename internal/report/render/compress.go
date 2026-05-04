@@ -8,14 +8,20 @@ import (
 	"hash/fnv"
 )
 
+// ContentHash returns the FNV-1a 64-bit hex hash of data. It is the canonical
+// content fingerprint used both in the inline "<hash>:<base64_gzip>" embed
+// format and in the URL form "?hash=<hash>" served by previewhttp.Server.
+func ContentHash(data []byte) string {
+	h := fnv.New64a()
+	h.Write(data)
+	return fmt.Sprintf("%x", h.Sum64())
+}
+
 // CompressContent gzip-compresses data, base64-encodes it, and prepends an
 // FNV-1a hash.  The result format is "<hash>:<base64_gzip>" which the
 // bn-template-engine decodes when raw="false".
 func CompressContent(data []byte) (string, error) {
-	// Compute hash of the raw content.
-	h := fnv.New64a()
-	h.Write(data)
-	hashStr := fmt.Sprintf("%x", h.Sum64())
+	hashStr := ContentHash(data)
 
 	// Gzip compress.
 	var buf bytes.Buffer

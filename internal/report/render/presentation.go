@@ -217,6 +217,8 @@ var presentationContextTemplate = strings.TrimSpace(`<bn-context locale='%s'>
 type PresentationResult struct {
 	HTML        []byte
 	LocalAssets []LocalAsset
+	// EmittedData is non-nil only when PluginOptions.DataMode == "url".
+	EmittedData []EmittedData
 }
 
 // PresentationFrameResult captures a two-phase render for preview mode.
@@ -224,6 +226,8 @@ type PresentationFrameResult struct {
 	FrameHTML   []byte
 	ContextHTML []byte
 	LocalAssets []LocalAsset
+	// EmittedData is non-nil only when PluginOptions.DataMode == "url".
+	EmittedData []EmittedData
 }
 
 // PresentationOptions configures presentation rendering.
@@ -246,10 +250,13 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	var collectOpts *datasource.CollectOptions
 	var extraHeadMarkup string
 	var pluginRenderer PluginComponentRenderer
+	var dataMode, dataBaseURL string
 	if pluginOpts != nil {
 		collectOpts = pluginOpts.CollectOptions
 		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
 		pluginRenderer = pluginOpts.ComponentRenderer
+		dataMode = pluginOpts.DataMode
+		dataBaseURL = pluginOpts.DataBaseURL
 	}
 
 	sources, diags, err := datasource.Collect(ctx, docs, collectOpts)
@@ -291,11 +298,14 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	}
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)
-	if ds := renderDatasources(sources); len(ds) > 0 {
+	var emitted []EmittedData
+	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
-	if ds := renderDatasets(datasetResults); len(ds) > 0 {
+	if ds, em := renderDatasets(datasetResults, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
 
 	assetURLMap := make(map[string]string, len(assetComponents))
@@ -363,7 +373,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		revealConfig,
 	)
 
-	return PresentationResult{HTML: []byte(markup), LocalAssets: localAssets}, diags, nil
+	return PresentationResult{HTML: []byte(markup), LocalAssets: localAssets, EmittedData: emitted}, diags, nil
 }
 
 // GeneratePresentationFrameAndContext produces a two-phase render for preview mode.
@@ -378,10 +388,13 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	var collectOpts *datasource.CollectOptions
 	var extraHeadMarkup string
 	var pluginRenderer PluginComponentRenderer
+	var dataMode, dataBaseURL string
 	if pluginOpts != nil {
 		collectOpts = pluginOpts.CollectOptions
 		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
 		pluginRenderer = pluginOpts.ComponentRenderer
+		dataMode = pluginOpts.DataMode
+		dataBaseURL = pluginOpts.DataBaseURL
 	}
 
 	sources, diags, err := datasource.Collect(ctx, docs, collectOpts)
@@ -420,11 +433,14 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	}
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)
-	if ds := renderDatasources(sources); len(ds) > 0 {
+	var emitted []EmittedData
+	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
-	if ds := renderDatasets(datasetResults); len(ds) > 0 {
+	if ds, em := renderDatasets(datasetResults, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
 
 	assetURLMap := make(map[string]string, len(assetComponents))
@@ -480,6 +496,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 		FrameHTML:   []byte(frameMarkup),
 		ContextHTML: []byte(contextMarkup),
 		LocalAssets: localAssets,
+		EmittedData: emitted,
 	}, diags, nil
 }
 

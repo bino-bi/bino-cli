@@ -65,6 +65,9 @@ func newBuildCommand() *cobra.Command {
 
 		// Data validation
 		dataValidation string
+
+		// Data delivery mode for dataset/datasource payloads.
+		dataMode string
 	)
 
 	cmd := &cobra.Command{
@@ -233,6 +236,12 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				return RuntimeError(err)
 			}
 
+			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
+			resolvedDataMode, err := normalizeDataMode(dataMode)
+			if err != nil {
+				return RuntimeError(err)
+			}
+
 			// Set up plugin integration for the build pipeline.
 			var pluginOpts *render.PluginOptions
 			var postRenderHTMLHook func(context.Context, []byte) ([]byte, error)
@@ -263,6 +272,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 					hostSvc.SetDocuments(plugin.DocumentsFromConfig(manifests.Documents))
 					hostSvc.SetDefaultDuckDBOpener()
 				}
+			}
+			if resolvedDataMode == render.DataModeURL {
+				if pluginOpts == nil {
+					pluginOpts = &render.PluginOptions{}
+				}
+				pluginOpts.DataMode = render.DataModeURL
+				// Relative URLs work for the ephemeral PDF/screenshot server too,
+				// so DataBaseURL stays empty here.
 			}
 
 			// Step 2: Build all artifacts
@@ -374,6 +391,10 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 	// Data validation
 	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
+
+	// Data delivery mode
+	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
+		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
 
 	// Accept both UK and US spellings for artefact flags
 	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
@@ -494,7 +515,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
 	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
-	if err := cfg.Builder.RenderPDF(ctx, renderResult.HTML, renderResult.LocalAssets, pipeline.PDFRenderOptions{
+	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
 		PDFPath:               pdfPath,
 		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artifact.Spec.Format,
@@ -670,7 +691,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 
 		finalPDFOpts := basePDFOpts
 		finalPDFOpts.PDFPath = pdfPath
-		if err := cfg.Builder.RenderPDF(ctx, renderResult.HTML, renderResult.LocalAssets, finalPDFOpts); err != nil {
+		if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, finalPDFOpts); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 			}
@@ -757,7 +778,7 @@ func buildDocumentWithTOC(ctx context.Context, cfg buildDocumentArtefactConfig, 
 	contentHTML := pdf.InjectHeadingLinks(contentResult.HTML, contentResult.HeadingIDs)
 
 	contentPDFOpts := basePDFOpts
-	contentTmpPath, err := cfg.Builder.RenderPDFToTempFile(ctx, contentHTML, contentResult.LocalAssets, contentPDFOpts)
+	contentTmpPath, err := cfg.Builder.RenderPDFToTempFileWithData(ctx, contentHTML, contentResult.LocalAssets, contentResult.EmittedData, contentPDFOpts)
 	if err != nil {
 		return fmt.Errorf("document artefact %s: render content pdf: %w", artefactName, err)
 	}
@@ -801,7 +822,7 @@ func buildDocumentWithTOC(ctx context.Context, cfg buildDocumentArtefactConfig, 
 	if tocPDFOpts.DisplayHeaderFooter {
 		tocPDFOpts.FooterTemplate = buildTOCFooter()
 	}
-	tocTmpPath, err := cfg.Builder.RenderPDFToTempFile(ctx, tocResult.HTML, tocResult.LocalAssets, tocPDFOpts)
+	tocTmpPath, err := cfg.Builder.RenderPDFToTempFileWithData(ctx, tocResult.HTML, tocResult.LocalAssets, tocResult.EmittedData, tocPDFOpts)
 	if err != nil {
 		return fmt.Errorf("document artefact %s: render toc pdf: %w", artefactName, err)
 	}
@@ -995,7 +1016,7 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 	}
 
 	// Capture screenshots via Builder (ephemeral server + Chrome)
-	captureResults, err := cfg.Builder.CaptureScreenshots(ctx, renderResult.HTML, renderResult.LocalAssets, pipeline.ScreenshotRenderOptions{
+	captureResults, err := cfg.Builder.CaptureScreenshotsWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.ScreenshotRenderOptions{
 		OutputDir:             cfg.OutputDir,
 		ChromePath:            cfg.ChromePath,
 		Format:                cfg.Artifact.Spec.Format,

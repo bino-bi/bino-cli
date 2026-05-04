@@ -904,6 +904,86 @@ func TestSetContentRoutes(t *testing.T) {
 	})
 }
 
+func TestUpdateContentRoutes(t *testing.T) {
+	t.Run("merges without dropping existing routes", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		srv.SetContentRoutes(map[string]ContentFunc{
+			"/a": StaticContent([]byte("aaa"), "text/plain"),
+			"/b": StaticContent([]byte("bbb"), "text/plain"),
+		})
+
+		srv.UpdateContentRoutes(map[string]ContentFunc{
+			"/b": StaticContent([]byte("BBB"), "text/plain"),
+			"/c": StaticContent([]byte("ccc"), "text/plain"),
+		})
+
+		got := map[string]string{}
+		for _, p := range []string{"/a", "/b", "/c"} {
+			fn, ok := srv.lookupContentFunc(p)
+			if !ok {
+				t.Fatalf("route %s missing after merge", p)
+			}
+			body, _, _ := fn(context.Background())
+			got[p] = string(body)
+		}
+		if got["/a"] != "aaa" {
+			t.Errorf("/a = %q, want %q (merge dropped a route)", got["/a"], "aaa")
+		}
+		if got["/b"] != "BBB" {
+			t.Errorf("/b = %q, want %q (overwrite failed)", got["/b"], "BBB")
+		}
+		if got["/c"] != "ccc" {
+			t.Errorf("/c = %q, want %q (new route missing)", got["/c"], "ccc")
+		}
+	})
+
+	t.Run("normalizes paths and skips invalid entries", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		srv.UpdateContentRoutes(map[string]ContentFunc{
+			"page":  StaticContent([]byte("page"), "text/plain"),
+			"":      StaticContent([]byte("empty"), "text/plain"),
+			"/nil":  nil,
+			"/good": StaticContent([]byte("good"), "text/plain"),
+		})
+
+		if _, ok := srv.lookupContentFunc("/page"); !ok {
+			t.Error("expected /page route after normalisation")
+		}
+		if _, ok := srv.lookupContentFunc("/nil"); ok {
+			t.Error("nil function should not be stored")
+		}
+		srv.contentMu.RLock()
+		count := len(srv.routes)
+		srv.contentMu.RUnlock()
+		if count != 2 {
+			t.Errorf("route count = %d, want 2", count)
+		}
+	})
+
+	t.Run("nil or empty input is a no-op", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		srv.SetContentRoutes(map[string]ContentFunc{
+			"/a": StaticContent([]byte("aaa"), "text/plain"),
+		})
+		srv.UpdateContentRoutes(nil)
+		srv.UpdateContentRoutes(map[string]ContentFunc{})
+		if _, ok := srv.lookupContentFunc("/a"); !ok {
+			t.Error("existing route should survive a no-op merge")
+		}
+	})
+}
+
 func TestSetLocalAssets(t *testing.T) {
 	t.Run("ignores empty paths", func(t *testing.T) {
 		srv, err := New(Config{})
@@ -929,26 +1009,54 @@ func TestSetLocalAssets(t *testing.T) {
 }
 
 func TestBroadcastContent(t *testing.T) {
-	t.Run("normalizes path", func(t *testing.T) {
+	t.Run("emits path-changed without HTML body", func(t *testing.T) {
 		srv, err := New(Config{})
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
 		}
 
-		// Subscribe to receive broadcasts
 		ch := srv.sse.Subscribe()
 		defer srv.sse.Unsubscribe(ch)
 
-		// Broadcast with path without leading slash
-		srv.BroadcastContent("page", []byte("<html></html>"))
+		srv.BroadcastContent("page", []byte("<html>some long body</html>"))
 
 		select {
 		case msg := <-ch:
-			if !strings.Contains(string(msg), `"path":"/page"`) {
-				t.Errorf("message should contain normalized path: %s", string(msg))
+			s := string(msg)
+			if !strings.HasPrefix(s, "event: path-changed\n") {
+				t.Errorf("event name not path-changed: %q", s)
+			}
+			if !strings.Contains(s, `"path":"/page"`) {
+				t.Errorf("message should contain normalized path: %s", s)
+			}
+			// HTML body must NOT be sent over SSE — keeps messages tiny so
+			// the per-client channel buffer can absorb a full refresh
+			// cycle without dropping refresh-done.
+			if strings.Contains(s, "htmlBase64") || strings.Contains(s, "some long body") {
+				t.Errorf("path-changed must not carry HTML body: %s", s)
 			}
 		case <-time.After(100 * time.Millisecond):
 			t.Error("timeout waiting for broadcast")
+		}
+	})
+
+	t.Run("populates context cache for /__preview/context fetches", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		body := []byte("<bn-context>fresh</bn-context>")
+		srv.BroadcastContent("/page", body)
+
+		srv.contentMu.Lock()
+		elem, ok := srv.contextCache["/page"]
+		srv.contentMu.Unlock()
+		if !ok {
+			t.Fatalf("context cache missing entry for /page")
+		}
+		entry, _ := elem.Value.(*contextCacheEntry)
+		if string(entry.html) != string(body) {
+			t.Errorf("cache html mismatch: got %q want %q", entry.html, body)
 		}
 	})
 
@@ -976,6 +1084,92 @@ func TestBroadcastContent(t *testing.T) {
 		// Should not panic
 		srv.BroadcastContent("/page", []byte("html"))
 	})
+}
+
+func TestBroadcastRefreshError(t *testing.T) {
+	t.Run("global error omits path", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		ch := srv.sse.Subscribe()
+		defer srv.sse.Unsubscribe(ch)
+
+		srv.BroadcastRefreshError("", `render: "x" failed`)
+
+		select {
+		case msg := <-ch:
+			s := string(msg)
+			if !strings.HasPrefix(s, "event: refresh-error\n") {
+				t.Errorf("event name not refresh-error: %q", s)
+			}
+			// path is omitted via omitempty when empty.
+			if strings.Contains(s, `"path"`) {
+				t.Errorf("global error must not include path field: %q", s)
+			}
+			// Quote/escape characters must be JSON-safe.
+			if !strings.Contains(s, `"message":"render: \"x\" failed"`) {
+				t.Errorf("payload missing escaped message: %q", s)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Error("timeout waiting for refresh-error broadcast")
+		}
+	})
+
+	t.Run("path-scoped error includes path", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		ch := srv.sse.Subscribe()
+		defer srv.sse.Unsubscribe(ch)
+
+		srv.BroadcastRefreshError("/myArt", "boom")
+
+		select {
+		case msg := <-ch:
+			s := string(msg)
+			if !strings.Contains(s, `"path":"/myArt"`) {
+				t.Errorf("path-scoped error must include path: %q", s)
+			}
+			if !strings.Contains(s, `"message":"boom"`) {
+				t.Errorf("payload missing message: %q", s)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Error("timeout waiting for refresh-error broadcast")
+		}
+	})
+
+	t.Run("nil server is safe", func(t *testing.T) {
+		var srv *Server
+		srv.BroadcastRefreshError("", "boom") // must not panic
+	})
+}
+
+func TestBroadcastRefreshDoneCarriesPaths(t *testing.T) {
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ch := srv.sse.Subscribe()
+	defer srv.sse.Unsubscribe(ch)
+
+	srv.BroadcastRefreshDone([]string{"/", "/myArt"})
+
+	select {
+	case msg := <-ch:
+		s := string(msg)
+		if !strings.HasPrefix(s, "event: refresh-done\n") {
+			t.Errorf("event name not refresh-done: %q", s)
+		}
+		if !strings.Contains(s, `"paths":["/","/myArt"]`) {
+			t.Errorf("payload missing paths array: %q", s)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("timeout waiting for refresh-done broadcast")
+	}
 }
 
 func TestSSEHub(t *testing.T) {

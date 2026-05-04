@@ -1,4 +1,4 @@
-import { decodeBase64, normalizePath, waitForEngine, swapContext } from '../shared/dom-utils.js';
+import { normalizePath, waitForEngine, swapContext } from '../shared/dom-utils.js';
 import './components/bino-toolbar.js';
 import './components/bino-error-panel.js';
 import './components/bino-search.js';
@@ -11,44 +11,20 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
 } else {
   window.__bnPreviewRuntime = true;
 
+  // Bumped on each user-visible runtime change so a quick devtools check
+  // confirms whether the page is on the latest preview-app.js. Increment
+  // when fixing a hot-reload bug here.
+  console.info('bn preview runtime v9 (upstream idiomorph via esm.sh, no custom-element ids)');
+
   var parser = new DOMParser();
   var normalizedPath = normalizePath(window.location.pathname || '/');
   var source = new EventSource('/__preview/events');
   var sseReady = false;
   var engineReady = false;
 
-  function swapContextWithEvent(html) {
-    if (swapContext(html, parser)) {
-      try {
-        document.dispatchEvent(new CustomEvent('bn-preview:content-updated', { detail: { path: normalizedPath } }));
-      } catch (eventErr) {
-        console.debug('bn preview: custom event skipped', eventErr);
-      }
-    }
-  }
-
-  function fetchInitialContext() {
-    fetch('/__preview/context?path=' + encodeURIComponent(normalizedPath))
-      .then(function (resp) {
-        if (!resp.ok) {
-          console.debug('bn preview: context not available yet');
-          return null;
-        }
-        return resp.text();
-      })
-      .then(function (html) {
-        if (html) {
-          swapContextWithEvent(html);
-        }
-      })
-      .catch(function (err) {
-        console.error('bn preview: fetch context failed', err);
-      });
-  }
-
   function tryFetchContext() {
     if (sseReady && engineReady) {
-      fetchInitialContext();
+      fetchAndSwapContext('initial');
     }
   }
 
@@ -72,21 +48,107 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
     }
   });
 
-  source.addEventListener('refresh-done', function () {
-    document.dispatchEvent(new CustomEvent('bn-preview:refresh-done'));
+  source.addEventListener('refresh-done', function (event) {
+    var detail = {};
+    try {
+      detail = JSON.parse(event.data || '{}') || {};
+    } catch (err) {
+      detail = {};
+    }
+    var paths = Array.isArray(detail.paths) ? detail.paths : [];
+    var matched = false;
+    if (paths.length > 0) {
+      for (var i = 0; i < paths.length; i++) {
+        if (normalizePath(paths[i]) === normalizedPath) {
+          matched = true;
+          break;
+        }
+      }
+      // Server completed a refresh but didn't broadcast for this view.
+      // Most often: the artefact at this path failed to render. Surface
+      // a distinct warning so the toolbar can show why.
+      if (!matched) {
+        console.warn('bn preview: refresh did not include this view', normalizedPath, 'broadcast paths:', paths);
+        document.dispatchEvent(new CustomEvent('bn-preview:no-payload', { detail: { path: normalizedPath, broadcastPaths: paths } }));
+      }
+    }
+    // Initial-load retry: if our path was just broadcast (so the cache is
+    // now populated for this path) but we never successfully swapped yet
+    // (typical when the page opened before the first server-side refresh
+    // completed), fetch and swap now. Without this, the bn-loading
+    // placeholder stays forever.
+    if (matched && !contextLoaded) {
+      fetchAndSwapContext('initial-retry');
+    }
+    document.dispatchEvent(new CustomEvent('bn-preview:refresh-done', { detail: detail }));
   });
 
-  source.addEventListener('content', function (event) {
+  // Track the most recent in-flight context fetch so a fast burst of
+  // path-changed events doesn't morph stale HTML on top of fresh HTML.
+  var contextFetchSeq = 0;
+  // Set true after the first successful swap; refresh-done uses this to
+  // retry the initial fetch when it 404'd because the cache hadn't been
+  // populated yet (e.g. server still doing its first refresh when the page
+  // loaded).
+  var contextLoaded = false;
+
+  function fetchAndSwapContext(reason) {
+    var seq = ++contextFetchSeq;
+    fetch('/__preview/context?path=' + encodeURIComponent(normalizedPath))
+      .then(function (resp) {
+        if (!resp.ok) {
+          console.warn('bn preview: context fetch failed', resp.status, reason);
+          return null;
+        }
+        return resp.text();
+      })
+      .then(function (html) {
+        if (!html || seq !== contextFetchSeq) return;
+        var ok = swapContext(html, parser);
+        if (ok) {
+          contextLoaded = true;
+          try {
+            document.dispatchEvent(new CustomEvent('bn-preview:content-updated', { detail: { path: normalizedPath } }));
+          } catch (eventErr) {
+            console.debug('bn preview: custom event skipped', eventErr);
+          }
+        } else {
+          console.warn('bn preview: swapContext returned false; DOM not updated');
+        }
+      })
+      .catch(function (err) {
+        console.error('bn preview: context fetch errored', err);
+      });
+  }
+
+  source.addEventListener('path-changed', function (event) {
+    var payload = {};
     try {
-      var payload = JSON.parse(event.data || '{}');
-      if (!payload || normalizePath(payload.path) !== normalizedPath) {
-        return;
-      }
-      var html = decodeBase64(payload.htmlBase64);
-      swapContextWithEvent(html);
+      payload = JSON.parse(event.data || '{}') || {};
     } catch (err) {
-      console.error('bn preview: apply failed', err);
+      return;
     }
+    if (!payload.path || normalizePath(payload.path) !== normalizedPath) {
+      // The change applies to a different artefact's view; ignore it.
+      return;
+    }
+    fetchAndSwapContext('path-changed');
+  });
+
+  source.addEventListener('refresh-error', function (event) {
+    var payload = {};
+    try {
+      payload = JSON.parse(event.data || '{}');
+    } catch (err) {
+      // Ignore malformed payload.
+    }
+    // Path-scoped errors only apply to clients viewing that path; ignore
+    // errors for other artefacts to keep the toolbar from flashing.
+    if (payload && payload.path && normalizePath(payload.path) !== normalizedPath) {
+      return;
+    }
+    console.error('bn preview: refresh failed', payload && payload.message);
+    document.dispatchEvent(new CustomEvent('bn-preview:refresh-error', { detail: payload }));
   });
 
   window.addEventListener('beforeunload', function () {

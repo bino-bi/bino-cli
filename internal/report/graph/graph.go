@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"sort"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/spec"
@@ -70,6 +71,100 @@ func (g *Graph) DocumentArtefactByName(name string) (*Node, bool) {
 	}
 	node, ok := g.documentArtefactIndex[name]
 	return node, ok
+}
+
+// NodesByFile returns nodes whose File field matches any path in the given
+// set. Comparison is exact string equality; callers must normalise paths
+// (e.g. via pathutil.RelPath) on both sides before calling.
+func (g *Graph) NodesByFile(files map[string]struct{}) []*Node {
+	if g == nil || len(files) == 0 {
+		return nil
+	}
+	matches := make([]*Node, 0)
+	for _, n := range g.Nodes {
+		if n == nil || n.File == "" {
+			continue
+		}
+		if _, ok := files[n.File]; ok {
+			matches = append(matches, n)
+		}
+	}
+	return matches
+}
+
+// AffectedArtefacts walks reverse-dependency edges from each seed and returns
+// the names of all ReportArtefact and DocumentArtefact nodes that
+// transitively depend on any seed (including seeds that are themselves
+// artefacts). Names are sorted and de-duplicated. Cost is O(N+E) per call —
+// the reverse-edge index is built on demand because each preview refresh
+// constructs a fresh Graph.
+func (g *Graph) AffectedArtefacts(seeds []*Node) (reports, docs []string) {
+	if g == nil || len(seeds) == 0 {
+		return nil, nil
+	}
+
+	reverse := make(map[string][]string, len(g.Nodes))
+	for id, n := range g.Nodes {
+		if n == nil {
+			continue
+		}
+		for _, dep := range n.DependsOn {
+			reverse[dep] = append(reverse[dep], id)
+		}
+	}
+
+	visited := make(map[string]struct{}, len(g.Nodes))
+	queue := make([]string, 0, len(seeds))
+	for _, s := range seeds {
+		if s == nil {
+			continue
+		}
+		if _, ok := visited[s.ID]; ok {
+			continue
+		}
+		visited[s.ID] = struct{}{}
+		queue = append(queue, s.ID)
+	}
+
+	reportSet := make(map[string]struct{})
+	docSet := make(map[string]struct{})
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		node, ok := g.Nodes[id]
+		if !ok {
+			continue
+		}
+		switch node.Kind {
+		case NodeReportArtefact:
+			reportSet[node.Name] = struct{}{}
+		case NodeDocumentArtefact:
+			docSet[node.Name] = struct{}{}
+		case NodeLayoutPage, NodeLayoutCard, NodeComponent, NodeDataSet, NodeDataSource, NodeMarkdownFile:
+			// Intermediate kinds: keep walking up to find the artefact roots.
+		}
+		for _, parent := range reverse[id] {
+			if _, seen := visited[parent]; seen {
+				continue
+			}
+			visited[parent] = struct{}{}
+			queue = append(queue, parent)
+		}
+	}
+
+	return sortedSetKeys(reportSet), sortedSetKeys(docSet)
+}
+
+func sortedSetKeys(m map[string]struct{}) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // BuildOptions configures graph construction.

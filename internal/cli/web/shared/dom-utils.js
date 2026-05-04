@@ -1,7 +1,7 @@
 /**
  * Shared DOM utilities for bino preview and serve modes.
  */
-import { Idiomorph } from './idiomorph.js';
+import { Idiomorph } from 'idiomorph';
 
 /**
  * Decode a base64-encoded string. Returns empty string on failure.
@@ -60,12 +60,22 @@ export function waitForEngine() {
  * @returns {boolean} true if the swap succeeded.
  */
 export function swapContext(html, parser) {
-  if (!html) return false;
+  if (!html) {
+    console.debug('bino: swapContext skipped — empty html');
+    return false;
+  }
   if (!parser) parser = new DOMParser();
   var doc = parser.parseFromString(html, 'text/html');
   var nextCtx = doc.querySelector('bn-context');
   var currentCtx = document.querySelector('bn-context');
-  if (!nextCtx || !currentCtx) return false;
+  if (!nextCtx) {
+    console.debug('bino: swapContext skipped — incoming HTML has no <bn-context>');
+    return false;
+  }
+  if (!currentCtx) {
+    console.debug('bino: swapContext skipped — live DOM has no <bn-context>');
+    return false;
+  }
 
   // Sync attributes on the <bn-context> element itself (e.g. data-page-meta, locale)
   syncAttributes(currentCtx, nextCtx);

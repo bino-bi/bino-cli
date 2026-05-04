@@ -89,8 +89,8 @@ var contextTemplate = strings.TrimSpace(`<bn-context%s locale='%s'>
 </bn-context>
 `)
 
-// PluginOptions bundles plugin-related parameters for rendering.
-// All fields are optional — nil means no plugin integration.
+// PluginOptions bundles plugin-related parameters and data-delivery options
+// for rendering. All fields are optional.
 type PluginOptions struct {
 	// CollectOptions routes plugin datasource kinds to the owning plugin.
 	CollectOptions *datasource.CollectOptions
@@ -100,12 +100,42 @@ type PluginOptions struct {
 
 	// ComponentRenderer renders HTML for plugin-provided component kinds.
 	ComponentRenderer PluginComponentRenderer
+
+	// DataMode selects how dataset/datasource payloads are delivered to the
+	// browser. "" or "inline" embeds gzip+base64 in the HTML (default for
+	// backward compatibility). "url" emits an HTTP URL pointing at the
+	// previewhttp.Server data store; the caller must register the bodies
+	// returned in Result.EmittedData / FrameResult.EmittedData on the server
+	// before the HTML becomes reachable to the browser.
+	DataMode string
+
+	// DataBaseURL is the absolute base URL used when DataMode is "url" (e.g.
+	// "http://127.0.0.1:45678"). Required for url mode; ignored otherwise.
+	DataBaseURL string
+}
+
+// EmittedData is the payload that must be registered on previewhttp.Server
+// when the renderer ran in url mode. Each entry corresponds to one
+// <bn-datasource> or <bn-dataset> element in the HTML.
+type EmittedData struct {
+	// Kind is one of "datasource" or "dataset" (matching the URL path).
+	Kind string
+	// Name is the manifest metadata.name.
+	Name string
+	// Hash is the FNV-1a content hash that appears in the URL ?hash=…
+	// query parameter.
+	Hash string
+	// Body is the raw JSON bytes the server should return for this URL.
+	Body []byte
 }
 
 // Result captures the rendered HTML alongside metadata about local assets that must be proxied by the preview server.
 type Result struct {
 	HTML        []byte
 	LocalAssets []LocalAsset
+	// EmittedData is non-nil only when PluginOptions.DataMode == "url". The
+	// caller must register these on previewhttp.Server before serving HTML.
+	EmittedData []EmittedData
 }
 
 // FrameResult captures a two-phase render output: a lightweight frame HTML
@@ -121,6 +151,9 @@ type FrameResult struct {
 	ContextHTML []byte
 	// LocalAssets lists files that need to be served by the preview HTTP server.
 	LocalAssets []LocalAsset
+	// EmittedData is non-nil only when PluginOptions.DataMode == "url". The
+	// caller must register these on previewhttp.Server before serving HTML.
+	EmittedData []EmittedData
 }
 
 // InvalidRootError indicates that a manifest attempted to render a root component other than LayoutPage.
@@ -205,10 +238,13 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	var collectOpts *datasource.CollectOptions
 	var extraHeadMarkup string
 	var pluginRenderer PluginComponentRenderer
+	var dataMode, dataBaseURL string
 	if pluginOpts != nil {
 		collectOpts = pluginOpts.CollectOptions
 		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
 		pluginRenderer = pluginOpts.ComponentRenderer
+		dataMode = pluginOpts.DataMode
+		dataBaseURL = pluginOpts.DataBaseURL
 	}
 
 	renderModeStr := "build"
@@ -257,12 +293,15 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)
 
-	if ds := renderDatasources(sources); len(ds) > 0 {
+	var emitted []EmittedData
+	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
 	// Render dataset results as <bn-dataset> elements
-	if ds := renderDatasets(datasetResults); len(ds) > 0 {
+	if ds, em := renderDatasets(datasetResults, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
 
 	// Build asset URL map for resolving asset: image references in markdown.
@@ -314,7 +353,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 	headMarkup := fontMarkup + extraHeadMarkup
 	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, headMarkup, orientationAttr, html.EscapeString(locale), body.String())
-	return Result{HTML: []byte(markup), LocalAssets: localAssets}, diags, nil
+	return Result{HTML: []byte(markup), LocalAssets: localAssets, EmittedData: emitted}, diags, nil
 }
 
 // GenerateFrameAndContext produces a two-phase render output for preview mode.
@@ -334,10 +373,13 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	var collectOpts *datasource.CollectOptions
 	var extraHeadMarkup string
 	var pluginRenderer PluginComponentRenderer
+	var dataMode, dataBaseURL string
 	if pluginOpts != nil {
 		collectOpts = pluginOpts.CollectOptions
 		extraHeadMarkup = pluginOpts.ExtraHeadMarkup
 		pluginRenderer = pluginOpts.ComponentRenderer
+		dataMode = pluginOpts.DataMode
+		dataBaseURL = pluginOpts.DataBaseURL
 	}
 
 	sources, diags, err := datasource.Collect(ctx, docs, collectOpts)
@@ -381,11 +423,14 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	referencedSources := collectReferencedDatasources(docs, allDocs)
 	sources = filterDatasourcesByRefs(sources, referencedSources)
 
-	if ds := renderDatasources(sources); len(ds) > 0 {
+	var emitted []EmittedData
+	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
-	if ds := renderDatasets(datasetResults); len(ds) > 0 {
+	if ds, em := renderDatasets(datasetResults, dataMode, dataBaseURL); len(ds) > 0 {
 		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
 	}
 
 	// Build asset URL map for resolving asset: image references in markdown.
@@ -439,5 +484,6 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		FrameHTML:   []byte(frameMarkup),
 		ContextHTML: []byte(contextMarkup),
 		LocalAssets: localAssets,
+		EmittedData: emitted,
 	}, diags, nil
 }
