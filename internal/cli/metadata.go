@@ -27,8 +27,9 @@ type DependencyInfo struct {
 	License string // SPDX license identifier
 }
 
-// DirectDependencies lists the direct (require) dependencies from go.mod
-// along with their licenses as discovered from their GitHub repositories.
+// DirectDependencies lists the direct dependencies (Go modules and bundled
+// JS libraries) shipped with bino along with their licenses as discovered
+// from their upstream repositories.
 var DirectDependencies = []DependencyInfo{
 	{
 		Module:  "github.com/spf13/cobra",
@@ -107,5 +108,17 @@ var DirectDependencies = []DependencyInfo{
 		Version: "v0.37.0",
 		URL:     "https://github.com/golang/term",
 		License: "BSD-3-Clause",
+	},
+	{
+		Module:  "lit",
+		Version: "3.2.1",
+		URL:     "https://github.com/lit/lit",
+		License: "BSD-3-Clause",
+	},
+	{
+		Module:  "idiomorph",
+		Version: "0.7.4",
+		URL:     "https://github.com/bigskysoftware/idiomorph",
+		License: "BSD-2-Clause",
 	},
 }
