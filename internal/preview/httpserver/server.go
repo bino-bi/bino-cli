@@ -430,14 +430,14 @@ func (s *Server) BroadcastRefreshDone(paths []string) {
 // refresh is invisible in the browser: BroadcastRefreshDone still fires,
 // and the DOM is left in its previous state because no `content` event
 // arrives.
-func (s *Server) BroadcastRefreshError(path, message string) {
+func (s *Server) BroadcastRefreshError(routePath, message string) {
 	if s == nil || s.sse == nil {
 		return
 	}
 	payload, err := json.Marshal(struct {
 		Path    string `json:"path,omitempty"`
 		Message string `json:"message"`
-	}{Path: path, Message: message})
+	}{Path: routePath, Message: message})
 	if err != nil {
 		payload = []byte(`{"message":"unknown"}`)
 	}
