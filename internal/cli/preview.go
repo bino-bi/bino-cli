@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/http"
 	"os/exec"
 	"path"
@@ -1098,7 +1099,11 @@ func withPreviewStyles(doc []byte) []byte {
 		return doc
 	}
 	block := previewStyleBlock()
-	updated := make([]byte, 0, len(doc)+len(block))
+	extra := len(block)
+	if len(doc) > math.MaxInt-extra {
+		return doc
+	}
+	updated := make([]byte, 0, len(doc)+extra)
 	updated = append(updated, doc[:idx]...)
 	updated = append(updated, block...)
 	updated = append(updated, doc[idx:]...)
@@ -1116,7 +1121,11 @@ func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
 	if idx == -1 {
 		return doc
 	}
-	out := make([]byte, 0, len(doc)+len(tag))
+	extra := len(tag)
+	if len(doc) > math.MaxInt-extra {
+		return doc
+	}
+	out := make([]byte, 0, len(doc)+extra)
 	out = append(out, doc[:idx]...)
 	out = append(out, tag...)
 	out = append(out, doc[idx:]...)
