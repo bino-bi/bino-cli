@@ -11,8 +11,14 @@ import (
 
 //go:generate go run bundle.go
 
-//go:embed shared/tokens.css preview/preview.css serve/serve.css static/preview.js static/serve.js
+//go:embed shared/tokens.css preview/preview.css preview/loading.html serve/serve.css static/preview.js static/serve.js
 var assets embed.FS
+
+// LoadingPageHTML returns the embedded boot/loading page served while the
+// preview server is initializing DuckDB and rendering the first refresh.
+func LoadingPageHTML() ([]byte, error) {
+	return fs.ReadFile(assets, "preview/loading.html")
+}
 
 // mimeTypes maps file extensions to MIME types for embedded assets.
 var mimeTypes = map[string]string{

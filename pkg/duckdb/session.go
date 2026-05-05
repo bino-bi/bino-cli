@@ -254,10 +254,25 @@ func (s *Session) resetProxySettings(ctx context.Context) error {
 	return nil
 }
 
+// ExtensionProgress is invoked for each extension as it is installed and
+// loaded. `done` is the number of extensions completed so far (1-based once
+// the first one finishes), `total` is the total number being processed in this
+// call. Implementations must be safe for sequential calls and may be nil.
+type ExtensionProgress func(done, total int, name string)
+
 // InstallAndLoadExtensions downloads (if needed) and loads the provided extensions.
 // If http_proxy environment variable is set, it is applied temporarily during
 // extension download and reset afterwards.
 func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) error {
+	return s.InstallAndLoadExtensionsWithProgress(ctx, names, nil)
+}
+
+// InstallAndLoadExtensionsWithProgress is the variant of InstallAndLoadExtensions
+// that reports per-extension progress via the supplied callback. The callback
+// is invoked twice per extension: once before the install/load (done=i,
+// total=N, name="<name>") so the UI can show "loading X" and once after
+// (done=i+1) so a progress bar can advance.
+func (s *Session) InstallAndLoadExtensionsWithProgress(ctx context.Context, names []string, progress ExtensionProgress) error {
 	if s == nil || s.db == nil {
 		return errors.New("duckdb session is not initialized")
 	}
@@ -273,14 +288,22 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 		}
 	}()
 
-	for _, name := range names {
+	total := len(names)
+	for i, name := range names {
 		if !extensionNamePattern.MatchString(name) {
 			return fmt.Errorf("invalid DuckDB extension name: %s", name)
 		}
 
 		// Skip if already loaded in this session (avoids repeated INSTALL+LOAD on reuse).
 		if _, loaded := s.loadedExts[name]; loaded {
+			if progress != nil {
+				progress(i+1, total, name)
+			}
 			continue
+		}
+
+		if progress != nil {
+			progress(i, total, name)
 		}
 
 		install := fmt.Sprintf("INSTALL %s;", name)
@@ -294,6 +317,9 @@ func (s *Session) InstallAndLoadExtensions(ctx context.Context, names []string) 
 		}
 
 		s.loadedExts[name] = struct{}{}
+		if progress != nil {
+			progress(i+1, total, name)
+		}
 	}
 
 	return nil

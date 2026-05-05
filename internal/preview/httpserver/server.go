@@ -133,6 +133,9 @@ type Server struct {
 	maxCDNBytes int64
 	sse         *SSEHub
 
+	bootMu     sync.RWMutex
+	bootStatus []byte // latest boot-status JSON payload for late subscribers
+
 	contentMu sync.RWMutex
 	contentFn ContentFunc
 	routes    map[string]ContentFunc
@@ -190,6 +193,7 @@ func New(cfg Config) (*Server, error) {
 	mux.Handle("/cdn/", compressionHandlerFunc(srv.handleCDN))
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
+	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(srv.handleBootStatus))
 	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
@@ -389,6 +393,44 @@ func (s *Server) BroadcastContent(reqPath string, html []byte) {
 		return
 	}
 	s.sse.Broadcast(FormatSSE("path-changed", data))
+}
+
+// BroadcastBootStatus stores the latest cold-start status payload (JSON) and
+// pushes it to connected SSE clients as a "boot-status" event. Late-connecting
+// clients can fetch the cached snapshot via /__preview/boot-status so they
+// don't sit on a stale loading screen after boot finishes.
+func (s *Server) BroadcastBootStatus(payload []byte) {
+	if s == nil {
+		return
+	}
+	if len(payload) > 0 {
+		s.bootMu.Lock()
+		s.bootStatus = append(s.bootStatus[:0], payload...)
+		s.bootMu.Unlock()
+	}
+	if s.sse == nil {
+		return
+	}
+	s.sse.Broadcast(FormatSSE("boot-status", payload))
+}
+
+// handleBootStatus serves the latest boot status JSON. Returns 204 when no
+// status has been recorded yet (server is still constructing the reporter).
+func (s *Server) handleBootStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.bootMu.RLock()
+	payload := append([]byte(nil), s.bootStatus...)
+	s.bootMu.RUnlock()
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	if len(payload) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(payload)
 }
 
 // BroadcastRefreshing notifies connected SSE clients that a content refresh has started.

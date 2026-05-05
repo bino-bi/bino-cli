@@ -8,19 +8,23 @@ import (
 	"html"
 	"math"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
+	"bino.bi/bino/internal/preview/bootstatus"
 	"bino.bi/bino/internal/preview/explorer"
 	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
@@ -98,26 +102,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
-			// Create a shared DuckDB session for the lifetime of the preview process.
-			// Extensions are loaded once; views are re-registered on each refresh
-			// via CREATE OR REPLACE VIEW.
-			logger.Infof("Initializing DuckDB engine...")
-			duckdbOpts, err := duckdb.DefaultOptions()
-			if err != nil {
-				return RuntimeError(err)
-			}
-			duckdbOpts.QueryLogger = queryLogger
-			sharedSession, err := duckdb.OpenSession(ctx, duckdbOpts)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			defer sharedSession.Close()
-
-			if err := sharedSession.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
-				return RuntimeError(err)
-			}
-
-			// Resolve data validation mode
+			// Resolve data validation mode early — must happen before the boot
+			// goroutine starts, since refreshCfg captures it.
 			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
 			dataValidationMode, err := resolveDataValidationMode(dataValidation)
 			if err != nil {
@@ -125,7 +111,6 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 			dataValidationSampleSize := dataset.GetDataValidationSampleSize()
 
-			// Resolve data delivery mode
 			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
 			resolvedDataMode, err := normalizeDataMode(dataMode)
 			if err != nil {
@@ -139,7 +124,6 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				Verbose:  logx.DebugEnabled(ctx),
 			}
 
-			// Set up plugin integration for the preview pipeline.
 			var pluginOpts *render.PluginOptions
 			var postRenderHTMLHook func(context.Context, []byte) ([]byte, error)
 			var postDatasetHook func(context.Context, []pipeline.DatasetPayload) error
@@ -174,170 +158,258 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					pluginOpts = &render.PluginOptions{}
 				}
 				pluginOpts.DataMode = render.DataModeURL
-				// Same-origin relative URLs work for the long-lived preview server.
 			}
 
-			refreshMu := &sync.Mutex{}
-			refreshState := &previewRefreshState{
-				perArtefactAssets: make(map[string][]previewhttp.LocalAsset),
-			}
-			var server *previewhttp.Server
-			var explorerSession *explorer.Session
-
-			refreshCfg := previewRefreshConfig{
-				Logger:                   logger,
-				Workdir:                  env.ProjectRoot,
-				EnableLint:               enableLint,
-				EngineVersion:            env.EngineVersion,
-				QueryLogger:              queryLogger,
-				DataValidationMode:       dataValidationMode,
-				DataValidationSampleSize: dataValidationSampleSize,
-				HookRunner:               env.HookRunner,
-				HookEnv:                  previewHookEnv,
-				Session:                  sharedSession,
-				KindProvider:             env.PluginRegistry,
-				PluginOptions:            pluginOpts,
-				PostRenderHTMLHook:       postRenderHTMLHook,
-				PostDatasetHook:          postDatasetHook,
-				PluginLinters:            pluginLinters,
-			}
-			if env.PluginManager != nil {
-				refreshCfg.HostService = env.PluginManager.HostService()
-			}
-
-			refresh := func(reason string, changed []string) error {
-				if err := ctx.Err(); err != nil {
-					return err
+			// Lazily-initialized explorer session; created in the boot
+			// goroutine alongside the main DuckDB session so its extension
+			// install does not extend cold-start latency. The HTTP handler
+			// reads the slot and returns 503 until init completes.
+			var explorerSlot atomic.Pointer[explorer.Session]
+			lazyExplorer := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sess := explorerSlot.Load()
+				if sess == nil {
+					http.Error(w, "explorer is still initializing", http.StatusServiceUnavailable)
+					return
 				}
-				refreshMu.Lock()
-				defer refreshMu.Unlock()
-				if server == nil {
-					return RuntimeErrorf("preview: server not initialized")
-				}
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				server.BroadcastRefreshing(reason)
-				broadcastPaths, err := refreshPreviewContent(ctx, reason, changed, server, explorerSession, &refreshCfg, refreshState)
-				if err != nil && ctx.Err() == nil {
-					// Surface the refresh failure to the browser so the user
-					// notices it instead of seeing the progress bar toggle
-					// over a stale DOM. Empty path = global error, every
-					// client surfaces it.
-					server.BroadcastRefreshError("", err.Error())
-				}
-				server.BroadcastRefreshDone(broadcastPaths)
-				return err
-			}
+				explorer.Handler(sess).ServeHTTP(w, r)
+			})
 
-			// Create explorer session for data exploration
-			explorerSession, err = explorer.NewSession(ctx, logger.Channel("explorer"))
-			if err != nil {
-				logger.Warnf("Data explorer unavailable: %v", err)
-			}
-			if explorerSession != nil {
-				defer explorerSession.Close()
-			}
-
-			server, err = previewhttp.New(previewhttp.Config{
+			server, err := previewhttp.New(previewhttp.Config{
 				ListenAddr:      addr,
 				CacheDir:        env.CacheDir,
 				Logger:          logger.Channel("server"),
-				ExplorerHandler: explorerHandler(explorerSession),
+				ExplorerHandler: lazyExplorer,
 			})
 			if err != nil {
 				return RuntimeError(err)
 			}
 
-			// In url mode, emit absolute URLs so older template-engine builds
-			// (which only treat http:// or https:// bodies as URLs) still
-			// fetch them correctly. Same-origin relative paths would also
-			// work, but only with template-engine builds that include the
-			// "/" prefix in isUrl().
-			if resolvedDataMode == render.DataModeURL && refreshCfg.PluginOptions != nil {
-				refreshCfg.PluginOptions.DataBaseURL = server.URL()
+			if loadingPage, lerr := web.LoadingPageHTML(); lerr == nil && len(loadingPage) > 0 {
+				server.SetContentFunc(previewhttp.StaticContent(loadingPage, "text/html; charset=utf-8"))
 			}
 
-			// Run pre-preview hook (once, before initial refresh)
+			if resolvedDataMode == render.DataModeURL && pluginOpts != nil {
+				pluginOpts.DataBaseURL = server.URL()
+			}
+
+			// Status reporter fans cold-start phases out to the CLI spinner
+			// (TTY-aware, falls back to plain log lines on CI/piped output)
+			// and to connected SSE clients via the loading page.
+			cliSink := logx.NewStatus(logger, os.Stdout)
+			defer cliSink.Stop()
+			reporter := bootstatus.NewMultiplexer(
+				bootstatus.NewSSEReporter(server),
+				bootstatus.NewCLIReporter(cliSink),
+			)
+
+			// Start serving immediately; handleRoot returns the loading page
+			// for any path until SetContentRoutes/SetContentFunc are updated
+			// at the end of the first refresh.
+			serverErrCh := make(chan error, 1)
+			go func() { serverErrCh <- server.Start(ctx) }()
+
+			previewURL := server.URL()
+			logger.Successf("Serving preview at %s", previewURL)
+			if err := openBrowser(ctx, previewURL); err != nil {
+				logger.Warnf("Unable to open browser automatically: %v", err)
+			}
+			logger.Infof("Preview running * press Ctrl+C to stop")
+
 			previewHookEnv.ListenAddr = addr
 			if err := env.HookRunner.Run(ctx, "pre-preview", previewHookEnv); err != nil {
+				cliSink.Stop()
 				return RuntimeError(err)
 			}
 
-			// Initial refresh collects visited directories so the watcher can
-			// register them without a redundant filesystem walk.
-			logger.Infof("Loading manifests and executing datasets...")
-			var visitedDirs []string
-			refreshCfg.CollectedDirs = &visitedDirs
-			if err := refresh("initial load", nil); err != nil {
-				return err
-			}
-			refreshCfg.CollectedDirs = nil // subsequent refreshes skip collection
-
-			refreshCh := make(chan refreshRequest, 16)
-			enqueue := func(req refreshRequest) {
-				select {
-				case refreshCh <- req:
-				default:
+			// Phase 2 (background): heavy work that used to block before
+			// `server.Start()`. We retain the duckdb session pointer so the
+			// outer scope can close it on shutdown even if boot crashed mid-way.
+			var (
+				sessionMu     sync.Mutex
+				sharedSession *duckdb.Session
+			)
+			defer func() {
+				sessionMu.Lock()
+				defer sessionMu.Unlock()
+				if sharedSession != nil {
+					_ = sharedSession.Close()
 				}
-			}
-
-			watchLog := logger.Channel("watcher")
-			watcher, err := watchers.NewWatcher(watchers.Config{
-				Root:   env.ProjectRoot,
-				Dirs:   visitedDirs,
-				Logger: watchLog,
-				Handler: func(evt watchers.Event) {
-					watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
-					req := refreshRequest{reason: fmt.Sprintf("change %s", evt.RelativePath)}
-					if incremental && evt.Path != "" {
-						req.files = []string{evt.Path}
-					}
-					enqueue(req)
-				},
-			})
-			if err != nil {
-				return RuntimeError(err)
-			}
-			defer watcher.Close()
-			go watcher.Run(ctx)
-
-			go func() {
-				debounce := time.NewTimer(0)
-				if !debounce.Stop() {
-					<-debounce.C
-				}
-				var pending []refreshRequest
-				for {
-					select {
-					case <-ctx.Done():
-						debounce.Stop()
-						return
-					case req := <-refreshCh:
-						pending = append(pending, req)
-						debounce.Reset(300 * time.Millisecond)
-					case <-debounce.C:
-						if len(pending) == 0 {
-							continue
-						}
-						coalesced, files := mergeRefreshRequests(pending)
-						pending = pending[:0]
-						if err := refresh(coalesced, files); err != nil {
-							logger.Errorf("Refresh failed: %v", err)
-						}
-					}
+				if es := explorerSlot.Load(); es != nil {
+					_ = es.Close()
 				}
 			}()
 
-			url := server.URL()
-			logger.Successf("Serving preview at %s", url)
+			bootDone := make(chan struct{})
+			go func() {
+				defer close(bootDone)
 
-			if err := openBrowser(ctx, url); err != nil {
-				logger.Warnf("Unable to open browser automatically: %v", err)
-			}
+				// 1. DuckDB engine + extensions
+				reporter.Begin(bootstatus.PhaseDuckDB, "Initializing DuckDB engine")
+				duckdbOpts, oerr := duckdb.DefaultOptions()
+				if oerr != nil {
+					reporter.Fail(bootstatus.PhaseDuckDB, oerr)
+					logger.Errorf("DuckDB options: %v", oerr)
+					return
+				}
+				duckdbOpts.QueryLogger = queryLogger
+				sess, oerr := duckdb.OpenSession(ctx, duckdbOpts)
+				if oerr != nil {
+					reporter.Fail(bootstatus.PhaseDuckDB, oerr)
+					logger.Errorf("DuckDB open: %v", oerr)
+					return
+				}
+				sessionMu.Lock()
+				sharedSession = sess
+				sessionMu.Unlock()
 
-			logger.Infof("Preview running * press Ctrl+C to stop")
-			if err := server.Start(ctx); err != nil {
+				exts := duckdb.DefaultExtensions()
+				progress := func(done, total int, name string) {
+					reporter.Progress(done, total, name)
+				}
+				if eerr := sess.InstallAndLoadExtensionsWithProgress(ctx, exts, progress); eerr != nil {
+					reporter.Fail(bootstatus.PhaseDuckDB, eerr)
+					logger.Errorf("DuckDB extensions: %v", eerr)
+					return
+				}
+				reporter.End(bootstatus.PhaseDuckDB)
+
+				// 2. Explorer session — created in parallel; failure is non-fatal.
+				go func() {
+					explorerLog := logger.Channel("explorer")
+					reporter.Begin(bootstatus.PhaseExplorer, "Initializing data explorer")
+					es, eerr := explorer.NewSession(ctx, explorerLog)
+					if eerr != nil {
+						explorerLog.Warnf("Data explorer unavailable: %v", eerr)
+						reporter.End(bootstatus.PhaseExplorer)
+						return
+					}
+					explorerSlot.Store(es)
+					reporter.End(bootstatus.PhaseExplorer)
+				}()
+
+				// 3. Build refresh plumbing
+				refreshMu := &sync.Mutex{}
+				refreshState := &previewRefreshState{
+					perArtefactAssets: make(map[string][]previewhttp.LocalAsset),
+				}
+				refreshCfg := previewRefreshConfig{
+					Logger:                   logger,
+					Workdir:                  env.ProjectRoot,
+					EnableLint:               enableLint,
+					EngineVersion:            env.EngineVersion,
+					QueryLogger:              queryLogger,
+					DataValidationMode:       dataValidationMode,
+					DataValidationSampleSize: dataValidationSampleSize,
+					HookRunner:               env.HookRunner,
+					HookEnv:                  previewHookEnv,
+					Session:                  sess,
+					KindProvider:             env.PluginRegistry,
+					PluginOptions:            pluginOpts,
+					PostRenderHTMLHook:       postRenderHTMLHook,
+					PostDatasetHook:          postDatasetHook,
+					PluginLinters:            pluginLinters,
+					Reporter:                 reporter,
+				}
+				if env.PluginManager != nil {
+					refreshCfg.HostService = env.PluginManager.HostService()
+				}
+
+				refresh := func(reason string, changed []string) error {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+					refreshMu.Lock()
+					defer refreshMu.Unlock()
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+					server.BroadcastRefreshing(reason)
+					broadcastPaths, err := refreshPreviewContent(ctx, reason, changed, server, explorerSlot.Load(), &refreshCfg, refreshState)
+					if err != nil && ctx.Err() == nil {
+						server.BroadcastRefreshError("", err.Error())
+					}
+					server.BroadcastRefreshDone(broadcastPaths)
+					return err
+				}
+
+				// 4. Initial refresh — failure no longer aborts the server,
+				// the loading page surfaces the error and the watcher will
+				// retry once the user fixes the source.
+				var visitedDirs []string
+				refreshCfg.CollectedDirs = &visitedDirs
+				initialErr := refresh("initial load", nil)
+				refreshCfg.CollectedDirs = nil
+				if initialErr != nil {
+					reporter.Fail(bootstatus.PhaseRendering, initialErr)
+				} else {
+					reporter.Begin(bootstatus.PhaseReady, "Ready")
+					reporter.End(bootstatus.PhaseReady)
+				}
+
+				// 5. File watcher + debounce loop. Must be set up after the
+				// initial refresh so the watcher knows which dirs to register.
+				watchLog := logger.Channel("watcher")
+				refreshCh := make(chan refreshRequest, 16)
+				enqueue := func(req refreshRequest) {
+					select {
+					case refreshCh <- req:
+					default:
+					}
+				}
+				watcher, werr := watchers.NewWatcher(watchers.Config{
+					Root:   env.ProjectRoot,
+					Dirs:   visitedDirs,
+					Logger: watchLog,
+					Handler: func(evt watchers.Event) {
+						watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
+						req := refreshRequest{reason: fmt.Sprintf("change %s", evt.RelativePath)}
+						if incremental && evt.Path != "" {
+							req.files = []string{evt.Path}
+						}
+						enqueue(req)
+					},
+				})
+				if werr != nil {
+					logger.Errorf("Watcher init failed: %v", werr)
+					return
+				}
+				go watcher.Run(ctx)
+
+				go func() {
+					defer watcher.Close()
+					debounce := time.NewTimer(0)
+					if !debounce.Stop() {
+						<-debounce.C
+					}
+					var pending []refreshRequest
+					for {
+						select {
+						case <-ctx.Done():
+							debounce.Stop()
+							return
+						case req := <-refreshCh:
+							pending = append(pending, req)
+							debounce.Reset(300 * time.Millisecond)
+						case <-debounce.C:
+							if len(pending) == 0 {
+								continue
+							}
+							coalesced, files := mergeRefreshRequests(pending)
+							pending = pending[:0]
+							if err := refresh(coalesced, files); err != nil {
+								logger.Errorf("Refresh failed: %v", err)
+							}
+						}
+					}
+				}()
+			}()
+
+			// Wait for either the server goroutine to exit (shutdown) or the
+			// outer context to cancel. We do not block on bootDone — the
+			// server should keep accepting requests even if boot is mid-flight
+			// when Ctrl+C arrives.
+			err = <-serverErrCh
+			if err != nil {
 				return RuntimeError(err)
 			}
 			return nil
@@ -447,6 +519,9 @@ type previewRefreshConfig struct {
 	PluginLinters lint.PluginLinterRegistry
 	// HostService is the shared BinoHost server for updating documents. May be nil.
 	HostService *plugin.BinoHostServer
+	// Reporter receives phase events for the CLI spinner and the loading-page
+	// SSE stream. May be nil for callers that do not surface progress (tests).
+	Reporter bootstatus.Reporter
 }
 
 // refreshPreviewContent loads manifests, renders affected artifacts, and
@@ -461,6 +536,10 @@ type previewRefreshConfig struct {
 func refreshPreviewContent(ctx context.Context, reason string, changed []string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig, state *previewRefreshState) ([]string, error) {
 	logger := cfg.Logger
 	watchDir := cfg.Workdir
+	report := cfg.Reporter
+	if report == nil {
+		report = bootstatus.Nop()
+	}
 
 	refreshHookEnv := cfg.HookEnv
 	refreshHookEnv.RefreshReason = reason
@@ -469,13 +548,15 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		return nil, nil
 	}
 
-	logger.Infof("Rendering report (%s)", reason)
+	report.Begin(bootstatus.PhaseManifests, fmt.Sprintf("Loading manifests (%s)", reason))
 	loadOpts := config.LoadOptions{CollectedDirs: cfg.CollectedDirs, KindProvider: cfg.KindProvider}
 	docs, err := config.LoadDirWithOptions(ctx, watchDir, loadOpts)
 	if err != nil {
+		report.Fail(bootstatus.PhaseManifests, err)
 		logger.Errorf("Render failed (%s): %v", reason, err)
 		return nil, RuntimeError(err)
 	}
+	report.End(bootstatus.PhaseManifests)
 
 	if cfg.HostService != nil {
 		cfg.HostService.SetDocuments(plugin.DocumentsFromConfig(docs))
@@ -555,10 +636,12 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		})
 	}
 
+	report.Begin(bootstatus.PhaseGraph, "Building dependency graph")
 	g, graphErr := reportgraph.Build(ctx, docs)
 	if graphErr != nil {
 		logger.Warnf("Graph build skipped: %v", graphErr)
 	}
+	report.End(bootstatus.PhaseGraph)
 
 	// Decide selective vs full. Selective requires: changed != nil, the graph
 	// built successfully, and every changed file maps to at least one graph
@@ -603,9 +686,20 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		}
 	}
 
+	totalRender := 0
+	if renderAllPages {
+		totalRender++
+	}
+	totalRender += len(artifacts) + len(documentArtefacts)
+	if totalRender > 0 {
+		report.Begin(bootstatus.PhaseRendering, fmt.Sprintf("Rendering report (%s)", reason))
+	}
+	rendered := 0
+
 	// Render "All Pages" if needed. Cache the frame and context HTML so we
 	// can reuse them on selective refreshes that don't touch the layout.
 	if renderAllPages {
+		report.Progress(rendered, totalRender, "All Pages")
 		allPagesResult, rerr := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
 			Workdir:                  watchDir,
 			Language:                 "de",
@@ -647,6 +741,8 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 	if renderAllPages {
 		server.BroadcastContent("/", state.allPagesContextHTML)
 		broadcastPaths = append(broadcastPaths, "/")
+		rendered++
+		report.Progress(rendered, totalRender, "All Pages")
 	}
 
 	// On a full rebuild, drop stale per-artefact assets so deleted artefacts
@@ -667,6 +763,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 				continue
 			}
 		}
+		report.Progress(rendered, totalRender, art.Document.Name)
 		renderResult, rerr := pipeline.RenderArtefactFrameAndContextWithOptions(ctx, watchDir, docs, art, pipeline.FrameRenderOptions{
 			QueryLogger:              cfg.QueryLogger,
 			EngineVersion:            cfg.EngineVersion,
@@ -703,6 +800,8 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		// while later artefacts are still rendering.
 		server.BroadcastContent(artPath, contextHTML)
 		broadcastPaths = append(broadcastPaths, artPath)
+		rendered++
+		report.Progress(rendered, totalRender, art.Document.Name)
 	}
 
 	for _, docArt := range documentArtefacts {
@@ -712,6 +811,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 				continue
 			}
 		}
+		report.Progress(rendered, totalRender, docArt.Document.Name)
 		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion:      cfg.EngineVersion,
 			Session:            cfg.Session,
@@ -736,6 +836,8 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
 		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		rendered++
+		report.Progress(rendered, totalRender, docArt.Document.Name)
 	}
 
 	// Register lazy presentation routes. On a full rebuild we register all
@@ -769,6 +871,9 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		server.SetContentRoutes(routeMap)
 	}
 	server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), state.allPagesFrameHTML...), "text/html; charset=utf-8"))
+	if totalRender > 0 {
+		report.End(bootstatus.PhaseRendering)
+	}
 	logger.Successf("Content refreshed (%s)", reason)
 	return broadcastPaths, nil
 }
@@ -1227,12 +1332,4 @@ func validateBrowserURL(url string) error {
 	}
 
 	return nil
-}
-
-// explorerHandler returns the explorer HTTP handler if the session is available.
-func explorerHandler(session *explorer.Session) http.Handler {
-	if session == nil {
-		return nil
-	}
-	return explorer.Handler(session)
 }
