@@ -48,7 +48,7 @@ jobs:
 
   test:
     name: Test
-    needs: [resolve-tag]
+    needs: [ resolve-tag ]
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner
@@ -80,7 +80,7 @@ jobs:
 
   build-vscode-extension:
     name: Build VS Code Extension
-    needs: [resolve-tag, test]
+    needs: [ resolve-tag, test ]
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner
@@ -96,7 +96,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: vscode-bino/package-lock.json
 
@@ -132,7 +132,7 @@ jobs:
   # Windows links the pre-built DuckDB DLL from GitHub releases.
   build:
     name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
-    needs: [test, resolve-tag]
+    needs: [ test, resolve-tag ]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -260,7 +260,7 @@ jobs:
 
   release:
     name: Release
-    needs: [build, build-vscode-extension, resolve-tag]
+    needs: [ build, build-vscode-extension, resolve-tag ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -361,7 +361,7 @@ jobs:
 
   update-homebrew-tap:
     name: Update Homebrew Tap
-    needs: [release, resolve-tag]
+    needs: [ release, resolve-tag ]
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner
@@ -431,7 +431,7 @@ jobs:
 
   build-docs:
     name: Build and Push Docs
-    needs: [release, resolve-tag]
+    needs: [ release, resolve-tag ]
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner
