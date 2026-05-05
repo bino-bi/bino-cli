@@ -87,6 +87,19 @@ there is a fatal error loading manifests.`),
 				}
 			}
 
+			// Engine version compatibility check. Runs before manifest loading so
+			// the finding is reported even when YAML manifests fail to parse —
+			// the engine pin is the more actionable problem in that case. Forces
+			// a non-zero exit independent of --fail-on-warnings.
+			var compatFatal bool
+			var compatFinding lint.Finding
+			if cfgErr == nil {
+				if f, fatal := engineCompatFinding(projectRoot, projectCfg.EngineVersion); fatal {
+					compatFinding = f
+					compatFatal = true
+				}
+			}
+
 			// Check for cancellation before starting expensive manifest loading
 			if err := ctx.Err(); err != nil {
 				return err
@@ -97,9 +110,18 @@ there is a fatal error loading manifests.`),
 			loadStart := time.Now()
 			documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider})
 			if err != nil {
+				if compatFatal {
+					out.Blank()
+					printCompatFinding(out, projectRoot, compatFinding)
+				}
 				return ConfigError(err)
 			}
 			if len(documents) == 0 {
+				if compatFatal {
+					out.Blank()
+					printCompatFinding(out, projectRoot, compatFinding)
+					return RuntimeErrorf("engine-version-incompatible")
+				}
 				return ConfigErrorf("no YAML documents found in %s", projectRoot)
 			}
 
@@ -121,6 +143,11 @@ there is a fatal error loading manifests.`),
 			}
 
 			out.StepDone(fmt.Sprintf("Checked %d rule(s)", len(runner.Rules())), time.Since(lintStart))
+
+			// Prepend the compat finding (resolved earlier) so it renders first.
+			if compatFatal {
+				findings = append([]lint.Finding{compatFinding}, findings...)
+			}
 
 			// Step 3: Execute queries and validate data (optional)
 			var dataValidationWarnings []dataset.Warning
@@ -149,7 +176,9 @@ there is a fatal error loading manifests.`),
 				for _, f := range findings {
 					relPath := pathutil.RelPath(projectRoot, f.File)
 					loc := relPath
-					if f.DocIdx > 0 {
+					if f.Line > 0 {
+						loc = fmt.Sprintf("%s:%d:%d", relPath, f.Line, f.Column)
+					} else if f.DocIdx > 0 {
 						loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
 					}
 					if f.Path != "" {
@@ -193,6 +222,12 @@ there is a fatal error loading manifests.`),
 
 			out.Blank()
 			out.Done("Lint complete")
+
+			// Engine version incompatibility is a runtime-fatal condition; force
+			// a non-zero exit regardless of --fail-on-warnings.
+			if compatFatal {
+				return RuntimeErrorf("engine-version-incompatible")
+			}
 
 			// Exit with error if --fail-on-warnings and there are warnings
 			totalWarnings := len(findings) + len(dataValidationWarnings)

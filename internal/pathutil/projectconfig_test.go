@@ -133,3 +133,82 @@ API_KEY = "secret"
 		t.Fatal("expected no plugins in backwards-compatible config")
 	}
 }
+
+func TestFindEngineVersionLine(t *testing.T) {
+	cases := []struct {
+		name     string
+		content  string
+		wantLine int
+		wantCol  int
+	}{
+		{
+			name:     "first line",
+			content:  "engine-version = \"v1.0.0\"\nreport-id = \"x\"\n",
+			wantLine: 1,
+			wantCol:  1,
+		},
+		{
+			name:     "later line",
+			content:  "report-id = \"x\"\n\nengine-version = \"v1.0.0\"\n",
+			wantLine: 3,
+			wantCol:  1,
+		},
+		{
+			name:     "leading spaces",
+			content:  "report-id = \"x\"\n    engine-version = \"v1.0.0\"\n",
+			wantLine: 2,
+			wantCol:  5,
+		},
+		{
+			name:     "leading tab",
+			content:  "report-id = \"x\"\n\tengine-version = \"v1.0.0\"\n",
+			wantLine: 2,
+			wantCol:  2,
+		},
+		{
+			name:     "missing returns 1,1",
+			content:  "report-id = \"x\"\n",
+			wantLine: 1,
+			wantCol:  1,
+		},
+		{
+			name:     "commented out skipped",
+			content:  "# engine-version = \"v0.5.0\"\nreport-id = \"x\"\nengine-version = \"v1.0.0\"\n",
+			wantLine: 3,
+			wantCol:  1,
+		},
+		{
+			name:     "duplicate returns first",
+			content:  "engine-version = \"v1.0.0\"\nengine-version = \"v2.0.0\"\n",
+			wantLine: 1,
+			wantCol:  1,
+		},
+		{
+			name:     "CRLF line endings",
+			content:  "report-id = \"x\"\r\nengine-version = \"v1.0.0\"\r\n",
+			wantLine: 2,
+			wantCol:  1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			path := filepath.Join(tmp, "bino.toml")
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			line, col := FindEngineVersionLine(path)
+			if line != tc.wantLine || col != tc.wantCol {
+				t.Errorf("FindEngineVersionLine = (%d, %d), want (%d, %d)",
+					line, col, tc.wantLine, tc.wantCol)
+			}
+		})
+	}
+}
+
+func TestFindEngineVersionLine_MissingFile(t *testing.T) {
+	line, col := FindEngineVersionLine(filepath.Join(t.TempDir(), "nonexistent.toml"))
+	if line != 1 || col != 1 {
+		t.Errorf("FindEngineVersionLine on missing file = (%d, %d), want (1, 1)", line, col)
+	}
+}
