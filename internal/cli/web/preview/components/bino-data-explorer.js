@@ -527,7 +527,8 @@ class BinoDataExplorer extends LitElement {
             <div class="sidebar-title">DataSets (${meta.datasets.length})</div>
             ${meta.datasets.map(function(ds) {
               return html`
-                <div class="sidebar-item" @click=${function() { self._selectDataset(ds.name); }}>
+                <div class="sidebar-item" @click=${function() { self._selectDataset(ds); }}
+                     title=${ds.sqlError ? ('cannot resolve dataset SQL: ' + ds.sqlError) : (ds.sql || '')}>
                   <span class="sidebar-item-name">${ds.name}</span>
                   <span class="sidebar-item-badge badge-dataset">set</span>
                 </div>
@@ -732,11 +733,22 @@ class BinoDataExplorer extends LitElement {
     this._runQuery();
   }
 
-  _selectDataset(name) {
-    this._sql = 'SELECT * FROM "' + name + '"';
+  _selectDataset(ds) {
+    // Datasets are not registered as DuckDB views (only DataSources are), so
+    // SELECT * FROM "<name>" would fail. Use the resolved SQL the metadata
+    // endpoint exposes; fall back to a comment if the manifest is broken.
+    if (ds && ds.sql) {
+      this._sql = ds.sql;
+    } else if (ds && ds.sqlError) {
+      this._sql = '-- Cannot resolve SQL for dataset "' + ds.name + '":\n-- ' + ds.sqlError;
+    } else {
+      this._sql = '-- Dataset "' + (ds && ds.name) + '" has no resolvable SQL.';
+    }
     this._page = 0;
     this._activeTab = 'results';
-    this._runQuery();
+    if (ds && ds.sql) {
+      this._runQuery();
+    }
   }
 
   _toggleSourceInfo(name) {

@@ -273,21 +273,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				reporter.End(bootstatus.PhaseDuckDB)
 
-				// 2. Explorer session — created in parallel; failure is non-fatal.
-				go func() {
-					explorerLog := logger.Channel("explorer")
-					reporter.Begin(bootstatus.PhaseExplorer, "Initializing data explorer")
-					es, eerr := explorer.NewSession(ctx, explorerLog)
-					if eerr != nil {
-						explorerLog.Warnf("Data explorer unavailable: %v", eerr)
-						reporter.End(bootstatus.PhaseExplorer)
-						return
-					}
-					explorerSlot.Store(es)
-					reporter.End(bootstatus.PhaseExplorer)
-				}()
-
-				// 3. Build refresh plumbing
+				// 2. Build refresh plumbing
 				refreshMu := &sync.Mutex{}
 				refreshState := &previewRefreshState{
 					perArtefactAssets: make(map[string][]previewhttp.LocalAsset),
@@ -332,7 +318,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return err
 				}
 
-				// 4. Initial refresh — failure no longer aborts the server,
+				// 3. Initial refresh — failure no longer aborts the server,
 				// the loading page surfaces the error and the watcher will
 				// retry once the user fixes the source.
 				var visitedDirs []string
@@ -345,6 +331,30 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					reporter.Begin(bootstatus.PhaseReady, "Ready")
 					reporter.End(bootstatus.PhaseReady)
 				}
+
+				// 4. Explorer session — kept off the cold-start critical path
+				// by initializing AFTER the first refresh (so it doesn't add
+				// to the "time to first paint"). Self-populates from the docs
+				// the first refresh already loaded; failure is non-fatal.
+				go func() {
+					explorerLog := logger.Channel("explorer")
+					reporter.Begin(bootstatus.PhaseExplorer, "Initializing data explorer")
+					defer reporter.End(bootstatus.PhaseExplorer)
+					es, eerr := explorer.NewSession(ctx, explorerLog)
+					if eerr != nil {
+						explorerLog.Warnf("Data explorer unavailable: %v", eerr)
+						return
+					}
+					refreshMu.Lock()
+					docs := refreshState.lastDocs
+					refreshMu.Unlock()
+					if len(docs) > 0 {
+						if rerr := es.Refresh(ctx, docs); rerr != nil {
+							explorerLog.Warnf("Initial explorer refresh: %v", rerr)
+						}
+					}
+					explorerSlot.Store(es)
+				}()
 
 				// 5. File watcher + debounce loop. Must be set up after the
 				// initial refresh so the watcher knows which dirs to register.
@@ -450,6 +460,14 @@ type previewRefreshState struct {
 	// perArtefactAssets keys are route paths ("/name", "/doc/name") so the
 	// asset union can be rebuilt across full and selective refreshes.
 	perArtefactAssets map[string][]previewhttp.LocalAsset
+
+	// lastDocs is the most recent successfully-loaded manifest set. Replaced
+	// (never mutated) on every refresh, so a goroutine that grabbed the
+	// slice header earlier can keep using it without holding refreshMu. The
+	// boot's explorer-init goroutine reads this so a freshly-created
+	// explorer session can be populated even when it finishes initializing
+	// after the first refresh.
+	lastDocs []config.Document
 }
 
 // mergeRefreshRequests collapses a debounce window into a single
@@ -557,6 +575,9 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		return nil, RuntimeError(err)
 	}
 	report.End(bootstatus.PhaseManifests)
+	// Snapshot for late-arriving consumers (e.g. the explorer init goroutine
+	// when it finishes after the first refresh).
+	state.lastDocs = docs
 
 	if cfg.HostService != nil {
 		cfg.HostService.SetDocuments(plugin.DocumentsFromConfig(docs))

@@ -38,6 +38,16 @@ type sourceInfo struct {
 type datasetInfo struct {
 	Name      string   `json:"name"`
 	DependsOn []string `json:"dependsOn,omitempty"`
+	// SQL is the resolved query the dataset would execute. Populated so the
+	// UI can put it straight into the editor when the dataset is selected
+	// (datasets, unlike datasources, are not registered as DuckDB views).
+	// Empty when the dataset has no usable query (broken manifest) or the
+	// query file could not be read.
+	SQL string `json:"sql,omitempty"`
+	// SQLError carries the resolution error message when SQL is empty and
+	// the dataset is otherwise valid. Surfaced in the UI so the developer
+	// can see why the dataset cannot be previewed.
+	SQLError string `json:"sqlError,omitempty"`
 }
 
 type columnInfo struct {
@@ -88,6 +98,11 @@ func handleMetadata(session *Session) http.HandlerFunc {
 			case "DataSet":
 				di := datasetInfo{Name: doc.Name}
 				di.DependsOn = extractDependsOn(doc.Raw)
+				if resolved, rerr := resolvedDatasetSQL(doc); rerr == nil {
+					di.SQL = resolved
+				} else {
+					di.SQLError = rerr.Error()
+				}
 				resp.Datasets = append(resp.Datasets, di)
 			}
 		}
