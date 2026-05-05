@@ -89,6 +89,9 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		return nil, ConfigError(fmt.Errorf("template engine: %w", err))
 	}
 	engineVersion = engineInfo.Version
+	if err := engine.CheckCompatibility(engineVersion); err != nil {
+		return nil, ConfigError(err)
+	}
 	logger.Infof("Using template engine %s", engineVersion)
 
 	// Load plugins if declared in bino.toml.

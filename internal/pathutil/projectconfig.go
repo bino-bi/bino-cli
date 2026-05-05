@@ -1,12 +1,17 @@
 package pathutil
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pelletier/go-toml/v2"
 )
+
+var engineVersionLinePattern = regexp.MustCompile(`^[ \t]*engine-version[ \t]*=`)
 
 // HooksConfig maps checkpoint names to ordered lists of shell commands.
 type HooksConfig map[string][]string
@@ -209,4 +214,32 @@ func WriteProjectConfig(dir, reportID, engineVersion string) error {
 // GenerateReportID creates a new unique report ID (UUID).
 func GenerateReportID() string {
 	return uuid.NewString()
+}
+
+// FindEngineVersionLine scans bino.toml for the first non-commented
+// `engine-version = ...` line and returns its 1-based line number and the
+// 1-based column of the first non-whitespace character. Returns (1, 1) if
+// the file cannot be read or the key is absent.
+func FindEngineVersionLine(configPath string) (line, col int) {
+	f, err := os.Open(configPath)
+	if err != nil {
+		return 1, 1
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		raw := scanner.Text()
+		trimmed := strings.TrimLeft(raw, " \t")
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if engineVersionLinePattern.MatchString(raw) {
+			return lineNum, len(raw) - len(trimmed) + 1
+		}
+	}
+	return 1, 1
 }

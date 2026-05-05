@@ -92,6 +92,20 @@ Manifest Discovery → YAML Parsing → Validation → Datasource Collection →
 
 Manifests are YAML documents typed by a `kind` field (DataSource, DataSet, LayoutPage, ReportArtefact, etc.). DuckDB serves as the embedded SQL engine for all data queries. Chrome headless shell converts rendered HTML into PDF output.
 
+## Template Engine Compatibility
+
+Each `bino` release declares the range of `bn-template-engine` versions it supports. The contract lives in `internal/engine/compat.go` as `SupportedEngineRanges` and is enforced by `build`, `preview`, `serve`, `lint`, and `lsp`. On a mismatch, `build`/`preview`/`serve` exit non-zero before any pipeline work; `lint` reports rule `engine-version-incompatible` and exits non-zero; `lsp` (and the VS Code extension) publishes an error-severity diagnostic on the `engine-version` line of `bino.toml`.
+
+Range syntax follows npm conventions (comparators, hyphen ranges, x-ranges, tilde, caret, AND within an entry, OR across entries) with npm pre-release inclusion semantics: a pre-release version satisfies a range only when at least one comparator in that range explicitly mentions a pre-release of the same `MAJOR.MINOR.PATCH`.
+
+Current supported ranges: `>=1.0.0-alpha, <2.0.0-0` — any 1.x release or pre-release is accepted; 0.x and 2.0.0+ are rejected. To use a specific engine version, pin it in `bino.toml`:
+
+```toml
+engine-version = "v1.0.0-alpha.14"
+```
+
+If the version is not yet cached locally, run `bino setup --template-engine --engine-version v1.0.0-alpha.14`.
+
 <details>
 <summary>Directory structure</summary>
 

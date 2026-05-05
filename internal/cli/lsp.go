@@ -302,6 +302,12 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 		diagnostics = append(diagnostics, diag...)
 	}
 
+	// Engine version compatibility check — emits an error-severity diagnostic
+	// on bino.toml when the resolved engine version is outside the supported ranges.
+	if diag, ok := engineCompatDiagnostic(dir); ok {
+		diagnostics = append(diagnostics, diag)
+	}
+
 	// Run lint rules and add findings as warnings
 	lintDocs := configDocsToLintDocs(docs)
 	runner := lint.NewDefaultRunner()
