@@ -28,7 +28,7 @@ jobs:
         uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0, 0BSD
+          allow-licenses: BlueOak-1.0.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0, 0BSD
           allow-dependencies-licenses: >-
             pkg:golang/golang.org/x/crypto,
             pkg:golang/golang.org/x/mod,
