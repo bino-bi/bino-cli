@@ -26,8 +26,8 @@ type HookEnv struct {
 	ArtefactName  string // artifact-scoped hooks only
 	ArtefactKind  string // artifact-scoped hooks only
 	OutputDir     string // build only
-	Include       string // build only (comma-separated)
-	Exclude       string // build only (comma-separated)
+	Include       string // build / preview (comma-separated)
+	Exclude       string // build / preview (comma-separated)
 	PDFPath       string // post-render only
 	ListenAddr    string // preview/serve only
 	RefreshReason string // pre-refresh only

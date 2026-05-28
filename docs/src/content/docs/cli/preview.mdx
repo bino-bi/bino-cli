@@ -16,6 +16,8 @@ Common flags:
 
 - `--work-dir` – report bundle directory (default: `.`).
 - `--port` – HTTP port (default: `45678`).
+- `--artefact` – preview only specified artefact names (can be repeated).
+- `--exclude-artefact` – skip specified artefact names (can be repeated).
 - `--log-sql` – log executed SQL queries.
 - `--lint` – run lint rules on each refresh (disabled by default).
 - `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`.
@@ -30,6 +32,8 @@ port = 9000
 log-sql = true
 lint = true
 data-validation = "warn"
+artefact = ["monthly", "weekly"]
+exclude-artefact = ["draft"]
 ```
 
 When you override a TOML default, the CLI logs an info message:
@@ -71,6 +75,12 @@ Preview a different workdir and log SQL:
 
 ```bash
 bino preview --work-dir my-report --log-sql
+```
+
+Preview only selected artefacts — useful for speeding up the live-reload loop in bundles with many artefacts:
+
+```bash
+bino preview --artefact monthly_sales --artefact annual_sales
 ```
 
 If the browser does not open automatically, open `http://127.0.0.1:45678/` manually.

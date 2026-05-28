@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
@@ -60,6 +61,8 @@ func newPreviewCommand() *cobra.Command {
 		dataValidation string
 		dataMode       string
 		incremental    bool
+		include        []string
+		exclude        []string
 	)
 
 	cmd := &cobra.Command{
@@ -91,6 +94,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			port = env.Resolver.ResolveInt("port", "port", port)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			enableLint = env.Resolver.ResolveBool("lint", "lint", enableLint)
+			include = env.Resolver.ResolveStringSlice("artefact", "artefact", include)
+			exclude = env.Resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
 
 			if !env.EngineVersionPinned {
 				logger.Warnf("No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds.")
@@ -122,6 +127,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				Workdir:  env.ProjectRoot,
 				ReportID: env.ProjectCfg.ReportID,
 				Verbose:  logx.DebugEnabled(ctx),
+				Include:  strings.Join(include, ","),
+				Exclude:  strings.Join(exclude, ","),
 			}
 
 			var pluginOpts *render.PluginOptions
@@ -295,6 +302,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					PostDatasetHook:          postDatasetHook,
 					PluginLinters:            pluginLinters,
 					Reporter:                 reporter,
+					Include:                  include,
+					Exclude:                  exclude,
 				}
 				if env.PluginManager != nil {
 					refreshCfg.HostService = env.PluginManager.HostService()
@@ -443,6 +452,19 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
 	cmd.Flags().BoolVar(&incremental, "incremental", true,
 		"Only re-render artefacts affected by the changed file(s); falls back to full rebuild for unknown files. Set --incremental=false to always rebuild everything")
+	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to preview (default: all)")
+	cmd.Flags().StringSliceVar(&exclude, "exclude-artefact", nil, "metadata.name entries to skip")
+
+	// Accept both UK and US spellings for artefact flags
+	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		switch name {
+		case "artifact":
+			return pflag.NormalizedName("artefact")
+		case "exclude-artifact":
+			return pflag.NormalizedName("exclude-artefact")
+		}
+		return pflag.NormalizedName(name)
+	})
 
 	return cmd
 }
@@ -557,6 +579,12 @@ type previewRefreshConfig struct {
 	// Reporter receives phase events for the CLI spinner and the loading-page
 	// SSE stream. May be nil for callers that do not surface progress (tests).
 	Reporter bootstatus.Reporter
+
+	// Include/Exclude restrict the artefact set rendered each refresh.
+	// Empty Include means "render all". Applied on every refresh so the
+	// filter remains stable across manifest changes.
+	Include []string
+	Exclude []string
 }
 
 // refreshPreviewContent loads manifests, renders affected artifacts, and
@@ -641,6 +669,18 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		return nil, RuntimeError(err)
 	}
 	pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
+
+	// Apply --artefact / --exclude-artefact. Validation is best-effort here:
+	// if a name disappears mid-session (manifest renamed/removed) we warn
+	// rather than kill the live-reload loop.
+	if len(cfg.Include) > 0 || len(cfg.Exclude) > 0 {
+		if err := pipeline.ValidateAllArtefactNames(artifacts, nil, documentArtefacts, cfg.Include); err != nil {
+			logger.Warnf("artefact filter: %v", err)
+		}
+		filterOpts := pipeline.FilterOptions{Include: cfg.Include, Exclude: cfg.Exclude}
+		artifacts = pipeline.FilterArtefacts(artifacts, filterOpts)
+		documentArtefacts = pipeline.FilterDocumentArtefacts(documentArtefacts, filterOpts)
+	}
 
 	// Snapshot for the /__embedding/{name} handler and invalidate any
 	// previously cached embedding renders. Refreshes hold refreshMu, so the
