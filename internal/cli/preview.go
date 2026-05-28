@@ -300,6 +300,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					refreshCfg.HostService = env.PluginManager.HostService()
 				}
 
+				// Wire the embedding endpoint to the refresh state and config
+				// so /__embedding/{name} can render any named artefact as
+				// build-equivalent isolated HTML.
+				server.SetEmbeddingFunc(func(ctx context.Context, name string) ([]byte, error) {
+					return embedArtefactByName(ctx, name, refreshMu, refreshState, &refreshCfg, server)
+				})
+
 				refresh := func(reason string, changed []string) error {
 					if err := ctx.Err(); err != nil {
 						return err
@@ -468,6 +475,16 @@ type previewRefreshState struct {
 	// explorer session can be populated even when it finishes initializing
 	// after the first refresh.
 	lastDocs []config.Document
+
+	// artefacts and documentArtefacts are snapshots used by the
+	// /__embedding/{name} handler to find an artefact by name and render
+	// it as standalone build-equivalent HTML.
+	artefacts         []config.Artifact
+	documentArtefacts []config.DocumentArtefact
+
+	// embeddingCache memoizes rendered embedding HTML keyed by artefact
+	// name. Reset to nil at the start of every refresh.
+	embeddingCache map[string][]byte
 }
 
 // mergeRefreshRequests collapses a debounce window into a single
@@ -624,6 +641,14 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		return nil, RuntimeError(err)
 	}
 	pipeline.LogDocumentArtefactWarnings(logger, documentArtefacts)
+
+	// Snapshot for the /__embedding/{name} handler and invalidate any
+	// previously cached embedding renders. Refreshes hold refreshMu, so the
+	// handler observes either the pre-refresh or post-refresh snapshot
+	// atomically.
+	state.artefacts = artifacts
+	state.documentArtefacts = documentArtefacts
+	state.embeddingCache = nil
 
 	artefactInfos := make([]previewArtefactInfo, 0, len(artifacts)+len(documentArtefacts))
 	for _, art := range artifacts {
@@ -952,6 +977,100 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 		})
 		return cachedBody, cachedCT, cachedErr
 	}
+}
+
+// embedArtefactByName resolves a name from the latest refresh snapshot and
+// renders the matching artefact as standalone HTML — equivalent to what
+// `bino build` feeds to Chrome. ReportArtefact wins over DocumentArtefact on
+// name collision. Renders are memoized in state.embeddingCache; the cache is
+// reset on every refresh.
+func embedArtefactByName(ctx context.Context, name string, mu *sync.Mutex, state *previewRefreshState, cfg *previewRefreshConfig, server *previewhttp.Server) ([]byte, error) {
+	mu.Lock()
+	if cached, ok := state.embeddingCache[name]; ok {
+		mu.Unlock()
+		return cached, nil
+	}
+
+	var reportArt *config.Artifact
+	for i := range state.artefacts {
+		if state.artefacts[i].Document.Name == name {
+			reportArt = &state.artefacts[i]
+			break
+		}
+	}
+	var docArt *config.DocumentArtefact
+	if reportArt == nil {
+		for i := range state.documentArtefacts {
+			if state.documentArtefacts[i].Document.Name == name {
+				docArt = &state.documentArtefacts[i]
+				break
+			}
+		}
+	}
+
+	if reportArt == nil && docArt == nil {
+		names := make([]string, 0, len(state.artefacts)+len(state.documentArtefacts))
+		for _, a := range state.artefacts {
+			names = append(names, a.Document.Name)
+		}
+		for _, a := range state.documentArtefacts {
+			names = append(names, a.Document.Name)
+		}
+		mu.Unlock()
+		msg := fmt.Sprintf("no embeddable artefact named %q. Available: %s", name, strings.Join(names, ", "))
+		if len(names) == 0 {
+			msg = fmt.Sprintf("no embeddable artefact named %q. No artefacts are registered yet.", name)
+		}
+		return nil, previewhttp.NewHTTPError(http.StatusNotFound, msg)
+	}
+
+	// Release the lock for the slow render call; the captured artefact value
+	// is a copy and docs are replaced (never mutated) by refreshes.
+	docs := state.lastDocs
+	mu.Unlock()
+
+	var body []byte
+	var emitted []render.EmittedData
+	if reportArt != nil {
+		result, err := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, *reportArt, pipeline.RenderArtefactOptions{
+			EngineVersion:            cfg.EngineVersion,
+			QueryLogger:              cfg.QueryLogger,
+			DataValidation:           cfg.DataValidationMode,
+			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			PluginOptions:            cfg.PluginOptions,
+			PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
+			PostDatasetHook:          cfg.PostDatasetHook,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("embed artefact %q: %w", name, err)
+		}
+		body = result.HTML
+		emitted = result.EmittedData
+	} else {
+		result, err := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, *docArt, pipeline.DocumentArtefactRenderOptions{
+			EngineVersion:      cfg.EngineVersion,
+			Session:            cfg.Session,
+			PluginOptions:      cfg.PluginOptions,
+			KindProvider:       cfg.KindProvider,
+			PostRenderHTMLHook: cfg.PostRenderHTMLHook,
+			PostDatasetHook:    cfg.PostDatasetHook,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("embed document %q: %w", name, err)
+		}
+		body = result.HTML
+		emitted = result.EmittedData
+	}
+
+	registerEmittedData(server, emitted)
+
+	mu.Lock()
+	if state.embeddingCache == nil {
+		state.embeddingCache = make(map[string][]byte)
+	}
+	state.embeddingCache[name] = body
+	mu.Unlock()
+	return body, nil
 }
 
 // previewArtefactInfo holds metadata about an artifact for the preview header dropdown.

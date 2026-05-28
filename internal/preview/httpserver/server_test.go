@@ -476,6 +476,109 @@ func TestHandleRoot(t *testing.T) {
 	}
 }
 
+func TestHandleEmbedding(t *testing.T) {
+	tests := []struct {
+		name       string
+		embedFn    EmbeddingFunc
+		pathName   string
+		method     string
+		wantStatus int
+		wantBody   string // exact match; empty means do not assert body
+		wantType   string // exact match; empty means do not assert
+		wantCache  string // exact match; empty means do not assert
+	}{
+		{
+			name:       "no embedding func installed",
+			embedFn:    nil,
+			pathName:   "foo",
+			method:     http.MethodGet,
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name: "success returns html with cache headers",
+			embedFn: func(context.Context, string) ([]byte, error) {
+				return []byte("<html>ok</html>"), nil
+			},
+			pathName:   "foo",
+			method:     http.MethodGet,
+			wantStatus: http.StatusOK,
+			wantBody:   "<html>ok</html>",
+			wantType:   "text/html; charset=utf-8",
+			wantCache:  "no-cache, no-store, must-revalidate",
+		},
+		{
+			name: "HTTPError 404 propagates",
+			embedFn: func(context.Context, string) ([]byte, error) {
+				return nil, NewHTTPError(http.StatusNotFound, "no embeddable artefact named \"foo\"")
+			},
+			pathName:   "foo",
+			method:     http.MethodGet,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "HTTPError 503 propagates",
+			embedFn: func(context.Context, string) ([]byte, error) {
+				return nil, NewHTTPError(http.StatusServiceUnavailable, "still booting")
+			},
+			pathName:   "foo",
+			method:     http.MethodGet,
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name: "plain error maps to 500",
+			embedFn: func(context.Context, string) ([]byte, error) {
+				return nil, errors.New("boom")
+			},
+			pathName:   "foo",
+			method:     http.MethodGet,
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "missing path value returns 404",
+			embedFn:    func(context.Context, string) ([]byte, error) { return []byte("ok"), nil },
+			pathName:   "",
+			method:     http.MethodGet,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, err := New(Config{})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if tt.embedFn != nil {
+				srv.SetEmbeddingFunc(tt.embedFn)
+			}
+
+			req := httptest.NewRequestWithContext(context.Background(), tt.method, "/__embedding/"+tt.pathName, nil)
+			req.SetPathValue("name", tt.pathName)
+			w := httptest.NewRecorder()
+			srv.handleEmbedding(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+			}
+			if tt.wantBody != "" {
+				body, _ := io.ReadAll(resp.Body)
+				if string(body) != tt.wantBody {
+					t.Errorf("body = %q, want %q", string(body), tt.wantBody)
+				}
+			}
+			if tt.wantType != "" && resp.Header.Get("Content-Type") != tt.wantType {
+				t.Errorf("Content-Type = %q, want %q", resp.Header.Get("Content-Type"), tt.wantType)
+			}
+			if tt.wantCache != "" && resp.Header.Get("Cache-Control") != tt.wantCache {
+				t.Errorf("Cache-Control = %q, want %q", resp.Header.Get("Cache-Control"), tt.wantCache)
+			}
+		})
+	}
+}
+
 func TestHandleAsset(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")

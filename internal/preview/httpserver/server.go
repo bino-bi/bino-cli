@@ -85,6 +85,13 @@ func NewHTTPError(code int, message string) *HTTPError {
 //   - The server is shutting down
 type ContentFunc func(context.Context) ([]byte, string, error)
 
+// EmbeddingFunc renders a named artefact as a standalone HTML document with
+// no preview chrome (toolbar, modals, preview stylesheet, preview JS bundle).
+// The output is build-equivalent so it can be safely embedded in an iframe.
+// Implementations should return *HTTPError to signal 404 (unknown name) or
+// 503 (preview still booting); other errors are reported as 500.
+type EmbeddingFunc func(ctx context.Context, name string) ([]byte, error)
+
 // StaticContent returns a ContentFunc that always responds with identical bytes.
 func StaticContent(body []byte, contentType string) ContentFunc {
 	clone := append([]byte(nil), body...)
@@ -139,6 +146,9 @@ type Server struct {
 	contentMu sync.RWMutex
 	contentFn ContentFunc
 	routes    map[string]ContentFunc
+
+	embeddingMu sync.RWMutex
+	embeddingFn EmbeddingFunc
 
 	// contextCache stores the latest context HTML per path for initial client fetch.
 	// This enables two-phase rendering where clients request context after SSE connects.
@@ -196,6 +206,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(srv.handleBootStatus))
 	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
+	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(srv.handleEmbedding))
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
 		mux.Handle("/__explorer/", cfg.ExplorerHandler)
@@ -222,6 +233,15 @@ func (s *Server) SetContentFunc(fn ContentFunc) {
 	s.contentMu.Lock()
 	defer s.contentMu.Unlock()
 	s.contentFn = fn
+}
+
+// SetEmbeddingFunc installs the function used to render /__embedding/{name}
+// responses. Passing nil clears the installed function, causing subsequent
+// requests to receive a 503 response.
+func (s *Server) SetEmbeddingFunc(fn EmbeddingFunc) {
+	s.embeddingMu.Lock()
+	defer s.embeddingMu.Unlock()
+	s.embeddingFn = fn
 }
 
 // SetContentRoutes replaces the map of path-specific content functions served by the root handler.
@@ -317,6 +337,45 @@ func (s *Server) handleData(kind string) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}
+}
+
+// handleEmbedding serves a single named artefact as standalone HTML for use
+// in iframes. The response carries no preview chrome; the body is whatever
+// the installed EmbeddingFunc returns.
+func (s *Server) handleEmbedding(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		http.Error(w, "missing artefact name", http.StatusNotFound)
+		return
+	}
+
+	s.embeddingMu.RLock()
+	fn := s.embeddingFn
+	s.embeddingMu.RUnlock()
+
+	if fn == nil {
+		http.Error(w, "preview still booting", http.StatusServiceUnavailable)
+		return
+	}
+
+	body, err := fn(r.Context(), name)
+	if err != nil {
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) {
+			http.Error(w, httpErr.Message, httpErr.Code)
+			if httpErr.Code >= 500 {
+				s.cfg.Logger.Errorf("embedding render failed for %q: %v", name, err)
+			}
+			return
+		}
+		http.Error(w, "failed to render embedding", http.StatusInternalServerError)
+		s.cfg.Logger.Errorf("embedding render failed for %q: %v", name, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	_, _ = w.Write(body)
 }
 
 func writeDataNotFound(w http.ResponseWriter, message string) {
