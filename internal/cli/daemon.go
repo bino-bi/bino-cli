@@ -18,8 +18,9 @@ const defaultInactivityTimeout = 5 * time.Minute
 
 func newDaemonCommand() *cobra.Command {
 	var (
-		port    int
-		workdir string
+		port       int
+		workdir    string
+		listenAddr string
 	)
 
 	cmd := &cobra.Command{
@@ -75,18 +76,18 @@ func newDaemonCommand() *cobra.Command {
 				logger.Errorf("Initial refresh failed: %v", err)
 			}
 
-			// Create HTTP server
-			listenAddr := "127.0.0.1:0"
-			if port > 0 {
-				listenAddr = fmt.Sprintf("127.0.0.1:%d", port)
-			}
+			// Create HTTP server. The listen address defaults to 127.0.0.1 (localhost
+			// only) to match the original local-IDE assumption; --listen-addr=0.0.0.0
+			// is the explicit opt-in needed when the daemon runs inside a container and
+			// must be reachable from another container on a private docker network.
+			fullListenAddr := fmt.Sprintf("%s:%d", listenAddr, port)
 
 			if env.PluginManager != nil {
 				defer env.PluginManager.ShutdownAll(ctx)
 			}
 
 			server, err := daemon.NewServer(daemon.ServerConfig{
-				ListenAddr:     listenAddr,
+				ListenAddr:     fullListenAddr,
 				State:          state,
 				Logger:         logger.Channel("server"),
 				PluginRegistry: env.PluginRegistry,
@@ -102,7 +103,7 @@ func newDaemonCommand() *cobra.Command {
 			defer daemon.RemovePortFile(env.ProjectRoot)
 			defer server.StopPreview()
 
-			logger.Infof("Daemon listening on 127.0.0.1:%d", server.Port())
+			logger.Infof("Daemon listening on %s:%d", listenAddr, server.Port())
 
 			// Create a cancellable context for the server
 			serverCtx, serverCancel := context.WithCancel(ctx)
@@ -225,6 +226,7 @@ func newDaemonCommand() *cobra.Command {
 
 	cmd.Flags().IntVarP(&port, "port", "p", 0, "Port to listen on (default: ephemeral)")
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
+	cmd.Flags().StringVar(&listenAddr, "listen-addr", "127.0.0.1", "Address to listen on (use 0.0.0.0 to accept connections from a container network)")
 
 	return cmd
 }
