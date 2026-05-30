@@ -432,6 +432,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('bino.previewArtefactEmbedded', async (arg?: LSPDocument | BinoTreeItem) => {
+            // Tree menu passes a BinoTreeItem; CodeLens/palette pass an LSPDocument or nothing.
+            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await previewManager?.previewArtefactEmbedded(doc?.kind ? doc : undefined);
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('bino.previewMenu', async () => {
             await previewManager?.showPreviewMenu();
         })

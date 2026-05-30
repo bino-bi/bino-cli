@@ -214,14 +214,14 @@ func GenerateHTML(ctx context.Context, workdir string, locale string, renderOrie
 		})
 	}
 
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion, nil, nil)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, locale, renderOrientation, renderFormat, mode, diags, nil, engineVersion, nil, nil, "")
 }
 
 // GenerateHTMLFromDocuments renders HTML using an already loaded set of manifests.
 // The mode parameter determines whether build-specific attributes like render-orientation are included.
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, locale string, renderOrientation string, renderFormat string, mode Mode, engineVersion string) (Result, []datasource.Diagnostic, error) {
-	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil, nil)
+	return GenerateHTMLFromDocumentsWithDatasets(ctx, docs, nil, locale, renderOrientation, renderFormat, mode, nil, nil, engineVersion, nil, nil, "")
 }
 
 // GenerateHTMLFromDocumentsWithDatasets renders HTML using loaded manifests and pre-executed dataset results.
@@ -229,7 +229,7 @@ func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, loca
 // The engineVersion parameter specifies which template engine version to use (e.g., "v1.2.3").
 // The allDocs parameter is the complete unfiltered document set, used to distinguish refs filtered by
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
-func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions) (Result, []datasource.Diagnostic, error) {
+func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions, rootComponent string) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -327,9 +327,17 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			}
 			segments = append(segments, htmlContent)
 		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "Table", "Image":
-			// These kinds can be referenced as layout children but cannot be rendered as root.
-			// Skip them silently - they will be rendered when referenced via ref in a LayoutPage.
-			continue
+			// These kinds are normally only rendered when referenced via ref in a
+			// LayoutPage. When rootComponent names one of them, render it directly
+			// into the context so it can be embedded without a wrapping LayoutPage.
+			if rootComponent == "" || doc.Name != rootComponent {
+				continue
+			}
+			htmlContent, err := renderStandaloneComponentDoc(doc, assetURLMap)
+			if err != nil {
+				return Result{}, diags, fmt.Errorf("render: component %s: %w", doc.Name, err)
+			}
+			segments = append(segments, htmlContent)
 		}
 	}
 

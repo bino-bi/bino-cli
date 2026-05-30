@@ -85,12 +85,14 @@ func NewHTTPError(code int, message string) *HTTPError {
 //   - The server is shutting down
 type ContentFunc func(context.Context) ([]byte, string, error)
 
-// EmbeddingFunc renders a named artefact as a standalone HTML document with
+// EmbeddingFunc renders a named document as a standalone HTML document with
 // no preview chrome (toolbar, modals, preview stylesheet, preview JS bundle).
+// The optional kind disambiguates names that collide across kinds (names are
+// unique per kind, not globally); an empty kind resolves by a fixed priority.
 // The output is build-equivalent so it can be safely embedded in an iframe.
 // Implementations should return *HTTPError to signal 404 (unknown name) or
 // 503 (preview still booting); other errors are reported as 500.
-type EmbeddingFunc func(ctx context.Context, name string) ([]byte, error)
+type EmbeddingFunc func(ctx context.Context, name, kind string) ([]byte, error)
 
 // StaticContent returns a ContentFunc that always responds with identical bytes.
 func StaticContent(body []byte, contentType string) ContentFunc {
@@ -358,7 +360,7 @@ func (s *Server) handleEmbedding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := fn(r.Context(), name)
+	body, err := fn(r.Context(), name, r.URL.Query().Get("kind"))
 	if err != nil {
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) {

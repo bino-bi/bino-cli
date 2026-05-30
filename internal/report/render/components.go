@@ -1340,3 +1340,17 @@ func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[strin
 		return "", fmt.Errorf("unsupported component kind %q for inline rendering", kind)
 	}
 }
+
+// renderStandaloneComponentDoc renders a component document's spec directly as a
+// component element, with no wrapping LayoutPage. Only the leaf component kinds
+// supported by ComponentFromSpec apply; container kinds (Tree, Grid, LayoutCard)
+// need child ref resolution and must be rendered inside a LayoutPage.
+func renderStandaloneComponentDoc(doc config.Document, assetURLs map[string]string) (string, error) {
+	var payload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+		return "", fmt.Errorf("parse %s %q: %w", doc.Kind, doc.Name, err)
+	}
+	return ComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
+}

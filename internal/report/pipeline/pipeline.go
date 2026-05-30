@@ -351,6 +351,12 @@ type RenderOptions struct {
 	// PostDatasetHook is called after dataset execution with the dataset results.
 	// Receives dataset name/JSONRows/columns tuples. May be nil.
 	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
+
+	// RootComponent, when set, renders the named standalone component directly
+	// inside <bn-context> with no wrapping LayoutPage. Only leaf component kinds
+	// (Text, Table, ChartStructure, ChartTime, Image) are supported. Used by the
+	// embedding endpoint to preview a single component.
+	RootComponent string
 }
 
 // DatasetPayload carries dataset results through pipeline hooks.
@@ -447,7 +453,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.RootComponent)
 
 	// End render step
 	if opts.ExecutionPlan != nil {

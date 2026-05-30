@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
+import { EMBEDDABLE_KINDS } from './embeddable';
 
 /**
  * CodeLens provider for Bino YAML manifests.
@@ -47,12 +48,12 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
             return docPath === currentPath;
         });
 
-        // If no indexed docs, try to parse inline from the current document
-        if (fileDocs.length === 0) {
-            return this.parseCodeLensesFromDocument(document, text);
-        }
-
         const lines = text.split('\n');
+
+        // If no indexed datasets, fall back to parsing them inline from the document.
+        if (fileDocs.length === 0) {
+            codeLenses.push(...this.parseCodeLensesFromDocument(document, text));
+        }
 
         // For each DataSource/DataSet in this file, find the apiVersion line and add CodeLens
         for (const doc of fileDocs) {
@@ -75,6 +76,31 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
             });
 
             codeLenses.push(codeLens);
+        }
+
+        // For each embeddable document in this file, add an embedded-preview CodeLens
+        const artefactDocs = this.indexer
+            .getDocuments(EMBEDDABLE_KINDS)
+            .filter(doc => doc.file.replace(/\\/g, '/') === filePath.replace(/\\/g, '/'));
+
+        for (const doc of artefactDocs) {
+            if (token.isCancellationRequested) {
+                break;
+            }
+
+            const lineNumber = this.findApiVersionLine(lines, doc.position);
+            if (lineNumber === -1) {
+                continue;
+            }
+
+            const range = new vscode.Range(lineNumber, 0, lineNumber, 0);
+
+            codeLenses.push(new vscode.CodeLens(range, {
+                title: '$(preview) Preview (Embedded)',
+                command: 'bino.previewArtefactEmbedded',
+                arguments: [doc],
+                tooltip: `Open embedded preview of ${doc.kind} "${doc.name}"`
+            }));
         }
 
         return codeLenses;

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
+import { EMBEDDABLE_KINDS } from './embeddable';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -17,6 +18,11 @@ export class BinoPreviewManager {
     private indexer: WorkspaceIndexer | undefined;
     private daemonClient: DaemonClient | undefined;
     private usingDaemonPreview = false;
+
+    // Embedded single-artefact preview (chrome-free /__embedding/{name} view)
+    private artefactPanel: vscode.WebviewPanel | undefined;
+    private currentArtefact: { name: string; kind: string } | undefined;
+    private artefactFollowDisposables: vscode.Disposable[] = [];
 
     // Event emitter for status changes
     private _onStatusChange = new vscode.EventEmitter<PreviewStatus>();
@@ -290,6 +296,248 @@ export class BinoPreviewManager {
         this.previewPanel.onDidDispose(() => {
             this.previewPanel = undefined;
         });
+    }
+
+    /**
+     * Open the embedded single-artefact preview (chrome-free /__embedding/{name}).
+     * Auto-follows the active editor while the panel is open.
+     * @param target Optional artefact document from a tree item or CodeLens.
+     */
+    async previewArtefactEmbedded(target?: LSPDocument): Promise<void> {
+        let artefact = target
+            ? { name: target.name, kind: target.kind }
+            : this.resolveActiveArtefact();
+
+        // No explicit target and nothing embeddable under the cursor: ask.
+        if (!artefact && !target) {
+            artefact = await this.pickArtefact();
+            if (!artefact) {
+                return; // user cancelled
+            }
+        }
+        if (!artefact) {
+            vscode.window.showInformationMessage('No embeddable artefact selected');
+            return;
+        }
+
+        // Ensure the preview server is running.
+        if (this.previewStatus !== 'running') {
+            await this.startPreview();
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
+        this.currentArtefact = artefact;
+
+        if (!this.artefactPanel) {
+            this.artefactPanel = vscode.window.createWebviewPanel(
+                'binoArtefactPreview',
+                `Embed: ${artefact.name}`,
+                vscode.ViewColumn.Beside,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
+                }
+            );
+
+            this.artefactPanel.onDidDispose(() => {
+                this.artefactPanel = undefined;
+                this.currentArtefact = undefined;
+                this.disposeArtefactFollow();
+            });
+
+            this.registerArtefactFollow();
+        }
+
+        this.artefactPanel.reveal(vscode.ViewColumn.Beside);
+        this.artefactPanel.title = `Embed: ${artefact.name}`;
+        this.artefactPanel.webview.html = this.getEmbeddedWebviewContent(this.getPreviewPort(), artefact.name, artefact.kind);
+    }
+
+    /** Switch the embedded preview to another artefact without rebuilding the webview (keeps SSE alive). */
+    private switchArtefact(name: string, kind: string): void {
+        if (!this.artefactPanel || this.currentArtefact?.name === name) {
+            return;
+        }
+        this.currentArtefact = { name, kind };
+        this.artefactPanel.title = `Embed: ${name}`;
+        this.artefactPanel.webview.postMessage({ type: 'bino:setArtefact', name, kind });
+    }
+
+    /**
+     * Resolve the embeddable artefact at the active editor's cursor.
+     * Returns undefined when the active file holds no ReportArtefact/DocumentArtefact
+     * (e.g. a dependency or a LiveReportArtefact) so the caller keeps the last artefact.
+     */
+    private resolveActiveArtefact(): { name: string; kind: string } | undefined {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || !this.indexer) {
+            return undefined;
+        }
+        const doc = editor.document;
+        const cursorLine = editor.selection.active.line; // 0-based
+
+        const filePath = doc.uri.fsPath.replace(/\\/g, '/');
+        const candidates = this.indexer
+            .getDocuments(EMBEDDABLE_KINDS)
+            .filter(d => d.file.replace(/\\/g, '/') === filePath);
+
+        if (candidates.length === 0) {
+            return undefined; // dependency / non-artefact → keep last
+        }
+
+        // Pick the candidate whose start line is the greatest startLine <= cursorLine.
+        const withLines = candidates.map(d => ({ d, startLine: this.findDocumentLine(doc, d.position) }));
+        let chosen = withLines[0];
+        for (const c of withLines) {
+            if (c.startLine <= cursorLine && c.startLine >= chosen.startLine) {
+                chosen = c;
+            }
+        }
+        return { name: chosen.d.name, kind: chosen.d.kind };
+    }
+
+    /** Prompt the user to choose an embeddable artefact. */
+    private async pickArtefact(): Promise<{ name: string; kind: string } | undefined> {
+        const artefacts = this.indexer?.getDocuments(EMBEDDABLE_KINDS) ?? [];
+        if (artefacts.length === 0) {
+            vscode.window.showInformationMessage('No embeddable documents found in workspace');
+            return undefined;
+        }
+        const items = artefacts.map(a => ({ label: a.name, description: a.kind }));
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a document to preview (embedded)',
+            title: 'Bino: Preview (Embedded)'
+        });
+        return picked ? { name: picked.label, kind: picked.description! } : undefined;
+    }
+
+    /** Follow the active editor while the embedded panel is open. */
+    private registerArtefactFollow(): void {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const followNow = () => {
+            const next = this.resolveActiveArtefact();
+            if (next) {
+                this.switchArtefact(next.name, next.kind);
+            }
+            // next === undefined → editing a dependency/non-artefact → keep last
+        };
+        const debounced = () => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+            timer = setTimeout(followNow, 200);
+        };
+        this.artefactFollowDisposables.push(
+            vscode.window.onDidChangeActiveTextEditor(() => followNow()),
+            vscode.window.onDidChangeTextEditorSelection(debounced)
+        );
+    }
+
+    /** Tear down the active-editor follow listeners. */
+    private disposeArtefactFollow(): void {
+        for (const d of this.artefactFollowDisposables) {
+            d.dispose();
+        }
+        this.artefactFollowDisposables = [];
+    }
+
+    /** Generate the embedded webview HTML: chrome-free artefact iframe + SSE auto-reload. */
+    private getEmbeddedWebviewContent(port: number, name: string, kind: string): string {
+        const base = `http://localhost:${port}`;
+        const csp = [
+            "default-src 'none'",
+            "img-src http://localhost:* http://127.0.0.1:* data:",
+            "style-src 'unsafe-inline'",
+            "script-src 'unsafe-inline'",
+            "frame-src http://localhost:* http://127.0.0.1:*",
+            "connect-src http://localhost:* http://127.0.0.1:*"
+        ].join('; ');
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bino Artefact Preview</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--vscode-editor-background);
+            color: var(--vscode-foreground);
+            font-family: var(--vscode-font-family);
+        }
+        #bar {
+            height: 24px;
+            line-height: 24px;
+            padding: 0 8px;
+            font-size: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        #status { opacity: 0.7; }
+        #frame {
+            width: 100%;
+            height: calc(100% - 25px);
+            border: none;
+            display: block;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="bar"><span id="title"></span><span id="status"></span></div>
+    <iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <script>
+        const base = ${JSON.stringify(base)};
+        let currentName = ${JSON.stringify(name)};
+        let currentKind = ${JSON.stringify(kind)};
+        const frame = document.getElementById('frame');
+        const titleEl = document.getElementById('title');
+        const statusEl = document.getElementById('status');
+
+        function setStatus(s) { statusEl.textContent = s ? '(' + s + ')' : ''; }
+        function load(reason) {
+            titleEl.textContent = currentName;
+            frame.dataset.loaded = '';
+            frame.src = base + '/__embedding/' + encodeURIComponent(currentName)
+                + '?kind=' + encodeURIComponent(currentKind) + '&t=' + Date.now();
+            setStatus(reason);
+        }
+        frame.addEventListener('load', () => { frame.dataset.loaded = '1'; setStatus(''); });
+        load('loading');
+
+        // One delayed retry to cover the boot 503 race.
+        setTimeout(() => { if (!frame.dataset.loaded) { load('retry'); } }, 1500);
+
+        // Reload on preview-server refresh events (embedding cache is reset each refresh).
+        function connect() {
+            let es;
+            try { es = new EventSource(base + '/__preview/events'); } catch (e) { return; }
+            es.addEventListener('ready', () => load('ready'));
+            es.addEventListener('refresh-done', () => load('updated'));
+            es.addEventListener('path-changed', () => load('updated'));
+            // EventSource auto-reconnects on error.
+        }
+        connect();
+
+        // Switch artefact (from the extension) without rebuilding the document.
+        window.addEventListener('message', (event) => {
+            const msg = event.data;
+            if (msg && msg.type === 'bino:setArtefact') {
+                currentName = msg.name;
+                currentKind = msg.kind;
+                load('switch');
+            }
+        });
+    </script>
+</body>
+</html>`;
     }
 
     /** Handle reveal source message from preview webview */
@@ -596,6 +844,8 @@ export class BinoPreviewManager {
     dispose(): void {
         this.stopPreview();
         this.previewPanel?.dispose();
+        this.artefactPanel?.dispose();
+        this.disposeArtefactFollow();
         this.statusBarItem.dispose();
         this._onStatusChange.dispose();
     }

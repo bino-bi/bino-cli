@@ -298,6 +298,12 @@
         "category": "Bino"
       },
       {
+        "command": "bino.previewArtefactEmbedded",
+        "title": "Preview (Embedded)",
+        "category": "Bino",
+        "icon": "$(preview)"
+      },
+      {
         "command": "bino.validateWithQueries",
         "title": "Validate with Queries",
         "category": "Bino"
@@ -371,23 +377,28 @@
       ],
       "view/item/context": [
         {
+          "command": "bino.previewArtefactEmbedded",
+          "when": "view == binoDocuments && viewItem == binoArtefact",
+          "group": "preview@1"
+        },
+        {
           "command": "bino.openFirstProblem",
-          "when": "view == binoDocuments && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "navigation"
         },
         {
           "command": "bino.showGraphForItem",
-          "when": "view == binoDocuments && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "graph@1"
         },
         {
           "command": "bino.showDependenciesForItem",
-          "when": "view == binoDocuments && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "graph@2"
         },
         {
           "command": "bino.showDependentsForItem",
-          "when": "view == binoDocuments && viewItem == binoDocument",
+          "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "graph@3"
         }
       ],

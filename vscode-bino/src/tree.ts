@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { BinoValidator } from './validation';
+import { isEmbeddableKind } from './embeddable';
 
 /**
  * Represents an inline child component within a LayoutPage or LayoutCard.
@@ -51,8 +52,9 @@ export class BinoTreeItem extends vscode.TreeItem {
                 arguments: [inlineChild]
             };
         } else if (document) {
-            // This is a document item
-            this.contextValue = 'binoDocument';
+            // This is a document item; embeddable kinds get a distinct contextValue
+            // so the embedded-preview action only shows on documents that can render.
+            this.contextValue = isEmbeddableKind(document.kind) ? 'binoArtefact' : 'binoDocument';
             this.description = this.getRelativePath(document.file);
             this.tooltip = new vscode.MarkdownString(
                 `**${document.name}**\n\n` +

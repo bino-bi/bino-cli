@@ -496,7 +496,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "success returns html with cache headers",
-			embedFn: func(context.Context, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string) ([]byte, error) {
 				return []byte("<html>ok</html>"), nil
 			},
 			pathName:   "foo",
@@ -508,7 +508,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "HTTPError 404 propagates",
-			embedFn: func(context.Context, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string) ([]byte, error) {
 				return nil, NewHTTPError(http.StatusNotFound, "no embeddable artefact named \"foo\"")
 			},
 			pathName:   "foo",
@@ -517,7 +517,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "HTTPError 503 propagates",
-			embedFn: func(context.Context, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string) ([]byte, error) {
 				return nil, NewHTTPError(http.StatusServiceUnavailable, "still booting")
 			},
 			pathName:   "foo",
@@ -526,7 +526,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "plain error maps to 500",
-			embedFn: func(context.Context, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string) ([]byte, error) {
 				return nil, errors.New("boom")
 			},
 			pathName:   "foo",
@@ -535,7 +535,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name:       "missing path value returns 404",
-			embedFn:    func(context.Context, string) ([]byte, error) { return []byte("ok"), nil },
+			embedFn:    func(context.Context, string, string) ([]byte, error) { return []byte("ok"), nil },
 			pathName:   "",
 			method:     http.MethodGet,
 			wantStatus: http.StatusNotFound,
