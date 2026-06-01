@@ -496,21 +496,33 @@ func buildConnectionSecretDocument(data ConnectionSecretManifestData) *schema.Do
 	}
 
 	switch data.Type {
-	case ConnectionSecretTypePostgres, ConnectionSecretTypeMySQL:
-		spec.PasswordFromEnv = data.PasswordFromEnv
+	case ConnectionSecretTypePostgres:
+		spec.Postgres = &schema.PostgresAuthSpec{PasswordFromEnv: data.PasswordFromEnv}
 
-	case ConnectionSecretTypeS3, ConnectionSecretTypeGCS, ConnectionSecretTypeR2:
-		spec.KeyID = data.KeyID
-		spec.SecretFromEnv = data.SecretEnv
+	case ConnectionSecretTypeMySQL:
+		spec.MySQL = &schema.MySQLAuthSpec{PasswordFromEnv: data.PasswordFromEnv}
+
+	case ConnectionSecretTypeS3:
+		spec.S3 = &schema.S3AuthSpec{KeyID: data.KeyID, SecretFromEnv: data.SecretEnv}
+
+	case ConnectionSecretTypeGCS:
+		spec.GCS = &schema.GCSAuthSpec{KeyID: data.KeyID, SecretFromEnv: data.SecretEnv}
+
+	case ConnectionSecretTypeR2:
+		spec.R2 = &schema.R2AuthSpec{KeyID: data.KeyID, SecretFromEnv: data.SecretEnv}
 
 	case ConnectionSecretTypeHTTP:
-		spec.Username = data.Username
-		spec.PasswordFromEnv = data.Password
-		spec.BearerTokenFromEnv = data.BearerToken
+		spec.HTTP = &schema.HTTPAuthSpec{
+			Username:           data.Username,
+			PasswordFromEnv:    data.Password,
+			BearerTokenFromEnv: data.BearerToken,
+		}
 
 	case ConnectionSecretTypeAzure:
-		spec.ConnectionStringFromEnv = data.ConnectionString
-		spec.AccountKeyFromEnv = data.AccountKey
+		spec.Azure = &schema.AzureAuthSpec{
+			ConnectionStringFromEnv: data.ConnectionString,
+			AccountKeyFromEnv:       data.AccountKey,
+		}
 
 	default:
 	}

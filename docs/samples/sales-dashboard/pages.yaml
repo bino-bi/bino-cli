@@ -4,18 +4,15 @@ metadata:
   name: sales-dashboard-page
 spec:
   pageLayout: 2x2
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "Revenue"
-        unit: "EUR k"
-    titleScenarios: "AC, PY, BU"
-    dateEnd: "2025-06-30"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - Monthly Sales Report"
-    code: "S.01"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PY, BU"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - Monthly Sales Report"
   children:
     - kind: ChartStructure
       metadata:
@@ -75,18 +72,15 @@ kind: LayoutPage
 metadata:
   name: chart-structure-page
 spec:
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "Revenue"
-        unit: "EUR k"
-    titleScenarios: "AC, PY"
-    dateEnd: "2025-06-30"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - Revenue Analysis"
-    code: "S.02"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PY"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - Revenue Analysis"
   children:
     - kind: ChartStructure
       metadata:
@@ -111,18 +105,15 @@ kind: LayoutPage
 metadata:
   name: chart-time-page
 spec:
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "Revenue"
-        unit: "EUR k"
-    titleScenarios: "AC, PY, FC"
-    dateEnd: "2025-12-31"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - Revenue Trend"
-    code: "S.03"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PY, FC"
+  titleDateEnd: "2025-12-31"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - Revenue Trend"
   children:
     - kind: ChartTime
       metadata:
@@ -144,18 +135,15 @@ kind: LayoutPage
 metadata:
   name: table-page
 spec:
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "P&L"
-        unit: "EUR k"
-    titleScenarios: "AC, PY, BU"
-    dateEnd: "2025-06-30"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - Financial Summary"
-    code: "S.04"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "P&L"
+      unit: "EUR k"
+  titleScenarios: "AC, PY, BU"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - Financial Summary"
   children:
     - kind: Table
       metadata:
@@ -177,17 +165,14 @@ kind: LayoutPage
 metadata:
   name: text-page
 spec:
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "Executive Summary"
-        unit: ""
-    dateEnd: "2025-06-30"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - Management Report"
-    code: "S.05"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Executive Summary"
+      unit: ""
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - Management Report"
   children:
     - kind: Text
       metadata:
@@ -216,23 +201,20 @@ metadata:
   name: layout-card-page
 spec:
   pageLayout: 2x2
-  titleRow:
-    businessUnit: "Acme Corp"
-    measures:
-      - name: "KPI Dashboard"
-        unit: ""
-    dateEnd: "2025-06-30"
-    dateFormat: month
-    dateLink: interval
-  footer:
-    text: "Acme Corp - KPI Cards"
-    code: "S.06"
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "KPI Dashboard"
+      unit: ""
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  titleDateLink: interval
+  footerText: "Acme Corp - KPI Cards"
   children:
     - kind: LayoutCard
       metadata:
         name: revenue_card
       spec:
-        title: "Revenue Overview"
+        titleBusinessUnit: "Revenue Overview"
         children:
           - kind: ChartStructure
             spec:
@@ -248,7 +230,7 @@ spec:
       metadata:
         name: trend_card
       spec:
-        title: "Revenue Trend"
+        titleBusinessUnit: "Revenue Trend"
         children:
           - kind: ChartTime
             spec:
@@ -265,7 +247,7 @@ spec:
       metadata:
         name: table_card
       spec:
-        title: "Financial Summary"
+        titleBusinessUnit: "Financial Summary"
         children:
           - kind: Table
             spec:
@@ -280,7 +262,7 @@ spec:
       metadata:
         name: summary_card
       spec:
-        title: "Executive Summary"
+        titleBusinessUnit: "Executive Summary"
         children:
           - kind: Text
             spec:

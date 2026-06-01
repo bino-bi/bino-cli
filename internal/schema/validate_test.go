@@ -105,7 +105,7 @@ spec:
   query: SELECT 1
 `,
 			wantPath:    "(root)",
-			wantMessage: "kind is required",
+			wantMessage: "missing property 'kind'",
 		},
 		{
 			name: "missing metadata.name",
@@ -118,7 +118,7 @@ spec:
   query: SELECT 1
 `,
 			wantPath:    "metadata",
-			wantMessage: "name is required",
+			wantMessage: "missing property 'name'",
 		},
 		{
 			name: "missing spec",
@@ -129,7 +129,7 @@ metadata:
   name: test
 `,
 			wantPath:    "(root)",
-			wantMessage: "spec is required",
+			wantMessage: "missing property 'spec'",
 		},
 	}
 
@@ -181,7 +181,7 @@ spec:
   query: SELECT 1
 `,
 			wantPath:    "metadata.constraints",
-			wantMessage: "Invalid type",
+			wantMessage: "want array",
 		},
 		{
 			name: "labels not object",
@@ -195,7 +195,7 @@ spec:
   query: SELECT 1
 `,
 			wantPath:    "metadata.labels",
-			wantMessage: "Invalid type",
+			wantMessage: "want object",
 		},
 	}
 

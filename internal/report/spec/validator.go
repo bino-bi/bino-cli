@@ -82,7 +82,7 @@ func getSuggestion(err SchemaError) string {
 	field := strings.ToLower(err.Field)
 
 	// Missing required field
-	if strings.Contains(desc, "is required") {
+	if strings.Contains(desc, "missing propert") {
 		if strings.Contains(field, "kind") {
 			return "Add 'kind: <DocumentType>' to specify the document type"
 		}
@@ -100,22 +100,22 @@ func getSuggestion(err SchemaError) string {
 	}
 
 	// Type mismatch
-	if strings.Contains(desc, "invalid type") {
-		if strings.Contains(desc, "expected string") {
+	if strings.Contains(desc, ", want ") {
+		if strings.Contains(desc, "want string") {
 			return "Wrap the value in quotes to make it a string"
 		}
-		if strings.Contains(desc, "expected array") {
+		if strings.Contains(desc, "want array") {
 			return "Use YAML list syntax with '- ' prefix for each item"
 		}
-		if strings.Contains(desc, "expected object") {
+		if strings.Contains(desc, "want object") {
 			return "Use YAML mapping syntax with 'key: value' pairs"
 		}
 	}
 
 	// Additional properties
-	if strings.Contains(desc, "additional property") {
+	if strings.Contains(desc, "additional propert") {
 		// Extract property name from description
-		re := regexp.MustCompile(`"([^"]+)"`)
+		re := regexp.MustCompile(`'([^']+)'`)
 		if matches := re.FindStringSubmatch(err.Description); len(matches) > 1 {
 			return fmt.Sprintf("'%s' is not a valid field; check for typos", matches[1])
 		}

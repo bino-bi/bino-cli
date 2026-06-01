@@ -16,30 +16,102 @@ const (
 )
 
 // ConnectionSecretSpec represents the spec section of a ConnectionSecret manifest.
+// Credentials are nested under a type-specific auth block (postgres, mysql, s3,
+// gcs, http, r2, azure, huggingface) that must match the secret Type. Connection
+// details (host, port, database, user) live on the DataSource, not here.
 type ConnectionSecretSpec struct {
 	// Type is the connection secret type (required).
 	Type ConnectionSecretType `yaml:"type" json:"type"`
 
-	// PasswordFromEnv is the environment variable containing the password (postgres, mysql, webdav).
+	// Scope optionally limits where the secret applies (for example "s3://my-bucket").
+	Scope string `yaml:"scope,omitempty" json:"scope,omitempty"`
+
+	// Provider is the secret provider (defaults to "config"); use "credential_chain" for auto-discovery.
+	Provider string `yaml:"provider,omitempty" json:"provider,omitempty"`
+
+	// Type-specific credential blocks. Set the one matching Type.
+	Postgres    *PostgresAuthSpec    `yaml:"postgres,omitempty" json:"postgres,omitempty"`
+	MySQL       *MySQLAuthSpec       `yaml:"mysql,omitempty" json:"mysql,omitempty"`
+	S3          *S3AuthSpec          `yaml:"s3,omitempty" json:"s3,omitempty"`
+	GCS         *GCSAuthSpec         `yaml:"gcs,omitempty" json:"gcs,omitempty"`
+	HTTP        *HTTPAuthSpec        `yaml:"http,omitempty" json:"http,omitempty"`
+	R2          *R2AuthSpec          `yaml:"r2,omitempty" json:"r2,omitempty"`
+	Azure       *AzureAuthSpec       `yaml:"azure,omitempty" json:"azure,omitempty"`
+	Huggingface *HuggingfaceAuthSpec `yaml:"huggingface,omitempty" json:"huggingface,omitempty"`
+}
+
+// PostgresAuthSpec holds PostgreSQL credentials.
+type PostgresAuthSpec struct {
+	Password        string `yaml:"password,omitempty" json:"password,omitempty"`
 	PasswordFromEnv string `yaml:"passwordFromEnv,omitempty" json:"passwordFromEnv,omitempty"`
+}
 
-	// KeyID is the access key ID (s3, gcs, r2).
-	KeyID string `yaml:"keyId,omitempty" json:"keyId,omitempty"`
+// MySQLAuthSpec holds MySQL credentials.
+type MySQLAuthSpec struct {
+	Password        string `yaml:"password,omitempty" json:"password,omitempty"`
+	PasswordFromEnv string `yaml:"passwordFromEnv,omitempty" json:"passwordFromEnv,omitempty"`
+}
 
-	// SecretFromEnv is the environment variable containing the secret key (s3, gcs, r2).
+// S3AuthSpec holds AWS S3 credentials and configuration.
+type S3AuthSpec struct {
+	KeyID               string `yaml:"keyId,omitempty" json:"keyId,omitempty"`
+	KeyIDFromEnv        string `yaml:"keyIdFromEnv,omitempty" json:"keyIdFromEnv,omitempty"`
+	Secret              string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	SecretFromEnv       string `yaml:"secretFromEnv,omitempty" json:"secretFromEnv,omitempty"`
+	Region              string `yaml:"region,omitempty" json:"region,omitempty"`
+	SessionToken        string `yaml:"sessionToken,omitempty" json:"sessionToken,omitempty"`
+	SessionTokenFromEnv string `yaml:"sessionTokenFromEnv,omitempty" json:"sessionTokenFromEnv,omitempty"`
+	Endpoint            string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	URLStyle            string `yaml:"urlStyle,omitempty" json:"urlStyle,omitempty"`
+}
+
+// GCSAuthSpec holds Google Cloud Storage credentials.
+type GCSAuthSpec struct {
+	KeyID         string `yaml:"keyId,omitempty" json:"keyId,omitempty"`
+	KeyIDFromEnv  string `yaml:"keyIdFromEnv,omitempty" json:"keyIdFromEnv,omitempty"`
+	Secret        string `yaml:"secret,omitempty" json:"secret,omitempty"`
 	SecretFromEnv string `yaml:"secretFromEnv,omitempty" json:"secretFromEnv,omitempty"`
+}
 
-	// Username is the HTTP basic auth username (http, webdav).
-	Username string `yaml:"username,omitempty" json:"username,omitempty"`
+// HTTPAuthSpec holds HTTP/HTTPS authentication credentials and proxy configuration.
+type HTTPAuthSpec struct {
+	Username                 string `yaml:"username,omitempty" json:"username,omitempty"`
+	UsernameFromEnv          string `yaml:"usernameFromEnv,omitempty" json:"usernameFromEnv,omitempty"`
+	Password                 string `yaml:"password,omitempty" json:"password,omitempty"`
+	PasswordFromEnv          string `yaml:"passwordFromEnv,omitempty" json:"passwordFromEnv,omitempty"`
+	BearerToken              string `yaml:"bearerToken,omitempty" json:"bearerToken,omitempty"`
+	BearerTokenFromEnv       string `yaml:"bearerTokenFromEnv,omitempty" json:"bearerTokenFromEnv,omitempty"`
+	HTTPProxy                string `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
+	HTTPProxyFromEnv         string `yaml:"httpProxyFromEnv,omitempty" json:"httpProxyFromEnv,omitempty"`
+	HTTPProxyUsername        string `yaml:"httpProxyUsername,omitempty" json:"httpProxyUsername,omitempty"`
+	HTTPProxyUsernameFromEnv string `yaml:"httpProxyUsernameFromEnv,omitempty" json:"httpProxyUsernameFromEnv,omitempty"`
+	HTTPProxyPassword        string `yaml:"httpProxyPassword,omitempty" json:"httpProxyPassword,omitempty"`
+	HTTPProxyPasswordFromEnv string `yaml:"httpProxyPasswordFromEnv,omitempty" json:"httpProxyPasswordFromEnv,omitempty"`
+}
 
-	// BearerTokenFromEnv is the environment variable containing the bearer token (http).
-	BearerTokenFromEnv string `yaml:"bearerTokenFromEnv,omitempty" json:"bearerTokenFromEnv,omitempty"`
+// R2AuthSpec holds Cloudflare R2 credentials and configuration.
+type R2AuthSpec struct {
+	KeyID         string `yaml:"keyId,omitempty" json:"keyId,omitempty"`
+	KeyIDFromEnv  string `yaml:"keyIdFromEnv,omitempty" json:"keyIdFromEnv,omitempty"`
+	Secret        string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	SecretFromEnv string `yaml:"secretFromEnv,omitempty" json:"secretFromEnv,omitempty"`
+	AccountID     string `yaml:"accountId,omitempty" json:"accountId,omitempty"`
+	Endpoint      string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+}
 
-	// ConnectionStringFromEnv is the environment variable containing the connection string (azure).
+// AzureAuthSpec holds Azure Blob Storage credentials.
+type AzureAuthSpec struct {
+	ConnectionString        string `yaml:"connectionString,omitempty" json:"connectionString,omitempty"`
 	ConnectionStringFromEnv string `yaml:"connectionStringFromEnv,omitempty" json:"connectionStringFromEnv,omitempty"`
+	AccountName             string `yaml:"accountName,omitempty" json:"accountName,omitempty"`
+	AccountKey              string `yaml:"accountKey,omitempty" json:"accountKey,omitempty"`
+	AccountKeyFromEnv       string `yaml:"accountKeyFromEnv,omitempty" json:"accountKeyFromEnv,omitempty"`
+}
 
-	// AccountKeyFromEnv is the environment variable containing the account key (azure).
-	AccountKeyFromEnv string `yaml:"accountKeyFromEnv,omitempty" json:"accountKeyFromEnv,omitempty"`
+// HuggingfaceAuthSpec holds Hugging Face credentials.
+type HuggingfaceAuthSpec struct {
+	Token        string `yaml:"token,omitempty" json:"token,omitempty"`
+	TokenFromEnv string `yaml:"tokenFromEnv,omitempty" json:"tokenFromEnv,omitempty"`
 }
 
 // LayoutPageSpec represents the spec section of a LayoutPage manifest.
