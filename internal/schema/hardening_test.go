@@ -187,7 +187,7 @@ func TestValidate_Scale(t *testing.T) {
 	}{
 		{"none", false},
 		{"auto", false},
-		{"0.8", false},  // numeric string (documented form)
+		{"0.8", false},   // numeric string (documented form)
 		{`"0.8"`, false}, // explicitly quoted numeric string
 		{"1.2", false},
 		{"atuo", true}, // typo of "auto"
