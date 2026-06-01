@@ -469,8 +469,8 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
-    "@types/vscode": "1.85.0",
+    "@types/node": "^25.9.1",
+    "@types/vscode": "1.120.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "esbuild": "^0.28.0",
@@ -478,6 +478,6 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "yaml": "^2.8.3"
+    "yaml": "^2.9.0"
   }
 }
