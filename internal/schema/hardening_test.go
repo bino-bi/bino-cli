@@ -65,3 +65,114 @@ spec:
 		t.Fatal("typo in ref override spec should fail")
 	}
 }
+
+// TestValidate_Strictness covers the additionalProperties:false cases (Issue 2):
+// misspelled spec fields, unknown top-level keys, and unknown keys inside a
+// ConnectionSecret are all rejected, while valid documents still pass.
+func TestValidate_Strictness(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "ChartStructure spec typo rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: chart
+spec:
+  dataset: revenue
+  scenrios: [ac1]
+`,
+			wantErr: true,
+		},
+		{
+			name: "unknown top-level key rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+foo: bar
+`,
+			wantErr: true,
+		},
+		{
+			name: "ConnectionSecret s3 valid",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: my_s3
+spec:
+  type: s3
+  s3:
+    keyId: AKIA
+    secret: shhh
+`,
+			wantErr: false,
+		},
+		{
+			name: "ConnectionSecret s3 with unknown key rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: my_s3
+spec:
+  type: s3
+  s3:
+    keyId: AKIA
+  foo: bar
+`,
+			wantErr: true,
+		},
+		{
+			name: "Asset with localPath source valid",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./logo.png
+`,
+			wantErr: false,
+		},
+		{
+			name: "Asset source with two variants rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./logo.png
+    remoteURL: https://example.com/logo.png
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

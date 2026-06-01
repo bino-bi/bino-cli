@@ -4,6 +4,7 @@
   "title": "Bino Report Bundle",
   "description": "Configuration documents used by bino build to collect data and render reports.",
   "type": "object",
+  "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "properties": {
     "apiVersion": {
@@ -318,8 +319,14 @@
   "$defs": {
     "metadata": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["name"],
       "properties": {
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/layoutPageParamSpec" },
+          "description": "Parameter definitions for this LayoutPage. When the page is referenced with params, these define the expected parameter names, types, and validation rules."
+        },
         "name": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
@@ -387,6 +394,7 @@
     },
     "assetSpec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type", "mediaType", "source"],
       "properties": {
         "type": {
@@ -406,36 +414,27 @@
     },
     "assetSource": {
       "type": "object",
-      "oneOf": [
-        {
-          "required": ["inlineBase64"],
-          "properties": {
-            "inlineBase64": {
-              "type": "string",
-              "contentEncoding": "base64",
-              "description": "Base64-encoded asset content embedded directly in the manifest. Useful for fully self-contained bundles."
-            }
-          }
+      "additionalProperties": false,
+      "properties": {
+        "inlineBase64": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Base64-encoded asset content embedded directly in the manifest. Useful for fully self-contained bundles."
         },
-        {
-          "required": ["localPath"],
-          "properties": {
-            "localPath": {
-              "type": "string",
-              "description": "Relative or absolute path to a local asset file (for example './assets/logo.png'). Resolved relative to the manifest file."
-            }
-          }
+        "localPath": {
+          "type": "string",
+          "description": "Relative or absolute path to a local asset file (for example './assets/logo.png'). Resolved relative to the manifest file."
         },
-        {
-          "required": ["remoteURL"],
-          "properties": {
-            "remoteURL": {
-              "type": "string",
-              "format": "uri",
-              "description": "HTTP/HTTPS URL pointing to a remotely hosted asset (for example 'https://example.com/logo.svg')."
-            }
-          }
+        "remoteURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "HTTP/HTTPS URL pointing to a remotely hosted asset (for example 'https://example.com/logo.svg')."
         }
+      },
+      "oneOf": [
+        { "required": ["inlineBase64"] },
+        { "required": ["localPath"] },
+        { "required": ["remoteURL"] }
       ]
     },
     "sqlIdentifier": {
@@ -497,6 +496,7 @@
     },
     "inlineSource": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["content"],
       "properties": {
         "content": {
@@ -531,6 +531,7 @@
     },
     "dataSourceSpec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type"],
       "description": "Configuration for a DataSource that collects raw data from files, inline content, or external databases and exposes it as a DuckDB view.",
       "properties": {
@@ -672,6 +673,7 @@
     },
     "sqlConnection": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Connection parameters for 'postgres_query' and 'mysql_query' datasources. This block defines all non-credential connection details (host, port, database, user). Credentials are provided separately via a ConnectionSecret referenced by the 'secret' field.",
       "required": ["host", "port", "database", "user"],
       "properties": {
@@ -720,8 +722,17 @@
         "provider": {
           "type": "string",
           "description": "Secret provider (defaults to 'config'). Use 'credential_chain' for automatic discovery."
-        }
+        },
+        "postgres": { "$ref": "#/$defs/postgresAuthSpec" },
+        "mysql": { "$ref": "#/$defs/mysqlAuthSpec" },
+        "s3": { "$ref": "#/$defs/s3AuthSpec" },
+        "gcs": { "$ref": "#/$defs/gcsAuthSpec" },
+        "http": { "$ref": "#/$defs/httpAuthSpec" },
+        "r2": { "$ref": "#/$defs/r2AuthSpec" },
+        "azure": { "$ref": "#/$defs/azureAuthSpec" },
+        "huggingface": { "$ref": "#/$defs/huggingfaceAuthSpec" }
       },
+      "additionalProperties": false,
       "allOf": [
         {
           "if": {
@@ -730,10 +741,7 @@
             }
           },
           "then": {
-            "required": ["postgres"],
-            "properties": {
-              "postgres": { "$ref": "#/$defs/postgresAuthSpec" }
-            }
+            "required": ["postgres"]
           }
         },
         {
@@ -743,10 +751,7 @@
             }
           },
           "then": {
-            "required": ["mysql"],
-            "properties": {
-              "mysql": { "$ref": "#/$defs/mysqlAuthSpec" }
-            }
+            "required": ["mysql"]
           }
         },
         {
@@ -756,10 +761,7 @@
             }
           },
           "then": {
-            "required": ["s3"],
-            "properties": {
-              "s3": { "$ref": "#/$defs/s3AuthSpec" }
-            }
+            "required": ["s3"]
           }
         },
         {
@@ -769,10 +771,7 @@
             }
           },
           "then": {
-            "required": ["gcs"],
-            "properties": {
-              "gcs": { "$ref": "#/$defs/gcsAuthSpec" }
-            }
+            "required": ["gcs"]
           }
         },
         {
@@ -782,10 +781,7 @@
             }
           },
           "then": {
-            "required": ["http"],
-            "properties": {
-              "http": { "$ref": "#/$defs/httpAuthSpec" }
-            }
+            "required": ["http"]
           }
         },
         {
@@ -795,10 +791,7 @@
             }
           },
           "then": {
-            "required": ["r2"],
-            "properties": {
-              "r2": { "$ref": "#/$defs/r2AuthSpec" }
-            }
+            "required": ["r2"]
           }
         },
         {
@@ -808,10 +801,7 @@
             }
           },
           "then": {
-            "required": ["azure"],
-            "properties": {
-              "azure": { "$ref": "#/$defs/azureAuthSpec" }
-            }
+            "required": ["azure"]
           }
         },
         {
@@ -821,16 +811,14 @@
             }
           },
           "then": {
-            "required": ["huggingface"],
-            "properties": {
-              "huggingface": { "$ref": "#/$defs/huggingfaceAuthSpec" }
-            }
+            "required": ["huggingface"]
           }
         }
       ]
     },
     "postgresAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "PostgreSQL credentials. Connection details (host, port, database, user) must be defined in the DataSource connection block.",
       "properties": {
         "password": {
@@ -849,6 +837,7 @@
     },
     "mysqlAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "MySQL credentials. Connection details (host, port, database, user) must be defined in the DataSource connection block.",
       "properties": {
         "password": {
@@ -867,6 +856,7 @@
     },
     "s3AuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "AWS S3 authentication configuration.",
       "properties": {
         "keyId": {
@@ -910,6 +900,7 @@
     },
     "gcsAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Google Cloud Storage authentication configuration.",
       "properties": {
         "keyId": {
@@ -932,6 +923,7 @@
     },
     "httpAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "HTTP/HTTPS authentication and proxy configuration.",
       "properties": {
         "username": {
@@ -986,6 +978,7 @@
     },
     "r2AuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Cloudflare R2 authentication configuration.",
       "properties": {
         "keyId": {
@@ -1016,6 +1009,7 @@
     },
     "azureAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Azure Blob Storage authentication configuration.",
       "properties": {
         "connectionString": {
@@ -1042,6 +1036,7 @@
     },
     "huggingfaceAuthSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Hugging Face authentication configuration.",
       "properties": {
         "token": {
@@ -1129,6 +1124,7 @@
     },
     "inlineDataSourceSpec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type"],
       "description": "Inline DataSource definition embedded directly in a DataSet or component. Same structure as dataSourceSpec but without requiring a separate document.",
       "properties": {
@@ -1250,6 +1246,7 @@
     },
     "inlineDataSetSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Inline DataSet definition embedded directly in a component. Supports query, prql, or source fields.",
       "properties": {
         "query": {
@@ -2346,6 +2343,7 @@
     },
     "layoutPageSpec": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "titleBusinessUnit": {
           "type": "string",
@@ -2474,6 +2472,7 @@
     "layoutCardSpec": { "allOf": [{ "$ref": "#/$defs/layoutCardSpecBase" }], "required": ["children"] },
     "layoutCardSpecBase": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Configuration for a LayoutCard component. Cards are containers for child components (charts, tables, text) and support card-specific layout properties.",
       "properties": {
         "titleImage": {
@@ -2609,6 +2608,7 @@
     },
     "layoutChild": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["kind"],
       "properties": {
         "kind": {
@@ -2698,6 +2698,7 @@
     },
     "imageSpec": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Configuration for an Image component. Displays an image from an asset name or URL.",
       "properties": {
         "source": {
@@ -2708,6 +2709,7 @@
     },
     "layoutChildMetadata": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Metadata for inline layout children (children of LayoutPage and LayoutCard).",
       "properties": {
         "name": {
@@ -3111,6 +3113,7 @@
     },
     "treeNode": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["id", "kind"],
       "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, or ChartTime component, either inline or by reference.",
       "properties": {
@@ -3177,6 +3180,7 @@
     },
     "treeLabelSpec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["value"],
       "description": "Configuration for a Label component in a tree node. Labels display simple text or HTML content.",
       "properties": {
@@ -3187,6 +3191,10 @@
         "dataset": {
           "$ref": "#/$defs/datasetRef",
           "description": "Optional dataset binding for template interpolation in the value."
+        },
+        "scale": {
+          "type": ["string", "number"],
+          "description": "Font-size scaling mode. \"none\" disables scaling, \"auto\" auto-scales silently, a positive number (e.g. \"0.8\") sets an explicit factor. When omitted, auto-scales and warns with the applied factor."
         }
       }
     },
@@ -3284,6 +3292,7 @@
     },
     "gridChild": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["row", "column", "kind"],
       "description": "A child (cell) in the grid. Each child specifies its position (row and column) and content, which can be a reference to an existing component or an inline definition.",
       "properties": {
