@@ -351,7 +351,7 @@
         "name": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
-          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily')."
+          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'). For DataSource documents the name is additionally constrained to a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$) because it becomes the DuckDB view name."
         },
         "labels": {
           "type": "object",
@@ -1296,6 +1296,7 @@
         "format": {
           "type": "string",
           "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "default": "xga",
           "description": "Logical page size of the rendered artefact (for example 'xga', 'a4', 'letter')."
         },
@@ -1618,6 +1619,7 @@
         "format": {
           "type": "string",
           "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "default": "xga",
           "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full_hd', '4k')."
         },
@@ -1711,6 +1713,7 @@
         },
         "locale": {
           "type": "string",
+          "pattern": "^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$",
           "default": "de",
           "description": "Locale for the document, used for i18n and the bn-context element (for example 'en', 'de', 'fr')."
         },
@@ -2325,6 +2328,7 @@
         "code": {
           "type": "string",
           "minLength": 1,
+          "pattern": "^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$",
           "description": "Locale code applied to the payload (e.g. de-DE)."
         },
         "namespace": {
