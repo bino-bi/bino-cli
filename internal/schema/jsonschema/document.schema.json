@@ -52,7 +52,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Asset" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -64,7 +65,8 @@
       "if": {
         "properties": {
           "kind": { "const": "DataSource" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -76,7 +78,8 @@
       "if": {
         "properties": {
           "kind": { "const": "DataSet" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -88,7 +91,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Text" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -100,7 +104,8 @@
       "if": {
         "properties": {
           "kind": { "const": "LayoutPage" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -123,7 +128,8 @@
       "if": {
         "properties": {
           "kind": { "const": "LayoutCard" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -135,7 +141,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ChartStructure" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -147,7 +154,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ChartTime" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -159,7 +167,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Tree" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -171,7 +180,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Grid" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -183,7 +193,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Table" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -195,7 +206,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ComponentStyle" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -207,7 +219,8 @@
       "if": {
         "properties": {
           "kind": { "const": "Internationalization" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -219,7 +232,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ScalingGroup" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -231,7 +245,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ReportArtefact" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -243,7 +258,8 @@
       "if": {
         "properties": {
           "kind": { "const": "LiveReportArtefact" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -255,7 +271,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ScreenshotArtefact" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -267,7 +284,8 @@
       "if": {
         "properties": {
           "kind": { "const": "DocumentArtefact" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -279,7 +297,8 @@
       "if": {
         "properties": {
           "kind": { "const": "SigningProfile" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -291,7 +310,8 @@
       "if": {
         "properties": {
           "kind": { "const": "ConnectionSecret" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -303,7 +323,8 @@
       "if": {
         "properties": {
           "kind": { "const": "DataSource" }
-        }
+        },
+        "required": ["kind"]
       },
       "then": {
         "properties": {
@@ -604,7 +625,8 @@
           "if": {
             "properties": {
               "type": { "const": "inline" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "anyOf": [
@@ -617,7 +639,8 @@
           "if": {
             "properties": {
               "type": { "const": "excel" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["path"]
@@ -627,7 +650,8 @@
           "if": {
             "properties": {
               "type": { "const": "csv" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["path"]
@@ -637,7 +661,8 @@
           "if": {
             "properties": {
               "type": { "const": "parquet" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["path"]
@@ -647,7 +672,8 @@
           "if": {
             "properties": {
               "type": { "const": "postgres_query" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["connection", "query"]
@@ -657,14 +683,15 @@
           "if": {
             "properties": {
               "type": { "const": "mysql_query" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["connection", "query"]
           }
         },
         {
-          "if": { "properties": { "type": { "const": "csv" } } },
+          "if": { "properties": { "type": { "const": "csv" } }, "required": ["type"] },
           "then": {
             "not": { "required": ["columns", "columnNames"] }
           }
@@ -738,7 +765,8 @@
           "if": {
             "properties": {
               "type": { "const": "postgres" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["postgres"]
@@ -748,7 +776,8 @@
           "if": {
             "properties": {
               "type": { "const": "mysql" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["mysql"]
@@ -758,7 +787,8 @@
           "if": {
             "properties": {
               "type": { "const": "s3" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["s3"]
@@ -768,7 +798,8 @@
           "if": {
             "properties": {
               "type": { "const": "gcs" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["gcs"]
@@ -778,7 +809,8 @@
           "if": {
             "properties": {
               "type": { "const": "http" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["http"]
@@ -788,7 +820,8 @@
           "if": {
             "properties": {
               "type": { "const": "r2" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["r2"]
@@ -798,7 +831,8 @@
           "if": {
             "properties": {
               "type": { "const": "azure" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["azure"]
@@ -808,7 +842,8 @@
           "if": {
             "properties": {
               "type": { "const": "huggingface" }
-            }
+            },
+            "required": ["type"]
           },
           "then": {
             "required": ["huggingface"]
@@ -1194,7 +1229,7 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "type": { "const": "inline" } } },
+          "if": { "properties": { "type": { "const": "inline" } }, "required": ["type"] },
           "then": {
             "anyOf": [
               { "required": ["inline"] },
@@ -1203,27 +1238,27 @@
           }
         },
         {
-          "if": { "properties": { "type": { "const": "excel" } } },
+          "if": { "properties": { "type": { "const": "excel" } }, "required": ["type"] },
           "then": { "required": ["path"] }
         },
         {
-          "if": { "properties": { "type": { "const": "csv" } } },
+          "if": { "properties": { "type": { "const": "csv" } }, "required": ["type"] },
           "then": { "required": ["path"] }
         },
         {
-          "if": { "properties": { "type": { "const": "parquet" } } },
+          "if": { "properties": { "type": { "const": "parquet" } }, "required": ["type"] },
           "then": { "required": ["path"] }
         },
         {
-          "if": { "properties": { "type": { "const": "postgres_query" } } },
+          "if": { "properties": { "type": { "const": "postgres_query" } }, "required": ["type"] },
           "then": { "required": ["connection", "query"] }
         },
         {
-          "if": { "properties": { "type": { "const": "mysql_query" } } },
+          "if": { "properties": { "type": { "const": "mysql_query" } }, "required": ["type"] },
           "then": { "required": ["connection", "query"] }
         },
         {
-          "if": { "properties": { "type": { "const": "csv" } } },
+          "if": { "properties": { "type": { "const": "csv" } }, "required": ["type"] },
           "then": {
             "not": { "required": ["columns", "columnNames"] }
           }
