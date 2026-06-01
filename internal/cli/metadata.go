@@ -68,9 +68,9 @@ var DirectDependencies = []DependencyInfo{
 		License: "MIT",
 	},
 	{
-		Module:  "github.com/xeipuuv/gojsonschema",
-		Version: "v1.2.0",
-		URL:     "https://github.com/xeipuuv/gojsonschema",
+		Module:  "github.com/santhosh-tekuri/jsonschema/v6",
+		Version: "v6.0.2",
+		URL:     "https://github.com/santhosh-tekuri/jsonschema",
 		License: "Apache-2.0",
 	},
 	{

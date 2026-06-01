@@ -1,16 +1,20 @@
 package schema
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/xeipuuv/gojsonschema"
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,9 +28,12 @@ func DocumentSchemaBytes() []byte {
 
 var (
 	schemaOnce sync.Once
-	schemaObj  *gojsonschema.Schema
+	schemaObj  *jsonschema.Schema
 	errSchema  error
 )
+
+// msgPrinter renders the validation library's localized (English) error messages.
+var msgPrinter = message.NewPrinter(language.English)
 
 // ValidationError contains structured validation failure information.
 type ValidationError struct {
@@ -104,52 +111,103 @@ func Validate(yamlBytes []byte) error {
 func ValidateJSON(jsonBytes []byte) error {
 	// Initialize schema once
 	schemaOnce.Do(func() {
-		loader := gojsonschema.NewBytesLoader(documentSchema)
-		schemaObj, errSchema = gojsonschema.NewSchema(loader)
+		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(documentSchema))
+		if err != nil {
+			errSchema = err
+			return
+		}
+		c := jsonschema.NewCompiler()
+		c.AssertFormat() // assert string formats (e.g. uri), matching prior behavior
+		const schemaURL = "https://bino.bi/schemas/report-bundle.json"
+		if err := c.AddResource(schemaURL, doc); err != nil {
+			errSchema = err
+			return
+		}
+		schemaObj, errSchema = c.Compile(schemaURL)
 	})
 
 	if errSchema != nil {
 		return fmt.Errorf("load schema: %w", errSchema)
 	}
 
-	// Validate
-	result, err := schemaObj.Validate(gojsonschema.NewBytesLoader(jsonBytes))
+	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(jsonBytes))
 	if err != nil {
-		return fmt.Errorf("validate: %w", err)
+		return fmt.Errorf("parse json: %w", err)
 	}
 
-	if result.Valid() {
+	verr := schemaObj.Validate(inst)
+	if verr == nil {
 		return nil
 	}
 
-	// Convert to structured errors, filtering out noisy meta-validator errors
-	// from gojsonschema's if/then/else and allOf/anyOf/oneOf composition.
-	issues := make([]ValidationIssue, 0, len(result.Errors()))
-	for _, desc := range result.Errors() {
-		switch desc.Type() {
-		case "condition_then", "condition_else",
-			"number_all_of", "number_any_of", "number_one_of":
-			continue
-		}
-
-		field := desc.Field()
-		if field == "" {
-			field = "(root)"
-		}
-
-		issues = append(issues, ValidationIssue{
-			Path:    field,
-			Message: desc.Description(),
-			Value:   desc.Value(),
-		})
+	var ve *jsonschema.ValidationError
+	if !errors.As(verr, &ve) {
+		return fmt.Errorf("validate: %w", verr)
 	}
 
+	issues := flattenIssues(ve, inst)
+
 	// Sort errors by field path for consistent output
-	sort.Slice(issues, func(i, j int) bool {
+	sort.SliceStable(issues, func(i, j int) bool {
 		return issues[i].Path < issues[j].Path
 	})
 
 	return &ValidationError{Errors: issues}
+}
+
+// flattenIssues converts a jsonschema validation error tree into a flat list of
+// ValidationIssues. Only leaf errors (nodes without nested causes) describe actual
+// constraint failures; the structural nodes for if/then/else and allOf/anyOf/oneOf
+// composition carry causes and are skipped.
+func flattenIssues(ve *jsonschema.ValidationError, inst any) []ValidationIssue {
+	var issues []ValidationIssue
+	var walk func(n *jsonschema.ValidationError)
+	walk = func(n *jsonschema.ValidationError) {
+		if len(n.Causes) > 0 {
+			for _, c := range n.Causes {
+				walk(c)
+			}
+			return
+		}
+
+		path := "(root)"
+		if len(n.InstanceLocation) > 0 {
+			path = strings.Join(n.InstanceLocation, ".")
+		}
+
+		issues = append(issues, ValidationIssue{
+			Path:    path,
+			Message: n.ErrorKind.LocalizedString(msgPrinter),
+			Value:   valueAt(inst, n.InstanceLocation),
+		})
+	}
+	walk(ve)
+	return issues
+}
+
+// valueAt returns the instance value at the given location, or nil if the path
+// cannot be resolved (e.g. a missing required property).
+func valueAt(root any, loc []string) any {
+	cur := root
+	for _, seg := range loc {
+		switch c := cur.(type) {
+		case map[string]any:
+			v, ok := c[seg]
+			if !ok {
+				return nil
+			}
+			cur = v
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(c) {
+				return nil
+			}
+			cur = c[i]
+		default:
+			return nil
+		}
+	}
+	return cur
 }
 
 // convertYAMLToJSON converts YAML-parsed data structures to JSON-compatible types.
