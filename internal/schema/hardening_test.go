@@ -176,3 +176,33 @@ spec:
 		})
 	}
 }
+
+// TestValidate_Scale verifies the tightened scale field (Issue 8): the keywords
+// none/auto, positive numbers and positive numeric strings are accepted, while a
+// misspelled keyword is rejected.
+func TestValidate_Scale(t *testing.T) {
+	cases := []struct {
+		scale   string
+		wantErr bool
+	}{
+		{"none", false},
+		{"auto", false},
+		{"0.8", false},  // numeric string (documented form)
+		{`"0.8"`, false}, // explicitly quoted numeric string
+		{"1.2", false},
+		{"atuo", true}, // typo of "auto"
+		{"abc", true},
+	}
+	for _, c := range cases {
+		t.Run(c.scale, func(t *testing.T) {
+			yaml := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: t\nspec:\n  value: hi\n  scale: " + c.scale + "\n"
+			err := Validate([]byte(yaml))
+			if c.wantErr && err == nil {
+				t.Errorf("scale %q: expected error, got nil", c.scale)
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("scale %q: expected valid, got: %v", c.scale, err)
+			}
+		})
+	}
+}
