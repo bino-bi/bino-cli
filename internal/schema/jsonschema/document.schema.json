@@ -525,31 +525,6 @@
         }
       }
     },
-    "pathSource": {
-      "type": "object",
-      "required": ["pattern", "format"],
-      "properties": {
-        "pattern": {
-          "type": "string",
-          "description": "File path, directory, or glob pattern that selects one or more data files (for example './data/*.csv' or 'landing/sales/*.parquet')."
-        },
-        "format": { "$ref": "#/$defs/dataFileFormat" }
-      }
-    },
-    "s3Source": {
-      "type": "object",
-      "required": ["bucket", "format"],
-      "properties": {
-        "bucket": { "type": "string" },
-        "prefix": { "type": "string" },
-        "filePattern": { "type": "string" },
-        "region": { "type": "string" },
-        "accessKeyFromEnv": { "type": "string" },
-        "secretKeyFromEnv": { "type": "string" },
-        "sessionTokenFromEnv": { "type": "string" },
-        "format": { "$ref": "#/$defs/dataFileFormat" }
-      }
-    },
     "dataSourceSpec": {
       "type": "object",
       "additionalProperties": false,
@@ -1905,19 +1880,6 @@
         { "required": ["path"] }
       ],
       "additionalProperties": false
-    },
-    "reportMetadata": {
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "subject": { "type": "string" },
-        "author": { "type": "string" },
-        "keywords": {
-          "type": "array",
-          "items": { "type": "string" },
-          "uniqueItems": true
-        }
-      }
     },
     "datasetRef": {
       "description": "Single or multiple dataset references. Each reference can be a string name or an inline DataSet definition.",
