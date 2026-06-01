@@ -1907,9 +1907,10 @@
         }
       ]
     },
-    "textSpec": {
+    "textSpec": { "allOf": [{ "$ref": "#/$defs/textSpecBase" }], "required": ["value"] },
+    "textSpecBase": {
       "type": "object",
-      "required": ["value"],
+      "additionalProperties": false,
       "properties": {
         "value": {
           "type": "string",
@@ -2470,7 +2471,8 @@
       },
       "required": ["children"]
     },
-    "layoutCardSpec": {
+    "layoutCardSpec": { "allOf": [{ "$ref": "#/$defs/layoutCardSpecBase" }], "required": ["children"] },
+    "layoutCardSpecBase": {
       "type": "object",
       "description": "Configuration for a LayoutCard component. Cards are containers for child components (charts, tables, text) and support card-specific layout properties.",
       "properties": {
@@ -2603,8 +2605,7 @@
           "minItems": 1,
           "description": "Child components to render inside the card slots."
         }
-      },
-      "required": ["children"]
+      }
     },
     "layoutChild": {
       "type": "object",
@@ -2628,109 +2629,69 @@
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
         }
       },
-      "if": {
-        "not": {
-          "required": ["ref"]
-        }
-      },
-      "then": {
-        "required": ["spec"]
-      },
       "allOf": [
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Text" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Text" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/textSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/textSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/textSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Table" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Table" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/tableSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/tableSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "ChartStructure" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "ChartStructure" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/chartStructureSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartStructureSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "ChartTime" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "ChartTime" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/chartTimeSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Tree" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Tree" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/treeSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/treeSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/treeSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "LayoutCard" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "LayoutCard" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/layoutCardSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/layoutCardSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/layoutCardSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Grid" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Grid" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/gridSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/gridSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/gridSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Image" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Image" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/imageSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
           }
         }
       ]
@@ -2795,9 +2756,10 @@
         }
       }
     },
-    "chartStructureSpec": {
+    "chartStructureSpec": { "allOf": [{ "$ref": "#/$defs/chartStructureSpecBase" }], "required": ["dataset"] },
+    "chartStructureSpecBase": {
       "type": "object",
-      "required": ["dataset"],
+      "additionalProperties": false,
       "properties": {
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
@@ -2908,9 +2870,10 @@
         }
       }
     },
-    "chartTimeSpec": {
+    "chartTimeSpec": { "allOf": [{ "$ref": "#/$defs/chartTimeSpecBase" }], "required": ["dataset"] },
+    "chartTimeSpecBase": {
       "type": "object",
-      "required": ["dataset"],
+      "additionalProperties": false,
       "properties": {
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
@@ -3057,9 +3020,10 @@
         }
       }
     },
-    "treeSpec": {
+    "treeSpec": { "allOf": [{ "$ref": "#/$defs/treeSpecBase" }], "required": ["edges"] },
+    "treeSpecBase": {
       "type": "object",
-      "required": ["edges"],
+      "additionalProperties": false,
       "description": "Configuration for a Tree component. Trees display hierarchical structures with nodes connected by edges, commonly used for driver trees and decomposition diagrams.",
       "properties": {
         "edges": {
@@ -3168,73 +3132,45 @@
           "description": "Component specification. Required for Label kind and inline definitions. When ref is set, spec fields override the referenced document's spec values."
         }
       },
-      "if": {
-        "not": {
-          "required": ["ref"]
-        }
-      },
-      "then": {
-        "required": ["spec"]
-      },
       "allOf": [
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Label" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Label" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/treeLabelSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/treeLabelSpec" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/treeLabelSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Table" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Table" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/tableSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/tableSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "ChartStructure" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "ChartStructure" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/chartStructureSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartStructureSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "ChartTime" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "ChartTime" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/chartTimeSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
           }
         },
         {
-          "if": {
-            "properties": {
-              "kind": { "const": "Image" }
-            }
-          },
+          "if": { "properties": { "kind": { "const": "Image" } }, "required": ["kind"] },
           "then": {
-            "properties": {
-              "spec": { "$ref": "#/$defs/imageSpec" }
-            }
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
           }
         }
       ]
@@ -3254,9 +3190,10 @@
         }
       }
     },
-    "gridSpec": {
+    "gridSpec": { "allOf": [{ "$ref": "#/$defs/gridSpecBase" }], "required": ["rowHeaders", "columnHeaders", "children"] },
+    "gridSpecBase": {
       "type": "object",
-      "required": ["rowHeaders", "columnHeaders", "children"],
+      "additionalProperties": false,
       "description": "Configuration for a Grid component. Grids create CSS grid-based layouts with row and column headers for organizing child components in a tabular structure.",
       "properties": {
         "chartTitle": {
@@ -3387,44 +3324,61 @@
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
         }
       },
-      "if": {
-        "not": {
-          "required": ["ref"]
-        }
-      },
-      "then": {
-        "required": ["spec"]
-      },
       "allOf": [
         {
-          "if": { "properties": { "kind": { "const": "Text" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/textSpec" } } }
+          "if": { "properties": { "kind": { "const": "Text" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/textSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/textSpec" } } }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "Table" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpec" } } }
+          "if": { "properties": { "kind": { "const": "Table" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/tableSpec" } } }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "ChartStructure" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpec" } } }
+          "if": { "properties": { "kind": { "const": "ChartStructure" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartStructureSpec" } } }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "ChartTime" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+          "if": { "properties": { "kind": { "const": "ChartTime" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "Tree" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/treeSpec" } } }
+          "if": { "properties": { "kind": { "const": "Tree" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/treeSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/treeSpec" } } }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "Image" } } },
-          "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
+          "if": { "properties": { "kind": { "const": "Image" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
+          }
         }
       ]
     },
-    "tableSpec": {
+    "tableSpec": { "allOf": [{ "$ref": "#/$defs/tableSpecBase" }], "required": ["dataset"] },
+    "tableSpecBase": {
       "type": "object",
-      "required": ["dataset"],
+      "additionalProperties": false,
       "properties": {
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "tableTitle": {
