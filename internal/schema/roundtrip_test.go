@@ -87,8 +87,8 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "db_secret",
 				},
 				Spec: &ConnectionSecretSpec{
-					Type:            ConnectionSecretTypePostgres,
-					PasswordFromEnv: "DB_PASSWORD",
+					Type:     ConnectionSecretTypePostgres,
+					Postgres: &PostgresAuthSpec{PasswordFromEnv: "DB_PASSWORD"},
 				},
 			},
 		},
@@ -101,9 +101,8 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "s3_secret",
 				},
 				Spec: &ConnectionSecretSpec{
-					Type:          ConnectionSecretTypeS3,
-					KeyID:         "AKIAIOSFODNN7EXAMPLE",
-					SecretFromEnv: "AWS_SECRET_KEY",
+					Type: ConnectionSecretTypeS3,
+					S3:   &S3AuthSpec{KeyID: "AKIAIOSFODNN7EXAMPLE", SecretFromEnv: "AWS_SECRET_KEY"},
 				},
 			},
 		},
