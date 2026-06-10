@@ -13,6 +13,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/internal/version"
 )
 
@@ -64,10 +65,7 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 	}
 
 	cmdCfg := commandConfigForMode(projectCfg, mode)
-
-	cmdCfg.Env.Apply(func(key, tomlVal, envVal string) {
-		logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
-	})
+	applyCommandEnv(cmdCfg, logger)
 
 	hookRunner := hooks.NewRunner(
 		hooks.Resolve(projectCfg.Hooks, cmdCfg.Hooks, logger.Channel("hooks")),
@@ -120,6 +118,20 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		PluginManager:       pluginMgr,
 		PluginRegistry:      pluginReg,
 	}, nil
+}
+
+// applyCommandEnv exports the bino.toml [<mode>.env] values into the process
+// environment, then re-snapshots runtime limits: BNR_* values set via
+// bino.toml would otherwise be ignored because runtimecfg captures the
+// environment once at process init, before bino.toml is loaded.
+func applyCommandEnv(cmdCfg pathutil.CommandConfig, logger logx.Logger) {
+	cmdCfg.Env.Apply(func(key, tomlVal, envVal string) {
+		logger.Infof("Environment variable %s overrides bino.toml (%q -> %q)", key, tomlVal, envVal)
+	})
+	runtimecfg.Reload()
+	for _, warning := range runtimecfg.Warnings() {
+		logger.Warnf("%s", warning)
+	}
 }
 
 // commandConfigForMode returns the CommandConfig section from bino.toml
