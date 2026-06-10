@@ -2,11 +2,13 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 )
 
@@ -167,6 +169,112 @@ func TestLoadDirBnignoreFilePattern(t *testing.T) {
 	}
 	if docs[0].Name != "main" {
 		t.Fatalf("expected document 'main', got %q", docs[0].Name)
+	}
+}
+
+func TestLoadDirCollectErrorsContinuesAcrossFiles(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	// One schema-invalid manifest (unknown property), one syntactically broken
+	// file, and one valid manifest.
+	invalid := minimalManifest("broken") + "  bogusExtraField: true\n"
+	if err := os.WriteFile(filepath.Join(root, "a_invalid.yaml"), []byte(invalid), 0o600); err != nil {
+		t.Fatalf("write a_invalid.yaml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "b_syntax.yaml"), []byte("foo: [unclosed\n"), 0o600); err != nil {
+		t.Fatalf("write b_syntax.yaml: %v", err)
+	}
+	writeManifest(t, filepath.Join(root, "c_valid.yaml"), "valid")
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	var collected []error
+	docs, err := LoadDirWithOptions(ctx, root, LoadOptions{CollectErrors: &collected})
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Name != "valid" {
+		t.Fatalf("expected only the valid document, got %+v", docs)
+	}
+	if len(collected) != 2 {
+		t.Fatalf("expected 2 collected errors, got %d: %v", len(collected), collected)
+	}
+	var schemaErr *spec.SchemaValidationError
+	if !errors.As(collected[0], &schemaErr) {
+		t.Fatalf("expected first error to be SchemaValidationError, got %T: %v", collected[0], collected[0])
+	}
+	if !strings.HasSuffix(schemaErr.File, "a_invalid.yaml") {
+		t.Fatalf("expected error file a_invalid.yaml, got %q", schemaErr.File)
+	}
+	if !strings.Contains(collected[1].Error(), "b_syntax.yaml") {
+		t.Fatalf("expected second error to reference b_syntax.yaml, got %v", collected[1])
+	}
+}
+
+func TestLoadDirCollectErrorsContinuesWithinFile(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	// Multi-doc file: document #1 is schema-invalid, document #2 is valid.
+	content := minimalManifest("first") + "  bogusExtraField: true\n---\n" + minimalManifest("second")
+	if err := os.WriteFile(filepath.Join(root, "multi.yaml"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write multi.yaml: %v", err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	var collected []error
+	docs, err := LoadDirWithOptions(ctx, root, LoadOptions{CollectErrors: &collected})
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Name != "second" {
+		t.Fatalf("expected only the second document, got %+v", docs)
+	}
+	if docs[0].Position != 2 {
+		t.Fatalf("expected position 2 for surviving document, got %d", docs[0].Position)
+	}
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 collected error, got %d: %v", len(collected), collected)
+	}
+	var schemaErr *spec.SchemaValidationError
+	if !errors.As(collected[0], &schemaErr) {
+		t.Fatalf("expected SchemaValidationError, got %T: %v", collected[0], collected[0])
+	}
+	if schemaErr.DocPosition != 1 {
+		t.Fatalf("expected error for document #1, got #%d", schemaErr.DocPosition)
+	}
+}
+
+func TestLoadDirWithoutCollectErrorsFailsFast(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	invalid := minimalManifest("broken") + "  bogusExtraField: true\n"
+	if err := os.WriteFile(filepath.Join(root, "invalid.yaml"), []byte(invalid), 0o600); err != nil {
+		t.Fatalf("write invalid.yaml: %v", err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	if _, err := LoadDir(ctx, root); err == nil {
+		t.Fatal("expected error without CollectErrors")
 	}
 }
 

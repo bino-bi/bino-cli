@@ -62,6 +62,13 @@ type LoadOptions struct {
 	// built-in JSON schema validation (they are validated by the plugin's own schema).
 	// May be nil when no plugins are loaded.
 	KindProvider KindProvider
+
+	// CollectErrors, when non-nil, receives per-document validation and parse
+	// errors instead of aborting the load on the first one. Failing documents
+	// are skipped and loading continues so every issue in the bundle is
+	// reported in one pass. Fatal errors (context cancellation, scan limits)
+	// still abort the load. Ignored when Lenient is true.
+	CollectErrors *[]error
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -132,10 +139,14 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider, opts.CollectErrors)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
+				return nil
+			}
+			if opts.CollectErrors != nil && ctx.Err() == nil {
+				*opts.CollectErrors = append(*opts.CollectErrors, err)
 				return nil
 			}
 			return err
@@ -159,14 +170,18 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 
 	if !opts.Lenient {
 		if err := ValidateDocuments(docs); err != nil {
-			return nil, err
+			if opts.CollectErrors != nil {
+				*opts.CollectErrors = append(*opts.CollectErrors, err)
+			} else {
+				return nil, err
+			}
 		}
 	}
 
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -213,8 +228,24 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			break
 		}
 		if decodeErr != nil {
+			// Only a *yaml.TypeError leaves the parser positioned after the
+			// failing document; any other decode error (e.g. a syntax error)
+			// leaves it stuck on the same input, so continuing to decode
+			// would loop forever — abandon the rest of the file instead.
+			var typeErr *yaml.TypeError
+			canContinue := errors.As(decodeErr, &typeErr)
 			if lenient {
-				continue
+				if canContinue {
+					continue
+				}
+				break
+			}
+			if collect != nil {
+				*collect = append(*collect, fmt.Errorf("decode %s: %w", path, decodeErr))
+				if canContinue {
+					continue
+				}
+				break
 			}
 			return nil, fmt.Errorf("decode %s: %w", path, decodeErr)
 		}
@@ -228,12 +259,20 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			if lenient {
 				break
 			}
+			if collect != nil {
+				*collect = append(*collect, fmt.Errorf("%s contains more than %d manifest documents", path, maxDocs))
+				break
+			}
 			return nil, fmt.Errorf("%s contains more than %d manifest documents", path, maxDocs)
 		}
 
 		rawJSON, err := json.Marshal(manifest)
 		if err != nil {
 			if lenient {
+				continue
+			}
+			if collect != nil {
+				*collect = append(*collect, fmt.Errorf("marshal %s: %w", path, err))
 				continue
 			}
 			return nil, fmt.Errorf("marshal %s: %w", path, err)
@@ -275,10 +314,18 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 			if json.Unmarshal(rawJSON, &peek) == nil && IsPluginKind(peek.Kind, kindProvider) {
 				var header documentHeader
 				if err := json.Unmarshal(rawJSON, &header); err != nil {
+					if collect != nil {
+						*collect = append(*collect, fmt.Errorf("header %s document %d: %w", path, index, err))
+						continue
+					}
 					return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
 				}
 				constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
 				if err != nil {
+					if collect != nil {
+						*collect = append(*collect, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err))
+						continue
+					}
 					return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err)
 				}
 				docs = append(docs, Document{
@@ -317,18 +364,32 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 					}
 				}
 
-				return nil, schemaErr
+				err = schemaErr
+			} else {
+				err = fmt.Errorf("%s document %d: %w", path, index, err)
 			}
-			return nil, fmt.Errorf("%s document %d: %w", path, index, err)
+			if collect != nil {
+				*collect = append(*collect, err)
+				continue
+			}
+			return nil, err
 		}
 
 		var header documentHeader
 		if err := json.Unmarshal(rawJSON, &header); err != nil {
+			if collect != nil {
+				*collect = append(*collect, fmt.Errorf("header %s document %d: %w", path, index, err))
+				continue
+			}
 			return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
 		}
 
 		constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
 		if err != nil {
+			if collect != nil {
+				*collect = append(*collect, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err))
+				continue
+			}
 			return nil, fmt.Errorf("%s document %d: invalid constraints: %w", path, index, err)
 		}
 

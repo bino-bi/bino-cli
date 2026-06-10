@@ -132,15 +132,23 @@ func (s *State) SetPluginLinters(linters lint.PluginLinterRegistry) {
 // validateDocs runs full validation and returns diagnostics.
 // Must be called with s.mu held.
 func (s *State) validateDocs(ctx context.Context) []Diagnostic {
-	var diagnostics []Diagnostic
 	dir := s.projectRoot
 
-	// Load documents in strict mode to catch schema errors
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider})
+	// Load documents in strict mode to catch schema errors. Errors are
+	// collected per document so every schema issue is reported, not just
+	// the first one. ValidateDocuments runs inside the loader and its
+	// failures land in loadErrs as well.
+	var loadErrs []error
+	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs})
 	if err != nil {
-		diag := parseValidationError(err)
-		diagnostics = append(diagnostics, diag...)
-		// Use the lenient docs already loaded (s.documents may not be set yet)
+		loadErrs = append(loadErrs, err)
+	}
+	diagnostics := make([]Diagnostic, 0, len(loadErrs))
+	for _, loadErr := range loadErrs {
+		diagnostics = append(diagnostics, parseValidationError(loadErr)...)
+	}
+	if len(loadErrs) > 0 {
+		// Use lenient docs so downstream checks still see schema-invalid documents
 		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider})
 	}
 
@@ -154,12 +162,6 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 			Message:  fmt.Sprintf("Unresolved environment variable: %s", mv.VarName),
 			Code:     "missing-env-var",
 		})
-	}
-
-	// Validate document uniqueness
-	if err := config.ValidateDocuments(docs); err != nil {
-		diag := parseValidationError(err)
-		diagnostics = append(diagnostics, diag...)
 	}
 
 	// Run lint rules

@@ -271,15 +271,21 @@ func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io
 func validateDirectory(ctx context.Context, dir string, executeQueries bool) []LSPDiagnostic {
 	var diagnostics []LSPDiagnostic
 
-	// Load documents in strict mode first to catch schema errors
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false})
+	// Load documents in strict mode first to catch schema errors. Errors are
+	// collected per document so every schema issue is reported, not just the
+	// first one. ValidateDocuments runs inside the loader and its failures
+	// land in loadErrs as well.
+	var loadErrs []error
+	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, CollectErrors: &loadErrs})
 	if err != nil {
-		// Parse the error to extract diagnostic info
-		diag := parseValidationError(err)
-		diagnostics = append(diagnostics, diag...)
-
-		// If strict loading failed, also try lenient to get the document list
-		// for additional checks
+		loadErrs = append(loadErrs, err)
+	}
+	for _, loadErr := range loadErrs {
+		diagnostics = append(diagnostics, parseValidationError(loadErr)...)
+	}
+	if len(loadErrs) > 0 {
+		// If strict loading had errors, also try lenient to get the document
+		// list for additional checks
 		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true})
 	}
 
@@ -294,12 +300,6 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 			Message:  fmt.Sprintf("Unresolved environment variable: %s", mv.VarName),
 			Code:     "missing-env-var",
 		})
-	}
-
-	// Validate document uniqueness (ReportArtefact names)
-	if err := config.ValidateDocuments(docs); err != nil {
-		diag := parseValidationError(err)
-		diagnostics = append(diagnostics, diag...)
 	}
 
 	// Engine version compatibility check — emits an error-severity diagnostic

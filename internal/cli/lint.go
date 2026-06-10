@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/version"
 )
 
@@ -105,10 +107,12 @@ there is a fatal error loading manifests.`),
 				return err
 			}
 
-			// Step 1: Load and validate manifests
+			// Step 1: Load and validate manifests. Schema errors are collected
+			// instead of aborting so every issue in the bundle is reported.
 			out.Step("Loading manifests...")
 			loadStart := time.Now()
-			documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider})
+			var loadErrors []error
+			documents, err := config.LoadDirWithOptions(ctx, projectRoot, config.LoadOptions{KindProvider: kindProvider, CollectErrors: &loadErrors})
 			if err != nil {
 				if compatFatal {
 					out.Blank()
@@ -116,7 +120,7 @@ there is a fatal error loading manifests.`),
 				}
 				return ConfigError(err)
 			}
-			if len(documents) == 0 {
+			if len(documents) == 0 && len(loadErrors) == 0 {
 				if compatFatal {
 					out.Blank()
 					printCompatFinding(out, projectRoot, compatFinding)
@@ -125,7 +129,12 @@ there is a fatal error loading manifests.`),
 				return ConfigErrorf("no YAML documents found in %s", projectRoot)
 			}
 
-			out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
+			schemaFindings := schemaFindingsFromErrors(loadErrors)
+			if len(loadErrors) > 0 {
+				out.StepDone(fmt.Sprintf("Validated %d document(s), %d failed validation", len(documents), len(loadErrors)), time.Since(loadStart))
+			} else {
+				out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
+			}
 
 			// Convert config.Document to lint.Document
 			lintDocs := lint.DocumentsFromConfig(documents)
@@ -170,23 +179,18 @@ there is a fatal error loading manifests.`),
 				}
 			}
 
+			// Print schema validation issues
+			if len(schemaFindings) > 0 {
+				out.Blank()
+				out.Warning(fmt.Sprintf("Found %d schema validation issue(s):", len(schemaFindings)))
+				printFindingLines(out, projectRoot, schemaFindings)
+			}
+
 			// Print lint findings
 			if len(findings) > 0 {
 				out.Blank()
 				out.Warning(fmt.Sprintf("Found %d lint warning(s):", len(findings)))
-				for _, f := range findings {
-					relPath := pathutil.RelPath(projectRoot, f.File)
-					loc := relPath
-					if f.Line > 0 {
-						loc = fmt.Sprintf("%s:%d:%d", relPath, f.Line, f.Column)
-					} else if f.DocIdx > 0 {
-						loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
-					}
-					if f.Path != "" {
-						loc = fmt.Sprintf("%s (%s)", loc, f.Path)
-					}
-					out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
-				}
+				printFindingLines(out, projectRoot, findings)
 			} else {
 				out.Blank()
 				out.Done("No lint warnings found")
@@ -207,16 +211,17 @@ there is a fatal error loading manifests.`),
 				logger.Warnf("failed to create output directory: %v", err)
 			}
 
-			// Write lint log
+			// Write lint log (schema issues first, then lint findings)
+			logFindings := append(append([]lint.Finding{}, schemaFindings...), findings...)
 			logPath := filepath.Join(outputDir, fmt.Sprintf("bino-lint-%s.log", shortRunID))
-			if err := writeLintLog(logPath, runID, startTime, projectRoot, documents, findings); err != nil {
+			if err := writeLintLog(logPath, runID, startTime, projectRoot, documents, logFindings); err != nil {
 				logger.Warnf("failed to write lint log: %v", err)
 			}
 
 			// Write JSON lint log if requested
 			if logFormat == "json" {
 				jsonLogPath := filepath.Join(outputDir, fmt.Sprintf("bino-lint-%s.json", shortRunID))
-				if err := writeLintJSONLog(jsonLogPath, runID, startTime, projectRoot, documents, findings); err != nil {
+				if err := writeLintJSONLog(jsonLogPath, runID, startTime, projectRoot, documents, logFindings); err != nil {
 					logger.Warnf("failed to write JSON lint log: %v", err)
 				}
 			}
@@ -228,6 +233,12 @@ there is a fatal error loading manifests.`),
 			// a non-zero exit regardless of --fail-on-warnings.
 			if compatFatal {
 				return RuntimeErrorf("engine-version-incompatible")
+			}
+
+			// Schema validation errors remain fatal (as they were before they
+			// were collected), but only after every issue has been reported.
+			if len(loadErrors) > 0 {
+				return ConfigErrorf("schema validation failed: %d issue(s) in %d document(s)", len(schemaFindings), len(loadErrors))
 			}
 
 			// Exit with error if --fail-on-warnings and there are warnings
@@ -251,6 +262,52 @@ there is a fatal error loading manifests.`),
 		"Exit with non-zero code if any warnings are found (useful for CI)")
 
 	return cmd
+}
+
+// schemaFindingsFromErrors converts manifest load errors collected by
+// config.LoadDirWithOptions into findings, one per schema issue, so that
+// every issue is listed (and logged) alongside lint warnings.
+func schemaFindingsFromErrors(loadErrors []error) []lint.Finding {
+	var findings []lint.Finding
+	for _, err := range loadErrors {
+		var schemaErr *spec.SchemaValidationError
+		if errors.As(err, &schemaErr) {
+			for _, se := range schemaErr.Errors {
+				findings = append(findings, lint.Finding{
+					RuleID:  "schema-validation",
+					File:    schemaErr.File,
+					DocIdx:  schemaErr.DocPosition,
+					Path:    se.Field,
+					Line:    se.Line,
+					Column:  se.Column,
+					Message: se.Description,
+				})
+			}
+			continue
+		}
+		findings = append(findings, lint.Finding{
+			RuleID:  "manifest-load",
+			Message: err.Error(),
+		})
+	}
+	return findings
+}
+
+// printFindingLines prints findings one per line with file:line:col locations.
+func printFindingLines(out *Output, projectRoot string, findings []lint.Finding) {
+	for _, f := range findings {
+		relPath := pathutil.RelPath(projectRoot, f.File)
+		loc := relPath
+		if f.Line > 0 {
+			loc = fmt.Sprintf("%s:%d:%d", relPath, f.Line, f.Column)
+		} else if f.DocIdx > 0 {
+			loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
+		}
+		if f.Path != "" {
+			loc = fmt.Sprintf("%s (%s)", loc, f.Path)
+		}
+		out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
+	}
 }
 
 // findingsToLintEntries converts lint findings to build log lint entries.
