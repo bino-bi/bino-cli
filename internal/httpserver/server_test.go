@@ -1684,3 +1684,30 @@ func TestHandleCDN_CacheFirst_UsesCache(t *testing.T) {
 	}
 }
 
+func TestHealthzAndServerTimeouts(t *testing.T) {
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer srv.listener.Close()
+
+	// The server must carry a Slowloris guard: bino serve advertises
+	// production use, so the header read must have a deadline.
+	if srv.httpServer.ReadHeaderTimeout <= 0 {
+		t.Error("ReadHeaderTimeout is not set")
+	}
+	if srv.httpServer.IdleTimeout <= 0 {
+		t.Error("IdleTimeout is not set")
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /healthz status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if got := w.Body.String(); got != "ok" {
+		t.Fatalf("GET /healthz body = %q, want %q", got, "ok")
+	}
+}

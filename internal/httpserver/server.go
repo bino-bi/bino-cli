@@ -211,12 +211,23 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
 	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(srv.handleEmbedding))
+	mux.HandleFunc("GET /healthz", srv.handleHealthz)
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
 		mux.Handle("/__explorer/", cfg.ExplorerHandler)
 	}
 
-	srv.httpServer = &http.Server{Handler: mux} //nolint:gosec // G112: local dev server on localhost, Slowloris not a concern
+	srv.httpServer = &http.Server{
+		Handler: mux,
+		// Slowloris guard: bino serve advertises production use and may bind
+		// non-localhost addresses, so bound the time a client may take to
+		// send its request headers.
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		// No ReadTimeout/WriteTimeout: SSE responses (/__preview/events) stay
+		// open indefinitely and CDN-proxied downloads can be slow; both would
+		// be killed by connection-wide deadlines.
+	}
 	srv.contentFn = StaticContent([]byte("Hello world"), "text/plain; charset=utf-8")
 	return srv, nil
 }
@@ -380,6 +391,15 @@ func (s *Server) handleEmbedding(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	_, _ = w.Write(body)
+}
+
+// handleHealthz reports liveness for production deployments of `bino serve`
+// (load balancers, container orchestrators, uptime probes).
+func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
 }
 
 func writeDataNotFound(w http.ResponseWriter, message string) {
