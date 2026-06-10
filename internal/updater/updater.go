@@ -270,8 +270,10 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		return fmt.Errorf("getting executable path: %w", err)
 	}
 
-	// Create a temporary file for the new binary
-	tmpFile, err := os.CreateTemp("", "bino-update-*")
+	// Create the temporary file for the new binary next to the executable so
+	// the final os.Rename stays on one filesystem (a rename from os.TempDir()
+	// fails with EXDEV when /tmp is a different mount, e.g. tmpfs on Linux).
+	tmpFile, err := os.CreateTemp(filepath.Dir(execPath), ".bino-update-*")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
