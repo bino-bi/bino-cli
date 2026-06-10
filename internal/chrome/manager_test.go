@@ -1,6 +1,7 @@
 package chrome
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -195,4 +197,73 @@ func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		base = http.DefaultTransport
 	}
 	return base.RoundTrip(req)
+}
+
+// writeTestZip creates a zip file at path with the given name → content entries.
+func writeTestZip(t *testing.T, path string, entries map[string]string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	defer f.Close()
+
+	w := zip.NewWriter(f)
+	for name, content := range entries {
+		fw, err := w.Create(name)
+		if err != nil {
+			t.Fatalf("create zip entry %s: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(content)); err != nil {
+			t.Fatalf("write zip entry %s: %v", name, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+}
+
+func TestExtractZipStrippingTopDir_ValidArchive(t *testing.T) {
+	tmp := t.TempDir()
+	zipPath := filepath.Join(tmp, "ok.zip")
+	writeTestZip(t, zipPath, map[string]string{
+		"top/a.txt":     "hello",
+		"top/sub/b.txt": "world",
+	})
+
+	destDir := filepath.Join(tmp, "dest")
+	if err := extractZipStrippingTopDir(zipPath, destDir); err != nil {
+		t.Fatalf("extractZipStrippingTopDir() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(destDir, "sub", "b.txt"))
+	if err != nil {
+		t.Fatalf("read extracted file: %v", err)
+	}
+	if string(data) != "world" {
+		t.Errorf("extracted content = %q, want %q", data, "world")
+	}
+}
+
+func TestExtractZipStrippingTopDir_RejectsSiblingDirEscape(t *testing.T) {
+	tmp := t.TempDir()
+	zipPath := filepath.Join(tmp, "bad.zip")
+	// Two distinct top dirs so no common prefix is stripped; the second entry
+	// resolves to a sibling of destDir that shares it as a string prefix.
+	writeTestZip(t, zipPath, map[string]string{
+		"good/a.txt":            "ok",
+		"../dest-evil/evil.txt": "pwned",
+	})
+
+	destDir := filepath.Join(tmp, "dest")
+	err := extractZipStrippingTopDir(zipPath, destDir)
+	if err == nil {
+		t.Fatal("extractZipStrippingTopDir() should reject path traversal entry")
+	}
+	if !strings.Contains(err.Error(), "invalid file path in zip") {
+		t.Errorf("error = %v, want invalid file path in zip", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(tmp, "dest-evil", "evil.txt")); !os.IsNotExist(statErr) {
+		t.Error("zip entry escaped the destination directory")
+	}
 }

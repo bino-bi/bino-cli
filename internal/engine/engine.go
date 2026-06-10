@@ -290,6 +290,7 @@ func (m *Manager) extractZip(zipPath, destDir string) error {
 	// The zip contains a bn-template-engine/ folder - strip this prefix
 	const prefix = "bn-template-engine/"
 
+	cleanDest := filepath.Clean(destDir)
 	for _, f := range r.File {
 		name := f.Name
 
@@ -302,8 +303,9 @@ func (m *Manager) extractZip(zipPath, destDir string) error {
 
 		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
 
-		// Prevent path traversal
-		if !strings.HasPrefix(targetPath, destDir) {
+		// Prevent path traversal, including sibling-directory escapes such as
+		// "../dest-evil/x" that share destDir as a bare string prefix.
+		if targetPath != cleanDest && !strings.HasPrefix(targetPath, cleanDest+string(os.PathSeparator)) {
 			return fmt.Errorf("invalid file path in zip: %s", f.Name)
 		}
 

@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"archive/zip"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -289,5 +291,73 @@ func TestCacheDir(t *testing.T) {
 	// Should contain the expected path structure
 	if !filepath.IsAbs(cacheDir) {
 		t.Errorf("CacheDir() = %q, want absolute path", cacheDir)
+	}
+}
+
+// writeTestZip creates a zip file at path with the given name → content entries.
+func writeTestZip(t *testing.T, path string, entries map[string]string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	defer f.Close()
+
+	w := zip.NewWriter(f)
+	for name, content := range entries {
+		fw, err := w.Create(name)
+		if err != nil {
+			t.Fatalf("create zip entry %s: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(content)); err != nil {
+			t.Fatalf("write zip entry %s: %v", name, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+}
+
+func TestExtractZip_ValidArchive(t *testing.T) {
+	tmp := t.TempDir()
+	mgr := NewManagerWithClient(tmp, nil)
+	zipPath := filepath.Join(tmp, "ok.zip")
+	writeTestZip(t, zipPath, map[string]string{
+		"bn-template-engine/main.js": "// engine",
+	})
+
+	destDir := filepath.Join(tmp, "dest")
+	if err := mgr.extractZip(zipPath, destDir); err != nil {
+		t.Fatalf("extractZip() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(destDir, "main.js"))
+	if err != nil {
+		t.Fatalf("read extracted file: %v", err)
+	}
+	if string(data) != "// engine" {
+		t.Errorf("extracted content = %q, want %q", data, "// engine")
+	}
+}
+
+func TestExtractZip_RejectsSiblingDirEscape(t *testing.T) {
+	tmp := t.TempDir()
+	mgr := NewManagerWithClient(tmp, nil)
+	zipPath := filepath.Join(tmp, "bad.zip")
+	// Resolves to a sibling of destDir that shares it as a string prefix.
+	writeTestZip(t, zipPath, map[string]string{
+		"bn-template-engine/../dest-evil/evil.txt": "pwned",
+	})
+
+	destDir := filepath.Join(tmp, "dest")
+	err := mgr.extractZip(zipPath, destDir)
+	if err == nil {
+		t.Fatal("extractZip() should reject path traversal entry")
+	}
+	if !strings.Contains(err.Error(), "invalid file path in zip") {
+		t.Errorf("error = %v, want invalid file path in zip", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(tmp, "dest-evil", "evil.txt")); !os.IsNotExist(statErr) {
+		t.Error("zip entry escaped the destination directory")
 	}
 }

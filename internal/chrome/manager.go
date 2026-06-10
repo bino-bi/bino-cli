@@ -414,6 +414,7 @@ func extractZipStrippingTopDir(zipPath, destDir string) error {
 		}
 	}
 
+	cleanDest := filepath.Clean(destDir)
 	for _, f := range r.File {
 		name := f.Name
 		if prefix != "" {
@@ -425,8 +426,9 @@ func extractZipStrippingTopDir(zipPath, destDir string) error {
 
 		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
 
-		// Prevent path traversal
-		if !strings.HasPrefix(targetPath, destDir) {
+		// Prevent path traversal, including sibling-directory escapes such as
+		// "../dest-evil/x" that share destDir as a bare string prefix.
+		if targetPath != cleanDest && !strings.HasPrefix(targetPath, cleanDest+string(os.PathSeparator)) {
 			return fmt.Errorf("invalid file path in zip: %s", f.Name)
 		}
 
