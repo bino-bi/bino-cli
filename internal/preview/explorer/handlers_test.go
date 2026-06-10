@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -238,5 +239,84 @@ func TestIsWriteOperation(t *testing.T) {
 				t.Errorf("isWriteOperation(%q) = %v, want %v", tt.sql, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandleExport(t *testing.T) {
+	sess := setupTestSession(t)
+	handler := Handler(sess)
+
+	body := `{"sql": "SELECT * FROM sales ORDER BY region"}`
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/export", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want text/csv", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment") {
+		t.Errorf("Content-Disposition = %q, want attachment", cd)
+	}
+
+	records, err := csv.NewReader(w.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("parse CSV: %v", err)
+	}
+	if len(records) != 4 { // header + 3 rows
+		t.Fatalf("expected 4 CSV records, got %d: %v", len(records), records)
+	}
+	if records[0][0] != "amount" || records[0][1] != "region" {
+		t.Errorf("header = %v, want [amount region]", records[0])
+	}
+	if records[1][0] != "150" || records[1][1] != "East" {
+		t.Errorf("first data row = %v, want [150 East]", records[1])
+	}
+}
+
+func TestHandleExportRejectsWrites(t *testing.T) {
+	sess := setupTestSession(t)
+	handler := Handler(sess)
+
+	body := `{"sql": "DROP TABLE sales"}`
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/export", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	var resp queryResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !strings.Contains(resp.Error, "not allowed") {
+		t.Errorf("error = %q, want write-rejection message", resp.Error)
+	}
+}
+
+func TestHandleExportInvalidSQLReturnsJSONError(t *testing.T) {
+	sess := setupTestSession(t)
+	handler := Handler(sess)
+
+	body := `{"sql": "SELECT * FROM does_not_exist"}`
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/export", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("Content-Type = %q, want JSON error (CSV stream must not start)", ct)
+	}
+	var resp queryResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error == "" {
+		t.Error("expected an error message for invalid SQL")
 	}
 }

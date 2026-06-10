@@ -1,6 +1,36 @@
 import { LitElement, html, css, nothing } from 'lit';
 
 var PAGE_SIZES = [25, 50, 100, 250];
+var HISTORY_LIMIT = 20;
+var LS_LAYOUT = 'bino-explorer-layout';
+var LS_SQL = 'bino-explorer-sql';
+var LS_HISTORY = 'bino-explorer-history';
+
+var SIDEBAR_MIN = 180;
+var SIDEBAR_MAX = 560;
+var EDITOR_MIN = 64;
+var RESULTS_MIN = 140;
+
+function clamp(v, min, max) {
+  return Math.min(Math.max(v, min), max);
+}
+
+function lsGet(key, fallback) {
+  try {
+    var raw = window.localStorage.getItem(key);
+    return raw != null ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function lsSet(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    /* private mode or quota — layout just won't persist */
+  }
+}
 
 class BinoDataExplorer extends LitElement {
   static properties = {
@@ -16,6 +46,12 @@ class BinoDataExplorer extends LitElement {
     _activeTab: { state: true },
     _expandedSource: { state: true },
     _refreshing: { state: true },
+    _sidebarWidth: { state: true },
+    _editorHeight: { state: true },
+    _dragging: { state: true },
+    _history: { state: true },
+    _historyOpen: { state: true },
+    _exporting: { state: true },
   };
 
   static styles = css`
@@ -36,6 +72,10 @@ class BinoDataExplorer extends LitElement {
       width: 100%;
       height: 100%;
       background: var(--bino-surface);
+    }
+    .explorer.dragging {
+      user-select: none;
+      -webkit-user-select: none;
     }
     .explorer-header {
       display: flex;
@@ -110,12 +150,38 @@ class BinoDataExplorer extends LitElement {
       overflow: hidden;
     }
     .sidebar {
-      width: 280px;
-      min-width: 280px;
-      border-right: 1px solid var(--bino-border);
+      border-right: none;
       overflow-y: auto;
       background: #fafbfc;
       flex-shrink: 0;
+    }
+    .splitter-v {
+      width: 5px;
+      flex-shrink: 0;
+      cursor: col-resize;
+      background: var(--bino-border);
+      transition: background 0.15s;
+      touch-action: none;
+    }
+    .splitter-v:hover,
+    .splitter-v:focus-visible,
+    .splitter-v.active {
+      background: var(--bino-primary);
+      outline: none;
+    }
+    .splitter-h {
+      height: 5px;
+      flex-shrink: 0;
+      cursor: row-resize;
+      background: var(--bino-border);
+      transition: background 0.15s;
+      touch-action: none;
+    }
+    .splitter-h:hover,
+    .splitter-h:focus-visible,
+    .splitter-h.active {
+      background: var(--bino-primary);
+      outline: none;
     }
     .sidebar-section {
       padding: var(--bino-space-sm) 0;
@@ -206,17 +272,17 @@ class BinoDataExplorer extends LitElement {
     .editor-area {
       display: flex;
       flex-direction: column;
-      border-bottom: 1px solid var(--bino-border);
       flex-shrink: 0;
+      min-height: 0;
     }
     .sql-editor {
       width: 100%;
-      min-height: 100px;
-      max-height: 200px;
+      flex: 1;
+      min-height: 0;
       padding: var(--bino-space-sm) var(--bino-space-md);
       border: none;
       outline: none;
-      resize: vertical;
+      resize: none;
       font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
       font-size: var(--bino-font-size-sm);
       line-height: 1.5;
@@ -234,6 +300,7 @@ class BinoDataExplorer extends LitElement {
       padding: var(--bino-space-xs) var(--bino-space-md);
       background: #f1f3f5;
       border-top: 1px solid var(--bino-border);
+      flex-shrink: 0;
     }
     .editor-btn {
       padding: 4px 12px;
@@ -266,6 +333,62 @@ class BinoDataExplorer extends LitElement {
       font-size: 10px;
       color: var(--bino-text-secondary);
       margin-left: auto;
+    }
+    .history-wrap {
+      position: relative;
+    }
+    .history-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 10;
+      min-width: 320px;
+      max-width: 520px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--bino-surface);
+      border: 1px solid var(--bino-border);
+      border-radius: var(--bino-radius);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    .history-item {
+      display: flex;
+      align-items: baseline;
+      gap: var(--bino-space-sm);
+      width: 100%;
+      padding: 6px var(--bino-space-md);
+      border: none;
+      border-bottom: 1px solid var(--bino-border);
+      background: none;
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--bino-font-sans);
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .history-item:hover {
+      background: var(--bino-surface-hover);
+    }
+    .history-sql {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: var(--bino-font-size-xs);
+      color: var(--bino-text);
+    }
+    .history-time {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--bino-text-secondary);
+    }
+    .history-empty {
+      padding: var(--bino-space-md);
+      font-size: var(--bino-font-size-xs);
+      color: var(--bino-text-secondary);
+      text-align: center;
     }
     .results-area {
       flex: 1;
@@ -340,6 +463,13 @@ class BinoDataExplorer extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--bino-text);
+    }
+    .row-num {
+      color: var(--bino-text-secondary);
+      font-size: var(--bino-font-size-xs);
+      text-align: right;
+      width: 1%;
+      user-select: none;
     }
     tr:nth-child(even) {
       background: #fafbfc;
@@ -423,7 +553,7 @@ class BinoDataExplorer extends LitElement {
     super();
     this._open = false;
     this._metadata = null;
-    this._sql = '';
+    this._sql = typeof lsGet(LS_SQL, '') === 'string' ? lsGet(LS_SQL, '') : '';
     this._result = null;
     this._summarizeResult = null;
     this._loading = false;
@@ -433,6 +563,13 @@ class BinoDataExplorer extends LitElement {
     this._activeTab = 'results';
     this._expandedSource = null;
     this._refreshing = false;
+    var layout = lsGet(LS_LAYOUT, {});
+    this._sidebarWidth = clamp(Number(layout.sidebarWidth) || 280, SIDEBAR_MIN, SIDEBAR_MAX);
+    this._editorHeight = Math.max(Number(layout.editorHeight) || 160, EDITOR_MIN);
+    this._dragging = false;
+    this._history = Array.isArray(lsGet(LS_HISTORY, [])) ? lsGet(LS_HISTORY, []) : [];
+    this._historyOpen = false;
+    this._exporting = false;
     this._boundOnOpen = this._onOpen.bind(this);
     this._boundOnKeydown = this._onKeydown.bind(this);
     this._boundOnDocsChanged = this._onDocsChanged.bind(this);
@@ -455,10 +592,9 @@ class BinoDataExplorer extends LitElement {
   render() {
     if (!this._open) return nothing;
 
-    var self = this;
     return html`
       <div class="backdrop">
-        <div class="explorer">
+        <div class="explorer ${this._dragging ? 'dragging' : ''}" @click=${this._onExplorerClick}>
           <div class="explorer-header">
             <h2>Data Explorer</h2>
             <div class="header-actions">
@@ -466,7 +602,7 @@ class BinoDataExplorer extends LitElement {
                 title="Refresh data sources and datasets"
                 ?disabled=${this._refreshing}
                 @click=${this._onRefresh}>
-                <span class="refresh-icon">\u21BB</span>
+                <span class="refresh-icon">↻</span>
                 <span>${this._refreshing ? 'Refreshing...' : 'Refresh'}</span>
               </button>
               <button class="close-btn" title="Close (Esc)" @click=${this._close}>&times;</button>
@@ -474,6 +610,11 @@ class BinoDataExplorer extends LitElement {
           </div>
           <div class="explorer-body">
             ${this._renderSidebar()}
+            <div class="splitter-v ${this._dragging === 'sidebar' ? 'active' : ''}"
+              role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"
+              title="Drag to resize the sidebar (arrow keys when focused)"
+              @pointerdown=${this._startSidebarDrag}
+              @keydown=${this._onSidebarSplitterKey}></div>
             ${this._renderMainPanel()}
           </div>
         </div>
@@ -484,12 +625,13 @@ class BinoDataExplorer extends LitElement {
   _renderSidebar() {
     var self = this;
     var meta = this._metadata;
+    var widthStyle = 'width: ' + this._sidebarWidth + 'px; min-width: ' + this._sidebarWidth + 'px;';
     if (!meta) {
-      return html`<div class="sidebar"><div class="loading-msg">Loading...</div></div>`;
+      return html`<div class="sidebar" style=${widthStyle}><div class="loading-msg">Loading...</div></div>`;
     }
 
     return html`
-      <div class="sidebar">
+      <div class="sidebar" style=${widthStyle}>
         ${meta.sources && meta.sources.length > 0 ? html`
           <div class="sidebar-section">
             <div class="sidebar-title">DataSources (${meta.sources.length})</div>
@@ -502,7 +644,7 @@ class BinoDataExplorer extends LitElement {
                     ${src.type ? html`<span class="sidebar-item-badge badge-source">${src.type}</span>` : nothing}
                     <button class="sidebar-info-btn" title="Show columns"
                       @click=${function(e) { e.stopPropagation(); self._toggleSourceInfo(src.name); }}>
-                      ${isExpanded ? '\u25B4' : '\u25BE'}
+                      ${isExpanded ? '▴' : '▾'}
                     </button>
                   </div>
                   ${isExpanded && src.columns && src.columns.length > 0 ? html`
@@ -547,21 +689,34 @@ class BinoDataExplorer extends LitElement {
     var self = this;
     return html`
       <div class="main-panel">
-        <div class="editor-area">
+        <div class="editor-area" style="height: ${this._editorHeight}px;">
           <textarea class="sql-editor"
             placeholder="Enter SQL query... (Ctrl+Enter to run)"
             .value=${this._sql}
-            @input=${function(e) { self._sql = e.target.value; }}
+            @input=${this._onSqlInput.bind(this)}
             @keydown=${this._onEditorKeydown.bind(this)}
             spellcheck="false"
           ></textarea>
           <div class="editor-toolbar">
             <button class="editor-btn primary" ?disabled=${this._loading} @click=${this._runQuery.bind(this)}>Run</button>
             <button class="editor-btn" ?disabled=${this._loading || !this._sql.trim()} @click=${this._runSummarize.bind(this)}>Summarize</button>
+            <div class="history-wrap">
+              <button class="editor-btn" title="Recent queries"
+                @click=${function(e) { e.stopPropagation(); self._historyOpen = !self._historyOpen; }}>History ▾</button>
+              ${this._historyOpen ? this._renderHistoryMenu() : nothing}
+            </div>
+            <button class="editor-btn" ?disabled=${this._exporting || !this._sql.trim()}
+              title="Download the full result set as CSV"
+              @click=${this._exportCSV.bind(this)}>${this._exporting ? 'Exporting...' : 'Export CSV'}</button>
             <button class="editor-btn" @click=${this._clearEditor.bind(this)}>Clear</button>
-            <span class="editor-shortcut">${navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl'}+Enter to run</span>
+            <span class="editor-shortcut">${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to run</span>
           </div>
         </div>
+        <div class="splitter-h ${this._dragging === 'editor' ? 'active' : ''}"
+          role="separator" aria-orientation="horizontal" aria-label="Resize SQL editor" tabindex="0"
+          title="Drag to resize the SQL editor (arrow keys when focused)"
+          @pointerdown=${this._startEditorDrag}
+          @keydown=${this._onEditorSplitterKey}></div>
         <div class="results-area">
           <div class="tab-bar">
             <button class="tab-btn ${this._activeTab === 'results' ? 'active' : ''}"
@@ -571,6 +726,26 @@ class BinoDataExplorer extends LitElement {
           </div>
           ${this._activeTab === 'results' ? this._renderResults() : this._renderSummarizeTab()}
         </div>
+      </div>
+    `;
+  }
+
+  _renderHistoryMenu() {
+    var self = this;
+    if (!this._history.length) {
+      return html`<div class="history-menu"><div class="history-empty">No queries yet</div></div>`;
+    }
+    return html`
+      <div class="history-menu" @click=${function(e) { e.stopPropagation(); }}>
+        ${this._history.map(function(entry) {
+          return html`
+            <button class="history-item" title=${entry.sql}
+              @click=${function() { self._applyHistoryEntry(entry); }}>
+              <span class="history-sql">${entry.sql}</span>
+              <span class="history-time">${self._formatHistoryTime(entry.ts)}</span>
+            </button>
+          `;
+        })}
       </div>
     `;
   }
@@ -597,6 +772,7 @@ class BinoDataExplorer extends LitElement {
     var rows = this._result.rows || [];
     var totalRows = this._result.totalRows;
     var totalPages = typeof totalRows === 'number' ? Math.ceil(totalRows / this._pageSize) : null;
+    var rowOffset = this._page * this._pageSize;
 
     return html`
       <div class="table-container">
@@ -606,25 +782,29 @@ class BinoDataExplorer extends LitElement {
             <table>
               <thead>
                 <tr>
+                  <th class="row-num">#</th>
                   ${cols.map(function(col) {
                     return html`<th>${col.name}<span class="col-type">${col.type}</span></th>`;
                   })}
                 </tr>
               </thead>
               <tbody>
-                ${rows.map(function(row) {
-                  return html`<tr>${row.map(function(cell) {
-                    return html`<td title="${cell != null ? String(cell) : ''}">${cell != null ? String(cell) : ''}</td>`;
-                  })}</tr>`;
+                ${rows.map(function(row, idx) {
+                  return html`<tr>
+                    <td class="row-num">${rowOffset + idx + 1}</td>
+                    ${row.map(function(cell) {
+                      return html`<td title="${cell != null ? String(cell) : ''}">${cell != null ? String(cell) : ''}</td>`;
+                    })}
+                  </tr>`;
                 })}
               </tbody>
             </table>
           `}
       </div>
       <div class="pagination">
-        <button ?disabled=${this._page === 0} @click=${function() { self._page--; self._rerunQuery(); }}>\u2190</button>
+        <button ?disabled=${this._page === 0} @click=${function() { self._page--; self._rerunQuery(); }}>←</button>
         <span>Page ${this._page + 1}${totalPages != null ? ' of ' + totalPages : ''}</span>
-        <button ?disabled=${totalPages != null && this._page >= totalPages - 1} @click=${function() { self._page++; self._rerunQuery(); }}>\u2192</button>
+        <button ?disabled=${totalPages != null && this._page >= totalPages - 1} @click=${function() { self._page++; self._rerunQuery(); }}>→</button>
         <span>|</span>
         <select .value=${String(this._pageSize)} @change=${function(e) { self._pageSize = parseInt(e.target.value, 10); self._page = 0; self._rerunQuery(); }}>
           ${PAGE_SIZES.map(function(s) {
@@ -683,11 +863,22 @@ class BinoDataExplorer extends LitElement {
 
   _close() {
     this._open = false;
+    this._historyOpen = false;
   }
 
   _onKeydown(e) {
     if (this._open && e.key === 'Escape') {
+      if (this._historyOpen) {
+        this._historyOpen = false;
+        return;
+      }
       this._close();
+    }
+  }
+
+  _onExplorerClick() {
+    if (this._historyOpen) {
+      this._historyOpen = false;
     }
   }
 
@@ -706,6 +897,125 @@ class BinoDataExplorer extends LitElement {
     });
   }
 
+  _onSqlInput(e) {
+    this._sql = e.target.value;
+    lsSet(LS_SQL, this._sql);
+  }
+
+  _setSql(sql) {
+    this._sql = sql;
+    lsSet(LS_SQL, sql);
+  }
+
+  // ── Pane resizing ──
+
+  _maxEditorHeight() {
+    var panel = this.renderRoot.querySelector('.main-panel');
+    return panel ? Math.max(panel.clientHeight - RESULTS_MIN, EDITOR_MIN) : 600;
+  }
+
+  _startEditorDrag(e) {
+    e.preventDefault();
+    var self = this;
+    var startY = e.clientY;
+    var startH = this._editorHeight;
+    var maxH = this._maxEditorHeight();
+    this._dragging = 'editor';
+    function move(ev) {
+      self._editorHeight = clamp(startH + (ev.clientY - startY), EDITOR_MIN, maxH);
+    }
+    function up() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      self._dragging = false;
+      self._saveLayout();
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  _startSidebarDrag(e) {
+    e.preventDefault();
+    var self = this;
+    var startX = e.clientX;
+    var startW = this._sidebarWidth;
+    this._dragging = 'sidebar';
+    function move(ev) {
+      self._sidebarWidth = clamp(startW + (ev.clientX - startX), SIDEBAR_MIN, SIDEBAR_MAX);
+    }
+    function up() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      self._dragging = false;
+      self._saveLayout();
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  _onEditorSplitterKey(e) {
+    var step = 16;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._editorHeight = clamp(this._editorHeight - step, EDITOR_MIN, this._maxEditorHeight());
+      this._saveLayout();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this._editorHeight = clamp(this._editorHeight + step, EDITOR_MIN, this._maxEditorHeight());
+      this._saveLayout();
+    }
+  }
+
+  _onSidebarSplitterKey(e) {
+    var step = 16;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      this._sidebarWidth = clamp(this._sidebarWidth - step, SIDEBAR_MIN, SIDEBAR_MAX);
+      this._saveLayout();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      this._sidebarWidth = clamp(this._sidebarWidth + step, SIDEBAR_MIN, SIDEBAR_MAX);
+      this._saveLayout();
+    }
+  }
+
+  _saveLayout() {
+    lsSet(LS_LAYOUT, {
+      sidebarWidth: this._sidebarWidth,
+      editorHeight: this._editorHeight,
+    });
+  }
+
+  // ── Query history ──
+
+  _recordHistory(sql) {
+    var entry = { sql: sql, ts: Date.now() };
+    var history = this._history.filter(function(h) { return h.sql !== sql; });
+    history.unshift(entry);
+    if (history.length > HISTORY_LIMIT) {
+      history.length = HISTORY_LIMIT;
+    }
+    this._history = history;
+    lsSet(LS_HISTORY, history);
+  }
+
+  _applyHistoryEntry(entry) {
+    this._setSql(entry.sql);
+    this._historyOpen = false;
+    this._page = 0;
+    this._runQuery();
+  }
+
+  _formatHistoryTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var today = new Date();
+    var sameDay = d.toDateString() === today.toDateString();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
   _onEditorKeydown(e) {
     // Tab inserts spaces
     if (e.key === 'Tab') {
@@ -713,7 +1023,7 @@ class BinoDataExplorer extends LitElement {
       var textarea = e.target;
       var start = textarea.selectionStart;
       var end = textarea.selectionEnd;
-      this._sql = this._sql.substring(0, start) + '  ' + this._sql.substring(end);
+      this._setSql(this._sql.substring(0, start) + '  ' + this._sql.substring(end));
       this.updateComplete.then(function() {
         textarea.selectionStart = textarea.selectionEnd = start + 2;
       });
@@ -727,7 +1037,7 @@ class BinoDataExplorer extends LitElement {
   }
 
   _selectSource(name) {
-    this._sql = 'SELECT * FROM "' + name + '"';
+    this._setSql('SELECT * FROM "' + name + '"');
     this._page = 0;
     this._activeTab = 'results';
     this._runQuery();
@@ -738,11 +1048,11 @@ class BinoDataExplorer extends LitElement {
     // SELECT * FROM "<name>" would fail. Use the resolved SQL the metadata
     // endpoint exposes; fall back to a comment if the manifest is broken.
     if (ds && ds.sql) {
-      this._sql = ds.sql;
+      this._setSql(ds.sql);
     } else if (ds && ds.sqlError) {
-      this._sql = '-- Cannot resolve SQL for dataset "' + ds.name + '":\n-- ' + ds.sqlError;
+      this._setSql('-- Cannot resolve SQL for dataset "' + ds.name + '":\n-- ' + ds.sqlError);
     } else {
-      this._sql = '-- Dataset "' + (ds && ds.name) + '" has no resolvable SQL.';
+      this._setSql('-- Dataset "' + (ds && ds.name) + '" has no resolvable SQL.');
     }
     this._page = 0;
     this._activeTab = 'results';
@@ -756,7 +1066,7 @@ class BinoDataExplorer extends LitElement {
   }
 
   _clearEditor() {
-    this._sql = '';
+    this._setSql('');
     this._result = null;
     this._summarizeResult = null;
     this._error = '';
@@ -777,6 +1087,7 @@ class BinoDataExplorer extends LitElement {
     this._loading = true;
     this._error = '';
     this._activeTab = 'results';
+    this._recordHistory(sqlText);
 
     fetch('/__explorer/query', {
       method: 'POST',
@@ -820,6 +1131,44 @@ class BinoDataExplorer extends LitElement {
       .catch(function(err) {
         self._error = err.message || 'Summarize failed';
         self._loading = false;
+      });
+  }
+
+  _exportCSV() {
+    var sqlText = this._sql.trim();
+    if (!sqlText || this._exporting) return;
+
+    var self = this;
+    this._exporting = true;
+
+    fetch('/__explorer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql: sqlText }),
+    })
+      .then(function(resp) {
+        var ct = resp.headers.get('Content-Type') || '';
+        if (ct.indexOf('text/csv') === -1) {
+          // The server reports failures as JSON before the CSV stream starts.
+          return resp.json().then(function(data) {
+            throw new Error(data.error || 'Export failed');
+          });
+        }
+        return resp.blob();
+      })
+      .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'bino-explorer-export.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        self._exporting = false;
+      })
+      .catch(function(err) {
+        self._error = err.message || 'Export failed';
+        self._activeTab = 'results';
+        self._exporting = false;
       });
   }
 

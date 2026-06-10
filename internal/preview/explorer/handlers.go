@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ func Handler(session *Session) http.Handler {
 	mux.HandleFunc("GET /__explorer/metadata", handleMetadata(session))
 	mux.HandleFunc("POST /__explorer/query", handleQuery(session))
 	mux.HandleFunc("POST /__explorer/summarize", handleSummarize(session))
+	mux.HandleFunc("POST /__explorer/export", handleExport(session))
 	return mux
 }
 
@@ -299,6 +301,106 @@ func handleSummarize(session *Session) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// exportRequest is the JSON body for the export endpoint.
+type exportRequest struct {
+	SQL string `json:"sql"`
+}
+
+// handleExport streams the full result of a query as a CSV download. Rows are
+// capped at the BNR_MAX_QUERY_ROWS limit so a runaway query cannot exhaust
+// memory or produce an unbounded download.
+func handleExport(session *Session) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req exportRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, queryResponse{Error: "invalid request body"})
+			return
+		}
+
+		sqlText := strings.TrimSpace(req.SQL)
+		if sqlText == "" {
+			writeJSON(w, http.StatusBadRequest, queryResponse{Error: "sql is required"})
+			return
+		}
+
+		if isWriteOperation(sqlText) {
+			writeJSON(w, http.StatusBadRequest, queryResponse{Error: "write operations are not allowed"})
+			return
+		}
+
+		cfg := runtimecfg.Current()
+		timeout := cfg.MaxQueryDuration
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		maxRows := cfg.MaxQueryRows
+		if maxRows <= 0 {
+			maxRows = 100_000
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
+		err := session.WithDB(func(db *sql.DB) error {
+			cappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d", sqlText, maxRows) //nolint:gosec // G201: local dev-only SQL explorer, user writes own queries
+			rows, err := db.QueryContext(ctx, cappedSQL)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+
+			cols, err := rows.Columns()
+			if err != nil {
+				return err
+			}
+
+			// Headers must be set before the first write; errors after this
+			// point can only abort the stream.
+			w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+			w.Header().Set("Content-Disposition", `attachment; filename="bino-explorer-export.csv"`)
+
+			cw := csv.NewWriter(w)
+			if err := cw.Write(cols); err != nil {
+				return err
+			}
+
+			vals := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			record := make([]string, len(cols))
+			for rows.Next() {
+				if err := rows.Scan(ptrs...); err != nil {
+					return err
+				}
+				for i, v := range vals {
+					if norm := normalizeValue(v); norm != nil {
+						record[i] = fmt.Sprintf("%v", norm)
+					} else {
+						record[i] = ""
+					}
+				}
+				if err := cw.Write(record); err != nil {
+					return err
+				}
+			}
+			cw.Flush()
+			if err := cw.Error(); err != nil {
+				return err
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			// If the CSV headers were not sent yet (query failed to start),
+			// report a JSON error; otherwise the truncated stream is all we
+			// can signal.
+			if w.Header().Get("Content-Type") != "text/csv; charset=utf-8" {
+				writeJSON(w, http.StatusOK, queryResponse{Error: err.Error()})
+			}
+		}
 	}
 }
 
