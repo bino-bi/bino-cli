@@ -104,7 +104,7 @@ type PluginOptions struct {
 	// DataMode selects how dataset/datasource payloads are delivered to the
 	// browser. "" or "inline" embeds gzip+base64 in the HTML (default for
 	// backward compatibility). "url" emits an HTTP URL pointing at the
-	// previewhttp.Server data store; the caller must register the bodies
+	// httpserver.Server data store; the caller must register the bodies
 	// returned in Result.EmittedData / FrameResult.EmittedData on the server
 	// before the HTML becomes reachable to the browser.
 	DataMode string
@@ -114,7 +114,7 @@ type PluginOptions struct {
 	DataBaseURL string
 }
 
-// EmittedData is the payload that must be registered on previewhttp.Server
+// EmittedData is the payload that must be registered on httpserver.Server
 // when the renderer ran in url mode. Each entry corresponds to one
 // <bn-datasource> or <bn-dataset> element in the HTML.
 type EmittedData struct {
@@ -134,7 +134,7 @@ type Result struct {
 	HTML        []byte
 	LocalAssets []LocalAsset
 	// EmittedData is non-nil only when PluginOptions.DataMode == "url". The
-	// caller must register these on previewhttp.Server before serving HTML.
+	// caller must register these on httpserver.Server before serving HTML.
 	EmittedData []EmittedData
 }
 
@@ -152,7 +152,7 @@ type FrameResult struct {
 	// LocalAssets lists files that need to be served by the preview HTTP server.
 	LocalAssets []LocalAsset
 	// EmittedData is non-nil only when PluginOptions.DataMode == "url". The
-	// caller must register these on previewhttp.Server before serving HTML.
+	// caller must register these on httpserver.Server before serving HTML.
 	EmittedData []EmittedData
 }
 

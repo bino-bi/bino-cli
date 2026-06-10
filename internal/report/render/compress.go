@@ -10,7 +10,7 @@ import (
 
 // ContentHash returns the FNV-1a 64-bit hex hash of data. It is the canonical
 // content fingerprint used both in the inline "<hash>:<base64_gzip>" embed
-// format and in the URL form "?hash=<hash>" served by previewhttp.Server.
+// format and in the URL form "?hash=<hash>" served by httpserver.Server.
 func ContentHash(data []byte) string {
 	h := fnv.New64a()
 	h.Write(data)

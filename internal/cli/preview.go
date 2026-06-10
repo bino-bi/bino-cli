@@ -20,14 +20,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/hooks"
+	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/preview/bootstatus"
 	"bino.bi/bino/internal/preview/explorer"
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	reportgraph "bino.bi/bino/internal/report/graph"
@@ -36,6 +35,7 @@ import (
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/watchers"
+	"bino.bi/bino/internal/web"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -181,7 +181,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				explorer.Handler(sess).ServeHTTP(w, r)
 			})
 
-			server, err := previewhttp.New(previewhttp.Config{
+			server, err := httpserver.New(httpserver.Config{
 				ListenAddr:      addr,
 				CacheDir:        env.CacheDir,
 				Logger:          logger.Channel("server"),
@@ -192,7 +192,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}
 
 			if loadingPage, lerr := web.LoadingPageHTML(); lerr == nil && len(loadingPage) > 0 {
-				server.SetContentFunc(previewhttp.StaticContent(loadingPage, "text/html; charset=utf-8"))
+				server.SetContentFunc(httpserver.StaticContent(loadingPage, "text/html; charset=utf-8"))
 			}
 
 			if resolvedDataMode == render.DataModeURL && pluginOpts != nil {
@@ -283,7 +283,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// 2. Build refresh plumbing
 				refreshMu := &sync.Mutex{}
 				refreshState := &previewRefreshState{
-					perArtefactAssets: make(map[string][]previewhttp.LocalAsset),
+					perArtefactAssets: make(map[string][]httpserver.LocalAsset),
 				}
 				refreshCfg := previewRefreshConfig{
 					Logger:                   logger,
@@ -484,11 +484,11 @@ type refreshRequest struct {
 type previewRefreshState struct {
 	allPagesFrameHTML   []byte
 	allPagesContextHTML []byte
-	allPagesAssets      []previewhttp.LocalAsset
+	allPagesAssets      []httpserver.LocalAsset
 
 	// perArtefactAssets keys are route paths ("/name", "/doc/name") so the
 	// asset union can be rebuilt across full and selective refreshes.
-	perArtefactAssets map[string][]previewhttp.LocalAsset
+	perArtefactAssets map[string][]httpserver.LocalAsset
 
 	// lastDocs is the most recent successfully-loaded manifest set. Replaced
 	// (never mutated) on every refresh, so a goroutine that grabbed the
@@ -596,7 +596,7 @@ type previewRefreshConfig struct {
 // fresh content broadcast so the caller can forward it to
 // BroadcastRefreshDone — clients viewing a path not in the slice know their
 // view was not part of this refresh (failure or simply unaffected).
-func refreshPreviewContent(ctx context.Context, reason string, changed []string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig, state *previewRefreshState) ([]string, error) { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func refreshPreviewContent(ctx context.Context, reason string, changed []string, server *httpserver.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig, state *previewRefreshState) ([]string, error) { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	logger := cfg.Logger
 	watchDir := cfg.Workdir
 	report := cfg.Reporter
@@ -820,7 +820,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		state.allPagesAssets = pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)
 	}
 
-	routeMap := make(map[string]previewhttp.ContentFunc, len(artifacts)+len(documentArtefacts)+1)
+	routeMap := make(map[string]httpserver.ContentFunc, len(artifacts)+len(documentArtefacts)+1)
 	broadcastPaths := make([]string, 0, len(artifacts)+len(documentArtefacts)+1)
 
 	// Broadcast "/" early so any client viewing All Pages sees the new
@@ -883,7 +883,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		frameHTML := withPreviewHeader(withPreviewStyles(renderResult.FrameHTML), artefactInfos, documentInfos, artPath, artGraph)
 		contextHTML := withPreviewContextStyles(renderResult.ContextHTML)
 		state.perArtefactAssets[artPath] = pipeline.ConvertLocalAssets(renderResult.LocalAssets)
-		routeMap[artPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		routeMap[artPath] = httpserver.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 		// Broadcast immediately so the browser can fetch new context HTML
 		// while later artefacts are still rendering.
 		server.BroadcastContent(artPath, contextHTML)
@@ -924,7 +924,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		}
 		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
 		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
-		routeMap[docPath] = previewhttp.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		routeMap[docPath] = httpserver.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 		rendered++
 		report.Progress(rendered, totalRender, docArt.Document.Name)
 	}
@@ -948,7 +948,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 	// Rebuild the asset union and push it to the server. SetLocalAssets
 	// replaces the table, so we always send the full union — selective
 	// refreshes preserve unchanged entries via the per-artefact cache.
-	allAssets := make([]previewhttp.LocalAsset, 0, len(state.allPagesAssets)+len(state.perArtefactAssets)*4)
+	allAssets := make([]httpserver.LocalAsset, 0, len(state.allPagesAssets)+len(state.perArtefactAssets)*4)
 	allAssets = append(allAssets, state.allPagesAssets...)
 	for _, assets := range state.perArtefactAssets {
 		allAssets = append(allAssets, assets...)
@@ -959,7 +959,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 	} else {
 		server.SetContentRoutes(routeMap)
 	}
-	server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), state.allPagesFrameHTML...), "text/html; charset=utf-8"))
+	server.SetContentFunc(httpserver.StaticContent(append([]byte(nil), state.allPagesFrameHTML...), "text/html; charset=utf-8"))
 	if totalRender > 0 {
 		report.End(bootstatus.PhaseRendering)
 	}
@@ -993,7 +993,7 @@ func needsAllPagesRerender(seeds []*reportgraph.Node) bool {
 // result. Errors are returned but not cached, so a failed first render (e.g.
 // with an already-canceled request context) does not pin the error for all
 // subsequent requests.
-func lazyContent(renderFn previewhttp.ContentFunc) previewhttp.ContentFunc {
+func lazyContent(renderFn httpserver.ContentFunc) httpserver.ContentFunc {
 	var mu sync.Mutex
 	var cached bool
 	var cachedBody []byte
@@ -1018,7 +1018,7 @@ func lazyContent(renderFn previewhttp.ContentFunc) previewhttp.ContentFunc {
 
 // lazyPresentationContent returns a ContentFunc that renders the presentation view
 // on first access, caching the result for subsequent requests.
-func lazyPresentationContent(workdir string, docs []config.Document, art config.Artifact, cfg *previewRefreshConfig, server *previewhttp.Server, presPath string) previewhttp.ContentFunc {
+func lazyPresentationContent(workdir string, docs []config.Document, art config.Artifact, cfg *previewRefreshConfig, server *httpserver.Server, presPath string) httpserver.ContentFunc {
 	return lazyContent(func(ctx context.Context) ([]byte, string, error) {
 		renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, workdir, docs, art, pipeline.PresentationArtefactRenderOptions{
 			EngineVersion:            cfg.EngineVersion,
@@ -1063,7 +1063,7 @@ var embeddableComponentKinds = map[string]struct{}{
 // per kind, not globally, so callers that know the kind should pass it. Renders
 // are memoized in state.embeddingCache keyed by "kind:name"; the cache is reset
 // on every refresh.
-func embedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *previewRefreshState, cfg *previewRefreshConfig, server *previewhttp.Server) ([]byte, error) {
+func embedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *previewRefreshState, cfg *previewRefreshConfig, server *httpserver.Server) ([]byte, error) {
 	cacheKey := kind + ":" + name
 
 	mu.Lock()
@@ -1297,20 +1297,20 @@ func syntheticComponentPage(compKind, compName string) (config.Document, error) 
 // matches. It must be called while holding the refresh mutex.
 func embedNotFoundError(name, kind string, state *previewRefreshState) error {
 	if kind != "" {
-		return previewhttp.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable %s named %q", kind, name))
+		return httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable %s named %q", kind, name))
 	}
 	// The name exists, but under a kind that cannot be rendered standalone.
 	for i := range state.lastDocs {
 		if state.lastDocs[i].Name == name {
-			return previewhttp.NewHTTPError(http.StatusUnprocessableEntity,
+			return httpserver.NewHTTPError(http.StatusUnprocessableEntity,
 				fmt.Sprintf("%q (kind %s) cannot be embedded; only artefacts, LayoutPages and standalone components are embeddable", name, state.lastDocs[i].Kind))
 		}
 	}
 	names := embeddableNames(state)
 	if len(names) == 0 {
-		return previewhttp.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q. No embeddable documents are registered yet.", name))
+		return httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q. No embeddable documents are registered yet.", name))
 	}
-	return previewhttp.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q. Available: %s", name, strings.Join(names, ", ")))
+	return httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q. Available: %s", name, strings.Join(names, ", ")))
 }
 
 // embeddableNames lists the names of every embeddable document in the snapshot.
@@ -1559,14 +1559,14 @@ func withPreviewHeader(doc []byte, artifacts []previewArtefactInfo, documents []
 	return updated
 }
 
-func setPreviewErrorPage(server *previewhttp.Server, message, hint string) {
+func setPreviewErrorPage(server *httpserver.Server, message, hint string) {
 	if server == nil {
 		return
 	}
 	content := buildPreviewErrorPage(message, hint)
 	server.SetLocalAssets(nil)
 	server.SetContentRoutes(nil)
-	server.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), content...), "text/html; charset=utf-8"))
+	server.SetContentFunc(httpserver.StaticContent(append([]byte(nil), content...), "text/html; charset=utf-8"))
 	server.BroadcastContent("/", content)
 }
 

@@ -448,7 +448,7 @@ type FullDocumentOptions struct {
 // This includes the template engine, bn-context, datasources, datasets, i18n, etc.
 //
 // When RenderContext.DataMode == "url", the returned []render.EmittedData
-// describes the bodies that must be registered on previewhttp.Server before
+// describes the bodies that must be registered on httpserver.Server before
 // the HTML becomes reachable to the browser. In inline mode it is nil.
 func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, []render.EmittedData) {
 	rc := opts.RenderContext

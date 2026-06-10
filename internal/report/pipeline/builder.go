@@ -1,6 +1,6 @@
 // Package pipeline — builder.go provides the Builder type that decouples
-// CLI commands from the internal report orchestration packages (chrome, signing,
-// preview/httpserver). CLI commands create a Builder once with session-level
+// CLI commands from the internal report orchestration packages (chrome,
+// signing, httpserver). CLI commands create a Builder once with session-level
 // configuration and call its methods instead of importing and orchestrating
 // chrome, signing, and ephemeral-server lifecycles directly.
 package pipeline
@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/chrome"
+	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pdf"
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -414,17 +414,17 @@ func (b *Builder) SignPDF(ctx context.Context, pdfPath string, profile config.Si
 // ephemeralServer is a short-lived HTTP server used to serve rendered HTML
 // to Chrome headless shell during PDF generation and screenshot capture.
 type ephemeralServer struct {
-	server *previewhttp.Server
+	server *httpserver.Server
 	cancel context.CancelFunc
 	errCh  chan error
 }
 
-func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []previewhttp.LocalAsset, emitted []render.EmittedData) (*ephemeralServer, error) {
+func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []httpserver.LocalAsset, emitted []render.EmittedData) (*ephemeralServer, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	srv, err := previewhttp.New(previewhttp.Config{
+	srv, err := httpserver.New(httpserver.Config{
 		ListenAddr: "127.0.0.1:0",
 		CacheDir:   cacheDir,
 		Logger:     logger,
@@ -443,7 +443,7 @@ func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger
 			srv.PutDataset(e.Name, e.Hash, e.Body)
 		}
 	}
-	srv.SetContentFunc(previewhttp.StaticContent(append([]byte(nil), html...), "text/html; charset=utf-8"))
+	srv.SetContentFunc(httpserver.StaticContent(append([]byte(nil), html...), "text/html; charset=utf-8"))
 
 	runCtx, cancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)

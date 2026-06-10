@@ -1,6 +1,6 @@
 .DS_Store
 dist/
-internal/cli/web/node_modules/
+internal/web/node_modules/
 
 # AI development tools
 CLAUDE.md

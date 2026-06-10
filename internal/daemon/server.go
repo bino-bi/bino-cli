@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/graph"
 )
 
@@ -44,7 +44,7 @@ type indexDocument struct {
 // Server is the daemon HTTP server.
 type Server struct {
 	state          *State
-	sse            *previewhttp.SSEHub
+	sse            *httpserver.SSEHub
 	listener       net.Listener
 	httpServer     *http.Server
 	logger         logx.Logger
@@ -89,7 +89,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 
 	srv := &Server{
 		state:          cfg.State,
-		sse:            previewhttp.NewSSEHub(),
+		sse:            httpserver.NewSSEHub(),
 		listener:       listener,
 		logger:         cfg.Logger,
 		startedAt:      time.Now(),
@@ -138,7 +138,7 @@ func (s *Server) BroadcastEvent(event string, data any) {
 		s.logger.Warnf("daemon: marshal sse payload: %v", err)
 		return
 	}
-	s.sse.Broadcast(previewhttp.FormatSSE(event, payload))
+	s.sse.Broadcast(httpserver.FormatSSE(event, payload))
 }
 
 // ShutdownCh returns a channel that is closed when a shutdown is requested via the API.
@@ -437,7 +437,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	clientCh := s.sse.Subscribe()
 	defer s.sse.Unsubscribe(clientCh)
 
-	if _, err := w.Write(previewhttp.FormatSSE("ready", []byte(`{}`))); err != nil {
+	if _, err := w.Write(httpserver.FormatSSE("ready", []byte(`{}`))); err != nil {
 		return
 	}
 	flusher.Flush()

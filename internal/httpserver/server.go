@@ -1,4 +1,6 @@
-// Package httpserver provides a preview HTTP server for report development.
+// Package httpserver provides the HTTP server shared by the preview dev
+// server, the production serve command, and the ephemeral servers that back
+// Chrome during PDF rendering and screenshot capture.
 //
 // # Context and Cancellation
 //
@@ -34,9 +36,9 @@ import (
 	"sync"
 	"time"
 
-	"bino.bi/bino/internal/cli/web"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/runtimecfg"
+	"bino.bi/bino/internal/web"
 )
 
 // requestInfoKey is the context key for storing request info.

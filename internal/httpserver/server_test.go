@@ -1683,3 +1683,4 @@ func TestHandleCDN_CacheFirst_UsesCache(t *testing.T) {
 		t.Errorf("body = %q, want %q (cache-first files should use cache)", string(body), "cached css")
 	}
 }
+

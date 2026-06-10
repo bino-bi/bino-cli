@@ -123,14 +123,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: internal/cli/web/package-lock.json
+          cache-dependency-path: internal/web/package-lock.json
 
       - name: Install JS dependencies
-        working-directory: internal/cli/web
+        working-directory: internal/web
         run: npm ci
 
       - name: Regenerate bundles
-        run: go generate ./internal/cli/web/...
+        run: go generate ./internal/web/...
 
       - name: Verify bundles are up to date
-        run: git diff --exit-code -- internal/cli/web/static/
+        run: git diff --exit-code -- internal/web/static/

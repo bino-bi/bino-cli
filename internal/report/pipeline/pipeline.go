@@ -375,7 +375,7 @@ type RenderResult struct {
 	LocalAssets []render.LocalAsset
 	Diagnostics []datasource.Diagnostic
 	// EmittedData carries dataset/datasource bodies that must be registered on
-	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	// httpserver.Server when the renderer ran in url mode. Nil in inline mode.
 	EmittedData []render.EmittedData
 }
 
@@ -391,7 +391,7 @@ type FrameRenderResult struct {
 	// Diagnostics contains any warnings or errors from datasource/dataset processing.
 	Diagnostics []datasource.Diagnostic
 	// EmittedData carries dataset/datasource bodies that must be registered on
-	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	// httpserver.Server when the renderer ran in url mode. Nil in inline mode.
 	EmittedData []render.EmittedData
 }
 
@@ -1306,7 +1306,7 @@ type DocumentArtefactResult struct {
 	// Populated when TableOfContents is enabled in the spec.
 	HeadingIDs []string
 	// EmittedData carries the dataset/datasource bodies that must be
-	// registered on previewhttp.Server when the renderer ran in url mode.
+	// registered on httpserver.Server when the renderer ran in url mode.
 	// Nil in inline mode.
 	EmittedData []render.EmittedData
 }
@@ -1525,7 +1525,7 @@ type PresentationArtefactResult struct {
 	HTML        []byte
 	LocalAssets []render.LocalAsset
 	// EmittedData carries dataset/datasource bodies that must be registered on
-	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	// httpserver.Server when the renderer ran in url mode. Nil in inline mode.
 	EmittedData []render.EmittedData
 }
 
@@ -1545,7 +1545,7 @@ type PresentationFrameRenderResult struct {
 	ContextHTML []byte
 	LocalAssets []render.LocalAsset
 	// EmittedData carries dataset/datasource bodies that must be registered on
-	// previewhttp.Server when the renderer ran in url mode. Nil in inline mode.
+	// httpserver.Server when the renderer ran in url mode. Nil in inline mode.
 	EmittedData []render.EmittedData
 }
 

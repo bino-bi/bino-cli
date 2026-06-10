@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/hooks"
+	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/pipeline"
@@ -185,7 +185,7 @@ Environment knobs:
 			}
 
 			// Create the server
-			server, err := previewhttp.New(previewhttp.Config{
+			server, err := httpserver.New(httpserver.Config{
 				ListenAddr: addr,
 				CacheDir:   env.CacheDir,
 				Logger:     logger.Channel("server"),
@@ -298,7 +298,7 @@ Environment knobs:
 
 // serveRequestContext holds the result of processing query parameters for a serve request.
 type serveRequestContext struct {
-	ReqInfo     previewhttp.RequestInfo
+	ReqInfo     httpserver.RequestInfo
 	QueryParams map[string]string
 	Docs        []config.Document // Documents reloaded with query params (or baseDocs if no params)
 }
@@ -317,7 +317,7 @@ func prepareServeRequest(
 	session *duckdb.Session,
 	kindProvider config.KindProvider,
 ) (*serveRequestContext, []byte, error) {
-	reqInfo := previewhttp.GetRequestInfo(ctx)
+	reqInfo := httpserver.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
 	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
@@ -372,19 +372,19 @@ type serveRouteConfig struct {
 	HostService        *plugin.BinoHostServer
 	// Server is used to register dataset/datasource payloads when the
 	// renderer runs in url mode. May be nil in inline mode.
-	Server *previewhttp.Server
+	Server *httpserver.Server
 }
 
 // serveRouteSetup holds the results of route setup.
 type serveRouteSetup struct {
-	RouteMap    map[string]previewhttp.ContentFunc
-	RootContent previewhttp.ContentFunc // nil if "/" not in routes
+	RouteMap    map[string]httpserver.ContentFunc
+	RootContent httpserver.ContentFunc // nil if "/" not in routes
 }
 
 // setupServeRoutes builds the route map and root content function from a LiveReportArtefact.
 func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	renderCache := newServeRenderCache()
-	routeMap := make(map[string]previewhttp.ContentFunc)
+	routeMap := make(map[string]httpserver.ContentFunc)
 
 	// renderMu serializes request handling across the shared DuckDB session:
 	// renders execute ATTACH and CREATE OR REPLACE VIEW with request-scoped
@@ -479,8 +479,8 @@ func collectServeAssets(
 	engineVersion string, session *duckdb.Session, pluginOpts *render.PluginOptions,
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
-) []previewhttp.LocalAsset {
-	allAssets := make([]previewhttp.LocalAsset, 0)
+) []httpserver.LocalAsset {
+	allAssets := make([]httpserver.LocalAsset, 0)
 	for _, route := range liveArtefact.Spec.Routes {
 		if route.Artifact != "" {
 			art := artefactMap[route.Artifact]
@@ -527,7 +527,7 @@ type serveRenderEntry struct {
 	contextHTML []byte
 	assets      []render.LocalAsset
 	// emitted is the set of dataset/datasource bodies that need to be
-	// registered on the previewhttp.Server's data store for url-mode fetches.
+	// registered on the httpserver.Server's data store for url-mode fetches.
 	// Re-registered on every cache hit because the store retains only the
 	// last N hashes per (kind,name).
 	emitted []render.EmittedData
@@ -571,10 +571,10 @@ func serveRenderHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
-	server *previewhttp.Server,
+	server *httpserver.Server,
 ) (body []byte, contentType string, err error) {
 	// Extract query parameters from request context
-	reqInfo := previewhttp.GetRequestInfo(ctx)
+	reqInfo := httpserver.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
 	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
@@ -696,7 +696,7 @@ func serveLayoutPagesHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
-	server *previewhttp.Server,
+	server *httpserver.Server,
 ) (body []byte, contentType string, err error) {
 	// Process query parameters and reload documents if needed
 	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)

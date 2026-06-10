@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	previewhttp "bino.bi/bino/internal/preview/httpserver"
+	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/report/render"
 )
 
 // registerEmittedData registers a renderer's emitted dataset/datasource
-// payloads on previewhttp.Server so that <bn-datasource> / <bn-dataset>
+// payloads on httpserver.Server so that <bn-datasource> / <bn-dataset>
 // elements (in url mode) can fetch them via /__bino/data/{kind}/{name}?hash=…
 // Safe to call with nil server, nil entries, or unknown kinds.
-func registerEmittedData(server *previewhttp.Server, entries []render.EmittedData) {
+func registerEmittedData(server *httpserver.Server, entries []render.EmittedData) {
 	if server == nil || len(entries) == 0 {
 		return
 	}

@@ -25,12 +25,12 @@ const (
 	// DataModeInline embeds gzip+base64 payload bodies directly in the HTML.
 	DataModeInline = "inline"
 	// DataModeURL emits an HTTP URL body that fetches the JSON from
-	// previewhttp.Server. The caller must register payloads on the server.
+	// httpserver.Server. The caller must register payloads on the server.
 	DataModeURL = "url"
 
 	// EmittedKindDatasource and EmittedKindDataset match the URL path segment
-	// served by previewhttp.Server (/__bino/data/{datasource|dataset}/…) and
-	// the value used by previewhttp.PutDatasource / PutDataset.
+	// served by httpserver.Server (/__bino/data/{datasource|dataset}/…) and
+	// the value used by httpserver.PutDatasource / PutDataset.
 	EmittedKindDatasource = "datasource"
 	EmittedKindDataset    = "dataset"
 )
@@ -266,7 +266,7 @@ func filterDatasourcesByRefs(results []datasource.Result, referenced map[string]
 // In DataModeInline, payload bodies are gzip+base64 inlined into the element
 // (raw="false" indicates compressed content).
 //
-// In DataModeURL, the body is a URL pointing at previewhttp.Server (absolute
+// In DataModeURL, the body is a URL pointing at httpserver.Server (absolute
 // when dataBaseURL is non-empty, otherwise a same-origin path starting with
 // "/__bino/data/…"). The returned EmittedData entries must be registered on
 // the server with PutDatasource(name, hash, body) before the HTML is served.

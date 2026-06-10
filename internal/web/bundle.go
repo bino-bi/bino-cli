@@ -3,7 +3,7 @@
 // Package main bundles the preview and serve UI entrypoints into static
 // JS files that are embedded into the bino binary. Run via:
 //
-//	go generate ./internal/cli/web/...
+//	go generate ./internal/web/...
 package main
 
 import (
@@ -21,7 +21,7 @@ func main() {
 	if _, err := os.Stat(filepath.Join(wd, "node_modules")); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr,
 			"web/bundle: node_modules missing — skipping bundle regeneration. "+
-				"Run 'npm ci' inside internal/cli/web/ to enable.")
+				"Run 'npm ci' inside internal/web/ to enable.")
 		return
 	}
 

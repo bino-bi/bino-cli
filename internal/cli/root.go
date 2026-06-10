@@ -34,7 +34,7 @@
 // - Individual queries use context with configurable timeout (BNR_MAX_QUERY_DURATION_MS)
 // - Parent context cancellation stops in-flight queries
 //
-// ### internal/preview/httpserver
+// ### internal/httpserver
 // - Server.Start() blocks until context is canceled
 // - Graceful shutdown with 5-second timeout for in-flight requests
 // - SSE connections respect request context for cleanup
