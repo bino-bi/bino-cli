@@ -8,7 +8,10 @@ linters:
     - errname
     - errorlint
     - exhaustive
+    - funlen
+    - gocognit
     - gocritic
+    - gocyclo
     - gosec
     - misspell
     - nilerr
@@ -19,14 +22,21 @@ linters:
     - unparam
     - whitespace
   disable:
-    - funlen
-    - gocognit
-    - gocyclo
     - lll
     - nlreturn
     - wrapcheck
     - wsl
   settings:
+    # Complexity linters act as a backstop against pathological growth, not a
+    # style gate: thresholds are deliberately loose, and pre-existing offenders
+    # carry //nolint:gocognit markers. Don't add new ones — refactor instead.
+    funlen:
+      lines: 250
+      statements: -1
+    gocognit:
+      min-complexity: 60
+    gocyclo:
+      min-complexity: 60
     errcheck:
       check-type-assertions: true
       check-blank: false
@@ -100,6 +110,11 @@ linters:
       - linters:
           - gocritic
           - gosec
+        path: _test\.go
+      - linters:
+          - funlen
+          - gocognit
+          - gocyclo
         path: _test\.go
       - linters:
           - errcheck

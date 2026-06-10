@@ -39,7 +39,7 @@ type ViewsOptions struct {
 //   - Attaches external databases (postgres, mysql) using ATTACH with appropriate secrets
 //   - Creates `CREATE OR REPLACE VIEW "<name>" AS <sourceSQL>` for each DataSource
 //   - Returns diagnostics for individual failures without aborting the entire operation
-func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.Document, opts *ViewsOptions) ([]Diagnostic, error) {
+func RegisterViews(ctx context.Context, session *duckdb.Session, docs []config.Document, opts *ViewsOptions) ([]Diagnostic, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

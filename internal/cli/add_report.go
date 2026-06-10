@@ -55,7 +55,7 @@ type SigningProfileManifestData struct {
 	SignerName      string
 }
 
-func newAddReportArtefactCommand() *cobra.Command {
+func newAddReportArtefactCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		flagFilename    string
 		flagTitle       string
@@ -375,7 +375,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 	return cmd
 }
 
-func newAddLiveReportArtefactCommand() *cobra.Command {
+func newAddLiveReportArtefactCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagTitle      string
 		flagConstraint []string
@@ -598,7 +598,7 @@ IMPORTANT: A root route "/" is required.
 	return cmd
 }
 
-func newAddSigningProfileCommand() *cobra.Command {
+func newAddSigningProfileCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagCertificate string
 		flagPrivateKey  string

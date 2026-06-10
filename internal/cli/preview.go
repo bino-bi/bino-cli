@@ -52,7 +52,7 @@ const defaultPreviewPort = 45678
 //   - The file watcher stops processing events
 //   - The HTTP server performs graceful shutdown (5s timeout)
 //   - The refresh goroutine exits
-func newPreviewCommand() *cobra.Command {
+func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		port           int
 		workdir        string
@@ -596,7 +596,7 @@ type previewRefreshConfig struct {
 // fresh content broadcast so the caller can forward it to
 // BroadcastRefreshDone — clients viewing a path not in the slice know their
 // view was not part of this refresh (failure or simply unaffected).
-func refreshPreviewContent(ctx context.Context, reason string, changed []string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig, state *previewRefreshState) ([]string, error) {
+func refreshPreviewContent(ctx context.Context, reason string, changed []string, server *previewhttp.Server, explorerSession *explorer.Session, cfg *previewRefreshConfig, state *previewRefreshState) ([]string, error) { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	logger := cfg.Logger
 	watchDir := cfg.Workdir
 	report := cfg.Reporter

@@ -16,7 +16,7 @@ import (
 
 const defaultInactivityTimeout = 5 * time.Minute
 
-func newDaemonCommand() *cobra.Command {
+func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		port       int
 		workdir    string

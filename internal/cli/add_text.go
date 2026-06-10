@@ -44,7 +44,7 @@ type InternationalizationManifestData struct {
 	Content     map[string]string // Translation key-value pairs
 }
 
-func newAddTextCommand() *cobra.Command {
+func newAddTextCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagValue      string
 		flagDataset    string

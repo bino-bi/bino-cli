@@ -39,7 +39,7 @@ const componentReadyConsolePrefix = "componentRegisterIsRendered:"
 //   - During PDF rendering via Chrome headless shell
 //
 // On cancellation, partial work is abandoned and resources are cleaned up.
-func newBuildCommand() *cobra.Command {
+func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		workdir    string
 		outDir     string

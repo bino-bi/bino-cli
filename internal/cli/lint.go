@@ -23,7 +23,7 @@ import (
 
 // newLintCommand creates the lint subcommand.
 // It loads and validates manifests, then runs lint rules and reports findings.
-func newLintCommand() *cobra.Command {
+func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		workdir        string
 		outDir         string

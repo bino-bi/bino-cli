@@ -166,7 +166,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider) ([]Document, error) {
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)

@@ -98,7 +98,7 @@ type ConnectionSecretManifestData struct {
 	AccountKey       string
 }
 
-func newAddConnectionSecretCommand() *cobra.Command {
+func newAddConnectionSecretCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		flagType        string
 		flagPasswordEnv string

@@ -35,7 +35,7 @@ type LayoutCardManifestData struct {
 	Children    []string // Component names
 }
 
-func newAddLayoutPageCommand() *cobra.Command {
+func newAddLayoutPageCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagChildren   []string
 		flagConstraint []string
@@ -280,7 +280,7 @@ populate with component references later.
 	return cmd
 }
 
-func newAddLayoutCardCommand() *cobra.Command {
+func newAddLayoutCardCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagTitle      string
 		flagChildren   []string

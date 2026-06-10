@@ -32,7 +32,7 @@ const defaultServePort = 8080
 //   - Renders on-demand per request (with caching)
 //   - Uses query parameters for dynamic variable substitution
 //   - Serves a single LiveReportArtefact with navigation
-func newServeCommand() *cobra.Command {
+func newServeCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		port     int
 		workdir  string

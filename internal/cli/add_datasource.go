@@ -18,7 +18,7 @@ import (
 	"bino.bi/bino/internal/schema"
 )
 
-func newAddDataSourceCommand() *cobra.Command {
+func newAddDataSourceCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		flagType         string
 		flagFile         string

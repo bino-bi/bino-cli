@@ -11,7 +11,7 @@ import (
 	"bino.bi/bino/internal/updater"
 )
 
-func newSetupCommand() *cobra.Command {
+func newSetupCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		dryRun         bool
 		quiet          bool

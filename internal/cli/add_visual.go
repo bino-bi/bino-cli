@@ -45,7 +45,7 @@ type ChartTimeManifestData struct {
 	Title       string
 }
 
-func newAddTableCommand() *cobra.Command {
+func newAddTableCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagDataset    string
 		flagTitle      string
@@ -249,7 +249,7 @@ A Table component displays data from a DataSet in a formatted table.
 	return cmd
 }
 
-func newAddChartStructureCommand() *cobra.Command {
+func newAddChartStructureCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagDataset    string
 		flagTitle      string
@@ -487,7 +487,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 	return cmd
 }
 
-func newAddChartTimeCommand() *cobra.Command {
+func newAddChartTimeCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagDataset    string
 		flagTitle      string
