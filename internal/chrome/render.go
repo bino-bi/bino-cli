@@ -78,7 +78,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	// Navigate and wait for network idle
 	if err := chromedp.Run(taskCtx,
 		chromedp.Navigate(opts.URL),
-		waitNetworkIdle(),
+		waitNetworkIdle(logger),
 	); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return err
@@ -88,7 +88,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 
 	// Wait for component readiness signal
 	if readyCh != nil {
-		if err := waitForComponentReady(ctx, readyCh, timeout); err != nil {
+		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
 			return err
 		}
 	}
@@ -269,7 +269,7 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	if err := chromedp.Run(taskCtx,
 		chromedp.EmulateViewport(int64(viewportWidth), int64(viewportHeight), chromedp.EmulateScale(scaleFactor)),
 		chromedp.Navigate(opts.URL),
-		waitNetworkIdle(),
+		waitNetworkIdle(logger),
 	); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, err
@@ -278,7 +278,7 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	}
 
 	if readyCh != nil {
-		if err := waitForComponentReady(ctx, readyCh, timeout); err != nil {
+		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
 			return nil, err
 		}
 	}
@@ -351,7 +351,12 @@ func newExecAllocator(parentCtx context.Context, chromePath string, debug bool) 
 
 // waitNetworkIdle returns a chromedp action that enables lifecycle events and
 // waits for the "networkIdle" event, indicating no pending network requests.
-func waitNetworkIdle() chromedp.ActionFunc {
+// A timeout is tolerated (some pages never fire networkIdle) but logged as a
+// warning, since the rendered output may be incomplete.
+func waitNetworkIdle(logger logx.Logger) chromedp.ActionFunc {
+	if logger == nil {
+		logger = logx.Nop()
+	}
 	return func(ctx context.Context) error {
 		// Enable lifecycle events
 		if err := page.SetLifecycleEventsEnabled(true).Do(ctx); err != nil {
@@ -374,7 +379,9 @@ func waitNetworkIdle() chromedp.ActionFunc {
 		case <-ch:
 			return nil
 		case <-ctx.Done():
-			// Timeout = success (same as current behavior — page may not fire networkIdle)
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				logger.Warnf("Timed out waiting for network idle; rendered output may be incomplete")
+			}
 			return nil
 		}
 	}
@@ -441,7 +448,12 @@ func unquoteJSValue(raw jsontext.Value) string {
 }
 
 // waitForComponentReady blocks until the component signals readiness or a timeout/cancellation occurs.
-func waitForComponentReady(ctx context.Context, ready <-chan struct{}, timeout time.Duration) error {
+// A timeout is tolerated (the page may never emit the readiness signal) but logged
+// as a warning, since the rendered output may be incomplete.
+func waitForComponentReady(ctx context.Context, ready <-chan struct{}, timeout time.Duration, logger logx.Logger) error {
+	if logger == nil {
+		logger = logx.Nop()
+	}
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
 	}
@@ -452,6 +464,7 @@ func waitForComponentReady(ctx context.Context, ready <-chan struct{}, timeout t
 		return nil
 	case <-waitCtx.Done():
 		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+			logger.Warnf("Component readiness signal not received within %s; rendered output may be incomplete", timeout)
 			return nil
 		}
 		return waitCtx.Err()

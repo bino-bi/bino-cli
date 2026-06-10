@@ -1,8 +1,15 @@
 package chrome
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
+	"time"
+
+	"bino.bi/bino/internal/logx"
 )
 
 func TestFormatDimensionsPx(t *testing.T) {
@@ -177,4 +184,59 @@ func TestIsTruthy(t *testing.T) {
 			t.Errorf("isTruthy(%q) = %v, want %v", tt.input, got, tt.want)
 		}
 	}
+}
+
+// warnCaptureLogger records Warnf calls for assertions.
+type warnCaptureLogger struct {
+	logx.Logger
+	warns []string
+}
+
+func (l *warnCaptureLogger) Warnf(format string, args ...any) {
+	l.warns = append(l.warns, fmt.Sprintf(format, args...))
+}
+
+func TestWaitForComponentReady(t *testing.T) {
+	t.Run("ready signal received", func(t *testing.T) {
+		ready := make(chan struct{}, 1)
+		ready <- struct{}{}
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+
+		if err := waitForComponentReady(context.Background(), ready, time.Second, logger); err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if len(logger.warns) != 0 {
+			t.Errorf("waitForComponentReady() logged warnings %v, want none", logger.warns)
+		}
+	})
+
+	t.Run("timeout logs warning", func(t *testing.T) {
+		ready := make(chan struct{})
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+
+		if err := waitForComponentReady(context.Background(), ready, 10*time.Millisecond, logger); err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil (timeout is tolerated)", err)
+		}
+		if len(logger.warns) != 1 {
+			t.Fatalf("waitForComponentReady() logged %d warnings, want 1", len(logger.warns))
+		}
+		if !strings.Contains(logger.warns[0], "may be incomplete") {
+			t.Errorf("warning %q should mention incomplete output", logger.warns[0])
+		}
+	})
+
+	t.Run("cancellation returns error without warning", func(t *testing.T) {
+		ready := make(chan struct{})
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := waitForComponentReady(ctx, ready, time.Second, logger)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("waitForComponentReady() error = %v, want context.Canceled", err)
+		}
+		if len(logger.warns) != 0 {
+			t.Errorf("waitForComponentReady() logged warnings %v, want none", logger.warns)
+		}
+	})
 }
