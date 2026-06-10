@@ -69,8 +69,9 @@ import (
 // and carries cancellation signals for graceful shutdown.
 func newRootCommand() *cobra.Command {
 	var (
-		verbose bool
-		noColor bool
+		verbose   bool
+		noColor   bool
+		logFormat string
 	)
 	cmd := &cobra.Command{
 		Use:   "bino",
@@ -122,8 +123,17 @@ func newRootCommand() *cobra.Command {
 			ctx = WithStyle(ctx, GetStyle())
 			ctx = logx.WithNoColor(ctx, effectiveNoColor)
 
-			// Create terminal logger with the same noColor setting
-			var logger logx.Logger = logx.NewTerminalWithColor(cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose, effectiveNoColor)
+			// Create the logger: colored terminal output by default, JSON
+			// lines for production deployments (log aggregation).
+			var logger logx.Logger
+			switch logFormat {
+			case "", "text":
+				logger = logx.NewTerminalWithColor(cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose, effectiveNoColor)
+			case "json":
+				logger = logx.NewJSON(cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose)
+			default:
+				return ConfigErrorf("invalid --log-format %q: expected \"text\" or \"json\"", logFormat)
+			}
 
 			// Only show run ID in logger prefix when verbose mode is enabled
 			if verbose {
@@ -147,6 +157,7 @@ func newRootCommand() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&verbose, "debug", false, "Enable verbose logging (alias for --verbose)")
 	_ = cmd.PersistentFlags().MarkHidden("debug") // Keep --debug working but prefer --verbose in docs
 	cmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	cmd.PersistentFlags().StringVar(&logFormat, "log-format", "text", "Log output format: 'text' (colored terminal) or 'json' (one JSON object per line)")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newAboutCommand())
