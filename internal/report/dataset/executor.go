@@ -499,7 +499,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		}
 	}
 	if hasPrql {
-		if err := session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions()); err != nil {
+		if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
 			return nil, nil, fmt.Errorf("load prql extension: %w", err)
 		}
 	}

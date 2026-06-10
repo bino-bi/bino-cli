@@ -611,7 +611,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 		switch {
 		case payload.Spec.Prql != "":
 			// Load PRQL extension for PRQL queries
-			if err := session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions()); err != nil {
+			if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
 				return nil, nil, false, fmt.Errorf("load prql extension: %w", err)
 			}
 			// For PRQL, wrap the query with a LIMIT

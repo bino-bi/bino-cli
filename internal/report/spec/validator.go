@@ -33,7 +33,14 @@ func (e *SchemaValidationError) Error() string {
 	}
 
 	var b strings.Builder
-	b.WriteString("schema validation failed:\n")
+	b.WriteString("schema validation failed")
+	if e.File != "" {
+		fmt.Fprintf(&b, " in %s", e.File)
+		if e.DocPosition > 0 {
+			fmt.Fprintf(&b, " (document #%d)", e.DocPosition)
+		}
+	}
+	b.WriteString(":\n")
 
 	// Group errors by field path prefix for better readability
 	for i, err := range e.Errors {
@@ -41,6 +48,12 @@ func (e *SchemaValidationError) Error() string {
 			b.WriteString("\n")
 		}
 		b.WriteString(formatSchemaError(err))
+		if err.Line > 0 && e.Source != "" {
+			if snippet := ExtractSourceSnippet(e.Source, err.Line, 2); snippet != "" {
+				b.WriteString("\n")
+				b.WriteString(snippet)
+			}
+		}
 	}
 
 	return strings.TrimSpace(b.String())
@@ -52,10 +65,14 @@ func formatSchemaError(err SchemaError) string {
 
 	// Field path with visual indicator
 	if err.Field != "" && err.Field != "(root)" {
-		fmt.Fprintf(&b, "  ✗ %s\n", err.Field)
+		fmt.Fprintf(&b, "  ✗ %s", err.Field)
 	} else {
-		b.WriteString("  ✗ (document root)\n")
+		b.WriteString("  ✗ (document root)")
 	}
+	if err.Line > 0 {
+		fmt.Fprintf(&b, " (line %d, col %d)", err.Line, err.Column)
+	}
+	b.WriteString("\n")
 
 	// Description
 	fmt.Fprintf(&b, "    %s\n", err.Description)

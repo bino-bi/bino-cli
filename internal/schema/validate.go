@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 	"gopkg.in/yaml.v3"
@@ -173,6 +174,21 @@ func flattenIssues(ve *jsonschema.ValidationError, inst any) []ValidationIssue {
 		path := "(root)"
 		if len(n.InstanceLocation) > 0 {
 			path = strings.Join(n.InstanceLocation, ".")
+		}
+
+		// additionalProperties failures are reported on the parent object and
+		// list every disallowed key. Emit one issue per key, pathed at the key
+		// itself, so line/column resolution points at the offending property.
+		if ap, ok := n.ErrorKind.(*kind.AdditionalProperties); ok {
+			for _, prop := range ap.Properties {
+				loc := append(append([]string{}, n.InstanceLocation...), prop)
+				issues = append(issues, ValidationIssue{
+					Path:    strings.Join(loc, "."),
+					Message: fmt.Sprintf("additional property '%s' not allowed", prop),
+					Value:   valueAt(inst, loc),
+				})
+			}
+			return
 		}
 
 		issues = append(issues, ValidationIssue{

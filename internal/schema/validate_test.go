@@ -384,6 +384,47 @@ this is not: valid: yaml: syntax
 	}
 }
 
+func TestValidate_AdditionalPropertyPath(t *testing.T) {
+	// additionalProperties failures must be pathed at the offending key (not
+	// the parent object) so line/column resolution points at the right line.
+	yaml := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test_dataset
+spec:
+  query: SELECT 1
+  level: warning
+`
+
+	err := Validate([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected validation error for unknown key, got nil")
+	}
+
+	ve := &ValidationError{}
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *ValidationError, got %T", err)
+	}
+
+	found := false
+	for _, issue := range ve.Errors {
+		if issue.Path != "spec.level" {
+			continue
+		}
+		found = true
+		if !strings.Contains(issue.Message, "'level' not allowed") {
+			t.Errorf("expected message to name 'level', got: %s", issue.Message)
+		}
+		if issue.Value != "warning" {
+			t.Errorf("expected value 'warning', got: %v", issue.Value)
+		}
+	}
+	if !found {
+		t.Errorf("expected an issue with path 'spec.level', got: %v", ve.Errors)
+	}
+}
+
 func TestValidationError_Error(t *testing.T) {
 	ve := &ValidationError{
 		Errors: []ValidationIssue{

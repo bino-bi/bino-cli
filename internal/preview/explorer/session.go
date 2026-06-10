@@ -7,6 +7,7 @@ package explorer
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -41,15 +43,12 @@ func NewSession(ctx context.Context, logger logx.Logger) (*Session, error) {
 		return nil, fmt.Errorf("explorer: open duckdb: %w", err)
 	}
 
-	// Install standard and community extensions
-	if err := sess.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
-		sess.Close()
-		os.RemoveAll(tmpDir)
-		return nil, fmt.Errorf("explorer: install extensions: %w", err)
-	}
-	if err := sess.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions()); err != nil {
-		logger.Warnf("explorer: community extensions: %v", err)
-	}
+	// No eager extension loading: standard extensions autoload on first use
+	// (autoload_known_extensions defaults to true), datasource-required ones
+	// are loaded by RegisterViews during Refresh, and prql is loaded there
+	// only when a dataset actually uses it. Loading everything up front made
+	// explorer init slow and pulled in webdavfs, which prints raw noise to
+	// stdout on LOAD.
 
 	return &Session{
 		session: sess,
@@ -81,6 +80,14 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 	entries, _ := os.ReadDir(s.tempDir)
 	for _, e := range entries {
 		os.Remove(fmt.Sprintf("%s/%s", s.tempDir, e.Name()))
+	}
+
+	// PRQL cannot autoload (community extension); load it only when a
+	// dataset actually uses it.
+	if needsPrql(docs) {
+		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
+			s.logger.Warnf("explorer: prql extension: %v", err)
+		}
 	}
 
 	// Re-register views from documents
@@ -122,6 +129,27 @@ func (s *Session) Close() error {
 		return s.session.Close()
 	}
 	return nil
+}
+
+// needsPrql reports whether any DataSet document uses a PRQL query.
+func needsPrql(docs []config.Document) bool {
+	for _, doc := range docs {
+		if doc.Kind != "DataSet" {
+			continue
+		}
+		var payload struct {
+			Spec struct {
+				Prql spec.QueryField `json:"prql"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &payload) != nil {
+			continue
+		}
+		if !payload.Spec.Prql.IsEmpty() {
+			return true
+		}
+	}
+	return false
 }
 
 // dropUserViews drops all non-internal views from the DuckDB session.

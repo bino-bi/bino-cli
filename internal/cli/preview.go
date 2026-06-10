@@ -415,9 +415,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 							}
 							coalesced, files := refresh.MergeRequests(pending)
 							pending = pending[:0]
-							if err := doRefresh(coalesced, files); err != nil {
-								logger.Errorf("Refresh failed: %v", err)
-							}
+							// refresh.Run logs its own failures with reason
+							// context; logging here would duplicate the output.
+							_ = doRefresh(coalesced, files)
 						}
 					}
 				}()
