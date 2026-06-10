@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -516,10 +517,25 @@ func collectServeAssets(
 	return allAssets
 }
 
-// serveRenderCache provides thread-safe caching for rendered content.
+// maxServeRenderCacheEntries bounds the render cache. Every distinct
+// query-param combination creates an entry and params arrive from untrusted
+// clients, so an unbounded map is a memory-growth vector on the production
+// serve surface.
+const maxServeRenderCacheEntries = 100
+
+// serveRenderCache provides thread-safe caching for rendered content with
+// LRU eviction once maxServeRenderCacheEntries is exceeded.
 type serveRenderCache struct {
-	mu    sync.RWMutex
-	cache map[string]*serveRenderEntry
+	mu    sync.Mutex
+	cache map[string]*list.Element
+	lru   *list.List // front=oldest, back=most recently used
+}
+
+// serveRenderCacheItem is the LRU list element value; it stores its own key
+// so eviction can delete the map entry in O(1).
+type serveRenderCacheItem struct {
+	key   string
+	entry *serveRenderEntry
 }
 
 type serveRenderEntry struct {
@@ -535,21 +551,39 @@ type serveRenderEntry struct {
 
 func newServeRenderCache() *serveRenderCache {
 	return &serveRenderCache{
-		cache: make(map[string]*serveRenderEntry),
+		cache: make(map[string]*list.Element),
+		lru:   list.New(),
 	}
 }
 
 func (c *serveRenderCache) Get(key string) (*serveRenderEntry, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	entry, ok := c.cache[key]
-	return entry, ok
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	elem, ok := c.cache[key]
+	if !ok {
+		return nil, false
+	}
+	c.lru.MoveToBack(elem)
+	item, _ := elem.Value.(*serveRenderCacheItem)
+	return item.entry, true
 }
 
 func (c *serveRenderCache) Set(key string, entry *serveRenderEntry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cache[key] = entry
+	if elem, ok := c.cache[key]; ok {
+		item, _ := elem.Value.(*serveRenderCacheItem)
+		item.entry = entry
+		c.lru.MoveToBack(elem)
+		return
+	}
+	c.cache[key] = c.lru.PushBack(&serveRenderCacheItem{key: key, entry: entry})
+	for c.lru.Len() > maxServeRenderCacheEntries {
+		oldest := c.lru.Front()
+		item, _ := oldest.Value.(*serveRenderCacheItem)
+		delete(c.cache, item.key)
+		c.lru.Remove(oldest)
+	}
 }
 
 // serveRenderHandler handles on-demand rendering for a route with query param substitution.

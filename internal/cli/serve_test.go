@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
@@ -471,5 +472,51 @@ func TestBuildQueryParamsJSON(t *testing.T) {
 				t.Errorf("got %d params, want %d", len(params), tt.wantCount)
 			}
 		})
+	}
+}
+
+func TestServeRenderCache_LRUBound(t *testing.T) {
+	cache := newServeRenderCache()
+
+	// Fill past the cap; the oldest entries must be evicted.
+	for i := 0; i < maxServeRenderCacheEntries+10; i++ {
+		cache.Set(fmt.Sprintf("key-%d", i), &serveRenderEntry{frameHTML: []byte{byte(i)}})
+	}
+	if got := cache.lru.Len(); got != maxServeRenderCacheEntries {
+		t.Fatalf("lru length = %d, want %d", got, maxServeRenderCacheEntries)
+	}
+	if len(cache.cache) != maxServeRenderCacheEntries {
+		t.Fatalf("map length = %d, want %d", len(cache.cache), maxServeRenderCacheEntries)
+	}
+	for i := 0; i < 10; i++ {
+		if _, ok := cache.Get(fmt.Sprintf("key-%d", i)); ok {
+			t.Fatalf("key-%d should have been evicted", i)
+		}
+	}
+	if _, ok := cache.Get("key-10"); !ok {
+		t.Fatal("key-10 should still be cached")
+	}
+
+	// Get must refresh recency: touch the oldest entry, add one more, and
+	// verify the touched entry survived while the next-oldest was evicted.
+	if _, ok := cache.Get("key-11"); !ok {
+		t.Fatal("key-11 should still be cached")
+	}
+	cache.Set("key-new", &serveRenderEntry{})
+	if _, ok := cache.Get("key-11"); !ok {
+		t.Fatal("key-11 was evicted despite being recently used")
+	}
+	if _, ok := cache.Get("key-12"); ok {
+		t.Fatal("key-12 should have been evicted as least recently used")
+	}
+
+	// Set on an existing key must update in place, not grow the cache.
+	cache.Set("key-new", &serveRenderEntry{frameHTML: []byte("updated")})
+	if got := cache.lru.Len(); got != maxServeRenderCacheEntries {
+		t.Fatalf("lru length after update = %d, want %d", got, maxServeRenderCacheEntries)
+	}
+	entry, ok := cache.Get("key-new")
+	if !ok || string(entry.frameHTML) != "updated" {
+		t.Fatalf("key-new not updated in place: ok=%v entry=%v", ok, entry)
 	}
 }
