@@ -986,37 +986,55 @@ func needsAllPagesRerender(seeds []*reportgraph.Node) bool {
 	return false
 }
 
+// lazyContent wraps renderFn in a ContentFunc that caches the first successful
+// result. Errors are returned but not cached, so a failed first render (e.g.
+// with an already-canceled request context) does not pin the error for all
+// subsequent requests.
+func lazyContent(renderFn previewhttp.ContentFunc) previewhttp.ContentFunc {
+	var mu sync.Mutex
+	var cached bool
+	var cachedBody []byte
+	var cachedCT string
+
+	return func(ctx context.Context) ([]byte, string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if cached {
+			return cachedBody, cachedCT, nil
+		}
+		body, ct, err := renderFn(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		cached = true
+		cachedBody = body
+		cachedCT = ct
+		return cachedBody, cachedCT, nil
+	}
+}
+
 // lazyPresentationContent returns a ContentFunc that renders the presentation view
 // on first access, caching the result for subsequent requests.
 func lazyPresentationContent(workdir string, docs []config.Document, art config.Artifact, cfg *previewRefreshConfig, server *previewhttp.Server, presPath string) previewhttp.ContentFunc {
-	var once sync.Once
-	var cachedBody []byte
-	var cachedCT string
-	var cachedErr error
-
-	return func(ctx context.Context) ([]byte, string, error) {
-		once.Do(func() {
-			renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, workdir, docs, art, pipeline.PresentationArtefactRenderOptions{
-				EngineVersion:            cfg.EngineVersion,
-				QueryLogger:              cfg.QueryLogger,
-				DataValidation:           cfg.DataValidationMode,
-				DataValidationSampleSize: cfg.DataValidationSampleSize,
-				PluginOptions:            cfg.PluginOptions,
-				PostDatasetHook:          cfg.PostDatasetHook,
-				Session:                  cfg.Session,
-			})
-			if err != nil {
-				cachedErr = err
-				return
-			}
-			registerEmittedData(server, renderResult.EmittedData)
-			frameHTML := withPreviewStyles(renderResult.FrameHTML)
-			cachedBody = append([]byte(nil), frameHTML...)
-			cachedCT = "text/html; charset=utf-8"
-			server.BroadcastContent(presPath, renderResult.ContextHTML)
+	return lazyContent(func(ctx context.Context) ([]byte, string, error) {
+		renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, workdir, docs, art, pipeline.PresentationArtefactRenderOptions{
+			EngineVersion:            cfg.EngineVersion,
+			QueryLogger:              cfg.QueryLogger,
+			DataValidation:           cfg.DataValidationMode,
+			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			PluginOptions:            cfg.PluginOptions,
+			PostDatasetHook:          cfg.PostDatasetHook,
+			Session:                  cfg.Session,
 		})
-		return cachedBody, cachedCT, cachedErr
-	}
+		if err != nil {
+			return nil, "", err
+		}
+		registerEmittedData(server, renderResult.EmittedData)
+		frameHTML := withPreviewStyles(renderResult.FrameHTML)
+		body := append([]byte(nil), frameHTML...)
+		server.BroadcastContent(presPath, renderResult.ContextHTML)
+		return body, "text/html; charset=utf-8", nil
+	})
 }
 
 // embeddableComponentKinds are standalone component kinds that can be rendered
