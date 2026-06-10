@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/runtimecfg"
 )
 
 func TestExecute_CachesResults(t *testing.T) {
@@ -112,7 +114,9 @@ spec:
 		t.Fatalf("load docs: %v", err)
 	}
 
-	_, warnings, err := Execute(ctx, workdir, docs, nil)
+	// The query itself fails (the dependency doesn't exist), so opt into
+	// continue-on-error to reach the missing-dependency warning.
+	_, warnings, err := Execute(ctx, workdir, docs, &ExecuteOptions{ContinueOnQueryError: true})
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -127,6 +131,187 @@ spec:
 	}
 	if !foundMissingWarning {
 		t.Fatalf("expected missing dependency warning, got: %v", warnings)
+	}
+}
+
+func TestExecute_QueryErrorFailsByDefault(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: broken-dataset
+spec:
+  query: SELECT * FROM does_not_exist
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	_, _, err = Execute(ctx, workdir, docs, nil)
+	if err == nil {
+		t.Fatal("expected query error to fail execution, got nil")
+	}
+	if !contains(err.Error(), "broken-dataset") {
+		t.Fatalf("error should name the failing dataset, got: %v", err)
+	}
+}
+
+func TestExecute_ContinueOnQueryError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: broken-dataset
+spec:
+  query: SELECT * FROM does_not_exist
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: good-dataset
+spec:
+  query: SELECT 1 as value
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, warnings, err := Execute(ctx, workdir, docs, &ExecuteOptions{ContinueOnQueryError: true})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(results) != 1 || results[0].Name != "good-dataset" {
+		t.Fatalf("expected only good-dataset result, got: %+v", results)
+	}
+	foundExecuteWarning := false
+	for _, w := range warnings {
+		if w.DataSet == "broken-dataset" && contains(w.Message, "execute:") {
+			foundExecuteWarning = true
+			break
+		}
+	}
+	if !foundExecuteWarning {
+		t.Fatalf("expected execute warning for broken-dataset, got: %v", warnings)
+	}
+}
+
+func TestExecute_MaxQueryRowsExceeded(t *testing.T) {
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	restore := runtimecfg.SetForTests(runtimecfg.Config{MaxQueryRows: 5})
+	defer restore()
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: too-many-rows
+spec:
+  query: SELECT * FROM range(10)
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	_, _, err = Execute(ctx, workdir, docs, nil)
+	if err == nil {
+		t.Fatal("expected row limit error, got nil")
+	}
+	if !contains(err.Error(), "BNR_MAX_QUERY_ROWS") {
+		t.Fatalf("error should mention BNR_MAX_QUERY_ROWS, got: %v", err)
+	}
+}
+
+func TestExecute_MaxQueryRowsWithinLimit(t *testing.T) {
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	restore := runtimecfg.SetForTests(runtimecfg.Config{MaxQueryRows: 10})
+	defer restore()
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: within-limit
+spec:
+  query: SELECT * FROM range(10)
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+}
+
+func TestExecute_MaxQueryDurationExceeded(t *testing.T) {
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	restore := runtimecfg.SetForTests(runtimecfg.Config{MaxQueryDuration: time.Millisecond})
+	defer restore()
+
+	// A cross join over range() is expensive enough to reliably exceed 1ms.
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: slow-dataset
+spec:
+  query: SELECT count(*) AS n FROM range(100000000) a, range(100) b
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	_, _, err = Execute(ctx, workdir, docs, nil)
+	if err == nil {
+		t.Fatal("expected duration limit error, got nil")
+	}
+	if !contains(err.Error(), "BNR_MAX_QUERY_DURATION_MS") {
+		t.Fatalf("error should mention BNR_MAX_QUERY_DURATION_MS, got: %v", err)
 	}
 }
 

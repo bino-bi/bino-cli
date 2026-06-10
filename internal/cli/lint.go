@@ -158,6 +158,7 @@ there is a fatal error loading manifests.`),
 				execOpts := &dataset.ExecuteOptions{
 					DataValidation:           dataset.DataValidationWarn,
 					DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+					ContinueOnQueryError:     true,
 				}
 				results, warnings, err := dataset.Execute(ctx, projectRoot, documents, execOpts)
 				if err != nil {

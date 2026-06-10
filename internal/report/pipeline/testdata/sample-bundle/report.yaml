@@ -1,0 +1,12 @@
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: sample-report
+spec:
+  format: xga
+  orientation: landscape
+  language: en
+  filename: sample-report.pdf
+  title: "Test Corp - Sample Report"
+  layoutPages:
+    - sample-page

@@ -1,0 +1,46 @@
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sample-page
+spec:
+  pageLayout: 2x2
+  titleBusinessUnit: "Test Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PY"
+  footerText: "Test Corp - Sample Report"
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: revenue_chart
+      spec:
+        dataset: revenue_by_region
+        scenarios:
+          - ac1
+          - pp1
+        variances:
+          - dac1_pp1_pos
+        level: category
+        order: ac1
+        orderDirection: desc
+        unitScaling: 0.001
+        chartTitle: "Revenue by Region"
+    - kind: Text
+      metadata:
+        name: summary_text
+      spec:
+        value: |
+          **Summary**
+
+          Revenue exceeded prior year across most regions.
+    - kind: Text
+      metadata:
+        name: detail_text
+      spec:
+        value: DACH remains the strongest region.
+    - kind: Text
+      metadata:
+        name: outlook_text
+      spec:
+        value: Outlook for H2 remains positive.

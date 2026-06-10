@@ -216,6 +216,7 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 	execOpts := &dataset.ExecuteOptions{
 		DataValidation:           dataset.DataValidationWarn,
 		DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+		ContinueOnQueryError:     true,
 	}
 	_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
 	if err != nil {

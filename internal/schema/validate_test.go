@@ -162,6 +162,102 @@ metadata:
 	}
 }
 
+func TestValidate_ClosedNestedObjects(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "typo in titleMeasures item",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: 1x1
+  titleMeasures:
+    - name: Revenue
+      unit: EUR
+      uni: typo
+  children:
+    - kind: Text
+      metadata:
+        name: t1
+      spec:
+        value: hello
+`,
+		},
+		{
+			name: "typo in chart stack",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: 1x1
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: c1
+      spec:
+        dataset: ds
+        scenarios: [ac1]
+        stack:
+          by: scenarios
+          mod: absolute
+`,
+		},
+		{
+			name: "typo in table thereof item",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: 1x1
+  children:
+    - kind: Table
+      metadata:
+        name: t1
+      spec:
+        dataset: ds
+        scenarios: [ac1]
+        thereof:
+          - rowGroup: Umsatz
+            categorie: typo
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if err == nil {
+				t.Fatal("expected validation error for unknown nested key, got nil")
+			}
+
+			ve := &ValidationError{}
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected *ValidationError, got %T", err)
+			}
+
+			found := false
+			for _, issue := range ve.Errors {
+				if strings.Contains(issue.Message, "not allowed") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected an 'additional properties not allowed' issue, got: %v", ve.Errors)
+			}
+		})
+	}
+}
+
 func TestValidate_WrongType(t *testing.T) {
 	tests := []struct {
 		name        string

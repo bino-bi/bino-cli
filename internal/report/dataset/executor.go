@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/filehash"
+	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -58,6 +60,13 @@ type ExecuteOptions struct {
 	// DataValidationSampleSize limits how many rows are validated.
 	// Default (0) uses GetDataValidationSampleSize() which reads from env.
 	DataValidationSampleSize int
+
+	// ContinueOnQueryError downgrades dataset query execution failures to
+	// warnings and continues with the remaining datasets. Default (false)
+	// fails execution on the first query error so a broken query can never
+	// produce a green build. Dev surfaces (preview, lint, lsp, daemon) set
+	// this so one broken query doesn't abort their diagnostics loop.
+	ContinueOnQueryError bool
 
 	// Session is an optional pre-existing DuckDB session to reuse.
 	// When set, dataset execution skips opening a new session and reuses this one.
@@ -513,8 +522,11 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 
 		data, err := executeDataSet(ctx, session, job, opts)
 		if err != nil {
-			warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
-			continue
+			if opts != nil && opts.ContinueOnQueryError {
+				warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
+				continue
+			}
+			return results, warnings, fmt.Errorf("dataset %s: %w", job.doc.Name, err)
 		}
 
 		// Validate data if enabled
@@ -592,18 +604,30 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Record timing for query execution metadata
 	startTime := time.Now()
 
+	// Enforce the per-query duration limit (BNR_MAX_QUERY_DURATION_MS, 0 = unlimited).
+	cfg := runtimecfg.Current()
+	queryCtx := ctx
+	if cfg.MaxQueryDuration > 0 {
+		var cancel context.CancelFunc
+		queryCtx, cancel = context.WithTimeout(ctx, cfg.MaxQueryDuration)
+		defer cancel()
+	}
+
 	// Execute query
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(queryCtx, query)
 	if err != nil {
+		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		// Log failed query execution if logger is available
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
 		return nil, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 
-	// Serialize to JSON array and capture rows for metadata
-	data, columns, rowStrings, err := rowsToJSONWithMeta(rows)
+	// Serialize to JSON array and capture rows for metadata.
+	// Enforces the row limit (BNR_MAX_QUERY_ROWS, 0 = unlimited).
+	data, columns, rowStrings, err := rowsToJSONWithMeta(rows, cfg.MaxQueryRows)
 	if err != nil {
+		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
 		return nil, fmt.Errorf("serialize: %w", err)
 	}
@@ -641,15 +665,26 @@ func logQueryExecError(session *duckdb.Session, query, datasetName string, start
 	})
 }
 
+// describeQueryLimitError attributes a deadline-exceeded error to the
+// configured query duration limit so users learn which knob to turn.
+func describeQueryLimitError(err error, maxDuration time.Duration) error {
+	if maxDuration > 0 && errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("exceeded max query duration %s (BNR_MAX_QUERY_DURATION_MS): %w", maxDuration, err)
+	}
+	return err
+}
+
 type rowScanner interface {
 	Next() bool
 	Scan(...any) error
 	Columns() ([]string, error)
+	Err() error
 }
 
 // rowsToJSONWithMeta serializes rows to JSON and also returns column names and rows as strings
-// for CSV embedding in build logs.
-func rowsToJSONWithMeta(rows rowScanner) (data json.RawMessage, columns []string, rowStrings [][]string, err error) {
+// for CSV embedding in build logs. maxRows bounds the result size (0 = unlimited);
+// exceeding it is an error so a capped result can never silently ship as complete data.
+func rowsToJSONWithMeta(rows rowScanner, maxRows int) (data json.RawMessage, columns []string, rowStrings [][]string, err error) {
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, nil, nil, err
@@ -663,6 +698,9 @@ func rowsToJSONWithMeta(rows rowScanner) (data json.RawMessage, columns []string
 	}
 
 	for rows.Next() {
+		if maxRows > 0 && len(results) >= maxRows {
+			return nil, nil, nil, fmt.Errorf("query returned more than %d rows (BNR_MAX_QUERY_ROWS)", maxRows)
+		}
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return nil, nil, nil, err
 		}
@@ -674,6 +712,9 @@ func rowsToJSONWithMeta(rows rowScanner) (data json.RawMessage, columns []string
 		}
 		results = append(results, row)
 		rowStrings = append(rowStrings, rowStr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
 	}
 
 	if results == nil {

@@ -332,6 +332,9 @@ type RenderOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// ContinueOnQueryError downgrades dataset query failures to warnings
+	// instead of failing the render. See dataset.ExecuteOptions.
+	ContinueOnQueryError bool
 	// LayoutPageParams provides override values for LayoutPage parameters.
 	// Used by serve mode to pass URL query params as LayoutPage param values.
 	LayoutPageParams map[string]string
@@ -413,6 +416,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 			EmbedOptions:             opts.EmbedOptions,
 			DataValidation:           opts.DataValidation,
 			DataValidationSampleSize: opts.DataValidationSampleSize,
+			ContinueOnQueryError:     opts.ContinueOnQueryError,
 			Session:                  opts.Session,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
@@ -498,6 +502,9 @@ type RenderArtefactOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// ContinueOnQueryError downgrades dataset query failures to warnings
+	// instead of failing the render. See dataset.ExecuteOptions.
+	ContinueOnQueryError bool
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
 	// PostRenderHTMLHook is called after HTML generation. May be nil.
@@ -549,6 +556,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		ContinueOnQueryError:     opts.ContinueOnQueryError,
 		PluginOptions:            opts.PluginOptions,
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
@@ -564,6 +572,7 @@ type RenderScreenshotArtefactOptions struct {
 	ExecutionPlan            *buildlog.ExecutionPlan
 	DataValidation           dataset.DataValidationMode
 	DataValidationSampleSize int
+	ContinueOnQueryError     bool
 	PluginOptions            *render.PluginOptions
 	PostRenderHTMLHook       func(ctx context.Context, html []byte) ([]byte, error)
 	PostDatasetHook          func(ctx context.Context, datasets []DatasetPayload) error
@@ -622,6 +631,7 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		ContinueOnQueryError:     opts.ContinueOnQueryError,
 		PluginOptions:            opts.PluginOptions,
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
@@ -1065,6 +1075,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 			QueryLogger:              opts.QueryLogger,
 			DataValidation:           opts.DataValidation,
 			DataValidationSampleSize: opts.DataValidationSampleSize,
+			ContinueOnQueryError:     opts.ContinueOnQueryError,
 			Session:                  opts.Session,
 		}
 		results, warnings, err := dataset.Execute(ctx, opts.Workdir, docs, execOpts)
@@ -1115,6 +1126,9 @@ type FrameRenderOptions struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// ContinueOnQueryError downgrades dataset query failures to warnings
+	// instead of failing the render. See dataset.ExecuteOptions.
+	ContinueOnQueryError bool
 	// Session is an optional pre-existing DuckDB session to reuse across renders.
 	Session *duckdb.Session
 	// PluginOptions carries plugin integration state. May be nil.
@@ -1182,6 +1196,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 		AllDocs:                  docs,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		ContinueOnQueryError:     opts.ContinueOnQueryError,
 		Session:                  opts.Session,
 		PluginOptions:            opts.PluginOptions,
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
@@ -1312,6 +1327,9 @@ type DocumentArtefactRenderOptions struct {
 	TOCOnly bool
 	// Session is an optional pre-existing DuckDB session to reuse.
 	Session *duckdb.Session
+	// ContinueOnQueryError downgrades dataset query failures to warnings
+	// instead of failing the render. See dataset.ExecuteOptions.
+	ContinueOnQueryError bool
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
 	// KindProvider enables plugin kind validation. May be nil.
@@ -1336,9 +1354,9 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	}
 
 	// Execute datasets and collect datasources
-	var execOpts *dataset.ExecuteOptions
-	if opts.Session != nil {
-		execOpts = &dataset.ExecuteOptions{Session: opts.Session}
+	execOpts := &dataset.ExecuteOptions{
+		Session:              opts.Session,
+		ContinueOnQueryError: opts.ContinueOnQueryError,
 	}
 	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
 	if err != nil {
@@ -1495,6 +1513,7 @@ type PresentationArtefactRenderOptions struct {
 	QueryExecLogger          duckdb.QueryExecLogger
 	DataValidation           dataset.DataValidationMode
 	DataValidationSampleSize int
+	ContinueOnQueryError     bool
 	PluginOptions            *render.PluginOptions
 	PostDatasetHook          func(ctx context.Context, datasets []DatasetPayload) error
 	// Session is an optional pre-existing DuckDB session to reuse (e.g., from preview).
@@ -1556,6 +1575,7 @@ func RenderPresentationFrameAndContext(ctx context.Context, workdir string, docs
 		QueryLogger:              opts.QueryLogger,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		ContinueOnQueryError:     opts.ContinueOnQueryError,
 		Session:                  opts.Session,
 	}
 	datasetResults, _, err := dataset.Execute(ctx, workdir, filtered, execOpts)
@@ -1616,6 +1636,7 @@ func renderPresentationArtefactHTML(ctx context.Context, workdir string, docs []
 		QueryLogger:              opts.QueryLogger,
 		DataValidation:           opts.DataValidation,
 		DataValidationSampleSize: opts.DataValidationSampleSize,
+		ContinueOnQueryError:     opts.ContinueOnQueryError,
 		Session:                  opts.Session,
 	}
 	if opts.QueryExecLogger != nil {

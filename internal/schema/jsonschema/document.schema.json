@@ -2386,6 +2386,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["name", "unit"],
                 "properties": {
                   "name": { "type": "string" },
@@ -2524,6 +2525,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["name", "unit"],
                 "properties": {
                   "name": { "type": "string" },
@@ -2857,6 +2859,7 @@
         },
         "stack": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Configures stacked bar rendering. When set, bars are stacked instead of shown side-by-side.",
           "required": ["by"],
           "properties": {
@@ -3011,6 +3014,7 @@
         },
         "stack": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Configures stacked column/area rendering. When set with chartMode 'bar', renders stacked columns. When set with chartMode 'line', renders stacked area chart.",
           "required": ["by"],
           "properties": {
@@ -3052,6 +3056,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["from", "to"],
                 "properties": {
                   "from": {
@@ -3073,6 +3078,7 @@
                   },
                   "style": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                       "color": { "type": "string" },
                       "width": { "type": "number" },
@@ -3239,6 +3245,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["label", "id"],
                 "properties": {
                   "label": { "type": "string", "description": "Display text for the row header." },
@@ -3263,6 +3270,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["label", "id"],
                 "properties": {
                   "label": { "type": "string", "description": "Display text for the column header." },
@@ -3542,6 +3550,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "rowGroup": { "type": "string" },
                   "category": { "type": "string" },
@@ -3559,6 +3568,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "rowGroup": { "type": "string" },
                   "category": { "type": "string" }
@@ -3576,6 +3586,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "scenario": { "type": "string" },
                   "name": { "type": "string" },

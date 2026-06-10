@@ -1,0 +1,22 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: revenue_data
+spec:
+  type: inline
+  content:
+    - category: "DACH"
+      categoryIndex: 1
+      operation: "+"
+      ac1: 4250
+      pp1: 3800
+    - category: "Nordics"
+      categoryIndex: 2
+      operation: "+"
+      ac1: 2870
+      pp1: 2650
+    - category: "UK & Ireland"
+      categoryIndex: 3
+      operation: "+"
+      ac1: 3120
+      pp1: 3400

@@ -330,6 +330,7 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 		execOpts := &dataset.ExecuteOptions{
 			DataValidation:           dataset.DataValidationWarn,
 			DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+			ContinueOnQueryError:     true,
 		}
 		_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
 		if err != nil {

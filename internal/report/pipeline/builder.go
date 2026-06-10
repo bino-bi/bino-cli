@@ -59,6 +59,9 @@ type Builder struct {
 	DataValidation dataset.DataValidationMode
 	// DataValidationSampleSize limits how many rows are validated.
 	DataValidationSampleSize int
+	// ContinueOnQueryError downgrades dataset query failures to warnings
+	// instead of failing the render. See dataset.ExecuteOptions.
+	ContinueOnQueryError bool
 
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
@@ -91,6 +94,7 @@ func (b *Builder) RenderArtefactHTML(ctx context.Context, docs []config.Document
 		ExecutionPlan:            b.ExecutionPlan,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostRenderHTMLHook:       b.PostRenderHTMLHook,
 		PostDatasetHook:          b.PostDatasetHook,
@@ -107,6 +111,7 @@ func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Docume
 		ExecutionPlan:            b.ExecutionPlan,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostRenderHTMLHook:       b.PostRenderHTMLHook,
 		PostDatasetHook:          b.PostDatasetHook,
@@ -130,6 +135,7 @@ func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.Docume
 	if opts.KindProvider == nil {
 		opts.KindProvider = b.KindProvider
 	}
+	opts.ContinueOnQueryError = opts.ContinueOnQueryError || b.ContinueOnQueryError
 	return RenderDocumentArtefactHTML(ctx, b.Workdir, artifact, opts)
 }
 
@@ -141,6 +147,7 @@ func (b *Builder) RenderPresentationHTML(ctx context.Context, docs []config.Docu
 		QueryExecLogger:          b.QueryExecLogger,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostDatasetHook:          b.PostDatasetHook,
 	})
@@ -153,6 +160,7 @@ func (b *Builder) RenderPresentationPreviewHTML(ctx context.Context, docs []conf
 		QueryLogger:              b.QueryLogger,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostDatasetHook:          b.PostDatasetHook,
 		Session:                  session,
@@ -169,6 +177,7 @@ func (b *Builder) RenderPreviewFrame(ctx context.Context, docs []config.Document
 		QueryLogger:              b.QueryLogger,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostRenderHTMLHook:       b.PostRenderHTMLHook,
 		PostDatasetHook:          b.PostDatasetHook,
@@ -182,6 +191,7 @@ func (b *Builder) RenderArtefactPreviewFrame(ctx context.Context, docs []config.
 		EngineVersion:            b.EngineVersion,
 		DataValidation:           b.DataValidation,
 		DataValidationSampleSize: b.DataValidationSampleSize,
+		ContinueOnQueryError:     b.ContinueOnQueryError,
 		PluginOptions:            b.PluginOptions,
 		PostRenderHTMLHook:       b.PostRenderHTMLHook,
 		PostDatasetHook:          b.PostDatasetHook,
@@ -250,7 +260,18 @@ func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []r
 	if closeErr != nil && !errors.Is(closeErr, context.Canceled) {
 		return fmt.Errorf("stop ephemeral server: %w", closeErr)
 	}
-	return nil
+	return normalizePDFIfRequested(opts.PDFPath)
+}
+
+// normalizePDFIfRequested strips nondeterministic metadata (timestamps,
+// document ID) from the PDF when SOURCE_DATE_EPOCH is set, following the
+// reproducible-builds.org convention.
+func normalizePDFIfRequested(pdfPath string) error {
+	ts, ok := pdf.SourceDateEpoch()
+	if !ok {
+		return nil
+	}
+	return pdf.NormalizeForReproducibility(pdfPath, ts)
 }
 
 // RenderPDFToTempFile renders HTML to a temporary PDF file and returns its
@@ -280,7 +301,10 @@ func (b *Builder) RenderPDFToTempFileWithData(ctx context.Context, html []byte, 
 
 // MergePDFs concatenates multiple PDF files into a single output file.
 func (b *Builder) MergePDFs(_ context.Context, inFiles []string, outFile string) error {
-	return pdf.MergeFiles(inFiles, outFile)
+	if err := pdf.MergeFiles(inFiles, outFile); err != nil {
+		return err
+	}
+	return normalizePDFIfRequested(outFile)
 }
 
 // ---------------------------------------------------------------------------

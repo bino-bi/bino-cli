@@ -794,6 +794,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 			QueryLogger:              cfg.QueryLogger,
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			ContinueOnQueryError:     true,
 			Session:                  cfg.Session,
 			PluginOptions:            cfg.PluginOptions,
 			PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
@@ -855,6 +856,7 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 			EngineVersion:            cfg.EngineVersion,
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			ContinueOnQueryError:     true,
 			Session:                  cfg.Session,
 			PluginOptions:            cfg.PluginOptions,
 			PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
@@ -899,12 +901,13 @@ func refreshPreviewContent(ctx context.Context, reason string, changed []string,
 		}
 		report.Progress(rendered, totalRender, docArt.Document.Name)
 		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
-			EngineVersion:      cfg.EngineVersion,
-			Session:            cfg.Session,
-			PluginOptions:      cfg.PluginOptions,
-			KindProvider:       cfg.KindProvider,
-			PostRenderHTMLHook: cfg.PostRenderHTMLHook,
-			PostDatasetHook:    cfg.PostDatasetHook,
+			EngineVersion:        cfg.EngineVersion,
+			Session:              cfg.Session,
+			ContinueOnQueryError: true,
+			PluginOptions:        cfg.PluginOptions,
+			KindProvider:         cfg.KindProvider,
+			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
+			PostDatasetHook:      cfg.PostDatasetHook,
 		})
 		if rerr != nil {
 			logger.Errorf("Render failed for DocumentArtefact %s (%s): %v", docArt.Document.Name, reason, rerr)
@@ -1022,6 +1025,7 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 			QueryLogger:              cfg.QueryLogger,
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
+			ContinueOnQueryError:     true,
 			PluginOptions:            cfg.PluginOptions,
 			PostDatasetHook:          cfg.PostDatasetHook,
 			Session:                  cfg.Session,
@@ -1126,12 +1130,13 @@ func embedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *
 		body, emitted, err = result.HTML, result.EmittedData, e
 	case docArt != nil:
 		result, e := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, *docArt, pipeline.DocumentArtefactRenderOptions{
-			EngineVersion:      cfg.EngineVersion,
-			Session:            cfg.Session,
-			PluginOptions:      cfg.PluginOptions,
-			KindProvider:       cfg.KindProvider,
-			PostRenderHTMLHook: cfg.PostRenderHTMLHook,
-			PostDatasetHook:    cfg.PostDatasetHook,
+			EngineVersion:        cfg.EngineVersion,
+			Session:              cfg.Session,
+			ContinueOnQueryError: true,
+			PluginOptions:        cfg.PluginOptions,
+			KindProvider:         cfg.KindProvider,
+			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
+			PostDatasetHook:      cfg.PostDatasetHook,
 		})
 		body, emitted, err = result.HTML, result.EmittedData, e
 	case layoutDoc != nil:
@@ -1204,6 +1209,7 @@ func embedComponentOpts(cfg *previewRefreshConfig, name string) pipeline.RenderO
 		QueryLogger:              cfg.QueryLogger,
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
+		ContinueOnQueryError:     true,
 		PluginOptions:            cfg.PluginOptions,
 		PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
 		PostDatasetHook:          cfg.PostDatasetHook,
@@ -1218,6 +1224,7 @@ func embedRenderOpts(cfg *previewRefreshConfig) pipeline.RenderArtefactOptions {
 		QueryLogger:              cfg.QueryLogger,
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
+		ContinueOnQueryError:     true,
 		PluginOptions:            cfg.PluginOptions,
 		PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
 		PostDatasetHook:          cfg.PostDatasetHook,

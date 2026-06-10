@@ -68,16 +68,27 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 
 		// Data delivery mode for dataset/datasource payloads.
 		dataMode string
+
+		// Downgrade dataset query errors to warnings (legacy behavior).
+		warnOnQueryErrors bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Validate manifests and render report artefacts to PDF",
 		Long: strings.TrimSpace(`Validate the manifest bundle, collect data, and render every ReportArtefact to PDF.
-Tweak manifest scan limits via environment variables:
+Tweak manifest scan and query limits via environment variables:
   - BNR_MAX_MANIFEST_FILES (default 500)
-  - BNR_MAX_MANIFEST_DOCS (default 10 per file)
+  - BNR_MAX_MANIFEST_DOCS (default unlimited per file)
   - BNR_MAX_MANIFEST_BYTES (default 10 MB total)
+  - BNR_MAX_QUERY_ROWS (default 100000 per dataset query)
+  - BNR_MAX_QUERY_DURATION_MS (default 60000 per dataset query)
+
+A failed dataset query fails the build. Pass --warn-on-query-errors to downgrade
+query errors to warnings and render the report with the remaining data.
+
+Set SOURCE_DATE_EPOCH (unix seconds) to normalize PDF timestamps and document
+IDs for byte-reproducible builds.
 
 Use --artefact/--exclude-artefact to control which metadata.name entries produce output.`),
 		Example: strings.TrimSpace(`  bino build
@@ -118,6 +129,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			noGraph = env.Resolver.ResolveBool("no-graph", "no-graph", noGraph)
 			noLint = env.Resolver.ResolveBool("no-lint", "no-lint", noLint)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
+			warnOnQueryErrors = env.Resolver.ResolveBool("warn-on-query-errors", "warn-on-query-errors", warnOnQueryErrors)
 			embedDataCSV = env.Resolver.ResolveBool("embed-data-csv", "embed-data-csv", embedDataCSV)
 			embedDataMaxRows = env.Resolver.ResolveInt("embed-data-max-rows", "embed-data-max-rows", embedDataMaxRows)
 			embedDataMaxBytes = env.Resolver.ResolveInt("embed-data-max-bytes", "embed-data-max-bytes", embedDataMaxBytes)
@@ -294,6 +306,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				ExecutionPlan:            execPlan,
 				DataValidation:           dataValidationMode,
 				DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
+				ContinueOnQueryError:     warnOnQueryErrors,
 				PluginOptions:            pluginOpts,
 				PostRenderHTMLHook:       postRenderHTMLHook,
 				PostDatasetHook:          postDatasetHook,
@@ -393,6 +406,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
 
 	// Data delivery mode
+	cmd.Flags().BoolVar(&warnOnQueryErrors, "warn-on-query-errors", false,
+		"Downgrade dataset query errors to warnings instead of failing the build")
+
 	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
 		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
 

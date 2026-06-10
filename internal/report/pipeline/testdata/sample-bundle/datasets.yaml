@@ -1,0 +1,6 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: revenue_by_region
+spec:
+  query: SELECT * FROM revenue_data ORDER BY categoryIndex
