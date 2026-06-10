@@ -128,7 +128,7 @@ there is a fatal error loading manifests.`),
 			out.StepDone(fmt.Sprintf("Validated %d document(s)", len(documents)), time.Since(loadStart))
 
 			// Convert config.Document to lint.Document
-			lintDocs := configDocsToLintDocs(documents)
+			lintDocs := lint.DocumentsFromConfig(documents)
 
 			// Step 2: Run lint rules
 			out.Step("Running lint rules...")
@@ -251,23 +251,6 @@ there is a fatal error loading manifests.`),
 		"Exit with non-zero code if any warnings are found (useful for CI)")
 
 	return cmd
-}
-
-// configDocsToLintDocs converts config.Document slice to lint.Document slice.
-func configDocsToLintDocs(docs []config.Document) []lint.Document {
-	lintDocs := make([]lint.Document, 0, len(docs))
-	for _, d := range docs {
-		lintDocs = append(lintDocs, lint.Document{
-			File:        d.File,
-			Position:    d.Position,
-			Kind:        d.Kind,
-			Name:        d.Name,
-			Labels:      d.Labels,
-			Constraints: d.Constraints,
-			Raw:         d.Raw,
-		})
-	}
-	return lintDocs
 }
 
 // findingsToLintEntries converts lint findings to build log lint entries.

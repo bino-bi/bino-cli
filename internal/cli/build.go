@@ -16,7 +16,6 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/pdf"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
@@ -672,16 +671,23 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		basePDFOpts.MarginTop = spec.MarginTop
 		basePDFOpts.MarginBottom = spec.MarginBottom
 		if basePDFOpts.HeaderTemplate == "" {
-			basePDFOpts.HeaderTemplate = buildDefaultDocumentHeader(spec.Title)
+			basePDFOpts.HeaderTemplate = pipeline.DefaultDocumentHeaderTemplate(spec.Title)
 		}
 		if basePDFOpts.FooterTemplate == "" {
-			basePDFOpts.FooterTemplate = buildDefaultDocumentFooter()
+			basePDFOpts.FooterTemplate = pipeline.DefaultDocumentFooterTemplate()
 		}
 	}
 
 	if spec.TableOfContents {
 		// ── Split-PDF pipeline: content PDF → extract page numbers → TOC PDF → merge ──
-		if err := buildDocumentWithTOC(ctx, cfg, artifact, artefactName, basePDFOpts, pdfPath); err != nil {
+		tocOpts := pipeline.DocumentTOCPDFOptions{
+			PDFOptions: basePDFOpts,
+			OutputPath: pdfPath,
+		}
+		if spinner != nil {
+			tocOpts.Progress = spinner.Update
+		}
+		if err := cfg.Builder.BuildDocumentPDFWithTOC(ctx, artifact, tocOpts); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 			}
@@ -747,147 +753,6 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		spinner.Stop()
 	}
 	return documentArtefactResult{Name: artefactName, PDFPath: pdfPath}, nil
-}
-
-// buildDefaultDocumentHeader creates the default header template for DocumentArtefact PDFs.
-// The header displays the document title centered at the top.
-// Chrome header/footer templates use special CSS classes for dynamic content.
-func buildDefaultDocumentHeader(title string) string {
-	escapedTitle := title
-	// Basic HTML escaping for the title
-	escapedTitle = strings.ReplaceAll(escapedTitle, "&", "&amp;")
-	escapedTitle = strings.ReplaceAll(escapedTitle, "<", "&lt;")
-	escapedTitle = strings.ReplaceAll(escapedTitle, ">", "&gt;")
-	escapedTitle = strings.ReplaceAll(escapedTitle, "\"", "&quot;")
-	return `<div style="width: 100%; font-size: 10px; font-family: Arial, sans-serif; text-align: center; color: #333;">` + escapedTitle + `</div>`
-}
-
-// buildDocumentWithTOC implements the 4-phase split-PDF pipeline for
-// DocumentArtefacts with a Table of Contents:
-//
-//  1. Render content-only HTML → Chrome PrintToPDF → content.pdf (Arabic page numbers)
-//  2. Parse content.pdf → extract heading ID → page number mapping
-//  3. Render TOC-only HTML with correct page numbers → Chrome PrintToPDF → toc.pdf
-//  4. Merge toc.pdf + content.pdf → final.pdf, stamp Roman numerals on TOC pages
-func buildDocumentWithTOC(ctx context.Context, cfg buildDocumentArtefactConfig, artifact config.DocumentArtefact, artefactName string, basePDFOpts pipeline.PDFRenderOptions, pdfPath string) error {
-	logger := cfg.Logger
-	spinner := cfg.Spinner
-
-	// ── Phase 1: Render content-only PDF ──
-	if spinner != nil {
-		spinner.Update(fmt.Sprintf("Rendering content for %s", artefactName))
-	}
-
-	contentResult, err := cfg.Builder.RenderDocumentHTML(ctx, artifact, pipeline.DocumentArtefactRenderOptions{
-		ExcludeTOC: true,
-	})
-	if err != nil {
-		return fmt.Errorf("document artefact %s: render content: %w", artefactName, err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// Inject hidden anchor links so Chrome creates internal link annotations
-	// that HeadingPageMap can read for accurate page number extraction.
-	contentHTML := pdf.InjectHeadingLinks(contentResult.HTML, contentResult.HeadingIDs)
-
-	contentPDFOpts := basePDFOpts
-	contentTmpPath, err := cfg.Builder.RenderPDFToTempFileWithData(ctx, contentHTML, contentResult.LocalAssets, contentResult.EmittedData, contentPDFOpts)
-	if err != nil {
-		return fmt.Errorf("document artefact %s: render content pdf: %w", artefactName, err)
-	}
-	defer os.Remove(contentTmpPath)
-
-	// ── Phase 2: Extract heading page numbers from content PDF ──
-	if spinner != nil {
-		spinner.Update(fmt.Sprintf("Collecting page numbers for %s", artefactName))
-	}
-
-	var tocPageNumbers map[string]int
-	if len(contentResult.HeadingIDs) > 0 {
-		tocPageNumbers, err = pdf.HeadingPageMap(contentTmpPath, contentResult.HeadingIDs)
-		if err != nil {
-			logger.Warnf("Failed to extract heading pages for %s: %v (continuing without page numbers)", artefactName, err)
-			tocPageNumbers = nil
-		} else {
-			logger.Debugf("Extracted %d heading page numbers for %s", len(tocPageNumbers), artefactName)
-		}
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// ── Phase 3: Render TOC-only PDF with page numbers ──
-	if spinner != nil {
-		spinner.Update(fmt.Sprintf("Rendering table of contents for %s", artefactName))
-	}
-
-	tocResult, err := cfg.Builder.RenderDocumentHTML(ctx, artifact, pipeline.DocumentArtefactRenderOptions{
-		TOCOnly:        true,
-		TOCPageNumbers: tocPageNumbers,
-	})
-	if err != nil {
-		return fmt.Errorf("document artefact %s: render toc: %w", artefactName, err)
-	}
-
-	tocPDFOpts := basePDFOpts
-	// TOC uses a footer without page numbers — Roman numerals are stamped by pdfcpu.
-	if tocPDFOpts.DisplayHeaderFooter {
-		tocPDFOpts.FooterTemplate = buildTOCFooter()
-	}
-	tocTmpPath, err := cfg.Builder.RenderPDFToTempFileWithData(ctx, tocResult.HTML, tocResult.LocalAssets, tocResult.EmittedData, tocPDFOpts)
-	if err != nil {
-		return fmt.Errorf("document artefact %s: render toc pdf: %w", artefactName, err)
-	}
-	defer os.Remove(tocTmpPath)
-
-	// Stamp Roman numeral page numbers on the TOC PDF.
-	if tocPDFOpts.DisplayHeaderFooter {
-		if err := pdf.StampRomanPageNumbers(tocTmpPath, ""); err != nil {
-			logger.Warnf("Failed to stamp Roman page numbers on TOC for %s: %v", artefactName, err)
-		}
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// ── Phase 4: Merge TOC + content PDFs ──
-	if spinner != nil {
-		spinner.Update(fmt.Sprintf("Merging PDFs for %s", artefactName))
-	}
-
-	if err := cfg.Builder.MergePDFs(ctx, []string{tocTmpPath, contentTmpPath}, pdfPath); err != nil {
-		return fmt.Errorf("document artefact %s: merge pdfs: %w", artefactName, err)
-	}
-
-	return nil
-}
-
-// buildDefaultDocumentFooter creates the default footer template for DocumentArtefact PDFs.
-// The footer displays the date on the left and page number on the right.
-// Chrome footer templates use special CSS classes:
-// - "date" class shows the formatted print date
-// - "pageNumber" class shows the current page number
-// - "totalPages" class shows the total number of pages
-func buildDefaultDocumentFooter() string {
-	return `<div style="width: 100%; font-size: 9px; font-family: Arial, sans-serif; padding: 0 10mm; display: flex; justify-content: space-between; color: #666;">
-  <span class="date"></span>
-  <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-</div>`
-}
-
-// buildTOCFooter creates the footer template for the TOC PDF.
-// It shows only the date — Roman numeral page numbers are stamped
-// separately by pdfcpu after PDF generation.
-func buildTOCFooter() string {
-	return `<div style="width: 100%; font-size: 9px; font-family: Arial, sans-serif; padding: 0 10mm; display: flex; justify-content: space-between; color: #666;">
-  <span class="date"></span>
-  <span></span>
-</div>`
 }
 
 // writeBuildLog writes a detailed build log file with run information.
@@ -1243,7 +1108,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 	// Run lint rules unless disabled
 	var lintFindings []lint.Finding
 	if !noLint {
-		lintDocs := configDocsToLintDocs(documents)
+		lintDocs := lint.DocumentsFromConfig(documents)
 		runner := lint.NewDefaultRunner()
 		lintFindings = runner.Run(ctx, lintDocs)
 

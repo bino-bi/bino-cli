@@ -197,7 +197,7 @@ func sortedChildren(g *reportgraph.Graph, node *reportgraph.Node) []*reportgraph
 	}
 	sort.Slice(children, func(i, j int) bool {
 		if children[i].Kind == children[j].Kind {
-			return displayName(children[i]) < displayName(children[j])
+			return children[i].DisplayName() < children[j].DisplayName()
 		}
 		return children[i].Kind < children[j].Kind
 	})
@@ -205,14 +205,14 @@ func sortedChildren(g *reportgraph.Graph, node *reportgraph.Node) []*reportgraph
 }
 
 func printGraphFlat(out io.Writer, g *reportgraph.Graph, roots []*reportgraph.Node, base string) {
-	reachable := collectReachableNodes(g, roots)
+	reachable := g.CollectReachable(roots)
 	nodes := make([]*reportgraph.Node, 0, len(reachable))
 	for _, node := range reachable {
 		nodes = append(nodes, node)
 	}
 	sort.Slice(nodes, func(i, j int) bool {
 		if nodes[i].Kind == nodes[j].Kind {
-			return displayName(nodes[i]) < displayName(nodes[j])
+			return nodes[i].DisplayName() < nodes[j].DisplayName()
 		}
 		return nodes[i].Kind < nodes[j].Kind
 	})
@@ -224,38 +224,13 @@ func printGraphFlat(out io.Writer, g *reportgraph.Graph, roots []*reportgraph.No
 		details := strings.Join(nodeDetails(node, base), ", ")
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
 			node.Kind,
-			displayName(node),
+			node.DisplayName(),
 			shortHash(node.Hash),
 			strings.Join(depLabels, ", "),
 			details,
 		)
 	}
 	tw.Flush()
-}
-
-func collectReachableNodes(g *reportgraph.Graph, roots []*reportgraph.Node) map[string]*reportgraph.Node {
-	visited := make(map[string]*reportgraph.Node)
-	var walk func(node *reportgraph.Node)
-	walk = func(node *reportgraph.Node) {
-		if node == nil {
-			return
-		}
-		if _, ok := visited[node.ID]; ok {
-			return
-		}
-		visited[node.ID] = node
-		for _, dep := range node.DependsOn {
-			child, ok := g.NodeByID(dep)
-			if !ok {
-				continue
-			}
-			walk(child)
-		}
-	}
-	for _, root := range roots {
-		walk(root)
-	}
-	return visited
 }
 
 func dependencyLabels(g *reportgraph.Graph, node *reportgraph.Node) []string {
@@ -268,7 +243,7 @@ func dependencyLabels(g *reportgraph.Graph, node *reportgraph.Node) []string {
 		if !ok {
 			continue
 		}
-		labels = append(labels, fmt.Sprintf("%s:%s", child.Kind, displayName(child)))
+		labels = append(labels, fmt.Sprintf("%s:%s", child.Kind, child.DisplayName()))
 	}
 	sort.Strings(labels)
 	return labels
@@ -306,22 +281,12 @@ func nodeDetails(node *reportgraph.Node, base string) []string {
 }
 
 func formatNodeLine(node *reportgraph.Node, base string) string {
-	label := displayName(node)
+	label := node.DisplayName()
 	meta := strings.Join(nodeDetails(node, base), ", ")
 	if meta == "" {
 		return fmt.Sprintf("%s [%s]", label, node.Kind)
 	}
 	return fmt.Sprintf("%s [%s] %s", label, node.Kind, meta)
-}
-
-func displayName(node *reportgraph.Node) string {
-	if node == nil {
-		return ""
-	}
-	if node.Label != "" {
-		return node.Label
-	}
-	return node.Name
 }
 
 func shortHash(hash string) string {

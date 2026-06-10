@@ -309,7 +309,7 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 	}
 
 	// Run lint rules and add findings as warnings
-	lintDocs := configDocsToLintDocs(docs)
+	lintDocs := lint.DocumentsFromConfig(docs)
 	runner := lint.NewDefaultRunner()
 	findings := runner.Run(ctx, lintDocs)
 	for _, f := range findings {

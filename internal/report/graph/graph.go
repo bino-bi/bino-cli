@@ -253,3 +253,42 @@ func BuildForArtefact(ctx context.Context, docs []config.Document, artifact conf
 	// Build the graph with filtered documents
 	return BuildWithOptions(ctx, filtered, BuildOptions{Mode: mode})
 }
+
+// CollectReachable returns every node reachable from the given roots by
+// following DependsOn edges, keyed by node ID.
+func (g *Graph) CollectReachable(roots []*Node) map[string]*Node {
+	visited := make(map[string]*Node)
+	var walk func(node *Node)
+	walk = func(node *Node) {
+		if node == nil {
+			return
+		}
+		if _, ok := visited[node.ID]; ok {
+			return
+		}
+		visited[node.ID] = node
+		for _, dep := range node.DependsOn {
+			child, ok := g.NodeByID(dep)
+			if !ok {
+				continue
+			}
+			walk(child)
+		}
+	}
+	for _, root := range roots {
+		walk(root)
+	}
+	return visited
+}
+
+// DisplayName returns the node's human-readable label, falling back to its
+// metadata name. Safe to call on a nil node.
+func (n *Node) DisplayName() string {
+	if n == nil {
+		return ""
+	}
+	if n.Label != "" {
+		return n.Label
+	}
+	return n.Name
+}

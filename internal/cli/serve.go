@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"container/list"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -18,9 +15,9 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
-	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
+	"bino.bi/bino/internal/report/serve"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -321,12 +318,12 @@ func prepareServeRequest(
 	reqInfo := httpserver.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
-	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
 
 	// If there are missing required params, return missing params HTML
 	if !validation.IsValid() {
-		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
-		html := buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
+		html := serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
 		return nil, html, nil
 	}
 
@@ -611,13 +608,13 @@ func serveRenderHandler(
 	reqInfo := httpserver.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
-	validation := validateAndMergeQueryParams(routeSpec, reqInfo.Query)
+	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
 
 	// If there are missing required params, show the sidebar with error indicators
 	if !validation.IsValid() {
 		// Resolve dataset options for select parameters (needed for sidebar)
-		datasetOptions := resolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
-		return buildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
+		return serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
 
 	queryParams := validation.Params
@@ -630,8 +627,8 @@ func serveRenderHandler(
 		// Re-register payloads on every hit: the data store retains only the
 		// last N hashes per (kind,name), so a long-lived cached HTML can
 		// outlive its data registration.
-		registerEmittedData(server, entry.emitted)
-		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		pipeline.RegisterEmittedData(server, entry.emitted)
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
 	// If we have query params, reload documents with query params as variables
@@ -694,10 +691,10 @@ func serveRenderHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource").Channel(artifact.Document.Name), renderResult.Diagnostics)
-	registerEmittedData(server, renderResult.EmittedData)
+	pipeline.RegisterEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
-	frameHTML := withServeStyles(renderResult.FrameHTML)
+	frameHTML := serve.WithStyles(renderResult.FrameHTML)
 	contextHTML := renderResult.ContextHTML
 
 	// Cache the result
@@ -708,7 +705,7 @@ func serveRenderHandler(
 		emitted:     renderResult.EmittedData,
 	})
 
-	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
+	return serve.BuildHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
 }
 
 // serveLayoutPagesHandler handles on-demand rendering for a route with layoutPages.
@@ -751,8 +748,8 @@ func serveLayoutPagesHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		registerEmittedData(server, entry.emitted)
-		return buildServeHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		pipeline.RegisterEmittedData(server, entry.emitted)
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
 	}
 
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
@@ -776,10 +773,10 @@ func serveLayoutPagesHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
-	registerEmittedData(server, renderResult.EmittedData)
+	pipeline.RegisterEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
-	frameHTML := withServeStyles(renderResult.FrameHTML)
+	frameHTML := serve.WithStyles(renderResult.FrameHTML)
 	contextHTML := renderResult.ContextHTML
 
 	// Cache the result
@@ -790,7 +787,7 @@ func serveLayoutPagesHandler(
 		emitted:     renderResult.EmittedData,
 	})
 
-	return buildServeHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
+	return serve.BuildHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 }
 
 // filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
@@ -857,83 +854,6 @@ func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[s
 	return key + "?" + strings.Join(parts, "&")
 }
 
-// queryParamValidationResult holds the result of query parameter validation.
-type queryParamValidationResult struct {
-	Params       map[string]string // Merged parameters (request values + defaults)
-	MissingNames []string          // Names of missing required parameters
-}
-
-// IsValid returns true if there are no missing required parameters.
-func (r queryParamValidationResult) IsValid() bool {
-	return len(r.MissingNames) == 0
-}
-
-// validateAndMergeQueryParams validates query parameters against route spec.
-// Returns merged params (request values + defaults) and list of missing required params.
-// Unlike before, this does NOT return an error - missing params are reported in the result.
-// For select type params with static items, also adds {name}_LABEL with the label from the option item.
-func validateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) queryParamValidationResult {
-	result := queryParamValidationResult{
-		Params:       make(map[string]string),
-		MissingNames: nil,
-	}
-
-	// Build param spec lookup for label resolution
-	paramSpecs := make(map[string]config.LiveQueryParamSpec)
-	for _, p := range routeSpec.QueryParams {
-		paramSpecs[p.Name] = p
-	}
-
-	// Apply defaults first
-	defaults := routeSpec.GetQueryParamDefaults()
-	for name, defaultVal := range defaults {
-		result.Params[name] = defaultVal
-		// Add _LABEL for select params with static items
-		if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
-			result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, defaultVal)
-		}
-	}
-
-	// Override with request values (only for declared params)
-	declaredParams := make(map[string]struct{})
-	for _, p := range routeSpec.QueryParams {
-		declaredParams[p.Name] = struct{}{}
-	}
-
-	for name := range declaredParams {
-		if values, ok := requestQuery[name]; ok && len(values) > 0 {
-			result.Params[name] = values[0]
-			// Add _LABEL for select params with static items
-			if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
-				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, values[0])
-			}
-		}
-	}
-
-	// Check for missing required params (params with no default)
-	for _, requiredName := range routeSpec.GetRequiredQueryParams() {
-		if _, ok := result.Params[requiredName]; !ok {
-			result.MissingNames = append(result.MissingNames, requiredName)
-		}
-	}
-
-	return result
-}
-
-// lookupLiveSelectLabel finds the label for a given value in a list of live select option items.
-// If the value is not found or has no label, the value itself is returned.
-func lookupLiveSelectLabel(items []config.LiveQueryParamOptionItem, value string) string {
-	for _, item := range items {
-		if item.Value == value {
-			if item.Label != "" {
-				return item.Label
-			}
-			return value // No label defined, use value
-		}
-	}
-	return value // Value not found in items, use value as-is
-}
-
 // buildCacheKey creates a cache key from artifact name and sorted query params.
 func buildCacheKey(artefactName string, params map[string]string) string {
 	if len(params) == 0 {
@@ -956,357 +876,4 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 		sb.WriteString(params[k])
 	}
 	return sb.String()
-}
-
-// buildServeHTML combines frame and context HTML with seamless navigation support.
-// Instead of replacing the placeholder, it keeps the loading state and embeds context
-// as data to be injected after the template engine is ready.
-func buildServeHTML(ctx context.Context, frameHTML, contextHTML []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, workdir string, docs []config.Document, session *duckdb.Session) []byte {
-	frameStr := string(frameHTML)
-
-	// Encode context HTML as base64 for safe embedding
-	contextBase64 := base64.StdEncoding.EncodeToString(contextHTML)
-
-	// Resolve dataset options for select parameters
-	datasetOptions := resolveDatasetOptions(ctx, workdir, docs, routeSpec, session)
-
-	// Inject the navigation script and embedded context before </head>
-	return injectServeScript([]byte(frameStr), liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, nil)
-}
-
-// buildMissingParamsHTML generates a full HTML page with sidebar showing error indicators
-// for missing required parameters and a message instead of the report content.
-func buildMissingParamsHTML(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery string, missingParams []string, datasetOptions map[string][]queryParamOptionItem) []byte {
-	// Build a minimal HTML frame with the serve styles and the control panel
-	// Context is empty since we don't render the report
-	contextBase64 := ""
-
-	// Create a set of missing params for quick lookup
-	missingSet := make(map[string]struct{}, len(missingParams))
-	for _, name := range missingParams {
-		missingSet[name] = struct{}{}
-	}
-
-	// Apply serve styles to the frame HTML first, then inject script
-	frameHTML := withServeStyles([]byte(buildMissingParamsFrameHTML()))
-	return injectServeScript(frameHTML, liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, missingSet)
-}
-
-// buildMissingParamsFrameHTML generates a minimal HTML frame for the missing params page.
-// It includes the template engine so that navigation to other routes works properly.
-func buildMissingParamsFrameHTML() string {
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Parameters Required</title>
-<script type="module" src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
-<script nomodule src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
-</head>
-<body>
-</body>
-</html>`
-}
-
-// injectServeScript adds the navigation script and embedded context before </head>.
-// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
-func injectServeScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) []byte {
-	htmlStr := string(htmlBytes)
-	script := buildServeScript(liveArtefact, currentPath, routeSpec, rawQuery, contextBase64, datasetOptions, missingParams)
-
-	headClose := strings.Index(htmlStr, "</head>")
-	if headClose == -1 {
-		return htmlBytes
-	}
-
-	var b strings.Builder
-	b.WriteString(htmlStr[:headClose])
-	b.WriteString(script)
-	b.WriteString(htmlStr[headClose:])
-	return []byte(b.String())
-}
-
-// queryParamInfo holds info about a query parameter for JSON serialization.
-type queryParamInfo struct {
-	Name        string             `json:"name"`
-	Type        string             `json:"type"` // string, number, number_range, select, date, date_time
-	Default     *string            `json:"default,omitempty"`
-	Description string             `json:"description,omitempty"`
-	Required    bool               `json:"required"`
-	Options     *queryParamOptions `json:"options,omitempty"`
-}
-
-// queryParamOptions holds options for select, number, and number_range type parameters.
-type queryParamOptions struct {
-	Items []queryParamOptionItem `json:"items,omitempty"`
-	Min   *float64               `json:"min,omitempty"`
-	Max   *float64               `json:"max,omitempty"`
-	Step  *float64               `json:"step,omitempty"`
-}
-
-// queryParamOptionItem holds a single option for select type parameters.
-type queryParamOptionItem struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-}
-
-// resolveDatasetOptions resolves select options from datasets for a route's query parameters.
-// Returns a map from parameter name to resolved options.
-func resolveDatasetOptions(ctx context.Context, workdir string, docs []config.Document, routeSpec config.LiveRouteSpec, session *duckdb.Session) map[string][]queryParamOptionItem {
-	result := make(map[string][]queryParamOptionItem)
-
-	// Find parameters that need dataset resolution
-	datasetsNeeded := make(map[string]config.LiveQueryParamSpec)
-	for _, p := range routeSpec.QueryParams {
-		if p.Options != nil && p.Options.Dataset != "" {
-			datasetsNeeded[p.Options.Dataset] = p
-		}
-	}
-
-	if len(datasetsNeeded) == 0 {
-		return result
-	}
-
-	// Execute datasets
-	var execOpts *dataset.ExecuteOptions
-	if session != nil {
-		execOpts = &dataset.ExecuteOptions{Session: session}
-	}
-	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
-	if err != nil {
-		// Log error but continue - options will be empty
-		return result
-	}
-
-	// Build lookup of dataset results
-	datasetResultMap := make(map[string]json.RawMessage)
-	for _, r := range datasetResults {
-		datasetResultMap[r.Name] = r.Data
-	}
-
-	// Resolve options for each parameter
-	for datasetName, paramSpec := range datasetsNeeded {
-		data, ok := datasetResultMap[datasetName]
-		if !ok {
-			continue
-		}
-
-		// Parse dataset result as array of objects
-		var rows []map[string]any
-		if err := json.Unmarshal(data, &rows); err != nil {
-			continue
-		}
-
-		valueCol := paramSpec.Options.ValueColumn
-		labelCol := paramSpec.Options.LabelColumn
-		if labelCol == "" {
-			labelCol = valueCol
-		}
-
-		items := make([]queryParamOptionItem, 0, len(rows))
-		for _, row := range rows {
-			valueRaw, ok := row[valueCol]
-			if !ok {
-				continue
-			}
-			value := fmt.Sprintf("%v", valueRaw)
-
-			label := value
-			if labelRaw, ok := row[labelCol]; ok {
-				label = fmt.Sprintf("%v", labelRaw)
-			}
-
-			items = append(items, queryParamOptionItem{
-				Value: value,
-				Label: label,
-			})
-		}
-
-		result[paramSpec.Name] = items
-	}
-
-	return result
-}
-
-// buildRoutesJSON builds the routes map for navigation and returns JSON.
-func buildRoutesJSON(liveArtefact config.LiveArtefact) []byte {
-	routes := make(map[string]string)
-	for path, route := range liveArtefact.Spec.Routes {
-		title := route.Title
-		if title == "" {
-			title = route.Artifact
-		}
-		routes[path] = title
-	}
-	routesJSON, _ := json.Marshal(routes)
-	return routesJSON
-}
-
-// buildMissingParamsJSON builds a sorted list of missing parameter names and returns JSON.
-func buildMissingParamsJSON(missingParams map[string]struct{}) []byte {
-	missingList := make([]string, 0, len(missingParams))
-	for name := range missingParams {
-		missingList = append(missingList, name)
-	}
-	sort.Strings(missingList) // for consistent output
-	missingParamsJSON, _ := json.Marshal(missingList)
-	return missingParamsJSON
-}
-
-// buildQueryParamsJSON builds the query params array for the control panel and returns JSON.
-func buildQueryParamsJSON(routeSpec config.LiveRouteSpec, datasetOptions map[string][]queryParamOptionItem) []byte {
-	queryParams := make([]queryParamInfo, 0, len(routeSpec.QueryParams))
-	for _, p := range routeSpec.QueryParams {
-		paramType := p.Type
-		if paramType == "" {
-			paramType = "string"
-		}
-
-		info := queryParamInfo{
-			Name:        p.Name,
-			Type:        paramType,
-			Default:     p.Default,
-			Description: p.Description,
-			Required:    p.Default == nil && !p.Optional,
-		}
-
-		// Add options if present
-		if p.Options != nil {
-			opts := &queryParamOptions{
-				Min:  p.Options.Min,
-				Max:  p.Options.Max,
-				Step: p.Options.Step,
-			}
-			// Use dataset options if available, otherwise use static items
-			if dsItems, ok := datasetOptions[p.Name]; ok && len(dsItems) > 0 {
-				opts.Items = dsItems
-			} else if len(p.Options.Items) > 0 {
-				// Convert static items
-				opts.Items = make([]queryParamOptionItem, 0, len(p.Options.Items))
-				for _, item := range p.Options.Items {
-					label := item.Label
-					if label == "" {
-						label = item.Value
-					}
-					opts.Items = append(opts.Items, queryParamOptionItem{
-						Value: item.Value,
-						Label: label,
-					})
-				}
-			}
-			info.Options = opts
-		}
-
-		queryParams = append(queryParams, info)
-	}
-	queryParamsJSON, _ := json.Marshal(queryParams)
-	return queryParamsJSON
-}
-
-// buildServeScript generates an inline config script and a reference to the external serve runtime.
-// If missingParams is non-nil, it indicates which parameters are missing and should be highlighted with errors.
-func buildServeScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec config.LiveRouteSpec, rawQuery, contextBase64 string, datasetOptions map[string][]queryParamOptionItem, missingParams map[string]struct{}) string {
-	routesJSON := buildRoutesJSON(liveArtefact)
-	missingParamsJSON := buildMissingParamsJSON(missingParams)
-	queryParamsJSON := buildQueryParamsJSON(routeSpec, datasetOptions)
-
-	// Build full URL with query string for initial state
-	currentURL := currentPath
-	if rawQuery != "" {
-		currentURL = currentPath + "?" + rawQuery
-	}
-
-	// Build the config object as JSON. The contextBase64 field is emitted
-	// separately (not via json.Marshal) because it can be very large and
-	// we want to avoid double-escaping.
-	type serveConfig struct {
-		Routes        json.RawMessage `json:"routes"`
-		QueryParams   json.RawMessage `json:"queryParams"`
-		MissingParams json.RawMessage `json:"missingParams"`
-		CurrentPath   string          `json:"currentPath"`
-		CurrentURL    string          `json:"currentURL"`
-	}
-	cfg := serveConfig{
-		Routes:        routesJSON,
-		QueryParams:   queryParamsJSON,
-		MissingParams: missingParamsJSON,
-		CurrentPath:   currentPath,
-		CurrentURL:    currentURL,
-	}
-	cfgJSON, _ := json.Marshal(cfg)
-
-	// Strip the closing "}" so we can append the contextBase64 field manually.
-	// This avoids JSON-encoding the (potentially huge) base64 string twice.
-	cfgStr := string(cfgJSON[:len(cfgJSON)-1])
-
-	var sb strings.Builder
-	sb.WriteString(`<script id="bino-serve-config">window.__binoServeConfig = `)
-	sb.WriteString(cfgStr)
-	sb.WriteString(`,"initialContextBase64":"`)
-	sb.WriteString(contextBase64)
-	sb.WriteString(`"};</script>`)
-	sb.WriteString("\n")
-	sb.WriteString(`<script type="module" src="/__bino/static/serve.js"></script>`)
-	return sb.String()
-}
-
-// withServeStyles applies production-appropriate styles to the frame HTML.
-func withServeStyles(frameHTML []byte) []byte {
-	if len(frameHTML) == 0 {
-		return frameHTML
-	}
-
-	// Check if already has serve styles
-	if strings.Contains(string(frameHTML), "bn-serve-style") {
-		return frameHTML
-	}
-
-	styleBlock := []byte(`
-<link id="bn-serve-style" rel="stylesheet" href="/__bino/shared/tokens.css">
-<link rel="stylesheet" href="/__bino/serve/serve.css">
-`)
-
-	// Find </head> and inject styles before it
-	headClose := bytes.Index(frameHTML, []byte("</head>"))
-	if headClose == -1 {
-		// No </head> found, prepend styles
-		return append(styleBlock, frameHTML...)
-	}
-
-	result := make([]byte, 0, len(frameHTML)+len(styleBlock))
-	result = append(result, frameHTML[:headClose]...)
-	result = append(result, styleBlock...)
-	result = append(result, frameHTML[headClose:]...)
-
-	// Inject bino-serve-shell wrapper after <body>
-	resultStr := string(result)
-	bodyOpen := strings.Index(resultStr, "<body")
-	if bodyOpen == -1 {
-		return result
-	}
-	// Find the closing > of the body tag
-	bodyClose := strings.Index(resultStr[bodyOpen:], ">")
-	if bodyClose == -1 {
-		return result
-	}
-	bodyEnd := bodyOpen + bodyClose + 1
-
-	// Find </body> to wrap content
-	bodyCloseTag := strings.Index(resultStr, "</body>")
-	if bodyCloseTag == -1 {
-		return result
-	}
-
-	// Extract original body content and wrap in shell
-	originalBodyContent := resultStr[bodyEnd:bodyCloseTag]
-
-	var sb strings.Builder
-	sb.WriteString(resultStr[:bodyEnd])
-	sb.WriteString(`<bino-serve-shell>`)
-	sb.WriteString(originalBodyContent)
-	sb.WriteString(`</bino-serve-shell>`)
-	sb.WriteString(resultStr[bodyCloseTag:])
-
-	return []byte(sb.String())
 }
