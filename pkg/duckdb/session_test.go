@@ -2,7 +2,9 @@ package duckdb
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -325,6 +327,38 @@ func TestInstallAndLoadCommunityExtensions_InvalidName(t *testing.T) {
 	err = session.InstallAndLoadCommunityExtensions(ctx, []string{"Invalid-Name"})
 	if err == nil {
 		t.Error("InstallAndLoadCommunityExtensions() should return error for invalid name")
+	}
+}
+
+func TestSession_ConcurrentBookkeeping(t *testing.T) {
+	// Regression test for the unsynchronized map access that made a shared
+	// session unsafe across net/http goroutines in `bino serve`.
+	// Fails under -race (and with "concurrent map writes") without the
+	// Session mutex.
+	session := &Session{
+		loadedExts:  make(map[string]struct{}),
+		attachedDBs: make(map[string]struct{}),
+	}
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for i := range 200 {
+				name := fmt.Sprintf("db_%d", i%10)
+				session.MarkDBAttached(name)
+				session.IsDBAttached(name)
+				session.markExtLoaded(name)
+				session.isExtLoaded(name)
+			}
+		})
+	}
+	wg.Wait()
+
+	if !session.IsDBAttached("db_0") {
+		t.Error("IsDBAttached(db_0) = false after MarkDBAttached")
+	}
+	if !session.isExtLoaded("db_0") {
+		t.Error("isExtLoaded(db_0) = false after markExtLoaded")
 	}
 }
 

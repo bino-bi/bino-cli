@@ -386,6 +386,12 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	renderCache := newServeRenderCache()
 	routeMap := make(map[string]previewhttp.ContentFunc)
 
+	// renderMu serializes request handling across the shared DuckDB session:
+	// renders execute ATTACH and CREATE OR REPLACE VIEW with request-scoped
+	// ${VAR} values, so concurrent renders would race on session bookkeeping
+	// and could read another request's views. See pkg/duckdb.Session docs.
+	var renderMu sync.Mutex
+
 	for path, route := range cfg.LiveArtefact.Spec.Routes {
 		routePath := path
 		routeSpec := route
@@ -401,6 +407,8 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
 				}
+				renderMu.Lock()
+				defer renderMu.Unlock()
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
@@ -414,6 +422,8 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
 				}
+				renderMu.Lock()
+				defer renderMu.Unlock()
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
@@ -434,6 +444,8 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
 				}
+				renderMu.Lock()
+				defer renderMu.Unlock()
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
@@ -446,6 +458,8 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
 				}
+				renderMu.Lock()
+				defer renderMu.Unlock()
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,

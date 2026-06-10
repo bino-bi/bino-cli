@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2" // register duckdb database driver
@@ -59,13 +60,22 @@ type QueryExecMeta struct {
 type QueryExecLogger func(meta QueryExecMeta)
 
 // Session owns an in-memory DuckDB connection configured for CLI pipelines.
+//
+// The bookkeeping that tracks loaded extensions and ATTACHed databases is safe
+// for concurrent use. The underlying database is shared, however: pipelines
+// mutate session-wide state (ATTACH, CREATE OR REPLACE VIEW) with
+// caller-specific values, so callers that share one Session across goroutines
+// must serialize whole render/query operations externally (see the render
+// mutex in `bino serve`).
 type Session struct {
 	db              *sql.DB
 	cacheDir        string
 	queryLogger     QueryLogger
 	queryExecLogger QueryExecLogger
-	loadedExts      map[string]struct{} // tracks loaded extensions for idempotent reloading
-	attachedDBs     map[string]struct{} // tracks ATTACHed databases for session reuse
+
+	mu          sync.Mutex          // guards loadedExts and attachedDBs
+	loadedExts  map[string]struct{} // tracks loaded extensions for idempotent reloading
+	attachedDBs map[string]struct{} // tracks ATTACHed databases for session reuse
 }
 
 // Options capture how a DuckDB session should be created.
@@ -177,6 +187,8 @@ func (s *Session) IsDBAttached(name string) bool {
 	if s == nil {
 		return false
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, ok := s.attachedDBs[name]
 	return ok
 }
@@ -186,10 +198,30 @@ func (s *Session) MarkDBAttached(name string) {
 	if s == nil {
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.attachedDBs == nil {
 		s.attachedDBs = make(map[string]struct{})
 	}
 	s.attachedDBs[name] = struct{}{}
+}
+
+// isExtLoaded reports whether an extension was already loaded in this session.
+func (s *Session) isExtLoaded(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.loadedExts[name]
+	return ok
+}
+
+// markExtLoaded records that an extension has been loaded in this session.
+func (s *Session) markExtLoaded(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loadedExts == nil {
+		s.loadedExts = make(map[string]struct{})
+	}
+	s.loadedExts[name] = struct{}{}
 }
 
 var extensionNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
@@ -295,7 +327,7 @@ func (s *Session) InstallAndLoadExtensionsWithProgress(ctx context.Context, name
 		}
 
 		// Skip if already loaded in this session (avoids repeated INSTALL+LOAD on reuse).
-		if _, loaded := s.loadedExts[name]; loaded {
+		if s.isExtLoaded(name) {
 			if progress != nil {
 				progress(i+1, total, name)
 			}
@@ -316,7 +348,7 @@ func (s *Session) InstallAndLoadExtensionsWithProgress(ctx context.Context, name
 			return fmt.Errorf("load extension %s: %w", name, err)
 		}
 
-		s.loadedExts[name] = struct{}{}
+		s.markExtLoaded(name)
 		if progress != nil {
 			progress(i+1, total, name)
 		}
@@ -351,7 +383,7 @@ func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names [
 		}
 
 		// Skip if already loaded in this session (avoids repeated INSTALL+LOAD on reuse).
-		if _, loaded := s.loadedExts[name]; loaded {
+		if s.isExtLoaded(name) {
 			continue
 		}
 
@@ -365,7 +397,7 @@ func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names [
 			return fmt.Errorf("load community extension %s: %w", name, err)
 		}
 
-		s.loadedExts[name] = struct{}{}
+		s.markExtLoaded(name)
 	}
 
 	return nil
