@@ -24,6 +24,10 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # govulncheck-action performs its own checkout; persisted credentials
+          # from this step would duplicate the Authorization header (HTTP 400)
+          persist-credentials: false
 
       - name: Run govulncheck
         uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
