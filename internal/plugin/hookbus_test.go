@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"bino.bi/bino/internal/logx"
 )
@@ -96,7 +97,7 @@ func TestHookBus_Modification(t *testing.T) {
 	}
 }
 
-func TestHookBus_Error_NonStrict(t *testing.T) {
+func TestHookBus_Error_LoggedNonFatal(t *testing.T) {
 	reg := NewRegistry()
 	p := &hookMockPlugin{
 		mockPlugin: mockPlugin{manifest: PluginManifest{Name: "failing", Hooks: []string{"post-load"}}},
@@ -109,7 +110,7 @@ func TestHookBus_Error_NonStrict(t *testing.T) {
 
 	result, diags, err := bus.Dispatch(context.Background(), "post-load", &HookPayload{Documents: []DocumentPayload{{Name: "doc"}}})
 	if err != nil {
-		t.Fatalf("non-strict should not return error, got: %v", err)
+		t.Fatalf("hook errors should not fail dispatch, got: %v", err)
 	}
 	if len(diags) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diags))
@@ -119,20 +120,42 @@ func TestHookBus_Error_NonStrict(t *testing.T) {
 	}
 }
 
-func TestHookBus_Error_Strict(t *testing.T) {
-	reg := NewRegistry()
-	p := &hookMockPlugin{
-		mockPlugin: mockPlugin{manifest: PluginManifest{Name: "failing", Hooks: []string{"post-load"}}},
-		onHookFn: func(ctx context.Context, checkpoint string, payload *HookPayload) (*HookResult, error) {
-			return nil, errors.New("plugin crash")
-		},
+func TestHookBus_PerPluginHookTimeout(t *testing.T) {
+	deadlines := make(map[string]time.Duration)
+	newHookPlugin := func(name string, hookTimeout time.Duration) *hookMockPlugin {
+		return &hookMockPlugin{
+			mockPlugin: mockPlugin{manifest: PluginManifest{
+				Name:        name,
+				Hooks:       []string{"post-load"},
+				HookTimeout: hookTimeout,
+			}},
+			onHookFn: func(ctx context.Context, checkpoint string, payload *HookPayload) (*HookResult, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Errorf("plugin %s: hook context has no deadline", name)
+					return &HookResult{}, nil
+				}
+				deadlines[name] = time.Until(deadline)
+				return &HookResult{}, nil
+			},
+		}
 	}
-	reg.Register(p)
-	bus := NewHookBus(reg, logx.Nop())
-	bus.SetStrict(true)
 
-	_, _, err := bus.Dispatch(context.Background(), "post-load", &HookPayload{})
-	if err == nil {
-		t.Fatal("strict mode should return error")
+	reg := NewRegistry()
+	reg.Register(newHookPlugin("pinned", 2*time.Minute))
+	reg.Register(newHookPlugin("fallback", 0))
+	bus := NewHookBus(reg, logx.Nop())
+
+	if _, _, err := bus.Dispatch(context.Background(), "post-load", &HookPayload{}); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+
+	// The bino.toml hook_timeout declaration must drive the hook deadline;
+	// without it the 30s bus default applies.
+	if got := deadlines["pinned"]; got <= 30*time.Second || got > 2*time.Minute {
+		t.Errorf("pinned plugin deadline %v, want ~2m", got)
+	}
+	if got := deadlines["fallback"]; got <= 0 || got > 30*time.Second {
+		t.Errorf("fallback plugin deadline %v, want ~30s", got)
 	}
 }

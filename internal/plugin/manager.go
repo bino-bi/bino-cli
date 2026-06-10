@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	pluginv1 "github.com/bino-bi/bino-plugin-sdk/proto/v1"
 	"github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -78,6 +79,16 @@ func (m *Manager) LoadAll(ctx context.Context, cfg *pathutil.ProjectConfig, proj
 }
 
 func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.PluginDeclaration, projectRoot string, binoVersion string) error {
+	// 0. Validate the declaration before launching anything.
+	var hookTimeout time.Duration
+	if decl.HookTimeout != "" {
+		parsed, err := time.ParseDuration(decl.HookTimeout)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid hook_timeout %q in bino.toml (want a positive duration like \"60s\")", decl.HookTimeout)
+		}
+		hookTimeout = parsed
+	}
+
 	// 1. Discover binary.
 	binaryPath, err := DiscoverBinary(name, decl.Path, projectRoot)
 	if err != nil {
@@ -144,11 +155,37 @@ func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.Plu
 		manifest: manifestFromProto(manifest),
 		process:  client,
 	}
+	p.manifest.HookTimeout = hookTimeout
 
-	// 7. Register in registry.
+	// 7. Enforce the bino.toml version pin against the reported version.
+	if decl.Version != "" {
+		if err := checkVersionPin(decl.Version, p.manifest.Version); err != nil {
+			return err
+		}
+	}
+
+	// 8. Register in registry.
 	m.registry.Register(p)
 
 	m.logger.Infof("loaded plugin %q v%s (%d kinds)", p.manifest.Name, p.manifest.Version, len(p.manifest.Kinds))
+	return nil
+}
+
+// checkVersionPin validates a plugin's reported version against the bino.toml
+// version pin. The pin is a Masterminds/semver constraint, so both exact pins
+// ("1.2.3") and ranges (">=1.0 <2.0", "^1.2") work.
+func checkVersionPin(pin, reported string) error {
+	constraint, err := semver.NewConstraint(pin)
+	if err != nil {
+		return fmt.Errorf("invalid version pin %q in bino.toml: %w", pin, err)
+	}
+	version, err := semver.NewVersion(reported)
+	if err != nil {
+		return fmt.Errorf("plugin reports unparseable version %q, cannot check pin %q: %w", reported, pin, err)
+	}
+	if !constraint.Check(version) {
+		return fmt.Errorf("plugin version %s does not satisfy the bino.toml pin %q", reported, pin)
+	}
 	return nil
 }
 

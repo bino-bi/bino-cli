@@ -13,7 +13,6 @@ type HookBus struct {
 	registry       *PluginRegistry
 	logger         logx.Logger
 	defaultTimeout time.Duration
-	strictMode     bool
 	lastFindings   []LintFinding
 }
 
@@ -26,14 +25,19 @@ func NewHookBus(registry *PluginRegistry, logger logx.Logger) *HookBus {
 	}
 }
 
-// SetStrict enables strict mode where hook errors are fatal.
-func (h *HookBus) SetStrict(strict bool) {
-	h.strictMode = strict
-}
-
-// SetDefaultTimeout overrides the default per-hook timeout.
+// SetDefaultTimeout overrides the default per-hook timeout. A plugin's
+// bino.toml hook_timeout declaration takes precedence over this default.
 func (h *HookBus) SetDefaultTimeout(d time.Duration) {
 	h.defaultTimeout = d
+}
+
+// hookTimeoutFor returns the per-hook timeout for a plugin: the bino.toml
+// hook_timeout declaration when present, the bus default otherwise.
+func (h *HookBus) hookTimeoutFor(p Plugin) time.Duration {
+	if t := p.Manifest().HookTimeout; t > 0 {
+		return t
+	}
+	return h.defaultTimeout
 }
 
 // Dispatch sends a hook event to all interested plugins in order.
@@ -42,9 +46,8 @@ func (h *HookBus) SetDefaultTimeout(d time.Duration) {
 // If a plugin returns modified=true, subsequent plugins and the
 // caller receive the modified payload.
 //
-// If a plugin returns an error:
-//   - In non-strict mode: logged as warning, payload passes through
-//   - In strict mode: returns the error immediately
+// If a plugin returns an error it is logged as a warning and the payload
+// passes through unmodified.
 func (h *HookBus) Dispatch(ctx context.Context, checkpoint string, payload *HookPayload) (*HookPayload, []Diagnostic, error) {
 	plugins := h.registry.PluginsForHook(checkpoint)
 	if len(plugins) == 0 {
@@ -58,23 +61,17 @@ func (h *HookBus) Dispatch(ctx context.Context, checkpoint string, payload *Hook
 	for _, p := range plugins {
 		h.logger.Debugf("dispatching hook %q to plugin %q", checkpoint, p.Manifest().Name)
 
-		hookCtx, cancel := context.WithTimeout(ctx, h.defaultTimeout)
+		hookCtx, cancel := context.WithTimeout(ctx, h.hookTimeoutFor(p))
 		result, err := p.OnHook(hookCtx, checkpoint, current)
 		cancel()
 
 		if err != nil {
-			diag := Diagnostic{
+			allDiagnostics = append(allDiagnostics, Diagnostic{
 				Source:   p.Manifest().Name,
 				Stage:    checkpoint,
 				Message:  fmt.Sprintf("hook error: %v", err),
 				Severity: SeverityWarning,
-			}
-			if h.strictMode {
-				diag.Severity = SeverityError
-				allDiagnostics = append(allDiagnostics, diag)
-				return current, allDiagnostics, fmt.Errorf("plugin %q hook %q failed (strict mode): %w", p.Manifest().Name, checkpoint, err)
-			}
-			allDiagnostics = append(allDiagnostics, diag)
+			})
 			h.logger.Warnf("plugin %q hook %q error (non-fatal): %v", p.Manifest().Name, checkpoint, err)
 			continue
 		}

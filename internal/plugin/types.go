@@ -1,5 +1,7 @@
 package plugin
 
+import "time"
+
 // KindCategory determines how bino treats a plugin-provided kind internally.
 type KindCategory int
 
@@ -31,6 +33,11 @@ type PluginManifest struct {
 	ProvidesAssets   bool
 	Commands         []CommandDescriptor
 	Hooks            []string // checkpoint names this plugin subscribes to
+
+	// HookTimeout is the per-plugin hook timeout from the bino.toml
+	// declaration (host-side configuration, not reported by the plugin).
+	// Zero means the HookBus default applies.
+	HookTimeout time.Duration
 }
 
 // CommandDescriptor describes a CLI subcommand provided by a plugin.
