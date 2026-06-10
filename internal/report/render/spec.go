@@ -275,11 +275,13 @@ type treeSpec struct {
 
 // treeNode defines a node in a tree.
 // Each node can contain a Label, Table, ChartStructure, or ChartTime component.
+// When optional is true and the ref is missing, the node is skipped gracefully instead of erroring.
 type treeNode struct {
-	ID   string          `json:"id"`
-	Kind string          `json:"kind"`
-	Ref  string          `json:"ref,omitempty"`
-	Spec json.RawMessage `json:"spec,omitempty"`
+	ID       string          `json:"id"`
+	Kind     string          `json:"kind"`
+	Ref      string          `json:"ref,omitempty"`
+	Optional bool            `json:"optional,omitempty"`
+	Spec     json.RawMessage `json:"spec,omitempty"`
 }
 
 // treeLabelSpec defines a simple label component for tree nodes.

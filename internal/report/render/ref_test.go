@@ -177,6 +177,83 @@ func TestRenderLayoutChildWithOptionalMissingRef(t *testing.T) {
 	}
 }
 
+func TestRenderTreeNodeWithMissingRef(t *testing.T) {
+	ctx := context.Background()
+
+	// LayoutPage with a Tree whose node references a non-existent ChartStructure (required ref).
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Tree",
+					"spec": {
+						"nodes": [
+							{
+								"id": "n1",
+								"kind": "ChartStructure",
+								"ref": "nonExistentChart"
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{layoutPageDoc}
+	_, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err == nil {
+		t.Fatalf("GenerateHTMLFromDocuments should error on missing required tree node ref")
+	}
+	if !strings.Contains(err.Error(), "required reference") {
+		t.Fatalf("error message should mention 'required reference', got: %v", err)
+	}
+}
+
+func TestRenderTreeNodeWithOptionalMissingRef(t *testing.T) {
+	ctx := context.Background()
+
+	// LayoutPage with a Tree whose node references a non-existent ChartStructure with optional: true.
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Tree",
+					"spec": {
+						"nodes": [
+							{
+								"id": "n1",
+								"kind": "ChartStructure",
+								"ref": "nonExistentChart",
+								"optional": true
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments should not error on optional missing tree node ref: %v", err)
+	}
+
+	html := string(result.HTML)
+
+	// The missing optional node should be skipped, so no chart element.
+	if strings.Contains(html, `<bn-chart-structure`) {
+		t.Fatalf("expected no bn-chart-structure element when optional tree node ref is missing, got:\n%s", html)
+	}
+}
+
 func TestRenderLayoutChildWithConstraintFilteredRef(t *testing.T) {
 	ctx := context.Background()
 

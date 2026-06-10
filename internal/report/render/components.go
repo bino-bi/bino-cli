@@ -1032,7 +1032,11 @@ func resolveTreeNodeSpec(node treeNode, rc *renderCtx) (json.RawMessage, error) 
 		if existsGlobally {
 			return nil, nil // Filtered by constraints, skip
 		}
-		return nil, fmt.Errorf("reference %q of kind %q not found", node.Ref, node.Kind)
+		if node.Optional {
+			logx.FromContext(rc.ctx).Channel("render").Infof("optional ref %q of kind %q not found, skipping tree node", node.Ref, node.Kind)
+			return nil, nil // Optional ref: skip gracefully
+		}
+		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", node.Ref, node.Kind)
 	}
 
 	// Extract spec from referenced document

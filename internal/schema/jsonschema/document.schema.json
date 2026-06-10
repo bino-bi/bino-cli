@@ -2631,6 +2631,11 @@
           "type": "string",
           "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used as the base, and any spec fields provided here act as overrides. The referenced document must have a kind matching this child's kind. LayoutPage cannot be referenced."
         },
+        "optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true and the ref is missing, the child is skipped gracefully instead of erroring."
+        },
         "spec": {
           "type": "object",
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
@@ -2722,6 +2727,10 @@
         "name": {
           "type": "string",
           "description": "Optional name for the inline child component. Used in error messages and for identification."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional human-readable description of the child component. Documentation only; not rendered."
         },
         "constraints": {
           "type": "array",
@@ -3148,6 +3157,11 @@
         "ref": {
           "type": "string",
           "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, and Image kinds."
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true and the ref is missing, the node is skipped gracefully instead of erroring."
         },
         "spec": {
           "type": "object",
