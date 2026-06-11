@@ -65,7 +65,7 @@ spec:
 - `stack` – optional object to enable stacked bar rendering:
   - `by` – (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
   - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
-  - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default).
+  - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default). With `by: scenarios` and `order: dataset`, segments stack in the order given in `scenarios`.
 
 ## Example: Top 10 regions with variance
 

@@ -44,6 +44,7 @@ spec:
   thereof: []
   partof: []
   columnthereof: null
+  attributes: []                     # computed attribute columns (label + expression)
 ```
 
 ## Fields
@@ -72,6 +73,7 @@ spec:
   - `"auto"` – auto-scale to fit the parent width silently (no warning).
   - A positive number (`"0.5"`, `"1.2"`, …) – fixed factor applied to the base font size.
 - `thereof`, `partof`, `columnthereof` – drilldown configuration.
+- `attributes` – computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
 
 ## Example: Grouped table with drilldown
 
@@ -106,6 +108,65 @@ spec:
       name: "DE"
       subGroups: ["Berlin", "Hamburg"]
 ```
+
+## Computed attribute columns
+
+`attributes` adds custom columns computed from dataset fields, rendered between
+the category column and the scenario columns. Each entry maps a column header
+label to an aggregate expression evaluated over the dataset rows behind each
+table row:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_with_attributes
+spec:
+  dataset: revenue_by_region
+  scenarios: ["ac1", "pp1"]
+  grouped: true
+  type: sum
+  attributes:
+    - label: "Verkaufsleiter"
+      expression: "set(_leiter)"
+    - label: "Umsatz gesamt"
+      expression: "sum(ac1)"
+```
+
+The list order defines the column order. Alternatively, a raw JSON object
+string can be used; its key order defines the column order:
+
+```yaml
+  attributes: '{"Verkaufsleiter": "set(_leiter)", "Umsatz gesamt": "sum(ac1)"}'
+```
+
+### Expression functions
+
+| Function | Result |
+|----------|--------|
+| `set(field)` | All distinct values in the group, joined with `", "`. |
+| `first(field)` | Value of the first row in the group. |
+| `last(field)` | Value of the last row in the group. |
+| `min(field)`, `max(field)` | Numeric minimum/maximum. |
+| `avg(field)`, `sum(field)` | Numeric average/sum; respects the row operation sign. |
+| `lit(value)` | Constant value rendered in every row. |
+
+Notes:
+
+- Field arguments must be plain identifiers (`[A-Za-z_][A-Za-z0-9_]*`): standard
+  dataset fields (e.g. `ac1`) or custom fields prefixed with `_` (e.g. `_leiter`).
+  Custom fields pass through datasources and datasets as extra row columns.
+  `lit` accepts any non-empty constant.
+- Results of `min`, `max`, `avg`, and `sum` are formatted like scenario cells
+  (measure scale and decimal digits); other functions render as-is.
+- Cells stay blank on total and group-header rows (SUM, GROUP_SUM, GROUPHEAD,
+  REST, PARTELEMENT). On `thereof` drill rows, aggregates are computed over the
+  drilled subset.
+- Invalid entries are ignored and produce a component warning. Duplicate labels
+  collapse (the last one wins).
+- Requires template engine `v1.0.0-alpha.15` or newer; older engines silently
+  ignore the attribute.
 
 ## Inline bar chart columns
 
@@ -252,6 +313,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level). | see below |
 | `spec.partof` | string or array | no | `[]` | Part-of groupings (category level). | see below |
 | `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration. | see below |
+| `spec.attributes` | string or array | no | — | Computed attribute columns (header label → aggregate expression). See [Computed attribute columns](#computed-attribute-columns). | see below |
 
 #### Thereof (drilldown rows)
 
@@ -280,5 +342,16 @@ spec:
     - scenario: "ac1"
       name: "DE"
       subGroups: ["Berlin", "Hamburg"]
+```
+
+#### Attributes (computed columns)
+
+```yaml
+spec:
+  attributes:
+    - label: "Verkaufsleiter"
+      expression: "set(_leiter)"
+    - label: "Umsatz gesamt"
+      expression: "sum(ac1)"
 ```
 

@@ -230,6 +230,27 @@ spec:
             categorie: typo
 `,
 		},
+		{
+			name: "typo in table attributes item",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: 1x1
+  children:
+    - kind: Table
+      metadata:
+        name: t1
+      spec:
+        dataset: ds
+        scenarios: [ac1]
+        attributes:
+          - labl: Verkaufsleiter
+            expression: set(_leiter)
+`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -253,6 +274,115 @@ spec:
 			}
 			if !found {
 				t.Errorf("expected an 'additional properties not allowed' issue, got: %v", ve.Errors)
+			}
+		})
+	}
+}
+
+func TestValidate_TableAttributes(t *testing.T) {
+	tableDoc := func(attributes string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: full
+  children:
+    - kind: Table
+      metadata:
+        name: t1
+      spec:
+        dataset: ds
+        scenarios: [ac1]
+        attributes: ` + attributes + `
+`
+	}
+
+	tests := []struct {
+		name       string
+		attributes string
+		wantErr    bool
+	}{
+		{
+			name: "array form with set, sum, and lit",
+			attributes: `
+          - label: Verkaufsleiter
+            expression: set(_leiter)
+          - label: Umsatz gesamt
+            expression: sum(ac1)
+          - label: Region
+            expression: lit(Fixed Value)`,
+			wantErr: false,
+		},
+		{
+			name:       "string form",
+			attributes: `'{"Verkaufsleiter": "set(_leiter)", "Umsatz gesamt": "sum(ac1)"}'`,
+			wantErr:    false,
+		},
+		{
+			name: "unknown function",
+			attributes: `
+          - label: Anzahl
+            expression: count(ac1)`,
+			wantErr: true,
+		},
+		{
+			name: "empty argument",
+			attributes: `
+          - label: Summe
+            expression: sum()`,
+			wantErr: true,
+		},
+		{
+			name: "invalid field identifier",
+			attributes: `
+          - label: Summe
+            expression: sum(1abc)`,
+			wantErr: true,
+		},
+		{
+			name: "bare field without function",
+			attributes: `
+          - label: Summe
+            expression: ac1`,
+			wantErr: true,
+		},
+		{
+			name: "missing label",
+			attributes: `
+          - expression: sum(ac1)`,
+			wantErr: true,
+		},
+		{
+			name: "missing expression",
+			attributes: `
+          - label: Summe`,
+			wantErr: true,
+		},
+		{
+			// The YAML map form is rejected on purpose: the loader alphabetizes
+			// map keys, which would silently reorder columns.
+			name: "map form rejected",
+			attributes: `
+          Verkaufsleiter: set(_leiter)`,
+			wantErr: true,
+		},
+		{
+			name:       "non-object string rejected",
+			attributes: `"hello"`,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tableDoc(tt.attributes)))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected document to validate, got: %v", err)
 			}
 		})
 	}

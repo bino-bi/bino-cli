@@ -30,6 +30,14 @@ type ColumnthereofItem struct {
 	SubGroups []string `json:"subGroups,omitempty" yaml:"subGroups,omitempty"`
 }
 
+// AttributeItem represents a single computed attribute column with a header
+// label and an aggregate expression (set|first|last|min|max|avg|sum|lit).
+// Used by Table components; list order defines column order.
+type AttributeItem struct {
+	Label      string `json:"label" yaml:"label"`
+	Expression string `json:"expression" yaml:"expression"`
+}
+
 // InlineLocation tracks the original source location of an inline definition
 // for error messages and debugging. When inline DataSources or DataSets are
 // materialized into synthetic documents, this information allows error messages

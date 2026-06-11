@@ -159,6 +159,9 @@ spec:
           - dac1_pl1_pos
           - drac1_pl1_pos
         grouped: true
+        attributes:
+          - label: "Plan total"
+            expression: "sum(pl1)"
 ---
 apiVersion: bino.bi/v1alpha1
 kind: LayoutPage

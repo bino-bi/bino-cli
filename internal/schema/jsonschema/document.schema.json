@@ -3612,6 +3612,35 @@
               }
             }
           ]
+        },
+        "attributes": {
+          "description": "Computed attribute columns rendered between the category and scenario columns, in list order. Maps a column header label to an aggregate expression over the rows behind each table row. Functions: set, first, last, min, max, avg, sum (dataset field or custom '_'-prefixed field) and lit (constant). Use the ordered array form, or a JSON object string whose key order defines column order. Example: [{\"label\": \"Verkaufsleiter\", \"expression\": \"set(_leiter)\"}]",
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "expression"],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Column header label."
+                  },
+                  "expression": {
+                    "type": "string",
+                    "pattern": "^\\s*((set|first|last|min|max|avg|sum)\\(\\s*[A-Za-z_][A-Za-z0-9_]*\\s*\\)|lit\\(.+\\))\\s*$",
+                    "description": "Aggregate expression: set|first|last|min|max|avg|sum(field) where field is a dataset column or a custom field prefixed with '_', or lit(constant)."
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     }

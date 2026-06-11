@@ -101,10 +101,10 @@ Range syntax follows npm conventions (comparators, hyphen ranges, x-ranges, tild
 Current supported ranges: `>=1.0.0-alpha, <2.0.0-0` — any 1.x release or pre-release is accepted; 0.x and 2.0.0+ are rejected. To use a specific engine version, pin it in `bino.toml`:
 
 ```toml
-engine-version = "v1.0.0-alpha.14"
+engine-version = "v1.0.0-alpha.15"
 ```
 
-If the version is not yet cached locally, run `bino setup --template-engine --engine-version v1.0.0-alpha.14`.
+If the version is not yet cached locally, run `bino setup --template-engine --engine-version v1.0.0-alpha.15`.
 
 <details>
 <summary>Directory structure</summary>

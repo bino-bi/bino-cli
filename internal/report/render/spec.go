@@ -335,6 +335,7 @@ type tableSpec struct {
 	Thereof                  reportspec.ThereofList       `json:"thereof"`
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
+	Attributes               reportspec.AttributesList    `json:"attributes"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -368,6 +369,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
+	writeAttr(b, "attributes", s.Attributes.String())
 }
 
 // writeBoolAttr writes a boolean attribute if the value is non-nil.
