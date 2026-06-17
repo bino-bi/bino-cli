@@ -410,7 +410,7 @@ func extractSpecSchema(merged json.RawMessage, kind string) (json.RawMessage, bo
 		if !ok {
 			return nil, false
 		}
-		out := make(map[string]any, len(spec)+2)
+		out := make(map[string]any)
 		maps.Copy(out, spec)
 		if defs, ok := doc["$defs"]; ok {
 			out["$defs"] = defs
