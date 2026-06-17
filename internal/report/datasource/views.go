@@ -320,6 +320,9 @@ func createView(ctx context.Context, db *sql.DB, session *duckdb.Session, v view
 func buildViewSourceSQL(spec sourceSpec) (string, error) {
 	switch spec.Type {
 	case sourceTypeExcel:
+		if sheet := strings.TrimSpace(spec.Sheet); sheet != "" {
+			return buildFileSourceSQLWithParams(spec, "read_xlsx", fmt.Sprintf("sheet = '%s'", escapeSQLString(sheet)))
+		}
 		return buildFileSourceSQL(spec, "read_xlsx")
 	case sourceTypeCSV:
 		return buildCSVSourceSQL(spec)

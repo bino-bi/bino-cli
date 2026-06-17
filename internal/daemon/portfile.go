@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"bino.bi/bino/internal/version"
 )
 
 const portFileName = "daemon.json"
@@ -16,6 +18,10 @@ type PortFile struct {
 	PID       int       `json:"pid"`
 	Port      int       `json:"port"`
 	StartedAt time.Time `json:"startedAt"`
+	// Version is the bino version that started this daemon. Clients compare it
+	// against their own binary to detect (and restart) a stale daemon. Empty in
+	// port files written by older daemons, which clients treat as stale.
+	Version string `json:"version,omitempty"`
 }
 
 // PortFilePath returns the path to the port file for a given project root.
@@ -29,6 +35,7 @@ func WritePortFile(projectRoot string, port int) error {
 		PID:       os.Getpid(),
 		Port:      port,
 		StartedAt: time.Now().UTC(),
+		Version:   version.Version,
 	}
 	data, err := json.MarshalIndent(pf, "", "  ")
 	if err != nil {

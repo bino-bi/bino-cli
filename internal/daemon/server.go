@@ -19,6 +19,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/version"
 )
 
 // Diagnostic represents a single diagnostic message for a file/document.
@@ -105,6 +106,10 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("POST /validate", srv.handleValidatePost)
 	mux.HandleFunc("GET /columns", srv.handleColumns)
 	mux.HandleFunc("GET /rows", srv.handleRows)
+	mux.HandleFunc("POST /introspect-draft", srv.handleIntrospectDraft)
+	mux.HandleFunc("POST /sqlgen/typed-select", srv.handleTypedSelect)
+	mux.HandleFunc("POST /preview-dataset", srv.handlePreviewDataSet)
+	mux.HandleFunc("GET /dataset-schema", srv.handleDatasetSchema)
 	mux.HandleFunc("GET /graph-deps", srv.handleGraphDeps)
 	mux.HandleFunc("POST /preview/start", srv.handlePreviewStart)
 	mux.HandleFunc("POST /preview/stop", srv.handlePreviewStop)
@@ -181,10 +186,12 @@ func (s *Server) writeJSON(w http.ResponseWriter, v any) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	resp := map[string]any{
-		"status":    "ok",
-		"uptime":    time.Since(s.startedAt).String(),
-		"startedAt": s.startedAt.UTC(),
-		"clients":   s.sse.ClientCount(),
+		"status":       "ok",
+		"uptime":       time.Since(s.startedAt).String(),
+		"startedAt":    s.startedAt.UTC(),
+		"clients":      s.sse.ClientCount(),
+		"version":      version.Version,
+		"capabilities": daemonCapabilities,
 	}
 	if s.state != nil && s.state.Session() != nil {
 		resp["session"] = true

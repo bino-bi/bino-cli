@@ -70,6 +70,24 @@
     ],
     "commands": [
       {
+        "command": "bino.newDataSourceFromFile",
+        "title": "New DataSource from File…",
+        "category": "Bino",
+        "icon": "$(database)"
+      },
+      {
+        "command": "bino.newDataSourceFromDatabase",
+        "title": "New DataSource from Database…",
+        "category": "Bino",
+        "icon": "$(database)"
+      },
+      {
+        "command": "bino.restartDaemon",
+        "title": "Restart Daemon",
+        "category": "Bino",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "bino.refreshIndex",
         "title": "Refresh Index",
         "category": "Bino",
@@ -337,7 +355,26 @@
           "group": "navigation"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "bino.newDataSourceFromFile",
+          "when": "bino.projectDetected && resourceExtname =~ /\\.(csv|tsv|xlsx|xls|parquet)$/i",
+          "group": "bino@1"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "bino.newDataSourceFromFile",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.newDataSourceFromDatabase",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.restartDaemon",
+          "when": "bino.projectDetected"
+        },
         {
           "command": "bino.openDocument",
           "when": "false"
@@ -454,6 +491,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable persistent background daemon for faster indexing, validation, and data introspection. The daemon shares a single DuckDB session across operations."
+        },
+        "bino.wizard.sampleRowLimit": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum number of sample rows the DataSource wizard fetches when introspecting a source."
         }
       }
     }

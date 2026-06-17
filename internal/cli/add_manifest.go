@@ -355,10 +355,24 @@ type DataSourceManifestData struct {
 	DBSecret   string // ConnectionSecret name
 	DBQuery    string
 
+	// Excel-specific options
+	Sheet string
+
 	// CSV-specific options
-	CSVDelimiter string
-	CSVHeader    *bool
-	CSVSkipRows  int
+	CSVDelimiter        string
+	CSVHeader           *bool
+	CSVSkipRows         int
+	CSVThousands        string
+	CSVDecimalSeparator string
+	CSVDateFormat       string
+	CSVColumnNames      []string
+
+	// Columns maps column name to DuckDB type, locking the schema.
+	// Mutually exclusive with CSVColumnNames.
+	Columns map[string]string
+
+	// Ephemeral, when set, marks the datasource as non-cacheable.
+	Ephemeral *bool
 }
 
 // quoteYAMLIfNeeded adds quotes to a string if it contains special characters.

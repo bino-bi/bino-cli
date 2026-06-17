@@ -121,6 +121,10 @@ type sourceSpec struct {
 	// Supports local paths, globs, http(s)://, and s3:// URLs.
 	Path string `json:"path"`
 
+	// Sheet selects the worksheet to read for excel sources (by name).
+	// When empty, DuckDB reads the first sheet.
+	Sheet string `json:"sheet,omitempty"`
+
 	// Connection holds all non-credential SQL database connection parameters (postgres_query, mysql_query).
 	// This includes host, port, database, user, and an optional reference to a ConnectionSecret.
 	// The ConnectionSecret contains only credentials (password), not connection details.

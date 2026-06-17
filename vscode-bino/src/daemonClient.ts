@@ -28,6 +28,8 @@ export class DaemonClient {
     private outputChannel: vscode.OutputChannel;
     private eventHandlers = new Map<string, Set<(data: any) => void>>();
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    private daemonVersion: string | undefined;
+    private capabilities: string[] = [];
 
     private _onStatusChange = new vscode.EventEmitter<DaemonStatus>();
     readonly onStatusChange = this._onStatusChange.event;
@@ -172,6 +174,26 @@ export class DaemonClient {
         return this.fetchJSON('/build', 'POST', artefact ? { artefact } : undefined);
     }
 
+    /** POST /introspect-draft — introspect a not-yet-registered data source */
+    async introspectDraft(req: { spec: any; baseDir?: string; sheet?: string; limit?: number }): Promise<any | undefined> {
+        return this.fetchJSON('/introspect-draft', 'POST', req);
+    }
+
+    /** POST /sqlgen/typed-select — generate a column-aware SELECT */
+    async typedSelect(req: { source: string; columns: any[]; pretty?: boolean; castMode?: string }): Promise<{ sql: string; aliases: string[] } | undefined> {
+        return this.fetchJSON('/sqlgen/typed-select', 'POST', req);
+    }
+
+    /** POST /preview-dataset — run a draft DataSet SQL against a not-yet-registered source */
+    async previewDataSet(req: { spec: any; sourceName: string; sql: string; baseDir?: string; sheet?: string; limit?: number }): Promise<any | undefined> {
+        return this.fetchJSON('/preview-dataset', 'POST', req);
+    }
+
+    /** GET /dataset-schema — the canonical standard dataset columns */
+    async datasetSchema(): Promise<{ columns: any[] } | undefined> {
+        return this.fetchJSON('/dataset-schema');
+    }
+
     /**
      * Shut down the daemon process.
      * Sends SIGTERM directly to the daemon PID — this is synchronous and
@@ -200,6 +222,33 @@ export class DaemonClient {
         this.cleanup();
     }
 
+    /**
+     * Terminate the current daemon and connect to a freshly spawned one. Used to
+     * recover from a stale daemon (one started by an older binary that lacks a
+     * needed capability). Unlike shutdown(), this preserves event handlers and
+     * the status emitter so the extension stays wired up across the restart.
+     */
+    async restart(projectRoot: string): Promise<boolean> {
+        const pid = this.daemonPid ?? this.daemonProcess?.pid;
+        this.stopEventStream();
+        if (pid) {
+            try {
+                process.kill(pid, 'SIGTERM');
+            } catch {
+                // already gone
+            }
+        }
+        this.port = undefined;
+        this.daemonPid = undefined;
+        this.daemonProcess = undefined;
+        this.capabilities = [];
+        this.daemonVersion = undefined;
+        this.setStatus('disconnected');
+        // Give the old daemon a moment to remove its port file before respawning.
+        await new Promise((r) => setTimeout(r, 400));
+        return this.connect(projectRoot);
+    }
+
     // --- Private methods ---
 
     private setStatus(status: DaemonStatus): void {
@@ -223,10 +272,29 @@ export class DaemonClient {
         }
         try {
             const result = await this.fetchJSON('/health');
-            return result?.status === 'ok';
+            if (result?.status === 'ok') {
+                this.daemonVersion = typeof result.version === 'string' ? result.version : undefined;
+                this.capabilities = Array.isArray(result.capabilities) ? result.capabilities : [];
+                return true;
+            }
+            return false;
         } catch {
             return false;
         }
+    }
+
+    /** The bino version that started the connected daemon, if known. */
+    get version(): string | undefined {
+        return this.daemonVersion;
+    }
+
+    /**
+     * Whether the connected daemon advertises a given capability. Daemons spawned
+     * from an older binary won't list new capabilities, so this is the signal the
+     * extension uses to detect a stale daemon and fall back / offer a restart.
+     */
+    hasCapability(name: string): boolean {
+        return this.capabilities.includes(name);
     }
 
     private async spawnDaemon(projectRoot: string): Promise<boolean> {

@@ -15,6 +15,7 @@ import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
+import { DataSourceWizardManager } from './wizard/wizardPanel';
 import { TreeTableEditorManager } from './treeTableEditor';
 import { PreviewTreeProvider } from './previewTree';
 import { ActionsTreeProvider } from './actionsTree';
@@ -25,6 +26,7 @@ let indexer: WorkspaceIndexer | undefined;
 let validator: BinoValidator | undefined;
 let previewManager: BinoPreviewManager | undefined;
 let rowsPreviewManager: RowsPreviewManager | undefined;
+let wizardManager: DataSourceWizardManager | undefined;
 let treeTableEditorManager: TreeTableEditorManager | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
@@ -220,6 +222,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize rows preview manager
     rowsPreviewManager = new RowsPreviewManager(indexer, outputChannel);
     context.subscriptions.push({ dispose: () => rowsPreviewManager?.dispose() });
+
+    // Initialize the DataSource/DataSet wizard
+    wizardManager = new DataSourceWizardManager(indexer, outputChannel);
+    context.subscriptions.push({ dispose: () => wizardManager?.dispose() });
 
     // Initialize tree-table editor manager
     treeTableEditorManager = new TreeTableEditorManager(indexer, context.extensionPath);
@@ -479,6 +485,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.openTreeEditor', () => {
             treeTableEditorManager?.openPanel();
+        })
+    );
+
+    // DataSource/DataSet wizard commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.newDataSourceFromFile', (uri?: vscode.Uri) => {
+            const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+            if (!target) {
+                vscode.window.showErrorMessage('Bino: no file selected for the DataSource wizard.');
+                return;
+            }
+            wizardManager?.openForFile(target);
+        }),
+        vscode.commands.registerCommand('bino.newDataSourceFromDatabase', () => {
+            wizardManager?.openForDatabase();
+        }),
+        vscode.commands.registerCommand('bino.restartDaemon', async () => {
+            const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!daemonClient || !root) {
+                vscode.window.showWarningMessage('Bino: daemon is not enabled for this workspace.');
+                return;
+            }
+            const ok = await daemonClient.restart(root);
+            vscode.window.showInformationMessage(ok ? 'Bino daemon restarted.' : 'Bino daemon failed to restart — check the output channel.');
         })
     );
 
