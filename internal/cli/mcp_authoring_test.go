@@ -10,8 +10,6 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"bino.bi/bino/internal/daemon"
-	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
 )
 
@@ -22,16 +20,8 @@ func newAuthoringClient(t *testing.T) (*mcpsdk.ClientSession, string) {
 	ctx := context.Background()
 	root := t.TempDir()
 
-	managed, err := daemon.NewManagedState(ctx, daemon.ManagedStateConfig{ProjectRoot: root, Logger: logx.Nop()})
-	if err != nil {
-		t.Fatalf("managed state: %v", err)
-	}
-	t.Cleanup(managed.Close)
-	if err := managed.State.Refresh(ctx); err != nil {
-		t.Fatalf("refresh: %v", err)
-	}
-
-	server := mcp.NewServer(mcp.Deps{State: managed.State, Authoring: newCLIAuthoring(root)})
+	state := newTestState(t, root)
+	server := mcp.NewServer(mcp.Deps{State: state, Authoring: newCLIAuthoring(root)})
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
 	if err != nil {

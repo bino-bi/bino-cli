@@ -13,7 +13,36 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/pkg/duckdb"
 )
+
+// newTestState builds a daemon State over root without eagerly installing
+// DuckDB extensions (the sample/temp projects use only inline + CSV data, which
+// need none). Eager extension install hits the network and is exercised by the
+// stdio smoke test instead.
+func newTestState(t *testing.T, root string) *daemon.State {
+	t.Helper()
+	ctx := context.Background()
+	opts, err := duckdb.DefaultOptions()
+	if err != nil {
+		t.Fatalf("duckdb options: %v", err)
+	}
+	session, err := duckdb.OpenSession(ctx, opts)
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	state, err := daemon.NewState(root, session, logx.Nop())
+	if err != nil {
+		t.Fatalf("new state: %v", err)
+	}
+	t.Cleanup(state.Close)
+	if err := state.Refresh(ctx); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	return state
+}
 
 // startMCPDaemon brings up a daemon HTTP server with /mcp mounted over the
 // sample project and returns a connected upstream MCP client session.
@@ -25,21 +54,14 @@ func startMCPDaemon(t *testing.T) *mcpsdk.ClientSession {
 	if err != nil {
 		t.Fatalf("abs: %v", err)
 	}
-	managed, err := daemon.NewManagedState(ctx, daemon.ManagedStateConfig{ProjectRoot: root, Logger: logx.Nop()})
-	if err != nil {
-		t.Fatalf("managed state: %v", err)
-	}
-	t.Cleanup(managed.Close)
-	if err := managed.State.Refresh(ctx); err != nil {
-		t.Fatalf("refresh: %v", err)
-	}
+	state := newTestState(t, root)
 
-	deps := mcp.Deps{State: managed.State}
+	deps := mcp.Deps{State: state}
 	handler := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 		return mcp.NewServer(deps)
 	}, nil)
 
-	srv, err := daemon.NewServer(daemon.ServerConfig{ListenAddr: "127.0.0.1:0", State: managed.State, MCPHandler: handler})
+	srv, err := daemon.NewServer(daemon.ServerConfig{ListenAddr: "127.0.0.1:0", State: state, MCPHandler: handler})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}

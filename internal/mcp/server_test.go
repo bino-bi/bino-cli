@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 // newTestClient builds a managed State over the sample project, constructs the
@@ -25,19 +26,8 @@ func newTestClient(t *testing.T) *mcpsdk.ClientSession {
 		t.Fatalf("abs: %v", err)
 	}
 
-	managed, err := daemon.NewManagedState(ctx, daemon.ManagedStateConfig{
-		ProjectRoot: root,
-		Logger:      logx.Nop(),
-	})
-	if err != nil {
-		t.Fatalf("managed state: %v", err)
-	}
-	t.Cleanup(managed.Close)
-	if err := managed.State.Refresh(ctx); err != nil {
-		t.Fatalf("refresh: %v", err)
-	}
-
-	server := NewServer(Deps{State: managed.State})
+	state := newTestState(t, root)
+	server := NewServer(Deps{State: state})
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
@@ -53,6 +43,34 @@ func newTestClient(t *testing.T) *mcpsdk.ClientSession {
 	}
 	t.Cleanup(func() { _ = cs.Close() })
 	return cs
+}
+
+// newTestState builds a daemon State over root without eagerly installing
+// DuckDB extensions (the sample/temp projects use only inline + CSV data, which
+// need none). Eager extension install hits the network and is exercised by the
+// stdio smoke test instead.
+func newTestState(t *testing.T, root string) *daemon.State {
+	t.Helper()
+	ctx := context.Background()
+	opts, err := duckdb.DefaultOptions()
+	if err != nil {
+		t.Fatalf("duckdb options: %v", err)
+	}
+	session, err := duckdb.OpenSession(ctx, opts)
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	state, err := daemon.NewState(root, session, logx.Nop())
+	if err != nil {
+		t.Fatalf("new state: %v", err)
+	}
+	t.Cleanup(state.Close)
+	if err := state.Refresh(ctx); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	return state
 }
 
 func readResourceText(t *testing.T, cs *mcpsdk.ClientSession, uri string) string {
