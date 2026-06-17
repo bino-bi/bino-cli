@@ -173,6 +173,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newUpdateCommand())
 	cmd.AddCommand(newAddCommand())
 	cmd.AddCommand(newDaemonCommand())
+	cmd.AddCommand(newMCPCommand())
 	cmd.AddCommand(newSchemaCommand())
 	cmd.AddCommand(newPluginCommand())
 	return cmd

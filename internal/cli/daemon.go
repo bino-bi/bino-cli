@@ -3,14 +3,34 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"sync/atomic"
 	"time"
 
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/plugin"
 )
+
+// connCounter wraps an http.Handler and tracks the number of in-flight requests,
+// so an attached MCP session (which holds an open Streamable-HTTP stream) counts
+// as daemon activity for the idle-shutdown check.
+type connCounter struct {
+	inner http.Handler
+	n     atomic.Int64
+}
+
+func (c *connCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	c.n.Add(1)
+	defer c.n.Add(-1)
+	c.inner.ServeHTTP(w, r)
+}
+
+func (c *connCounter) active() int64 { return c.n.Load() }
 
 const defaultInactivityTimeout = 5 * time.Minute
 
@@ -19,6 +39,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 		port       int
 		workdir    string
 		listenAddr string
+		mcpEnabled bool
 	)
 
 	cmd := &cobra.Command{
@@ -64,6 +85,22 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				logger.Errorf("Initial refresh failed: %v", err)
 			}
 
+			// Build the MCP handler (Streamable HTTP) sharing this State. Mounted
+			// at /mcp on the daemon's listener by default, loopback-only. An
+			// attached MCP session (open Streamable-HTTP request) counts as
+			// activity for the idle-shutdown check below.
+			var mcpHandler http.Handler
+			var mcpActive func() int64
+			if mcpEnabled {
+				deps := mcp.Deps{State: state, Registry: env.PluginRegistry}
+				inner := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
+					return mcp.NewServer(deps)
+				}, nil)
+				cc := &connCounter{inner: inner}
+				mcpHandler = cc
+				mcpActive = cc.active
+			}
+
 			// Create HTTP server. The listen address defaults to 127.0.0.1 (localhost
 			// only) to match the original local-IDE assumption; --listen-addr=0.0.0.0
 			// is the explicit opt-in needed when the daemon runs inside a container and
@@ -79,6 +116,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				State:          state,
 				Logger:         logger.Channel("server"),
 				PluginRegistry: env.PluginRegistry,
+				MCPHandler:     mcpHandler,
 			})
 			if err != nil {
 				return RuntimeError(err)
@@ -92,6 +130,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			defer server.StopPreview()
 
 			logger.Infof("Daemon listening on %s:%d", listenAddr, server.Port())
+			if mcpEnabled {
+				logger.Infof("MCP endpoint at http://%s:%d/mcp", listenAddr, server.Port())
+			}
 
 			// Create a cancellable context for the server
 			serverCtx, serverCancel := context.WithCancel(ctx)
@@ -124,12 +165,16 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 					case <-serverCtx.Done():
 						return
 					case <-ticker.C:
-						if server.ClientCount() > 0 {
+						active := server.ClientCount()
+						if mcpActive != nil {
+							active += int(mcpActive())
+						}
+						if active > 0 {
 							lastActive = time.Now()
 							continue
 						}
 						if time.Since(lastActive) > defaultInactivityTimeout {
-							logger.Infof("No SSE clients for %v, shutting down", defaultInactivityTimeout)
+							logger.Infof("No active clients for %v, shutting down", defaultInactivityTimeout)
 							server.BroadcastEvent("shutdown", map[string]string{
 								"reason": "inactivity timeout",
 							})
@@ -166,6 +211,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 	cmd.Flags().IntVarP(&port, "port", "p", 0, "Port to listen on (default: ephemeral)")
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().StringVar(&listenAddr, "listen-addr", "127.0.0.1", "Address to listen on (use 0.0.0.0 to accept connections from a container network)")
+	cmd.Flags().BoolVar(&mcpEnabled, "mcp", true, "Mount the MCP server at /mcp (Streamable HTTP); use --mcp=false to disable")
 
 	return cmd
 }

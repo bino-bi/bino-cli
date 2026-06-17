@@ -63,6 +63,11 @@ type ServerConfig struct {
 	State          *State
 	Logger         logx.Logger
 	PluginRegistry *plugin.PluginRegistry
+	// MCPHandler, when non-nil, is mounted at /mcp to serve the Model Context
+	// Protocol over Streamable HTTP, sharing the daemon's loaded State. Built by
+	// the CLI layer (internal/cli) so the daemon package avoids importing
+	// internal/mcp (which imports this package).
+	MCPHandler http.Handler
 }
 
 // NewServer constructs a daemon HTTP server.
@@ -108,6 +113,13 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("POST /build", srv.handleBuild)
 	mux.HandleFunc("GET /events", srv.handleEvents)
 	mux.HandleFunc("POST /shutdown", srv.handleShutdown)
+
+	// The MCP server (Streamable HTTP) is mounted here when supplied by the CLI.
+	// Both "/mcp" and "/mcp/" are routed so subpath requests reach the handler.
+	if cfg.MCPHandler != nil {
+		mux.Handle("/mcp", cfg.MCPHandler)
+		mux.Handle("/mcp/", cfg.MCPHandler)
+	}
 
 	srv.httpServer = &http.Server{Handler: mux} //nolint:gosec // G112: local dev server on localhost
 	return srv, nil
