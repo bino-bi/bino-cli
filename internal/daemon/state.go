@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -249,6 +251,83 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 	}
 
 	return diagnostics
+}
+
+// ValidateDraft validates in-memory manifest YAML (one or more documents)
+// against the schema and constraints, without touching the project on disk. It
+// reports schema-validation and constraint diagnostics for the draft only; it
+// does not run project-wide lint rules (which assume the full document set and
+// would produce false positives against a single draft). This is the agent's
+// pre-write guardrail.
+func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnostic, error) {
+	tmpDir, err := os.MkdirTemp("", "bino-draft-")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	draftPath := filepath.Join(tmpDir, "draft.yaml")
+	if err := os.WriteFile(draftPath, yamlBytes, 0o600); err != nil {
+		return nil, fmt.Errorf("write draft: %w", err)
+	}
+
+	// Strict load collects every schema/constraint error per document. The temp
+	// dir is outside the project, so this neither touches project files nor
+	// triggers the watcher.
+	var loadErrs []error
+	_, _ = config.LoadDirWithOptions(ctx, tmpDir, config.LoadOptions{
+		Lenient:       false,
+		KindProvider:  s.kindProvider,
+		CollectErrors: &loadErrs,
+	})
+
+	diagnostics := make([]Diagnostic, 0, len(loadErrs))
+	for _, loadErr := range loadErrs {
+		for _, d := range parseValidationError(loadErr) {
+			d.File = "<draft>" // the temp path is meaningless to callers
+			diagnostics = append(diagnostics, d)
+		}
+	}
+	return diagnostics, nil
+}
+
+// IntrospectSource probes a not-yet-registered data source described by specJSON
+// (a bare DataSource spec object) and returns its columns, a sample of rows,
+// Excel sheet names, and detected CSV options. It opens a fresh ephemeral
+// session so introspection never pollutes the shared one (matching the daemon's
+// introspect-draft handler and lsp-helper).
+func (s *State) IntrospectSource(ctx context.Context, specJSON json.RawMessage, sheet string, limit int) (*datasource.ProbeResult, error) {
+	cfg := runtimecfg.Current()
+	if limit <= 0 {
+		limit = 100
+	}
+	if cfg.MaxQueryRows > 0 && limit > cfg.MaxQueryRows {
+		limit = cfg.MaxQueryRows
+	}
+	timeout := cfg.MaxQueryDuration
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	opts, err := duckdb.DefaultOptions()
+	if err != nil {
+		return nil, err
+	}
+	session, err := duckdb.OpenSession(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	return datasource.Probe(ctx, session, datasource.ProbeRequest{
+		SpecJSON: specJSON,
+		BaseDir:  s.ProjectRoot(),
+		Docs:     s.Documents(),
+		Sheet:    sheet,
+		Limit:    limit,
+	})
 }
 
 // IntrospectColumns returns column names for a DataSource or DataSet using the shared session.

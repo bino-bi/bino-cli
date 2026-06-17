@@ -30,6 +30,13 @@ jobs:
           persist-credentials: false
 
       - name: Run govulncheck
+        # Non-blocking: govulncheck currently panics during its SSA reachability
+        # analysis ("ForEachElement called on type containing *types.TypeParam",
+        # golang.org/x/tools/go/ssa) on the generics-heavy
+        # github.com/modelcontextprotocol/go-sdk dependency. This is an upstream
+        # x/tools bug, not a vulnerability. Remove continue-on-error once the
+        # upstream fix is released.
+        continue-on-error: true
         uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
         with:
           go-version-file: go.mod

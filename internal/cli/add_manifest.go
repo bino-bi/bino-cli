@@ -241,11 +241,40 @@ func WriteManifest(path, content string) error {
 		return fmt.Errorf("file %s already exists", path)
 	}
 
-	// Write file
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
+	// Write file atomically (tmp + rename) so a crash mid-write cannot leave a
+	// partially written manifest.
+	if err := atomicWriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
+	return nil
+}
+
+// atomicWriteFile writes data to path via a temp file in the same directory
+// followed by an atomic rename, so an interrupted write never corrupts the
+// destination file.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".bino-write-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeds
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
 	return nil
 }
 
@@ -265,8 +294,8 @@ func AppendToManifest(path, content string) error {
 	newContent += "---\n"
 	newContent += content
 
-	// Write back
-	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
+	// Write back atomically.
+	if err := atomicWriteFile(path, []byte(newContent), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 

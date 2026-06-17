@@ -138,9 +138,7 @@ func parseProbeSpec(specJSON json.RawMessage) (sourceSpec, error) {
 	if len(specJSON) == 0 {
 		return sourceSpec{}, fmt.Errorf("spec is required")
 	}
-	wrapped := make([]byte, 0, len(specJSON)+9)
-	wrapped = append(wrapped, []byte(`{"spec":`)...)
-	wrapped = append(wrapped, specJSON...)
+	wrapped := append([]byte(`{"spec":`), specJSON...)
 	wrapped = append(wrapped, '}')
 	return parseSpec(wrapped)
 }
