@@ -18,7 +18,6 @@ import (
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
-	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/version"
 )
 
@@ -32,14 +31,6 @@ type Diagnostic struct {
 	Message  string `json:"message"`
 	Code     string `json:"code,omitempty"`
 	Field    string `json:"field,omitempty"`
-}
-
-// indexDocument represents a document entry for the index response.
-type indexDocument struct {
-	Kind     string `json:"kind"`
-	Name     string `json:"name"`
-	File     string `json:"file"`
-	Position int    `json:"position"`
 }
 
 // Server is the daemon HTTP server.
@@ -230,44 +221,15 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	docs := s.state.Documents()
-
-	result := struct {
-		Documents []indexDocument `json:"documents"`
-	}{
-		Documents: make([]indexDocument, 0, len(docs)),
-	}
-	for _, doc := range docs {
-		result.Documents = append(result.Documents, indexDocument{
-			Kind:     doc.Kind,
-			Name:     doc.Name,
-			File:     doc.File,
-			Position: doc.Position,
-		})
-	}
-	s.writeJSON(w, result)
+	s.writeJSON(w, s.state.Index())
 }
 
 func (s *Server) handleValidateGet(w http.ResponseWriter, _ *http.Request) {
-	diags := s.state.Diagnostics()
-	s.writeJSON(w, struct {
-		Valid       bool         `json:"valid"`
-		Diagnostics []Diagnostic `json:"diagnostics"`
-	}{
-		Valid:       len(diags) == 0,
-		Diagnostics: diags,
-	})
+	s.writeJSON(w, s.state.Validate(context.Background(), false))
 }
 
 func (s *Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
-	diags := s.state.ValidateWithQueries(r.Context())
-	s.writeJSON(w, struct {
-		Valid       bool         `json:"valid"`
-		Diagnostics []Diagnostic `json:"diagnostics"`
-	}{
-		Valid:       len(diags) == 0,
-		Diagnostics: diags,
-	})
+	s.writeJSON(w, s.state.Validate(r.Context(), true))
 }
 
 func (s *Server) handleColumns(w http.ResponseWriter, r *http.Request) {
@@ -276,24 +238,7 @@ func (s *Server) handleColumns(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"missing name parameter"}`, http.StatusBadRequest)
 		return
 	}
-
-	columns, err := s.state.IntrospectColumns(r.Context(), name)
-
-	result := struct {
-		Name    string   `json:"name"`
-		Columns []string `json:"columns"`
-		Error   string   `json:"error,omitempty"`
-	}{
-		Name:    name,
-		Columns: columns,
-	}
-	if result.Columns == nil {
-		result.Columns = []string{}
-	}
-	if err != nil {
-		result.Error = err.Error()
-	}
-	s.writeJSON(w, result)
+	s.writeJSON(w, s.state.Columns(r.Context(), name))
 }
 
 func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
@@ -309,44 +254,13 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-
-	columns, rows, truncated, kind, err := s.state.QueryRows(r.Context(), name, limit)
-
-	result := struct {
-		Name      string           `json:"name"`
-		Kind      string           `json:"kind"`
-		Columns   []string         `json:"columns"`
-		Rows      []map[string]any `json:"rows"`
-		Limit     int              `json:"limit"`
-		Truncated bool             `json:"truncated"`
-		Error     string           `json:"error,omitempty"`
-	}{
-		Name:      name,
-		Kind:      kind,
-		Columns:   columns,
-		Rows:      rows,
-		Limit:     limit,
-		Truncated: truncated,
-	}
-	if result.Columns == nil {
-		result.Columns = []string{}
-	}
-	if result.Rows == nil {
-		result.Rows = []map[string]any{}
-	}
-	if err != nil {
-		result.Error = err.Error()
-	}
-	s.writeJSON(w, result)
+	s.writeJSON(w, s.state.Rows(r.Context(), name, limit))
 }
 
 func (s *Server) handleGraphDeps(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	name := r.URL.Query().Get("name")
 	direction := r.URL.Query().Get("direction")
-	if direction == "" {
-		direction = "both"
-	}
 
 	maxDepth := 0
 	if md := r.URL.Query().Get("max-depth"); md != "" {
@@ -354,79 +268,7 @@ func (s *Server) handleGraphDeps(w http.ResponseWriter, r *http.Request) {
 			maxDepth = parsed
 		}
 	}
-
-	result := struct {
-		RootID    string      `json:"rootId"`
-		Direction string      `json:"direction"`
-		Nodes     []graphNode `json:"nodes"`
-		Edges     []graphEdge `json:"edges"`
-		Error     string      `json:"error,omitempty"`
-	}{
-		Direction: direction,
-		Nodes:     []graphNode{},
-		Edges:     []graphEdge{},
-	}
-
-	if kind == "" || name == "" {
-		result.Error = "both kind and name parameters are required"
-		s.writeJSON(w, result)
-		return
-	}
-	if direction != "in" && direction != "out" && direction != "both" {
-		result.Error = "direction must be 'in', 'out', or 'both'"
-		s.writeJSON(w, result)
-		return
-	}
-
-	g, err := s.state.BuildGraph(r.Context())
-	if err != nil {
-		result.Error = fmt.Sprintf("build graph: %v", err)
-		s.writeJSON(w, result)
-		return
-	}
-
-	rootNode := findGraphNode(g, kind, name)
-	if rootNode == nil {
-		result.Error = fmt.Sprintf("node not found: %s:%s", kind, name)
-		s.writeJSON(w, result)
-		return
-	}
-
-	result.RootID = rootNode.ID
-
-	reverseAdj := make(map[string][]string)
-	for _, node := range g.Nodes {
-		for _, depID := range node.DependsOn {
-			reverseAdj[depID] = append(reverseAdj[depID], node.ID)
-		}
-	}
-
-	visited := make(map[string]bool)
-	var edges []graphEdge
-
-	if direction == "out" || direction == "both" {
-		traverseGraph(g, rootNode.ID, "out", maxDepth, visited, &edges, nil)
-	}
-	if direction == "in" || direction == "both" {
-		traverseGraph(g, rootNode.ID, "in", maxDepth, visited, &edges, reverseAdj)
-	}
-
-	for nodeID := range visited {
-		node, ok := g.NodeByID(nodeID)
-		if !ok {
-			continue
-		}
-		result.Nodes = append(result.Nodes, graphNode{
-			ID:   node.ID,
-			Kind: string(node.Kind),
-			Name: node.Name,
-			File: node.File,
-			Hash: node.Hash,
-		})
-	}
-
-	result.Edges = edges
-	s.writeJSON(w, result)
+	s.writeJSON(w, s.state.GraphDeps(r.Context(), kind, name, direction, maxDepth))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -684,108 +526,4 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 
 	s.BroadcastEvent("build-complete", result)
 	s.writeJSON(w, result)
-}
-
-// --- Graph helpers (replicated from cli/lsp.go to avoid circular import) ---
-
-type graphNode struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	Name string `json:"name"`
-	File string `json:"file,omitempty"`
-	Hash string `json:"hash,omitempty"`
-}
-
-type graphEdge struct {
-	FromID    string `json:"fromId"`
-	ToID      string `json:"toId"`
-	Direction string `json:"direction"`
-}
-
-func findGraphNode(g *graph.Graph, kind, name string) *graph.Node {
-	if kind == "ReportArtefact" {
-		if node, ok := g.ReportArtefactByName(name); ok {
-			return node
-		}
-		return nil
-	}
-
-	componentKinds := map[string]bool{
-		"Text": true, "Table": true, "ChartStructure": true,
-		"ChartTime": true, "Image": true, "Asset": true,
-	}
-	if componentKinds[kind] {
-		for _, node := range g.Nodes {
-			if node.Kind == graph.NodeComponent &&
-				node.Attributes["componentKind"] == kind &&
-				node.Name == name {
-				return node
-			}
-		}
-		return nil
-	}
-
-	targetKind := graph.NodeKind(kind)
-	for _, node := range g.Nodes {
-		if node.Kind == targetKind && node.Name == name {
-			return node
-		}
-	}
-	return nil
-}
-
-func traverseGraph(
-	g *graph.Graph,
-	rootID string,
-	dir string,
-	maxDepth int,
-	visited map[string]bool,
-	edges *[]graphEdge,
-	reverseAdj map[string][]string,
-) {
-	type queueItem struct {
-		id    string
-		depth int
-	}
-	queue := []queueItem{{id: rootID, depth: 0}}
-	visited[rootID] = true
-
-	for len(queue) > 0 {
-		item := queue[0]
-		queue = queue[1:]
-
-		if maxDepth > 0 && item.depth >= maxDepth {
-			continue
-		}
-
-		var neighbors []string
-		if dir == "out" {
-			if node, ok := g.NodeByID(item.id); ok {
-				neighbors = node.DependsOn
-			}
-		} else {
-			neighbors = reverseAdj[item.id]
-		}
-
-		for _, neighborID := range neighbors {
-			if dir == "out" {
-				*edges = append(*edges, graphEdge{
-					FromID:    item.id,
-					ToID:      neighborID,
-					Direction: "out",
-				})
-			} else {
-				*edges = append(*edges, graphEdge{
-					FromID:    neighborID,
-					ToID:      item.id,
-					Direction: "in",
-				})
-			}
-
-			if !visited[neighborID] {
-				visited[neighborID] = true
-				queue = append(queue, queueItem{id: neighborID, depth: item.depth + 1})
-			}
-		}
-	}
 }

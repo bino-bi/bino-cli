@@ -10,8 +10,6 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
-	"bino.bi/bino/internal/watchers"
-	"bino.bi/bino/pkg/duckdb"
 )
 
 const defaultInactivityTimeout = 5 * time.Minute
@@ -45,31 +43,21 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				return ConfigErrorf("daemon already running on port %d (pid %d)", existing.Port, existing.PID)
 			}
 
-			// Create shared DuckDB session
-			duckdbOpts, err := duckdb.DefaultOptions()
-			if err != nil {
-				return RuntimeError(err)
+			// Create the shared session + state (also used by `bino mcp` standalone).
+			managedCfg := daemon.ManagedStateConfig{
+				ProjectRoot: env.ProjectRoot,
+				Logger:      logger,
 			}
-			sharedSession, err := duckdb.OpenSession(ctx, duckdbOpts)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			defer sharedSession.Close()
-
-			if err := sharedSession.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
-				return RuntimeError(err)
-			}
-
-			// Create daemon state
-			state, err := daemon.NewState(env.ProjectRoot, sharedSession, logger)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			defer state.Close()
 			if env.PluginRegistry != nil {
-				state.SetKindProvider(env.PluginRegistry)
-				state.SetPluginLinters(plugin.NewLinterRegistry(env.PluginRegistry))
+				managedCfg.KindProvider = env.PluginRegistry
+				managedCfg.PluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
 			}
+			managed, err := daemon.NewManagedState(ctx, managedCfg)
+			if err != nil {
+				return RuntimeError(err)
+			}
+			defer managed.Close()
+			state := managed.State
 
 			// Initial refresh
 			if err := state.Refresh(ctx); err != nil {
@@ -109,70 +97,21 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			serverCtx, serverCancel := context.WithCancel(ctx)
 			defer serverCancel()
 
-			// Start file watcher
-			refreshCh := make(chan string, 16)
-			enqueue := func(reason string) {
-				select {
-				case refreshCh <- reason:
-				default:
-				}
-			}
-
-			watchLog := logger.Channel("watcher")
-			watcher, err := watchers.NewWatcher(watchers.Config{
-				Root:   env.ProjectRoot,
-				Logger: watchLog,
-				Handler: func(evt watchers.Event) {
-					watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
-					enqueue(fmt.Sprintf("change %s", evt.RelativePath))
-				},
-			})
-			if err != nil {
+			// Start file watcher; broadcast index/diagnostics updates to SSE clients
+			// after each refresh.
+			if err := managed.Watch(ctx, func(st *daemon.State, reason string) {
+				server.BroadcastEvent("index-updated", map[string]any{
+					"reason":    reason,
+					"documents": len(st.Documents()),
+				})
+				diags := st.Diagnostics()
+				server.BroadcastEvent("diagnostics", map[string]any{
+					"valid":       len(diags) == 0,
+					"diagnostics": diags,
+				})
+			}); err != nil {
 				return RuntimeError(err)
 			}
-			defer watcher.Close()
-			go watcher.Run(ctx)
-
-			// Debounced refresh goroutine
-			go func() {
-				debounce := time.NewTimer(0)
-				if !debounce.Stop() {
-					<-debounce.C
-				}
-				var reasons []string
-				for {
-					select {
-					case <-ctx.Done():
-						debounce.Stop()
-						return
-					case reason := <-refreshCh:
-						reasons = append(reasons, reason)
-						debounce.Reset(300 * time.Millisecond)
-					case <-debounce.C:
-						if len(reasons) == 0 {
-							continue
-						}
-						coalesced := coalesceRefreshReasons(reasons)
-						reasons = reasons[:0]
-						if err := state.Refresh(ctx); err != nil {
-							logger.Errorf("Refresh failed: %v", err)
-							continue
-						}
-						logger.Infof("Refreshed (%s)", coalesced)
-
-						// Broadcast updates to SSE clients
-						server.BroadcastEvent("index-updated", map[string]any{
-							"reason":    coalesced,
-							"documents": len(state.Documents()),
-						})
-						diags := state.Diagnostics()
-						server.BroadcastEvent("diagnostics", map[string]any{
-							"valid":       len(diags) == 0,
-							"diagnostics": diags,
-						})
-					}
-				}
-			}()
 
 			// Inactivity timeout goroutine
 			go func() {
@@ -229,14 +168,4 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 	cmd.Flags().StringVar(&listenAddr, "listen-addr", "127.0.0.1", "Address to listen on (use 0.0.0.0 to accept connections from a container network)")
 
 	return cmd
-}
-
-func coalesceRefreshReasons(reasons []string) string {
-	if len(reasons) == 0 {
-		return "unknown"
-	}
-	if len(reasons) == 1 {
-		return reasons[0]
-	}
-	return fmt.Sprintf("%s (+%d more)", reasons[0], len(reasons)-1)
 }
