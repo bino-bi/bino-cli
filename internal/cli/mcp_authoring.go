@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/schema"
 )
 
@@ -89,6 +90,43 @@ func (a *cliAuthoring) WriteManifest(_ context.Context, in mcp.WriteManifestInpu
 		return mcp.WriteResult{}, err
 	}
 	return mcp.WriteResult{File: in.File, Action: "created"}, nil
+}
+
+// EditManifest applies dotted-path edits to one document in a manifest file,
+// preserving comments and key order, validates the edited document, then writes
+// the whole file atomically.
+func (a *cliAuthoring) EditManifest(_ context.Context, in mcp.EditManifestInput) (mcp.WriteResult, error) {
+	if in.File == "" {
+		return mcp.WriteResult{}, fmt.Errorf("file is required")
+	}
+	if len(in.Patch) == 0 {
+		return mcp.WriteResult{}, fmt.Errorf("patch is required")
+	}
+	pos := in.Position
+	if pos == 0 {
+		pos = 1
+	}
+
+	abs := in.File
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(a.root, abs)
+	}
+	content, err := os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local agent
+	if err != nil {
+		return mcp.WriteResult{}, fmt.Errorf("read %s: %w", in.File, err)
+	}
+
+	full, edited, err := spec.EditYAMLDocument(string(content), pos, in.Patch)
+	if err != nil {
+		return mcp.WriteResult{}, err
+	}
+	if err := schema.Validate([]byte(edited)); err != nil {
+		return mcp.WriteResult{}, fmt.Errorf("edit would make the document invalid: %w", err)
+	}
+	if err := atomicWriteFile(abs, []byte(full), 0o644); err != nil {
+		return mcp.WriteResult{}, fmt.Errorf("write %s: %w", in.File, err)
+	}
+	return mcp.WriteResult{File: in.File, Action: "edited"}, nil
 }
 
 // ScaffoldSource scaffolds a DataSource (and optional DataSet) from a payload,

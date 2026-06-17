@@ -13,8 +13,16 @@ import (
 type Authoring interface {
 	CreateManifest(ctx context.Context, in CreateManifestInput) (WriteResult, error)
 	WriteManifest(ctx context.Context, in WriteManifestInput) (WriteResult, error)
+	EditManifest(ctx context.Context, in EditManifestInput) (WriteResult, error)
 	ScaffoldSource(ctx context.Context, payload json.RawMessage) (ScaffoldResult, error)
 	InitBundle(ctx context.Context, in InitBundleInput) (InitResult, error)
+}
+
+// EditManifestInput edits one document in a manifest file in place.
+type EditManifestInput struct {
+	File     string         `json:"file" jsonschema:"path to the manifest file, relative to the project root"`
+	Position int            `json:"position,omitempty" jsonschema:"1-based document index within the file (default 1)"`
+	Patch    map[string]any `json:"patch" jsonschema:"dotted-path edits to apply, e.g. {\"spec.title\": \"Q3\", \"spec.columns[0]\": \"region\"}"`
 }
 
 // CreateManifestInput describes a new manifest to create from a spec object.

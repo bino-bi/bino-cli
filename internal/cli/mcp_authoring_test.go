@@ -94,6 +94,47 @@ func TestCreateManifest(t *testing.T) {
 	}
 }
 
+func TestEditManifestEndToEnd(t *testing.T) {
+	cs, root := newAuthoringClient(t)
+
+	// Seed a manifest file with a comment to prove fidelity.
+	original := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: note # keep me\nspec:\n  value: old\n"
+	path := filepath.Join(root, "note.yaml")
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res := callTool(t, cs, "edit_manifest", map[string]any{
+		"file":  "note.yaml",
+		"patch": map[string]any{"spec.value": "new"},
+	})
+	if res.IsError {
+		t.Fatalf("edit_manifest failed: %+v", res.Content)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if !strings.Contains(got, "value: new") || strings.Contains(got, "value: old") {
+		t.Errorf("edit not applied:\n%s", got)
+	}
+	if !strings.Contains(got, "# keep me") {
+		t.Errorf("comment not preserved:\n%s", got)
+	}
+
+	// An edit that violates the schema is rejected and the file is untouched.
+	bad := callTool(t, cs, "edit_manifest", map[string]any{
+		"file":  "note.yaml",
+		"patch": map[string]any{"spec.value": map[string]any{"not": "a string"}},
+	})
+	if !bad.IsError {
+		t.Error("schema-violating edit should be an error")
+	}
+	after, _ := os.ReadFile(path)
+	if !strings.Contains(string(after), "value: new") {
+		t.Errorf("file changed after rejected edit:\n%s", string(after))
+	}
+}
+
 func TestWriteManifestValidation(t *testing.T) {
 	cs, root := newAuthoringClient(t)
 

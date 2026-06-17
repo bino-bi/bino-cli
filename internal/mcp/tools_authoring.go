@@ -43,6 +43,17 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "edit_manifest",
+		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in EditManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
+		res, err := a.EditManifest(ctx, in)
+		if err != nil {
+			return errorResult(err), WriteResult{}, nil
+		}
+		return nil, res, nil
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "scaffold_source",
 		Description: "Scaffold a DataSource (and optionally a typed DataSet that selects from it) in one step, choosing file placement by project convention. Validates before writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in scaffoldSourceInput) (*mcpsdk.CallToolResult, ScaffoldResult, error) {
