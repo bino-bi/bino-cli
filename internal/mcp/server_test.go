@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -174,6 +176,55 @@ func TestGetColumnsReturnsResult(t *testing.T) {
 	// tool plumbing works without a protocol-level failure.
 	if len(out.Columns) == 0 && out.Error == "" {
 		t.Error("get_columns returned neither columns nor error")
+	}
+}
+
+func TestValidateDraft(t *testing.T) {
+	cs := newTestClient(t)
+
+	// A structurally valid Text manifest.
+	valid := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: hello\nspec:\n  value: Hello world\n"
+	var okRes daemon.ValidateResult
+	callToolJSON(t, cs, "validate_draft", map[string]any{"yaml": valid}, &okRes)
+	if !okRes.Valid {
+		t.Errorf("valid draft reported invalid: %+v", okRes.Diagnostics)
+	}
+
+	// Missing required spec → schema-validation diagnostics, not valid.
+	invalid := "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: broken\n"
+	var badRes daemon.ValidateResult
+	callToolJSON(t, cs, "validate_draft", map[string]any{"yaml": invalid}, &badRes)
+	if badRes.Valid {
+		t.Error("invalid draft (missing spec) reported valid")
+	}
+	if len(badRes.Diagnostics) == 0 {
+		t.Error("invalid draft produced no diagnostics")
+	}
+}
+
+func TestIntrospectSource(t *testing.T) {
+	cs := newTestClient(t)
+
+	csvPath := filepath.Join(t.TempDir(), "sales.csv")
+	if err := os.WriteFile(csvPath, []byte("category,ac1\nDACH,4250\nNordics,2870\n"), 0o600); err != nil {
+		t.Fatalf("write csv: %v", err)
+	}
+
+	spec := map[string]any{"type": "csv", "path": csvPath}
+	var out introspectSourceOutput
+	callToolJSON(t, cs, "introspect_source", map[string]any{"spec": spec}, &out)
+	if out.Error != "" {
+		t.Fatalf("introspect_source error: %s", out.Error)
+	}
+	names := make([]string, len(out.Columns))
+	for i, c := range out.Columns {
+		names[i] = c.Name
+	}
+	if !slices.Contains(names, "category") || !slices.Contains(names, "ac1") {
+		t.Errorf("introspect_source columns = %v, want category + ac1", names)
+	}
+	if len(out.SampleRows) == 0 {
+		t.Error("introspect_source returned no sample rows")
 	}
 }
 

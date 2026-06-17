@@ -15,6 +15,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/plugin"
+	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/version"
 )
 
@@ -221,6 +222,50 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in graphDepsInput) (*mcpsdk.CallToolResult, daemon.GraphDepsResult, error) {
 		return nil, h.deps.State.GraphDeps(ctx, in.Kind, in.Name, in.Direction, in.MaxDepth), nil
 	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "validate_draft",
+		Description: "Validate manifest YAML in memory (no disk write) and return schema/constraint diagnostics. Use this to check a draft before create_manifest or write_manifest.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in validateDraftInput) (*mcpsdk.CallToolResult, daemon.ValidateResult, error) {
+		diags, err := h.deps.State.ValidateDraft(ctx, []byte(in.YAML))
+		if err != nil {
+			return nil, daemon.ValidateResult{}, err
+		}
+		if diags == nil {
+			diags = []daemon.Diagnostic{}
+		}
+		return nil, daemon.ValidateResult{Valid: len(diags) == 0, Diagnostics: diags}, nil
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "introspect_source",
+		Description: "Probe a not-yet-registered data source (CSV/Excel/database) and return its columns, sample rows, Excel sheet names, and detected CSV options. Pass the bare DataSource spec object (no apiVersion/kind/metadata).",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in introspectSourceInput) (*mcpsdk.CallToolResult, introspectSourceOutput, error) {
+		specJSON, err := json.Marshal(in.Spec)
+		if err != nil {
+			return nil, introspectSourceOutput{}, fmt.Errorf("encode spec: %w", err)
+		}
+		out := introspectSourceOutput{Columns: []datasource.ProbeColumn{}, SampleRows: []map[string]any{}}
+		res, err := h.deps.State.IntrospectSource(ctx, specJSON, in.Sheet, in.Limit)
+		if err != nil {
+			// Surface probe failures (bad path, unknown type, ...) as structured
+			// output so the agent can read and fix them, not as a protocol error.
+			out.Error = err.Error()
+			return nil, out, nil //nolint:nilerr // probe error reported in out.Error
+		}
+		out.Columns = res.Columns
+		out.Sheets = res.Sheets
+		out.SampleRows = res.SampleRows
+		out.Truncated = res.Truncated
+		out.DetectedCSV = res.DetectedCSV
+		if out.Columns == nil {
+			out.Columns = []datasource.ProbeColumn{}
+		}
+		if out.SampleRows == nil {
+			out.SampleRows = []map[string]any{}
+		}
+		return nil, out, nil
+	})
 }
 
 // --- Tool input/output types (schemas inferred from these via jsonschema tags) ---
@@ -266,6 +311,25 @@ type graphDepsInput struct {
 	Name      string `json:"name" jsonschema:"name of the root node"`
 	Direction string `json:"direction,omitempty" jsonschema:"'out' (dependencies), 'in' (dependents), or 'both' (default)"`
 	MaxDepth  int    `json:"max_depth,omitempty" jsonschema:"limit traversal depth (0 = unlimited)"`
+}
+
+type validateDraftInput struct {
+	YAML string `json:"yaml" jsonschema:"the manifest YAML to validate, one or more documents separated by ---"`
+}
+
+type introspectSourceInput struct {
+	Spec  map[string]any `json:"spec" jsonschema:"the DataSource spec object without the apiVersion/kind/metadata envelope, e.g. {type: csv, path: data/sales.csv}"`
+	Sheet string         `json:"sheet,omitempty" jsonschema:"Excel sheet name to read (optional)"`
+	Limit int            `json:"limit,omitempty" jsonschema:"maximum sample rows (default 100)"`
+}
+
+type introspectSourceOutput struct {
+	Columns     []datasource.ProbeColumn `json:"columns"`
+	Sheets      []string                 `json:"sheets,omitempty"`
+	SampleRows  []map[string]any         `json:"sampleRows"`
+	Truncated   bool                     `json:"truncated"`
+	DetectedCSV *datasource.DetectedCSV  `json:"detectedCsv,omitempty"`
+	Error       string                   `json:"error,omitempty"`
 }
 
 // --- Schema helpers ---
