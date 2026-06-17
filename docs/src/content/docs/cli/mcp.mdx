@@ -1,0 +1,132 @@
+---
+title: bino mcp
+description: Run a Model Context Protocol server so AI agents can introspect, validate, author, and build reports.
+---
+
+`bino mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over
+stdio, exposing bino's introspection, validation, authoring, and build surface to AI agent
+clients such as Claude Code, Claude Desktop, and Cursor.
+
+Because a bino report is plain-text YAML + SQL, an agent can author it directly — and bino's
+schema and validation become the guardrails that tell the agent precisely whether what it
+wrote is correct.
+
+## Usage
+
+```bash
+bino mcp [--work-dir DIR]
+```
+
+Most agent clients are configured with a *command*, so `bino mcp` is the entrypoint you
+register once. Under the hood:
+
+- **Proxy mode** — if a `bino daemon` is already running for the project (for example because
+  VS Code is open), `bino mcp` connects to that daemon's `/mcp` endpoint and forwards to it, so
+  the agent reuses the daemon's already-loaded DuckDB session and file watcher instead of
+  starting a second one.
+- **Standalone mode** — with no daemon running, `bino mcp` loads the project itself and serves
+  the MCP directly.
+
+Flags:
+
+- `--work-dir`, `-w` – report bundle directory (default: `.`).
+- `--no-proxy` – always run standalone, even if a daemon is running.
+
+Clients that speak MCP over HTTP can instead point straight at a running daemon's endpoint
+(`http://127.0.0.1:<port>/mcp`; the port is recorded in `.bino/daemon.json`). The daemon mounts
+`/mcp` by default on loopback — pass `bino daemon --mcp=false` to disable it.
+
+## Configure your client
+
+### Claude Code
+
+```bash
+claude mcp add bino -- bino mcp --work-dir /path/to/report
+```
+
+### Claude Desktop / Cursor
+
+Add an entry to the client's MCP config (Claude Desktop:
+`claude_desktop_config.json`; Cursor: `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "bino": {
+      "command": "bino",
+      "args": ["mcp", "--work-dir", "/path/to/report"]
+    }
+  }
+}
+```
+
+## Resources
+
+Read-only context an agent can pull in:
+
+| URI | Contents |
+| --- | --- |
+| `bino://schema` | The full merged JSON Schema for all manifest kinds (built-in + plugin). |
+| `bino://schema/{kind}` | The self-contained spec schema for one kind (e.g. `bino://schema/Table`). |
+| `bino://kinds` | Every manifest kind and its capability category (`data` / `layout` / `embeddable` / `artefact` / `config`). |
+| `bino://documents` | The project index: every document → `{kind, name, file, position}`. |
+
+## Tools
+
+### Understand & inspect
+
+| Tool | What it does |
+| --- | --- |
+| `list_kinds` | Every manifest kind with its capability category. |
+| `describe_kind(kind)` | The spec JSON Schema for one kind. |
+| `describe_project()` | All documents in the project. |
+| `describe_document(file)` | The documents declared in one file. |
+| `get_columns(name)` | Column names of a DataSet or DataSource (prefix `$` to force a DataSource). |
+| `get_rows(name, limit?)` | A sample of rows from a DataSet or DataSource. |
+| `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`. |
+
+### Validate
+
+| Tool | What it does |
+| --- | --- |
+| `validate_project(execute_queries?)` | Validate the project on disk; optionally execute datasets for data-validation warnings. |
+| `validate_draft(yaml)` | Validate manifest YAML **in memory** (no disk write) — the pre-write guardrail. |
+| `introspect_source(spec, sheet?, limit?)` | Probe a not-yet-registered CSV/Excel/DB source: columns, sample rows, sheets, detected CSV options. |
+
+### Author
+
+| Tool | What it does |
+| --- | --- |
+| `create_manifest(kind, name, spec, ...)` | Create any manifest from a spec object; validated and written atomically, auto-placed by project convention. |
+| `write_manifest(file, yaml, append?)` | Persist a full manifest document, validated before writing. |
+| `edit_manifest(file, position, patch)` | Edit one document in place via dotted-path edits, preserving comments and key order. |
+| `scaffold_source(dataSource, dataSet?)` | Scaffold a DataSource and an optional typed DataSet in one step. |
+| `init_bundle(...)` | Bootstrap a new starter report bundle. |
+
+Every write validates against the merged JSON Schema before persisting, so an agent cannot
+write a structurally invalid manifest. Writes are atomic (temp file + rename).
+
+### Build
+
+| Tool | What it does |
+| --- | --- |
+| `build(artefacts?, out_dir?)` | Render artefacts by running `bino build` — streams progress and returns the exit code, output, and produced artefacts. Subject to the usual engine-compatibility check. |
+
+## The authoring loop
+
+```text
+1. Read bino://schema/Table          → learn the Table spec fields
+2. get_columns({name:"sales"})        → {columns:["region","ac1","pl1",...]}
+3. draft a Table manifest using those columns
+4. validate_draft({yaml:"..."})       → {valid:false, diagnostics:[{message:"...", ...}]}
+5. fix and re-validate                → {valid:true}
+6. create_manifest({kind:"Table", name:"q3", spec:{...}})
+7. build({artefacts:["q3"]})          → q3.pdf
+```
+
+## Security
+
+The server runs SQL, reads the filesystem, and (via `build`) launches headless Chrome. This is
+intended for **local** use over stdio and a loopback HTTP endpoint. Exposing the daemon on a
+non-loopback address (`bino daemon --listen-addr`) is out of scope for this surface and would
+require additional hardening.
