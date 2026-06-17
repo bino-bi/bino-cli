@@ -334,22 +334,28 @@ func newLSPScaffoldCommand() *cobra.Command {
 }
 
 func runLSPScaffold(ctx context.Context, dir string, payloadJSON []byte, out io.Writer) error {
-	result := lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}}
-
 	absDir, err := resolveProjectRootForLSP(dir)
 	if err != nil {
-		result.Error = fmt.Sprintf("resolve project root: %v", err)
-		return outputJSON(out, result)
+		return outputJSON(out, lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}, Error: fmt.Sprintf("resolve project root: %v", err)})
 	}
 
 	var payload scaffoldPayload
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		result.Error = fmt.Sprintf("parse payload: %v", err)
-		return outputJSON(out, result)
+		return outputJSON(out, lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}, Error: fmt.Sprintf("parse payload: %v", err)})
 	}
+
+	return outputJSON(out, scaffoldManifests(ctx, absDir, payload))
+}
+
+// scaffoldManifests writes a DataSource (and optional DataSet) from a parsed
+// payload into absDir, choosing file placement by project convention. It is
+// shared by the lsp-helper `scaffold` command and the MCP scaffold_source tool.
+func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPayload) lspScaffoldResult {
+	result := lspScaffoldResult{Version: version.Version, Files: []scaffoldFileResult{}}
+
 	if payload.DataSource.Name == "" {
 		result.Error = "dataSource.name is required"
-		return outputJSON(out, result)
+		return result
 	}
 
 	manifests, _ := ScanManifests(ctx, absDir)
@@ -361,7 +367,7 @@ func runLSPScaffold(ctx context.Context, dir string, payloadJSON []byte, out io.
 	dsDoc := buildDataSourceDocument(dataSourceManifestFromPayload(payload.DataSource, filepath.Dir(filepath.Join(absDir, dsPath))))
 	if err := WriteSchemaDocument(dsDoc, absDir, dsPath, dsAppended, io.Discard); err != nil {
 		result.Error = fmt.Sprintf("write datasource: %v", err)
-		return outputJSON(out, result)
+		return result
 	}
 	result.Files = append(result.Files, scaffoldFileResult{Path: dsPath, Appended: dsAppended})
 
@@ -388,13 +394,13 @@ func runLSPScaffold(ctx context.Context, dir string, payloadJSON []byte, out io.
 		if err := WriteSchemaDocument(dsetDoc, absDir, dsetPath, dsetAppended, io.Discard); err != nil {
 			// The DataSource was written successfully; surface the error but keep it.
 			result.Error = fmt.Sprintf("write dataset: %v", err)
-			return outputJSON(out, result)
+			return result
 		}
 		result.Files = append(result.Files, scaffoldFileResult{Path: dsetPath, Appended: dsetAppended})
 	}
 
 	result.OK = true
-	return outputJSON(out, result)
+	return result
 }
 
 // dataSourceManifestFromPayload converts a wizard payload into DataSourceManifestData,

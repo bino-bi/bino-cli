@@ -23,6 +23,10 @@ import (
 type Deps struct {
 	State    *daemon.State
 	Registry *plugin.PluginRegistry
+	// Authoring, when non-nil, enables the manifest write tools (create_manifest,
+	// write_manifest, scaffold_source, init_bundle, edit_manifest). Supplied by
+	// the CLI layer.
+	Authoring Authoring
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -52,6 +56,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerResources(srv)
 	h.registerReadTools(srv)
 	h.registerBuildTool(srv)
+	h.registerAuthoringTools(srv)
 	return srv
 }
 

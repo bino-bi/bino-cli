@@ -92,7 +92,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			var mcpHandler http.Handler
 			var mcpActive func() int64
 			if mcpEnabled {
-				deps := mcp.Deps{State: state, Registry: env.PluginRegistry}
+				deps := mcp.Deps{State: state, Registry: env.PluginRegistry, Authoring: newCLIAuthoring(env.ProjectRoot)}
 				inner := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 					return mcp.NewServer(deps)
 				}, nil)
