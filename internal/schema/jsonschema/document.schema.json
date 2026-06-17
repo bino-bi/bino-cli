@@ -542,6 +542,10 @@
           "type": "string",
           "description": "File path, directory, glob pattern or URL used by file-based datasources. For example './data/landing/*.csv' or 's3://bucket/path/data.parquet'. Required for types 'excel', 'csv' and 'parquet'."
         },
+        "sheet": {
+          "type": "string",
+          "description": "Worksheet name to read for 'excel' datasources. When omitted, the first sheet is used."
+        },
         "connection": { "$ref": "#/$defs/sqlConnection" },
         "query": {
           "type": "string",
@@ -1148,6 +1152,10 @@
         "path": {
           "type": "string",
           "description": "File path, directory, glob pattern or URL for file-based datasources."
+        },
+        "sheet": {
+          "type": "string",
+          "description": "Worksheet name to read for 'excel' datasources. When omitted, the first sheet is used."
         },
         "connection": { "$ref": "#/$defs/sqlConnection" },
         "query": {

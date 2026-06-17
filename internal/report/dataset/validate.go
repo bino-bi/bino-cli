@@ -63,43 +63,14 @@ type DataValidationResult struct {
 }
 
 // dependentRequiredPairs defines field pairs where one requires the other.
-var dependentRequiredPairs = map[string]string{
-	"rowGroup":            "rowGroupIndex",
-	"rowGroupIndex":       "rowGroup",
-	"category":            "categoryIndex",
-	"categoryIndex":       "category",
-	"subCategory":         "subCategoryIndex",
-	"subCategoryIndex":    "subCategory",
-	"columnGroup":         "columnGroupIndex",
-	"columnGroupIndex":    "columnGroup",
-	"columnSubGroup":      "columnSubGroupIndex",
-	"columnSubGroupIndex": "columnSubGroup",
-}
-
-// stringFields are fields that should be strings.
-var stringFields = map[string]bool{
-	"setname":        true,
-	"date":           true,
-	"operation":      true,
-	"rowGroup":       true,
-	"category":       true,
-	"subCategory":    true,
-	"columnGroup":    true,
-	"columnSubGroup": true,
-}
-
-// numberFields are fields that should be numbers.
-var numberFields = map[string]bool{
-	"rowGroupIndex":       true,
-	"categoryIndex":       true,
-	"subCategoryIndex":    true,
-	"columnGroupIndex":    true,
-	"columnSubGroupIndex": true,
-	"ac1":                 true, "pp1": true, "fc1": true, "pl1": true,
-	"ac2": true, "pp2": true, "fc2": true, "pl2": true,
-	"ac3": true, "pp3": true, "fc3": true, "pl3": true,
-	"ac4": true, "pp4": true, "fc4": true, "pl4": true,
-}
+// stringFields / numberFields are the names that must be strings / numbers.
+// All three are derived from the canonical schema in schema.go so there is a
+// single source of truth.
+var (
+	dependentRequiredPairs = standardPairs()
+	stringFields           = fieldsOfKind(ColumnString)
+	numberFields           = fieldsOfKind(ColumnNumber)
+)
 
 // datePattern matches ISO 8601 dates (YYYY-MM-DD) and datetimes
 // (YYYY-MM-DDThh:mm:ss with optional timezone offset or Z).

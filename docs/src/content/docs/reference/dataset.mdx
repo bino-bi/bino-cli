@@ -295,6 +295,52 @@ FROM sales_data
 GROUP BY product_name, product_rank
 ```
 
+## Built-in SQL functions
+
+bino registers a few scalar helper functions on the DuckDB engine, so they are available in every DataSet (and DataSource) query without any import or extension.
+
+### `op(value)` — sign as an operator
+
+`op` reduces a numeric value to its sign as a string — exactly the shape the `operation` control field (documented above) expects.
+
+| Input       | Result                |
+| :---------- | :-------------------- |
+| `value > 0` | `'+'`                 |
+| `value < 0` | `'-'`                 |
+| `value = 0` | `''` (empty string)   |
+| `NULL`      | `NULL`                |
+
+It accepts any numeric type (INTEGER, BIGINT, DECIMAL, DOUBLE, …) and returns `VARCHAR`.
+
+```sql
+SELECT
+  account_name    AS category,
+  sum(amount)     AS ac1,
+  op(sum(amount)) AS operation   -- '+' for revenue, '-' for costs
+FROM ledger
+GROUP BY account_name
+```
+
+### `iop(value)` — inverse sign
+
+`iop` is the inverse of `op` (`+` becomes `-` and vice versa; `0` stays `''`). Use it for **inverted** measures, where an increase is unfavorable — costs, headcount, error rates, churn — so a rising value reads as a negative signal.
+
+| Input       | `op`  | `iop` |
+| :---------- | :---- | :---- |
+| `value > 0` | `'+'` | `'-'` |
+| `value < 0` | `'-'` | `'+'` |
+| `value = 0` | `''`  | `''`  |
+
+### Absolute value
+
+There is no bino-specific helper for absolute values — DuckDB's built-in `abs()` already does it (`abs(-500)` → `500`). Combine it with `op` to render a signed magnitude as text:
+
+```sql
+SELECT op(variance) || abs(variance)::VARCHAR AS signed_variance
+-- variance = -500  ->  '-500'
+-- variance =  500  ->  '+500'
+```
+
 ## Data Validation
 
 bino can validate query results against the standard schema at build time. This catches common data issues early:

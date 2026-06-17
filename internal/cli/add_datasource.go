@@ -741,15 +741,40 @@ func buildDataSourceDocument(data DataSourceManifestData) *schema.Document {
 		if data.CSVSkipRows > 0 {
 			spec.SkipRows = data.CSVSkipRows
 		}
+		spec.Thousands = data.CSVThousands
+		spec.DecimalSeparator = data.CSVDecimalSeparator
+		spec.DateFormat = data.CSVDateFormat
+		applyColumnTyping(spec, data)
 
-	case DataSourceTypeParquet, DataSourceTypeExcel, DataSourceTypeJSON:
+	case DataSourceTypeExcel:
+		spec.Path = data.Path
+		spec.Sheet = data.Sheet
+
+	case DataSourceTypeParquet, DataSourceTypeJSON:
 		spec.Path = data.Path
 
 	default:
 	}
 
+	if data.Ephemeral != nil {
+		spec.Ephemeral = data.Ephemeral
+	}
+
 	doc.Spec = spec
 	return doc
+}
+
+// applyColumnTyping sets either the explicit column-type map or the column-name
+// list on the spec. The two are mutually exclusive in the schema, so a non-empty
+// Columns map takes precedence over CSVColumnNames.
+func applyColumnTyping(spec *schema.DataSourceSpec, data DataSourceManifestData) {
+	if len(data.Columns) > 0 {
+		spec.Columns = data.Columns
+		return
+	}
+	if len(data.CSVColumnNames) > 0 {
+		spec.ColumnNames = data.CSVColumnNames
+	}
 }
 
 // convertDataSourceType converts CLI DataSourceType to schema.DataSourceType.

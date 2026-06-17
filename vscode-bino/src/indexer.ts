@@ -505,6 +505,127 @@ export class WorkspaceIndexer {
         }
     }
 
+    /**
+     * Execute a bino lsp-helper command, piping `input` to its stdin. Used for
+     * the wizard subcommands, which take JSON on stdin (--spec-file -) to keep
+     * SQL and file paths off the argv.
+     */
+    private execBinoStdin(args: string[], input: string): Promise<string> {
+        const binPath = this.getBinoPath();
+        const workDir = this.getWorkspaceRoot();
+        return new Promise((resolve, reject) => {
+            const proc = cp.spawn(binPath, args, { cwd: workDir, stdio: ['pipe', 'pipe', 'pipe'] });
+            let stdout = '';
+            let stderr = '';
+            proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+            proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+            proc.on('error', reject);
+            proc.on('close', (code) => {
+                if (code !== 0) {
+                    this.outputChannel.appendLine(`lsp-helper ${args.join(' ')} exited ${code}: ${stderr}`);
+                    reject(new Error(stderr || `exited with code ${code}`));
+                    return;
+                }
+                resolve(stdout);
+            });
+            proc.stdin.write(input);
+            proc.stdin.end();
+        });
+    }
+
+    /** Introspect a draft data source (schema, types, sample, sheets, csv options). */
+    async introspectDraft(req: { spec: any; baseDir?: string; sheet?: string; limit?: number }): Promise<any> {
+        if (this.daemonClient?.isConnected && this.daemonClient.hasCapability('introspect-draft')) {
+            try {
+                const result = await this.daemonClient.introspectDraft(req);
+                if (result) {
+                    return result;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return { error: 'no workspace folder open', columns: [], sampleRows: [] };
+        }
+        const args = ['lsp-helper', 'introspect-draft', workDir, '--spec-file', '-', '--limit', String(req.limit ?? 100)];
+        if (req.baseDir) { args.push('--base-dir', req.baseDir); }
+        if (req.sheet) { args.push('--sheet', req.sheet); }
+        const output = await this.execBinoStdin(args, JSON.stringify(req.spec));
+        return JSON.parse(output);
+    }
+
+    /** Generate a column-aware SELECT statement server-side. */
+    async typedSelect(req: { source: string; columns: any[]; pretty?: boolean; castMode?: string }): Promise<{ sql: string; aliases: string[] } | undefined> {
+        if (this.daemonClient?.isConnected && this.daemonClient.hasCapability('typed-select')) {
+            try {
+                const result = await this.daemonClient.typedSelect(req);
+                if (result) {
+                    return result;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return undefined;
+        }
+        const output = await this.execBinoStdin(['lsp-helper', 'typed-select', '--payload-file', '-'], JSON.stringify(req));
+        return JSON.parse(output);
+    }
+
+    /** Run a draft DataSet SQL against a not-yet-registered DataSource (ephemeral). */
+    async previewDataSet(req: { spec: any; sourceName: string; sql: string; baseDir?: string; sheet?: string; limit?: number }): Promise<any> {
+        if (this.daemonClient?.isConnected && this.daemonClient.hasCapability('preview-dataset')) {
+            try {
+                const result = await this.daemonClient.previewDataSet(req);
+                if (result) {
+                    return result;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return { error: 'no workspace folder open', columns: [], rows: [] };
+        }
+        const output = await this.execBinoStdin(['lsp-helper', 'preview-dataset', workDir, '--payload-file', '-'], JSON.stringify(req));
+        return JSON.parse(output);
+    }
+
+    /** Fetch the canonical dataset schema (standard columns) from the CLI/daemon. */
+    async datasetSchema(): Promise<any[]> {
+        if (this.daemonClient?.isConnected && this.daemonClient.hasCapability('dataset-schema')) {
+            try {
+                const result = await this.daemonClient.datasetSchema();
+                if (result?.columns) {
+                    return result.columns;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+        try {
+            const output = await this.execBino(['lsp-helper', 'dataset-schema']);
+            return JSON.parse(output).columns ?? [];
+        } catch {
+            return [];
+        }
+    }
+
+    /** Write DataSource (and optionally DataSet) manifests from a wizard payload. */
+    async scaffold(payload: any): Promise<{ ok: boolean; files: { path: string; appended: boolean }[]; error?: string }> {
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return { ok: false, files: [], error: 'no workspace folder open' };
+        }
+        const output = await this.execBinoStdin(['lsp-helper', 'scaffold', workDir, '--payload-file', '-'], JSON.stringify(payload));
+        return JSON.parse(output);
+    }
+
     /** Check if a document is a Bino manifest (has apiVersion: bino.bi) */
     async isBinoDocument(document: vscode.TextDocument): Promise<boolean> {
         const text = document.getText();
