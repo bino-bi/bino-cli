@@ -106,7 +106,7 @@ func Probe(ctx context.Context, session *duckdb.Session, req ProbeRequest) (*Pro
 		if _, _, err := LoadSecrets(ctx, db, req.Docs); err != nil {
 			return nil, fmt.Errorf("load secrets: %w", err)
 		}
-		if _, err := db.ExecContext(ctx, attachSQL); err != nil {
+		if _, err := db.ExecContext(ctx, attachSQL); err != nil { // codeql[go/sql-injection] ATTACH string is SQL-escaped; connects to the developer's own DB on a local ephemeral session
 			return nil, fmt.Errorf("attach %s: %w", attachName, err)
 		}
 	}
@@ -149,7 +149,7 @@ func parseProbeSpec(specJSON json.RawMessage) (sourceSpec, error) {
 // typed columns from the result schema and scanning up to limit sample rows.
 func sampleAndDescribe(ctx context.Context, db *sql.DB, base string, limit int) (cols []ProbeColumn, sample []map[string]any, truncated bool, err error) {
 	query := fmt.Sprintf("SELECT * FROM (%s) AS _probe LIMIT %d", base, limit+1) //nolint:gosec // G201: base comes from buildViewSourceSQL (internal, escaped), not user free-text
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(ctx, query)                                     // codeql[go/sql-injection] source SELECT is built from an escaped, developer-supplied spec on a local ephemeral session
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("introspect source: %w", err)
 	}
@@ -195,7 +195,7 @@ func sampleAndDescribe(ctx context.Context, db *sql.DB, base string, limit int) 
 // Best-effort: returns nil if sniffing fails.
 func sniffCSV(ctx context.Context, db *sql.DB, path string) *DetectedCSV {
 	query := fmt.Sprintf("SELECT Delimiter, HasHeader, SkipRows FROM sniff_csv('%s')", escapeSQLString(path)) //nolint:gosec // G201: path is SQL-string-escaped
-	row := db.QueryRowContext(ctx, query)
+	row := db.QueryRowContext(ctx, query)                                                                     // codeql[go/sql-injection] path is SQL-escaped; sniffs a local developer-selected file
 	var (
 		delim    sql.NullString
 		header   sql.NullBool
@@ -230,7 +230,7 @@ func localFilePath(spec sourceSpec) (string, bool) {
 	if err != nil || pathutil.HasGlob(resolved) {
 		return "", false
 	}
-	info, err := os.Stat(resolved)
+	info, err := os.Stat(resolved) // codeql[go/path-injection] intentional stat of a developer-selected local file path (local introspection tool)
 	if err != nil || info.IsDir() {
 		return "", false
 	}

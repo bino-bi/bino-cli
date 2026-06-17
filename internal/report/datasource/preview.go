@@ -83,7 +83,7 @@ func PreviewDataSet(ctx context.Context, session *duckdb.Session, req PreviewReq
 		if _, _, err := LoadSecrets(ctx, db, req.Docs); err != nil {
 			return nil, fmt.Errorf("load secrets: %w", err)
 		}
-		if _, err := db.ExecContext(ctx, attachSQL); err != nil {
+		if _, err := db.ExecContext(ctx, attachSQL); err != nil { // codeql[go/sql-injection] ATTACH string is SQL-escaped; connects to the developer's own DB on a local ephemeral session
 			return nil, fmt.Errorf("attach %s: %w", attachName, err)
 		}
 	}
