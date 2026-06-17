@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,6 +133,56 @@ func TestEditManifestEndToEnd(t *testing.T) {
 	after, _ := os.ReadFile(path)
 	if !strings.Contains(string(after), "value: new") {
 		t.Errorf("file changed after rejected edit:\n%s", string(after))
+	}
+}
+
+func TestScaffoldSource(t *testing.T) {
+	cs, root := newAuthoringClient(t)
+
+	res := callTool(t, cs, "scaffold_source", map[string]any{
+		"dataSource": map[string]any{"name": "sales_src", "type": "csv", "path": "sales.csv"},
+		"dataSet":    map[string]any{"name": "sales_ds", "sql": "SELECT * FROM sales_src"},
+	})
+	if res.IsError {
+		t.Fatalf("scaffold_source failed: %+v", res.Content)
+	}
+
+	var out mcp.ScaffoldResult
+	if tc, ok := res.Content[0].(*mcpsdk.TextContent); ok {
+		_ = json.Unmarshal([]byte(tc.Text), &out)
+	}
+	if !out.OK {
+		t.Fatalf("scaffold not OK: %+v", out)
+	}
+	if len(out.Files) != 2 {
+		t.Errorf("expected 2 files (DataSource + DataSet), got %+v", out.Files)
+	}
+	// Both manifests landed on disk.
+	for _, f := range out.Files {
+		if _, err := os.Stat(filepath.Join(root, f.Path)); err != nil {
+			t.Errorf("scaffolded file %s missing: %v", f.Path, err)
+		}
+	}
+}
+
+func TestInitBundle(t *testing.T) {
+	cs, _ := newAuthoringClient(t)
+	dir := filepath.Join(t.TempDir(), "newbundle")
+
+	res := callTool(t, cs, "init_bundle", map[string]any{"directory": dir})
+	if res.IsError {
+		t.Fatalf("init_bundle failed: %+v", res.Content)
+	}
+
+	var out mcp.InitResult
+	if tc, ok := res.Content[0].(*mcpsdk.TextContent); ok {
+		_ = json.Unmarshal([]byte(tc.Text), &out)
+	}
+	if len(out.Files) == 0 {
+		t.Fatal("init_bundle created no files")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "bino.toml")); err != nil {
+		t.Errorf("bundle missing bino.toml: %v", err)
 	}
 }
 

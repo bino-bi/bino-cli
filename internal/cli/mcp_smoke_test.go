@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,7 +36,12 @@ func TestMCPStdioSmoke(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "smoke", Version: "v0"}, nil)
+	var progressCount atomic.Int64
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "smoke", Version: "v0"}, &mcpsdk.ClientOptions{
+		ProgressNotificationHandler: func(context.Context, *mcpsdk.ProgressNotificationClientRequest) {
+			progressCount.Add(1)
+		},
+	})
 	transport := &mcpsdk.CommandTransport{Command: exec.CommandContext(ctx, bin, "mcp", "-w", root)} //nolint:gosec // test-controlled binary path
 	cs, err := client.Connect(ctx, transport, nil)
 	if err != nil {
@@ -71,12 +77,23 @@ func TestMCPStdioSmoke(t *testing.T) {
 		t.Fatalf("create_manifest failed: %+v", cm.Content)
 	}
 
-	// build runs the real pipeline (needs Chrome; accept success or a structured failure).
-	b := smokeCallResult(ctx, t, cs, "build", map[string]any{})
+	// build runs the real pipeline (needs Chrome; accept success or a structured
+	// failure). A progress token makes the server stream progress notifications.
+	buildParams := &mcpsdk.CallToolParams{Name: "build", Arguments: map[string]any{}}
+	buildParams.SetProgressToken("build-smoke")
+	b, err := cs.CallTool(ctx, buildParams)
+	if err != nil {
+		t.Fatalf("call build: %v", err)
+	}
 	if b.IsError {
 		t.Fatalf("build returned a protocol error: %+v", b.Content)
 	}
 	t.Logf("build output: %s", smokeText(b))
+	if progressCount.Load() == 0 {
+		t.Error("build emitted no progress notifications")
+	} else {
+		t.Logf("received %d progress notifications", progressCount.Load())
+	}
 }
 
 func smokeCallResult(ctx context.Context, t *testing.T, cs *mcpsdk.ClientSession, name string, args map[string]any) *mcpsdk.CallToolResult {
