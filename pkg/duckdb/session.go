@@ -132,6 +132,11 @@ func OpenSession(ctx context.Context, opts Options) (*Session, error) {
 		return nil, err
 	}
 
+	if err := s.registerBuiltinUDFs(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return s, nil
 }
 
