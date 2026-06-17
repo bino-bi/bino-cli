@@ -78,7 +78,12 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
-	started := time.Now()
+	// Snapshot existing build logs so we can identify the one this run writes
+	// without relying on wall-clock vs filesystem mtime resolution (which varies
+	// by platform).
+	logDir := filepath.Join(h.deps.State.ProjectRoot(), outDir)
+	preexisting := buildLogSet(logDir)
+
 	if err := cmd.Start(); err != nil {
 		_ = pw.Close()
 		_ = pr.Close()
@@ -104,6 +109,7 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 			})
 		}
 	}
+	_ = scanner.Err()
 	_ = pr.Close()
 
 	exitCode := 0
@@ -122,9 +128,9 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 		Output:   tail(captured.String(), maxBuildOutput),
 	}
 
-	// Parse the JSON build log written by this run (newest log modified after we
-	// started) to surface the produced artefacts and warnings.
-	if logPath, log := newestBuildLog(filepath.Join(h.deps.State.ProjectRoot(), outDir), started); log != nil {
+	// Parse the JSON build log written by this run (a bino-build-*.json that
+	// wasn't present before) to surface the produced artefacts and warnings.
+	if logPath, log := newestBuildLog(logDir, preexisting); log != nil {
 		out.Artefacts = log.Artifacts
 		out.Warnings = log.Warnings
 		out.LogPath = logPath
@@ -150,20 +156,37 @@ func progressMessage(line string) string {
 	return line
 }
 
-// newestBuildLog finds the most recent bino-build-*.json in dir written at or
-// after start, and parses it. Returns ("", nil) when none is found.
-func newestBuildLog(dir string, start time.Time) (string, *buildlog.JSONBuildLog) {
+// buildLogSet returns the set of bino-build-*.json paths currently in dir.
+func buildLogSet(dir string) map[string]struct{} {
+	set := map[string]struct{}{}
+	matches, _ := filepath.Glob(filepath.Join(dir, "bino-build-*.json"))
+	for _, m := range matches {
+		set[m] = struct{}{}
+	}
+	return set
+}
+
+// newestBuildLog finds the most recent bino-build-*.json in dir that is not in
+// the exclude set (i.e. written by the current build) and parses it. Returns
+// ("", nil) when none is found.
+func newestBuildLog(dir string, exclude map[string]struct{}) (string, *buildlog.JSONBuildLog) {
 	matches, err := filepath.Glob(filepath.Join(dir, "bino-build-*.json"))
-	if err != nil || len(matches) == 0 {
+	if err != nil {
 		return "", nil
 	}
-	sort.Slice(matches, func(i, j int) bool {
-		return modTime(matches[i]).After(modTime(matches[j]))
-	})
-	newest := matches[0]
-	if modTime(newest).Before(start) {
-		return "", nil // stale log from an earlier build
+	var candidates []string
+	for _, m := range matches {
+		if _, skip := exclude[m]; !skip {
+			candidates = append(candidates, m)
+		}
 	}
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return modTime(candidates[i]).After(modTime(candidates[j]))
+	})
+	newest := candidates[0]
 	data, err := os.ReadFile(newest) //nolint:gosec // G304: path derived from our own out-dir glob
 	if err != nil {
 		return "", nil
