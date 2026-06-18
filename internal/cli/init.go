@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/pathutil"
+	tmpl "bino.bi/bino/internal/template"
+	"bino.bi/bino/internal/version"
 )
 
 var errInitCanceled = errors.New("init canceled")
@@ -30,11 +31,21 @@ func newInitCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "init",
+		Use:   "init [template]",
 		Short: "Create a starter report workspace with sample manifests",
 		Long: strings.TrimSpace(`bino init bootstraps a report bundle with example YAML manifests,
-an inline datasource, and a .bnignore file so you can run bino build or bino preview immediately.`),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+an inline datasource, and a .bnignore file so you can run bino build or bino preview immediately.
+
+The optional [template] selects a built-in scaffold: 'minimal' (a flat bundle, the
+default) or 'standard' (the same report organized into the canonical folder layout).`),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			templateName := "minimal"
+			explicitSource := len(args) == 1 && strings.TrimSpace(args[0]) != ""
+			if explicitSource {
+				templateName = strings.TrimSpace(args[0])
+			}
+
 			answers := initAnswers{
 				Directory:   flagDir,
 				ReportName:  flagName,
@@ -45,22 +56,30 @@ an inline datasource, and a .bnignore file so you can run bino build or bino pre
 			lockLanguage := cmd.Flags().Changed("language")
 			applyInitDefaults(&answers)
 			if !flagYes {
-				if err := runInitWizard(cmd, &answers, wizardOptions{
-					lockReportName: lockReportName,
-					lockLanguage:   lockLanguage,
-				}); err != nil {
+				chosen, err := runInitWizard(cmd, &answers, wizardOptions{
+					lockReportName:  lockReportName,
+					lockLanguage:    lockLanguage,
+					offerTemplate:   !explicitSource,
+					defaultTemplate: templateName,
+				})
+				if err != nil {
 					if errors.Is(err, errInitCanceled) {
 						return ConfigError(err)
 					}
 					return RuntimeError(err)
 				}
+				templateName = chosen
+			}
+
+			if !tmpl.IsBuiltin(templateName) {
+				return ConfigError(fmt.Errorf("unknown template %q (built-ins: %s)", templateName, strings.Join(tmpl.BuiltinNames(), ", ")))
 			}
 
 			data, err := buildInitTemplateData(answers)
 			if err != nil {
 				return ConfigError(err)
 			}
-			created, absDir, err := writeInitBundle(data, flagForce)
+			created, absDir, err := renderBuiltinBundle(templateName, data, flagForce)
 			if err != nil {
 				return RuntimeError(err)
 			}
@@ -72,6 +91,7 @@ an inline datasource, and a .bnignore file so you can run bino build or bino pre
 	}
 
 	cmd.Flags().StringVarP(&flagDir, "directory", "d", "", "Target directory for the new bundle (default ./rainbow-report)")
+	cmd.Flags().StringVarP(&flagDir, "output", "o", "", "Alias for --directory")
 	cmd.Flags().StringVar(&flagName, "name", "", "metadata.name to assign to the sample ReportArtefact")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Display title for the sample ReportArtefact")
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Default locale for the bundle (en or de)")
@@ -89,8 +109,10 @@ type initAnswers struct {
 }
 
 type wizardOptions struct {
-	lockReportName bool
-	lockLanguage   bool
+	lockReportName  bool
+	lockLanguage    bool
+	offerTemplate   bool
+	defaultTemplate string
 }
 
 func applyInitDefaults(ans *initAnswers) {
@@ -112,9 +134,9 @@ func applyInitDefaults(ans *initAnswers) {
 	}
 }
 
-func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) error {
+func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) (string, error) {
 	if ans == nil {
-		return fmt.Errorf("init wizard: answers missing")
+		return "", fmt.Errorf("init wizard: answers missing")
 	}
 	reader := bufio.NewReader(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
@@ -123,9 +145,18 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) err
 	fmt.Fprintln(out, "Press Enter to keep the default in brackets.")
 	fmt.Fprintln(out)
 
+	templateName := opts.defaultTemplate
+	if opts.offerTemplate {
+		chosen, err := promptTemplateChoice(reader, out, templateName)
+		if err != nil {
+			return "", err
+		}
+		templateName = chosen
+	}
+
 	dir, err := promptString(reader, out, "Target folder", ans.Directory)
 	if err != nil {
-		return err
+		return "", err
 	}
 	ans.Directory = dir
 	if !opts.lockReportName {
@@ -135,13 +166,13 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) err
 
 	name, err := promptString(reader, out, "Report identifier (metadata.name)", ans.ReportName)
 	if err != nil {
-		return err
+		return "", err
 	}
 	ans.ReportName = name
 
 	title, err := promptString(reader, out, "Report title", ans.ReportTitle)
 	if err != nil {
-		return err
+		return "", err
 	}
 	ans.ReportTitle = title
 
@@ -151,19 +182,37 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) err
 	}
 	lang, err := promptLanguage(reader, out, langDefault)
 	if err != nil {
-		return err
+		return "", err
 	}
 	ans.Language = lang
 
 	fmt.Fprintln(out)
 	confirmed, err := promptConfirm(reader, out, fmt.Sprintf("Create sample project in %s?", ans.Directory), true)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !confirmed {
-		return errInitCanceled
+		return "", errInitCanceled
 	}
-	return nil
+	return templateName, nil
+}
+
+// promptTemplateChoice asks the user to pick a built-in template, looping until
+// a valid name is entered.
+func promptTemplateChoice(reader *bufio.Reader, out io.Writer, def string) (string, error) {
+	fmt.Fprintln(out, "Templates:")
+	fmt.Fprintln(out, "  minimal  - a flat starter bundle")
+	fmt.Fprintln(out, "  standard - the same report in the canonical folder layout")
+	for {
+		value, err := promptString(reader, out, "Template (minimal/standard)", def)
+		if err != nil {
+			return "", err
+		}
+		if tmpl.IsBuiltin(value) {
+			return value, nil
+		}
+		fmt.Fprintln(out, "Please choose 'minimal' or 'standard'.")
+	}
 }
 
 func promptString(reader *bufio.Reader, out io.Writer, label, def string) (string, error) {
@@ -350,116 +399,47 @@ func sanitizeSQLIdentifier(raw string) string {
 	return result
 }
 
-type initFile struct {
-	Path    string
-	Content string
-}
-
-func (d initTemplateData) files() []initFile {
-	timestamp := time.Now().Format(time.RFC3339)
-	description := fmt.Sprintf("Starter report bundle generated by 'bino init' on %s.", timestamp)
-	report := fmt.Sprintf(`apiVersion: bino.bi/v1alpha1
-kind: ReportArtefact
-metadata:
-  name: %s
-spec:
-  format: xga
-  orientation: portrait
-  language: %s
-  filename: %s
-  title: %s
-  description: %s
-  author: %s
-  keywords:
-    - sample
-    - bino
-    - report
-  layoutPages:
-    - %s
-`, d.ReportName, d.Language, d.Filename, quoteYAML(d.ReportTitle), quoteYAML(description), quoteYAML("Rainbow Reporting Team"), d.LayoutName)
-
-	dataSource := fmt.Sprintf(`apiVersion: bino.bi/v1alpha1
-kind: DataSource
-metadata:
-  name: %s
-spec:
-  type: inline
-  content:
-    - name: Ada Lovelace
-      metric: 42
-    - name: Niklaus Wirth
-      metric: 37
-`, d.DataSourceName)
-
-	pages := fmt.Sprintf(`apiVersion: bino.bi/v1alpha1
-kind: LayoutPage
-metadata:
-  name: %s
-spec:
-  children:
-    - kind: Text
-      spec:
-        value: >-
-          Welcome to %s!
-          \${this.data['$%s'][0].name} just shipped the latest KPI export.
-        dataset: $%s
-`, d.LayoutName, d.ReportTitle, d.DataSourceName, d.DataSourceName)
-
-	bnignore := "# Bino build output\ndist/\n.bino/cache/\n"
-
-	gitignore := "# Bino build output\n.bino/\ndist/\n"
-
-	// Generate a new UUID for the report-id
-	// Try to get the latest locally installed engine version
-	var engineVersionLine string
+// renderVars assembles the substitution context for a built-in template. The
+// derived report fields come from buildInitTemplateData; the injected vars
+// (.ReportID/.EngineVersion/.Date/.BinoVersion) reproduce the historical
+// best-effort behavior (fresh UUID, latest local engine version, generation
+// timestamp).
+func (d initTemplateData) renderVars() map[string]any {
+	engineVersion := ""
 	if mgr, err := engine.NewManager(); err == nil {
 		if info, err := mgr.LatestLocalVersion(); err == nil {
-			engineVersionLine = fmt.Sprintf("engine-version = %q\n", info.Version)
+			engineVersion = info.Version
 		}
 	}
-
-	binoToml := fmt.Sprintf(`# Bino project configuration
-# This file marks the root of a bino reporting project.
-# Generated by 'bino init' on %s
-
-report-id = "%s"
-%s`, timestamp, pathutil.GenerateReportID(), engineVersionLine)
-
-	return []initFile{
-		{Path: pathutil.ProjectConfigFile, Content: binoToml},
-		{Path: "report.yaml", Content: report},
-		{Path: "data.yaml", Content: dataSource},
-		{Path: "pages.yaml", Content: pages},
-		{Path: ".bnignore", Content: bnignore},
-		{Path: ".gitignore", Content: gitignore},
+	return map[string]any{
+		"ReportName":     d.ReportName,
+		"ReportTitle":    d.ReportTitle,
+		"Language":       d.Language,
+		"Filename":       d.Filename,
+		"LayoutName":     d.LayoutName,
+		"DataSourceName": d.DataSourceName,
+		"ReportID":       pathutil.GenerateReportID(),
+		"EngineVersion":  engineVersion,
+		"Date":           time.Now().Format(time.RFC3339),
+		"BinoVersion":    version.Version,
 	}
 }
 
-func quoteYAML(value string) string {
-	return fmt.Sprintf("%q", value)
-}
-
-func writeInitBundle(data initTemplateData, force bool) (created []string, dir string, err error) {
-	files := data.files()
-	created = make([]string, 0, len(files))
-	for _, file := range files {
-		absPath := filepath.Join(data.Directory, file.Path)
-		if err := pathutil.EnsureDir(filepath.Dir(absPath)); err != nil {
-			return nil, "", fmt.Errorf("create directory %s: %w", filepath.Dir(absPath), err)
-		}
-		if !force {
-			if _, err := os.Stat(absPath); err == nil {
-				return nil, "", fmt.Errorf("%s already exists; use --force to overwrite", file.Path)
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return nil, "", fmt.Errorf("stat %s: %w", absPath, err)
-			}
-		}
-		if err := os.WriteFile(absPath, []byte(file.Content), 0o644); err != nil { //nolint:gosec // G306: scaffold files need standard read perms
-			return nil, "", fmt.Errorf("write %s: %w", absPath, err)
-		}
-		created = append(created, file.Path)
+// renderBuiltinBundle renders a built-in template (minimal or standard) into the
+// target directory via the shared template engine.
+func renderBuiltinBundle(name string, data initTemplateData, force bool) (created []string, dir string, err error) {
+	root, err := tmpl.BuiltinRoot(name)
+	if err != nil {
+		return nil, "", err
 	}
-	sort.Strings(created)
+	manifest, err := tmpl.BuiltinManifest(name)
+	if err != nil {
+		return nil, "", err
+	}
+	created, err = tmpl.RenderTree(root, manifest, data.Directory, data.renderVars(), force)
+	if err != nil {
+		return nil, "", err
+	}
 	return created, data.Directory, nil
 }
 

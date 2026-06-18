@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"bino.bi/bino/internal/projectlayout"
 )
 
 func TestSanitizeManifestName(t *testing.T) {
@@ -62,7 +64,10 @@ func TestBuildInitTemplateData(t *testing.T) {
 	}
 }
 
-func TestWriteInitBundleCreatesFiles(t *testing.T) {
+// TestStandardTemplateUsesCanonicalFolders keeps the built-in standard scaffold
+// aligned with projectlayout: every folder it seeds must be a canonical one, so
+// `bino add` co-locates new manifests with the scaffold instead of splitting.
+func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 	tmp := t.TempDir()
 	data := initTemplateData{
 		Directory:      tmp,
@@ -73,9 +78,36 @@ func TestWriteInitBundleCreatesFiles(t *testing.T) {
 		LayoutName:     "sample-report-page",
 		DataSourceName: "sample_report_data",
 	}
-	created, _, err := writeInitBundle(data, false)
+	created, _, err := renderBuiltinBundle("standard", data, false)
 	if err != nil {
-		t.Fatalf("writeInitBundle error: %v", err)
+		t.Fatalf("renderBuiltinBundle(standard): %v", err)
+	}
+	canonical := projectlayout.CanonicalFolders()
+	for _, rel := range created {
+		dir, _, nested := strings.Cut(rel, string(filepath.Separator))
+		if !nested {
+			continue // top-level file (bino.toml, dotfiles) — not a folder
+		}
+		if !slices.Contains(canonical, dir) {
+			t.Errorf("standard template seeds non-canonical folder %q (file %q); canonical=%v", dir, rel, canonical)
+		}
+	}
+}
+
+func TestRenderBuiltinMinimalCreatesFiles(t *testing.T) {
+	tmp := t.TempDir()
+	data := initTemplateData{
+		Directory:      tmp,
+		ReportName:     "sample-report",
+		ReportTitle:    "Sample",
+		Language:       "en",
+		Filename:       "sample-report.pdf",
+		LayoutName:     "sample-report-page",
+		DataSourceName: "sample_report_data",
+	}
+	created, _, err := renderBuiltinBundle("minimal", data, false)
+	if err != nil {
+		t.Fatalf("renderBuiltinBundle error: %v", err)
 	}
 	want := []string{".bnignore", ".gitignore", "bino.toml", "data.yaml", "pages.yaml", "report.yaml"}
 	slices.Sort(created)
@@ -101,10 +133,10 @@ func TestWriteInitBundleCreatesFiles(t *testing.T) {
 	if !strings.Contains(string(content), "dist/") {
 		t.Fatalf(".bnignore missing dist/ entry: %s", string(content))
 	}
-	if _, _, err := writeInitBundle(data, false); err == nil {
+	if _, _, err := renderBuiltinBundle("minimal", data, false); err == nil {
 		t.Fatalf("expected error when re-running without force")
 	}
-	if _, _, err := writeInitBundle(data, true); err != nil {
+	if _, _, err := renderBuiltinBundle("minimal", data, true); err != nil {
 		t.Fatalf("force write failed: %v", err)
 	}
 }

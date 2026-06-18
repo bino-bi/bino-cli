@@ -1,0 +1,12 @@
+apiVersion: bino.bi/v1alpha1
+kind: ProjectTemplate
+metadata:
+  name: standard
+spec:
+  fields:
+    - { name: ReportName, prompt: "Report name", default: rainbow-report }
+    - { name: ReportTitle, prompt: "Report title", default: Rainbow Sample Report }
+    - { name: Language, prompt: "Language (en/de)", default: en }
+  verbatim:
+    - .bnignore
+    - .gitignore
