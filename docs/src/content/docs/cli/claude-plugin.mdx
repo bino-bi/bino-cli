@@ -1,0 +1,93 @@
+---
+title: Claude Code plugin
+description: Install the bino-report Claude Code plugin to co-author and autopilot IBCS PDF reports, built on the bino MCP server.
+---
+
+The **bino-report** plugin packages the [`bino mcp`](/cli/mcp/) server into a batteries-included
+Claude Code experience: zero-config MCP registration, the IBCS knowledge the raw tools don't carry,
+slash commands, and a checkpointed autopilot pipeline. Because a bino report is plain-text YAML + SQL,
+Claude can author it directly — and bino's schema and validation are the guardrails.
+
+## Prerequisite
+
+The plugin drives the `bino` binary on your `PATH`, so you need a build new enough to have the `mcp`
+subcommand — check with `bino version`, and confirm `bino mcp --help` works. The plugin detects a
+missing or too-old binary and tells you — it can't install bino for you.
+
+## Install
+
+```bash
+claude plugin marketplace add bino-bi/bino-cli
+/plugin install bino
+```
+
+Installing registers the `bino` MCP server automatically — no `claude mcp add` step. Open `/mcp` to
+confirm the `bino` server is connected, and `/help` to see the `/bino:*` commands.
+
+## Mode A — Co-authoring
+
+You drive; Claude assists. Claude follows bino's authoring loop (read the live schema → learn a
+dataset's columns → draft → `validate_draft` → write → `validate_project` → `build`) and applies IBCS
+semantics — scenarios (`ac`/`pp`/`fc`/`pl`), variances (`d_`/`dr_`), component choice, and data-aware
+narrative.
+
+| Command | What it does |
+| --- | --- |
+| `/bino:report` | Co-author a report end-to-end: your data + a goal → a built PDF, step by step. |
+| `/bino:new` | Scaffold a fresh report bundle (`init_bundle`). |
+| `/bino:add-source` | Probe a CSV / Excel / database source, then scaffold a typed `DataSource` (+ `DataSet`). |
+| `/bino:fix` | Validate the project and walk the diagnostics to green. |
+| `/bino:build` | Render the report artefacts to PDF. |
+
+Two skills load automatically when relevant: **`bino-authoring`** (the draft→validate→write discipline)
+and **`bino-ibcs`** (the IBCS rubric — scenarios, variances, component choice, narrative).
+
+## Mode B — Autopilot
+
+```bash
+/bino:autopilot <data-or-source> "<goal>"
+```
+
+A main-thread orchestrator delegates the **requirements → data → authoring → validation → build**
+pipeline to three headless subagents — `bino-data`, `bino-author`, `bino-validation` — pausing for you
+only at gates. (Only the main thread can ask you a question, so the orchestrator and requirements
+elicitation live there; the subagents are isolated, single-responsibility workers.)
+
+### Autonomy tiers
+
+| Tier | Routine gates | Status |
+| --- | --- | --- |
+| 0 — Supervised | confirm every step | the `/bino:*` co-author commands |
+| **1 — Checkpointed** | pause after the brief, after the data plan, before the build | **autopilot default and ceiling** |
+| 2 — Autonomous | none | deferred — needs engine safety primitives that don't exist yet |
+
+### The four checkpoints
+
+Autopilot pauses for you at:
+
+1. **the report brief** — after eliciting requirements (audience, message, scenarios, variance, …);
+2. **the data plan** — after sources and datasets, flagging credentialed sources and anything the data
+   can't satisfy;
+3. **before the build** — rendering is slow and writes files; and
+4. **the finished PDF** — a mandatory visual sign-off, every run.
+
+### Hard safety gates
+
+These hold at every tier:
+
+- **Credentialed sources** (databases / S3 / WebDAV) are a hard human stop. The agent writes only the
+  `*FromEnv` skeleton — never an inline secret — and never spends a credential unattended.
+- **Running a data validation executes the agent's SQL** (DuckDB SQL is not read-only), so it runs
+  once, only on datasets authored that run, never unattended against a credentialed source.
+- **A non-empty / pre-existing project** drops autopilot to confirmed writes — bino has no rollback
+  yet, so it never silently clobbers hand-written manifests.
+- **Every build is gated and iteration-capped**, and the finished PDF **always** needs your eyes:
+  "validates + builds" is not the same as "correct."
+
+A `PASS` from autopilot means *mechanically correct and ready for sign-off* — never "done."
+
+## Other MCP clients
+
+Claude Desktop, Cursor, and other MCP clients can register `bino mcp` directly (see
+[bino mcp](/cli/mcp/)), but they don't get the plugin's skills, commands, or autopilot — those are
+Claude Code only.

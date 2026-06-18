@@ -1,0 +1,18 @@
+{
+  "name": "bino-bi",
+  "description": "Claude Code plugins for bino — Report-as-Code: co-author and autopilot pixel-perfect IBCS PDF reports.",
+  "owner": {
+    "name": "bino bi",
+    "url": "https://github.com/bino-bi"
+  },
+  "plugins": [
+    {
+      "name": "bino",
+      "source": "./claude-plugin",
+      "description": "Co-author and autopilot IBCS PDF reports with bino (Report-as-Code: YAML + SQL). Registers the bino MCP server and ships IBCS knowledge, slash commands, and a checkpointed autopilot pipeline.",
+      "version": "0.1.0",
+      "license": "AGPL-3.0-or-later",
+      "keywords": ["bino", "ibcs", "report-as-code", "pdf", "mcp"]
+    }
+  ]
+}

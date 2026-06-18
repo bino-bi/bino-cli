@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bino": {
+      "command": "bino",
+      "args": ["mcp"]
+    }
+  }
+}
