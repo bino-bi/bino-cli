@@ -145,9 +145,22 @@ func (a *cliAuthoring) ScaffoldSource(ctx context.Context, payload json.RawMessa
 }
 
 // InitBundle bootstraps a new report bundle, reusing the `bino init` core.
+//
+// Unlike the `bino init` CLI (which a human runs in their shell and which
+// defaults to a ./rainbow-report subfolder), the agent-facing tool scaffolds in
+// place at the project root by default, and resolves a relative directory
+// against the project root rather than the process working directory — so it
+// stays consistent with the other authoring tools regardless of the server's cwd.
 func (a *cliAuthoring) InitBundle(_ context.Context, in mcp.InitBundleInput) (mcp.InitResult, error) {
+	dir := in.Directory
+	switch {
+	case dir == "":
+		dir = a.root
+	case !filepath.IsAbs(dir):
+		dir = filepath.Join(a.root, dir)
+	}
 	ans := initAnswers{
-		Directory:   in.Directory,
+		Directory:   dir,
 		ReportName:  in.Name,
 		ReportTitle: in.Title,
 		Language:    in.Language,

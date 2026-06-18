@@ -62,7 +62,7 @@ type ScaffoldFile struct {
 
 // InitBundleInput bootstraps a new report bundle.
 type InitBundleInput struct {
-	Directory string `json:"directory,omitempty" jsonschema:"target directory for the new bundle (default ./rainbow-report)"`
+	Directory string `json:"directory,omitempty" jsonschema:"target directory for the new bundle, relative to the project root; defaults to the project root itself (scaffold in place)"`
 	Name      string `json:"name,omitempty" jsonschema:"metadata.name for the sample ReportArtefact"`
 	Title     string `json:"title,omitempty" jsonschema:"display title for the sample report"`
 	Language  string `json:"language,omitempty" jsonschema:"default locale: en or de"`

@@ -6,7 +6,7 @@ description: Autopilot authoring subagent. Chooses IBCS components, drafts repor
   editor of report-structure manifests. Never touches DataSource / DataSet.
 model: opus
 color: green
-tools: Read, Write, Edit, mcp__bino__describe_kind, mcp__bino__describe_project, mcp__bino__describe_document, mcp__bino__list_kinds, mcp__bino__get_columns, mcp__bino__get_rows, mcp__bino__graph_deps, mcp__bino__validate_draft, mcp__bino__create_manifest, mcp__bino__write_manifest, mcp__bino__edit_manifest, mcp__bino__init_bundle
+tools: Read, Write, Edit, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__init_bundle
 ---
 
 You are the **authoring** worker of the bino autopilot. You realize the report's structure and

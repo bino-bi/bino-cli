@@ -2792,7 +2792,10 @@
           "type": "string",
           "description": "Custom chart title."
         },
-        "filter": { "type": "string" },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the chart's data to filter rows before rendering, e.g. \"rowGroup = 'Revenue'\"."
+        },
         "level": {
           "type": "string",
           "enum": ["rowcategory", "category", "subcategory"],
@@ -2921,7 +2924,10 @@
           "enum": ["year", "quarter", "month", "week", "day", "hour", "minute", "second", "millisecond", "auto"],
           "description": "Axis date interval."
         },
-        "filter": { "type": "string" },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the chart's data to filter rows before rendering, e.g. \"rowGroup = 'Revenue'\"."
+        },
         "level": {
           "type": "string",
           "enum": ["rowcategory", "category", "subcategory"],
@@ -3441,7 +3447,10 @@
           "type": "string",
           "description": "A descriptive title for the table data."
         },
-        "filter": { "type": "string" },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the table's data to filter rows before rendering, e.g. \"category = 'Sales'\"."
+        },
         "order": {
           "type": "string",
           "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],

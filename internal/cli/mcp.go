@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 
@@ -41,9 +42,12 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 			logger := logx.NewTerminalWithColor(cmd.ErrOrStderr(), cmd.ErrOrStderr(), verbose, true).Channel("mcp")
 			ctx := logx.WithLogger(cmd.Context(), logger)
 
-			projectRoot, err := pipeline.ResolveProjectRoot(workdir)
+			projectRoot, initialized, err := resolveMCPRoot(workdir)
 			if err != nil {
 				return ConfigError(err)
+			}
+			if !initialized {
+				logger.Infof("No bino.toml found; starting MCP rooted at %s — not yet a bino project (use init_bundle to scaffold a bundle here)", projectRoot)
 			}
 
 			// Proxy to a running daemon when one exists, so the agent reuses the
@@ -67,6 +71,28 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "Always run standalone, even if a daemon is running")
 	return cmd
+}
+
+// resolveMCPRoot resolves the project root for the MCP server. Unlike the other
+// commands, the MCP server must start even in a folder that is not yet a bino
+// project, so an agent can scaffold a bundle in place (init_bundle /
+// create_manifest) instead of being forced to bootstrap with a separate CLI
+// call first. When no bino.toml is found up the tree, it roots the server at the
+// working directory itself; initialized reports whether an existing project was
+// found.
+func resolveMCPRoot(workdir string) (root string, initialized bool, err error) {
+	root, err = pipeline.ResolveProjectRoot(workdir)
+	if err == nil {
+		return root, true, nil
+	}
+	if !errors.Is(err, pathutil.ErrProjectRootNotFound) {
+		return "", false, err
+	}
+	root, err = pathutil.ResolveWorkdir(workdir)
+	if err != nil {
+		return "", false, err
+	}
+	return root, false, nil
 }
 
 // runMCPStandalone serves the MCP directly over stdio from a freshly loaded
