@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -149,5 +151,76 @@ func TestProxyForwarding(t *testing.T) {
 	}
 	if len(rr.Contents) == 0 || !strings.Contains(rr.Contents[0].Text, "$defs") {
 		t.Errorf("templated resource through proxy looks wrong: %+v", rr.Contents)
+	}
+}
+
+// TestResolveMCPRoot covers the MCP server's project-root resolution, including
+// the fallback that lets it start in a folder that is not yet a bino project so
+// an agent can scaffold in place instead of bootstrapping via a separate CLI call.
+func TestResolveMCPRoot(t *testing.T) {
+	t.Run("empty folder falls back to the working directory", func(t *testing.T) {
+		dir := t.TempDir()
+
+		root, initialized, err := resolveMCPRoot(dir)
+		if err != nil {
+			t.Fatalf("resolveMCPRoot(%q) errored on a not-yet-initialized folder: %v", dir, err)
+		}
+		if initialized {
+			t.Errorf("initialized = true, want false (no bino.toml present)")
+		}
+		if want, _ := filepath.Abs(dir); root != want {
+			t.Errorf("root = %q, want the working directory %q", root, want)
+		}
+	})
+
+	t.Run("existing project resolves to the project root", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectConfig(t, dir)
+
+		root, initialized, err := resolveMCPRoot(dir)
+		if err != nil {
+			t.Fatalf("resolveMCPRoot(%q): %v", dir, err)
+		}
+		if !initialized {
+			t.Errorf("initialized = false, want true (bino.toml present)")
+		}
+		if want, _ := filepath.Abs(dir); root != want {
+			t.Errorf("root = %q, want %q", root, want)
+		}
+	})
+
+	t.Run("subdirectory walks up to the project root", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectConfig(t, dir)
+		sub := filepath.Join(dir, "datasets")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		root, initialized, err := resolveMCPRoot(sub)
+		if err != nil {
+			t.Fatalf("resolveMCPRoot(%q): %v", sub, err)
+		}
+		if !initialized {
+			t.Errorf("initialized = false, want true (ancestor bino.toml present)")
+		}
+		if want, _ := filepath.Abs(dir); root != want {
+			t.Errorf("root = %q, want ancestor project root %q", root, want)
+		}
+	})
+
+	t.Run("nonexistent directory errors", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "does-not-exist")
+		if _, _, err := resolveMCPRoot(missing); err == nil {
+			t.Errorf("resolveMCPRoot(%q) = nil error, want a resolution error", missing)
+		}
+	})
+}
+
+func writeProjectConfig(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, pathutil.ProjectConfigFile)
+	if err := os.WriteFile(path, []byte("name = \"test\"\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }

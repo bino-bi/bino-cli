@@ -176,6 +176,35 @@ func TestInitBundle(t *testing.T) {
 	}
 }
 
+func TestInitBundleInPlaceDefault(t *testing.T) {
+	cs, root := newAuthoringClient(t)
+
+	// No directory given: scaffold in place at the project root.
+	res := callTool(t, cs, "init_bundle", map[string]any{})
+	if res.IsError {
+		t.Fatalf("init_bundle failed: %+v", res.Content)
+	}
+	if _, err := os.Stat(filepath.Join(root, "bino.toml")); err != nil {
+		t.Errorf("init_bundle did not scaffold in place: bino.toml missing at root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "rainbow-report", "bino.toml")); err == nil {
+		t.Error("init_bundle created a ./rainbow-report subfolder instead of scaffolding in place")
+	}
+}
+
+func TestInitBundleRelativeDirUnderRoot(t *testing.T) {
+	cs, root := newAuthoringClient(t)
+
+	// A relative directory resolves against the project root, not the process cwd.
+	res := callTool(t, cs, "init_bundle", map[string]any{"directory": "q3"})
+	if res.IsError {
+		t.Fatalf("init_bundle failed: %+v", res.Content)
+	}
+	if _, err := os.Stat(filepath.Join(root, "q3", "bino.toml")); err != nil {
+		t.Errorf("relative directory not resolved under the project root: %v", err)
+	}
+}
+
 func TestWriteManifestValidation(t *testing.T) {
 	cs, root := newAuthoringClient(t)
 
