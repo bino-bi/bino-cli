@@ -18,8 +18,11 @@ Run all four; a single FAIL in any layer makes the overall FAIL.
 1. **Schema** — `validate_project()` (**without** `execute_queries`: the data correctness pass is
    `bino-data`'s single-owner step; you read its result, you never re-run the SQL). Structural and
    cross-document/reference errors.
-2. **IBCS** — apply `bino-ibcs`: correct scenario codes, sensible variance direction, component fits
-   the question, and **message↔content coherence** (does the report actually say its primary message?).
+2. **IBCS** — apply the **SUCCESS** rules from `bino-ibcs` (see its self-audit and
+   `references/ibcs-standard.md`): **SAY** message↔content coherence (does the report actually say its
+   primary message?), **UNIFY** correct scenario codes and variance favorable-direction, **EXPRESS**
+   the component fits the question, **STRUCTURE** the breakdown is MECE. CHECK/CONDENSE/SIMPLIFY are
+   engine-enforced.
 3. **Build-readiness** — structurally confirm the report would build **without building it**: the
    `ReportArtefact` wires to real pages/embeddables (`graph_deps`), and nothing trips the
    engine-compatibility surface. Don't call `build` — that's gated and the orchestrator's to run.
@@ -52,8 +55,8 @@ classes first**:
 
 | Signal | routeTo |
 | --- | --- |
-| IBCS-semantic (notation, scenario meaning, message↔content) — the C11–C14 class | **human** |
-| Ambiguous variance / favorable-direction (the C4 class) | **human** |
+| IBCS-semantic (UNIFY notation / scenario meaning, SAY message↔content) | **human** |
+| Ambiguous variance / favorable-direction (UNIFY, UN 4.1) | **human** |
 | Engine `CompatibilityError` (version range) | **human** — no agent may widen it |
 | Acceptance criterion not mechanically checkable | **human** |
 | File is a `DataSource`/`DataSet`/`ConnectionSecret`, or message mentions column/SQL/type/null | **data** |
