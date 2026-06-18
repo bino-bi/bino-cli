@@ -5,7 +5,7 @@ description: Autopilot guardrail subagent. Runs a four-layer check (schema, IBCS
   never edits, never builds — a judge that wields the pen is not a guardrail.
 model: opus
 color: red
-tools: Read, Write, mcp__bino__validate_project, mcp__bino__validate_draft, mcp__bino__describe_kind, mcp__bino__describe_project, mcp__bino__describe_document, mcp__bino__list_kinds, mcp__bino__get_columns, mcp__bino__get_rows, mcp__bino__graph_deps
+tools: Read, Write, mcp__plugin_bino_bino__validate_project, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__graph_deps
 disallowedTools: Edit
 ---
 
