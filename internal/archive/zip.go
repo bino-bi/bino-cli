@@ -106,11 +106,8 @@ func Extract(zipPath, destDir string, opts Options) error {
 			}
 		}
 
-		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
-
-		// Prevent path traversal, including sibling-directory escapes such as
-		// "../dest-evil/x" that share destDir as a bare string prefix.
-		if targetPath != cleanDest && !strings.HasPrefix(targetPath, cleanDest+string(os.PathSeparator)) {
+		targetPath, err := sanitizeArchivePath(destDir, name)
+		if err != nil {
 			return fmt.Errorf("invalid file path in zip: %s", f.Name)
 		}
 
@@ -219,6 +216,26 @@ func extractFile(f *zip.File, destPath string, opts Options) (int64, error) {
 		return n, fmt.Errorf("%w (max %d bytes): %s", ErrFileTooBig, opts.Limits.MaxFileBytes, f.Name)
 	}
 	return n, nil
+}
+
+// errArchivePathTraversal marks an entry whose path escapes the destination.
+var errArchivePathTraversal = errors.New("archive entry escapes destination")
+
+// sanitizeArchivePath joins a (prefix-stripped) archive entry name onto dest and
+// returns the target path only if it stays inside dest. The first check is the
+// canonical filepath.Clean + strings.HasPrefix barrier that static analysis
+// recognizes as path-traversal sanitization; the second rejects
+// sibling-directory escapes (dest vs dest-evil) that a bare prefix check misses.
+func sanitizeArchivePath(dest, name string) (string, error) {
+	target := filepath.Join(dest, filepath.FromSlash(name))
+	if !strings.HasPrefix(target, filepath.Clean(dest)) {
+		return "", errArchivePathTraversal
+	}
+	cleanDest := filepath.Clean(dest)
+	if target != cleanDest && !strings.HasPrefix(target, cleanDest+string(os.PathSeparator)) {
+		return "", errArchivePathTraversal
+	}
+	return target, nil
 }
 
 // verifyResolvedParent re-checks, after MkdirAll, that the entry's parent

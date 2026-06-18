@@ -69,6 +69,12 @@ func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any
 		}
 
 		absPath := filepath.Join(destDir, filepath.FromSlash(renderedPath))
+		// Guard against a rendered path (e.g. a field value containing "..")
+		// escaping the target directory.
+		cleanDest := filepath.Clean(destDir)
+		if !strings.HasPrefix(absPath, cleanDest) || (absPath != cleanDest && !strings.HasPrefix(absPath, cleanDest+string(os.PathSeparator))) {
+			return fmt.Errorf("rendered path %q escapes the target directory", renderedPath)
+		}
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", filepath.Dir(absPath), err)
 		}
