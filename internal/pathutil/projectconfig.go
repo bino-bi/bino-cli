@@ -13,6 +13,39 @@ import (
 
 var engineVersionLinePattern = regexp.MustCompile(`^[ \t]*engine-version[ \t]*=`)
 
+var templateLinePattern = regexp.MustCompile(`(?m)^[ \t]*template[ \t]*=`)
+
+// StampTemplateProvenance appends a `template = "<source>"` line to the
+// project's bino.toml so a scaffold records the template it came from and is
+// re-runnable. It edits textually (rather than re-marshaling) so a
+// template-authored bino.toml keeps its formatting, and is a no-op when the
+// file is missing or already declares a template line.
+func StampTemplateProvenance(dir, source string) error {
+	if strings.TrimSpace(source) == "" {
+		return nil
+	}
+	path := ProjectConfigPath(dir)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if templateLinePattern.Match(data) {
+		return nil
+	}
+	content := string(data)
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	content += fmt.Sprintf("template = %q\n", source)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // G306: config files need standard read perms
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
 // HooksConfig maps checkpoint names to ordered lists of shell commands.
 type HooksConfig map[string][]string
 

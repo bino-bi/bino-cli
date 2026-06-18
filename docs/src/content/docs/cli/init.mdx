@@ -9,17 +9,27 @@ It is the recommended way to start a new report bundle.
 ## Usage
 
 ```bash
-bino init [flags]
+bino init [SOURCE] [flags]
 ```
+
+`SOURCE` is optional. With no source it renders the built-in `minimal` scaffold;
+`standard` renders the same report in the canonical folder layout. A source may also be a
+remote template — see [Project Templates](/concepts/templates/) for the full grammar,
+manifest format, and security model.
 
 Common flags:
 
-- `--directory, -d` – target directory (default: current directory).
-- `--name` – internal report name.
-- `--title` – human-readable report title.
-- `--language` – language code (for example `en`, `de`).
+- `--directory, -d` (alias `-o, --output`) – target directory (default `./rainbow-report`
+  for built-ins; required for remote templates).
+- `--name` – internal report name (built-in templates).
+- `--title` – human-readable report title (built-in templates).
+- `--language` – language code, for example `en`, `de` (built-in templates).
+- `--set key=value` – set a template field value; repeatable (remote/local templates).
 - `-y, --yes` – run non-interactively with defaults.
 - `--force` – overwrite existing files.
+- `--offline` – never reach the network; require a cached template (also `BINO_OFFLINE`).
+- `--trust` – skip the confirmation prompt for an uncurated remote source.
+- `--json` – emit the result (directory, files, template, resolved SHA, folders) as JSON.
 
 ![Sample init process](../../../assets/init.png)
 
@@ -31,16 +41,22 @@ Create a bundle in the current directory interactively:
 bino init
 ```
 
-Create a bundle in a new directory with explicit title and language:
+Scaffold the foldered `standard` layout:
 
 ```bash
-bino init --directory monthly-report --title "Monthly Sales" --language en
+bino init standard -d monthly-report
 ```
 
-Run non-interactively with defaults, overwriting existing files:
+Create a bundle non-interactively with explicit title and language:
 
 ```bash
-bino init -d my-report -y --force
+bino init --directory monthly-report --title "Monthly Sales" --language en -y
+```
+
+Scaffold from a remote template, pinned to a tag, supplying fields:
+
+```bash
+bino init owner/report-template#v1.2.0 -o ./out --set ReportName=q3 --trust
 ```
 
 After initialization, continue with [Your first report](/getting-started/first-report/).

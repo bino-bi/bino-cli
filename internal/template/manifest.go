@@ -14,6 +14,8 @@ const (
 	APIVersion = "bino.bi/v1alpha1"
 	// KindProjectTemplate is the manifest kind for a bino project template.
 	KindProjectTemplate = "ProjectTemplate"
+	// manifestFile is the template manifest filename at a template's root.
+	manifestFile = "bino.template.yaml"
 )
 
 // ProjectTemplate is the parsed bino.template.yaml manifest.

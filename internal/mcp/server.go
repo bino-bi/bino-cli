@@ -16,6 +16,7 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/datasource"
+	tmpl "bino.bi/bino/internal/template"
 	"bino.bi/bino/internal/version"
 )
 
@@ -99,6 +100,26 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 		Description: "Every document in the project: kind, name, file, and document position.",
 		MIMEType:    "application/json",
 	}, h.readDocuments)
+
+	srv.AddResource(&mcpsdk.Resource{
+		Name:        "templates",
+		URI:         "bino://templates",
+		Title:       "Available templates",
+		Description: "Built-in and curated templates that init_bundle can scaffold from.",
+		MIMEType:    "application/json",
+	}, h.readTemplates)
+}
+
+func (h *handlers) readTemplates(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+	payload := map[string]any{
+		"builtin": tmpl.BuiltinNames(),
+		"curated": tmpl.CuratedNames(),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return rawJSONResource("bino://templates", raw), nil
 }
 
 func (h *handlers) readSchema(ctx context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {

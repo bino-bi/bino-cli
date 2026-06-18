@@ -41,6 +41,11 @@ func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any
 		if d.IsDir() {
 			return nil
 		}
+		// The manifest lives at the render root only for the "root layout"
+		// convention (no template/ subdir); it is config, never scaffolded.
+		if p == manifestFile {
+			return nil
+		}
 
 		renderedPath, err := renderPath(p, data)
 		if err != nil {

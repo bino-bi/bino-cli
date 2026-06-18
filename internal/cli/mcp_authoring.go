@@ -9,8 +9,11 @@ import (
 	"path/filepath"
 
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/schema"
+	tmpl "bino.bi/bino/internal/template"
+	"bino.bi/bino/internal/version"
 )
 
 // cliAuthoring implements mcp.Authoring using the CLI's manifest builders,
@@ -151,7 +154,15 @@ func (a *cliAuthoring) ScaffoldSource(ctx context.Context, payload json.RawMessa
 // place at the project root by default, and resolves a relative directory
 // against the project root rather than the process working directory — so it
 // stays consistent with the other authoring tools regardless of the server's cwd.
-func (a *cliAuthoring) InitBundle(_ context.Context, in mcp.InitBundleInput) (mcp.InitResult, error) {
+//
+// A bare call (no source) renders the built-in minimal scaffold with zero
+// network. A remote source is fetched (cached by SHA) and honors ctx for
+// cancellation; an uncurated owner requires trust=true.
+func (a *cliAuthoring) InitBundle(ctx context.Context, in mcp.InitBundleInput) (mcp.InitResult, error) {
+	src, err := tmpl.ParseSource(in.Source)
+	if err != nil {
+		return mcp.InitResult{}, err
+	}
 	dir := in.Directory
 	switch {
 	case dir == "":
@@ -159,22 +170,55 @@ func (a *cliAuthoring) InitBundle(_ context.Context, in mcp.InitBundleInput) (mc
 	case !filepath.IsAbs(dir):
 		dir = filepath.Join(a.root, dir)
 	}
-	ans := initAnswers{
-		Directory:   dir,
-		ReportName:  in.Name,
-		ReportTitle: in.Title,
-		Language:    in.Language,
+
+	if src.Kind == tmpl.SourceBuiltin {
+		ans := initAnswers{Directory: dir, ReportName: in.Name, ReportTitle: in.Title, Language: in.Language}
+		applyInitDefaults(&ans)
+		data, err := buildInitTemplateData(ans)
+		if err != nil {
+			return mcp.InitResult{}, err
+		}
+		created, absDir, err := renderBuiltinBundle(src.Name, data, in.Force)
+		if err != nil {
+			return mcp.InitResult{}, err
+		}
+		return mcp.InitResult{
+			Directory: absDir, Files: created,
+			Template: "builtin:" + src.Name, Folders: foldersOf(created),
+		}, nil
 	}
-	applyInitDefaults(&ans)
-	data, err := buildInitTemplateData(ans)
+
+	if src.Kind == tmpl.SourceShorthand && !in.Trust {
+		return mcp.InitResult{}, fmt.Errorf("refusing to fetch the uncurated template github.com/%s/%s without trust=true", src.Owner, src.Repo)
+	}
+	mgr, err := tmpl.NewManager()
 	if err != nil {
 		return mcp.InitResult{}, err
 	}
-	created, dir, err := renderBuiltinBundle("minimal", data, in.Force)
+	resolved, err := mgr.Resolve(ctx, src, in.Offline)
 	if err != nil {
 		return mcp.InitResult{}, err
 	}
-	return mcp.InitResult{Directory: dir, Files: created}, nil
+	defer resolved.Close()
+	if err := resolved.Manifest.Validate(version.Version); err != nil {
+		return mcp.InitResult{}, err
+	}
+	vars, err := collectFieldsHeadless(resolved.Manifest, in.Set)
+	if err != nil {
+		return mcp.InitResult{}, err
+	}
+	created, err := tmpl.RenderTree(resolved.Root, resolved.Manifest, dir, vars, in.Force)
+	if err != nil {
+		return mcp.InitResult{}, err
+	}
+	if err := pathutil.StampTemplateProvenance(dir, resolved.Provenance); err != nil {
+		return mcp.InitResult{}, err
+	}
+	return mcp.InitResult{
+		Directory: dir, Files: created,
+		Template: resolved.Provenance, ResolvedSource: resolved.Provenance, ResolvedSHA: resolved.SHA,
+		Folders: foldersOf(created),
+	}, nil
 }
 
 func actionFor(appendMode bool) string {
