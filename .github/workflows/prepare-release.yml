@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Prepare release
+
+# Aligns the Claude Code plugin version to the release version, then commits and
+# tags so the existing Release workflow runs.
+#
+# Why a dedicated step: the CLI version is the git tag (injected via ldflags, no
+# version file) and the VS Code extension is stamped at publish time by
+# `vsce publish <version>`. The Claude plugin has neither — it is consumed
+# directly from git (marketplace `source: ./claude-plugin`), so the version users
+# see is whatever plugin.json / marketplace.json hold at the released ref. This
+# job writes that version in, commits it to main, and pushes the tag.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.67.0 (a leading 'v' is accepted)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Bump plugin version, commit, and tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the bump to main and push the tag
+      actions: write # dispatch the Release workflow
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      # The default GITHUB_TOKEN (contents: write) pushes the commit and tag. The
+      # tag push alone will not start the Release workflow — a tag pushed by
+      # GITHUB_TOKEN does not fire `on: push: tags` — so the final step triggers
+      # it explicitly via workflow_dispatch, which IS allowed for GITHUB_TOKEN.
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve and validate version
+        id: vars
+        run: |
+          RAW="${{ inputs.version }}"
+          VERSION="${RAW#v}"
+          TAG="v${VERSION}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'$RAW' is not a valid semver version (expected e.g. 0.67.0)"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::tag ${TAG} already exists"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump plugin + marketplace versions
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          plugin="claude-plugin/.claude-plugin/plugin.json"
+          market=".claude-plugin/marketplace.json"
+
+          # Replace the single "version" value in each file with sed so only that
+          # line changes (jq would reformat the keywords array). VERSION is
+          # validated semver above, so it is safe in the replacement.
+          sed -i -E 's/("version"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$VERSION"'"/' "$plugin"
+          sed -i -E 's/("version"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$VERSION"'"/' "$market"
+
+          # Verify (read-only) that both files now report the target version.
+          p=$(jq -r '.version' "$plugin")
+          m=$(jq -r '.plugins[0].version' "$market")
+          if [ "$p" != "$VERSION" ] || [ "$m" != "$VERSION" ]; then
+            echo "::error::version bump mismatch (plugin=$p marketplace=$m want=$VERSION)"
+            exit 1
+          fi
+          echo "Bumped plugin + marketplace to ${VERSION}"
+
+      - name: Commit, tag, and push
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "::notice::plugin versions already at ${VERSION}; tagging current main"
+          else
+            git add claude-plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json
+            git commit -m "chore(release): ${TAG}"
+            git push origin main
+          fi
+
+          git tag -a "${TAG}" -m "${TAG}"
+          git push origin "${TAG}"
+
+      - name: Trigger the Release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          gh workflow run release.yml --ref main -f tag="${TAG}"
+          echo "::notice::Dispatched the Release workflow for ${TAG}"

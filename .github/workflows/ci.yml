@@ -103,6 +103,29 @@ jobs:
         working-directory: vscode-bino
         run: npm run compile
 
+  plugin-version:
+    name: Plugin Version Sync
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: plugin.json and marketplace.json versions must agree
+        run: |
+          plugin=$(jq -r '.version' claude-plugin/.claude-plugin/plugin.json)
+          market=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          echo "plugin.json:      $plugin"
+          echo "marketplace.json: $market"
+          if [ "$plugin" != "$market" ]; then
+            echo "::error::plugin version drift: plugin.json ($plugin) != marketplace.json ($market). Both are bumped together by .github/workflows/prepare-release.yml."
+            exit 1
+          fi
+
   bundle-web:
     name: Web Bundles
     runs-on: ubuntu-24.04
