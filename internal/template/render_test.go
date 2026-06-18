@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // minimalGoldenData mirrors the values `bino init -y` derives for the default
@@ -127,6 +129,23 @@ func TestRenderStandardFoldered(t *testing.T) {
 	}
 	if !reflect.DeepEqual(created, want) {
 		t.Fatalf("created files = %v, want %v", created, want)
+	}
+}
+
+// TestRenderTreeRejectsPathTraversal ensures a rendered path that escapes the
+// destination (e.g. via a "../" field value) is refused.
+func TestRenderTreeRejectsPathTraversal(t *testing.T) {
+	src := fstest.MapFS{
+		"{{ .Name }}.txt": &fstest.MapFile{Data: []byte("x")},
+	}
+	manifest := &ProjectTemplate{}
+	dest := filepath.Join(t.TempDir(), "out")
+	_, err := RenderTree(src, manifest, dest, map[string]any{"Name": "../escape"}, false)
+	if err == nil || !strings.Contains(err.Error(), "escapes the target directory") {
+		t.Fatalf("expected path-traversal rejection, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(filepath.Dir(dest), "escape.txt")); !os.IsNotExist(statErr) {
+		t.Errorf("escape file should not have been written")
 	}
 }
 

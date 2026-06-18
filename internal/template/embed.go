@@ -35,7 +35,7 @@ func BuiltinManifest(name string) (*ProjectTemplate, error) {
 	if !IsBuiltin(name) {
 		return nil, fmt.Errorf("unknown built-in template %q", name)
 	}
-	data, err := builtinFS.ReadFile("builtin/" + name + "/bino.template.yaml")
+	data, err := builtinFS.ReadFile("builtin/" + name + "/" + manifestFile)
 	if err != nil {
 		return nil, fmt.Errorf("read built-in %q manifest: %w", name, err)
 	}

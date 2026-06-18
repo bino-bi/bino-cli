@@ -2,7 +2,6 @@
 package engine
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 
 	"golang.org/x/mod/semver"
 
+	"bino.bi/bino/internal/archive"
 	"bino.bi/bino/internal/pathutil"
 )
 
@@ -276,74 +276,12 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 // The zip is expected to contain a bn-template-engine/ folder; contents are extracted
 // directly to destDir (stripping the bn-template-engine/ prefix).
 func (m *Manager) extractZip(zipPath, destDir string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return fmt.Errorf("open zip: %w", err)
-	}
-	defer r.Close()
-
-	// Ensure destination directory exists
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("create destination directory: %w", err)
-	}
-
-	// The zip contains a bn-template-engine/ folder - strip this prefix
-	const prefix = "bn-template-engine/"
-
-	cleanDest := filepath.Clean(destDir)
-	for _, f := range r.File {
-		name := f.Name
-
-		// Strip the bn-template-engine/ prefix
-		name = strings.TrimPrefix(name, prefix)
-
-		if name == "" {
-			continue
-		}
-
-		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
-
-		// Prevent path traversal, including sibling-directory escapes such as
-		// "../dest-evil/x" that share destDir as a bare string prefix.
-		if targetPath != cleanDest && !strings.HasPrefix(targetPath, cleanDest+string(os.PathSeparator)) {
-			return fmt.Errorf("invalid file path in zip: %s", f.Name)
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return fmt.Errorf("create directory %s: %w", name, err)
-			}
-			continue
-		}
-
-		// Ensure parent directory exists
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return fmt.Errorf("create parent directory for %s: %w", name, err)
-		}
-
-		if err := extractFile(f, targetPath); err != nil {
-			return fmt.Errorf("extract %s: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
-func extractFile(f *zip.File, destPath string) error {
-	src, err := f.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
-	return err
+	// Engine releases are first-party signed archives wrapping a fixed
+	// bn-template-engine/ directory, so trusted mode + a fixed prefix strip.
+	return archive.Extract(zipPath, destDir, archive.Options{
+		Strip:       archive.StripFixed,
+		FixedPrefix: "bn-template-engine/",
+	})
 }
 
 // FetchLatestRemoteVersion queries GitHub for the latest release tag.

@@ -1,0 +1,142 @@
+---
+title: Project Templates
+description: How bino init scaffolds projects from built-in and remote templates, the canonical folder layout, the bino.template.yaml manifest, and the security model.
+---
+
+`bino init` scaffolds a new project from a **template**. Templates render through one
+engine whether they ship inside the binary or come from a remote repository, so the
+experience is identical online and offline.
+
+## Built-in templates
+
+Two templates are compiled into the binary and always work with **zero network**:
+
+- **`minimal`** — a flat starter bundle (`bino.toml`, `report.yaml`, `data.yaml`,
+  `pages.yaml`, ignore files). This is the default and the non-interactive (`-y`) choice.
+- **`standard`** — the same report organized into the **canonical folder layout**.
+
+```bash
+bino init              # minimal (interactive wizard offers standard)
+bino init standard     # the foldered standard scaffold
+bino init -y           # minimal, non-interactive
+```
+
+## The canonical folder layout
+
+A real project keeps one folder per manifest kind. `bino add` and the editor tooling
+place new manifests using this same map, so a `standard` project and the tooling agree:
+
+| Folder | Kinds |
+| --- | --- |
+| `datasources/` | `DataSource` |
+| `datasets/` | `DataSet` |
+| `components/` | `Table`, `Text`, `ChartStructure`, `ChartTime` |
+| `pages/` | `LayoutPage`, `LayoutCard` |
+| `reports/` | `ReportArtefact`, `LiveReportArtefact` |
+| `styles/` | `ComponentStyle` |
+| `i18n/` | `Internationalization` |
+| `resources/` | `Asset` |
+
+## Remote templates
+
+A `SOURCE` argument can point at a template hosted on GitHub, a generic archive URL, or
+a local directory:
+
+```bash
+bino init owner/repo                 # default branch HEAD
+bino init owner/repo#v1.2.0          # a tag, branch, or commit SHA
+bino init owner/repo/subdir#main     # a template rooted in a subdirectory
+bino init https://example.com/t.zip  # a generic archive URL
+bino init ./my-template              # a local directory (author live-edit loop)
+```
+
+Remote templates are fetched as archive ZIPs (no `git` dependency) and **cached by the
+resolved commit SHA** under `~/.bino/templates/{owner}/{repo}/{sha}/`. An `index.json`
+maps refs to SHAs so a previously-fetched ref resolves offline. Use `--offline` (or
+`BINO_OFFLINE=1`) to require the cache and never touch the network.
+
+### Fields
+
+Templates declare substitution **fields**. Supply them interactively, or headlessly with
+repeatable `--set`:
+
+```bash
+bino init owner/repo -o ./out --set ReportName=q3 --set Language=en
+```
+
+Unknown `--set` keys and unfilled `required` fields are hard errors — a scaffold never
+emits a half-filled manifest.
+
+## Authoring a template
+
+A template is a repository (or directory) with a `bino.template.yaml` manifest and a
+render root. If a `template/` subdirectory exists it is the render root; otherwise the
+repository root is, minus the manifest.
+
+```
+report-template/
+├── bino.template.yaml      # the manifest
+└── template/               # the render root
+    ├── bino.toml
+    ├── pages/  datasets/  reports/ …
+    └── resources/assets/logo.png
+```
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ProjectTemplate
+metadata: { name: report-template }
+spec:
+  min-bino-version: ">=1.2.0"     # checked before rendering (skipped on dev builds)
+  engine-version: ">=1.0.0-alpha, <2.0.0-0"   # validated, stamped into bino.toml, never downloaded
+  fields:
+    - { name: ReportName,  prompt: "Report name", default: my-report }
+    - { name: ReportTitle, prompt: "Title",       default: "{{ .ReportName | title }}" }
+    - { name: Language,    prompt: "Language",     default: en }
+  verbatim: ["*.md"]              # copied as-is (literal {{ }} survive)
+  binary:   ["resources/assets/**"]   # never read as text
+```
+
+### Substitution
+
+Both file **contents and path names** render through Go `text/template` using
+`{{ .Field }}` — the one delimiter that collides with nothing in bino YAML/SQL (bino's
+own `${VAR}` expansion, `\${…}` JS template literals, and the `$dataset` sigil all pass
+through untouched). Rendering uses `missingkey=error`, so a stale variable fails loudly
+instead of writing `<no value>` into a manifest.
+
+Context-aware quoters are available so values are escaped correctly:
+
+```yaml
+title: {{ .ReportTitle | yaml }}        # double-quoted YAML scalar
+```
+```sql
+WHERE region = '{{ .Region | sqlString }}'
+```
+
+These variables are **always injected**, so a template never has to prompt for them:
+`.ReportID`, `.EngineVersion`, `.Date`, `.BinoVersion`.
+
+### Co-location note
+
+A remote template owns its tree verbatim. For any kind it does *not* seed, `bino add`
+falls back to the [canonical folder](#the-canonical-folder-layout) for that kind — so if
+you want `bino add` to co-locate with your layout, seed at least one manifest per kind you
+expect users to extend.
+
+## Security model
+
+- **Declarative-only, no execution — ever.** There are no hooks and no shell-out. The
+  manifest parser **rejects unknown keys** (fail-closed), so a speculative `hooks:`/`run:`
+  key in an untrusted manifest can never be honored.
+- **Typosquat defense.** Fetching from an uncurated `owner/repo` requires confirmation
+  (interactive) or `--trust` (headless); bino never silently fetches an arbitrary owner.
+- **Hardened extraction.** Remote archives are extracted with symlink rejection,
+  zip-slip guards, decompression caps (zip-bomb defense), and mode-bit normalization.
+- **Integrity.** Everything is fetched over TLS and cached by immutable commit SHA.
+
+## Reproducibility
+
+A scaffold from a remote template stamps `template = "owner/repo@<sha>"` into `bino.toml`,
+and `bino init --json` reports the resolved source, SHA, and folders — so a run is
+self-documenting and re-runnable.

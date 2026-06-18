@@ -62,15 +62,23 @@ type ScaffoldFile struct {
 
 // InitBundleInput bootstraps a new report bundle.
 type InitBundleInput struct {
-	Directory string `json:"directory,omitempty" jsonschema:"target directory for the new bundle, relative to the project root; defaults to the project root itself (scaffold in place)"`
-	Name      string `json:"name,omitempty" jsonschema:"metadata.name for the sample ReportArtefact"`
-	Title     string `json:"title,omitempty" jsonschema:"display title for the sample report"`
-	Language  string `json:"language,omitempty" jsonschema:"default locale: en or de"`
-	Force     bool   `json:"force,omitempty" jsonschema:"overwrite existing files"`
+	Directory string            `json:"directory,omitempty" jsonschema:"target directory for the new bundle, relative to the project root; defaults to the project root itself (scaffold in place)"`
+	Source    string            `json:"source,omitempty" jsonschema:"template source; empty selects the built-in minimal scaffold (zero network). May be 'standard', owner/repo[/subdir]#ref, a URL, or a local path"`
+	Set       map[string]string `json:"set,omitempty" jsonschema:"template field values by name (for remote/local templates)"`
+	Name      string            `json:"name,omitempty" jsonschema:"metadata.name for the sample ReportArtefact (built-in templates)"`
+	Title     string            `json:"title,omitempty" jsonschema:"display title for the sample report (built-in templates)"`
+	Language  string            `json:"language,omitempty" jsonschema:"default locale: en or de (built-in templates)"`
+	Force     bool              `json:"force,omitempty" jsonschema:"overwrite existing files"`
+	Offline   bool              `json:"offline,omitempty" jsonschema:"never reach the network; require a cached template"`
+	Trust     bool              `json:"trust,omitempty" jsonschema:"auto-confirm fetching from an uncurated owner/repo"`
 }
 
-// InitResult reports the bundle directory and the files created.
+// InitResult reports the bundle directory, files created, and provenance.
 type InitResult struct {
-	Directory string   `json:"directory"`
-	Files     []string `json:"files"`
+	Directory      string   `json:"directory"`
+	Files          []string `json:"files"`
+	Template       string   `json:"template,omitempty"`
+	ResolvedSource string   `json:"resolvedSource,omitempty"`
+	ResolvedSHA    string   `json:"resolvedSHA,omitempty"`
+	Folders        []string `json:"folders,omitempty"`
 }

@@ -3,7 +3,6 @@
 package chrome
 
 import (
-	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,9 +13,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"time"
 
+	"bino.bi/bino/internal/archive"
 	"bino.bi/bino/internal/pathutil"
 )
 
@@ -385,85 +384,10 @@ func resolveExecInDir(dir string) string {
 	return ""
 }
 
-// extractZipStrippingTopDir extracts a zip file to destDir, stripping the top-level directory.
-// Chrome for Testing zips contain a single top-level directory (e.g., "chrome-headless-shell-mac-arm64/").
+// extractZipStrippingTopDir extracts a zip file to destDir, stripping the
+// single top-level directory. Chrome-for-Testing zips are first-party archives
+// wrapping one directory (e.g. "chrome-headless-shell-mac-arm64/"), so trusted
+// mode + auto prefix detection.
 func extractZipStrippingTopDir(zipPath, destDir string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return fmt.Errorf("open zip: %w", err)
-	}
-	defer r.Close()
-
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("create destination directory: %w", err)
-	}
-
-	// Detect common prefix (top-level directory)
-	var prefix string
-	for _, f := range r.File {
-		parts := strings.SplitN(f.Name, "/", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		candidate := parts[0] + "/"
-		if prefix == "" {
-			prefix = candidate
-		} else if prefix != candidate {
-			prefix = "" // no common prefix
-			break
-		}
-	}
-
-	cleanDest := filepath.Clean(destDir)
-	for _, f := range r.File {
-		name := f.Name
-		if prefix != "" {
-			name = strings.TrimPrefix(name, prefix)
-		}
-		if name == "" {
-			continue
-		}
-
-		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
-
-		// Prevent path traversal, including sibling-directory escapes such as
-		// "../dest-evil/x" that share destDir as a bare string prefix.
-		if targetPath != cleanDest && !strings.HasPrefix(targetPath, cleanDest+string(os.PathSeparator)) {
-			return fmt.Errorf("invalid file path in zip: %s", f.Name)
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return fmt.Errorf("create directory %s: %w", name, err)
-			}
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return fmt.Errorf("create parent directory for %s: %w", name, err)
-		}
-
-		if err := extractZipFile(f, targetPath); err != nil {
-			return fmt.Errorf("extract %s: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
-func extractZipFile(f *zip.File, destPath string) error {
-	src, err := f.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
-	return err
+	return archive.Extract(zipPath, destDir, archive.Options{Strip: archive.StripAuto})
 }

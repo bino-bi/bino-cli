@@ -41,6 +41,11 @@ func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any
 		if d.IsDir() {
 			return nil
 		}
+		// The manifest lives at the render root only for the "root layout"
+		// convention (no template/ subdir); it is config, never scaffolded.
+		if p == manifestFile {
+			return nil
+		}
 
 		renderedPath, err := renderPath(p, data)
 		if err != nil {
@@ -64,6 +69,12 @@ func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any
 		}
 
 		absPath := filepath.Join(destDir, filepath.FromSlash(renderedPath))
+		// Guard against a rendered path (e.g. a field value containing "..")
+		// escaping the target directory.
+		cleanDest := filepath.Clean(destDir)
+		if !strings.HasPrefix(absPath, cleanDest) || (absPath != cleanDest && !strings.HasPrefix(absPath, cleanDest+string(os.PathSeparator))) {
+			return fmt.Errorf("rendered path %q escapes the target directory", renderedPath)
+		}
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", filepath.Dir(absPath), err)
 		}

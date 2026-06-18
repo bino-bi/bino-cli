@@ -176,6 +176,47 @@ func TestInitBundle(t *testing.T) {
 	}
 }
 
+func TestInitBundleBareIsBuiltinMinimal(t *testing.T) {
+	root := t.TempDir()
+	a := newCLIAuthoring(root)
+	dir := filepath.Join(root, "bundle")
+	res, err := a.InitBundle(context.Background(), mcp.InitBundleInput{Directory: dir})
+	if err != nil {
+		t.Fatalf("InitBundle: %v", err)
+	}
+	if res.Template != "builtin:minimal" {
+		t.Errorf("Template = %q, want builtin:minimal", res.Template)
+	}
+	if res.ResolvedSHA != "" {
+		t.Errorf("built-in should have no resolved SHA, got %q", res.ResolvedSHA)
+	}
+}
+
+func TestInitBundleUncuratedRequiresTrust(t *testing.T) {
+	a := newCLIAuthoring(t.TempDir())
+	_, err := a.InitBundle(context.Background(), mcp.InitBundleInput{
+		Directory: "out",
+		Source:    "someowner/somerepo",
+	})
+	if err == nil || !strings.Contains(err.Error(), "without trust") {
+		t.Fatalf("expected uncurated-trust error, got %v", err)
+	}
+}
+
+func TestInitBundleHonorsContextCancellation(t *testing.T) {
+	a := newCLIAuthoring(t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // canceled before the call: the fetch must not proceed
+	_, err := a.InitBundle(ctx, mcp.InitBundleInput{
+		Directory: "out",
+		Source:    "someowner/somerepo",
+		Trust:     true,
+	})
+	if err == nil {
+		t.Fatal("expected error from canceled context")
+	}
+}
+
 func TestInitBundleInPlaceDefault(t *testing.T) {
 	cs, root := newAuthoringClient(t)
 

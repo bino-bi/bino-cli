@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,65 +28,50 @@ func newInitCommand() *cobra.Command {
 		flagName     string
 		flagTitle    string
 		flagLanguage string
+		flagSet      []string
 		flagYes      bool
 		flagForce    bool
+		flagOffline  bool
+		flagJSON     bool
+		flagTrust    bool
 	)
 
 	cmd := &cobra.Command{
-		Use:   "init [template]",
-		Short: "Create a starter report workspace with sample manifests",
-		Long: strings.TrimSpace(`bino init bootstraps a report bundle with example YAML manifests,
-an inline datasource, and a .bnignore file so you can run bino build or bino preview immediately.
+		Use:   "init [SOURCE]",
+		Short: "Create a starter report workspace from a built-in or remote template",
+		Long: strings.TrimSpace(`bino init bootstraps a report bundle so you can run bino build or
+bino preview immediately.
 
-The optional [template] selects a built-in scaffold: 'minimal' (a flat bundle, the
-default) or 'standard' (the same report organized into the canonical folder layout).`),
+With no SOURCE it renders the built-in 'minimal' scaffold; 'standard' renders the
+same report in the canonical folder layout. A SOURCE may also be a remote template:
+owner/repo[/subdir]#ref, a full archive URL, or a local ./path. Remote templates are
+fetched from GitHub, cached by commit SHA, and never execute code.`),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			templateName := "minimal"
-			explicitSource := len(args) == 1 && strings.TrimSpace(args[0]) != ""
-			if explicitSource {
-				templateName = strings.TrimSpace(args[0])
+			rawSource := ""
+			if len(args) == 1 {
+				rawSource = strings.TrimSpace(args[0])
 			}
-
-			answers := initAnswers{
-				Directory:   flagDir,
-				ReportName:  flagName,
-				ReportTitle: flagTitle,
-				Language:    flagLanguage,
-			}
-			lockReportName := cmd.Flags().Changed("name")
-			lockLanguage := cmd.Flags().Changed("language")
-			applyInitDefaults(&answers)
-			if !flagYes {
-				chosen, err := runInitWizard(cmd, &answers, wizardOptions{
-					lockReportName:  lockReportName,
-					lockLanguage:    lockLanguage,
-					offerTemplate:   !explicitSource,
-					defaultTemplate: templateName,
-				})
-				if err != nil {
-					if errors.Is(err, errInitCanceled) {
-						return ConfigError(err)
-					}
-					return RuntimeError(err)
-				}
-				templateName = chosen
-			}
-
-			if !tmpl.IsBuiltin(templateName) {
-				return ConfigError(fmt.Errorf("unknown template %q (built-ins: %s)", templateName, strings.Join(tmpl.BuiltinNames(), ", ")))
-			}
-
-			data, err := buildInitTemplateData(answers)
+			src, err := tmpl.ParseSource(rawSource)
 			if err != nil {
 				return ConfigError(err)
 			}
-			created, absDir, err := renderBuiltinBundle(templateName, data, flagForce)
+			sets, err := parseSetFlags(flagSet)
 			if err != nil {
-				return RuntimeError(err)
+				return ConfigError(err)
 			}
-			printInitSummary(cmd.OutOrStdout(), absDir, created)
-			return nil
+			offline := flagOffline || strings.TrimSpace(os.Getenv("BINO_OFFLINE")) != ""
+
+			if src.Kind == tmpl.SourceBuiltin {
+				return runBuiltinInit(cmd, src, builtinInitFlags{
+					dir: flagDir, name: flagName, title: flagTitle, language: flagLanguage,
+					yes: flagYes, force: flagForce, jsonOut: flagJSON, explicitSource: rawSource != "",
+				})
+			}
+			return runRemoteInit(cmd, src, remoteInitFlags{
+				dir: flagDir, sets: sets,
+				yes: flagYes, force: flagForce, offline: offline, trust: flagTrust, jsonOut: flagJSON,
+			})
 		},
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -92,13 +79,126 @@ default) or 'standard' (the same report organized into the canonical folder layo
 
 	cmd.Flags().StringVarP(&flagDir, "directory", "d", "", "Target directory for the new bundle (default ./rainbow-report)")
 	cmd.Flags().StringVarP(&flagDir, "output", "o", "", "Alias for --directory")
-	cmd.Flags().StringVar(&flagName, "name", "", "metadata.name to assign to the sample ReportArtefact")
-	cmd.Flags().StringVar(&flagTitle, "title", "", "Display title for the sample ReportArtefact")
+	cmd.Flags().StringVar(&flagName, "name", "", "metadata.name to assign to the sample ReportArtefact (built-in templates)")
+	cmd.Flags().StringVar(&flagTitle, "title", "", "Display title for the sample ReportArtefact (built-in templates)")
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Default locale for the bundle (en or de)")
+	cmd.Flags().StringArrayVar(&flagSet, "set", nil, "Set a template field value as key=value (repeatable)")
 	cmd.Flags().BoolVarP(&flagYes, "yes", "y", false, "Accept defaults and skip the interactive wizard")
 	cmd.Flags().BoolVar(&flagForce, "force", false, "Overwrite files if they already exist")
+	cmd.Flags().BoolVar(&flagOffline, "offline", false, "Never reach the network; require a cached template")
+	cmd.Flags().BoolVar(&flagJSON, "json", false, "Emit the result as JSON")
+	cmd.Flags().BoolVar(&flagTrust, "trust", false, "Skip the confirmation prompt for an uncurated remote source")
 
 	return cmd
+}
+
+type builtinInitFlags struct {
+	dir, name, title, language          string
+	yes, force, jsonOut, explicitSource bool
+}
+
+func runBuiltinInit(cmd *cobra.Command, src tmpl.Source, f builtinInitFlags) error {
+	answers := initAnswers{Directory: f.dir, ReportName: f.name, ReportTitle: f.title, Language: f.language}
+	lockReportName := cmd.Flags().Changed("name")
+	lockLanguage := cmd.Flags().Changed("language")
+	applyInitDefaults(&answers)
+	templateName := src.Name
+	if !f.yes {
+		chosen, err := runInitWizard(cmd, &answers, wizardOptions{
+			lockReportName:  lockReportName,
+			lockLanguage:    lockLanguage,
+			offerTemplate:   !f.explicitSource,
+			defaultTemplate: templateName,
+		})
+		if err != nil {
+			if errors.Is(err, errInitCanceled) {
+				return ConfigError(err)
+			}
+			return RuntimeError(err)
+		}
+		templateName = chosen
+	}
+	data, err := buildInitTemplateData(answers)
+	if err != nil {
+		return ConfigError(err)
+	}
+	created, absDir, err := renderBuiltinBundle(templateName, data, f.force)
+	if err != nil {
+		return RuntimeError(err)
+	}
+	return emitInitOutcome(cmd, initOutcome{
+		Directory: absDir,
+		Files:     created,
+		Template:  "builtin:" + templateName,
+		Folders:   foldersOf(created),
+	}, f.jsonOut)
+}
+
+type remoteInitFlags struct {
+	dir                                 string
+	sets                                map[string]string
+	yes, force, offline, trust, jsonOut bool
+}
+
+func runRemoteInit(cmd *cobra.Command, src tmpl.Source, f remoteInitFlags) error {
+	ctx := cmd.Context()
+	out := cmd.OutOrStdout()
+
+	absDir, err := resolveRemoteDir(cmd, f.dir, f.yes)
+	if err != nil {
+		return ConfigError(err)
+	}
+
+	if src.Kind == tmpl.SourceShorthand {
+		if err := confirmFetch(cmd, src, f.trust, f.yes); err != nil {
+			if errors.Is(err, errInitCanceled) {
+				return ConfigError(err)
+			}
+			return RuntimeError(err)
+		}
+	}
+
+	mgr, err := tmpl.NewManager()
+	if err != nil {
+		return RuntimeError(err)
+	}
+	resolved, err := mgr.Resolve(ctx, src, f.offline)
+	if err != nil {
+		return RuntimeError(err)
+	}
+	defer resolved.Close()
+
+	if err := resolved.Manifest.Validate(version.Version); err != nil {
+		return ConfigError(err)
+	}
+	// Engine pin: validate, never download. An out-of-range pin is stamped by the
+	// template author into its bino.toml; build/lint surface it later.
+	if ev := strings.TrimSpace(resolved.Manifest.Spec.EngineVersion); ev != "" {
+		if cerr := engine.CheckCompatibility(ev); cerr != nil {
+			fmt.Fprintf(out, "warning: template pins engine-version %s, outside this CLI's supported range; build will surface this.\n", ev)
+		}
+	}
+
+	vars, err := collectFields(cmd, resolved.Manifest, f.sets, f.yes)
+	if err != nil {
+		return ConfigError(err)
+	}
+
+	created, err := tmpl.RenderTree(resolved.Root, resolved.Manifest, absDir, vars, f.force)
+	if err != nil {
+		return RuntimeError(err)
+	}
+	if err := pathutil.StampTemplateProvenance(absDir, resolved.Provenance); err != nil {
+		return RuntimeError(err)
+	}
+	return emitInitOutcome(cmd, initOutcome{
+		Directory:      absDir,
+		Files:          created,
+		Template:       resolved.Provenance,
+		ResolvedSource: resolved.Provenance,
+		ResolvedSHA:    resolved.SHA,
+		Folders:        foldersOf(created),
+	}, f.jsonOut)
 }
 
 type initAnswers struct {
@@ -399,12 +499,10 @@ func sanitizeSQLIdentifier(raw string) string {
 	return result
 }
 
-// renderVars assembles the substitution context for a built-in template. The
-// derived report fields come from buildInitTemplateData; the injected vars
-// (.ReportID/.EngineVersion/.Date/.BinoVersion) reproduce the historical
-// best-effort behavior (fresh UUID, latest local engine version, generation
-// timestamp).
-func (d initTemplateData) renderVars() map[string]any {
+// injectedVars are the built-in template variables supplied to every template:
+// a fresh report id, the latest local engine version (best-effort), the
+// generation timestamp, and the running CLI version.
+func injectedVars() map[string]any {
 	engineVersion := ""
 	if mgr, err := engine.NewManager(); err == nil {
 		if info, err := mgr.LatestLocalVersion(); err == nil {
@@ -412,17 +510,218 @@ func (d initTemplateData) renderVars() map[string]any {
 		}
 	}
 	return map[string]any{
-		"ReportName":     d.ReportName,
-		"ReportTitle":    d.ReportTitle,
-		"Language":       d.Language,
-		"Filename":       d.Filename,
-		"LayoutName":     d.LayoutName,
-		"DataSourceName": d.DataSourceName,
-		"ReportID":       pathutil.GenerateReportID(),
-		"EngineVersion":  engineVersion,
-		"Date":           time.Now().Format(time.RFC3339),
-		"BinoVersion":    version.Version,
+		"ReportID":      pathutil.GenerateReportID(),
+		"EngineVersion": engineVersion,
+		"Date":          time.Now().Format(time.RFC3339),
+		"BinoVersion":   version.Version,
 	}
+}
+
+// renderVars assembles the substitution context for a built-in template: the
+// derived report fields from buildInitTemplateData plus the injected vars.
+func (d initTemplateData) renderVars() map[string]any {
+	vars := injectedVars()
+	vars["ReportName"] = d.ReportName
+	vars["ReportTitle"] = d.ReportTitle
+	vars["Language"] = d.Language
+	vars["Filename"] = d.Filename
+	vars["LayoutName"] = d.LayoutName
+	vars["DataSourceName"] = d.DataSourceName
+	return vars
+}
+
+// initOutcome is the result of a scaffold, rendered as text or JSON.
+type initOutcome struct {
+	Directory      string   `json:"directory"`
+	Files          []string `json:"files"`
+	Template       string   `json:"template"`
+	ResolvedSource string   `json:"resolvedSource,omitempty"`
+	ResolvedSHA    string   `json:"resolvedSHA,omitempty"`
+	Folders        []string `json:"folders"`
+}
+
+func emitInitOutcome(cmd *cobra.Command, outcome initOutcome, jsonOut bool) error {
+	out := cmd.OutOrStdout()
+	if jsonOut {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(outcome); err != nil {
+			return RuntimeError(err)
+		}
+		return nil
+	}
+	printInitSummary(out, outcome.Directory, outcome.Files)
+	if outcome.ResolvedSource != "" {
+		fmt.Fprintf(out, "\nTemplate: %s\n", outcome.ResolvedSource)
+	}
+	return nil
+}
+
+// foldersOf returns the sorted, distinct top-level folders among created files.
+func foldersOf(created []string) []string {
+	seen := map[string]bool{}
+	dirs := []string{}
+	for _, rel := range created {
+		if d, _, nested := strings.Cut(rel, string(filepath.Separator)); nested && !seen[d] {
+			seen[d] = true
+			dirs = append(dirs, d)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs
+}
+
+func parseSetFlags(sets []string) (map[string]string, error) {
+	out := make(map[string]string, len(sets))
+	for _, s := range sets {
+		k, v, ok := strings.Cut(s, "=")
+		k = strings.TrimSpace(k)
+		if !ok || k == "" {
+			return nil, fmt.Errorf("invalid --set %q (expected key=value)", s)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// resolveRemoteDir resolves the target directory for a remote template. Unlike
+// built-ins there is no implicit default, so a target is required (prompted when
+// interactive, an error in headless mode) — never silently scaffolding into CWD.
+func resolveRemoteDir(cmd *cobra.Command, dir string, yes bool) (string, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		if yes {
+			return "", fmt.Errorf("remote templates require an explicit -o/--directory in non-interactive mode")
+		}
+		v, err := promptString(bufio.NewReader(cmd.InOrStdin()), cmd.OutOrStdout(), "Target folder", "")
+		if err != nil {
+			return "", err
+		}
+		if v == "" || v == "-" {
+			return "", fmt.Errorf("a target directory is required")
+		}
+		dir = v
+	}
+	return pathutil.ResolveInitDir(dir, dir)
+}
+
+// confirmFetch guards against typosquatting: an uncurated owner/repo must be
+// confirmed interactively or via --trust before any network fetch.
+func confirmFetch(cmd *cobra.Command, src tmpl.Source, trust, yes bool) error {
+	if trust {
+		return nil
+	}
+	target := fmt.Sprintf("github.com/%s/%s", src.Owner, src.Repo)
+	if yes {
+		return fmt.Errorf("refusing to fetch the uncurated template %s without --trust", target)
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "About to fetch a template from an uncurated source: %s\n", target)
+	ok, err := promptConfirm(bufio.NewReader(cmd.InOrStdin()), out, "Proceed?", false)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errInitCanceled
+	}
+	return nil
+}
+
+// collectFields gathers the template's declared field values from --set (headless)
+// or interactive prompts, seeded with the injected vars so a field default may
+// reference them (e.g. {{ .ReportName | title }}). Unknown --set keys and missing
+// required fields are hard errors.
+func collectFields(cmd *cobra.Command, manifest *tmpl.ProjectTemplate, sets map[string]string, yes bool) (map[string]any, error) {
+	if yes {
+		return collectFieldsHeadless(manifest, sets)
+	}
+	vars := injectedVars()
+	if err := validateSetKeys(manifest, sets); err != nil {
+		return nil, err
+	}
+	reader := bufio.NewReader(cmd.InOrStdin())
+	out := cmd.OutOrStdout()
+	for _, fld := range manifest.Spec.Fields {
+		if v, ok := sets[fld.Name]; ok {
+			vars[fld.Name] = v
+			continue
+		}
+		def, err := renderFieldDefault(fld, vars)
+		if err != nil {
+			return nil, err
+		}
+		prompt := fld.Prompt
+		if prompt == "" {
+			prompt = fld.Name
+		}
+		for {
+			v, err := promptString(reader, out, prompt, def)
+			if err != nil {
+				return nil, err
+			}
+			if v == "-" {
+				v = ""
+			}
+			if v == "" && fld.Required {
+				fmt.Fprintln(out, "This field is required.")
+				continue
+			}
+			vars[fld.Name] = v
+			break
+		}
+	}
+	return vars, nil
+}
+
+// collectFieldsHeadless resolves field values without prompting: from --set/set,
+// else the (possibly templated) default. A required field with no value errors.
+func collectFieldsHeadless(manifest *tmpl.ProjectTemplate, sets map[string]string) (map[string]any, error) {
+	vars := injectedVars()
+	if err := validateSetKeys(manifest, sets); err != nil {
+		return nil, err
+	}
+	for _, fld := range manifest.Spec.Fields {
+		if v, ok := sets[fld.Name]; ok {
+			vars[fld.Name] = v
+			continue
+		}
+		def, err := renderFieldDefault(fld, vars)
+		if err != nil {
+			return nil, err
+		}
+		if fld.Required && strings.TrimSpace(def) == "" {
+			return nil, fmt.Errorf("field %q is required; set %s=value", fld.Name, fld.Name)
+		}
+		vars[fld.Name] = def
+	}
+	return vars, nil
+}
+
+func validateSetKeys(manifest *tmpl.ProjectTemplate, sets map[string]string) error {
+	declared := make(map[string]bool, len(manifest.Spec.Fields))
+	for _, fld := range manifest.Spec.Fields {
+		declared[fld.Name] = true
+	}
+	for k := range sets {
+		if !declared[k] {
+			return fmt.Errorf("unknown field %q", k)
+		}
+	}
+	return nil
+}
+
+// renderFieldDefault evaluates a field default, which may itself be a template
+// referencing earlier fields or injected vars.
+func renderFieldDefault(fld tmpl.Field, vars map[string]any) (string, error) {
+	def := fld.Default
+	if strings.Contains(def, "{{") {
+		rendered, err := tmpl.Render("default:"+fld.Name, []byte(def), vars)
+		if err != nil {
+			return "", fmt.Errorf("render default for field %q: %w", fld.Name, err)
+		}
+		def = string(rendered)
+	}
+	return def, nil
 }
 
 // renderBuiltinBundle renders a built-in template (minimal or standard) into the
