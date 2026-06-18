@@ -170,7 +170,7 @@ func (a *cliAuthoring) InitBundle(_ context.Context, in mcp.InitBundleInput) (mc
 	if err != nil {
 		return mcp.InitResult{}, err
 	}
-	created, dir, err := writeInitBundle(data, in.Force)
+	created, dir, err := renderBuiltinBundle("minimal", data, in.Force)
 	if err != nil {
 		return mcp.InitResult{}, err
 	}

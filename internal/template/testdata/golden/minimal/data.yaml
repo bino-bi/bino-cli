@@ -1,0 +1,11 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: rainbow_sample_report_data
+spec:
+  type: inline
+  content:
+    - name: Ada Lovelace
+      metric: 42
+    - name: Niklaus Wirth
+      metric: 37
