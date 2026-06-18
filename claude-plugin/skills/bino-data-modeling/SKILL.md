@@ -15,7 +15,8 @@ data can't answer the brief. Apply `bino-ibcs` for the scenario/variance meaning
 
 From the brief's `scenario_setup`, decide which raw column carries each scenario slot:
 
-- A realized/actuals column → `ac1` (a second actuals measure → `ac2`, …).
+- A realized/actuals column → `ac1` (a second, *distinct* actuals measure → `ac2`, …; the numbered
+  slots are different scenarios of the same type — IBCS WG1 "more scenarios per type").
 - A prior-period / last-year column → `pp1` (alias `py`).
 - A budget / target / plan column → `pl1` (alias `bu`).
 - A forecast column → `fc1`.
@@ -35,6 +36,11 @@ direction the brief specified:
 
 Compute them in SQL or let the component derive them — follow the schema (`describe_kind`) for how the
 chosen component expects variances.
+
+The `direction` (`pos`/`neg`/`neu`) is the measure's **polarity** (UN 4.1): is "more" favorable
+(revenue) or unfavorable (cost)? It drives the variance colour (green/red/blue), so it encodes
+*impact*, not sign — a cost decrease is `pos`. If the favorable sign is genuinely ambiguous, it's an
+`open_question` for the human, not a guess.
 
 ## DataSet SQL discipline
 
@@ -62,4 +68,5 @@ satisfy is a human decision (reduce scope / find more data), never a fabricated 
 Pick the grain from the brief's `granularity`. Aggregate to it in SQL; don't emit a finer grain than
 the report uses (it inflates rows and risks the row-count limit).
 
-> Cite, don't copy: `bn-template-engine/doc/data-model.md`, `src/utils/ibcsRuleSet.ts`.
+> Cite, don't copy: `bn-template-engine/doc/data-model.md`, `src/utils/ibcsRuleSet.ts`. For the
+> scenario/variance semantics, see `bino-ibcs` and its `references/ibcs-standard.md`.

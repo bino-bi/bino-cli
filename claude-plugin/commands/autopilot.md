@@ -68,8 +68,8 @@ Read `.bino/agent/verdict.json` and drive the fix loop per `bino-validation-loop
 
 - `PASS` → go to phase 5.
 - `FAIL` → route **each** diagnostic by the routing heuristic. Any `human`-routed diagnostic (IBCS
-  semantics C11–C14, ambiguous direction C4, `CompatibilityError`, non-mechanical acceptance) →
-  **stop and `AskUserQuestion`**; never auto-fix. `author`/`data`-routed → re-spawn the **owning**
+  semantics — UNIFY notation / SAY message↔content, ambiguous direction UN 4.1, `CompatibilityError`,
+  non-mechanical acceptance) → **stop and `AskUserQuestion`**; never auto-fix. `author`/`data`-routed → re-spawn the **owning**
   subagent with only those diagnostics ("fix only these"), then re-spawn `bino-validation`.
 - **Cap: at most 2 auto iterations per phase. Stop on any repeated diagnostic** (same code+file twice)
   → escalate to the human. `ESCALATE` → straight to the human.

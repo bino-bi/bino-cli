@@ -11,8 +11,9 @@ semantics (scenarios, variances, component choice, narrative). Confirm direction
 instead of running ahead.
 
 1. **Orient.** `describe_project()` to see what already exists. If there is no bundle yet, offer
-   `/bino:new` first. Restate the goal in IBCS terms (audience, the primary message, which scenarios
-   and period, the variance, the granularity) and confirm it with the human.
+   `/bino:new` first. Restate the goal in IBCS terms (audience, the primary message **as a full
+   sentence** — IBCS SAY, which scenarios and period, the variance, the granularity) and confirm it
+   with the human.
 2. **Data.** For each input the report needs, probe and scaffold it (`introspect_source` →
    `scaffold_source`, or `/bino:add-source`). Model the typed `DataSet`s with `get_columns` first.
    For a credentialed source, write only the `*FromEnv` skeleton — never an inline secret — and have

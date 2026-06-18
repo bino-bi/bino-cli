@@ -18,7 +18,9 @@ Use `AskUserQuestion`. Don't ask everything at once — propose sensible default
 data, and ask the human to confirm or correct. Cover:
 
 - **Audience** — who reads this, and what decision do they make from it?
-- **Primary message** — the *one* thing the report must say (IBCS: every report has a message).
+- **Primary message** — the *one* thing the report must say, phrased as a **full declarative
+  sentence**, not a topic label (IBCS **SAY**: "Actuals beat plan by 6% in Q3", not "Q3 revenue").
+  It becomes the title/headline and the spine the narrative and validation check against.
 - **Questions** — the specific questions the report answers.
 - **Scenarios + period** — which scenarios are in play (`ac`/`pp`/`fc`/`pl`) and over what period.
 - **Variance type** — absolute (`d_`), relative (`dr_`), or both; and **which sign is favorable** (a
