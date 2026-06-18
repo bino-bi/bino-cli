@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/projectlayout"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/schema"
 )
@@ -151,34 +152,10 @@ func DetectFilePattern(manifests []ManifestInfo, kind string) FilePattern {
 	}
 }
 
-// defaultDirectoryForKind returns the default directory for a kind.
+// defaultDirectoryForKind returns the default directory for a kind. It delegates
+// to projectlayout, the single source of truth for the canonical folder layout.
 func defaultDirectoryForKind(kind string) string {
-	switch kind {
-	case "DataSet":
-		return "datasets"
-	case "DataSource":
-		return "datasources"
-	case "ConnectionSecret":
-		return "secrets"
-	case "Asset":
-		return "assets"
-	case "LayoutPage", "LayoutCard":
-		return "layouts"
-	case "ChartStructure", "ChartTime", "Table", "Text":
-		return "components"
-	case "ComponentStyle":
-		return "styles"
-	case "Internationalization":
-		return "i18n"
-	case "ScalingGroup":
-		return "scaling"
-	case "ReportArtefact", "LiveReportArtefact":
-		return "reports"
-	case "SigningProfile":
-		return "signing"
-	default:
-		return "manifests"
-	}
+	return projectlayout.DirForKind(kind)
 }
 
 // findCommonDirectory finds the most common directory among manifests.
