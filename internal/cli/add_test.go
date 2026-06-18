@@ -230,6 +230,24 @@ func TestDetectFilePattern(t *testing.T) {
 	})
 }
 
+// TestDetectFilePatternCoLocatesExistingDir guards the Phase-1 folder
+// realignment (LayoutPage now defaults to pages/ instead of layouts/): a
+// project that already keeps its pages in a layouts/ directory must keep
+// co-locating new pages there, never silently splitting into pages/.
+func TestDetectFilePatternCoLocatesExistingDir(t *testing.T) {
+	manifests := []ManifestInfo{
+		{File: "/project/layouts/home.yaml", Kind: "LayoutPage", Position: 1},
+		{File: "/project/layouts/about.yaml", Kind: "LayoutPage", Position: 1},
+	}
+	pattern := DetectFilePattern(manifests, "LayoutPage")
+	if pattern.Mode != "separate-files" {
+		t.Fatalf("expected separate-files mode, got %s", pattern.Mode)
+	}
+	if got := filepath.Base(pattern.Directory); got != "layouts" {
+		t.Errorf("expected co-location in existing layouts/, got directory %q", pattern.Directory)
+	}
+}
+
 func TestBuildDataSetDocument(t *testing.T) {
 	t.Run("basic SQL query", func(t *testing.T) {
 		data := DataSetManifestData{
