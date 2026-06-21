@@ -58,7 +58,10 @@ func newTestServer() *Server {
 			{Kind: "DataSet", Name: "sales", File: "data.yaml", Position: 1},
 			{Kind: "DataSource", Name: "sales_src", File: "data.yaml", Position: 2},
 		},
-		columns: map[string][]string{"sales": {"ac1", "pp1", "category"}},
+		columns: map[string][]string{
+			"sales":     {"ac1", "pp1", "category"},
+			"sales_src": {"region", "amount", "period"},
+		},
 	}
 	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
 	return NewServer(be, log, true, "/proj")
@@ -163,6 +166,20 @@ func TestCompletion_SpecFields(t *testing.T) {
 	labels := completionLabels(t, res)
 	if !contains(labels, "title") || !contains(labels, "scenarios") {
 		t.Errorf("field completion should surface spec fields title/scenarios (got %v)", labels)
+	}
+}
+
+func TestCompletion_InQueryColumns(t *testing.T) {
+	s := newTestServer()
+	doc := "kind: DataSet\nmetadata:\n  name: ds\nspec:\n  source: sales_src\n  query: |\n    SELECT \n"
+	u := openDoc(t, s, doc)
+	// Cursor inside the query block scalar, after "SELECT ".
+	res, _ := s.Completion(context.Background(), completionParams(u, 6, 11))
+	labels := completionLabels(t, res)
+	for _, want := range []string{"region", "amount", "period"} {
+		if !contains(labels, want) {
+			t.Errorf("in-query completion should offer source column %q (got %v)", want, labels)
+		}
 	}
 }
 

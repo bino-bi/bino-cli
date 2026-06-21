@@ -49,6 +49,12 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		return completeVariances(scenarioSlots(available)), available == nil
 	case reportspec.PosDatasetRef:
 		return completeRefs(s.getIndex(ctx), pc.RefKind), false
+	case reportspec.PosQueryScalar:
+		cols := s.unionColumns(ctx, pc.BoundDatasets)
+		if cols == nil {
+			return nil, true // not warm yet — re-query once introspection lands
+		}
+		return completeColumns(cols), false
 	case reportspec.PosFreeValue:
 		if enum := completeEnum(s.getSchema(ctx), pc.EnclosingKind, pc.FieldName); len(enum) > 0 {
 			return enum, false
@@ -59,16 +65,17 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 	}
 }
 
-// scenarioColumns returns the union of the bound datasets' columns, bounded by a
-// 100ms deadline. It returns nil (→ offer the full scenario set, mark
-// incomplete) when no columns are available in time.
-func (s *Server) scenarioColumns(ctx context.Context, datasets []string) map[string]bool {
+// unionColumns returns the deduped, order-preserving union of the bound
+// datasets' columns, bounded by a 100ms deadline. It returns nil when no columns
+// are available in time so the caller can mark the list incomplete.
+func (s *Server) unionColumns(ctx context.Context, datasets []string) []string {
 	if len(datasets) == 0 {
 		return nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
-	set := make(map[string]bool)
+	seen := make(map[string]bool)
+	var out []string
 	got := false
 	for _, ds := range datasets {
 		cols, err := s.backend.Columns(cctx, strings.TrimPrefix(ds, "$"))
@@ -77,11 +84,28 @@ func (s *Server) scenarioColumns(ctx context.Context, datasets []string) map[str
 		}
 		got = true
 		for _, c := range cols {
-			set[c] = true
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
 		}
 	}
 	if !got {
 		return nil
+	}
+	return out
+}
+
+// scenarioColumns returns the bound datasets' columns as a membership set (for
+// intersecting the canonical scenario slots), or nil when unavailable in time.
+func (s *Server) scenarioColumns(ctx context.Context, datasets []string) map[string]bool {
+	cols := s.unionColumns(ctx, datasets)
+	if cols == nil {
+		return nil
+	}
+	set := make(map[string]bool, len(cols))
+	for _, c := range cols {
+		set[c] = true
 	}
 	return set
 }

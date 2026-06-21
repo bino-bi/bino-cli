@@ -91,8 +91,10 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 	}
 	ctx.EnclosingKind = w.enclosingKind
 	ctx.DocIndex = docIdx
-	if ctx.Kind == PosScenarioItem || ctx.Kind == PosVarianceItem {
+	switch ctx.Kind {
+	case PosScenarioItem, PosVarianceItem, PosQueryScalar:
 		ctx.BoundDatasets = w.boundDatasets
+	default:
 	}
 	return ctx, true
 }
@@ -382,26 +384,36 @@ func docKind(root *yaml.Node) string {
 	return ""
 }
 
-// extractBoundDatasets reads spec.dataset (string or sequence) from a document
-// root, so scenario/variance completion can intersect with the bound dataset's
-// columns.
+// extractBoundDatasets reads the upstream a document binds to: a component's
+// spec.dataset (string or sequence) for scenario/variance completion, and a
+// DataSet's spec.source + spec.dependencies for in-query column completion. A
+// document is one or the other, so the union is unambiguous.
 func extractBoundDatasets(root *yaml.Node) []string {
 	spec := mappingChild(root, "spec")
 	if spec == nil {
 		return nil
 	}
-	ds := mappingChild(spec, "dataset")
-	if ds == nil {
+	out := make([]string, 0, 4)
+	out = append(out, scalarOrSeqValues(mappingChild(spec, "dataset"))...)
+	out = append(out, scalarOrSeqValues(mappingChild(spec, "source"))...)
+	out = append(out, scalarOrSeqValues(mappingChild(spec, "dependencies"))...)
+	return out
+}
+
+// scalarOrSeqValues collects the non-empty scalar values of a node that is
+// either a scalar or a sequence of scalars.
+func scalarOrSeqValues(n *yaml.Node) []string {
+	if n == nil {
 		return nil
 	}
-	switch ds.Kind {
+	switch n.Kind {
 	case yaml.ScalarNode:
-		if ds.Value != "" {
-			return []string{ds.Value}
+		if n.Value != "" {
+			return []string{n.Value}
 		}
 	case yaml.SequenceNode:
-		var out []string
-		for _, e := range ds.Content {
+		out := make([]string, 0, len(n.Content))
+		for _, e := range n.Content {
 			if e.Kind == yaml.ScalarNode && e.Value != "" {
 				out = append(out, e.Value)
 			}

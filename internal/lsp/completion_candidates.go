@@ -121,6 +121,19 @@ func completeVariances(scenarios []string) []protocol.CompletionItem {
 	return items
 }
 
+// completeColumns offers raw column names — used inside a DataSet query/prql
+// block scalar to complete the upstream source's columns.
+func completeColumns(cols []string) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(cols))
+	for _, c := range cols {
+		items = append(items, protocol.CompletionItem{
+			Label: c,
+			Kind:  protocol.CompletionItemKindField,
+		})
+	}
+	return items
+}
+
 // completeRefs offers manifest names valid at a reference position. An empty
 // refKind (e.g. a layout child `ref:` whose target kind is contextual) offers
 // every document.

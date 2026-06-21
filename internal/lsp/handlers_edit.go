@@ -2,12 +2,15 @@ package lsp
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
+
+	reportspec "bino.bi/bino/internal/report/spec"
 )
 
 // PrepareRename validates the cursor sits on a renameable symbol and returns its
@@ -59,24 +62,130 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	return &protocol.WorkspaceEdit{Changes: changes}, nil
 }
 
-// CodeAction offers quick-fixes over the diagnostics in range. v1 of phase 2
-// handles the missing-env-var fix (append the variable to the project .env).
-func (s *Server) CodeAction(_ context.Context, params *protocol.CodeActionParams) ([]protocol.CommandOrCodeAction, error) {
+// CodeAction offers quick-fixes: append a missing ${VAR} to .env, insert a
+// missing required field, and scaffold a dangling reference's target manifest.
+func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CommandOrCodeAction, error) {
 	var actions []protocol.CommandOrCodeAction
+	docURI := params.TextDocument.URI
 	for i := range params.Context.Diagnostics {
 		d := params.Context.Diagnostics[i]
-		if diagCode(d.Code) != "missing-env-var" {
-			continue
-		}
-		name := envVarName(diagMessage(d.Message))
-		if name == "" {
-			continue
-		}
-		if a := s.addEnvVarAction(name, d); a != nil {
-			actions = append(actions, a)
+		switch {
+		case diagCode(d.Code) == "missing-env-var":
+			if name := envVarName(diagMessage(d.Message)); name != "" {
+				if a := s.addEnvVarAction(name, d); a != nil {
+					actions = append(actions, a)
+				}
+			}
+		case len(d.Data) > 0:
+			if a := s.insertFieldAction(docURI, d); a != nil {
+				actions = append(actions, a)
+			}
 		}
 	}
+	if a := s.scaffoldRefAction(ctx, docURI, params.Range); a != nil {
+		actions = append(actions, a)
+	}
 	return actions, nil
+}
+
+// insertFieldAction inserts a missing required field, reading the parent path and
+// property from the diagnostic's round-tripped Data and rewriting the document
+// through EditYAMLDocument (which preserves comments, order, and indentation).
+func (s *Server) insertFieldAction(u uri.URI, d protocol.Diagnostic) *protocol.CodeAction {
+	var fd struct {
+		Field string `json:"field"`
+		Doc   int    `json:"doc"`
+		Prop  string `json:"prop"`
+	}
+	if json.Unmarshal([]byte(d.Data), &fd) != nil || fd.Prop == "" || fd.Doc < 1 {
+		return nil
+	}
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return nil
+	}
+	path := fd.Prop
+	if fd.Field != "" && fd.Field != "(root)" {
+		path = fd.Field + "." + fd.Prop
+	}
+	full, _, err := reportspec.EditYAMLDocument(doc.Text, fd.Doc, map[string]any{path: ""})
+	if err != nil {
+		return nil
+	}
+	quickFix := protocol.CodeActionKindQuickFix
+	return &protocol.CodeAction{
+		Title:       "Add missing field '" + fd.Prop + "'",
+		Kind:        &quickFix,
+		Diagnostics: []protocol.Diagnostic{d},
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: wholeDocRange(doc), NewText: full}}},
+		},
+	}
+}
+
+// scaffoldRefAction offers to create the target manifest when the cursor sits on
+// a reference whose target does not yet exist.
+func (s *Server) scaffoldRefAction(ctx context.Context, u uri.URI, rng protocol.Range) *protocol.CodeAction {
+	pc, ok := s.resolve(u, rng.Start)
+	if !ok || pc.Kind != reportspec.PosDatasetRef {
+		return nil
+	}
+	name := strings.TrimPrefix(pc.Prefix, "$")
+	if name == "" {
+		return nil
+	}
+	kind := pc.RefKind
+	if strings.HasPrefix(pc.Prefix, "$") {
+		kind = "DataSource" // the $ shorthand always targets a DataSource
+	}
+	stub := scaffoldStub(kind, name)
+	if stub == "" {
+		return nil // no stub template for this kind
+	}
+	if _, found := s.getNameIndex(ctx).Definition(kind, name); found {
+		return nil // already declared
+	}
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return nil
+	}
+	insert := stub
+	if doc.Text != "" && !strings.HasSuffix(doc.Text, "\n") {
+		insert = "\n" + insert
+	}
+	end := doc.OffsetToPosition(len(doc.Text))
+	quickFix := protocol.CodeActionKindQuickFix
+	return &protocol.CodeAction{
+		Title: "Create " + kind + " '" + name + "'",
+		Kind:  &quickFix,
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: protocol.Range{Start: end, End: end}, NewText: insert}}},
+		},
+	}
+}
+
+// scaffoldStub returns a minimal manifest (as a new `---` document) for the kinds
+// a dangling reference can target.
+func scaffoldStub(kind, name string) string {
+	switch kind {
+	case "DataSet":
+		return "\n---\napiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: " + name +
+			"\nspec:\n  query: SELECT 1\n"
+	case "DataSource":
+		return "\n---\napiVersion: bino.bi/v1alpha1\nkind: DataSource\nmetadata:\n  name: " + name +
+			"\nspec:\n  type: csv\n  path: data.csv\n"
+	case "LayoutPage":
+		return "\n---\napiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: " + name +
+			"\nspec:\n  children: []\n"
+	default:
+		return ""
+	}
+}
+
+// wholeDocRange spans the entire buffer (for a full-document replacement edit).
+func wholeDocRange(doc *Document) protocol.Range {
+	end := doc.OffsetToPosition(len(doc.Text))
+	return protocol.Range{Start: protocol.Position{Line: 0, Character: 0}, End: end}
 }
 
 // addEnvVarAction builds a quick-fix appending `NAME=` to an existing project

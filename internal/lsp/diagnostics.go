@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"encoding/json"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -27,9 +28,41 @@ func backfillDiagnostics(doc *Document, diags []Diag) []protocol.Diagnostic {
 			Message:  protocol.String(d.Message),
 			Source:   protocol.NewOptional("bino"),
 			Code:     codeToken(d.Code),
+			Data:     missingFieldData(d),
 		})
 	}
 	return out
+}
+
+// missingFieldData carries the parent path + missing property of a
+// "missing property 'x'" diagnostic so the code-action layer can insert the
+// field without re-deriving the path. LSP preserves Data across the
+// publishDiagnostics → codeAction round-trip.
+func missingFieldData(d Diag) protocol.LSPAny {
+	prop := missingProperty(d.Message)
+	if prop == "" {
+		return nil
+	}
+	b, err := json.Marshal(map[string]any{"field": d.Field, "doc": d.Position, "prop": prop})
+	if err != nil {
+		return nil
+	}
+	return protocol.LSPAny(b)
+}
+
+// missingProperty extracts x from a "missing property 'x'" message.
+func missingProperty(message string) string {
+	const marker = "missing property '"
+	i := strings.Index(message, marker)
+	if i < 0 {
+		return ""
+	}
+	rest := message[i+len(marker):]
+	j := strings.IndexByte(rest, '\'')
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
 }
 
 // diagRange resolves a diagnostic to a buffer range: an explicit Line/Column
