@@ -1,391 +1,60 @@
 import * as vscode from 'vscode';
-import * as cp from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 import { DaemonClient } from './daemonClient';
 
-/** The project configuration filename that marks a bino project root */
-const PROJECT_CONFIG_FILE = 'bino.toml';
-
-/** Diagnostic from bino lsp-helper validate */
-export interface LSPDiagnostic {
-    file: string;
-    position: number;
-    line: number;
-    column: number;
-    severity: 'error' | 'warning' | 'info' | 'hint';
-    message: string;
-    code?: string;
-    field?: string;
-}
-
-/** Result from bino lsp-helper validate */
-export interface LSPValidateResult {
-    valid: boolean;
-    diagnostics: LSPDiagnostic[];
-    error?: string;
-}
-
-/** Options for workspace validation */
-export interface ValidationOptions {
-    /** Execute dataset queries and validate data (slower but catches data issues) */
-    executeQueries?: boolean;
-}
-
 /**
- * BinoValidator manages validation of bino documents and provides
- * diagnostics to VS Code's Problems panel.
+ * BinoValidator is a thin reader over VS Code's diagnostics. Diagnostics are now
+ * produced by the bino Language Server (`bino lsp`) and published to the Problems
+ * panel under the `bino` source; this class exposes summaries of them to the tree
+ * views and status bar without owning a DiagnosticCollection of its own (which
+ * would duplicate the LSP's diagnostics).
  */
 export class BinoValidator {
-    private diagnosticCollection: vscode.DiagnosticCollection;
-    private outputChannel: vscode.OutputChannel;
-    private _validating = false;
+    private readonly source = 'bino';
+    private readonly disposables: vscode.Disposable[] = [];
 
     private _onDidChangeDiagnostics = new vscode.EventEmitter<void>();
     readonly onDidChangeDiagnostics: vscode.Event<void> = this._onDidChangeDiagnostics.event;
 
+    // Retained for API compatibility with the tree/status-bar subscribers; the
+    // LSP validates continuously, so these never fire a distinct phase.
     private _onDidStartValidation = new vscode.EventEmitter<void>();
     readonly onDidStartValidation: vscode.Event<void> = this._onDidStartValidation.event;
 
     private _onDidFinishValidation = new vscode.EventEmitter<void>();
     readonly onDidFinishValidation: vscode.Event<void> = this._onDidFinishValidation.event;
 
-    /** Returns true if validation is currently in progress */
+    constructor(_outputChannel: vscode.OutputChannel) {
+        this.disposables.push(
+            vscode.languages.onDidChangeDiagnostics(() => this._onDidChangeDiagnostics.fire())
+        );
+    }
+
+    /** The LSP validates live, so there is never a discrete in-progress phase. */
     get isValidating(): boolean {
-        return this._validating;
+        return false;
     }
 
-    private daemonClient: DaemonClient | undefined;
-
-    constructor(outputChannel: vscode.OutputChannel) {
-        this.diagnosticCollection = vscode.languages.createDiagnosticCollection('bino');
-        this.outputChannel = outputChannel;
+    /** Kept for API compatibility; the daemon is reached by the LSP, not here. */
+    setDaemonClient(_client: DaemonClient | undefined): void {
+        // no-op
     }
 
-    /** Set the daemon client for fast validation */
-    setDaemonClient(client: DaemonClient | undefined): void {
-        this.daemonClient = client;
-    }
-
-    /**
-     * Get diagnostics for a specific URI.
-     * Returns an empty array if no diagnostics exist for the URI.
-     */
+    /** Returns the bino diagnostics VS Code currently holds for a URI. */
     getDiagnosticsForUri(uri: vscode.Uri): readonly vscode.Diagnostic[] {
-        return this.diagnosticCollection.get(uri) ?? [];
+        return vscode.languages.getDiagnostics(uri).filter(d => d.source === this.source);
     }
 
-    /**
-     * Get the maximum (worst) severity for a URI.
-     * Returns undefined if no diagnostics exist for the URI.
-     * Severity order: Error > Warning > Information > Hint
-     */
-    getMaxSeverityForUri(uri: vscode.Uri): vscode.DiagnosticSeverity | undefined {
-        const diags = this.getDiagnosticsForUri(uri);
-        if (diags.length === 0) {
-            return undefined;
-        }
-        // DiagnosticSeverity: Error=0, Warning=1, Information=2, Hint=3
-        // Lower value = more severe
-        let maxSeverity = vscode.DiagnosticSeverity.Hint;
-        for (const diag of diags) {
-            if (diag.severity < maxSeverity) {
-                maxSeverity = diag.severity;
-            }
-            if (maxSeverity === vscode.DiagnosticSeverity.Error) {
-                break; // Can't get worse
-            }
-        }
-        return maxSeverity;
-    }
-
-    /**
-     * Get the underlying DiagnosticCollection (for advanced usage).
-     */
-    get collection(): vscode.DiagnosticCollection {
-        return this.diagnosticCollection;
-    }
-
-    /** Get the configured bino CLI path */
-    private getBinoPath(): string {
-        const config = vscode.workspace.getConfiguration('bino');
-        const binPath = config.get<string>('binPath');
-        return binPath && binPath.trim() ? binPath : 'bino';
-    }
-
-    /**
-     * Find the bino project root by searching for bino.toml.
-     * Starts from the given directory and walks up the hierarchy.
-     */
-    private findProjectRoot(startDir: string): string | undefined {
-        let current = startDir;
-        while (true) {
-            const configPath = path.join(current, PROJECT_CONFIG_FILE);
-            if (fs.existsSync(configPath)) {
-                return current;
-            }
-            const parent = path.dirname(current);
-            if (parent === current) {
-                return undefined;
-            }
-            current = parent;
-        }
-    }
-
-    /** Get workspace root directory (bino project root containing bino.toml) */
-    private getWorkspaceRoot(): string | undefined {
-        // Try active editor first
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor?.document.uri.scheme === 'file') {
-            const fileDir = path.dirname(activeEditor.document.uri.fsPath);
-            const projectRoot = this.findProjectRoot(fileDir);
-            if (projectRoot) {
-                return projectRoot;
-            }
-        }
-
-        // Fallback: search workspace folders
-        const folders = vscode.workspace.workspaceFolders;
-        if (folders) {
-            for (const folder of folders) {
-                const projectRoot = this.findProjectRoot(folder.uri.fsPath);
-                if (projectRoot) {
-                    return projectRoot;
-                }
-            }
-        }
-
-        return undefined;
-    }
-
-    /** Execute bino command and return stdout */
-    private async execBino(args: string[]): Promise<string> {
-        const binPath = this.getBinoPath();
-        const workDir = this.getWorkspaceRoot();
-
-        return new Promise((resolve, reject) => {
-            const options: cp.ExecOptionsWithStringEncoding = {
-                cwd: workDir,
-                maxBuffer: 10 * 1024 * 1024,
-                timeout: 60000, // 60 seconds for validation
-                encoding: 'utf8'
-            };
-
-            const cmd = [binPath, ...args].join(' ');
-            this.outputChannel.appendLine(`[Validate] Executing: ${cmd}`);
-
-            cp.exec(cmd, options, (error, stdout, stderr) => {
-                if (stderr) {
-                    this.outputChannel.appendLine(`[Validate] Stderr: ${stderr}`);
-                }
-                // Validation returns JSON even on validation errors
-                if (stdout) {
-                    resolve(stdout);
-                    return;
-                }
-                if (error) {
-                    this.outputChannel.appendLine(`[Validate] Error: ${error.message}`);
-                    reject(error);
-                    return;
-                }
-                resolve('');
-            });
-        });
-    }
-
-    /** Convert LSP severity to VS Code DiagnosticSeverity */
-    private toVSCodeSeverity(severity: string): vscode.DiagnosticSeverity {
-        switch (severity) {
-            case 'error':
-                return vscode.DiagnosticSeverity.Error;
-            case 'warning':
-                return vscode.DiagnosticSeverity.Warning;
-            case 'info':
-                return vscode.DiagnosticSeverity.Information;
-            case 'hint':
-                return vscode.DiagnosticSeverity.Hint;
-            default:
-                return vscode.DiagnosticSeverity.Warning;
-        }
-    }
-
-    /**
-     * Find the line number where the Nth document starts in a multi-doc YAML file.
-     * @param text The file text content
-     * @param docIndex 1-based document index
-     * @returns 0-based line number
-     */
-    private findDocumentLine(text: string, docIndex: number): number {
-        const lines = text.split('\n');
-        let currentDocIndex = 0;
-
-        for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-            const line = lines[lineNum].trim();
-
-            if (lineNum === 0) {
-                if (line === '---') {
-                    continue;
-                } else if (line && !line.startsWith('#')) {
-                    currentDocIndex = 1;
-                    if (currentDocIndex === docIndex) {
-                        return 0;
-                    }
-                }
-            } else if (line === '---') {
-                currentDocIndex++;
-                if (currentDocIndex === docIndex) {
-                    return lineNum + 1;
-                }
-            } else if (currentDocIndex === 0 && line && !line.startsWith('#')) {
-                currentDocIndex = 1;
-                if (currentDocIndex === docIndex) {
-                    return lineNum;
-                }
-            }
-        }
-
-        return 0;
-    }
-
-    /** Validate workspace and update diagnostics */
-    async validateWorkspace(options: ValidationOptions = {}): Promise<boolean> {
-        if (this._validating) {
-            this.outputChannel.appendLine('[Validate] Validation already in progress');
-            return false;
-        }
-
-        const workDir = this.getWorkspaceRoot();
-        if (!workDir) {
-            vscode.window.showWarningMessage('No workspace folder open');
-            return false;
-        }
-
-        this._validating = true;
-        this._onDidStartValidation.fire();
-        this.diagnosticCollection.clear();
-
-        try {
-            let result: LSPValidateResult | undefined;
-
-            // Try daemon first
-            if (this.daemonClient?.isConnected) {
-                const daemonResult = options.executeQueries
-                    ? await this.daemonClient.validateWithQueries()
-                    : await this.daemonClient.getValidation();
-                if (daemonResult) {
-                    result = daemonResult as LSPValidateResult;
-                    this.outputChannel.appendLine('[Validate] Using daemon response');
-                }
-            }
-
-            // Fallback to subprocess
-            if (!result) {
-                const args = ['lsp-helper', 'validate', workDir];
-                if (options.executeQueries) {
-                    args.push('--execute-queries');
-                }
-                const output = await this.execBino(args);
-                result = JSON.parse(output) as LSPValidateResult;
-            }
-
-            if (result.error) {
-                this.outputChannel.appendLine(`[Validate] Error: ${result.error}`);
-                vscode.window.showErrorMessage(`Validation error: ${result.error}`);
-                return false;
-            }
-
-            // Ensure diagnostics is an array (may be null/undefined if valid)
-            const diagnostics = result.diagnostics ?? [];
-
-            // Group diagnostics by file
-            const byFile = new Map<string, LSPDiagnostic[]>();
-            for (const diag of diagnostics) {
-                const file = diag.file || workDir;
-                if (!byFile.has(file)) {
-                    byFile.set(file, []);
-                }
-                byFile.get(file)!.push(diag);
-            }
-
-            // Convert to VS Code diagnostics
-            for (const [file, diags] of byFile) {
-                const uri = vscode.Uri.file(file);
-                let fileContent: string | undefined;
-
-                try {
-                    const doc = await vscode.workspace.openTextDocument(uri);
-                    fileContent = doc.getText();
-                } catch {
-                    // File may not exist or be readable
-                }
-
-                const vsDiags: vscode.Diagnostic[] = [];
-
-                for (const diag of diags) {
-                    let line = diag.line > 0 ? diag.line - 1 : 0;
-
-                    // If we have position but no line, calculate from document position
-                    if (diag.line === 0 && diag.position > 0 && fileContent) {
-                        line = this.findDocumentLine(fileContent, diag.position);
-                    }
-
-                    const column = diag.column > 0 ? diag.column - 1 : 0;
-                    const range = new vscode.Range(line, column, line, Number.MAX_SAFE_INTEGER);
-
-                    const vsDiag = new vscode.Diagnostic(
-                        range,
-                        diag.message,
-                        this.toVSCodeSeverity(diag.severity)
-                    );
-
-                    vsDiag.source = 'bino';
-                    if (diag.code) {
-                        vsDiag.code = diag.code;
-                    }
-
-                    vsDiags.push(vsDiag);
-                }
-
-                this.diagnosticCollection.set(uri, vsDiags);
-            }
-
-            const errorCount = diagnostics.filter(d => d.severity === 'error').length;
-            const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
-
-            // Fire event to notify listeners (e.g., tree view) that diagnostics changed
-            this._onDidChangeDiagnostics.fire();
-
-            if (result.valid) {
-                vscode.window.showInformationMessage('✓ Bino workspace validation passed');
-            } else {
-                vscode.window.showWarningMessage(
-                    `Bino validation: ${errorCount} error(s), ${warningCount} warning(s)`
-                );
-            }
-
-            return result.valid;
-        } catch (err) {
-            this.outputChannel.appendLine(`[Validate] Failed: ${err}`);
-            vscode.window.showErrorMessage(`Validation failed: ${err}`);
-            return false;
-        } finally {
-            this._validating = false;
-            this._onDidFinishValidation.fire();
-        }
-    }
-
-    /**
-     * Get a summary of all diagnostics in the workspace.
-     * Returns counts of errors, warnings, info, and hints.
-     */
+    /** Aggregates bino diagnostics across the workspace by severity. */
     getWorkspaceSummary(): { errors: number; warnings: number; info: number; hints: number } {
         let errors = 0;
         let warnings = 0;
         let info = 0;
         let hints = 0;
-
-        this.diagnosticCollection.forEach((uri, diags) => {
+        for (const [, diags] of vscode.languages.getDiagnostics()) {
             for (const diag of diags) {
+                if (diag.source !== this.source) {
+                    continue;
+                }
                 switch (diag.severity) {
                     case vscode.DiagnosticSeverity.Error:
                         errors++;
@@ -401,20 +70,28 @@ export class BinoValidator {
                         break;
                 }
             }
-        });
-
+        }
         return { errors, warnings, info, hints };
     }
 
-    /** Clear all diagnostics */
-    clearDiagnostics(): void {
-        this.diagnosticCollection.clear();
-        this._onDidChangeDiagnostics.fire();
+    /**
+     * The LSP validates buffers continuously; an explicit workspace validation is
+     * no longer needed. Retained so the `bino.validateWorkspace` command and the
+     * save handler remain wired without behavioural change.
+     */
+    async validateWorkspace(_options?: { executeQueries?: boolean }): Promise<void> {
+        // no-op — diagnostics are pushed by the language server
     }
 
-    /** Dispose resources */
+    /** Diagnostics are owned by the LSP client; nothing to clear here. */
+    clearDiagnostics(): void {
+        // no-op
+    }
+
     dispose(): void {
-        this.diagnosticCollection.dispose();
+        for (const d of this.disposables) {
+            d.dispose();
+        }
         this._onDidChangeDiagnostics.dispose();
         this._onDidStartValidation.dispose();
         this._onDidFinishValidation.dispose();
