@@ -1,0 +1,78 @@
+---
+title: bino lsp
+description: Run a Language Server so any editor gets context-aware completion, hover, navigation, and live diagnostics for bino manifests.
+---
+
+`bino lsp` runs a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/)
+server over stdio. Any LSP-capable editor — VS Code, Neovim, Helix, … — connects to it and gets
+**context-aware** completion, hover, navigation, rename, and live diagnostics, computed
+server-side over a YAML syntax tree (not regex over text).
+
+The same Go core that powers `bino daemon` and `bino mcp` answers the editor, so every editor
+sees identical intelligence: the live merged schema (built-in + plugin kinds), the canonical IBCS
+scenario/variance model, real dataset columns, and the project's validation.
+
+## Usage
+
+```bash
+bino lsp [--work-dir DIR] [--no-proxy] [--socket PORT]
+```
+
+Editors are configured with a *command*, so `bino lsp` is the entrypoint you register once.
+Under the hood it follows `bino mcp`:
+
+- **Proxy mode** — if a `bino daemon` is already running for the project (for example because
+  VS Code is open), `bino lsp` delegates the heavy data work (columns, the index, the dependency
+  graph, validation) to that daemon over loopback HTTP, so the editor reuses the daemon's
+  already-loaded DuckDB session and file watcher instead of starting a second one. The lightweight
+  document/position session always stays local to `bino lsp`.
+- **Standalone mode** — with no daemon running, `bino lsp` loads the project itself and serves
+  everything in-process.
+
+Flags:
+
+- `--work-dir`, `-w` – report bundle directory (default: `.`).
+- `--no-proxy` – always run standalone, even if a daemon is running.
+- `--socket PORT` – serve over a TCP socket instead of stdio (debugging).
+- `--phase2` – advertise navigation/refactor capabilities (default: on).
+
+## Editor features
+
+**Completion** — IBCS scenario slots (`ac1–4 / pp1–4 / fc1–4 / pl1–4`) filtered to the columns the
+bound dataset actually emits, a guided builder for the variance grammar
+`d{base}_{compare}_{pos|neg|neu}`, the live `kind:` list, schema-driven fields and enum values, and
+references (`dataset:`, `ref:`, `source:`, `layoutPages:`, …) valid at that position.
+
+**Hover** — a dataset reference shows its live column list; a field shows its schema description; a
+scenario or variance token shows its IBCS meaning.
+
+**Live diagnostics** — schema errors, lint findings, missing `${VAR}` environment variables, and
+engine-compat warnings squiggled as you type, with precise line/column.
+
+**Navigation & refactor** — Go to Definition / Find All References / Go to Implementation across the
+project, project-wide Rename of a DataSet / DataSource / component (and every reference), document
+outline and workspace symbol search, and quick-fixes over diagnostics.
+
+## Generic editor setup
+
+Any LSP client can launch `bino lsp` over stdio for `yaml` documents. For Neovim
+(`nvim-lspconfig`-style):
+
+```lua
+vim.lsp.start({
+  name = 'bino',
+  cmd = { 'bino', 'lsp' },
+  root_dir = vim.fs.dirname(vim.fs.find({ 'bino.toml' }, { upward = true })[1]),
+})
+```
+
+Point any other LSP client at the command `bino lsp` with the project root as the working
+directory.
+
+## VS Code
+
+The [bino VS Code extension](/getting-started/installation) is a thin language client: it spawns
+`bino lsp` automatically and (when its daemon is enabled) makes that daemon the single heavy
+instance the server proxies to. Syntax highlighting and folding come from the
+`redhat.vscode-yaml` grammar, which the extension depends on. No configuration is needed beyond
+having a recent `bino` on your `PATH` (or `bino.binPath` set).

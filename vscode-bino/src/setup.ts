@@ -7,6 +7,7 @@ export interface SetupCheckResult {
     version?: string;
     hasLspHelper: boolean;
     hasValidate: boolean;
+    hasLsp: boolean;
     error?: string;
 }
 
@@ -22,7 +23,8 @@ export async function checkBinoSetup(): Promise<SetupCheckResult> {
         binoFound: false,
         binoPath: binPath,
         hasLspHelper: false,
-        hasValidate: false
+        hasValidate: false,
+        hasLsp: false
     };
 
     try {
@@ -45,6 +47,14 @@ export async function checkBinoSetup(): Promise<SetupCheckResult> {
             result.hasValidate = validateHelp.includes('validate');
         } catch {
             result.hasValidate = false;
+        }
+
+        // Check the language server (bino lsp) — the editor's primary integration.
+        try {
+            await execCommand(binPath, ['lsp', '--help']);
+            result.hasLsp = true;
+        } catch {
+            result.hasLsp = false;
         }
 
     } catch (err) {
@@ -83,8 +93,8 @@ export async function showSetupCheckResults(): Promise<void> {
     }
 
     const features: string[] = [];
-    if (result.hasLspHelper) {
-        features.push('LSP helper');
+    if (result.hasLsp) {
+        features.push('language server');
     }
     if (result.hasValidate) {
         features.push('validation');
@@ -99,9 +109,9 @@ export async function showSetupCheckResults(): Promise<void> {
         featureStr
     ].join('\n');
 
-    if (!result.hasValidate) {
+    if (!result.hasLsp) {
         vscode.window.showWarningMessage(
-            `Bino found but validation not available. Consider updating bino for full IDE support.\n${message}`
+            `Bino found but the language server (\`bino lsp\`) is not available. Update bino for completion, hover, navigation, and diagnostics.\n${message}`
         );
     } else {
         vscode.window.showInformationMessage(message);
