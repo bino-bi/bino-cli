@@ -82,7 +82,7 @@ With no daemon running, it serves standalone from its own project state.`,
 				stream = s
 			}
 
-			srv := lsp.NewServer(backend, logger, phase2)
+			srv := lsp.NewServer(backend, logger, phase2, projectRoot)
 			return srv.Serve(ctx, stream)
 		},
 	}
@@ -90,6 +90,6 @@ With no daemon running, it serves standalone from its own project state.`,
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "Always run standalone, even if a daemon is running")
 	cmd.Flags().IntVar(&socket, "socket", 0, "Serve over TCP on this port instead of stdio (debugging)")
-	cmd.Flags().BoolVar(&phase2, "phase2", false, "Advertise navigation/refactor capabilities (definition, references, rename, ...)")
+	cmd.Flags().BoolVar(&phase2, "phase2", true, "Advertise navigation/refactor capabilities (definition, references, rename, ...)")
 	return cmd
 }

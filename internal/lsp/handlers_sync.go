@@ -10,6 +10,7 @@ import (
 func (s *Server) DidOpen(_ context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	td := params.TextDocument
 	s.docs.Set(td.URI, td.Text, td.Version)
+	s.invalidateNav()
 	s.analyzer.Schedule(td.URI)
 	return nil
 }
@@ -23,6 +24,7 @@ func (s *Server) DidChange(_ context.Context, params *protocol.DidChangeTextDocu
 		return nil
 	}
 	s.docs.Set(params.TextDocument.URI, text, params.TextDocument.Version)
+	s.invalidateNav()
 	s.analyzer.Schedule(params.TextDocument.URI)
 	return nil
 }
@@ -38,6 +40,7 @@ func (s *Server) DidSave(_ context.Context, _ *protocol.DidSaveTextDocumentParam
 func (s *Server) DidClose(_ context.Context, params *protocol.DidCloseTextDocumentParams) error {
 	s.analyzer.Cancel(params.TextDocument.URI)
 	s.docs.Remove(params.TextDocument.URI)
+	s.invalidateNav()
 	return nil
 }
 

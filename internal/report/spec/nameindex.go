@@ -19,11 +19,12 @@ type SymbolDef struct {
 // SymbolRef is one site that references a manifest by name.
 type SymbolRef struct {
 	File       string
-	Range      Range // the reference value span
+	Range      Range // the reference value span (includes a leading $ when present)
 	TargetKind string
 	TargetName string
 	Field      string // the field that carried the reference (dataset/source/ref/...)
 	DocIndex   int
+	Dollar     bool // the value carried a $ prefix (DataSource shorthand)
 }
 
 // NameIndex is the project-wide name→location map that powers definition,
@@ -128,6 +129,7 @@ func (idx *NameIndex) recordScalarOrSeq(file string, docIdx int, field string, v
 		idx.refs = append(idx.refs, SymbolRef{
 			File: file, DocIndex: docIdx, Range: nodeRange(n),
 			TargetKind: k, TargetName: strings.TrimPrefix(n.Value, "$"), Field: field,
+			Dollar: strings.HasPrefix(n.Value, "$"),
 		})
 	}
 	switch val.Kind {

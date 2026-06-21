@@ -61,7 +61,7 @@ func newTestServer() *Server {
 		columns: map[string][]string{"sales": {"ac1", "pp1", "category"}},
 	}
 	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
-	return NewServer(be, log, false)
+	return NewServer(be, log, true, "/proj")
 }
 
 func openDoc(t *testing.T, s *Server, text string) uri.URI {

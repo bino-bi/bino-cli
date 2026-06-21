@@ -12,6 +12,7 @@ import (
 	"go.lsp.dev/uri"
 
 	"bino.bi/bino/internal/logx"
+	reportspec "bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/version"
 )
 
@@ -26,24 +27,27 @@ type Server struct {
 	analyzer *Analyzer
 	log      logx.Logger
 	phase2   bool
+	root     string // project root (for .env-targeting code actions)
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	client protocol.Client
 
-	mu     sync.RWMutex
-	schema *schemaModel
-	index  []IndexDoc
+	mu      sync.RWMutex
+	schema  *schemaModel
+	index   []IndexDoc
+	nameIdx *reportspec.NameIndex
 }
 
 // NewServer constructs a Server over the given backend. phase2 advertises the
-// navigation/refactor capabilities.
-func NewServer(backend Backend, log logx.Logger, phase2 bool) *Server {
+// navigation/refactor capabilities; root is the project root used by code actions.
+func NewServer(backend Backend, log logx.Logger, phase2 bool, root string) *Server {
 	return &Server{
 		backend: backend,
 		docs:    NewDocumentStore(),
 		log:     log,
 		phase2:  phase2,
+		root:    root,
 	}
 }
 
@@ -105,6 +109,7 @@ func (s *Server) onProjectChange() {
 	s.mu.Lock()
 	s.schema = nil
 	s.index = nil
+	s.nameIdx = nil
 	s.mu.Unlock()
 	if s.analyzer == nil {
 		return
@@ -112,6 +117,54 @@ func (s *Server) onProjectChange() {
 	for _, d := range s.docs.All() {
 		s.analyzer.Schedule(d.URI)
 	}
+}
+
+// invalidateNav drops the cached name index so the next navigation request
+// rebuilds it over the current buffers (called on buffer edits).
+func (s *Server) invalidateNav() {
+	s.mu.Lock()
+	s.nameIdx = nil
+	s.mu.Unlock()
+}
+
+// resolve maps a document position to a PositionContext over the live buffer.
+func (s *Server) resolve(u uri.URI, pos protocol.Position) (reportspec.PositionContext, bool) {
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return reportspec.PositionContext{}, false
+	}
+	line, col := doc.PositionToLineCol(pos)
+	return reportspec.ResolvePositionPath(doc.Text, line, col)
+}
+
+// getNameIndex returns the cached name→location index, building it from the
+// on-disk manifests overlaid with open buffers (so it reflects unsaved edits).
+func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
+	s.mu.RLock()
+	ni := s.nameIdx
+	s.mu.RUnlock()
+	if ni != nil {
+		return ni
+	}
+	files := make(map[string]string)
+	for _, d := range s.getIndex(ctx) {
+		if _, seen := files[d.File]; seen {
+			continue
+		}
+		if b, err := os.ReadFile(d.File); err == nil {
+			files[d.File] = string(b)
+		}
+	}
+	for _, doc := range s.docs.All() {
+		if doc.Path != "" {
+			files[doc.Path] = doc.Text
+		}
+	}
+	ni, _ = reportspec.BuildNameIndex(files)
+	s.mu.Lock()
+	s.nameIdx = ni
+	s.mu.Unlock()
+	return ni
 }
 
 // getSchema returns the cached merged-schema model, loading it on first use.
