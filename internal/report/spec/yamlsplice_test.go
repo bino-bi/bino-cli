@@ -47,6 +47,27 @@ spec:
   value: keep
 `
 
+// seqFootGoldenSource mirrors seqGoldenSource but adds a trailing block comment
+// after the last element, which yaml.v3 attaches as that element's FootComment.
+// It exercises the foot-hoist branch of removeSequenceElement (idx == last).
+const seqFootGoldenSource = `apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: t
+spec:
+  columns:
+    # head first
+    - first # line first
+    - second
+    # head third
+    - third # line third
+    # foot after third
+---
+kind: Text
+spec:
+  value: keep
+`
+
 func TestRemoveYAMLPathsGolden(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -134,6 +155,26 @@ spec:
     # head first
     - first # line first
     - second
+---
+kind: Text
+spec:
+  value: keep
+`,
+		},
+		{
+			name:   "delete last sequence element hoists its trailing foot comment to the prior element",
+			source: seqFootGoldenSource,
+			paths:  []string{"spec.columns[2]"},
+			want: `apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: t
+spec:
+  columns:
+    # head first
+    - first # line first
+    - second
+    # foot after third
 ---
 kind: Text
 spec:
