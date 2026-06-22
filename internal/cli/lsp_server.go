@@ -20,6 +20,7 @@ func newLSPServerCommand() *cobra.Command {
 		noProxy bool
 		socket  int
 		phase2  bool
+		stdio   bool
 	)
 
 	cmd := &cobra.Command{
@@ -91,5 +92,10 @@ With no daemon running, it serves standalone from its own project state.`,
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "Always run standalone, even if a daemon is running")
 	cmd.Flags().IntVar(&socket, "socket", 0, "Serve over TCP on this port instead of stdio (debugging)")
 	cmd.Flags().BoolVar(&phase2, "phase2", true, "Advertise navigation/refactor capabilities (definition, references, rename, ...)")
+	// `--stdio` is a no-op accepted for compatibility: LSP clients (e.g.
+	// vscode-languageclient with TransportKind.stdio) append it by convention to
+	// tell the server which transport to use. stdio is already the default.
+	cmd.Flags().BoolVar(&stdio, "stdio", false, "Use stdio transport (default; accepted for LSP-client compatibility)")
+	_ = stdio
 	return cmd
 }

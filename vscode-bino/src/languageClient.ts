@@ -4,7 +4,6 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind,
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient | undefined;
@@ -48,11 +47,13 @@ export async function startLanguageClient(
         return false;
     }
 
+    // An Executable communicates over the child process's stdin/stdout by
+    // default. Do NOT set `transport: TransportKind.stdio` — that appends a
+    // `--stdio` arg (a client convention) which `bino lsp` does not require.
     const serverOptions: ServerOptions = {
         command: binPath,
         args: ['lsp', '--work-dir', projectRoot],
         options: { cwd: projectRoot },
-        transport: TransportKind.stdio,
     };
 
     const clientOptions: LanguageClientOptions = {
