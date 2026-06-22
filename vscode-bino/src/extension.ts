@@ -482,7 +482,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // other kind runs a schema-driven guided form and is created via the
     // AuthoringClient (the Go create path), then the new file opens.
     if (indexer && wizardManager) {
-        const addElement = new AddElementCommand(indexer, wizardManager, getIconForKind, context.extensionPath);
+        const addElement = new AddElementCommand(
+            indexer,
+            wizardManager,
+            getIconForKind,
+            context.extensionPath,
+            (kind: string) => runInTerminal(`add ${kind.toLowerCase()}`),
+        );
         context.subscriptions.push(
             vscode.commands.registerCommand('bino.addElement', () => addElement.run())
         );

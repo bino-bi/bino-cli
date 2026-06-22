@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceIndexer, KindInfo } from './indexer';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
-import { AuthoringClient, formatEditDiagnostics } from './authoringClient';
+import { AuthoringClient } from './authoringClient';
 import { SchemaResolver, FieldDef } from './schemaResolver';
 
 /**
@@ -53,6 +53,7 @@ export class AddElementCommand {
         private readonly wizard: DataSourceWizardManager,
         private readonly getIcon: (kind: string) => string,
         extensionPath: string,
+        private readonly runAdd: (kind: string) => void,
     ) {
         this.authoring = new AuthoringClient(indexer);
         this.schema = new SchemaResolver(extensionPath);
@@ -127,9 +128,20 @@ export class AddElementCommand {
             return;
         }
 
+        // Kinds whose schema requires an object/array field the scalar form cannot
+        // fill (e.g. LayoutPage.children, SigningProfile.certificate, Asset.source)
+        // can't be completed by the guided form, so the form+create would always
+        // fail with schema diagnostics. Route them to `bino add <kind>` — the
+        // interactive CLI scaffolder — as the escape hatch instead.
+        const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
+        if (this.needsGuidedWidgets(fields)) {
+            this.runAdd(kind);
+            return;
+        }
+
         // Every other kind (built-in or plugin) is created through a schema-driven
         // guided form and the one authoring path.
-        await this.createViaForm(kind, pick.category);
+        await this.createViaForm(kind, pick.category, fields);
     }
 
     /**
@@ -140,13 +152,12 @@ export class AddElementCommand {
      * diagnostics if the result is incomplete. On success the index refreshes and
      * the new file opens.
      */
-    private async createViaForm(kind: string, category: string): Promise<void> {
+    private async createViaForm(kind: string, category: string, fields: FieldDef[]): Promise<void> {
         const name = await this.promptName(kind);
         if (name === undefined) {
             return;
         }
 
-        const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
         const spec: Record<string, unknown> = {};
 
         // Embeddable components bind to a dataset/datasource; offer the binding as
@@ -183,7 +194,11 @@ export class AddElementCommand {
 
         const result = await this.authoring.create({ kind, name, spec });
         if (!result.ok) {
-            vscode.window.showErrorMessage(`Bino: could not create ${kind} — ${formatEditDiagnostics(result)}`);
+            // The guided form couldn't produce a schema-valid spec — typically a
+            // conditional requirement the flat field list can't express (e.g.
+            // ConnectionSecret type:postgres needs a `postgres` object). Fall back
+            // to `bino add <kind>` rather than dead-ending on the diagnostics.
+            this.runAdd(kind);
             return;
         }
 
@@ -283,6 +298,17 @@ export class AddElementCommand {
         const trimmed = raw.trim();
         if (!trimmed) { return null; }
         return isNumber ? Number(trimmed) : trimmed;
+    }
+
+    /**
+     * True when the kind has a required field the guided form cannot fill: a
+     * required object/array that isn't the `dataset` binding (which the form does
+     * fill via promptDataset). Such kinds need the designer's rich widgets, so the
+     * palette routes them to the `bino add <kind>` escape hatch instead of running
+     * a form that could only fail schema validation.
+     */
+    private needsGuidedWidgets(fields: FieldDef[]): boolean {
+        return fields.some(f => f.required && f.key !== 'dataset' && !this.isScalarField(f));
     }
 
     /** True for fields a simple prompt can fill (scalar or enum, not object/array). */
