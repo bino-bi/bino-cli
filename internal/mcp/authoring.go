@@ -23,6 +23,7 @@ type EditManifestInput struct {
 	File     string         `json:"file" jsonschema:"path to the manifest file, relative to the project root"`
 	Position int            `json:"position,omitempty" jsonschema:"1-based document index within the file (default 1)"`
 	Patch    map[string]any `json:"patch" jsonschema:"dotted-path edits to apply, e.g. {\"spec.title\": \"Q3\", \"spec.columns[0]\": \"region\"}"`
+	DryRun   bool           `json:"dryRun,omitempty" jsonschema:"compute and validate the edit but do not write; the rewritten file is returned in the result's content"`
 }
 
 // CreateManifestInput describes a new manifest to create from a spec object.
@@ -43,8 +44,9 @@ type WriteManifestInput struct {
 
 // WriteResult reports where a manifest was written and how.
 type WriteResult struct {
-	File   string `json:"file"`
-	Action string `json:"action"` // "created" or "appended"
+	File    string `json:"file"`
+	Action  string `json:"action"`            // "created", "appended", "edited", or "computed" (dry run)
+	Content string `json:"content,omitempty"` // the rewritten file text, set only for a dry-run edit (no write)
 }
 
 // ScaffoldResult lists the files written by scaffold_source.

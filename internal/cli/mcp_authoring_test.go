@@ -124,6 +124,30 @@ func TestEditManifestEndToEnd(t *testing.T) {
 	if !strings.Contains(string(after), "value: new") {
 		t.Errorf("file changed after rejected edit:\n%s", string(after))
 	}
+
+	// A dry-run edit returns the rewritten file in `content` and writes nothing.
+	dry := callTool(t, cs, "edit_manifest", map[string]any{
+		"file":   "note.yaml",
+		"patch":  map[string]any{"spec.value": "dryval"},
+		"dryRun": true,
+	})
+	if dry.IsError {
+		t.Fatalf("dry-run edit_manifest failed: %+v", dry.Content)
+	}
+	var wr mcp.WriteResult
+	if tc, ok := dry.Content[0].(*mcpsdk.TextContent); ok {
+		_ = json.Unmarshal([]byte(tc.Text), &wr)
+	}
+	if wr.Action != "computed" {
+		t.Errorf("dry-run action = %q, want computed", wr.Action)
+	}
+	if !strings.Contains(wr.Content, "value: dryval") || !strings.Contains(wr.Content, "# keep me") {
+		t.Errorf("dry-run content did not apply the edit or dropped the comment:\n%s", wr.Content)
+	}
+	unchanged, _ := os.ReadFile(path)
+	if strings.Contains(string(unchanged), "dryval") {
+		t.Errorf("dry-run wrote to disk:\n%s", unchanged)
+	}
 }
 
 func TestScaffoldSource(t *testing.T) {

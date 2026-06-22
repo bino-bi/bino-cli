@@ -44,7 +44,7 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "edit_manifest",
-		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically.",
+		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in EditManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.EditManifest(ctx, in)
 		if err != nil {

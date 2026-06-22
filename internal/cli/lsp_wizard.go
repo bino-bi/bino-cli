@@ -14,6 +14,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/report/sqlgen"
 	"bino.bi/bino/internal/schema"
 	"bino.bi/bino/internal/version"
@@ -455,6 +456,140 @@ func parseScaffoldType(s string) DataSourceType {
 	default:
 		return ParseDataSourceType(s)
 	}
+}
+
+// --- edit -------------------------------------------------------------------
+
+// lspEditDiagnostic is a single schema-validation diagnostic for an edit. It
+// mirrors the GUI-facing shape consumed by the Design-mode authoring client
+// ({message, line, col, severity}). schema.Validate operates on the edited
+// document text without source positions, so line/col are 0 (unknown).
+type lspEditDiagnostic struct {
+	Message  string `json:"message"`
+	Line     int    `json:"line"`
+	Column   int    `json:"col"`
+	Severity string `json:"severity"`
+}
+
+// lspEditResult is the JSON output for the edit command. In compute mode it
+// carries the rewritten file (full) and the edited document; in write mode it
+// reports the written file. A non-empty diagnostics list means the edit was
+// rejected and nothing was written.
+type lspEditResult struct {
+	OK          bool                `json:"ok"`
+	Full        string              `json:"full,omitempty"`
+	Edited      string              `json:"edited,omitempty"`
+	File        string              `json:"file,omitempty"`
+	Diagnostics []lspEditDiagnostic `json:"diagnostics"`
+	Error       string              `json:"error,omitempty"`
+	Version     string              `json:"version"`
+}
+
+func newLSPEditCommand() *cobra.Command {
+	var payloadFile string
+	cmd := &cobra.Command{
+		Use:   "edit <directory>",
+		Short: "Compute or write a fidelity-preserving dotted-path edit to a manifest document",
+		Long:  "Reads a request {file, position, patch, mode} (from --payload-file or stdin). mode=compute validates the edit and returns the rewritten file without writing; mode=write applies it atomically. Comments and key order are preserved. Used by the Design-mode authoring client.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			payloadJSON, err := readFileOrStdin(cmd, payloadFile)
+			if err != nil {
+				return outputJSON(cmd.OutOrStdout(), lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}, Error: fmt.Sprintf("read payload: %v", err)})
+			}
+			return runLSPEdit(cmd.Context(), args[0], payloadJSON, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&payloadFile, "payload-file", "-", "Path to a JSON payload file, or '-' for stdin")
+	return cmd
+}
+
+func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer) error {
+	result := lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
+
+	var req struct {
+		File     string         `json:"file"`
+		Position int            `json:"position"`
+		Patch    map[string]any `json:"patch"`
+		Mode     string         `json:"mode"`
+	}
+	if err := json.Unmarshal(payloadJSON, &req); err != nil {
+		result.Error = fmt.Sprintf("parse payload: %v", err)
+		return outputJSON(out, result)
+	}
+	if req.File == "" {
+		result.Error = "file is required"
+		return outputJSON(out, result)
+	}
+	if len(req.Patch) == 0 {
+		result.Error = "patch is required"
+		return outputJSON(out, result)
+	}
+	mode := req.Mode
+	if mode == "" {
+		mode = "compute"
+	}
+	if mode != "compute" && mode != "write" {
+		result.Error = fmt.Sprintf("unknown mode %q (want \"compute\" or \"write\")", mode)
+		return outputJSON(out, result)
+	}
+	pos := req.Position
+	if pos == 0 {
+		pos = 1
+	}
+
+	absDir, err := resolveProjectRootForLSP(dir)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
+		return outputJSON(out, result)
+	}
+	abs := req.File
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(absDir, abs)
+	}
+	content, err := os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local IDE client
+	if err != nil {
+		result.Error = fmt.Sprintf("read %s: %v", req.File, err)
+		return outputJSON(out, result)
+	}
+
+	full, edited, err := spec.EditYAMLDocument(string(content), pos, req.Patch)
+	if err != nil {
+		result.Error = err.Error()
+		return outputJSON(out, result)
+	}
+
+	// Validate the edited document; on failure return diagnostics and write nothing.
+	if verr := schema.Validate([]byte(edited)); verr != nil {
+		for _, issue := range schema.GetValidationIssues(verr) {
+			msg := issue.Message
+			if issue.Path != "" && issue.Path != "(root)" {
+				msg = issue.Path + ": " + issue.Message
+			}
+			result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: msg, Severity: "error"})
+		}
+		if len(result.Diagnostics) == 0 {
+			// Non-ValidationError (e.g. schema load failure): surface verbatim.
+			result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: verr.Error(), Severity: "error"})
+		}
+		return outputJSON(out, result)
+	}
+
+	if mode == "write" {
+		if err := atomicWriteFile(abs, []byte(full)); err != nil {
+			result.Error = fmt.Sprintf("write %s: %v", req.File, err)
+			return outputJSON(out, result)
+		}
+		result.OK = true
+		result.File = req.File
+		return outputJSON(out, result)
+	}
+
+	// compute mode: return the rewritten text without touching disk.
+	result.OK = true
+	result.Full = full
+	result.Edited = edited
+	return outputJSON(out, result)
 }
 
 // readFileOrStdin reads from path, or from the command's stdin when path is "-".

@@ -126,7 +126,11 @@ func (a *cliAuthoring) EditManifest(_ context.Context, in mcp.EditManifestInput)
 	if err := schema.Validate([]byte(edited)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("edit would make the document invalid: %w", err)
 	}
-	if err := atomicWriteFile(abs, []byte(full), 0o644); err != nil {
+	if in.DryRun {
+		// Compute-only: return the rewritten file without touching disk.
+		return mcp.WriteResult{File: in.File, Action: "computed", Content: full}, nil
+	}
+	if err := atomicWriteFile(abs, []byte(full)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("write %s: %w", in.File, err)
 	}
 	return mcp.WriteResult{File: in.File, Action: "edited"}, nil

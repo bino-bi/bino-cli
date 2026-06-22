@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/schema"
 )
 
@@ -115,6 +116,151 @@ func TestRunLSPScaffoldCreatesValidManifests(t *testing.T) {
 	}
 	if bytes.Contains(dsBytes, []byte(csv)) {
 		t.Errorf("datasource path should be relative, not absolute:\n%s", dsBytes)
+	}
+}
+
+// seedEditProject writes a project root with a single Text manifest carrying a
+// comment, and returns the project dir and the manifest's absolute path.
+func seedEditProject(t *testing.T) (dir, manifest string) {
+	t.Helper()
+	dir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest = filepath.Join(dir, "note.yaml")
+	original := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: note # keep me\nspec:\n  value: old\n"
+	if err := os.WriteFile(manifest, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, manifest
+}
+
+func runEdit(t *testing.T, dir string, payload string) lspEditResult {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := runLSPEdit(context.Background(), dir, []byte(payload), &buf); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	var res lspEditResult
+	if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	return res
+}
+
+// compute mode returns the rewritten text but must not touch the file on disk.
+func TestRunLSPEditComputeDoesNotWrite(t *testing.T) {
+	dir, manifest := seedEditProject(t)
+	before, _ := os.ReadFile(manifest)
+
+	res := runEdit(t, dir, `{"file":"note.yaml","patch":{"spec.value":"new"},"mode":"compute"}`)
+	if !res.OK || res.Error != "" {
+		t.Fatalf("compute failed: ok=%v error=%s", res.OK, res.Error)
+	}
+	if len(res.Diagnostics) != 0 {
+		t.Fatalf("compute reported diagnostics for a valid edit: %+v", res.Diagnostics)
+	}
+	if res.Full == "" {
+		t.Fatal("compute returned empty full text")
+	}
+	if !bytes.Contains([]byte(res.Full), []byte("value: new")) || !bytes.Contains([]byte(res.Full), []byte("# keep me")) {
+		t.Errorf("compute full did not apply the edit or dropped the comment:\n%s", res.Full)
+	}
+	after, _ := os.ReadFile(manifest)
+	if !bytes.Equal(before, after) {
+		t.Errorf("compute wrote to disk:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// write mode lands exactly the bytes compute returned, and matches the
+// fidelity-preserving engine output.
+func TestRunLSPEditWriteMatchesCompute(t *testing.T) {
+	dir, manifest := seedEditProject(t)
+	payload := `{"file":"note.yaml","patch":{"spec.value":"new"},"mode":%q}`
+
+	computed := runEdit(t, dir, fmt.Sprintf(payload, "compute"))
+	if !computed.OK {
+		t.Fatalf("compute failed: %+v", computed)
+	}
+
+	written := runEdit(t, dir, fmt.Sprintf(payload, "write"))
+	if !written.OK || written.Error != "" {
+		t.Fatalf("write failed: ok=%v error=%s", written.OK, written.Error)
+	}
+	if written.File != "note.yaml" {
+		t.Errorf("write file = %q, want note.yaml", written.File)
+	}
+
+	onDisk, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(onDisk) != computed.Full {
+		t.Errorf("write bytes != compute full:\non disk:\n%s\ncompute:\n%s", onDisk, computed.Full)
+	}
+}
+
+// An invalid patch yields diagnostics and writes nothing.
+func TestRunLSPEditInvalidPatchBlocksWrite(t *testing.T) {
+	dir, manifest := seedEditProject(t)
+	before, _ := os.ReadFile(manifest)
+
+	// spec.value must be a string; a mapping makes the document invalid.
+	res := runEdit(t, dir, `{"file":"note.yaml","patch":{"spec.value":{"not":"a string"}},"mode":"write"}`)
+	if res.OK {
+		t.Fatal("invalid edit should not be ok")
+	}
+	if len(res.Diagnostics) == 0 {
+		t.Fatalf("invalid edit produced no diagnostics: %+v", res)
+	}
+	after, _ := os.ReadFile(manifest)
+	if !bytes.Equal(before, after) {
+		t.Errorf("invalid edit wrote to disk:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// lsp-helper edit (write) and the MCP edit_manifest path must land identical bytes.
+func TestRunLSPEditParityWithEditManifest(t *testing.T) {
+	// lsp-helper edit --write
+	dirA, manA := seedEditProject(t)
+	resA := runEdit(t, dirA, `{"file":"note.yaml","patch":{"spec.value":"new"},"mode":"write"}`)
+	if !resA.OK {
+		t.Fatalf("lsp-helper edit write failed: %+v", resA)
+	}
+	gotA, _ := os.ReadFile(manA)
+
+	// MCP EditManifest (writes to disk)
+	dirB, manB := seedEditProject(t)
+	a := newCLIAuthoring(dirB)
+	wr, err := a.EditManifest(context.Background(), mcp.EditManifestInput{
+		File: "note.yaml", Patch: map[string]any{"spec.value": "new"},
+	})
+	if err != nil {
+		t.Fatalf("EditManifest: %v", err)
+	}
+	if wr.Action != "edited" || wr.Content != "" {
+		t.Errorf("EditManifest write result = %+v, want action=edited, empty content", wr)
+	}
+	gotB, _ := os.ReadFile(manB)
+
+	if string(gotA) != string(gotB) {
+		t.Errorf("lsp-helper edit and edit_manifest disagree:\nlsp-helper:\n%s\nedit_manifest:\n%s", gotA, gotB)
+	}
+
+	// And the MCP dry-run content must equal the bytes the write path lands.
+	dirC, _ := seedEditProject(t)
+	c := newCLIAuthoring(dirC)
+	dry, err := c.EditManifest(context.Background(), mcp.EditManifestInput{
+		File: "note.yaml", Patch: map[string]any{"spec.value": "new"}, DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("EditManifest dry run: %v", err)
+	}
+	if dry.Action != "computed" {
+		t.Errorf("dry-run action = %q, want computed", dry.Action)
+	}
+	if dry.Content != string(gotB) {
+		t.Errorf("dry-run content != written bytes:\ndry:\n%s\nwritten:\n%s", dry.Content, gotB)
 	}
 }
 

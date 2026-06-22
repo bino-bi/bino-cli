@@ -220,7 +220,7 @@ func WriteManifest(path, content string) error {
 
 	// Write file atomically (tmp + rename) so a crash mid-write cannot leave a
 	// partially written manifest.
-	if err := atomicWriteFile(path, []byte(content), 0o644); err != nil {
+	if err := atomicWriteFile(path, []byte(content)); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
@@ -229,8 +229,9 @@ func WriteManifest(path, content string) error {
 
 // atomicWriteFile writes data to path via a temp file in the same directory
 // followed by an atomic rename, so an interrupted write never corrupts the
-// destination file.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+// destination file. The destination is created with 0o644 permissions.
+func atomicWriteFile(path string, data []byte) error {
+	const perm os.FileMode = 0o644
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".bino-write-*")
 	if err != nil {
@@ -272,7 +273,7 @@ func AppendToManifest(path, content string) error {
 	newContent += content
 
 	// Write back atomically.
-	if err := atomicWriteFile(path, []byte(newContent), 0o644); err != nil {
+	if err := atomicWriteFile(path, []byte(newContent)); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
