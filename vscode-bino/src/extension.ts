@@ -13,6 +13,7 @@ import { registerPrqlCompletion } from './prqlCompletion';
 import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
+import { AddElementCommand } from './addElement';
 import { TreeTableEditorManager } from './treeTableEditor';
 import { DesignerPanel } from './designer/designerPanel';
 import { PreviewTreeProvider } from './previewTree';
@@ -473,6 +474,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await designerPanel?.open(doc?.kind ? doc : undefined);
         })
     );
+
+    // "Add element" palette — the single entry point that supersedes the static
+    // `bino add` command list. Sources kinds from the live backend list (plugin
+    // kinds appear automatically) and routes each pick to its existing create
+    // path: DataSource/DataSet open the wizard, other kinds open `bino add <kind>`.
+    if (indexer && wizardManager) {
+        const addElement = new AddElementCommand(indexer, wizardManager, getIconForKind);
+        context.subscriptions.push(
+            vscode.commands.registerCommand('bino.addElement', () => addElement.run())
+        );
+    }
 
     // DataSource/DataSet wizard commands
     context.subscriptions.push(

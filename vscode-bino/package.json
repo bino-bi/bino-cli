@@ -222,6 +222,12 @@
         "icon": "$(edit)"
       },
       {
+        "command": "bino.addElement",
+        "title": "Add Element",
+        "category": "Bino",
+        "icon": "$(add)"
+      },
+      {
         "command": "bino.initProject",
         "title": "Initialize Project",
         "category": "Bino"
@@ -376,6 +382,74 @@
         {
           "command": "bino.newDataSourceFromDatabase",
           "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.addElement",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.addDataset",
+          "when": "false"
+        },
+        {
+          "command": "bino.addDatasource",
+          "when": "false"
+        },
+        {
+          "command": "bino.addConnectionSecret",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLayoutPage",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLayoutCard",
+          "when": "false"
+        },
+        {
+          "command": "bino.addTable",
+          "when": "false"
+        },
+        {
+          "command": "bino.addText",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartStructure",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartTime",
+          "when": "false"
+        },
+        {
+          "command": "bino.addReportArtefact",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLiveReportArtefact",
+          "when": "false"
+        },
+        {
+          "command": "bino.addSigningProfile",
+          "when": "false"
+        },
+        {
+          "command": "bino.addAsset",
+          "when": "false"
+        },
+        {
+          "command": "bino.addComponentStyle",
+          "when": "false"
+        },
+        {
+          "command": "bino.addInternationalization",
+          "when": "false"
+        },
+        {
+          "command": "bino.addScalingGroup",
+          "when": "false"
         },
         {
           "command": "bino.restartDaemon",

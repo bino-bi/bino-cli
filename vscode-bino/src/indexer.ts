@@ -440,6 +440,19 @@ export class WorkspaceIndexer {
     }
 
     /**
+     * The live manifest-kind list (built-in + plugin) as served by the backend,
+     * fetched once and cached for the session. Surfacing this lets GUI surfaces
+     * (the "Add element" palette) enumerate every kind from one backend fact, so
+     * plugin-provided kinds appear with no extension change.
+     */
+    async getKindInfos(): Promise<KindInfo[]> {
+        if (this.kinds) {
+            return this.kinds;
+        }
+        return this.refreshKinds();
+    }
+
+    /**
      * Fetch every manifest kind and its served render-embeddable flag from the
      * backend (daemon /kinds, falling back to `lsp-helper kinds`). This is the
      * single render-embeddable authority (internal/report/embed); the extension
