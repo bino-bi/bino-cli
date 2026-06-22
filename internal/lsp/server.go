@@ -56,11 +56,21 @@ func NewServer(backend Backend, log logx.Logger, phase2 bool, root string) *Serv
 func (s *Server) Serve(ctx context.Context, stream jsonrpc2.Stream) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	ctx, conn, client := protocol.NewServer(ctx, s, stream)
+	// Wire read-loop-visible state BEFORE protocol.NewServer spawns the read
+	// goroutine. A client request (e.g. didOpen → s.analyzer.Schedule) can
+	// otherwise arrive before these fields are assigned — a data race, and a nil
+	// dereference if the analyzer is not set yet. These writes happen-before the
+	// spawned goroutine, so handlers observe them without locking.
 	s.ctx = ctx
 	s.cancel = cancel
-	s.client = client
 	s.analyzer = NewAnalyzer(ctx, s.backend, s.docs, s.publishDiagnostics, s.log, 0)
+
+	_, conn, client := protocol.NewServer(ctx, s, stream)
+	// client is produced by NewServer after the read loop has started, so the
+	// store must be synchronized with publishDiagnostics' load.
+	s.mu.Lock()
+	s.client = client
+	s.mu.Unlock()
 	s.backend.OnProjectChange(s.onProjectChange)
 
 	<-conn.Done()
@@ -93,10 +103,13 @@ func (stdio) Close() error                { return nil }
 
 // publishDiagnostics pushes diagnostics for a document version to the client.
 func (s *Server) publishDiagnostics(u uri.URI, ver int32, diags []protocol.Diagnostic) {
-	if s.client == nil {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+	if client == nil {
 		return
 	}
-	_ = s.client.PublishDiagnostics(s.ctx, &protocol.PublishDiagnosticsParams{
+	_ = client.PublishDiagnostics(s.ctx, &protocol.PublishDiagnosticsParams{
 		URI:         u,
 		Version:     protocol.NewOptional(ver),
 		Diagnostics: diags,
