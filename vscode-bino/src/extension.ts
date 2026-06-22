@@ -14,6 +14,7 @@ import { BinoCodeLensProvider } from './codelens';
 import { RowsPreviewManager } from './rowsPreview';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
 import { TreeTableEditorManager } from './treeTableEditor';
+import { DesignerPanel } from './designer/designerPanel';
 import { PreviewTreeProvider } from './previewTree';
 import { ActionsTreeProvider } from './actionsTree';
 import { EnvironmentTreeProvider } from './environmentTree';
@@ -25,6 +26,7 @@ let previewManager: BinoPreviewManager | undefined;
 let rowsPreviewManager: RowsPreviewManager | undefined;
 let wizardManager: DataSourceWizardManager | undefined;
 let treeTableEditorManager: TreeTableEditorManager | undefined;
+let designerPanel: DesignerPanel | undefined;
 let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
 let daemonClient: DaemonClient | undefined;
@@ -204,6 +206,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize tree-table editor manager
     treeTableEditorManager = new TreeTableEditorManager(indexer, context.extensionPath);
     context.subscriptions.push({ dispose: () => treeTableEditorManager?.dispose() });
+
+    // Initialize the component designer (schema-driven form + live canvas)
+    designerPanel = new DesignerPanel(indexer, previewManager, context.extensionPath);
+    context.subscriptions.push({ dispose: () => designerPanel?.dispose() });
 
     // Register PRQL features (editor, SQL preview integration)
     registerPrqlFeatures(context);
@@ -456,6 +462,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.openTreeEditor', () => {
             treeTableEditorManager?.openPanel();
+        })
+    );
+
+    // Component designer command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.openDesigner', async (arg?: LSPDocument | BinoTreeItem) => {
+            // Tree menu passes a BinoTreeItem; palette passes an LSPDocument or nothing.
+            const doc = (arg as BinoTreeItem)?.document ?? (arg as LSPDocument | undefined);
+            await designerPanel?.open(doc?.kind ? doc : undefined);
         })
     );
 
@@ -1082,6 +1097,7 @@ export function deactivate(): void {
     // Send SIGTERM to daemon — synchronous, guaranteed to run before VS Code exits.
     // The daemon's Go signal handler cleans up: removes port file, stops preview, closes DuckDB.
     daemonClient?.shutdown();
+    designerPanel?.dispose();
     treeTableEditorManager?.dispose();
     previewManager?.dispose();
     validator?.dispose();
@@ -1091,6 +1107,7 @@ export function deactivate(): void {
     daemonClient = undefined;
     indexer = undefined;
     validator = undefined;
+    designerPanel = undefined;
     treeTableEditorManager = undefined;
     previewManager = undefined;
     indexerStatusBarItem = undefined;

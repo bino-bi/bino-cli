@@ -216,6 +216,12 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "bino.openDesigner",
+        "title": "Open Designer",
+        "category": "Bino",
+        "icon": "$(edit)"
+      },
+      {
         "command": "bino.initProject",
         "title": "Initialize Project",
         "category": "Bino"
@@ -417,6 +423,11 @@
           "command": "bino.previewArtefactEmbedded",
           "when": "view == binoDocuments && viewItem == binoArtefact",
           "group": "preview@1"
+        },
+        {
+          "command": "bino.openDesigner",
+          "when": "view == binoDocuments && viewItem == binoArtefact",
+          "group": "preview@2"
         },
         {
           "command": "bino.openFirstProblem",
