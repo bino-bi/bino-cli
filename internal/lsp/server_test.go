@@ -115,6 +115,45 @@ spec:
   title: Revenue
 `
 
+// refSchema mirrors the real schema shape: a kind's spec is a $ref to a $defs
+// entry that composes a base via allOf, with enums on leaf fields.
+const refSchema = `{
+  "properties": {"kind": {"enum": ["Table"]}},
+  "$defs": {
+    "tableBase": {"properties": {"title": {"description": "The title."}}},
+    "tableSpec": {"allOf": [
+      {"$ref": "#/$defs/tableBase"},
+      {"properties": {"orderDirection": {"enum": ["asc", "desc"]}}}
+    ]}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "Table"}}},
+     "then": {"properties": {"spec": {"$ref": "#/$defs/tableSpec"}}}}
+  ]
+}`
+
+func TestCompletion_SchemaRefAndAllOf(t *testing.T) {
+	be := &fakeBackend{schema: json.RawMessage(refSchema)}
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(be, log, true, "/proj")
+	doc := "kind: Table\nmetadata:\n  name: t\nspec:\n  orderDirection: desc\n"
+	u := openDoc(t, s, doc)
+	// enum value completion at end of "  orderDirection: desc"
+	res, _ := s.Completion(context.Background(), completionParams(u, 4, 22))
+	labels := completionLabels(t, res)
+	if !contains(labels, "asc") || !contains(labels, "desc") {
+		t.Errorf("orderDirection enum (via $ref+allOf) should offer asc/desc, got %v", labels)
+	}
+	// field-name completion under spec should surface allOf-composed fields
+	doc2 := "kind: Table\nmetadata:\n  name: t\nspec:\n  \n"
+	u2 := openDoc(t, s, doc2)
+	res2, _ := s.Completion(context.Background(), completionParams(u2, 4, 2))
+	labels2 := completionLabels(t, res2)
+	if !contains(labels2, "title") || !contains(labels2, "orderDirection") {
+		t.Errorf("field completion should surface $ref+allOf fields title/orderDirection, got %v", labels2)
+	}
+}
+
 func TestCompletion_Kind(t *testing.T) {
 	s := newTestServer()
 	u := openDoc(t, s, tableDoc)

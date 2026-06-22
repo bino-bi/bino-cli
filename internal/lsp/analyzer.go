@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -98,6 +99,13 @@ func (a *Analyzer) Shutdown() {
 }
 
 func (a *Analyzer) run(u uri.URI) {
+	// This runs in a background timer goroutine; a panic here would crash the
+	// whole LSP process, so contain it.
+	defer func() {
+		if r := recover(); r != nil {
+			a.log.Errorf("analysis panic for %s: %v\n%s", u, r, debug.Stack())
+		}
+	}()
 	ctx, cancel := context.WithCancel(a.base)
 	a.mu.Lock()
 	f := a.pending[u]

@@ -151,11 +151,15 @@ func (w *walker) descend(node *yaml.Node, path []string, parentEnd int) (Positio
 }
 
 func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (PositionContext, bool) {
-	// Track the nearest enclosing dataset binding as we descend, so a scenario /
-	// variance / query inside a layout child binds to that child's dataset, not
-	// the document root's. The deepest mapping on the path wins.
+	// Track the nearest enclosing dataset binding and component kind as we
+	// descend, so a scenario / variance / query / field inside a layout child
+	// resolves against that child (kind: Table, its dataset), not the document
+	// root (kind: LayoutPage). The deepest mapping on the path wins.
 	if ds := bindingDatasets(node); len(ds) > 0 {
 		w.boundDatasets = ds
+	}
+	if k := mappingChildValue(node, "kind"); k != "" {
+		w.enclosingKind = k
 	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
@@ -172,6 +176,11 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 		if w.cursorLine == key.Line {
 			// On the key's line: decide key-side vs value-side by the colon column.
 			if val.Line == key.Line && w.cursorCol >= val.Column {
+				// A flow container value (e.g. scenarios: ["ac1", ...]) — descend so
+				// the cursor lands on the right item context, not a free value.
+				if isContainer(val) {
+					return w.descend(val, childPath, upper)
+				}
 				return w.classifyValue(val, key.Value, childPath, path), true
 			}
 			keyEnd := key.Column + len(key.Value)
@@ -179,6 +188,9 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 				return w.keyContext(node, path), true
 			}
 			// Between the key token and an empty / next-line value.
+			if isContainer(val) {
+				return w.descend(val, childPath, upper)
+			}
 			return w.classifyValue(val, key.Value, childPath, path), true
 		}
 

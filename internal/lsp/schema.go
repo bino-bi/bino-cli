@@ -1,6 +1,10 @@
 package lsp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"maps"
+	"strings"
+)
 
 // schemaModel is a lazily-parsed view of the merged JSON schema, cached on the
 // server and rebuilt on project change. It exposes only what completion needs:
@@ -50,18 +54,11 @@ type propInfo struct {
 
 // specProps returns the spec.properties of a given kind, or nil.
 func (m *schemaModel) specProps(kind string) []propInfo {
-	spec := m.specSchema(kind)
-	if spec == nil {
-		return nil
-	}
-	props, ok := spec["properties"].(map[string]any)
-	if !ok {
-		return nil
-	}
+	props := m.specProperties(kind)
 	out := make([]propInfo, 0, len(props))
 	for name, raw := range props {
 		p := propInfo{Name: name}
-		if obj, ok := raw.(map[string]any); ok {
+		if obj := m.deref(raw); obj != nil {
 			p.Description, _ = obj["description"].(string)
 			if enum, ok := obj["enum"].([]any); ok {
 				p.Enum = toStrings(enum)
@@ -74,16 +71,8 @@ func (m *schemaModel) specProps(kind string) []propInfo {
 
 // fieldDoc returns the description of spec.<field> for a kind, if any.
 func (m *schemaModel) fieldDoc(kind, field string) string {
-	spec := m.specSchema(kind)
-	if spec == nil {
-		return ""
-	}
-	props, ok := spec["properties"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	obj, ok := props[field].(map[string]any)
-	if !ok {
+	obj := m.deref(m.specProperties(kind)[field])
+	if obj == nil {
 		return ""
 	}
 	d, _ := obj["description"].(string)
@@ -92,16 +81,8 @@ func (m *schemaModel) fieldDoc(kind, field string) string {
 
 // fieldEnum returns the enum values declared for spec.<field> of a kind, if any.
 func (m *schemaModel) fieldEnum(kind, field string) []string {
-	spec := m.specSchema(kind)
-	if spec == nil {
-		return nil
-	}
-	props, ok := spec["properties"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	obj, ok := props[field].(map[string]any)
-	if !ok {
+	obj := m.deref(m.specProperties(kind)[field])
+	if obj == nil {
 		return nil
 	}
 	if enum, ok := obj["enum"].([]any); ok {
@@ -110,25 +91,78 @@ func (m *schemaModel) fieldEnum(kind, field string) []string {
 	return nil
 }
 
-// specSchema extracts then.properties.spec for a kind from the merged schema's
-// allOf blocks (mirrors mcp.extractSpecSchema, scoped to what completion needs).
-func (m *schemaModel) specSchema(kind string) map[string]any {
+// specProperties returns the merged spec property map for a kind, following the
+// $ref + allOf composition the schema uses (e.g. spec -> $defs/tableSpec ->
+// allOf[base $ref, {properties}]).
+func (m *schemaModel) specProperties(kind string) map[string]any {
 	for _, block := range m.allOf() {
 		if kindConst(block) != kind {
 			continue
 		}
-		then, ok := block["then"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		props, ok := then["properties"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		spec, _ := props["spec"].(map[string]any)
-		return spec
+		then, _ := block["then"].(map[string]any)
+		props, _ := then["properties"].(map[string]any)
+		return m.mergedProperties(props["spec"], 0)
 	}
 	return nil
+}
+
+// mergedProperties resolves $ref and merges allOf to produce the effective
+// `properties` map of a schema node. Earlier entries win on key conflicts.
+func (m *schemaModel) mergedProperties(node any, depth int) map[string]any {
+	obj, ok := node.(map[string]any)
+	if !ok || depth > 20 {
+		return nil
+	}
+	if ref, ok := obj["$ref"].(string); ok {
+		return m.mergedProperties(m.resolveRef(ref), depth+1)
+	}
+	out := map[string]any{}
+	if props, ok := obj["properties"].(map[string]any); ok {
+		maps.Copy(out, props)
+	}
+	if allOf, ok := obj["allOf"].([]any); ok {
+		for _, sub := range allOf {
+			for k, v := range m.mergedProperties(sub, depth+1) {
+				if _, exists := out[k]; !exists {
+					out[k] = v
+				}
+			}
+		}
+	}
+	return out
+}
+
+// deref follows a single $ref on a field schema so its enum/description are
+// readable; non-ref nodes are returned as-is.
+func (m *schemaModel) deref(node any) map[string]any {
+	obj, ok := node.(map[string]any)
+	if !ok {
+		return nil
+	}
+	if ref, ok := obj["$ref"].(string); ok {
+		if r := m.resolveRef(ref); r != nil {
+			return r
+		}
+	}
+	return obj
+}
+
+// resolveRef follows a local JSON pointer ("#/$defs/foo").
+func (m *schemaModel) resolveRef(ref string) map[string]any {
+	if m.doc == nil || !strings.HasPrefix(ref, "#/") {
+		return nil
+	}
+	var cur any = m.doc
+	for p := range strings.SplitSeq(strings.TrimPrefix(ref, "#/"), "/") {
+		p = strings.ReplaceAll(strings.ReplaceAll(p, "~1", "/"), "~0", "~")
+		cm, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = cm[p]
+	}
+	out, _ := cur.(map[string]any)
+	return out
 }
 
 func (m *schemaModel) allOf() []map[string]any {

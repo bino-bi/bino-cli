@@ -138,6 +138,27 @@ spec:
 	if len(ctx.BoundDatasets) != 1 || ctx.BoundDatasets[0] != "revenue_by_region" {
 		t.Errorf("BoundDatasets = %v, want [revenue_by_region] (the nearest enclosing child dataset)", ctx.BoundDatasets)
 	}
+	if ctx.EnclosingKind != "ChartStructure" {
+		t.Errorf("EnclosingKind = %q, want ChartStructure (the child's kind, not the LayoutPage root)", ctx.EnclosingKind)
+	}
+}
+
+func TestResolvePositionPath_FlowSequenceScenarios(t *testing.T) {
+	// A flow-style scenarios value must still classify as scenario items.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  scenarios: ["ac1", "pp1"]
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 18) // inside the flow array
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosScenarioItem {
+		t.Errorf("Kind = %v, want PosScenarioItem for a flow-style scenarios value", ctx.Kind)
+	}
 }
 
 func TestResolvePositionPath_MultiDoc(t *testing.T) {

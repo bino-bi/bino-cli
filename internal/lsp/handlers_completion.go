@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -36,6 +37,14 @@ func (s *Server) CompletionResolve(_ context.Context, item *protocol.CompletionI
 }
 
 func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext) (items []protocol.CompletionItem, incomplete bool) {
+	// A completion panic must never crash the server or break the editor session;
+	// log it and return no suggestions.
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.Errorf("assembleCompletion panic (kind=%d field=%q): %v\n%s", pc.Kind, pc.FieldName, r, debug.Stack())
+			items, incomplete = nil, false
+		}
+	}()
 	switch pc.Kind {
 	case reportspec.PosKindValue:
 		return completeKinds(s.getSchema(ctx)), false
