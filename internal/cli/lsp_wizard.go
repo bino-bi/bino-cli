@@ -545,11 +545,12 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 	var req struct {
 		File     string         `json:"file"`
 		Position int            `json:"position"`
-		Op       string         `json:"op"`   // "edit" (default), "remove", "reorder"
+		Op       string         `json:"op"`   // "edit" (default), "remove", "reorder", "append"
 		Mode     string         `json:"mode"` // "compute" (default) or "write"
 		Patch    map[string]any `json:"patch"`
 		Paths    []string       `json:"paths"`
 		Path     string         `json:"path"`
+		Value    any            `json:"value"`
 		From     int            `json:"from"`
 		To       int            `json:"to"`
 	}
@@ -565,8 +566,8 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 	if op == "" {
 		op = "edit"
 	}
-	if op != "edit" && op != "remove" && op != "reorder" {
-		result.Error = fmt.Sprintf("unknown op %q (want \"edit\", \"remove\", or \"reorder\")", op)
+	if op != "edit" && op != "remove" && op != "reorder" && op != "append" {
+		result.Error = fmt.Sprintf("unknown op %q (want \"edit\", \"remove\", \"reorder\", or \"append\")", op)
 		return outputJSON(out, result)
 	}
 	mode := req.Mode
@@ -611,6 +612,12 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 			return outputJSON(out, result)
 		}
 		full, edited, err = spec.ReorderYAMLSequence(string(content), pos, req.Path, req.From, req.To)
+	case "append":
+		if req.Path == "" {
+			result.Error = "path is required for op=append"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.AppendYAMLSequence(string(content), pos, req.Path, req.Value)
 	default:
 		if len(req.Patch) == 0 {
 			result.Error = "patch is required for op=edit"

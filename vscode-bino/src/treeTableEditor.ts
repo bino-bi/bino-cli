@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
+import { parseAllDocuments, Document, Scalar, YAMLMap, YAMLSeq, Pair, isScalar, isMap, isSeq, isPair } from 'yaml';
 import { WorkspaceIndexer } from './indexer';
 import { SchemaResolver, FieldDef } from './schemaResolver';
-import { parseYamlDocuments, resolveLineNumbers, addField } from './yamlModel';
 import { AuthoringClient, formatEditDiagnostics, EditResult } from './authoringClient';
-import { getTreeTableHtml, getErrorHtml, getPlaceholderHtml } from './treeTableHtml';
+import { getTreeTableHtml, getErrorHtml, getPlaceholderHtml, TreeDocument, TreeNode } from './treeTableHtml';
 
 /**
  * Manages the tree-table editor webview panel.
@@ -283,46 +283,17 @@ export class TreeTableEditorManager {
     private async handleAddArrayItem(docIndex: number, path: string[], itemIsObject?: boolean): Promise<void> {
         if (!this.currentEditor) { return; }
 
-        const text = this.currentEditor.document.getText();
-
-        // Parse to find the current array length, then add at that index
-        const docs = parseYamlDocuments(text);
-        const doc = docs.find(d => d.docIndex === docIndex);
-        if (!doc) { return; }
-
-        // Walk the node tree to find the array node
-        let arrayNode: { children?: { length: number } } | undefined;
-        let current: typeof doc.nodes = doc.nodes;
-        for (const segment of path) {
-            const node = current.find(n => n.key === segment);
-            if (!node) { return; }
-            if (node.type === 'array' && node.children) {
-                arrayNode = node;
-            }
-            current = node.children || [];
-        }
-        if (!arrayNode?.children) { return; }
-
-        const newIndex = String(arrayNode.children.length);
+        // The Go engine appends to the end of the sequence (creating it if absent),
+        // so there is no need to compute the current array length here.
         const itemDefault = itemIsObject ? {} : '';
-        const result = addField(text, docIndex, [...path, newIndex], itemDefault);
-        if (!result) { return; }
-
-        this.suppressForwardSync = true;
-        try {
-            const fullRange = new vscode.Range(
-                this.currentEditor.document.positionAt(0),
-                this.currentEditor.document.positionAt(text.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(this.currentEditor.document.uri, fullRange, result.newText);
-            await vscode.workspace.applyEdit(edit);
-        } finally {
-            setTimeout(() => {
-                this.suppressForwardSync = false;
-                this.forwardSync();
-            }, 100);
-        }
+        await this.applyAuthoringEdit(
+            this.authoring.append({
+                file: this.currentEditor.document.uri.fsPath,
+                position: docIndex + 1,
+                path: path.join('.'),
+                value: itemDefault,
+            })
+        );
     }
 
     /**
@@ -371,48 +342,16 @@ export class TreeTableEditorManager {
             childObj = { kind, ref: pickedRef.refName };
         }
 
-        // Find current array length
-        const text = this.currentEditor.document.getText();
-        const docs = parseYamlDocuments(text);
-        const doc = docs.find(d => d.docIndex === docIndex);
-        if (!doc) { return; }
-
-        let arrayLen = -1; // -1 means array doesn't exist yet
-        let current = doc.nodes;
-        for (const segment of path) {
-            const node = current.find(n => n.key === segment);
-            if (!node) { arrayLen = -1; break; }
-            if (node.type === 'array' && node.children) {
-                arrayLen = node.children.length;
-            }
-            current = node.children || [];
-        }
-
-        // If array doesn't exist, create it with the child as first item
-        // If it exists, append to it
-        let result: { newText: string } | undefined;
-        if (arrayLen < 0) {
-            result = addField(text, docIndex, path, [childObj]);
-        } else {
-            result = addField(text, docIndex, [...path, String(arrayLen)], childObj);
-        }
-        if (!result) { return; }
-
-        this.suppressForwardSync = true;
-        try {
-            const fullRange = new vscode.Range(
-                this.currentEditor.document.positionAt(0),
-                this.currentEditor.document.positionAt(text.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(this.currentEditor.document.uri, fullRange, result.newText);
-            await vscode.workspace.applyEdit(edit);
-        } finally {
-            setTimeout(() => {
-                this.suppressForwardSync = false;
-                this.forwardSync();
-            }, 100);
-        }
+        // The Go engine appends the child, auto-vivifying the children array if it
+        // does not exist yet, so both the create-first and append cases are one op.
+        await this.applyAuthoringEdit(
+            this.authoring.append({
+                file: this.currentEditor.document.uri.fsPath,
+                position: docIndex + 1,
+                path: path.join('.'),
+                value: childObj,
+            })
+        );
     }
 
     /** Handle completion requests from the webview */
@@ -504,5 +443,273 @@ function getDefaultValueForType(fieldType: string): unknown {
         case 'array': return [];
         case 'object': return {};
         default: return '';
+    }
+}
+
+// --- Read-only YAML parsing for the tree view ---
+//
+// The webview renders a CST-preserving *read* of the manifest into TreeDocument
+// models; all *writes* go through the AuthoringClient / Go engine. This is not a
+// second YAML-fidelity write engine — it only feeds the renderer and column
+// lookups below.
+
+/**
+ * Parse a multi-document YAML string into TreeDocument models.
+ * Uses the `yaml` library for CST-preserving parsing.
+ */
+function parseYamlDocuments(text: string): TreeDocument[] {
+    const docs: TreeDocument[] = [];
+    let parsed: Document[];
+
+    try {
+        parsed = parseAllDocuments(text, { keepSourceTokens: true });
+    } catch {
+        return [];
+    }
+
+    const lines = text.split('\n');
+
+    for (let i = 0; i < parsed.length; i++) {
+        const doc = parsed[i];
+        if (!doc.contents) { continue; }
+        if (doc.errors && doc.errors.length > 0) { continue; }
+
+        const json = doc.toJSON();
+        if (!json || typeof json !== 'object') { continue; }
+
+        const kind = json.kind || '';
+        const name = json.metadata?.name || '';
+
+        // Compute start/end lines from document range
+        const range = doc.range;
+        let startLine = 0;
+        let endLine = lines.length - 1;
+
+        if (range) {
+            startLine = offsetToLine(text, range[0]);
+            endLine = offsetToLine(text, range[1]);
+        }
+
+        const nodes = mapContentsToNodes(doc.contents, []);
+        docs.push({ docIndex: i, kind, name, nodes, startLine, endLine });
+    }
+
+    return docs;
+}
+
+/** Convert an offset in the text to a 0-based line number */
+function offsetToLine(text: string, offset: number): number {
+    let line = 0;
+    for (let i = 0; i < offset && i < text.length; i++) {
+        if (text[i] === '\n') { line++; }
+    }
+    return line;
+}
+
+/** Convert an offset to a 0-based column number */
+function offsetToColumn(text: string, offset: number): number {
+    let col = 0;
+    for (let i = offset - 1; i >= 0; i--) {
+        if (text[i] === '\n') { break; }
+        col++;
+    }
+    return col;
+}
+
+/** Map yaml library node to TreeNode array */
+function mapContentsToNodes(node: unknown, parentPath: string[]): TreeNode[] {
+    if (isMap(node)) {
+        return mapMapNode(node as YAMLMap, parentPath);
+    }
+    return [];
+}
+
+/** Map a YAMLMap's pairs to TreeNode array */
+function mapMapNode(map: YAMLMap, parentPath: string[]): TreeNode[] {
+    const nodes: TreeNode[] = [];
+
+    for (const item of map.items) {
+        if (!isPair(item)) { continue; }
+        const pair = item as Pair;
+
+        const key = isScalar(pair.key) ? String((pair.key as Scalar).value) : String(pair.key);
+        const path = [...parentPath, key];
+
+        const treeNode = valueToTreeNode(key, pair.value, path, pair.key);
+        if (treeNode) {
+            nodes.push(treeNode);
+        }
+    }
+
+    return nodes;
+}
+
+/** Convert a YAML value node to a TreeNode */
+function valueToTreeNode(key: string, value: unknown, path: string[], keyNode?: unknown): TreeNode | undefined {
+    // Get line/column from the key node's range
+    let line = 0;
+    let column = 0;
+    if (isScalar(keyNode)) {
+        const range = (keyNode as any).range;
+        if (range) {
+            // range is [start, valueEnd, nodeEnd] offsets — but we don't have the text here
+            // We'll use a simplified approach and store the range offsets
+            line = range[0]; // Will be converted later
+            column = 0;
+        }
+    }
+
+    if (isScalar(value)) {
+        const scalar = value as Scalar;
+        const rawValue = scalar.value;
+        const type = inferScalarType(rawValue);
+        const isMultiline = typeof rawValue === 'string' && rawValue.includes('\n');
+        const valueRange = (scalar as any).range
+            ? { start: (scalar as any).range[0], end: (scalar as any).range[1] }
+            : undefined;
+
+        return {
+            key,
+            value: rawValue,
+            displayValue: formatDisplayValue(rawValue, isMultiline),
+            type: isMultiline ? 'multiline' : type,
+            path,
+            line,
+            column,
+            valueRange,
+        };
+    }
+
+    if (isMap(value)) {
+        const children = mapMapNode(value as YAMLMap, path);
+        return {
+            key,
+            value: undefined,
+            displayValue: `{${children.length}}`,
+            type: 'object',
+            path,
+            line,
+            column,
+            children,
+        };
+    }
+
+    if (isSeq(value)) {
+        const seq = value as YAMLSeq;
+        const children: TreeNode[] = [];
+
+        for (let i = 0; i < seq.items.length; i++) {
+            const item = seq.items[i];
+            const itemPath = [...path, String(i)];
+            const itemKey = `[${i}]`;
+
+            if (isMap(item)) {
+                const mapChildren = mapMapNode(item as YAMLMap, itemPath);
+                children.push({
+                    key: itemKey,
+                    value: undefined,
+                    displayValue: `{${mapChildren.length}}`,
+                    type: 'object',
+                    path: itemPath,
+                    line: 0,
+                    column: 0,
+                    children: mapChildren,
+                });
+            } else if (isScalar(item)) {
+                const scalar = item as Scalar;
+                const rawValue = scalar.value;
+                const type = inferScalarType(rawValue);
+                const valueRange = (scalar as any).range
+                    ? { start: (scalar as any).range[0], end: (scalar as any).range[1] }
+                    : undefined;
+                children.push({
+                    key: itemKey,
+                    value: rawValue,
+                    displayValue: formatDisplayValue(rawValue, false),
+                    type,
+                    path: itemPath,
+                    line: 0,
+                    column: 0,
+                    valueRange,
+                });
+            } else if (isSeq(item)) {
+                children.push({
+                    key: itemKey,
+                    value: undefined,
+                    displayValue: `[${(item as YAMLSeq).items.length}]`,
+                    type: 'array',
+                    path: itemPath,
+                    line: 0,
+                    column: 0,
+                });
+            }
+        }
+
+        return {
+            key,
+            value: undefined,
+            displayValue: `[${children.length}]`,
+            type: 'array',
+            path,
+            line,
+            column,
+            children,
+        };
+    }
+
+    // null / undefined
+    return {
+        key,
+        value: null,
+        displayValue: 'null',
+        type: 'null',
+        path,
+        line,
+        column,
+    };
+}
+
+/** Infer the scalar type */
+function inferScalarType(value: unknown): 'string' | 'number' | 'boolean' | 'null' {
+    if (value === null || value === undefined) { return 'null'; }
+    if (typeof value === 'boolean') { return 'boolean'; }
+    if (typeof value === 'number') { return 'number'; }
+    return 'string';
+}
+
+/** Format a value for display in the tree */
+function formatDisplayValue(value: unknown, isMultiline: boolean): string {
+    if (value === null || value === undefined) { return 'null'; }
+    if (typeof value === 'boolean') { return value ? 'true' : 'false'; }
+    if (typeof value === 'number') { return String(value); }
+    if (isMultiline) { return '(multiline)'; }
+    const str = String(value);
+    if (str.length > 80) { return str.substring(0, 80) + '...'; }
+    return str;
+}
+
+/**
+ * Resolve line numbers from offsets.
+ * Call this after parseYamlDocuments to convert offset-based line numbers
+ * to actual 0-based line numbers.
+ */
+function resolveLineNumbers(text: string, docs: TreeDocument[]): void {
+    for (const doc of docs) {
+        resolveNodeLines(text, doc.nodes);
+    }
+}
+
+/** Recursively resolve line numbers for a node tree */
+function resolveNodeLines(text: string, nodes: TreeNode[]): void {
+    for (const node of nodes) {
+        if (node.line > 0) {
+            // line currently holds the byte offset from the key node
+            const offset = node.line;
+            node.line = offsetToLine(text, offset);
+            node.column = offsetToColumn(text, offset);
+        }
+        if (node.children) {
+            resolveNodeLines(text, node.children);
+        }
     }
 }

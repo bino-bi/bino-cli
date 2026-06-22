@@ -353,6 +353,80 @@ func TestReorderYAMLSequenceNotASequence(t *testing.T) {
 	}
 }
 
+func TestAppendYAMLSequenceGolden(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		path    string
+		value   any
+		want    string
+		wantErr bool
+	}{
+		{
+			name:   "append a scalar to an existing commented sequence keeps the prior comments",
+			source: seqGoldenSource,
+			path:   "spec.columns",
+			value:  "fourth",
+			want: `apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: t
+spec:
+  columns:
+    # head first
+    - first # line first
+    - second
+    # head third
+    - third # line third
+    - fourth
+---
+kind: Text
+spec:
+  value: keep
+`,
+		},
+		{
+			name:   "append auto-vivifies a missing sequence as a one-element array",
+			source: "kind: LayoutPage\nspec:\n  title: T\n",
+			path:   "spec.children",
+			value:  map[string]any{"kind": "Table", "ref": "sales"},
+			want: `kind: LayoutPage
+spec:
+  title: T
+  children:
+    - kind: Table
+      ref: sales
+`,
+		},
+		{
+			name:    "append onto a mapping path errors",
+			source:  mapGoldenSource,
+			path:    "spec",
+			value:   "x",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			full, edited, err := AppendYAMLSequence(tt.source, 1, tt.path, tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got full:\n%s", full)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("AppendYAMLSequence: %v", err)
+			}
+			if full != tt.want {
+				t.Errorf("full mismatch:\n--- got ---\n%s\n--- want ---\n%s", full, tt.want)
+			}
+			assertEvenMappings(t, edited)
+		})
+	}
+}
+
 // assertEvenMappings fails if any mapping node in the document has an odd number
 // of children, which would break the alternating key/value invariant that
 // setMapValue and ResolvePathPosition rely on.

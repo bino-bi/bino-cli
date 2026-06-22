@@ -36,6 +36,21 @@ export interface RemoveRequest {
 }
 
 /**
+ * An append request: grow the sequence at `path` by one element. A missing
+ * sequence (and its intermediate maps) is created, so appending to an absent
+ * array yields a one-element sequence. This is the only mutation that grows a
+ * sequence past its end — an operation the set-only edit op cannot express.
+ */
+export interface AppendRequest {
+    file: string;
+    position?: number;
+    /** Dotted path of the sequence to append to, e.g. "spec.children". */
+    path: string;
+    /** The element to append (scalar, object, or array). */
+    value: unknown;
+}
+
+/**
  * The single extension-side authoring client every Design surface mutates
  * manifests through. It computes the rewritten manifest via the one Go fidelity
  * engine (`bino lsp-helper edit`, which preserves comments and key order) and
@@ -59,6 +74,11 @@ export class AuthoringClient {
     /** Remove one or more dotted paths from a manifest document. */
     async remove(req: RemoveRequest): Promise<EditResult> {
         return this.apply(req.file, req.position, { op: 'remove', paths: req.paths });
+    }
+
+    /** Append an element to the sequence at a dotted path (creating it if absent). */
+    async append(req: AppendRequest): Promise<EditResult> {
+        return this.apply(req.file, req.position, { op: 'append', path: req.path, value: req.value });
     }
 
     /**

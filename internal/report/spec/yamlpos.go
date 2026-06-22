@@ -195,6 +195,94 @@ func ReorderYAMLSequence(content string, position int, path string, from, to int
 	return full, edited, nil
 }
 
+// AppendYAMLSequence appends value to the end of the sequence at the dotted path
+// in a single document (1-based position), preserving the comments, key order,
+// and formatting of every other document and of the untouched keys. Missing
+// intermediate mappings — and the sequence itself — are created, so appending to
+// an absent array yields a one-element sequence. It returns the rewritten full
+// content and the edited document on its own (for validation).
+//
+// This is the growth counterpart to EditYAMLDocument, whose set-only paths reject
+// an out-of-range index (so they cannot append past a sequence's end). It is the
+// single engine for the designer's array-append mutations.
+func AppendYAMLSequence(content string, position int, path string, value any) (full string, edited string, err error) {
+	docs, err := decodeDocuments(content)
+	if err != nil {
+		return "", "", err
+	}
+	root, err := documentRoot(docs, position)
+	if err != nil {
+		return "", "", err
+	}
+
+	seq, err := descendOrCreateSequence(root, path)
+	if err != nil {
+		return "", "", fmt.Errorf("append %s: %w", path, err)
+	}
+	elem := &yaml.Node{}
+	if err := elem.Encode(normalizeJSONNumbers(value)); err != nil {
+		return "", "", fmt.Errorf("append %s: %w", path, err)
+	}
+	seq.Content = append(seq.Content, elem)
+
+	full, err = encodeDocuments(docs)
+	if err != nil {
+		return "", "", err
+	}
+	edited, err = encodeDocuments(docs[position-1 : position])
+	if err != nil {
+		return "", "", err
+	}
+	return full, edited, nil
+}
+
+// descendOrCreateSequence walks a dotted path from a mapping root to a sequence
+// node, creating missing intermediate mappings and the terminal sequence as
+// needed (mirroring setNodePath's auto-vivification). [index] suffixes select an
+// existing sequence element to descend into. It errors if a non-final segment
+// resolves to a non-mapping, or if the terminal node exists but is not a sequence.
+func descendOrCreateSequence(root *yaml.Node, path string) (*yaml.Node, error) {
+	parts := strings.Split(path, ".")
+	current := root
+	for i, part := range parts {
+		key, idx, hasIdx := parseSegment(part)
+		last := i == len(parts)-1
+
+		if current.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("cannot descend into %q: parent is not a mapping", key)
+		}
+		valNode := mapValue(current, key)
+
+		if valNode == nil {
+			if hasIdx {
+				return nil, fmt.Errorf("index %d out of range for %q (len 0)", idx, key)
+			}
+			valNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+			setMapValue(current, key, valNode)
+		}
+
+		if hasIdx {
+			if valNode.Kind != yaml.SequenceNode {
+				return nil, fmt.Errorf("%q is not a sequence", key)
+			}
+			if idx < 0 || idx >= len(valNode.Content) {
+				return nil, fmt.Errorf("index %d out of range for %q (len %d)", idx, key, len(valNode.Content))
+			}
+			current = valNode.Content[idx]
+			continue
+		}
+
+		if last {
+			if valNode.Kind != yaml.SequenceNode {
+				return nil, fmt.Errorf("%q is not a sequence", key)
+			}
+			return valNode, nil
+		}
+		current = valNode
+	}
+	return nil, fmt.Errorf("empty path")
+}
+
 // decodeDocuments parses multi-document YAML content into DocumentNodes,
 // preserving comments and order for fidelity-preserving re-encoding.
 func decodeDocuments(content string) ([]*yaml.Node, error) {
