@@ -112,6 +112,34 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_NestedLayoutChildBinding(t *testing.T) {
+	// A scenario inside a layout child binds to that child's dataset, not the
+	// document root (a LayoutPage has no top-level dataset).
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartStructure
+      metadata:
+        name: chart
+      spec:
+        dataset: revenue_by_region
+        scenarios:
+          - ac1
+`
+	ctx, ok := ResolvePositionPath(doc, 12, 13) // on "- ac1"
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosScenarioItem {
+		t.Fatalf("Kind = %v, want PosScenarioItem", ctx.Kind)
+	}
+	if len(ctx.BoundDatasets) != 1 || ctx.BoundDatasets[0] != "revenue_by_region" {
+		t.Errorf("BoundDatasets = %v, want [revenue_by_region] (the nearest enclosing child dataset)", ctx.BoundDatasets)
+	}
+}
+
 func TestResolvePositionPath_MultiDoc(t *testing.T) {
 	const content = `kind: DataSource
 metadata:

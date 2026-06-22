@@ -84,7 +84,6 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 	}
 
 	w := &walker{cursorLine: line, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx}
-	w.boundDatasets = extractBoundDatasets(root)
 	ctx, ok := w.descend(root, nil, endLine)
 	if !ok {
 		return PositionContext{}, false
@@ -152,6 +151,12 @@ func (w *walker) descend(node *yaml.Node, path []string, parentEnd int) (Positio
 }
 
 func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (PositionContext, bool) {
+	// Track the nearest enclosing dataset binding as we descend, so a scenario /
+	// variance / query inside a layout child binds to that child's dataset, not
+	// the document root's. The deepest mapping on the path wins.
+	if ds := bindingDatasets(node); len(ds) > 0 {
+		w.boundDatasets = ds
+	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
 		val := node.Content[i+1]
@@ -384,19 +389,17 @@ func docKind(root *yaml.Node) string {
 	return ""
 }
 
-// extractBoundDatasets reads the upstream a document binds to: a component's
-// spec.dataset (string or sequence) for scenario/variance completion, and a
-// DataSet's spec.source + spec.dependencies for in-query column completion. A
-// document is one or the other, so the union is unambiguous.
-func extractBoundDatasets(root *yaml.Node) []string {
-	spec := mappingChild(root, "spec")
-	if spec == nil {
-		return nil
-	}
+// bindingDatasets reads the upstream a mapping binds to from its DIRECT children:
+// a component's `dataset` (string or sequence) for scenario/variance completion,
+// and a DataSet's `source` + `dependencies` for in-query column completion. It is
+// called on each mapping along the descent, so the nearest enclosing binding wins
+// — `dataset` lives beside `scenarios` whether at the document root (a top-level
+// Table) or inside a layout child's `spec`.
+func bindingDatasets(node *yaml.Node) []string {
 	out := make([]string, 0, 4)
-	out = append(out, scalarOrSeqValues(mappingChild(spec, "dataset"))...)
-	out = append(out, scalarOrSeqValues(mappingChild(spec, "source"))...)
-	out = append(out, scalarOrSeqValues(mappingChild(spec, "dependencies"))...)
+	out = append(out, scalarOrSeqValues(mappingChild(node, "dataset"))...)
+	out = append(out, scalarOrSeqValues(mappingChild(node, "source"))...)
+	out = append(out, scalarOrSeqValues(mappingChild(node, "dependencies"))...)
 	return out
 }
 
