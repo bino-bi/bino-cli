@@ -13,7 +13,6 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/version"
 )
@@ -98,38 +97,14 @@ func resolveMCPRoot(workdir string) (root string, initialized bool, err error) {
 // runMCPStandalone serves the MCP directly over stdio from a freshly loaded
 // project State (no daemon involved).
 func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string) error {
-	projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
-	if err != nil {
-		logger.Debugf("Could not load bino.toml: %v", err)
-		projectCfg = &pathutil.ProjectConfig{}
-	}
-
-	// Load plugins so plugin kinds/linters appear in schema/validate (parity with
-	// the daemon and `bino schema`). Engine compatibility is intentionally not
-	// checked here — introspection should work regardless; the build tool shells
-	// out to `bino build`, which enforces engine-compat itself.
-	var reg *plugin.PluginRegistry
-	if len(projectCfg.Plugins) > 0 {
-		mgr := plugin.NewManager(logger.Channel("plugin"))
-		mgr.SetVerbose(logx.DebugEnabled(ctx))
-		if err := mgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
-			logger.Warnf("Failed to load plugins: %v", err)
-		} else {
-			reg = mgr.Registry()
-			defer mgr.ShutdownAll(ctx)
-		}
-	}
-
-	managedCfg := daemon.ManagedStateConfig{ProjectRoot: projectRoot, Logger: logger}
-	if reg != nil {
-		managedCfg.KindProvider = reg
-		managedCfg.PluginLinters = plugin.NewLinterRegistry(reg)
-	}
-	managed, err := daemon.NewManagedState(ctx, managedCfg)
+	// Plugins are loaded so plugin kinds/linters appear in schema/validate (parity
+	// with the daemon and `bino schema`); the build tool shells out to `bino build`,
+	// which enforces engine-compat itself.
+	managed, reg, cleanup, err := loadStandaloneState(ctx, logger, projectRoot)
 	if err != nil {
 		return RuntimeError(err)
 	}
-	defer managed.Close()
+	defer cleanup()
 
 	if err := managed.State.Refresh(ctx); err != nil {
 		logger.Errorf("Initial refresh failed: %v", err)

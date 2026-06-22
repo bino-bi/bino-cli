@@ -2,14 +2,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WorkspaceIndexer, LSPDocument, DatasetCandidate, LSPGraphNode, GraphDirection } from './indexer';
-import { BinoCompletionProvider } from './completion';
 import { BinoTreeProvider, BinoTreeItem, InlineChild } from './tree';
-import { BinoDefinitionProvider } from './definition';
-import { BinoHoverProvider } from './hover';
 import { BinoValidator } from './validation';
 import { BinoPreviewManager } from './preview';
 import { showSetupCheckResults } from './setup';
-import { registerRenameProvider } from './rename';
+import { startLanguageClient } from './languageClient';
 import { registerPrqlFeatures } from './prql';
 import { registerPrqlHighlighting } from './prqlHighlight';
 import { registerPrqlCompletion } from './prqlCompletion';
@@ -32,9 +29,6 @@ let indexerStatusBarItem: vscode.StatusBarItem | undefined;
 let validationStatusBarItem: vscode.StatusBarItem | undefined;
 let daemonClient: DaemonClient | undefined;
 let daemonStatusBarItem: vscode.StatusBarItem | undefined;
-
-// Schema URI for bino manifests
-const BINO_SCHEMA = 'bino-schema';
 
 /**
  * Find the line number where the Nth document starts in a multi-doc YAML file.
@@ -172,42 +166,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    // Register schema provider with RedHat YAML extension
-    await registerSchemaProvider(context);
-
-    // Register completion provider for YAML files
-    const completionProvider = new BinoCompletionProvider(indexer);
-
+    // The bino Language Server provides completion, hover, navigation, rename,
+    // and diagnostics — server-side over a YAML CST. It is gated on a binary
+    // capability: when `bino lsp` is missing (an old binary) the user is prompted
+    // to update and no language features are registered. The legacy heuristic
+    // providers and the redhat schema contributor have been removed; the LSP now
+    // serves schema-driven completion and validation. The daemon started above
+    // (when enabled) is the single heavy instance the LSP proxies to.
     const yamlSelector: vscode.DocumentSelector = [
         { language: 'yaml', scheme: 'file' },
         { language: 'yaml', scheme: 'untitled' }
     ];
 
-    context.subscriptions.push(
-        vscode.languages.registerCompletionItemProvider(
-            yamlSelector,
-            completionProvider,
-            ':', ' ', '-', '$'
-        )
-    );
-
-    // Register definition provider for go-to-definition
-    const definitionProvider = new BinoDefinitionProvider(indexer);
-    context.subscriptions.push(
-        vscode.languages.registerDefinitionProvider(
-            yamlSelector,
-            definitionProvider
-        )
-    );
-
-    // Register hover provider for dataset column info
-    const hoverProvider = new BinoHoverProvider(indexer);
-    context.subscriptions.push(
-        vscode.languages.registerHoverProvider(
-            yamlSelector,
-            hoverProvider
-        )
-    );
+    const lspProjectRoot = indexer.getProjectRootForUri();
+    if (lspProjectRoot) {
+        await startLanguageClient(context, outputChannel, lspProjectRoot);
+    }
 
     // Register CodeLens provider for DataSource/DataSet previews
     const codeLensProvider = new BinoCodeLensProvider(indexer);
@@ -230,9 +204,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize tree-table editor manager
     treeTableEditorManager = new TreeTableEditorManager(indexer, context.extensionPath);
     context.subscriptions.push({ dispose: () => treeTableEditorManager?.dispose() });
-
-    // Register rename provider for document identifiers
-    registerRenameProvider(context, indexer);
 
     // Register PRQL features (editor, SQL preview integration)
     registerPrqlFeatures(context);
@@ -762,91 +733,6 @@ function updateValidationStatusBar(): void {
         validationStatusBarItem.text = '$(pass) Bino: 0 errors';
         validationStatusBarItem.backgroundColor = undefined;
     }
-}
-
-/**
- * Register a custom schema provider with the RedHat YAML extension.
- * This allows us to dynamically associate the bino schema only with files
- * that contain `apiVersion: bino.bi/v1alpha1`.
- *
- * The schema is fetched from the daemon (which merges built-in + plugin schemas).
- * Falls back to the static embedded schema if the daemon is unavailable.
- */
-async function registerSchemaProvider(context: vscode.ExtensionContext): Promise<void> {
-    const yamlExtension = vscode.extensions.getExtension('redhat.vscode-yaml');
-
-    if (!yamlExtension) {
-        console.warn('RedHat YAML extension not found');
-        return;
-    }
-
-    // Wait for the extension to activate
-    const yamlApi = await yamlExtension.activate();
-
-    if (!yamlApi || !yamlApi.registerContributor) {
-        console.warn('RedHat YAML extension API not available');
-        return;
-    }
-
-    // Load embedded schema as fallback
-    const schemaFilePath = path.join(context.extensionPath, 'schema', 'document.schema.json');
-    let fallbackSchema: string = '{}';
-
-    try {
-        fallbackSchema = fs.readFileSync(schemaFilePath, 'utf8');
-    } catch (err) {
-        console.error('Failed to load fallback bino schema:', err);
-    }
-
-    // Cache the daemon schema to avoid fetching on every request.
-    // Refreshed when daemon connects or index updates.
-    let cachedDaemonSchema: string | undefined;
-
-    const refreshDaemonSchema = async () => {
-        if (daemonClient?.isConnected) {
-            const schema = await daemonClient.getSchema();
-            if (schema) {
-                cachedDaemonSchema = schema;
-                console.log('Refreshed schema from daemon (includes plugin kinds)');
-            }
-        }
-    };
-
-    // Refresh schema when daemon connects or index updates (plugins may change).
-    if (daemonClient) {
-        daemonClient.onStatusChange(async (status) => {
-            if (status === 'connected') {
-                await refreshDaemonSchema();
-            }
-        });
-        daemonClient.on('index-updated', async () => {
-            await refreshDaemonSchema();
-        });
-        // Try immediately if already connected
-        await refreshDaemonSchema();
-    }
-
-    // Register our schema contributor
-    // The label parameter enables content-based matching: only files containing
-    // 'apiVersion: bino.bi' will have this schema applied
-    yamlApi.registerContributor(
-        BINO_SCHEMA,
-        (resource: string) => {
-            // Return schema URI for any YAML file - the label filter handles the rest
-            if (resource.endsWith('.yaml') || resource.endsWith('.yml')) {
-                return `${BINO_SCHEMA}://schema/bino`;
-            }
-            return undefined;
-        },
-        (uri: string) => {
-            // Prefer daemon schema (includes plugin kinds), fall back to embedded
-            return cachedDaemonSchema || fallbackSchema;
-        },
-        // Label: only apply to files containing this pattern
-        'apiVersion: bino.bi'
-    );
-
-    console.log('Registered bino schema contributor with YAML extension');
 }
 
 /**

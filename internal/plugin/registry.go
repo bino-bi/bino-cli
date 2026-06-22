@@ -59,8 +59,12 @@ func (r *PluginRegistry) GetKindRegistration(kindName string) (KindRegistration,
 	return k, ok
 }
 
-// AllKinds returns all registered plugin kinds.
+// AllKinds returns all registered plugin kinds. A nil registry (no plugins
+// configured) has none.
 func (r *PluginRegistry) AllKinds() []KindRegistration {
+	if r == nil {
+		return nil
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -71,8 +75,12 @@ func (r *PluginRegistry) AllKinds() []KindRegistration {
 	return kinds
 }
 
-// AllPlugins returns all plugins in declaration order.
+// AllPlugins returns all plugins in declaration order. A nil registry (no
+// plugins configured) has none.
 func (r *PluginRegistry) AllPlugins() []Plugin {
+	if r == nil {
+		return nil
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

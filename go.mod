@@ -17,7 +17,7 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
+	github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/graemephi/goldmark-qjs-katex v0.3.0
@@ -35,6 +35,9 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/goldmark v1.8.2
 	go.abhg.dev/goldmark/toc v0.12.0
+	go.lsp.dev/jsonrpc2 v1.0.0
+	go.lsp.dev/protocol v1.0.0
+	go.lsp.dev/uri v1.0.0
 	golang.org/x/mod v0.37.0
 	golang.org/x/term v0.44.0
 	golang.org/x/text v0.38.0
@@ -49,11 +52,11 @@ require (
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7 // indirect
 	github.com/charmbracelet/bubbletea v1.3.6 // indirect
-	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
-	github.com/charmbracelet/x/ansi v0.9.3 // indirect
+	github.com/charmbracelet/colorprofile v0.4.3 // indirect
+	github.com/charmbracelet/x/ansi v0.11.7 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
-	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/digitorus/pdf v0.1.2 // indirect
@@ -82,7 +85,7 @@ require (
 	github.com/hhrutter/tiff v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -117,3 +120,11 @@ require (
 )
 
 tool github.com/evanw/esbuild/pkg/api
+
+replace github.com/charmbracelet/x/ansi => github.com/charmbracelet/x/ansi v0.9.3
+
+replace github.com/charmbracelet/colorprofile => github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc
+
+replace github.com/charmbracelet/x/term => github.com/charmbracelet/x/term v0.2.1
+
+replace github.com/lucasb-eyer/go-colorful => github.com/lucasb-eyer/go-colorful v1.2.0

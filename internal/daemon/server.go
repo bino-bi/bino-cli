@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -100,6 +101,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("GET /index", srv.handleIndex)
 	mux.HandleFunc("GET /validate", srv.handleValidateGet)
 	mux.HandleFunc("POST /validate", srv.handleValidatePost)
+	mux.HandleFunc("POST /validate-draft", srv.handleValidateDraft)
 	mux.HandleFunc("GET /columns", srv.handleColumns)
 	mux.HandleFunc("GET /rows", srv.handleRows)
 	mux.HandleFunc("POST /introspect-draft", srv.handleIntrospectDraft)
@@ -242,6 +244,27 @@ func (s *Server) handleValidateGet(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, s.state.Validate(r.Context(), true))
+}
+
+// handleValidateDraft validates a raw in-memory YAML buffer (schema + constraints,
+// no disk). It backs the LSP proxy's live per-keystroke diagnostics. Loopback-only
+// and stateless w.r.t. the shared session (ValidateDraft uses its own temp dir).
+func (s *Server) handleValidateDraft(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, `{"error":"read body"}`, http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	diags, err := s.state.ValidateDraft(ctx, body)
+	if err != nil {
+		s.writeJSON(w, ValidateResult{Valid: false, Diagnostics: []Diagnostic{{
+			Severity: "error", Message: err.Error(), Code: "validate-draft-error",
+		}}})
+		return
+	}
+	s.writeJSON(w, ValidateResult{Valid: len(diags) == 0, Diagnostics: diags})
 }
 
 func (s *Server) handleColumns(w http.ResponseWriter, r *http.Request) {
