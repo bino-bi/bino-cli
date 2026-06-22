@@ -623,18 +623,21 @@ func newLSPEditCommand() *cobra.Command {
 func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer) error {
 	result := lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
 
+	// Patch values and the append value are kept as raw JSON so object key order
+	// survives into the engine (decoding into map[string]any would alphabetize it);
+	// they are decoded into order-preserving yaml.Node values below.
 	var req struct {
-		File     string         `json:"file"`
-		Position int            `json:"position"`
-		Op       string         `json:"op"`   // "edit" (default), "remove", "reorder", "append"
-		Mode     string         `json:"mode"` // "compute" (default) or "write"
-		Content  *string        `json:"content"`
-		Patch    map[string]any `json:"patch"`
-		Paths    []string       `json:"paths"`
-		Path     string         `json:"path"`
-		Value    any            `json:"value"`
-		From     int            `json:"from"`
-		To       int            `json:"to"`
+		File     string                     `json:"file"`
+		Position int                        `json:"position"`
+		Op       string                     `json:"op"`   // "edit" (default), "remove", "reorder", "append"
+		Mode     string                     `json:"mode"` // "compute" (default) or "write"
+		Content  *string                    `json:"content"`
+		Patch    map[string]json.RawMessage `json:"patch"`
+		Paths    []string                   `json:"paths"`
+		Path     string                     `json:"path"`
+		Value    json.RawMessage            `json:"value"`
+		From     int                        `json:"from"`
+		To       int                        `json:"to"`
 	}
 	if err := json.Unmarshal(payloadJSON, &req); err != nil {
 		result.Error = fmt.Sprintf("parse payload: %v", err)
@@ -708,13 +711,27 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 			result.Error = "path is required for op=append"
 			return outputJSON(out, result)
 		}
-		full, edited, err = spec.AppendYAMLSequence(string(content), pos, req.Path, req.Value)
+		value, derr := spec.DecodeJSONValue(req.Value)
+		if derr != nil {
+			result.Error = fmt.Sprintf("decode value: %v", derr)
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.AppendYAMLSequence(string(content), pos, req.Path, value)
 	default:
 		if len(req.Patch) == 0 {
 			result.Error = "patch is required for op=edit"
 			return outputJSON(out, result)
 		}
-		full, edited, err = spec.EditYAMLDocument(string(content), pos, req.Patch)
+		patch := make(map[string]any, len(req.Patch))
+		for k, raw := range req.Patch {
+			node, derr := spec.DecodeJSONValue(raw)
+			if derr != nil {
+				result.Error = fmt.Sprintf("decode patch %q: %v", k, derr)
+				return outputJSON(out, result)
+			}
+			patch[k] = node
+		}
+		full, edited, err = spec.EditYAMLDocument(string(content), pos, patch)
 	}
 	if err != nil {
 		result.Error = err.Error()

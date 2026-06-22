@@ -56,7 +56,7 @@ func EditYAMLDocument(content string, position int, patch map[string]any) (full 
 	}
 	sort.Strings(paths)
 	for _, p := range paths {
-		if err := setNodePath(root, p, normalizeJSONNumbers(patch[p])); err != nil {
+		if err := setNodePath(root, p, patch[p]); err != nil {
 			return "", "", fmt.Errorf("set %s: %w", p, err)
 		}
 	}
@@ -219,8 +219,8 @@ func AppendYAMLSequence(content string, position int, path string, value any) (f
 	if err != nil {
 		return "", "", fmt.Errorf("append %s: %w", path, err)
 	}
-	elem := &yaml.Node{}
-	if err := elem.Encode(normalizeJSONNumbers(value)); err != nil {
+	elem, err := encodeValueNode(value)
+	if err != nil {
 		return "", "", fmt.Errorf("append %s: %w", path, err)
 	}
 	seq.Content = append(seq.Content, elem)
@@ -455,6 +455,23 @@ func encodeDocuments(docs []*yaml.Node) (string, error) {
 	return buf.String(), nil
 }
 
+// encodeValueNode turns a caller-supplied value into the yaml.Node to splice
+// into the tree. A *yaml.Node is used as-is so its key order and scalar styles
+// survive verbatim (DecodeJSONValue produces such order-preserving nodes for the
+// JSON edit boundary); any other Go value is normalized and encoded, which —
+// for a map[string]any — alphabetizes keys, so callers that must preserve object
+// key order pass a *yaml.Node, not a Go map.
+func encodeValueNode(value any) (*yaml.Node, error) {
+	if n, ok := value.(*yaml.Node); ok {
+		return n, nil
+	}
+	newNode := &yaml.Node{}
+	if err := newNode.Encode(normalizeJSONNumbers(value)); err != nil {
+		return nil, err
+	}
+	return newNode, nil
+}
+
 // setNodePath sets the value at a dotted path within a mapping node, creating
 // intermediate mappings as needed and preserving sibling order and comments.
 // A segment may carry a [index] suffix to address a sequence element.
@@ -473,8 +490,8 @@ func setNodePath(root *yaml.Node, path string, value any) error {
 		valNode := mapValue(current, key)
 
 		if last && !hasIdx {
-			newNode := &yaml.Node{}
-			if err := newNode.Encode(value); err != nil {
+			newNode, err := encodeValueNode(value)
+			if err != nil {
 				return err
 			}
 			setMapValue(current, key, newNode)
@@ -498,8 +515,8 @@ func setNodePath(root *yaml.Node, path string, value any) error {
 				return fmt.Errorf("index %d out of range for %q (len %d)", idx, key, len(valNode.Content))
 			}
 			if last {
-				newNode := &yaml.Node{}
-				if err := newNode.Encode(value); err != nil {
+				newNode, err := encodeValueNode(value)
+				if err != nil {
 					return err
 				}
 				valNode.Content[idx] = newNode
@@ -572,6 +589,66 @@ func normalizeJSONNumbers(v any) any {
 		return t
 	default:
 		return v
+	}
+}
+
+// DecodeJSONValue parses a JSON value into a *yaml.Node that preserves object key
+// order (Go's map[string]any does not) and re-encodes in natural block YAML.
+// JSON is a subset of YAML, so yaml.v3 decodes it into a node tree whose mapping
+// content keeps source order; the tree is then naturalized (flow style cleared,
+// JSON's blanket double-quoting reset to YAML's canonical per-scalar style,
+// integral floats retagged as ints) so a value read from disk and written back
+// unchanged round-trips byte-for-byte. The returned node is meant to be passed
+// straight into EditYAMLDocument's patch values or AppendYAMLSequence's value,
+// where encodeValueNode splices it verbatim. This is the order-preserving JSON
+// edit boundary for the designer's array-of-object widgets (edges, attributes,
+// thereof/partof/columnthereof) whose intra-object key order is meaningful.
+func DecodeJSONValue(raw []byte) (*yaml.Node, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("decode json value: %w", err)
+	}
+	var val *yaml.Node
+	switch {
+	case doc.Kind == yaml.DocumentNode && len(doc.Content) == 1:
+		val = doc.Content[0]
+	case doc.Kind == yaml.DocumentNode:
+		// Empty input (e.g. JSON null with no content) -> an explicit null node.
+		val = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null", Value: "null"}
+	default:
+		val = &doc
+	}
+	naturalizeNode(val)
+	return val, nil
+}
+
+// naturalizeNode strips the artifacts of yaml.v3's JSON decode so the node
+// re-encodes as idiomatic block YAML: flow-style collections become block, and
+// scalars (which JSON marks double-quoted) revert to style 0 so the encoder
+// picks the canonical style. Integral !!float scalars are retagged !!int to
+// match normalizeJSONNumbers, so "5" not "5.0".
+func naturalizeNode(n *yaml.Node) {
+	if n == nil {
+		return
+	}
+	switch n.Kind {
+	case yaml.MappingNode, yaml.SequenceNode:
+		n.Style = 0
+	case yaml.ScalarNode:
+		n.Style = 0
+		if n.Tag == "!!float" {
+			var f float64
+			if err := n.Decode(&f); err == nil && !math.IsInf(f, 0) && !math.IsNaN(f) && f == math.Trunc(f) {
+				n.Tag = "!!int"
+				n.Value = strconv.FormatInt(int64(f), 10)
+			}
+		}
+	default:
+		// DocumentNode/AliasNode never occur in a JSON-decoded value tree (the
+		// document wrapper is unwrapped in DecodeJSONValue); leave them untouched.
+	}
+	for _, c := range n.Content {
+		naturalizeNode(c)
 	}
 }
 
