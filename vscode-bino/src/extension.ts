@@ -475,6 +475,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
+    // Code↔Design bridge: open the designer for the manifest under the cursor in a
+    // text editor. With no argument the designer resolves the active editor's
+    // cursor to its embeddable (falling back to a picker), so this is a thin entry
+    // point that surfaces "Open in Designer" in the editor context / palette.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('bino.openInDesigner', async () => {
+            await designerPanel?.open();
+        })
+    );
+
     // "Add element" palette — the single entry point that supersedes the static
     // `bino add` command list. Sources kinds (and their categories) from the live
     // backend list (plugin kinds appear automatically) and creates each pick

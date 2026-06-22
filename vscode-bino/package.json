@@ -222,6 +222,12 @@
         "icon": "$(edit)"
       },
       {
+        "command": "bino.openInDesigner",
+        "title": "Open in Designer",
+        "category": "Bino",
+        "icon": "$(edit)"
+      },
+      {
         "command": "bino.addElement",
         "title": "Add Element",
         "category": "Bino",
@@ -357,14 +363,19 @@
     "menus": {
       "view/title": [
         {
+          "command": "bino.addElement",
+          "when": "view == binoDocuments",
+          "group": "navigation@0"
+        },
+        {
           "command": "bino.refreshIndex",
           "when": "view == binoDocuments",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "bino.validateWorkspace",
           "when": "view == binoDocuments",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "explorer/context": [
@@ -385,6 +396,10 @@
         },
         {
           "command": "bino.addElement",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.openInDesigner",
           "when": "bino.projectDetected"
         },
         {
@@ -532,6 +547,11 @@
         }
       ],
       "editor/context": [
+        {
+          "command": "bino.openInDesigner",
+          "when": "editorLangId == yaml && bino.projectDetected",
+          "group": "bino@0"
+        },
         {
           "command": "bino.openPrqlEditor",
           "when": "editorLangId == yaml && bino.inPrqlBlock",
