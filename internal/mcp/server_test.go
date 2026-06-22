@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -160,6 +161,45 @@ func TestListKindsCategories(t *testing.T) {
 		if got[name] != cat {
 			t.Errorf("kind %s: category = %q, want %q", name, got[name], cat)
 		}
+	}
+}
+
+// TestListKindsEmbeddable asserts the served `embeddable` flag matches the
+// single render-embeddable authority (internal/report/embed) for every kind, so
+// bino://kinds, the preview, and the extension never diverge. It also pins the
+// Asset/Image decision: Asset is in the embeddable category but is not a
+// standalone component, and Image is never a manifest kind.
+func TestListKindsEmbeddable(t *testing.T) {
+	cs := newTestClient(t)
+
+	var out listKindsOutput
+	callToolJSON(t, cs, "list_kinds", map[string]any{}, &out)
+
+	if len(out.Kinds) == 0 {
+		t.Fatal("list_kinds returned no kinds")
+	}
+	for _, k := range out.Kinds {
+		if want := embedkinds.IsEmbeddable(k.Name); k.Embeddable != want {
+			t.Errorf("kind %s: embeddable = %v, want %v (authority set)", k.Name, k.Embeddable, want)
+		}
+		if k.Name == "Image" {
+			t.Errorf("Image is a layout-child kind, not a manifest kind; it must not appear in bino://kinds")
+		}
+	}
+
+	got := make(map[string]KindInfo, len(out.Kinds))
+	for _, k := range out.Kinds {
+		got[k.Name] = k
+	}
+	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid"} {
+		if !got[name].Embeddable {
+			t.Errorf("component kind %s: embeddable = false, want true", name)
+		}
+	}
+	// Asset is categorized embeddable (palette grouping) but is a resource, not a
+	// standalone-rendering component.
+	if asset, ok := got["Asset"]; ok && asset.Embeddable {
+		t.Errorf("Asset: embeddable = true, want false (Asset is a resource, not a standalone component)")
 	}
 }
 

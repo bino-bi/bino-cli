@@ -10,6 +10,7 @@ import (
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/report/config"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
 )
@@ -66,18 +67,6 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 	})
 }
 
-// embeddableComponentKinds are standalone component kinds that can be rendered
-// on their own by wrapping them in a synthetic single-child LayoutPage.
-var embeddableComponentKinds = map[string]struct{}{
-	"Table":          {},
-	"ChartStructure": {},
-	"ChartTime":      {},
-	"Text":           {},
-	"Tree":           {},
-	"Grid":           {},
-	"Image":          {},
-}
-
 // EmbedByName resolves a name (optionally disambiguated by kind) from the latest
 // refresh snapshot and renders the matching document as standalone HTML —
 // equivalent to what `bino build` feeds to Chrome. Supported kinds are
@@ -128,7 +117,7 @@ func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *
 				layoutDoc = d
 				break
 			}
-			if _, ok := embeddableComponentKinds[d.Kind]; ok && want(d.Kind) {
+			if embedkinds.IsEmbeddable(d.Kind) && want(d.Kind) {
 				compDoc = d
 				break
 			}
@@ -354,7 +343,7 @@ func embeddableNames(state *State) []string {
 			names = append(names, d.Name)
 			continue
 		}
-		if _, ok := embeddableComponentKinds[d.Kind]; ok {
+		if embedkinds.IsEmbeddable(d.Kind) {
 			names = append(names, d.Name)
 		}
 	}

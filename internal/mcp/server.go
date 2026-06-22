@@ -16,6 +16,7 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/datasource"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	tmpl "bino.bi/bino/internal/template"
 	"bino.bi/bino/internal/version"
 )
@@ -162,10 +163,13 @@ func (h *handlers) readDocuments(_ context.Context, _ *mcpsdk.ReadResourceReques
 // emptyInput is the input type for tools that take no arguments.
 type emptyInput struct{}
 
-// KindInfo describes a manifest kind and its capability category.
+// KindInfo describes a manifest kind, its capability category, and whether it
+// renders standalone as a component (the designer's live canvas and the preview
+// read this flag from the same authority as the render layer).
 type KindInfo struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	Embeddable bool   `json:"embeddable"`
 }
 
 func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
@@ -457,7 +461,7 @@ func (h *handlers) listKinds(ctx context.Context) ([]KindInfo, error) {
 	names := kindEnum(agg.MergedSchema())
 	out := make([]KindInfo, 0, len(names))
 	for _, n := range names {
-		out = append(out, KindInfo{Name: n, Category: h.categoryFor(n)})
+		out = append(out, KindInfo{Name: n, Category: h.categoryFor(n), Embeddable: embedkinds.IsEmbeddable(n)})
 	}
 	return out, nil
 }
