@@ -41,6 +41,7 @@ export class DesignerPanel {
     private binding: Binding | undefined;
     private disposables: vscode.Disposable[] = [];
     private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    private suppressForwardSync = false;
 
     constructor(
         private readonly indexer: WorkspaceIndexer,
@@ -115,6 +116,7 @@ export class DesignerPanel {
     private setupListeners(): void {
         this.disposables.push(
             vscode.workspace.onDidChangeTextDocument(e => {
+                if (this.suppressForwardSync) { return; }
                 if (this.target && e.document.uri.fsPath === this.target.file) {
                     this.debouncedRenderForm();
                 }
@@ -314,14 +316,23 @@ export class DesignerPanel {
     /**
      * Apply an authoring mutation and surface a rejection. Returns true on
      * success so the caller can reload the canvas only on a real write.
+     * The AuthoringClient merges it via a WorkspaceEdit (firing onDidChange), so
+     * we hold the forward-sync guard across the apply to keep the designer's own
+     * edits from re-rendering the form (and stealing focus); external edits still
+     * refresh. The guard clears after a short delay to let the edit settle.
      */
     private async applyEdit(pending: Promise<EditResult>): Promise<boolean> {
-        const result = await pending;
-        if (!result.ok) {
-            vscode.window.showErrorMessage(`Edit rejected: ${formatEditDiagnostics(result)}`);
-            return false;
+        this.suppressForwardSync = true;
+        try {
+            const result = await pending;
+            if (!result.ok) {
+                vscode.window.showErrorMessage(`Edit rejected: ${formatEditDiagnostics(result)}`);
+                return false;
+            }
+            return true;
+        } finally {
+            setTimeout(() => { this.suppressForwardSync = false; }, 100);
         }
-        return true;
     }
 
     /**
