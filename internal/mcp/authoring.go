@@ -14,6 +14,8 @@ type Authoring interface {
 	CreateManifest(ctx context.Context, in CreateManifestInput) (WriteResult, error)
 	WriteManifest(ctx context.Context, in WriteManifestInput) (WriteResult, error)
 	EditManifest(ctx context.Context, in EditManifestInput) (WriteResult, error)
+	RemoveManifestPaths(ctx context.Context, in RemoveManifestPathsInput) (WriteResult, error)
+	ReorderManifestSequence(ctx context.Context, in ReorderManifestSequenceInput) (WriteResult, error)
 	ScaffoldSource(ctx context.Context, payload json.RawMessage) (ScaffoldResult, error)
 	InitBundle(ctx context.Context, in InitBundleInput) (InitResult, error)
 }
@@ -24,6 +26,26 @@ type EditManifestInput struct {
 	Position int            `json:"position,omitempty" jsonschema:"1-based document index within the file (default 1)"`
 	Patch    map[string]any `json:"patch" jsonschema:"dotted-path edits to apply, e.g. {\"spec.title\": \"Q3\", \"spec.columns[0]\": \"region\"}"`
 	DryRun   bool           `json:"dryRun,omitempty" jsonschema:"compute and validate the edit but do not write; the rewritten file is returned in the result's content"`
+}
+
+// RemoveManifestPathsInput deletes one or more dotted paths from one document in
+// a manifest file in place.
+type RemoveManifestPathsInput struct {
+	File     string   `json:"file" jsonschema:"path to the manifest file, relative to the project root"`
+	Position int      `json:"position,omitempty" jsonschema:"1-based document index within the file (default 1)"`
+	Paths    []string `json:"paths" jsonschema:"dotted paths to delete; a trailing [index] removes a sequence element, e.g. [\"spec.subtitle\", \"spec.columns[2]\"]"`
+	DryRun   bool     `json:"dryRun,omitempty" jsonschema:"compute and validate the removal but do not write; the rewritten file is returned in the result's content"`
+}
+
+// ReorderManifestSequenceInput moves an element within a sequence in one document
+// of a manifest file in place.
+type ReorderManifestSequenceInput struct {
+	File     string `json:"file" jsonschema:"path to the manifest file, relative to the project root"`
+	Position int    `json:"position,omitempty" jsonschema:"1-based document index within the file (default 1)"`
+	Path     string `json:"path" jsonschema:"dotted path to the sequence to reorder, e.g. spec.columns"`
+	From     int    `json:"from" jsonschema:"0-based index of the element to move"`
+	To       int    `json:"to" jsonschema:"0-based index the element should end up at"`
+	DryRun   bool   `json:"dryRun,omitempty" jsonschema:"compute and validate the reorder but do not write; the rewritten file is returned in the result's content"`
 }
 
 // CreateManifestInput describes a new manifest to create from a spec object.

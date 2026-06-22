@@ -264,6 +264,155 @@ func TestRunLSPEditParityWithEditManifest(t *testing.T) {
 	}
 }
 
+// seedSeqProject writes a project root with a DataSet whose spec.dependencies is
+// a reorderable/removable sequence of scalar references (schema-valid as-is).
+func seedSeqProject(t *testing.T) (dir, manifest string) {
+	t.Helper()
+	dir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest = filepath.Join(dir, "ds.yaml")
+	original := "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: ds # keep me\nspec:\n  query: SELECT 1\n  dependencies:\n    - $a\n    - $b\n    - $c\n"
+	if err := os.WriteFile(manifest, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, manifest
+}
+
+// op=remove: compute returns the rewritten text without writing; write lands the
+// same bytes; and the MCP remove_manifest_fields path agrees.
+func TestRunLSPEditRemoveParity(t *testing.T) {
+	dir, manifest := seedSeqProject(t)
+	before, _ := os.ReadFile(manifest)
+
+	computed := runEdit(t, dir, `{"file":"ds.yaml","op":"remove","paths":["spec.dependencies[1]"],"mode":"compute"}`)
+	if !computed.OK || computed.Error != "" {
+		t.Fatalf("remove compute failed: ok=%v error=%s diags=%+v", computed.OK, computed.Error, computed.Diagnostics)
+	}
+	if bytes.Contains([]byte(computed.Full), []byte("$b")) {
+		t.Errorf("remove compute kept the deleted element:\n%s", computed.Full)
+	}
+	if after, _ := os.ReadFile(manifest); !bytes.Equal(before, after) {
+		t.Errorf("remove compute wrote to disk")
+	}
+
+	written := runEdit(t, dir, `{"file":"ds.yaml","op":"remove","paths":["spec.dependencies[1]"],"mode":"write"}`)
+	if !written.OK {
+		t.Fatalf("remove write failed: %+v", written)
+	}
+	onDisk, _ := os.ReadFile(manifest)
+	if string(onDisk) != computed.Full {
+		t.Errorf("remove write bytes != compute full:\non disk:\n%s\ncompute:\n%s", onDisk, computed.Full)
+	}
+
+	// MCP parity: RemoveManifestPaths must land identical bytes.
+	dirB, manB := seedSeqProject(t)
+	a := newCLIAuthoring(dirB)
+	wr, err := a.RemoveManifestPaths(context.Background(), mcp.RemoveManifestPathsInput{
+		File: "ds.yaml", Paths: []string{"spec.dependencies[1]"},
+	})
+	if err != nil {
+		t.Fatalf("RemoveManifestPaths: %v", err)
+	}
+	if wr.Action != "edited" {
+		t.Errorf("RemoveManifestPaths action = %q, want edited", wr.Action)
+	}
+	if gotB, _ := os.ReadFile(manB); string(gotB) != string(onDisk) {
+		t.Errorf("lsp-helper remove and remove_manifest_fields disagree:\nlsp:\n%s\nmcp:\n%s", onDisk, gotB)
+	}
+
+	// MCP dry-run content equals the written bytes.
+	dirC, _ := seedSeqProject(t)
+	dry, err := newCLIAuthoring(dirC).RemoveManifestPaths(context.Background(), mcp.RemoveManifestPathsInput{
+		File: "ds.yaml", Paths: []string{"spec.dependencies[1]"}, DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("RemoveManifestPaths dry run: %v", err)
+	}
+	if dry.Action != "computed" || dry.Content != string(onDisk) {
+		t.Errorf("remove dry-run = %+v, want computed content == written bytes", dry)
+	}
+}
+
+// op=reorder: compute≡write, MCP parity, and a no-op is byte-identical.
+func TestRunLSPEditReorderParity(t *testing.T) {
+	dir, manifest := seedSeqProject(t)
+
+	computed := runEdit(t, dir, `{"file":"ds.yaml","op":"reorder","path":"spec.dependencies","from":0,"to":2,"mode":"compute"}`)
+	if !computed.OK || computed.Error != "" {
+		t.Fatalf("reorder compute failed: ok=%v error=%s diags=%+v", computed.OK, computed.Error, computed.Diagnostics)
+	}
+
+	written := runEdit(t, dir, `{"file":"ds.yaml","op":"reorder","path":"spec.dependencies","from":0,"to":2,"mode":"write"}`)
+	if !written.OK {
+		t.Fatalf("reorder write failed: %+v", written)
+	}
+	onDisk, _ := os.ReadFile(manifest)
+	if string(onDisk) != computed.Full {
+		t.Errorf("reorder write bytes != compute full:\non disk:\n%s\ncompute:\n%s", onDisk, computed.Full)
+	}
+
+	// MCP parity against a fresh copy.
+	dirB, manB := seedSeqProject(t)
+	if _, err := newCLIAuthoring(dirB).ReorderManifestSequence(context.Background(), mcp.ReorderManifestSequenceInput{
+		File: "ds.yaml", Path: "spec.dependencies", From: 0, To: 2,
+	}); err != nil {
+		t.Fatalf("ReorderManifestSequence: %v", err)
+	}
+	if gotB, _ := os.ReadFile(manB); string(gotB) != string(onDisk) {
+		t.Errorf("lsp-helper reorder and reorder_manifest_sequence disagree:\nlsp:\n%s\nmcp:\n%s", onDisk, gotB)
+	}
+
+	// No-op reorder is byte-identical to the canonical re-encoding.
+	dirC, _ := seedSeqProject(t)
+	noop := runEdit(t, dirC, `{"file":"ds.yaml","op":"reorder","path":"spec.dependencies","from":1,"to":1,"mode":"compute"}`)
+	if !noop.OK {
+		t.Fatalf("no-op reorder failed: %+v", noop)
+	}
+	canon := runEdit(t, dirC, `{"file":"ds.yaml","op":"reorder","path":"spec.dependencies","from":0,"to":0,"mode":"compute"}`)
+	if noop.Full != canon.Full {
+		t.Errorf("no-op reorder not byte-identical:\nfrom1to1:\n%s\nfrom0to0:\n%s", noop.Full, canon.Full)
+	}
+}
+
+// A removal that makes the document schema-invalid returns diagnostics and
+// writes nothing (the transport's validation gate applies to every op).
+func TestRunLSPEditRemoveInvalidBlocksWrite(t *testing.T) {
+	dir, manifest := seedEditProject(t)
+	before, _ := os.ReadFile(manifest)
+
+	// spec.value is required for a Text document; removing it is invalid.
+	res := runEdit(t, dir, `{"file":"note.yaml","op":"remove","paths":["spec.value"],"mode":"write"}`)
+	if res.OK {
+		t.Fatal("invalid removal should not be ok")
+	}
+	if len(res.Diagnostics) == 0 {
+		t.Fatalf("invalid removal produced no diagnostics: %+v", res)
+	}
+	if after, _ := os.ReadFile(manifest); !bytes.Equal(before, after) {
+		t.Errorf("invalid removal wrote to disk")
+	}
+}
+
+// Per-op required fields and unknown ops are reported as errors.
+func TestRunLSPEditOpValidation(t *testing.T) {
+	dir, _ := seedSeqProject(t)
+	cases := map[string]string{
+		"remove without paths": `{"file":"ds.yaml","op":"remove","mode":"compute"}`,
+		"reorder without path": `{"file":"ds.yaml","op":"reorder","from":0,"to":1,"mode":"compute"}`,
+		"unknown op":           `{"file":"ds.yaml","op":"frobnicate","mode":"compute"}`,
+	}
+	for name, payload := range cases {
+		t.Run(name, func(t *testing.T) {
+			res := runEdit(t, dir, payload)
+			if res.OK || res.Error == "" {
+				t.Errorf("expected an error result, got %+v", res)
+			}
+		})
+	}
+}
+
 // When the wizard sends an edited SQL, the DataSet must carry it verbatim
 // instead of regenerating a typed SELECT from the columns.
 func TestRunLSPScaffoldUsesEditedSQL(t *testing.T) {

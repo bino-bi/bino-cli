@@ -99,41 +99,75 @@ func (a *cliAuthoring) WriteManifest(_ context.Context, in mcp.WriteManifestInpu
 // preserving comments and key order, validates the edited document, then writes
 // the whole file atomically.
 func (a *cliAuthoring) EditManifest(_ context.Context, in mcp.EditManifestInput) (mcp.WriteResult, error) {
-	if in.File == "" {
-		return mcp.WriteResult{}, fmt.Errorf("file is required")
-	}
 	if len(in.Patch) == 0 {
 		return mcp.WriteResult{}, fmt.Errorf("patch is required")
 	}
-	pos := in.Position
+	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+		return spec.EditYAMLDocument(content, pos, in.Patch)
+	})
+}
+
+// RemoveManifestPaths deletes dotted paths from one document in a manifest file,
+// preserving comments and key order, validates the result, then writes the whole
+// file atomically.
+func (a *cliAuthoring) RemoveManifestPaths(_ context.Context, in mcp.RemoveManifestPathsInput) (mcp.WriteResult, error) {
+	if len(in.Paths) == 0 {
+		return mcp.WriteResult{}, fmt.Errorf("paths is required")
+	}
+	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+		return spec.RemoveYAMLPaths(content, pos, in.Paths)
+	})
+}
+
+// ReorderManifestSequence moves an element within a sequence in one document of a
+// manifest file, preserving comments and key order, validates the result, then
+// writes the whole file atomically.
+func (a *cliAuthoring) ReorderManifestSequence(_ context.Context, in mcp.ReorderManifestSequenceInput) (mcp.WriteResult, error) {
+	if in.Path == "" {
+		return mcp.WriteResult{}, fmt.Errorf("path is required")
+	}
+	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+		return spec.ReorderYAMLSequence(content, pos, in.Path, in.From, in.To)
+	})
+}
+
+// rewriteManifest reads a manifest, applies a fidelity-preserving op to the
+// 1-based document position, validates the edited document, and either returns
+// the rewritten file (DryRun) or writes it atomically. It is the shared core for
+// the edit/remove/reorder authoring tools.
+func (a *cliAuthoring) rewriteManifest(file string, position int, dryRun bool, op func(content string, pos int) (full string, edited string, err error)) (mcp.WriteResult, error) {
+	if file == "" {
+		return mcp.WriteResult{}, fmt.Errorf("file is required")
+	}
+	pos := position
 	if pos == 0 {
 		pos = 1
 	}
 
-	abs := in.File
+	abs := file
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(a.root, abs)
 	}
 	content, err := os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local agent
 	if err != nil {
-		return mcp.WriteResult{}, fmt.Errorf("read %s: %w", in.File, err)
+		return mcp.WriteResult{}, fmt.Errorf("read %s: %w", file, err)
 	}
 
-	full, edited, err := spec.EditYAMLDocument(string(content), pos, in.Patch)
+	full, edited, err := op(string(content), pos)
 	if err != nil {
 		return mcp.WriteResult{}, err
 	}
 	if err := schema.Validate([]byte(edited)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("edit would make the document invalid: %w", err)
 	}
-	if in.DryRun {
+	if dryRun {
 		// Compute-only: return the rewritten file without touching disk.
-		return mcp.WriteResult{File: in.File, Action: "computed", Content: full}, nil
+		return mcp.WriteResult{File: file, Action: "computed", Content: full}, nil
 	}
 	if err := atomicWriteFile(abs, []byte(full)); err != nil {
-		return mcp.WriteResult{}, fmt.Errorf("write %s: %w", in.File, err)
+		return mcp.WriteResult{}, fmt.Errorf("write %s: %w", file, err)
 	}
-	return mcp.WriteResult{File: in.File, Action: "edited"}, nil
+	return mcp.WriteResult{File: file, Action: "edited"}, nil
 }
 
 // ScaffoldSource scaffolds a DataSource (and optional DataSet) from a payload,

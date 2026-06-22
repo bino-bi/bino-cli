@@ -524,8 +524,8 @@ func newLSPEditCommand() *cobra.Command {
 	var payloadFile string
 	cmd := &cobra.Command{
 		Use:   "edit <directory>",
-		Short: "Compute or write a fidelity-preserving dotted-path edit to a manifest document",
-		Long:  "Reads a request {file, position, patch, mode} (from --payload-file or stdin). mode=compute validates the edit and returns the rewritten file without writing; mode=write applies it atomically. Comments and key order are preserved. Used by the Design-mode authoring client.",
+		Short: "Compute or write a fidelity-preserving edit, removal, or reorder of a manifest document",
+		Long:  "Reads a request {file, position, op, mode, ...} (from --payload-file or stdin). op=edit applies dotted-path `patch` edits (default); op=remove deletes `paths`; op=reorder moves element `from`->`to` within the sequence at `path`. mode=compute validates and returns the rewritten file without writing; mode=write applies it atomically. Comments and key order are preserved. Used by the Design-mode authoring client.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			payloadJSON, err := readFileOrStdin(cmd, payloadFile)
@@ -545,8 +545,13 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 	var req struct {
 		File     string         `json:"file"`
 		Position int            `json:"position"`
+		Op       string         `json:"op"`   // "edit" (default), "remove", "reorder"
+		Mode     string         `json:"mode"` // "compute" (default) or "write"
 		Patch    map[string]any `json:"patch"`
-		Mode     string         `json:"mode"`
+		Paths    []string       `json:"paths"`
+		Path     string         `json:"path"`
+		From     int            `json:"from"`
+		To       int            `json:"to"`
 	}
 	if err := json.Unmarshal(payloadJSON, &req); err != nil {
 		result.Error = fmt.Sprintf("parse payload: %v", err)
@@ -556,8 +561,12 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 		result.Error = "file is required"
 		return outputJSON(out, result)
 	}
-	if len(req.Patch) == 0 {
-		result.Error = "patch is required"
+	op := req.Op
+	if op == "" {
+		op = "edit"
+	}
+	if op != "edit" && op != "remove" && op != "reorder" {
+		result.Error = fmt.Sprintf("unknown op %q (want \"edit\", \"remove\", or \"reorder\")", op)
 		return outputJSON(out, result)
 	}
 	mode := req.Mode
@@ -588,7 +597,27 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 		return outputJSON(out, result)
 	}
 
-	full, edited, err := spec.EditYAMLDocument(string(content), pos, req.Patch)
+	var full, edited string
+	switch op {
+	case "remove":
+		if len(req.Paths) == 0 {
+			result.Error = "paths is required for op=remove"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.RemoveYAMLPaths(string(content), pos, req.Paths)
+	case "reorder":
+		if req.Path == "" {
+			result.Error = "path is required for op=reorder"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.ReorderYAMLSequence(string(content), pos, req.Path, req.From, req.To)
+	default:
+		if len(req.Patch) == 0 {
+			result.Error = "patch is required for op=edit"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.EditYAMLDocument(string(content), pos, req.Patch)
+	}
 	if err != nil {
 		result.Error = err.Error()
 		return outputJSON(out, result)
