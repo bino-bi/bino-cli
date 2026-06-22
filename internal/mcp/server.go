@@ -481,46 +481,15 @@ func kindEnum(merged json.RawMessage) []string {
 	return doc.Properties.Kind.Enum
 }
 
-// builtinCategory maps each built-in kind to a capability category.
-var builtinCategory = map[string]string{
-	"DataSource":           "data",
-	"DataSet":              "data",
-	"ConnectionSecret":     "data",
-	"LayoutPage":           "layout",
-	"LayoutCard":           "layout",
-	"Text":                 "embeddable",
-	"Table":                "embeddable",
-	"ChartStructure":       "embeddable",
-	"ChartTime":            "embeddable",
-	"Tree":                 "embeddable",
-	"Grid":                 "embeddable",
-	"Asset":                "embeddable",
-	"ReportArtefact":       "artefact",
-	"LiveReportArtefact":   "artefact",
-	"DocumentArtefact":     "artefact",
-	"ComponentStyle":       "config",
-	"Internationalization": "config",
-	"ScalingGroup":         "config",
-	"SigningProfile":       "config",
-}
-
-// categoryFor returns the capability category for a kind, falling back to the
-// plugin registry's categorization for plugin-provided kinds.
+// categoryFor returns the capability category for a kind. Built-in kinds resolve
+// from the single authority (internal/report/embed); plugin-provided kinds fall
+// back to the registry's categorization.
 func (h *handlers) categoryFor(kind string) string {
-	if c, ok := builtinCategory[kind]; ok {
+	if c, ok := embedkinds.BuiltinCategory(kind); ok {
 		return c
 	}
 	if h.deps.Registry != nil {
-		switch h.deps.Registry.CategorizeKind(kind) {
-		case plugin.KindCategoryDataSource:
-			return "data"
-		case plugin.KindCategoryArtifact:
-			return "artefact"
-		case plugin.KindCategoryConfig:
-			return "config"
-		case plugin.KindCategoryComponent:
-			return "embeddable"
-		}
+		return h.deps.Registry.CategorizeKind(kind).CapabilityCategory()
 	}
 	return "embeddable"
 }

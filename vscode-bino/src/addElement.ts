@@ -1,73 +1,27 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { WorkspaceIndexer, KindInfo } from './indexer';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
+import { AuthoringClient, formatEditDiagnostics } from './authoringClient';
+import { SchemaResolver, FieldDef } from './schemaResolver';
 
 /**
- * Capability category for each kind, mirroring the Go `builtinCategory`
- * (internal/mcp/server.go). The served `/kinds` endpoint only carries the
- * render-embeddable flag, not the category, so the palette categorizes built-in
- * kinds from this table; any kind not listed here (e.g. a plugin kind) falls
- * into OTHER_CATEGORY so it still appears.
+ * Display order and human labels for the capability categories the backend
+ * serves on `bino://kinds` (data | layout | embeddable | artefact | config) plus
+ * a trailing bucket for any category the backend introduces later. This is only
+ * presentation: the category a kind belongs to comes from the served
+ * `KindInfo.category`, never a hand-maintained kind→category table.
  */
-const KIND_CATEGORY: Record<string, string> = {
-    DataSource: 'data',
-    DataSet: 'data',
-    ConnectionSecret: 'data',
-    LayoutPage: 'layout',
-    LayoutCard: 'layout',
-    Text: 'embeddable',
-    Table: 'embeddable',
-    ChartStructure: 'embeddable',
-    ChartTime: 'embeddable',
-    Tree: 'embeddable',
-    Grid: 'embeddable',
-    Asset: 'embeddable',
-    ReportArtefact: 'artefact',
-    LiveReportArtefact: 'artefact',
-    DocumentArtefact: 'artefact',
-    ComponentStyle: 'config',
-    Internationalization: 'config',
-    ScalingGroup: 'config',
-    SigningProfile: 'config',
-};
-
-/** Bucket for kinds with no known category (e.g. plugin-provided kinds). */
-const OTHER_CATEGORY = 'other';
-
-/** Display order and labels for the QuickPick category separators. */
 const CATEGORY_ORDER: { id: string; label: string }[] = [
     { id: 'data', label: 'Data' },
     { id: 'embeddable', label: 'Components' },
     { id: 'layout', label: 'Layout' },
     { id: 'artefact', label: 'Artefacts' },
     { id: 'config', label: 'Configuration' },
-    { id: OTHER_CATEGORY, label: 'Other' },
 ];
 
-/**
- * Existing `bino add <kind>` command per built-in kind. Picking a non-data kind
- * routes to the matching guided terminal wizard (the fallback escape hatch the
- * Design-mode brief keeps). Casing is taken from the registered command ids
- * (note DataSource → addDatasource), so it is an explicit map, not derived.
- */
-const ADD_COMMAND_FOR_KIND: Record<string, string> = {
-    DataSet: 'bino.addDataset',
-    DataSource: 'bino.addDatasource',
-    ConnectionSecret: 'bino.addConnectionSecret',
-    LayoutPage: 'bino.addLayoutPage',
-    LayoutCard: 'bino.addLayoutCard',
-    Table: 'bino.addTable',
-    Text: 'bino.addText',
-    ChartStructure: 'bino.addChartStructure',
-    ChartTime: 'bino.addChartTime',
-    ReportArtefact: 'bino.addReportArtefact',
-    LiveReportArtefact: 'bino.addLiveReportArtefact',
-    SigningProfile: 'bino.addSigningProfile',
-    Asset: 'bino.addAsset',
-    ComponentStyle: 'bino.addComponentStyle',
-    Internationalization: 'bino.addInternationalization',
-    ScalingGroup: 'bino.addScalingGroup',
-};
+/** Fallback label for a served category not in CATEGORY_ORDER. */
+const OTHER_LABEL = 'Other';
 
 /**
  * A palette entry for one manifest kind. `kindName`/`category` are added on top
@@ -78,24 +32,32 @@ interface KindPick extends vscode.QuickPickItem {
     category: string;
 }
 
-/** Resolve a kind's category, falling back to the OTHER bucket. */
-function categoryFor(kind: string): string {
-    return KIND_CATEGORY[kind] ?? OTHER_CATEGORY;
-}
-
 /**
  * The "Add element" palette: a single entry point that lists every live manifest
- * kind grouped by capability category and routes the pick into the one existing
- * create path for that kind. Data kinds (DataSource/DataSet) open the wizard;
- * every other built-in kind opens its guided `bino add` terminal wizard. The kind
- * list is sourced from the backend, so plugin kinds appear with no code change.
+ * kind grouped by its served capability category and creates the chosen kind
+ * through the one authoring path. Data kinds (DataSource/DataSet) open the
+ * introspect→typed-SELECT wizard; every other kind — built-in or plugin — runs a
+ * schema-driven guided form and is created via the AuthoringClient (the Go
+ * create path: envelope build → schema validation → atomic write), then the
+ * index refreshes and the new file opens. The kind list and its categories are
+ * sourced from the backend, so plugin kinds appear and are created with no
+ * extension change.
  */
 export class AddElementCommand {
+    private readonly authoring: AuthoringClient;
+    private readonly schema: SchemaResolver;
+    private schemaLoaded: boolean;
+
     constructor(
         private readonly indexer: WorkspaceIndexer,
         private readonly wizard: DataSourceWizardManager,
         private readonly getIcon: (kind: string) => string,
-    ) {}
+        extensionPath: string,
+    ) {
+        this.authoring = new AuthoringClient(indexer);
+        this.schema = new SchemaResolver(extensionPath);
+        this.schemaLoaded = this.schema.load();
+    }
 
     /** Show the palette and route the chosen kind to its create path. */
     async run(): Promise<void> {
@@ -114,21 +76,29 @@ export class AddElementCommand {
         if (!picked || !('kindName' in picked)) {
             return;
         }
-        await this.createKind((picked as KindPick).kindName);
+        await this.createKind(picked as KindPick);
     }
 
     /** Build grouped QuickPick items (category separators + one item per kind). */
     private buildItems(kinds: KindInfo[]): vscode.QuickPickItem[] {
         const byCategory = new Map<string, KindInfo[]>();
         for (const k of kinds) {
-            const cat = categoryFor(k.name);
+            const cat = k.category || 'other';
             const bucket = byCategory.get(cat) ?? [];
             bucket.push(k);
             byCategory.set(cat, bucket);
         }
 
+        // Known categories first (in display order), then any unexpected ones.
+        const order = [...CATEGORY_ORDER];
+        for (const cat of [...byCategory.keys()].sort()) {
+            if (!order.some(o => o.id === cat)) {
+                order.push({ id: cat, label: OTHER_LABEL });
+            }
+        }
+
         const items: vscode.QuickPickItem[] = [];
-        for (const { id, label } of CATEGORY_ORDER) {
+        for (const { id, label } of order) {
             const bucket = byCategory.get(id);
             if (!bucket || bucket.length === 0) {
                 continue;
@@ -147,24 +117,195 @@ export class AddElementCommand {
         return items;
     }
 
-    /** Route a chosen kind into its existing create path. */
-    private async createKind(kind: string): Promise<void> {
+    /** Route a chosen kind into its create path. */
+    private async createKind(pick: KindPick): Promise<void> {
+        const kind = pick.kindName;
+
         // Data kinds flow through the introspect → typed-SELECT → preview wizard.
         if (kind === 'DataSource' || kind === 'DataSet') {
             this.wizard.openForDatabase();
             return;
         }
 
-        // Every other built-in kind opens its guided `bino add` terminal wizard.
-        const command = ADD_COMMAND_FOR_KIND[kind];
-        if (command) {
-            await vscode.commands.executeCommand(command);
+        // Every other kind (built-in or plugin) is created through a schema-driven
+        // guided form and the one authoring path.
+        await this.createViaForm(kind, pick.category);
+    }
+
+    /**
+     * Run a schema-driven guided form for `kind` and create the manifest through
+     * the AuthoringClient. The form prompts for the name, a data binding (for
+     * embeddable components that take a dataset), and each required scalar field;
+     * the spec is then validated and written by the Go create path, which returns
+     * diagnostics if the result is incomplete. On success the index refreshes and
+     * the new file opens.
+     */
+    private async createViaForm(kind: string, category: string): Promise<void> {
+        const name = await this.promptName(kind);
+        if (name === undefined) {
             return;
         }
 
-        // Plugin / unrecognized kinds have no guided create yet.
-        vscode.window.showInformationMessage(
-            `Bino: guided creation for ${kind} is not available yet — author it manually.`,
-        );
+        const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
+        const spec: Record<string, unknown> = {};
+
+        // Embeddable components bind to a dataset/datasource; offer the binding as
+        // the first guided step when the kind's spec carries a `dataset` field.
+        const hasDataset = fields.some(f => f.key === 'dataset');
+        if (category === 'embeddable' && hasDataset) {
+            const dataset = await this.promptDataset();
+            if (dataset === null) {
+                return; // user cancelled the binding step
+            }
+            if (dataset) {
+                spec.dataset = dataset;
+            }
+        }
+
+        // Prompt for each required scalar/enum field (objects and arrays are left
+        // for the designer's rich widgets; the create path reports any still
+        // missing as diagnostics).
+        for (const field of fields) {
+            if (field.key === 'dataset' && spec.dataset !== undefined) {
+                continue;
+            }
+            if (!field.required || !this.isScalarField(field)) {
+                continue;
+            }
+            const value = await this.promptField(kind, field);
+            if (value === undefined) {
+                return; // cancelled
+            }
+            if (value !== null) {
+                spec[field.key] = value;
+            }
+        }
+
+        const result = await this.authoring.create({ kind, name, spec });
+        if (!result.ok) {
+            vscode.window.showErrorMessage(`Bino: could not create ${kind} — ${formatEditDiagnostics(result)}`);
+            return;
+        }
+
+        await this.indexer.refreshIndex();
+        await this.openCreatedFile(result.file);
+        vscode.window.showInformationMessage(`Bino: created ${result.file}`);
+    }
+
+    /** Prompt for a unique metadata.name for the new manifest. */
+    private async promptName(kind: string): Promise<string | undefined> {
+        const existing = new Set(this.indexer.getDocuments([kind]).map(d => d.name));
+        return vscode.window.showInputBox({
+            title: `New ${kind}`,
+            prompt: `Name for the new ${kind}`,
+            value: this.suggestName(kind, existing),
+            validateInput: (v) => {
+                const t = v.trim();
+                if (!t) { return 'A name is required.'; }
+                if (existing.has(t)) { return `A ${kind} named "${t}" already exists.`; }
+                return undefined;
+            },
+        }).then(v => (v === undefined ? undefined : v.trim()));
+    }
+
+    /** Suggest a unique default name like `table_1`. */
+    private suggestName(kind: string, existing: Set<string>): string {
+        const base = kind.toLowerCase();
+        for (let i = 1; ; i++) {
+            const candidate = `${base}_${i}`;
+            if (!existing.has(candidate)) {
+                return candidate;
+            }
+        }
+    }
+
+    /**
+     * Prompt for a dataset/datasource to bind. Returns the chosen reference, an
+     * empty string when the user skips the binding, or null when they cancel.
+     */
+    private async promptDataset(): Promise<string | null> {
+        const datasets = this.indexer.getDocuments(['DataSet']).map(d => d.name);
+        const sources = this.indexer.getDocuments(['DataSource']).map(d => `$${d.name}`);
+        const items: vscode.QuickPickItem[] = [
+            ...datasets.map(label => ({ label, description: 'DataSet' })),
+            ...sources.map(label => ({ label, description: 'DataSource' })),
+            { label: '$(circle-slash) Skip — bind later', description: '' },
+        ];
+        const picked = await vscode.window.showQuickPick(items, {
+            title: 'Bind data',
+            placeHolder: datasets.length + sources.length > 0
+                ? 'Pick a dataset or datasource to bind'
+                : 'No datasets yet — skip and bind later',
+        });
+        if (!picked) {
+            return null;
+        }
+        return picked.label.startsWith('$(circle-slash)') ? '' : picked.label;
+    }
+
+    /**
+     * Prompt for a single scalar field. Enums become a QuickPick, booleans a
+     * yes/no pick, strings/numbers an InputBox. Returns the value, null when the
+     * field is left empty, or undefined when cancelled.
+     */
+    private async promptField(kind: string, field: FieldDef): Promise<unknown> {
+        const detail = field.description ? ` — ${field.description}` : '';
+
+        if (field.enumValues && field.enumValues.length > 0) {
+            const picked = await vscode.window.showQuickPick(field.enumValues, {
+                title: `${kind}: ${field.key}`,
+                placeHolder: `Choose ${field.key}${detail}`,
+            });
+            return picked === undefined ? undefined : picked;
+        }
+
+        if (field.type === 'boolean') {
+            const picked = await vscode.window.showQuickPick(['true', 'false'], {
+                title: `${kind}: ${field.key}`,
+                placeHolder: `${field.key}${detail}`,
+            });
+            if (picked === undefined) { return undefined; }
+            return picked === 'true';
+        }
+
+        const isNumber = field.type === 'number' || field.type === 'integer';
+        const raw = await vscode.window.showInputBox({
+            title: `${kind}: ${field.key}`,
+            prompt: `${field.key}${detail}`,
+            validateInput: (v) => {
+                if (isNumber && v.trim() && Number.isNaN(Number(v))) {
+                    return 'Enter a number.';
+                }
+                return undefined;
+            },
+        });
+        if (raw === undefined) { return undefined; }
+        const trimmed = raw.trim();
+        if (!trimmed) { return null; }
+        return isNumber ? Number(trimmed) : trimmed;
+    }
+
+    /** True for fields a simple prompt can fill (scalar or enum, not object/array). */
+    private isScalarField(field: FieldDef): boolean {
+        if (field.enumValues && field.enumValues.length > 0) {
+            return true;
+        }
+        return field.type === 'string'
+            || field.type === 'number'
+            || field.type === 'integer'
+            || field.type === 'boolean';
+    }
+
+    /** Open the newly created manifest (path is project-root relative). */
+    private async openCreatedFile(file: string): Promise<void> {
+        const root = this.indexer.getProjectRootForUri();
+        const abs = path.isAbsolute(file) ? file : root ? path.join(root, file) : file;
+        try {
+            const doc = await vscode.workspace.openTextDocument(abs);
+            await vscode.window.showTextDocument(doc, { preview: false });
+        } catch {
+            // The create reported the file; if opening fails (e.g. a race with the
+            // watcher), the success toast still names it.
+        }
     }
 }

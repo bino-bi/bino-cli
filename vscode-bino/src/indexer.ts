@@ -29,9 +29,11 @@ interface LSPColumnsResult {
     error?: string;
 }
 
-/** A manifest kind and its served render-embeddable flag (from /kinds). */
+/** A manifest kind with its served capability category and render-embeddable flag (from /kinds). */
 export interface KindInfo {
     name: string;
+    /** Capability category: data | layout | embeddable | artefact | config. */
+    category: string;
     embeddable: boolean;
 }
 
@@ -107,6 +109,17 @@ export interface LSPEditResult {
     full?: string;
     edited?: string;
     file?: string;
+    diagnostics: LSPEditDiagnostic[];
+    error?: string;
+}
+
+/** Result from bino lsp-helper create (envelope build + validate + atomic write). */
+export interface LSPCreateResult {
+    ok: boolean;
+    /** Path of the written manifest, relative to the project root. */
+    file?: string;
+    /** "created" or "appended". */
+    action?: string;
     diagnostics: LSPEditDiagnostic[];
     error?: string;
 }
@@ -738,6 +751,23 @@ export class WorkspaceIndexer {
             return { ok: false, diagnostics: [], error: 'no workspace folder open' };
         }
         const output = await this.execBinoStdin(['lsp-helper', 'edit', workDir, '--payload-file', '-'], JSON.stringify(payload));
+        return JSON.parse(output);
+    }
+
+    /**
+     * Create a new manifest of any kind through the one Go create path
+     * (CreateManifest): it builds the apiVersion/kind/metadata/spec envelope,
+     * validates it against the schema, and writes it atomically, auto-placing the
+     * file by project convention unless `file` is given. A non-empty diagnostics
+     * list means the manifest was rejected and nothing was written. Used by the
+     * Design-mode Add-element palette via the AuthoringClient.
+     */
+    async createManifest(payload: Record<string, unknown>): Promise<LSPCreateResult> {
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return { ok: false, diagnostics: [], error: 'no workspace folder open' };
+        }
+        const output = await this.execBinoStdin(['lsp-helper', 'create', workDir, '--payload-file', '-'], JSON.stringify(payload));
         return JSON.parse(output);
     }
 

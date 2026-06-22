@@ -497,3 +497,117 @@ func TestRunLSPScaffoldUsesEditedSQL(t *testing.T) {
 		t.Fatalf("edited-SQL dataset failed schema.Validate:\n%s\nerror: %v", dsetBytes, err)
 	}
 }
+
+// --- create -----------------------------------------------------------------
+
+func runCreate(t *testing.T, dir, payload string) lspCreateResult {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := runLSPCreate(context.Background(), dir, []byte(payload), &buf); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var res lspCreateResult
+	if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	return res
+}
+
+// A valid create writes a schema-valid manifest, auto-placing the file, and
+// reports the path. This is the palette's create path.
+func TestRunLSPCreateWritesValidManifest(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res := runCreate(t, dir, `{"kind":"Text","name":"hello","spec":{"value":"hi"}}`)
+	if !res.OK || res.Error != "" {
+		t.Fatalf("create failed: ok=%v error=%s diags=%+v", res.OK, res.Error, res.Diagnostics)
+	}
+	if res.File == "" || res.Action != "created" {
+		t.Fatalf("unexpected result: file=%q action=%q", res.File, res.Action)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, res.File))
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if !bytes.Contains(got, []byte("name: hello")) || !bytes.Contains(got, []byte("value: hi")) {
+		t.Errorf("created manifest missing expected content:\n%s", got)
+	}
+	if err := schema.Validate(got); err != nil {
+		t.Fatalf("created manifest failed schema.Validate:\n%s\nerror: %v", got, err)
+	}
+}
+
+// An incomplete spec is rejected with per-issue diagnostics and writes nothing,
+// so the GUI surfaces the diagnostics instead of opening a non-existent file.
+func TestRunLSPCreateInvalidSpecBlocksWrite(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadDir(dir)
+
+	res := runCreate(t, dir, `{"kind":"Table","name":"t","spec":{}}`) // Table requires spec.dataset
+	if res.OK {
+		t.Fatalf("create unexpectedly succeeded for an invalid spec: %+v", res)
+	}
+	if len(res.Diagnostics) == 0 {
+		t.Fatalf("expected schema diagnostics, got none (error=%q)", res.Error)
+	}
+	after, _ := os.ReadDir(dir)
+	if len(after) != len(before) {
+		t.Errorf("invalid create wrote files: before=%d after=%d", len(before), len(after))
+	}
+}
+
+// A duplicate name is a plain error (not schema diagnostics), and writes nothing.
+func TestRunLSPCreateDuplicateNameErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if res := runCreate(t, dir, `{"kind":"Text","name":"dup","spec":{"value":"a"}}`); !res.OK {
+		t.Fatalf("seed create failed: %+v", res)
+	}
+
+	res := runCreate(t, dir, `{"kind":"Text","name":"dup","spec":{"value":"b"}}`)
+	if res.OK {
+		t.Fatal("duplicate-name create unexpectedly succeeded")
+	}
+	if res.Error == "" {
+		t.Fatalf("expected a duplicate-name error, got diagnostics=%+v", res.Diagnostics)
+	}
+}
+
+// lsp-helper kinds serves a non-empty capability category for every kind, from
+// the same authority the MCP server and daemon read.
+func TestRunLSPKindsServesCategory(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := newLSPKindsCommand()
+	cmd.SetOut(&buf)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("kinds: %v", err)
+	}
+	var res lspKindsResult
+	if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	if len(res.Kinds) == 0 {
+		t.Fatal("kinds returned no entries")
+	}
+	want := map[string]string{"DataSource": "data", "LayoutPage": "layout", "Table": "embeddable", "ReportArtefact": "artefact", "ComponentStyle": "config"}
+	got := map[string]string{}
+	for _, k := range res.Kinds {
+		if k.Category == "" {
+			t.Errorf("kind %s has empty category", k.Name)
+		}
+		got[k.Name] = k.Category
+	}
+	for name, cat := range want {
+		if got[name] != cat {
+			t.Errorf("kind %s: category = %q, want %q", name, got[name], cat)
+		}
+	}
+}

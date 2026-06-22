@@ -12,6 +12,23 @@ const (
 	KindCategoryArtifact
 )
 
+// CapabilityCategory maps a KindCategory to the capability-category string used
+// by the GUI/agent surfaces (bino://kinds, the daemon /kinds endpoint, and
+// lsp-helper kinds). Components map to "embeddable". This is the single place the
+// enum→string mapping lives.
+func (c KindCategory) CapabilityCategory() string {
+	switch c {
+	case KindCategoryDataSource:
+		return "data"
+	case KindCategoryArtifact:
+		return "artefact"
+	case KindCategoryConfig:
+		return "config"
+	default: // KindCategoryComponent
+		return "embeddable"
+	}
+}
+
 // KindRegistration describes a custom kind provided by a plugin.
 type KindRegistration struct {
 	KindName       string       // e.g., "SalesforceDataSource"

@@ -476,11 +476,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // "Add element" palette — the single entry point that supersedes the static
-    // `bino add` command list. Sources kinds from the live backend list (plugin
-    // kinds appear automatically) and routes each pick to its existing create
-    // path: DataSource/DataSet open the wizard, other kinds open `bino add <kind>`.
+    // `bino add` command list. Sources kinds (and their categories) from the live
+    // backend list (plugin kinds appear automatically) and creates each pick
+    // through the one authoring path: DataSource/DataSet open the wizard, every
+    // other kind runs a schema-driven guided form and is created via the
+    // AuthoringClient (the Go create path), then the new file opens.
     if (indexer && wizardManager) {
-        const addElement = new AddElementCommand(indexer, wizardManager, getIconForKind);
+        const addElement = new AddElementCommand(indexer, wizardManager, getIconForKind, context.extensionPath);
         context.subscriptions.push(
             vscode.commands.registerCommand('bino.addElement', () => addElement.run())
         );

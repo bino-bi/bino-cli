@@ -118,6 +118,7 @@ func newLSPCommand() *cobra.Command {
 	cmd.AddCommand(newLSPScaffoldCommand())
 	cmd.AddCommand(newLSPTypedSelectCommand())
 	cmd.AddCommand(newLSPEditCommand())
+	cmd.AddCommand(newLSPCreateCommand())
 
 	return cmd
 }

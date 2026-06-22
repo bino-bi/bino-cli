@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WorkspaceIndexer, LSPEditDiagnostic, LSPEditResult } from './indexer';
+import { WorkspaceIndexer, LSPEditDiagnostic, LSPEditResult, LSPCreateResult } from './indexer';
 
 /**
  * How an applied edit reached disk/buffer.
@@ -16,6 +16,25 @@ export type EditApplied = 'workspaceEdit' | 'write';
 export type EditResult =
     | { ok: true; applied: EditApplied }
     | { ok: false; diagnostics: LSPEditDiagnostic[]; error?: string };
+
+/** Outcome of a manifest creation: the written file path, or a rejection. */
+export type CreateResult =
+    | { ok: true; file: string; action: string }
+    | { ok: false; diagnostics: LSPEditDiagnostic[]; error?: string };
+
+/** A request to create a new manifest of any kind from a spec object. */
+export interface CreateRequest {
+    /** The manifest kind, e.g. Table, DataSet, ReportArtefact. */
+    kind: string;
+    /** metadata.name for the new manifest (must be unique within its kind). */
+    name: string;
+    /** The spec object for the kind (see bino://schema/{kind} for its shape). */
+    spec: Record<string, unknown>;
+    /** Optional metadata.description. */
+    description?: string;
+    /** Output path relative to the project root; auto-placed when omitted. */
+    file?: string;
+}
 
 /** A dotted-path edit request (set existing or auto-vivify nested maps). */
 export interface EditRequest {
@@ -60,6 +79,10 @@ export interface AppendRequest {
  *   engine's `full` text (one undo step, no "file changed on disk" prompt);
  * - file CLOSED -> atomic write via the helper, picked up by the watcher.
  *
+ * It also owns manifest creation (`create`), so every Design surface — the
+ * Add-element palette included — reaches disk through this one client and the
+ * Go engine, never a second TS YAML transform or a shelled-out terminal.
+ *
  * Both paths refuse an edit the engine rejects (schema diagnostics) and surface
  * the diagnostic instead of writing.
  */
@@ -79,6 +102,38 @@ export class AuthoringClient {
     /** Append an element to the sequence at a dotted path (creating it if absent). */
     async append(req: AppendRequest): Promise<EditResult> {
         return this.apply(req.file, req.position, { op: 'append', path: req.path, value: req.value });
+    }
+
+    /**
+     * Create a new manifest of any kind. The Go create path builds the
+     * apiVersion/kind/metadata/spec envelope, validates it against the schema,
+     * and writes it atomically — auto-placing the file by project convention
+     * unless `file` is given. On a schema failure (or duplicate name) nothing is
+     * written and the diagnostics/error are returned for the caller to surface.
+     */
+    async create(req: CreateRequest): Promise<CreateResult> {
+        let result: LSPCreateResult;
+        try {
+            result = await this.indexer.createManifest({
+                kind: req.kind,
+                name: req.name,
+                spec: req.spec,
+                ...(req.description ? { description: req.description } : {}),
+                ...(req.file ? { file: req.file } : {}),
+            });
+        } catch (err) {
+            return { ok: false, diagnostics: [], error: err instanceof Error ? err.message : String(err) };
+        }
+        if (result.error) {
+            return { ok: false, diagnostics: result.diagnostics ?? [], error: result.error };
+        }
+        if (result.diagnostics && result.diagnostics.length > 0) {
+            return { ok: false, diagnostics: result.diagnostics };
+        }
+        if (!result.ok || !result.file) {
+            return { ok: false, diagnostics: [], error: 'create failed' };
+        }
+        return { ok: true, file: result.file, action: result.action ?? 'created' };
     }
 
     /**

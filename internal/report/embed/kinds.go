@@ -1,9 +1,12 @@
 // Package embed is the single source of truth for which manifest kinds render
 // standalone as a component — i.e. can be shown on their own (the preview's
 // /__embedding endpoint, the designer's live canvas, the bino://kinds
-// `embeddable` flag). Keeping the set here, free of render/pipeline imports,
-// lets both the preview rebuilder and the MCP server read one authority instead
-// of maintaining divergent copies.
+// `embeddable` flag) — and for each built-in kind's capability category. Keeping
+// these here, free of render/pipeline/plugin imports, lets the preview
+// rebuilder, the MCP server, the daemon `/kinds` endpoint, and `lsp-helper
+// kinds` all read one authority instead of maintaining divergent copies. The
+// plugin-kind fallback is layered on by each caller (which already holds the
+// registry) so this package stays a pure leaf.
 package embed
 
 // componentKinds are the standalone component manifest kinds: kinds that can be
@@ -39,4 +42,39 @@ func ComponentKinds() []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// builtinCategory maps each built-in manifest kind to its capability category
+// (data / layout / embeddable / artefact / config). This is the authority that
+// the MCP server, the daemon `/kinds` endpoint, and `lsp-helper kinds` all read,
+// so the categories never drift between the agent and GUI surfaces.
+var builtinCategory = map[string]string{
+	"DataSource":           "data",
+	"DataSet":              "data",
+	"ConnectionSecret":     "data",
+	"LayoutPage":           "layout",
+	"LayoutCard":           "layout",
+	"Text":                 "embeddable",
+	"Table":                "embeddable",
+	"ChartStructure":       "embeddable",
+	"ChartTime":            "embeddable",
+	"Tree":                 "embeddable",
+	"Grid":                 "embeddable",
+	"Asset":                "embeddable",
+	"ReportArtefact":       "artefact",
+	"LiveReportArtefact":   "artefact",
+	"DocumentArtefact":     "artefact",
+	"ComponentStyle":       "config",
+	"Internationalization": "config",
+	"ScalingGroup":         "config",
+	"SigningProfile":       "config",
+}
+
+// BuiltinCategory returns the capability category for a built-in manifest kind
+// and whether the kind is known. Callers layer their own plugin-kind fallback on
+// a false result (using the plugin registry they already hold), which keeps this
+// package free of a plugin import.
+func BuiltinCategory(kind string) (string, bool) {
+	c, ok := builtinCategory[kind]
+	return c, ok
 }

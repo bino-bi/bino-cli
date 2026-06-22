@@ -160,16 +160,45 @@ export class SchemaResolver {
         this.recursionGuard.add(defName);
 
         const resolved = this.resolveRef(def);
-        const props = (resolved as any).properties || {};
-        const required: string[] = (resolved as any).required || [];
+        const { properties: props, required } = this.collectObjectShape(resolved);
         const fields: FieldDef[] = [];
 
         for (const [key, propDef] of Object.entries(props)) {
-            fields.push(this.propertyToFieldDef(key, propDef as Record<string, unknown>, [...parentPath, key], required.includes(key)));
+            fields.push(this.propertyToFieldDef(key, propDef as Record<string, unknown>, [...parentPath, key], required.has(key)));
         }
 
         this.recursionGuard.delete(defName);
         return fields;
+    }
+
+    /**
+     * Collect an object def's effective properties and required keys, flattening
+     * `allOf` composition (and the `$ref`s inside it). Many specs are defined as
+     * `{ allOf: [{ $ref: fooSpecBase }], required: [...] }`, so the properties
+     * live in a referenced base while `required` sits at the top level; without
+     * flattening, getFieldsForKind would return no fields for those kinds.
+     */
+    private collectObjectShape(def: Record<string, unknown>): { properties: Record<string, unknown>; required: Set<string> } {
+        const properties: Record<string, unknown> = { ...((def as any).properties || {}) };
+        const required = new Set<string>((def as any).required || []);
+
+        const allOf = (def as any).allOf;
+        if (Array.isArray(allOf)) {
+            for (const member of allOf) {
+                const resolvedMember = this.resolveRef(member as Record<string, unknown>);
+                const sub = this.collectObjectShape(resolvedMember);
+                for (const [k, v] of Object.entries(sub.properties)) {
+                    if (!(k in properties)) {
+                        properties[k] = v;
+                    }
+                }
+                for (const k of sub.required) {
+                    required.add(k);
+                }
+            }
+        }
+
+        return { properties, required };
     }
 
     /** Convert a JSON Schema property definition to a FieldDef */

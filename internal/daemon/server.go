@@ -250,21 +250,30 @@ func (s *Server) handleKinds(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("building schema: %v", err), http.StatusInternalServerError)
 		return
 	}
-	s.writeJSON(w, map[string]any{"kinds": kindInfos(aggregator.KindNames())})
+	s.writeJSON(w, map[string]any{"kinds": kindInfos(aggregator.KindNames(), registry)})
 }
 
-// kindInfo is the served per-kind shape: the name plus the render-embeddable
-// flag. It matches the subset of mcp.KindInfo the extension consumes.
+// kindInfo is the served per-kind shape: the name, its capability category, and
+// the render-embeddable flag. It matches the subset of mcp.KindInfo the
+// extension consumes.
 type kindInfo struct {
 	Name       string `json:"name"`
+	Category   string `json:"category"`
 	Embeddable bool   `json:"embeddable"`
 }
 
-// kindInfos pairs each kind name with its render-embeddable flag.
-func kindInfos(names []string) []kindInfo {
+// kindInfos pairs each kind name with its capability category and
+// render-embeddable flag. The render-embeddable flag and built-in categories
+// come from the single authority (internal/report/embed); plugin-kind categories
+// fall back to the registry. Mirrors mcp.handlers.categoryFor.
+func kindInfos(names []string, registry *plugin.PluginRegistry) []kindInfo {
 	out := make([]kindInfo, 0, len(names))
 	for _, n := range names {
-		out = append(out, kindInfo{Name: n, Embeddable: embedkinds.IsEmbeddable(n)})
+		category, ok := embedkinds.BuiltinCategory(n)
+		if !ok {
+			category = registry.CategorizeKind(n).CapabilityCategory()
+		}
+		out = append(out, kindInfo{Name: n, Category: category, Embeddable: embedkinds.IsEmbeddable(n)})
 	}
 	return out
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -264,6 +265,7 @@ func newLSPDatasetSchemaCommand() *cobra.Command {
 
 type lspKindInfo struct {
 	Name       string `json:"name"`
+	Category   string `json:"category"`
 	Embeddable bool   `json:"embeddable"`
 }
 
@@ -275,22 +277,101 @@ type lspKindsResult struct {
 func newLSPKindsCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "kinds",
-		Short: "Print every manifest kind with its render-embeddable flag",
-		Long:  "Returns each built-in manifest kind and whether it renders standalone as a component (the single render-embeddable authority). The extension derives render-embeddable membership from this served flag. Subprocess fallback for the daemon's /kinds endpoint; needs no project directory.",
+		Short: "Print every manifest kind with its capability category and render-embeddable flag",
+		Long:  "Returns each built-in manifest kind, its capability category, and whether it renders standalone as a component (the single authority, internal/report/embed). The extension derives category and render-embeddable membership from these served fields. Subprocess fallback for the daemon's /kinds endpoint; needs no project directory.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			agg := plugin.NewSchemaAggregator(plugin.NewRegistry())
+			reg := plugin.NewRegistry()
+			agg := plugin.NewSchemaAggregator(reg)
 			if err := agg.Build(cmd.Context()); err != nil {
 				return fmt.Errorf("building schema: %w", err)
 			}
 			names := agg.KindNames()
 			kinds := make([]lspKindInfo, 0, len(names))
 			for _, n := range names {
-				kinds = append(kinds, lspKindInfo{Name: n, Embeddable: embedkinds.IsEmbeddable(n)})
+				category, ok := embedkinds.BuiltinCategory(n)
+				if !ok {
+					category = reg.CategorizeKind(n).CapabilityCategory()
+				}
+				kinds = append(kinds, lspKindInfo{Name: n, Category: category, Embeddable: embedkinds.IsEmbeddable(n)})
 			}
 			return outputJSON(cmd.OutOrStdout(), lspKindsResult{Version: version.Version, Kinds: kinds})
 		},
 	}
+}
+
+// --- create -----------------------------------------------------------------
+
+// lspCreateResult reports the outcome of `lsp-helper create`. On success it
+// names the file written (and whether it was created or appended); on a schema
+// failure it carries the per-issue diagnostics and writes nothing — mirroring
+// the edit command so the GUI can surface the diagnostics instead of opening a
+// non-existent file.
+type lspCreateResult struct {
+	OK          bool                `json:"ok"`
+	File        string              `json:"file,omitempty"`
+	Action      string              `json:"action,omitempty"`
+	Diagnostics []lspEditDiagnostic `json:"diagnostics"`
+	Error       string              `json:"error,omitempty"`
+	Version     string              `json:"version"`
+}
+
+func newLSPCreateCommand() *cobra.Command {
+	var payloadFile string
+	cmd := &cobra.Command{
+		Use:   "create <directory>",
+		Short: "Create a new manifest of any kind from a spec object",
+		Long:  "Reads a request {kind, name, spec, description?, file?} (from --payload-file or stdin), builds the apiVersion/kind/metadata/spec envelope, validates it against the schema, and writes it atomically — auto-placing the file by project convention unless `file` is given. A non-empty diagnostics list means the manifest was rejected and nothing was written. Used by the Design-mode Add-element palette.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			payloadJSON, err := readFileOrStdin(cmd, payloadFile)
+			if err != nil {
+				return outputJSON(cmd.OutOrStdout(), lspCreateResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}, Error: fmt.Sprintf("read payload: %v", err)})
+			}
+			return runLSPCreate(cmd.Context(), args[0], payloadJSON, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&payloadFile, "payload-file", "-", "Path to a JSON payload file, or '-' for stdin")
+	return cmd
+}
+
+func runLSPCreate(ctx context.Context, dir string, payloadJSON []byte, out io.Writer) error {
+	result := lspCreateResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
+
+	var in mcp.CreateManifestInput
+	if err := json.Unmarshal(payloadJSON, &in); err != nil {
+		result.Error = fmt.Sprintf("parse payload: %v", err)
+		return outputJSON(out, result)
+	}
+
+	absDir, err := resolveProjectRootForLSP(dir)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
+		return outputJSON(out, result)
+	}
+
+	res, err := newCLIAuthoring(absDir).CreateManifest(ctx, in)
+	if err != nil {
+		// A schema failure is reported as per-issue diagnostics (nothing was
+		// written); any other error (e.g. duplicate name) is surfaced verbatim.
+		if issues := schema.GetValidationIssues(err); len(issues) > 0 {
+			for _, issue := range issues {
+				msg := issue.Message
+				if issue.Path != "" && issue.Path != "(root)" {
+					msg = issue.Path + ": " + issue.Message
+				}
+				result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: msg, Severity: "error"})
+			}
+		} else {
+			result.Error = err.Error()
+		}
+		return outputJSON(out, result)
+	}
+
+	result.OK = true
+	result.File = res.File
+	result.Action = res.Action
+	return outputJSON(out, result)
 }
 
 // --- scaffold ---------------------------------------------------------------
