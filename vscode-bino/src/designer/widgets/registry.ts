@@ -31,6 +31,11 @@ export interface WidgetContext<T = unknown> {
     value: T;
     /** Binding context for column-aware widgets; absent until a dataset is picked. */
     binding?: Binding;
+    /**
+     * The whole component spec as plain JSON, so a widget can read a sibling
+     * field (e.g. the variance widget constrains its slots to `spec.scenarios`).
+     */
+    spec?: Record<string, unknown>;
     /** Report a new value → host emits editField → AuthoringClient.edit. */
     onChange(next: T): void;
 }

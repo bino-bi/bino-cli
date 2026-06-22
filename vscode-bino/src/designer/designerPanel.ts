@@ -8,6 +8,11 @@ import { BinoPreviewManager } from '../preview';
 import { isEmbeddableKind, getEmbeddableKinds } from '../embeddable';
 import { WidgetRegistry, WidgetContext, Binding, StandardColumn } from './widgets/registry';
 import { enumSelectWidget } from './widgets/enumSelect';
+import { scenarioWidget } from './widgets/scenario';
+import { varianceWidget } from './widgets/variance';
+import { stackWidget } from './widgets/stack';
+import { aggregateWidget } from './widgets/aggregate';
+import { edgesWidget } from './widgets/edges';
 import { getDesignerHtml, FormRow } from './designerHtml';
 
 /** The component currently shown in the designer. */
@@ -45,7 +50,13 @@ export class DesignerPanel {
         this.schema = new SchemaResolver(extensionPath);
         this.schema.load();
         this.authoring = new AuthoringClient(indexer);
-        // Reference widget proving the registry; brief 04 registers ahead of it.
+        // Bespoke IBCS widgets (brief 04) claim their specific fields first; the
+        // reference enum-select widget is the generic fallback for any enum field.
+        this.registry.register(scenarioWidget);
+        this.registry.register(varianceWidget);
+        this.registry.register(stackWidget);
+        this.registry.register(aggregateWidget);
+        this.registry.register(edgesWidget);
         this.registry.register(enumSelectWidget);
     }
 
@@ -142,12 +153,15 @@ export class DesignerPanel {
         const { kind, name } = this.target;
         const fields = this.schema.getFieldsForKind(kind);
         const spec = this.readSpecMap();
+        // Plain-JSON view of the spec so a widget can read a sibling field
+        // (e.g. variance constrains its slots to spec.scenarios).
+        const specJson = (spec ? toJSON(spec) : undefined) as Record<string, unknown> | undefined;
 
         const rows: FormRow[] = [];
         for (const field of fields) {
             // The dataset field is surfaced by the dedicated binding control.
             if (field.key === 'dataset' && this.kindHasDataset()) { continue; }
-            rows.push(this.buildRow(kind, field, spec));
+            rows.push(this.buildRow(kind, field, spec, specJson));
         }
 
         this.panel.webview.postMessage({
@@ -173,7 +187,7 @@ export class DesignerPanel {
      * Render one field: a registry widget if matched, a collapsible group for a
      * nested object (recursing into its scalar children), else a generic control.
      */
-    private buildRow(kind: string, field: FieldDef, spec: YAMLMap | undefined): FormRow {
+    private buildRow(kind: string, field: FieldDef, spec: YAMLMap | undefined, specJson?: Record<string, unknown>): FormRow {
         const value = valueAt(spec, field.path);
         const base = {
             // FieldDef.path is spec-relative (resolver roots at the spec def), so
@@ -192,6 +206,7 @@ export class DesignerPanel {
                 field,
                 value,
                 binding: this.binding,
+                spec: specJson,
                 // onChange is realized by the webview posting editField for the
                 // control; the host need not be called directly here.
                 onChange: () => undefined,
@@ -205,7 +220,7 @@ export class DesignerPanel {
             return {
                 ...base,
                 controlHtml: count > 0 ? `{${count}}` : '(empty)',
-                children: field.children.map(child => this.buildRow(kind, child, spec)),
+                children: field.children.map(child => this.buildRow(kind, child, spec, specJson)),
             };
         }
 
@@ -445,12 +460,14 @@ function toJSON(node: unknown): unknown {
 /**
  * Resolve a spec-relative field path to its current JSON value within the spec
  * map. Array-item segments ('[]') are never resolved here (arrays render as a
- * read-only summary), so such paths yield undefined.
+ * read-only summary), so such paths yield undefined. An explicit YAML `null` is
+ * preserved as `null` (distinct from an absent key → `undefined`) so a widget can
+ * tell `columnthereof: null` from an unset field.
  */
 function valueAt(spec: YAMLMap | undefined, relPath: string[]): unknown {
     if (!spec || relPath.length === 0 || relPath.includes('[]')) { return undefined; }
     const node = spec.getIn(relPath, true);
-    return node === undefined || node === null ? undefined : toJSON(node);
+    return node === undefined ? undefined : toJSON(node);
 }
 
 /** 0-based start line of the 1-based Nth document in a multi-doc YAML string. */
