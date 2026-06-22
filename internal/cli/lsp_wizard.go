@@ -11,9 +11,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/report/sqlgen"
 	"bino.bi/bino/internal/schema"
@@ -254,6 +256,39 @@ func newLSPDatasetSchemaCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return outputJSON(cmd.OutOrStdout(), lspDatasetSchemaResult{Version: version.Version, Columns: dataset.StandardColumns()})
+		},
+	}
+}
+
+// --- kinds ------------------------------------------------------------------
+
+type lspKindInfo struct {
+	Name       string `json:"name"`
+	Embeddable bool   `json:"embeddable"`
+}
+
+type lspKindsResult struct {
+	Version string        `json:"version"`
+	Kinds   []lspKindInfo `json:"kinds"`
+}
+
+func newLSPKindsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "kinds",
+		Short: "Print every manifest kind with its render-embeddable flag",
+		Long:  "Returns each built-in manifest kind and whether it renders standalone as a component (the single render-embeddable authority). The extension derives render-embeddable membership from this served flag. Subprocess fallback for the daemon's /kinds endpoint; needs no project directory.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			agg := plugin.NewSchemaAggregator(plugin.NewRegistry())
+			if err := agg.Build(cmd.Context()); err != nil {
+				return fmt.Errorf("building schema: %w", err)
+			}
+			names := agg.KindNames()
+			kinds := make([]lspKindInfo, 0, len(names))
+			for _, n := range names {
+				kinds = append(kinds, lspKindInfo{Name: n, Embeddable: embedkinds.IsEmbeddable(n)})
+			}
+			return outputJSON(cmd.OutOrStdout(), lspKindsResult{Version: version.Version, Kinds: kinds})
 		},
 	}
 }

@@ -114,6 +114,7 @@ func newLSPCommand() *cobra.Command {
 	cmd.AddCommand(newLSPIntrospectDraftCommand())
 	cmd.AddCommand(newLSPPreviewDataSetCommand())
 	cmd.AddCommand(newLSPDatasetSchemaCommand())
+	cmd.AddCommand(newLSPKindsCommand())
 	cmd.AddCommand(newLSPScaffoldCommand())
 	cmd.AddCommand(newLSPTypedSelectCommand())
 	cmd.AddCommand(newLSPEditCommand())

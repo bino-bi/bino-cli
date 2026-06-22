@@ -1,12 +1,16 @@
+import type { KindInfo } from './indexer';
+
 /**
- * Render-embeddable component kinds: manifest kinds that render standalone as a
- * component (the preview's live canvas, the designer). This mirrors the single
- * Go authority `internal/report/embed` (the served `embeddable` flag on
- * bino://kinds); keep the two in sync. "Image" is a layout-child kind, not a
- * manifest kind, so it is intentionally absent; "Asset" is a resource, not a
- * standalone component.
+ * Fallback render-embeddable component kinds, used only until the backend's
+ * served `embeddable` flag has been fetched (see setRenderEmbeddableKinds).
+ * Render-embeddable kinds render standalone as a component (the preview's live
+ * canvas, the designer). The authoritative set is the Go `internal/report/embed`
+ * package, served on GET /kinds and bino://kinds; the extension derives the live
+ * set from that flag rather than maintaining this list. "Image" is a
+ * layout-child kind, not a manifest kind, so it is intentionally absent; "Asset"
+ * is a resource, not a standalone component.
  */
-export const RENDER_EMBEDDABLE_KINDS = [
+const FALLBACK_RENDER_EMBEDDABLE_KINDS = [
     'Table',
     'ChartStructure',
     'ChartTime',
@@ -16,9 +20,30 @@ export const RENDER_EMBEDDABLE_KINDS = [
 ];
 
 /**
+ * The current render-embeddable component kinds. Starts as the static fallback
+ * and is replaced by the served `embeddable` flag once the indexer fetches it.
+ */
+let renderEmbeddableKinds: string[] = [...FALLBACK_RENDER_EMBEDDABLE_KINDS];
+
+/**
+ * Replace the render-embeddable set from the backend's served `embeddable` flag
+ * (KindInfo.embeddable on GET /kinds). Called by the indexer after each index
+ * refresh so the extension never drifts from the single Go authority. A served
+ * list with no embeddable kinds is ignored so a partial/failed fetch can't blank
+ * out the preview/designer entry points.
+ */
+export function setRenderEmbeddableKinds(kinds: KindInfo[]): void {
+    const next = kinds.filter(k => k.embeddable).map(k => k.name);
+    if (next.length > 0) {
+        renderEmbeddableKinds = next;
+    }
+}
+
+/**
  * Artefact / page kinds that are not standalone components but are still shown
  * in the embedded preview (rendered directly, or as a synthetic one-page
- * artefact). This is a separate UI concept from the render-component flag above.
+ * artefact). This is a separate UI concept from the render-embeddable flag above
+ * and is intentionally an explicit, extension-owned list.
  */
 export const ARTEFACT_PREVIEW_KINDS = [
     'ReportArtefact',
@@ -33,12 +58,11 @@ export const ARTEFACT_PREVIEW_KINDS = [
  * tree contextValue. LiveReportArtefact and data/config kinds are not
  * embeddable.
  */
-export const EMBEDDABLE_KINDS = [
-    ...ARTEFACT_PREVIEW_KINDS,
-    ...RENDER_EMBEDDABLE_KINDS
-];
+export function getEmbeddableKinds(): string[] {
+    return [...ARTEFACT_PREVIEW_KINDS, ...renderEmbeddableKinds];
+}
 
 /** Returns true if a document of this kind can be shown in the embedded preview. */
 export function isEmbeddableKind(kind: string): boolean {
-    return EMBEDDABLE_KINDS.includes(kind);
+    return getEmbeddableKinds().includes(kind);
 }

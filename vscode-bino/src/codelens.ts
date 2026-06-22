@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
-import { EMBEDDABLE_KINDS } from './embeddable';
+import { getEmbeddableKinds } from './embeddable';
 
 /**
  * CodeLens provider for Bino YAML manifests.
@@ -80,7 +80,7 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
 
         // For each embeddable document in this file, add an embedded-preview CodeLens
         const artefactDocs = this.indexer
-            .getDocuments(EMBEDDABLE_KINDS)
+            .getDocuments(getEmbeddableKinds())
             .filter(doc => doc.file.replace(/\\/g, '/') === filePath.replace(/\\/g, '/'));
 
         for (const doc of artefactDocs) {

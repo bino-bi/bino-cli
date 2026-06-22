@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
-import { EMBEDDABLE_KINDS } from './embeddable';
+import { getEmbeddableKinds } from './embeddable';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -378,7 +378,7 @@ export class BinoPreviewManager {
 
         const filePath = doc.uri.fsPath.replace(/\\/g, '/');
         const candidates = this.indexer
-            .getDocuments(EMBEDDABLE_KINDS)
+            .getDocuments(getEmbeddableKinds())
             .filter(d => d.file.replace(/\\/g, '/') === filePath);
 
         if (candidates.length === 0) {
@@ -398,7 +398,7 @@ export class BinoPreviewManager {
 
     /** Prompt the user to choose an embeddable artefact. */
     private async pickArtefact(): Promise<{ name: string; kind: string } | undefined> {
-        const artefacts = this.indexer?.getDocuments(EMBEDDABLE_KINDS) ?? [];
+        const artefacts = this.indexer?.getDocuments(getEmbeddableKinds()) ?? [];
         if (artefacts.length === 0) {
             vscode.window.showInformationMessage('No embeddable documents found in workspace');
             return undefined;

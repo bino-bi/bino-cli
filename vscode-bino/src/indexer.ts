@@ -3,6 +3,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DaemonClient } from './daemonClient';
+import { setRenderEmbeddableKinds } from './embeddable';
 
 /** The project configuration filename that marks a bino project root */
 const PROJECT_CONFIG_FILE = 'bino.toml';
@@ -25,6 +26,18 @@ interface LSPIndexResult {
 interface LSPColumnsResult {
     name: string;
     columns: string[];
+    error?: string;
+}
+
+/** A manifest kind and its served render-embeddable flag (from /kinds). */
+export interface KindInfo {
+    name: string;
+    embeddable: boolean;
+}
+
+/** Result from bino lsp-helper kinds */
+interface LSPKindsResult {
+    kinds: KindInfo[];
     error?: string;
 }
 
@@ -87,6 +100,7 @@ export interface LSPRowsResult {
 export class WorkspaceIndexer {
     private context: vscode.ExtensionContext;
     private documents: LSPDocument[] = [];
+    private kinds: KindInfo[] | undefined;
     private columnsCache: Map<string, ColumnCacheEntry> = new Map();
     private indexPromise: Promise<void> | undefined;
     private outputChannel: vscode.OutputChannel;
@@ -270,6 +284,11 @@ export class WorkspaceIndexer {
         this._isIndexing = true;
         this._onDidStartIndex.fire();
 
+        // Refresh the render-embeddable set from the served `embeddable` flag so
+        // it never drifts from the Go authority. Cached for the session; only
+        // re-fetched until the first success.
+        await this.ensureRenderEmbeddableKinds();
+
         try {
             // Try daemon first for faster indexing
             if (this.daemonClient?.isConnected) {
@@ -399,6 +418,55 @@ export class WorkspaceIndexer {
         } catch (err) {
             this.outputChannel.appendLine(`Failed to get columns for ${name}: ${err}`);
             return [];
+        }
+    }
+
+    /**
+     * Fetch every manifest kind and its served render-embeddable flag from the
+     * backend (daemon /kinds, falling back to `lsp-helper kinds`). This is the
+     * single render-embeddable authority (internal/report/embed); the extension
+     * derives membership from it instead of a hand-maintained list. The result is
+     * cached for the session.
+     */
+    private async refreshKinds(): Promise<KindInfo[]> {
+        // Try daemon first
+        if (this.daemonClient?.isConnected) {
+            try {
+                const result = await this.daemonClient.getKinds();
+                if (result && !result.error && Array.isArray(result.kinds)) {
+                    this.kinds = result.kinds;
+                    return this.kinds;
+                }
+            } catch {
+                // Fall through to subprocess
+            }
+        }
+
+        // Fallback to subprocess
+        try {
+            const output = await this.execBino(['lsp-helper', 'kinds']);
+            const result: LSPKindsResult = JSON.parse(output);
+            if (!result.error && Array.isArray(result.kinds)) {
+                this.kinds = result.kinds;
+            }
+        } catch (err) {
+            this.outputChannel.appendLine(`Failed to get kinds: ${err}`);
+        }
+        return this.kinds ?? [];
+    }
+
+    /**
+     * Fetch the served kind list once and apply the render-embeddable flag to the
+     * shared embeddable set. Idempotent: re-fetches only until the first success,
+     * so it can be called on every index refresh without repeated backend hits.
+     */
+    private async ensureRenderEmbeddableKinds(): Promise<void> {
+        if (this.kinds) {
+            return;
+        }
+        const kinds = await this.refreshKinds();
+        if (kinds.length > 0) {
+            setRenderEmbeddableKinds(kinds);
         }
     }
 
