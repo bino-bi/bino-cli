@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { WorkspaceIndexer } from './indexer';
 import { SchemaResolver, FieldDef } from './schemaResolver';
-import { parseYamlDocuments, resolveLineNumbers, applyEdit, removeField, addField } from './yamlModel';
+import { parseYamlDocuments, resolveLineNumbers, addField } from './yamlModel';
+import { AuthoringClient, formatEditDiagnostics, EditResult } from './authoringClient';
 import { getTreeTableHtml, getErrorHtml, getPlaceholderHtml } from './treeTableHtml';
 
 /**
@@ -11,6 +12,7 @@ import { getTreeTableHtml, getErrorHtml, getPlaceholderHtml } from './treeTableH
 export class TreeTableEditorManager {
     private panel: vscode.WebviewPanel | undefined;
     private indexer: WorkspaceIndexer;
+    private authoring: AuthoringClient;
     private schema: SchemaResolver;
     private currentEditor: vscode.TextEditor | undefined;
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -22,6 +24,7 @@ export class TreeTableEditorManager {
         extensionPath: string
     ) {
         this.indexer = indexer;
+        this.authoring = new AuthoringClient(indexer);
         this.schema = new SchemaResolver(extensionPath);
         this.schema.load();
     }
@@ -216,52 +219,25 @@ export class TreeTableEditorManager {
     /** Apply a value edit from the webview to the text document */
     private async handleEditValue(docIndex: number, path: string[], newValue: unknown): Promise<void> {
         if (!this.currentEditor) { return; }
-
-        const text = this.currentEditor.document.getText();
-        const result = applyEdit(text, docIndex, path, newValue);
-        if (!result) { return; }
-
-        this.suppressForwardSync = true;
-        try {
-            const fullRange = new vscode.Range(
-                this.currentEditor.document.positionAt(0),
-                this.currentEditor.document.positionAt(text.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(this.currentEditor.document.uri, fullRange, result.newText);
-            await vscode.workspace.applyEdit(edit);
-        } finally {
-            // Allow forward sync after a short delay to let the edit settle
-            setTimeout(() => {
-                this.suppressForwardSync = false;
-                this.forwardSync(); // Re-sync to pick up any normalization by the yaml lib
-            }, 100);
-        }
+        await this.applyAuthoringEdit(
+            this.authoring.edit({
+                file: this.currentEditor.document.uri.fsPath,
+                position: docIndex + 1,
+                patch: { [path.join('.')]: newValue },
+            })
+        );
     }
 
     /** Remove a field from the YAML document */
     private async handleRemoveField(docIndex: number, path: string[]): Promise<void> {
         if (!this.currentEditor) { return; }
-
-        const text = this.currentEditor.document.getText();
-        const result = removeField(text, docIndex, path);
-        if (!result) { return; }
-
-        this.suppressForwardSync = true;
-        try {
-            const fullRange = new vscode.Range(
-                this.currentEditor.document.positionAt(0),
-                this.currentEditor.document.positionAt(text.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(this.currentEditor.document.uri, fullRange, result.newText);
-            await vscode.workspace.applyEdit(edit);
-        } finally {
-            setTimeout(() => {
-                this.suppressForwardSync = false;
-                this.forwardSync();
-            }, 100);
-        }
+        await this.applyAuthoringEdit(
+            this.authoring.remove({
+                file: this.currentEditor.document.uri.fsPath,
+                position: docIndex + 1,
+                paths: [path.join('.')],
+            })
+        );
     }
 
     /** Add a new field to the YAML document */
@@ -271,20 +247,31 @@ export class TreeTableEditorManager {
         const defaultValue = providedDefault !== undefined && providedDefault !== null ? providedDefault : getDefaultValueForType(fieldType);
         const fullPath = [...parentPath, key];
 
-        const text = this.currentEditor.document.getText();
-        const result = addField(text, docIndex, fullPath, defaultValue);
-        if (!result) { return; }
+        await this.applyAuthoringEdit(
+            this.authoring.edit({
+                file: this.currentEditor.document.uri.fsPath,
+                position: docIndex + 1,
+                patch: { [fullPath.join('.')]: defaultValue },
+            })
+        );
+    }
 
+    /**
+     * Apply an authoring mutation that targets the current editor's open buffer.
+     * The AuthoringClient merges it via a WorkspaceEdit (firing onDidChange), so
+     * we hold the forward-sync guard across the apply and re-sync afterwards.
+     * A rejected edit (schema diagnostics) is surfaced and the buffer untouched.
+     */
+    private async applyAuthoringEdit(pending: Promise<EditResult>): Promise<void> {
         this.suppressForwardSync = true;
         try {
-            const fullRange = new vscode.Range(
-                this.currentEditor.document.positionAt(0),
-                this.currentEditor.document.positionAt(text.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(this.currentEditor.document.uri, fullRange, result.newText);
-            await vscode.workspace.applyEdit(edit);
+            const result = await pending;
+            if (!result.ok) {
+                vscode.window.showErrorMessage(`Edit rejected: ${formatEditDiagnostics(result)}`);
+            }
         } finally {
+            // Allow forward sync after a short delay to let the edit settle, then
+            // re-sync to pick up any normalization by the engine.
             setTimeout(() => {
                 this.suppressForwardSync = false;
                 this.forwardSync();

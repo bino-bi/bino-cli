@@ -93,6 +93,24 @@ export interface LSPRowsResult {
     error?: string;
 }
 
+/** A single schema-validation diagnostic for an edit (from lsp-helper edit). */
+export interface LSPEditDiagnostic {
+    message: string;
+    line: number;
+    col: number;
+    severity: string;
+}
+
+/** Result from bino lsp-helper edit (compute/write of an edit/remove/reorder). */
+export interface LSPEditResult {
+    ok: boolean;
+    full?: string;
+    edited?: string;
+    file?: string;
+    diagnostics: LSPEditDiagnostic[];
+    error?: string;
+}
+
 /**
  * WorkspaceIndexer maintains an index of all Bino documents in the workspace
  * and provides column introspection with caching.
@@ -691,6 +709,22 @@ export class WorkspaceIndexer {
             return { ok: false, files: [], error: 'no workspace folder open' };
         }
         const output = await this.execBinoStdin(['lsp-helper', 'scaffold', workDir, '--payload-file', '-'], JSON.stringify(payload));
+        return JSON.parse(output);
+    }
+
+    /**
+     * Compute or write a fidelity-preserving manifest edit through the one Go
+     * engine (EditYAMLDocument). The payload selects op (edit/remove/reorder)
+     * and mode (compute/write); compute returns the rewritten file without
+     * touching disk, write applies it atomically. A non-empty diagnostics list
+     * means the edit was rejected. Used by the Design-mode authoring client.
+     */
+    async editManifest(payload: Record<string, unknown>): Promise<LSPEditResult> {
+        const workDir = this.getWorkspaceRoot();
+        if (!workDir) {
+            return { ok: false, diagnostics: [], error: 'no workspace folder open' };
+        }
+        const output = await this.execBinoStdin(['lsp-helper', 'edit', workDir, '--payload-file', '-'], JSON.stringify(payload));
         return JSON.parse(output);
     }
 

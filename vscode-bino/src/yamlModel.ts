@@ -286,75 +286,12 @@ function resolveNodeLines(text: string, nodes: TreeNode[]): void {
 }
 
 /**
- * Apply an edit to a YAML document.
- * Returns the new full text after the edit, or undefined on failure.
- *
- * @param text Current document text
- * @param docIndex 0-based document index
- * @param path Key path within the document (e.g. ['spec', 'type'])
- * @param newValue New value to set
- */
-export function applyEdit(
-    text: string,
-    docIndex: number,
-    path: string[],
-    newValue: unknown
-): { newText: string; editStart: number; editEnd: number } | undefined {
-    try {
-        const docs = parseAllDocuments(text, { keepSourceTokens: true });
-        const doc = docs[docIndex];
-        if (!doc || !doc.contents) { return undefined; }
-
-        // Navigate to the parent and set the value
-        doc.setIn(path, newValue);
-
-        // Rebuild the full text from all documents
-        const newText = docs.map((d, i) => {
-            const str = d.toString();
-            // Add document separator for documents after the first
-            if (i > 0 && !str.startsWith('---')) {
-                return '---\n' + str;
-            }
-            return str;
-        }).join('');
-
-        return { newText, editStart: 0, editEnd: text.length };
-    } catch {
-        return undefined;
-    }
-}
-
-/**
- * Remove a field from a YAML document.
- */
-export function removeField(
-    text: string,
-    docIndex: number,
-    path: string[]
-): { newText: string } | undefined {
-    try {
-        const docs = parseAllDocuments(text, { keepSourceTokens: true });
-        const doc = docs[docIndex];
-        if (!doc || !doc.contents) { return undefined; }
-
-        doc.deleteIn(path);
-
-        const newText = docs.map((d, i) => {
-            const str = d.toString();
-            if (i > 0 && !str.startsWith('---')) {
-                return '---\n' + str;
-            }
-            return str;
-        }).join('');
-
-        return { newText };
-    } catch {
-        return undefined;
-    }
-}
-
-/**
  * Add a new field to a YAML document.
+ *
+ * Retained for array-append mutations (handleAddArrayItem /
+ * handleAddTypedArrayItem) that grow a sequence past its end — an operation the
+ * set-only Go engine (EditYAMLDocument) cannot express. All other manifest
+ * mutations go through the AuthoringClient / Go engine.
  */
 export function addField(
     text: string,
