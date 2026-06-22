@@ -172,6 +172,52 @@ func TestRunLSPEditComputeDoesNotWrite(t *testing.T) {
 	}
 }
 
+// When the IDE supplies the open buffer's `content` (unsaved/dirty edits),
+// compute must derive the rewritten file from that buffer, not from the stale
+// on-disk copy — otherwise a Design edit would clobber the user's unsaved work.
+func TestRunLSPEditComputeUsesSuppliedContent(t *testing.T) {
+	dir, manifest := seedEditProject(t)
+	diskBefore, _ := os.ReadFile(manifest)
+
+	// Live buffer: spec.value is dirty (not yet saved) and carries an unsaved
+	// comment that does not exist on disk. The patch touches an unrelated key.
+	buffer := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: note # keep me\nspec:\n  value: dirty-unsaved # not on disk\n"
+	payload, err := json.Marshal(map[string]any{
+		"file":    "note.yaml",
+		"mode":    "compute",
+		"content": buffer,
+		"patch":   map[string]any{"metadata.name": "renamed"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := runEdit(t, dir, string(payload))
+	if !res.OK || res.Error != "" {
+		t.Fatalf("compute failed: ok=%v error=%s", res.OK, res.Error)
+	}
+	// The unrelated patch applied...
+	if !bytes.Contains([]byte(res.Full), []byte("name: renamed")) {
+		t.Errorf("compute did not apply the patch:\n%s", res.Full)
+	}
+	// ...on top of the BUFFER (dirty value + unsaved comment preserved),
+	// proving disk was not the compute source (no-clobber).
+	if !bytes.Contains([]byte(res.Full), []byte("value: dirty-unsaved")) {
+		t.Errorf("compute clobbered the dirty buffer value with stale disk:\n%s", res.Full)
+	}
+	if !bytes.Contains([]byte(res.Full), []byte("# not on disk")) {
+		t.Errorf("compute dropped the unsaved buffer comment:\n%s", res.Full)
+	}
+	if bytes.Contains([]byte(res.Full), []byte("value: old")) {
+		t.Errorf("compute used the stale on-disk value instead of the buffer:\n%s", res.Full)
+	}
+	// And disk is still untouched (compute never writes).
+	diskAfter, _ := os.ReadFile(manifest)
+	if !bytes.Equal(diskBefore, diskAfter) {
+		t.Errorf("compute wrote to disk:\nbefore:\n%s\nafter:\n%s", diskBefore, diskAfter)
+	}
+}
+
 // write mode lands exactly the bytes compute returned, and matches the
 // fidelity-preserving engine output.
 func TestRunLSPEditWriteMatchesCompute(t *testing.T) {

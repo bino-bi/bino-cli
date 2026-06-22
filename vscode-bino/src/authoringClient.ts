@@ -95,9 +95,13 @@ export class AuthoringClient {
         const base = { file: abs, position: position ?? 1, ...opPayload };
 
         if (open) {
-            // Open buffer: compute the rewritten file, then merge via WorkspaceEdit
-            // so undo is one step and the editor's dirty-state is honored.
-            const result = await this.computeOrFail({ ...base, mode: 'compute' });
+            // Open buffer: compute the rewritten file from the LIVE buffer text
+            // (honoring unsaved/dirty edits, not stale disk), then merge via
+            // WorkspaceEdit so undo is one step and the editor's dirty-state is
+            // preserved. Capture the text once so the replace range is sized
+            // against the exact text the engine computed from.
+            const text = open.getText();
+            const result = await this.computeOrFail({ ...base, content: text, mode: 'compute' });
             if (!result.ok) { return result; }
             const full = result.value.full;
             if (full === undefined) {
@@ -105,7 +109,7 @@ export class AuthoringClient {
             }
             const fullRange = new vscode.Range(
                 open.positionAt(0),
-                open.positionAt(open.getText().length)
+                open.positionAt(text.length)
             );
             const edit = new vscode.WorkspaceEdit();
             edit.replace(open.uri, fullRange, full);

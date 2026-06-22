@@ -547,6 +547,7 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 		Position int            `json:"position"`
 		Op       string         `json:"op"`   // "edit" (default), "remove", "reorder", "append"
 		Mode     string         `json:"mode"` // "compute" (default) or "write"
+		Content  *string        `json:"content"`
 		Patch    map[string]any `json:"patch"`
 		Paths    []string       `json:"paths"`
 		Path     string         `json:"path"`
@@ -592,10 +593,19 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(absDir, abs)
 	}
-	content, err := os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local IDE client
-	if err != nil {
-		result.Error = fmt.Sprintf("read %s: %v", req.File, err)
-		return outputJSON(out, result)
+	// When the IDE has the manifest open with unsaved edits, it passes the live
+	// buffer text in `content`; compute against that so the rewrite is derived
+	// from what the user sees, not stale disk (no-clobber). Absent content falls
+	// back to reading the file (closed-file writes, remove/reorder/append).
+	var content []byte
+	if req.Content != nil {
+		content = []byte(*req.Content)
+	} else {
+		content, err = os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local IDE client
+		if err != nil {
+			result.Error = fmt.Sprintf("read %s: %v", req.File, err)
+			return outputJSON(out, result)
+		}
 	}
 
 	var full, edited string
