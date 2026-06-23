@@ -101,6 +101,16 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
                 arguments: [doc],
                 tooltip: `Open embedded preview of ${doc.kind} "${doc.name}"`
             }));
+
+            // Sibling lens on the same range: open this manifest in the visual
+            // designer (schema-driven form + live canvas). Renders next to the
+            // embedded-preview lens.
+            codeLenses.push(new vscode.CodeLens(range, {
+                title: '$(edit) Designer',
+                command: 'bino.openDesigner',
+                arguments: [doc],
+                tooltip: `Open ${doc.kind} "${doc.name}" in the Bino Designer`
+            }));
         }
 
         return codeLenses;
