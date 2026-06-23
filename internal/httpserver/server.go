@@ -691,6 +691,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// The embedded preview's EventSource runs inside the VS Code webview (origin
+	// vscode-webview://), so this localhost SSE stream is cross-origin. Without
+	// this header the browser blocks the connection and the preview never
+	// receives refresh events (the canvas stops auto-reloading). No credentials
+	// are used, so "*" is safe for this local-only preview server.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Create a compressed response writer for SSE
 	compType := selectCompression(r.Header.Get("Accept-Encoding"))
