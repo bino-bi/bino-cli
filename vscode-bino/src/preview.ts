@@ -346,6 +346,7 @@ export class BinoPreviewManager {
             });
 
             this.registerArtefactFollow();
+            this.registerLiveAutoSave();
         }
 
         this.artefactPanel.reveal(vscode.ViewColumn.Beside);
@@ -435,6 +436,43 @@ export class BinoPreviewManager {
         this.artefactFollowDisposables.push(
             vscode.window.onDidChangeActiveTextEditor(() => followNow()),
             vscode.window.onDidChangeTextEditorSelection(debounced)
+        );
+    }
+
+    /**
+     * Live preview: while the embedded preview is open, debounce-save dirty Bino
+     * YAML manifests so the disk watcher refreshes the canvas as you edit — both
+     * raw typing and designer form edits (which land as unsaved WorkspaceEdits).
+     * Scoped to Bino manifests and only while a preview panel is open.
+     */
+    private registerLiveAutoSave(): void {
+        const timers = new Map<string, ReturnType<typeof setTimeout>>();
+        this.artefactFollowDisposables.push(
+            vscode.workspace.onDidChangeTextDocument(e => {
+                const doc = e.document;
+                if (!this.isEmbeddedPreviewOpen() || doc.isUntitled || !doc.isDirty) {
+                    return;
+                }
+                const name = doc.fileName.toLowerCase();
+                if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
+                    return;
+                }
+                if (!doc.getText().includes('apiVersion: bino.bi')) {
+                    return;
+                }
+                const key = doc.uri.toString();
+                const existing = timers.get(key);
+                if (existing) {
+                    clearTimeout(existing);
+                }
+                timers.set(key, setTimeout(() => {
+                    timers.delete(key);
+                    // Re-check: the panel may have closed during the debounce.
+                    if (this.isEmbeddedPreviewOpen() && doc.isDirty) {
+                        void doc.save();
+                    }
+                }, 400));
+            })
         );
     }
 
