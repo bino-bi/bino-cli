@@ -67,64 +67,95 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 	})
 }
 
-// EmbedByName resolves a name (optionally disambiguated by kind) from the latest
-// refresh snapshot and renders the matching document as standalone HTML —
-// equivalent to what `bino build` feeds to Chrome. Supported kinds are
-// ReportArtefact, DocumentArtefact, LayoutPage and the standalone component
-// kinds; LayoutPages and components are rendered by synthesizing a one-page
-// artefact. When kind is empty the lookup falls back to a fixed priority
-// (ReportArtefact → DocumentArtefact → LayoutPage → component). Names are unique
-// per kind, not globally, so callers that know the kind should pass it. Renders
-// are memoized in state.embeddingCache keyed by "kind:name"; the cache is reset
-// on every refresh.
-func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *State, cfg *Config, server *httpserver.Server) ([]byte, error) {
-	cacheKey := kind + ":" + name
+// embedTarget holds the single resolved document to render. Exactly one field
+// is non-nil; all-nil means "not found".
+type embedTarget struct {
+	reportArt *config.Artifact
+	docArt    *config.DocumentArtefact
+	layoutDoc *config.Document
+	compDoc   *config.Document
+}
 
+func (t embedTarget) found() bool {
+	return t.reportArt != nil || t.docArt != nil || t.layoutDoc != nil || t.compDoc != nil
+}
+
+// resolveEmbedTarget picks the single document matching (name, kind) from the
+// supplied artefact/document sets, applying the fixed kind priority
+// (ReportArtefact → DocumentArtefact → LayoutPage → component) when kind is
+// empty. The returned pointers alias into the input slices, so callers must
+// keep those slices alive for the duration of the render.
+func resolveEmbedTarget(name, kind string, artefacts []config.Artifact, docArts []config.DocumentArtefact, docs []config.Document) embedTarget {
+	want := func(k string) bool { return kind == "" || kind == k }
+
+	var t embedTarget
+	if want("ReportArtefact") {
+		for i := range artefacts {
+			if artefacts[i].Document.Name == name {
+				t.reportArt = &artefacts[i]
+				return t
+			}
+		}
+	}
+	if want("DocumentArtefact") {
+		for i := range docArts {
+			if docArts[i].Document.Name == name {
+				t.docArt = &docArts[i]
+				return t
+			}
+		}
+	}
+	for i := range docs {
+		d := &docs[i]
+		if d.Name != name {
+			continue
+		}
+		if d.Kind == "LayoutPage" && want("LayoutPage") {
+			t.layoutDoc = d
+			return t
+		}
+		if embedkinds.IsEmbeddable(d.Kind) && want(d.Kind) {
+			t.compDoc = d
+			return t
+		}
+	}
+	return t
+}
+
+// EmbedByName resolves a name (optionally disambiguated by kind) and renders the
+// matching document as standalone HTML — equivalent to what `bino build` feeds
+// to Chrome. Supported kinds are ReportArtefact, DocumentArtefact, LayoutPage
+// and the standalone component kinds; LayoutPages and components are rendered by
+// synthesizing a one-page artefact. When kind is empty the lookup falls back to
+// a fixed priority (ReportArtefact → DocumentArtefact → LayoutPage → component).
+// Names are unique per kind, not globally, so callers that know the kind should
+// pass it.
+//
+// Two render sources exist:
+//   - Disk path (no live overrides): resolves from the last refresh snapshot
+//     (state.artefacts/documentArtefacts/lastDocs) and memoizes the rendered
+//     HTML in state.embeddingCache keyed by "kind:name"; the cache is reset on
+//     every refresh.
+//   - Override path (one or more live overrides set): performs a FRESH lenient
+//     load with the buffer overlay, resolves from THOSE docs, renders only the
+//     requested target, and bypasses embeddingCache entirely — so the previewed
+//     component reflects unsaved editor edits without a disk write or a full
+//     report refresh.
+func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *State, cfg *Config, server *httpserver.Server) ([]byte, error) {
 	mu.Lock()
+	if overlay := state.liveOverridesSnapshot(); overlay != nil {
+		mu.Unlock()
+		return embedFromOverlay(ctx, name, kind, overlay, cfg, server)
+	}
+
+	cacheKey := kind + ":" + name
 	if cached, ok := state.embeddingCache[cacheKey]; ok {
 		mu.Unlock()
 		return cached, nil
 	}
 
-	want := func(k string) bool { return kind == "" || kind == k }
-
-	var reportArt *config.Artifact
-	if want("ReportArtefact") {
-		for i := range state.artefacts {
-			if state.artefacts[i].Document.Name == name {
-				reportArt = &state.artefacts[i]
-				break
-			}
-		}
-	}
-	var docArt *config.DocumentArtefact
-	if reportArt == nil && want("DocumentArtefact") {
-		for i := range state.documentArtefacts {
-			if state.documentArtefacts[i].Document.Name == name {
-				docArt = &state.documentArtefacts[i]
-				break
-			}
-		}
-	}
-	var layoutDoc, compDoc *config.Document
-	if reportArt == nil && docArt == nil {
-		for i := range state.lastDocs {
-			d := &state.lastDocs[i]
-			if d.Name != name {
-				continue
-			}
-			if d.Kind == "LayoutPage" && want("LayoutPage") {
-				layoutDoc = d
-				break
-			}
-			if embedkinds.IsEmbeddable(d.Kind) && want(d.Kind) {
-				compDoc = d
-				break
-			}
-		}
-	}
-
-	if reportArt == nil && docArt == nil && layoutDoc == nil && compDoc == nil {
+	target := resolveEmbedTarget(name, kind, state.artefacts, state.documentArtefacts, state.lastDocs)
+	if !target.found() {
 		err := embedNotFoundError(name, kind, state)
 		mu.Unlock()
 		return nil, err
@@ -135,15 +166,68 @@ func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *
 	docs := state.lastDocs
 	mu.Unlock()
 
+	body, err := renderEmbedTarget(ctx, name, target, docs, cfg, server)
+	if err != nil {
+		return nil, err
+	}
+
+	mu.Lock()
+	if state.embeddingCache == nil {
+		state.embeddingCache = make(map[string][]byte)
+	}
+	state.embeddingCache[cacheKey] = body
+	mu.Unlock()
+	return body, nil
+}
+
+// embedFromOverlay renders a single named document from a fresh lenient load
+// that applies the buffer overlay, re-rendering ONLY that component. It never
+// reads or writes embeddingCache and never triggers a full report refresh, so
+// the preview reflects unsaved edits cheaply. Lenient loading means mid-edit
+// invalid YAML degrades to "not found" rather than aborting.
+func embedFromOverlay(ctx context.Context, name, kind string, overlay map[string]string, cfg *Config, server *httpserver.Server) ([]byte, error) {
+	docs, err := config.LoadDirWithOptions(ctx, cfg.Workdir, config.LoadOptions{
+		Lenient:      true,
+		KindProvider: cfg.KindProvider,
+		Overlay:      overlay,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("embed %q: load overlay: %w", name, err)
+	}
+
+	artefacts, err := config.CollectArtefacts(docs)
+	if err != nil {
+		return nil, fmt.Errorf("embed %q: collect artefacts: %w", name, err)
+	}
+	docArts, err := config.CollectDocumentArtefacts(docs)
+	if err != nil {
+		return nil, fmt.Errorf("embed %q: collect document artefacts: %w", name, err)
+	}
+
+	target := resolveEmbedTarget(name, kind, artefacts, docArts, docs)
+	if !target.found() {
+		if kind != "" {
+			return nil, httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable %s named %q", kind, name))
+		}
+		return nil, httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q", name))
+	}
+
+	return renderEmbedTarget(ctx, name, target, docs, cfg, server)
+}
+
+// renderEmbedTarget renders the resolved target against docs and registers any
+// emitted data with the server. It is the shared render path for both the disk
+// and overlay sources.
+func renderEmbedTarget(ctx context.Context, name string, target embedTarget, docs []config.Document, cfg *Config, server *httpserver.Server) ([]byte, error) {
 	var body []byte
 	var emitted []render.EmittedData
 	var err error
 	switch {
-	case reportArt != nil:
-		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, *reportArt, embedRenderOpts(cfg))
+	case target.reportArt != nil:
+		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, *target.reportArt, embedRenderOpts(cfg))
 		body, emitted, err = result.HTML, result.EmittedData, e
-	case docArt != nil:
-		result, e := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, *docArt, pipeline.DocumentArtefactRenderOptions{
+	case target.docArt != nil:
+		result, e := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, *target.docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion:        cfg.EngineVersion,
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
@@ -153,18 +237,18 @@ func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})
 		body, emitted, err = result.HTML, result.EmittedData, e
-	case layoutDoc != nil:
-		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, syntheticPageArtefact(*layoutDoc), embedRenderOpts(cfg))
+	case target.layoutDoc != nil:
+		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, syntheticPageArtefact(*target.layoutDoc), embedRenderOpts(cfg))
 		body, emitted, err = result.HTML, result.EmittedData, e
-	default: // compDoc != nil
-		if _, direct := directEmbeddableComponentKinds[compDoc.Kind]; direct {
+	default: // target.compDoc != nil
+		if _, direct := directEmbeddableComponentKinds[target.compDoc.Kind]; direct {
 			// Leaf components render directly inside <bn-context>, no wrapping page.
 			result, e := pipeline.RenderHTML(ctx, docsWithoutLayoutPages(docs), embedComponentOpts(cfg, name))
 			body, emitted, err = result.HTML, result.EmittedData, e
 			break
 		}
 		// Container components (Tree, Grid) need child resolution: wrap in a page.
-		page, e := syntheticComponentPage(compDoc.Kind, name)
+		page, e := syntheticComponentPage(target.compDoc.Kind, name)
 		if e != nil {
 			err = e
 			break
@@ -178,13 +262,6 @@ func EmbedByName(ctx context.Context, name, kind string, mu *sync.Mutex, state *
 	}
 
 	pipeline.RegisterEmittedData(server, emitted)
-
-	mu.Lock()
-	if state.embeddingCache == nil {
-		state.embeddingCache = make(map[string][]byte)
-	}
-	state.embeddingCache[cacheKey] = body
-	mu.Unlock()
 	return body, nil
 }
 

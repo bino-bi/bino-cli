@@ -23,6 +23,9 @@ export class BinoPreviewManager {
     private artefactPanel: vscode.WebviewPanel | undefined;
     private currentArtefact: { name: string; kind: string } | undefined;
     private artefactFollowDisposables: vscode.Disposable[] = [];
+    // Absolute paths we have pushed a buffer override for; cleared on save/close
+    // so the disk becomes authoritative again.
+    private overriddenFiles = new Set<string>();
 
     // Event emitter for status changes
     private _onStatusChange = new vscode.EventEmitter<PreviewStatus>();
@@ -343,11 +346,17 @@ export class BinoPreviewManager {
                 this.artefactPanel = undefined;
                 this.currentArtefact = undefined;
                 this.disposeArtefactFollow();
+                // Disk is authoritative again: clear every override we pushed.
+                void this.clearAllOverrides();
             });
 
             this.registerArtefactFollow();
-            this.registerLiveAutoSave();
+            this.registerLiveOverridePush();
         }
+
+        // Reflect any unsaved buffers before the first iframe load so opening
+        // the preview shows the editor's current state, not stale disk content.
+        await this.pushAllDirtyOverrides();
 
         this.artefactPanel.reveal(vscode.ViewColumn.Beside);
         this.artefactPanel.title = `Embed: ${artefact.name}`;
@@ -440,12 +449,16 @@ export class BinoPreviewManager {
     }
 
     /**
-     * Live preview: while the embedded preview is open, debounce-save dirty Bino
-     * YAML manifests so the disk watcher refreshes the canvas as you edit — both
-     * raw typing and designer form edits (which land as unsaved WorkspaceEdits).
+     * Live preview: while the embedded preview is open, push unsaved Bino YAML
+     * buffer content to the preview server so the previewed component renders
+     * straight from the editor — both raw typing and designer form edits (which
+     * land as unsaved WorkspaceEdits). No file is written; on success we ask the
+     * embedded webview to reload the (component-scoped) iframe.
+     *
+     * On save, the buffer matches disk again, so we clear that file's override.
      * Scoped to Bino manifests and only while a preview panel is open.
      */
-    private registerLiveAutoSave(): void {
+    private registerLiveOverridePush(): void {
         const timers = new Map<string, ReturnType<typeof setTimeout>>();
         this.artefactFollowDisposables.push(
             vscode.workspace.onDidChangeTextDocument(e => {
@@ -453,11 +466,7 @@ export class BinoPreviewManager {
                 if (!this.isEmbeddedPreviewOpen() || doc.isUntitled || !doc.isDirty) {
                     return;
                 }
-                const name = doc.fileName.toLowerCase();
-                if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
-                    return;
-                }
-                if (!doc.getText().includes('apiVersion: bino.bi')) {
+                if (!this.isBinoManifest(doc)) {
                     return;
                 }
                 const key = doc.uri.toString();
@@ -469,11 +478,99 @@ export class BinoPreviewManager {
                     timers.delete(key);
                     // Re-check: the panel may have closed during the debounce.
                     if (this.isEmbeddedPreviewOpen() && doc.isDirty) {
-                        void doc.save();
+                        void this.pushOverride(doc.uri.fsPath, doc.getText());
                     }
-                }, 400));
+                }, 150));
+            }),
+            // On save the buffer equals disk; drop the override so the disk path
+            // (with its embedding cache) serves again.
+            vscode.workspace.onDidSaveTextDocument(doc => {
+                if (!this.isEmbeddedPreviewOpen() || !this.isBinoManifest(doc)) {
+                    return;
+                }
+                const existing = timers.get(doc.uri.toString());
+                if (existing) {
+                    clearTimeout(existing);
+                    timers.delete(doc.uri.toString());
+                }
+                void this.clearOverride(doc.uri.fsPath);
             })
         );
+    }
+
+    /** Whether a document is a Bino YAML manifest (.yaml/.yml with apiVersion: bino.bi). */
+    private isBinoManifest(doc: vscode.TextDocument): boolean {
+        const name = doc.fileName.toLowerCase();
+        if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
+            return false;
+        }
+        return doc.getText().includes('apiVersion: bino.bi');
+    }
+
+    /** POST a buffer override and, on success, reload the embedded iframe. */
+    private async pushOverride(fsPath: string, content: string): Promise<void> {
+        const ok = await this.postOverrideRequest({ file: fsPath, content });
+        if (ok) {
+            this.overriddenFiles.add(fsPath);
+            this.artefactPanel?.webview.postMessage({ type: 'bino:reload' });
+        }
+    }
+
+    /** POST a clear for a single file and reload so the disk version shows. */
+    private async clearOverride(fsPath: string): Promise<void> {
+        if (!this.overriddenFiles.has(fsPath)) {
+            return;
+        }
+        const ok = await this.postOverrideRequest({ file: fsPath, clear: true });
+        if (ok) {
+            this.overriddenFiles.delete(fsPath);
+            this.artefactPanel?.webview.postMessage({ type: 'bino:reload' });
+        }
+    }
+
+    /** Push every currently-dirty Bino manifest as an override (no reload spam — caller reloads once). */
+    private async pushAllDirtyOverrides(): Promise<void> {
+        for (const doc of vscode.workspace.textDocuments) {
+            if (doc.isUntitled || !doc.isDirty || !this.isBinoManifest(doc)) {
+                continue;
+            }
+            const ok = await this.postOverrideRequest({ file: doc.uri.fsPath, content: doc.getText() });
+            if (ok) {
+                this.overriddenFiles.add(doc.uri.fsPath);
+            }
+        }
+    }
+
+    /** Clear every override we pushed (on panel close); best-effort. */
+    private async clearAllOverrides(): Promise<void> {
+        const files = [...this.overriddenFiles];
+        this.overriddenFiles.clear();
+        for (const file of files) {
+            await this.postOverrideRequest({ file, clear: true });
+        }
+    }
+
+    /**
+     * POST to /__bino/embedding/override on 127.0.0.1 (matching the server bind,
+     * and Node-side so no CORS applies). Returns true on a 2xx response.
+     */
+    private async postOverrideRequest(body: { file: string; content?: string; clear?: boolean }): Promise<boolean> {
+        const port = this.getPreviewPort();
+        try {
+            const res = await fetch(`http://127.0.0.1:${port}/__bino/embedding/override`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                this.outputChannel.appendLine(`[Preview] Override POST failed: HTTP ${res.status}`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            this.outputChannel.appendLine(`[Preview] Override POST error: ${err}`);
+            return false;
+        }
     }
 
     /** Tear down the active-editor follow listeners. */
@@ -569,13 +666,17 @@ export class BinoPreviewManager {
         }
         connect();
 
-        // Switch artefact (from the extension) without rebuilding the document.
+        // Messages from the extension.
         window.addEventListener('message', (event) => {
             const msg = event.data;
             if (msg && msg.type === 'bino:setArtefact') {
                 currentName = msg.name;
                 currentKind = msg.kind;
                 load('switch');
+            } else if (msg && msg.type === 'bino:reload') {
+                // Buffer override applied: reload this component (cache-busted,
+                // bypasses the same-name skip) so unsaved edits appear.
+                load('updated');
             }
         });
     </script>

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -312,6 +313,25 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return refresh.EmbedByName(ctx, name, kind, refreshMu, refreshState, &refreshCfg, server)
 				})
 
+				// Wire the buffer-override endpoint so the VS Code extension can
+				// push unsaved editor content for a manifest. EmbedByName then
+				// renders that file's component straight from the buffer (a fresh
+				// overlaid load) instead of disk — no auto-save, no full refresh.
+				projectRoot := env.ProjectRoot
+				server.SetEmbeddingOverrideFunc(func(file, content string, remove bool) error {
+					if !pathWithinRoot(projectRoot, file) {
+						return httpserver.NewHTTPError(http.StatusForbidden, "file is outside the project root")
+					}
+					refreshMu.Lock()
+					defer refreshMu.Unlock()
+					if remove {
+						refreshState.ClearLiveOverride(file)
+					} else {
+						refreshState.SetLiveOverride(file, content)
+					}
+					return nil
+				})
+
 				doRefresh := func(reason string, changed []string) error {
 					if err := ctx.Err(); err != nil {
 						return err
@@ -466,6 +486,26 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	})
 
 	return cmd
+}
+
+// pathWithinRoot reports whether file resolves to a location inside root.
+// Both are made absolute and cleaned; a relative path that escapes via ".."
+// (or an entirely different tree) is rejected. This guards the buffer-override
+// endpoint so a client cannot push content for arbitrary files on disk.
+func pathWithinRoot(root, file string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absFile, err := filepath.Abs(file)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absFile)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func openBrowser(ctx context.Context, url string) error {
