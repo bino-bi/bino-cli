@@ -23,6 +23,13 @@ func TestRenderDatasetsURLMode(t *testing.T) {
 	if !strings.Contains(segs[0], ">"+wantURL+"<") {
 		t.Fatalf("segment missing URL body %q\n  got %q", wantURL, segs[0])
 	}
+	// Regression guard (design-mode same-origin fix): an empty base must yield a
+	// host-free relative URL. An absolute base pinned to 127.0.0.1 broke the
+	// embedded canvas when the iframe loaded the page from localhost (different
+	// origin, no CORS headers on the data route).
+	if strings.Contains(segs[0], "http://127.0.0.1") || strings.Contains(segs[0], "http://localhost") {
+		t.Fatalf("url-mode with empty base must emit a relative same-origin URL, got absolute host: %q", segs[0])
+	}
 	if strings.Contains(segs[0], `raw='false'`) {
 		t.Fatalf("url mode should NOT set raw='false'; got %q", segs[0])
 	}

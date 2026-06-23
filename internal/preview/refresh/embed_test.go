@@ -4,7 +4,58 @@ import (
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/render"
 )
+
+// TestEmbedRenderOptsEmitRelativeDataURLs guards the design-mode fix: the
+// preview/embed render must emit same-origin RELATIVE data URLs in url mode,
+// never an absolute base pinned to one host. The preview server binds 127.0.0.1
+// but the VS Code webview iframe loads /__embedding from localhost; an absolute
+// 127.0.0.1 data base would make the engine's cross-origin fetch fail ("No
+// Data"). preview.go therefore leaves PluginOptions.DataBaseURL empty in url
+// mode. This test asserts the embed option builders propagate that empty base
+// (with DataMode still "url") so it reaches render.buildDataURL — which, given
+// an empty base, produces a relative "/__bino/data/..." path (see
+// render.TestRenderDatasetsURLMode).
+func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
+	t.Parallel()
+
+	// Exactly what post-fix preview.go produces for url mode.
+	cfg := &Config{
+		PluginOptions: &render.PluginOptions{
+			DataMode:    render.DataModeURL,
+			DataBaseURL: "",
+		},
+	}
+
+	t.Run("embedRenderOpts", func(t *testing.T) {
+		t.Parallel()
+		opts := embedRenderOpts(cfg)
+		if opts.PluginOptions == nil {
+			t.Fatal("embedRenderOpts dropped PluginOptions")
+		}
+		if opts.PluginOptions.DataMode != render.DataModeURL {
+			t.Errorf("DataMode = %q, want %q", opts.PluginOptions.DataMode, render.DataModeURL)
+		}
+		if opts.PluginOptions.DataBaseURL != "" {
+			t.Errorf("DataBaseURL = %q, want empty (same-origin relative URLs)", opts.PluginOptions.DataBaseURL)
+		}
+	})
+
+	t.Run("embedComponentOpts", func(t *testing.T) {
+		t.Parallel()
+		opts := embedComponentOpts(cfg, "standalone_table")
+		if opts.PluginOptions == nil {
+			t.Fatal("embedComponentOpts dropped PluginOptions")
+		}
+		if opts.PluginOptions.DataMode != render.DataModeURL {
+			t.Errorf("DataMode = %q, want %q", opts.PluginOptions.DataMode, render.DataModeURL)
+		}
+		if opts.PluginOptions.DataBaseURL != "" {
+			t.Errorf("DataBaseURL = %q, want empty (same-origin relative URLs)", opts.PluginOptions.DataBaseURL)
+		}
+	})
+}
 
 func TestPageFormatAndOrientation(t *testing.T) {
 	t.Parallel()

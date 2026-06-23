@@ -187,9 +187,15 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				server.SetContentFunc(httpserver.StaticContent(loadingPage, "text/html; charset=utf-8"))
 			}
 
-			if resolvedDataMode == render.DataModeURL && pluginOpts != nil {
-				pluginOpts.DataBaseURL = server.URL()
-			}
+			// In url mode, deliberately leave pluginOpts.DataBaseURL empty so the
+			// renderer emits relative, same-origin data URLs (/__bino/data/...).
+			// The preview server serves both the embed HTML and its data, but it
+			// binds 127.0.0.1 while clients (e.g. the VS Code webview iframe) load
+			// it via localhost. Browsers treat 127.0.0.1 and localhost as different
+			// origins, and the data route sends no CORS headers, so an absolute
+			// 127.0.0.1 base would make the engine's cross-origin data fetch fail
+			// ("No Data"). Relative URLs resolve against whatever host loaded the
+			// document, eliminating the mismatch.
 
 			// Status reporter fans cold-start phases out to the CLI spinner
 			// (TTY-aware, falls back to plain log lines on CI/piped output)
