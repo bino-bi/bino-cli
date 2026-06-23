@@ -353,6 +353,11 @@ export class BinoPreviewManager {
         this.artefactPanel.webview.html = this.getEmbeddedWebviewContent(this.getPreviewPort(), artefact.name, artefact.kind);
     }
 
+    /** Whether the embedded artefact preview panel is currently open. */
+    isEmbeddedPreviewOpen(): boolean {
+        return this.artefactPanel !== undefined;
+    }
+
     /** Switch the embedded preview to another artefact without rebuilding the webview (keeps SSE alive). */
     private switchArtefact(name: string, kind: string): void {
         if (!this.artefactPanel || this.currentArtefact?.name === name) {

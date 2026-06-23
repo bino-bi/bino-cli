@@ -78,15 +78,9 @@ export class DesignerPanel {
 
         this.ensurePanel();
         await this.bindTarget(doc);
-
-        // Embed the live canvas next to the form (reuses the preview seam).
-        await this.preview.previewArtefactEmbedded({
-            kind: doc.kind,
-            name: doc.name,
-            file: doc.file,
-            position: doc.position,
-        });
-
+        // The embedded preview is its own panel with its own CodeLens; the
+        // designer intentionally does NOT open it here (it only refreshes an
+        // already-open preview after an edit — see reloadCanvas).
         this.panel!.reveal(vscode.ViewColumn.Beside);
     }
 
@@ -340,7 +334,9 @@ export class DesignerPanel {
      * auto-reloads on the SSE refresh tick; this keeps it pinned to our target.
      */
     private reloadCanvas(): void {
-        if (!this.target) { return; }
+        // Never open the preview from the designer; only refresh it if the user
+        // already opened the embedded preview separately (its own CodeLens).
+        if (!this.target || !this.preview.isEmbeddedPreviewOpen()) { return; }
         void this.preview.previewArtefactEmbedded({
             kind: this.target.kind,
             name: this.target.name,
