@@ -16,6 +16,7 @@ import (
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/datasource"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	tmpl "bino.bi/bino/internal/template"
 	"bino.bi/bino/internal/version"
 )
@@ -162,10 +163,13 @@ func (h *handlers) readDocuments(_ context.Context, _ *mcpsdk.ReadResourceReques
 // emptyInput is the input type for tools that take no arguments.
 type emptyInput struct{}
 
-// KindInfo describes a manifest kind and its capability category.
+// KindInfo describes a manifest kind, its capability category, and whether it
+// renders standalone as a component (the designer's live canvas and the preview
+// read this flag from the same authority as the render layer).
 type KindInfo struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	Embeddable bool   `json:"embeddable"`
 }
 
 func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
@@ -457,7 +461,7 @@ func (h *handlers) listKinds(ctx context.Context) ([]KindInfo, error) {
 	names := kindEnum(agg.MergedSchema())
 	out := make([]KindInfo, 0, len(names))
 	for _, n := range names {
-		out = append(out, KindInfo{Name: n, Category: h.categoryFor(n)})
+		out = append(out, KindInfo{Name: n, Category: h.categoryFor(n), Embeddable: embedkinds.IsEmbeddable(n)})
 	}
 	return out, nil
 }
@@ -477,46 +481,15 @@ func kindEnum(merged json.RawMessage) []string {
 	return doc.Properties.Kind.Enum
 }
 
-// builtinCategory maps each built-in kind to a capability category.
-var builtinCategory = map[string]string{
-	"DataSource":           "data",
-	"DataSet":              "data",
-	"ConnectionSecret":     "data",
-	"LayoutPage":           "layout",
-	"LayoutCard":           "layout",
-	"Text":                 "embeddable",
-	"Table":                "embeddable",
-	"ChartStructure":       "embeddable",
-	"ChartTime":            "embeddable",
-	"Tree":                 "embeddable",
-	"Grid":                 "embeddable",
-	"Asset":                "embeddable",
-	"ReportArtefact":       "artefact",
-	"LiveReportArtefact":   "artefact",
-	"DocumentArtefact":     "artefact",
-	"ComponentStyle":       "config",
-	"Internationalization": "config",
-	"ScalingGroup":         "config",
-	"SigningProfile":       "config",
-}
-
-// categoryFor returns the capability category for a kind, falling back to the
-// plugin registry's categorization for plugin-provided kinds.
+// categoryFor returns the capability category for a kind. Built-in kinds resolve
+// from the single authority (internal/report/embed); plugin-provided kinds fall
+// back to the registry's categorization.
 func (h *handlers) categoryFor(kind string) string {
-	if c, ok := builtinCategory[kind]; ok {
+	if c, ok := embedkinds.BuiltinCategory(kind); ok {
 		return c
 	}
 	if h.deps.Registry != nil {
-		switch h.deps.Registry.CategorizeKind(kind) {
-		case plugin.KindCategoryDataSource:
-			return "data"
-		case plugin.KindCategoryArtifact:
-			return "artefact"
-		case plugin.KindCategoryConfig:
-			return "config"
-		case plugin.KindCategoryComponent:
-			return "embeddable"
-		}
+		return h.deps.Registry.CategorizeKind(kind).CapabilityCategory()
 	}
 	return "embeddable"
 }

@@ -216,6 +216,24 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "bino.openDesigner",
+        "title": "Open Designer",
+        "category": "Bino",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bino.openInDesigner",
+        "title": "Open in Designer",
+        "category": "Bino",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bino.addElement",
+        "title": "Add Element",
+        "category": "Bino",
+        "icon": "$(add)"
+      },
+      {
         "command": "bino.initProject",
         "title": "Initialize Project",
         "category": "Bino"
@@ -345,14 +363,19 @@
     "menus": {
       "view/title": [
         {
+          "command": "bino.addElement",
+          "when": "view == binoDocuments",
+          "group": "navigation@0"
+        },
+        {
           "command": "bino.refreshIndex",
           "when": "view == binoDocuments",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "bino.validateWorkspace",
           "when": "view == binoDocuments",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "explorer/context": [
@@ -370,6 +393,78 @@
         {
           "command": "bino.newDataSourceFromDatabase",
           "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.addElement",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.openInDesigner",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.addDataset",
+          "when": "false"
+        },
+        {
+          "command": "bino.addDatasource",
+          "when": "false"
+        },
+        {
+          "command": "bino.addConnectionSecret",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLayoutPage",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLayoutCard",
+          "when": "false"
+        },
+        {
+          "command": "bino.addTable",
+          "when": "false"
+        },
+        {
+          "command": "bino.addText",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartStructure",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartTime",
+          "when": "false"
+        },
+        {
+          "command": "bino.addReportArtefact",
+          "when": "false"
+        },
+        {
+          "command": "bino.addLiveReportArtefact",
+          "when": "false"
+        },
+        {
+          "command": "bino.addSigningProfile",
+          "when": "false"
+        },
+        {
+          "command": "bino.addAsset",
+          "when": "false"
+        },
+        {
+          "command": "bino.addComponentStyle",
+          "when": "false"
+        },
+        {
+          "command": "bino.addInternationalization",
+          "when": "false"
+        },
+        {
+          "command": "bino.addScalingGroup",
+          "when": "false"
         },
         {
           "command": "bino.restartDaemon",
@@ -419,6 +514,11 @@
           "group": "preview@1"
         },
         {
+          "command": "bino.openDesigner",
+          "when": "view == binoDocuments && viewItem == binoArtefact",
+          "group": "preview@2"
+        },
+        {
           "command": "bino.openFirstProblem",
           "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "navigation"
@@ -447,6 +547,11 @@
         }
       ],
       "editor/context": [
+        {
+          "command": "bino.openInDesigner",
+          "when": "editorLangId == yaml && bino.projectDetected",
+          "group": "bino@0"
+        },
         {
           "command": "bino.openPrqlEditor",
           "when": "editorLangId == yaml && bino.inPrqlBlock",

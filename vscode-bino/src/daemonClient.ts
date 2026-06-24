@@ -100,6 +100,11 @@ export class DaemonClient {
         return this.fetchJSON('/index');
     }
 
+    /** GET /kinds — every manifest kind with its capability category and render-embeddable flag */
+    async getKinds(): Promise<{ kinds: { name: string; category: string; embeddable: boolean }[]; error?: string } | undefined> {
+        return this.fetchJSON('/kinds');
+    }
+
     /** GET /validate */
     async getValidation(): Promise<{ valid: boolean; diagnostics: any[]; error?: string } | undefined> {
         return this.fetchJSON('/validate');

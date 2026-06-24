@@ -8,6 +8,7 @@ package refresh
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/httpserver"
@@ -64,6 +65,14 @@ type State struct {
 	// embeddingCache memoizes rendered embedding HTML keyed by artefact
 	// name. Reset to nil at the start of every refresh.
 	embeddingCache map[string][]byte
+
+	// liveOverrides maps absolute, filepath.Clean'd file paths to unsaved
+	// editor-buffer content. While non-empty, EmbedByName renders the
+	// requested component from a fresh overlaid load (reflecting the buffer)
+	// and bypasses embeddingCache entirely, so the previewed component tracks
+	// the editor without a disk write or a full report refresh. Guarded by the
+	// refresh mutex like the rest of State.
+	liveOverrides map[string]string
 }
 
 // NewState creates an empty refresh state ready for the first refresh.
@@ -76,6 +85,54 @@ func NewState() *State {
 // slice after releasing it — refreshes replace the slice, never mutate it.
 func (s *State) LastDocs() []config.Document {
 	return s.lastDocs
+}
+
+// SetLiveOverride records unsaved editor-buffer content for a file so the next
+// EmbedByName renders from the buffer instead of disk. The file key is
+// normalized to an absolute clean path. Callers must hold the refresh mutex.
+func (s *State) SetLiveOverride(file, content string) {
+	if s.liveOverrides == nil {
+		s.liveOverrides = make(map[string]string)
+	}
+	s.liveOverrides[liveOverrideKey(file)] = content
+}
+
+// ClearLiveOverride drops the buffer override for a single file (e.g. on save,
+// when disk becomes authoritative again). Callers must hold the refresh mutex.
+func (s *State) ClearLiveOverride(file string) {
+	if s.liveOverrides == nil {
+		return
+	}
+	delete(s.liveOverrides, liveOverrideKey(file))
+}
+
+// ClearLiveOverrides drops every buffer override (e.g. when the embedded
+// preview closes). Callers must hold the refresh mutex.
+func (s *State) ClearLiveOverrides() {
+	s.liveOverrides = nil
+}
+
+// liveOverridesSnapshot returns a copy of the current override map for use by a
+// render that runs without holding the refresh mutex. Returns nil when there
+// are no overrides. Callers must hold the refresh mutex while calling.
+func (s *State) liveOverridesSnapshot() map[string]string {
+	if len(s.liveOverrides) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(s.liveOverrides))
+	for k, v := range s.liveOverrides {
+		out[k] = v
+	}
+	return out
+}
+
+// liveOverrideKey normalizes a file path to the absolute clean form used as the
+// override map key, matching config.LoadOptions.Overlay's key convention.
+func liveOverrideKey(file string) string {
+	if abs, err := filepath.Abs(file); err == nil {
+		return abs
+	}
+	return filepath.Clean(file)
 }
 
 // MergeRequests collapses a debounce window into a single (reason, files)

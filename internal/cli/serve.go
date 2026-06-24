@@ -241,6 +241,12 @@ Environment knobs:
 				servePluginOpts.DataMode = render.DataModeURL
 				// Emit absolute URLs so older template-engine builds (which
 				// only fetch http:// or https:// bodies) still resolve them.
+				// NOTE: this has the same same-origin consideration as the
+				// preview path — an absolute base pins the data fetch to one
+				// host (e.g. 127.0.0.1), so a client loading the page from a
+				// different host name would hit a cross-origin fetch (the data
+				// route sends no CORS headers). Left as-is here on purpose;
+				// revisit if serve grows an embed/iframe consumer.
 				servePluginOpts.DataBaseURL = server.URL()
 			}
 

@@ -124,6 +124,94 @@ func TestEditManifestEndToEnd(t *testing.T) {
 	if !strings.Contains(string(after), "value: new") {
 		t.Errorf("file changed after rejected edit:\n%s", string(after))
 	}
+
+	// A dry-run edit returns the rewritten file in `content` and writes nothing.
+	dry := callTool(t, cs, "edit_manifest", map[string]any{
+		"file":   "note.yaml",
+		"patch":  map[string]any{"spec.value": "dryval"},
+		"dryRun": true,
+	})
+	if dry.IsError {
+		t.Fatalf("dry-run edit_manifest failed: %+v", dry.Content)
+	}
+	var wr mcp.WriteResult
+	if tc, ok := dry.Content[0].(*mcpsdk.TextContent); ok {
+		_ = json.Unmarshal([]byte(tc.Text), &wr)
+	}
+	if wr.Action != "computed" {
+		t.Errorf("dry-run action = %q, want computed", wr.Action)
+	}
+	if !strings.Contains(wr.Content, "value: dryval") || !strings.Contains(wr.Content, "# keep me") {
+		t.Errorf("dry-run content did not apply the edit or dropped the comment:\n%s", wr.Content)
+	}
+	unchanged, _ := os.ReadFile(path)
+	if strings.Contains(string(unchanged), "dryval") {
+		t.Errorf("dry-run wrote to disk:\n%s", unchanged)
+	}
+}
+
+func TestRemoveAndReorderManifestEndToEnd(t *testing.T) {
+	cs, root := newAuthoringClient(t)
+
+	// Seed a DataSet whose spec.dependencies is a reorderable/removable sequence.
+	original := "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: ds # keep me\nspec:\n  query: SELECT 1\n  dependencies:\n    - $a\n    - $b\n    - $c\n"
+	path := filepath.Join(root, "ds.yaml")
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// remove_manifest_fields deletes the middle element, keeping the comment.
+	rm := callTool(t, cs, "remove_manifest_fields", map[string]any{
+		"file":  "ds.yaml",
+		"paths": []any{"spec.dependencies[1]"},
+	})
+	if rm.IsError {
+		t.Fatalf("remove_manifest_fields failed: %+v", rm.Content)
+	}
+	got, _ := os.ReadFile(path)
+	if strings.Contains(string(got), "$b") {
+		t.Errorf("remove did not delete the element:\n%s", got)
+	}
+	if !strings.Contains(string(got), "# keep me") {
+		t.Errorf("remove dropped the comment:\n%s", got)
+	}
+
+	// reorder_manifest_sequence moves the first survivor to the end.
+	ro := callTool(t, cs, "reorder_manifest_sequence", map[string]any{
+		"file": "ds.yaml",
+		"path": "spec.dependencies",
+		"from": 0,
+		"to":   1,
+	})
+	if ro.IsError {
+		t.Fatalf("reorder_manifest_sequence failed: %+v", ro.Content)
+	}
+	reordered, _ := os.ReadFile(path)
+	if idxA, idxC := strings.Index(string(reordered), "$a"), strings.Index(string(reordered), "$c"); idxA < idxC {
+		t.Errorf("reorder did not move $a after $c:\n%s", reordered)
+	}
+
+	// A dry-run reorder returns content and writes nothing.
+	dry := callTool(t, cs, "reorder_manifest_sequence", map[string]any{
+		"file":   "ds.yaml",
+		"path":   "spec.dependencies",
+		"from":   0,
+		"to":     1,
+		"dryRun": true,
+	})
+	if dry.IsError {
+		t.Fatalf("dry-run reorder failed: %+v", dry.Content)
+	}
+	var wr mcp.WriteResult
+	if tc, ok := dry.Content[0].(*mcpsdk.TextContent); ok {
+		_ = json.Unmarshal([]byte(tc.Text), &wr)
+	}
+	if wr.Action != "computed" || wr.Content == "" {
+		t.Errorf("dry-run reorder = %+v, want computed with content", wr)
+	}
+	if afterDry, _ := os.ReadFile(path); string(afterDry) != string(reordered) {
+		t.Errorf("dry-run reorder wrote to disk")
+	}
 }
 
 func TestScaffoldSource(t *testing.T) {

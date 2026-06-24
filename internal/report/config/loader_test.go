@@ -278,6 +278,84 @@ func TestLoadDirWithoutCollectErrorsFailsFast(t *testing.T) {
 	}
 }
 
+// TestLoadDirOverlayUsesBufferContent proves the buffer-driven embedding seam:
+// when LoadOptions.Overlay holds replacement content for a file, the loader
+// parses the overlay instead of reading disk, and a non-overlaid sibling is
+// still read from disk. The overlay key and the on-disk path differ in form
+// (relative vs absolute) to exercise key normalization.
+func TestLoadDirOverlayUsesBufferContent(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	diskPath := filepath.Join(root, "a.yaml")
+	writeManifest(t, diskPath, "disk_name") // on-disk name
+	writeManifest(t, filepath.Join(root, "b.yaml"), "sibling")
+
+	// Overlay replaces a.yaml's content with a document that has a different
+	// metadata.name, so a successful overlay is observable by name.
+	overlayBody := minimalManifest("buffer_name")
+
+	docs, err := LoadDirWithOptions(ctx, root, LoadOptions{
+		Overlay: map[string]string{diskPath: overlayBody},
+	})
+	if err != nil {
+		t.Fatalf("load dir with overlay: %v", err)
+	}
+
+	names := make(map[string]bool, len(docs))
+	for _, d := range docs {
+		names[d.Name] = true
+	}
+	if !names["buffer_name"] {
+		t.Errorf("overlay content not parsed: want a document named %q, got %v", "buffer_name", names)
+	}
+	if names["disk_name"] {
+		t.Errorf("disk content was read for an overlaid file: unexpected %q in %v", "disk_name", names)
+	}
+	if !names["sibling"] {
+		t.Errorf("non-overlaid sibling not read from disk: want %q in %v", "sibling", names)
+	}
+}
+
+// TestLoadDirOverlayKeyNormalization confirms the overlay matches regardless of
+// whether the caller's key is relative, dot-prefixed, or already absolute.
+func TestLoadDirOverlayKeyNormalization(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	diskPath := filepath.Join(root, "a.yaml")
+	writeManifest(t, diskPath, "disk_name")
+
+	// A non-clean absolute key (…/./a.yaml) must still match the loaded path.
+	messyKey := filepath.Join(root, ".", "a.yaml")
+	docs, err := LoadDirWithOptions(ctx, root, LoadOptions{
+		Overlay: map[string]string{messyKey: minimalManifest("buffer_name")},
+	})
+	if err != nil {
+		t.Fatalf("load dir with overlay: %v", err)
+	}
+
+	for _, d := range docs {
+		if d.Name == "disk_name" {
+			t.Fatalf("overlay key did not normalize: disk content was read despite overlay key %q", messyKey)
+		}
+	}
+}
+
 func overrideConfig(t *testing.T, mutate func(runtimecfg.Config) runtimecfg.Config) {
 	t.Helper()
 	cfg := runtimecfg.Current()

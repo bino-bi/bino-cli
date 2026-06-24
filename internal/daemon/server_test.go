@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	embedkinds "bino.bi/bino/internal/report/embed"
 )
 
 // newTestServer creates a Server with a nil state for handler testing.
@@ -119,5 +121,52 @@ func TestServerStartAndShutdown(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down")
+	}
+}
+
+// TestKindsEndpoint asserts GET /kinds serves the render-embeddable flag from the
+// single authority (internal/report/embed) for every kind, so the daemon, the
+// MCP bino://kinds resource, and the extension never diverge. The extension
+// derives its render-embeddable set from this served flag instead of a
+// hand-maintained list.
+func TestKindsEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/kinds", nil)
+	w := httptest.NewRecorder()
+
+	srv.handleKinds(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var body struct {
+		Kinds []kindInfo `json:"kinds"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Kinds) == 0 {
+		t.Fatal("/kinds returned no kinds")
+	}
+
+	got := make(map[string]bool, len(body.Kinds))
+	for _, k := range body.Kinds {
+		if want := embedkinds.IsEmbeddable(k.Name); k.Embeddable != want {
+			t.Errorf("kind %s: embeddable = %v, want %v (authority set)", k.Name, k.Embeddable, want)
+		}
+		if k.Name == "Image" {
+			t.Errorf("Image is a layout-child kind, not a manifest kind; it must not appear in /kinds")
+		}
+		got[k.Name] = k.Embeddable
+	}
+	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid"} {
+		if !got[name] {
+			t.Errorf("component kind %s: embeddable = false, want true", name)
+		}
+	}
+	if got["Asset"] {
+		t.Error("Asset: embeddable = true, want false (Asset is a resource, not a standalone component)")
 	}
 }

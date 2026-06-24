@@ -44,9 +44,31 @@ func (h *handlers) registerAuthoringTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "edit_manifest",
-		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically.",
+		Description: "Edit one document in an existing manifest file in place, preserving comments and key order. Applies dotted-path edits (e.g. spec.title, spec.columns[0]) to document `position` (1-based, default 1). The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in EditManifestInput) (*mcpsdk.CallToolResult, WriteResult, error) {
 		res, err := a.EditManifest(ctx, in)
+		if err != nil {
+			return errorResult(err), WriteResult{}, nil
+		}
+		return nil, res, nil
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "remove_manifest_fields",
+		Description: "Delete one or more dotted paths from one document in a manifest file in place, preserving comments and key order. A trailing [index] removes a sequence element (e.g. spec.columns[2]); otherwise the mapping key and its value are removed. The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in RemoveManifestPathsInput) (*mcpsdk.CallToolResult, WriteResult, error) {
+		res, err := a.RemoveManifestPaths(ctx, in)
+		if err != nil {
+			return errorResult(err), WriteResult{}, nil
+		}
+		return nil, res, nil
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "reorder_manifest_sequence",
+		Description: "Move an element within a sequence in one document of a manifest file in place, preserving comments and key order. `path` addresses the sequence (e.g. spec.columns); the element at `from` (0-based) is moved so it ends up at `to`. The edited document is validated against the schema before the file is written atomically. Set dryRun=true to validate and return the rewritten file (in the result's `content`) without writing.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in ReorderManifestSequenceInput) (*mcpsdk.CallToolResult, WriteResult, error) {
+		res, err := a.ReorderManifestSequence(ctx, in)
 		if err != nil {
 			return errorResult(err), WriteResult{}, nil
 		}

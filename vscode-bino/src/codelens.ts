@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
-import { EMBEDDABLE_KINDS } from './embeddable';
+import { getEmbeddableKinds } from './embeddable';
 
 /**
  * CodeLens provider for Bino YAML manifests.
@@ -80,7 +80,7 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
 
         // For each embeddable document in this file, add an embedded-preview CodeLens
         const artefactDocs = this.indexer
-            .getDocuments(EMBEDDABLE_KINDS)
+            .getDocuments(getEmbeddableKinds())
             .filter(doc => doc.file.replace(/\\/g, '/') === filePath.replace(/\\/g, '/'));
 
         for (const doc of artefactDocs) {
@@ -100,6 +100,16 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
                 command: 'bino.previewArtefactEmbedded',
                 arguments: [doc],
                 tooltip: `Open embedded preview of ${doc.kind} "${doc.name}"`
+            }));
+
+            // Sibling lens on the same range: open this manifest in the visual
+            // designer (schema-driven form + live canvas). Renders next to the
+            // embedded-preview lens.
+            codeLenses.push(new vscode.CodeLens(range, {
+                title: '$(edit) Designer',
+                command: 'bino.openDesigner',
+                arguments: [doc],
+                tooltip: `Open ${doc.kind} "${doc.name}" in the Bino Designer`
             }));
         }
 

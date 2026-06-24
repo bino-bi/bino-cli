@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -187,9 +188,15 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				server.SetContentFunc(httpserver.StaticContent(loadingPage, "text/html; charset=utf-8"))
 			}
 
-			if resolvedDataMode == render.DataModeURL && pluginOpts != nil {
-				pluginOpts.DataBaseURL = server.URL()
-			}
+			// In url mode, deliberately leave pluginOpts.DataBaseURL empty so the
+			// renderer emits relative, same-origin data URLs (/__bino/data/...).
+			// The preview server serves both the embed HTML and its data, but it
+			// binds 127.0.0.1 while clients (e.g. the VS Code webview iframe) load
+			// it via localhost. Browsers treat 127.0.0.1 and localhost as different
+			// origins, and the data route sends no CORS headers, so an absolute
+			// 127.0.0.1 base would make the engine's cross-origin data fetch fail
+			// ("No Data"). Relative URLs resolve against whatever host loaded the
+			// document, eliminating the mismatch.
 
 			// Status reporter fans cold-start phases out to the CLI spinner
 			// (TTY-aware, falls back to plain log lines on CI/piped output)
@@ -304,6 +311,25 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// standalone component as build-equivalent isolated HTML.
 				server.SetEmbeddingFunc(func(ctx context.Context, name, kind string) ([]byte, error) {
 					return refresh.EmbedByName(ctx, name, kind, refreshMu, refreshState, &refreshCfg, server)
+				})
+
+				// Wire the buffer-override endpoint so the VS Code extension can
+				// push unsaved editor content for a manifest. EmbedByName then
+				// renders that file's component straight from the buffer (a fresh
+				// overlaid load) instead of disk — no auto-save, no full refresh.
+				projectRoot := env.ProjectRoot
+				server.SetEmbeddingOverrideFunc(func(file, content string, remove bool) error {
+					if !pathWithinRoot(projectRoot, file) {
+						return httpserver.NewHTTPError(http.StatusForbidden, "file is outside the project root")
+					}
+					refreshMu.Lock()
+					defer refreshMu.Unlock()
+					if remove {
+						refreshState.ClearLiveOverride(file)
+					} else {
+						refreshState.SetLiveOverride(file, content)
+					}
+					return nil
 				})
 
 				doRefresh := func(reason string, changed []string) error {
@@ -460,6 +486,26 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	})
 
 	return cmd
+}
+
+// pathWithinRoot reports whether file resolves to a location inside root.
+// Both are made absolute and cleaned; a relative path that escapes via ".."
+// (or an entirely different tree) is rejected. This guards the buffer-override
+// endpoint so a client cannot push content for arbitrary files on disk.
+func pathWithinRoot(root, file string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absFile, err := filepath.Abs(file)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absFile)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func openBrowser(ctx context.Context, url string) error {

@@ -1,5 +1,28 @@
-import { TreeDocument, TreeNode } from './yamlModel';
 import { FieldDef } from './schemaResolver';
+
+/** Represents a single YAML document in a multi-doc file */
+export interface TreeDocument {
+    docIndex: number;
+    kind: string;
+    name: string;
+    nodes: TreeNode[];
+    startLine: number;
+    endLine: number;
+}
+
+/** Represents a node in the YAML tree */
+export interface TreeNode {
+    key: string;
+    value: unknown;
+    displayValue: string;
+    type: 'string' | 'number' | 'boolean' | 'null' | 'object' | 'array' | 'multiline';
+    path: string[];
+    line: number;
+    column: number;
+    children?: TreeNode[];
+    /** Source range in the text for reverse-sync edits */
+    valueRange?: { start: number; end: number };
+}
 
 /**
  * Generate the complete HTML for the tree-table webview.

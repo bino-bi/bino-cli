@@ -11,9 +11,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	embedkinds "bino.bi/bino/internal/report/embed"
+	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/report/sqlgen"
 	"bino.bi/bino/internal/schema"
 	"bino.bi/bino/internal/version"
@@ -257,6 +261,119 @@ func newLSPDatasetSchemaCommand() *cobra.Command {
 	}
 }
 
+// --- kinds ------------------------------------------------------------------
+
+type lspKindInfo struct {
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	Embeddable bool   `json:"embeddable"`
+}
+
+type lspKindsResult struct {
+	Version string        `json:"version"`
+	Kinds   []lspKindInfo `json:"kinds"`
+}
+
+func newLSPKindsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "kinds",
+		Short: "Print every manifest kind with its capability category and render-embeddable flag",
+		Long:  "Returns each built-in manifest kind, its capability category, and whether it renders standalone as a component (the single authority, internal/report/embed). The extension derives category and render-embeddable membership from these served fields. Subprocess fallback for the daemon's /kinds endpoint; needs no project directory.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			reg := plugin.NewRegistry()
+			agg := plugin.NewSchemaAggregator(reg)
+			if err := agg.Build(cmd.Context()); err != nil {
+				return fmt.Errorf("building schema: %w", err)
+			}
+			names := agg.KindNames()
+			kinds := make([]lspKindInfo, 0, len(names))
+			for _, n := range names {
+				category, ok := embedkinds.BuiltinCategory(n)
+				if !ok {
+					category = reg.CategorizeKind(n).CapabilityCategory()
+				}
+				kinds = append(kinds, lspKindInfo{Name: n, Category: category, Embeddable: embedkinds.IsEmbeddable(n)})
+			}
+			return outputJSON(cmd.OutOrStdout(), lspKindsResult{Version: version.Version, Kinds: kinds})
+		},
+	}
+}
+
+// --- create -----------------------------------------------------------------
+
+// lspCreateResult reports the outcome of `lsp-helper create`. On success it
+// names the file written (and whether it was created or appended); on a schema
+// failure it carries the per-issue diagnostics and writes nothing — mirroring
+// the edit command so the GUI can surface the diagnostics instead of opening a
+// non-existent file.
+type lspCreateResult struct {
+	OK          bool                `json:"ok"`
+	File        string              `json:"file,omitempty"`
+	Action      string              `json:"action,omitempty"`
+	Diagnostics []lspEditDiagnostic `json:"diagnostics"`
+	Error       string              `json:"error,omitempty"`
+	Version     string              `json:"version"`
+}
+
+func newLSPCreateCommand() *cobra.Command {
+	var payloadFile string
+	cmd := &cobra.Command{
+		Use:   "create <directory>",
+		Short: "Create a new manifest of any kind from a spec object",
+		Long:  "Reads a request {kind, name, spec, description?, file?} (from --payload-file or stdin), builds the apiVersion/kind/metadata/spec envelope, validates it against the schema, and writes it atomically — auto-placing the file by project convention unless `file` is given. A non-empty diagnostics list means the manifest was rejected and nothing was written. Used by the Design-mode Add-element palette.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			payloadJSON, err := readFileOrStdin(cmd, payloadFile)
+			if err != nil {
+				return outputJSON(cmd.OutOrStdout(), lspCreateResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}, Error: fmt.Sprintf("read payload: %v", err)})
+			}
+			return runLSPCreate(cmd.Context(), args[0], payloadJSON, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&payloadFile, "payload-file", "-", "Path to a JSON payload file, or '-' for stdin")
+	return cmd
+}
+
+func runLSPCreate(ctx context.Context, dir string, payloadJSON []byte, out io.Writer) error {
+	result := lspCreateResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
+
+	var in mcp.CreateManifestInput
+	if err := json.Unmarshal(payloadJSON, &in); err != nil {
+		result.Error = fmt.Sprintf("parse payload: %v", err)
+		return outputJSON(out, result)
+	}
+
+	absDir, err := resolveProjectRootForLSP(dir)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
+		return outputJSON(out, result)
+	}
+
+	res, err := newCLIAuthoring(absDir).CreateManifest(ctx, in)
+	if err != nil {
+		// A schema failure is reported as per-issue diagnostics (nothing was
+		// written); any other error (e.g. duplicate name) is surfaced verbatim.
+		if issues := schema.GetValidationIssues(err); len(issues) > 0 {
+			for _, issue := range issues {
+				msg := issue.Message
+				if issue.Path != "" && issue.Path != "(root)" {
+					msg = issue.Path + ": " + issue.Message
+				}
+				result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: msg, Severity: "error"})
+			}
+		} else {
+			result.Error = err.Error()
+		}
+		return outputJSON(out, result)
+	}
+
+	result.OK = true
+	result.File = res.File
+	result.Action = res.Action
+	return outputJSON(out, result)
+}
+
 // --- scaffold ---------------------------------------------------------------
 
 type scaffoldConnection struct {
@@ -455,6 +572,203 @@ func parseScaffoldType(s string) DataSourceType {
 	default:
 		return ParseDataSourceType(s)
 	}
+}
+
+// --- edit -------------------------------------------------------------------
+
+// lspEditDiagnostic is a single schema-validation diagnostic for an edit. It
+// mirrors the GUI-facing shape consumed by the Design-mode authoring client
+// ({message, line, col, severity}). schema.Validate operates on the edited
+// document text without source positions, so line/col are 0 (unknown).
+type lspEditDiagnostic struct {
+	Message  string `json:"message"`
+	Line     int    `json:"line"`
+	Column   int    `json:"col"`
+	Severity string `json:"severity"`
+}
+
+// lspEditResult is the JSON output for the edit command. In compute mode it
+// carries the rewritten file (full) and the edited document; in write mode it
+// reports the written file. A non-empty diagnostics list means the edit was
+// rejected and nothing was written.
+type lspEditResult struct {
+	OK          bool                `json:"ok"`
+	Full        string              `json:"full,omitempty"`
+	Edited      string              `json:"edited,omitempty"`
+	File        string              `json:"file,omitempty"`
+	Diagnostics []lspEditDiagnostic `json:"diagnostics"`
+	Error       string              `json:"error,omitempty"`
+	Version     string              `json:"version"`
+}
+
+func newLSPEditCommand() *cobra.Command {
+	var payloadFile string
+	cmd := &cobra.Command{
+		Use:   "edit <directory>",
+		Short: "Compute or write a fidelity-preserving edit, removal, or reorder of a manifest document",
+		Long:  "Reads a request {file, position, op, mode, ...} (from --payload-file or stdin). op=edit applies dotted-path `patch` edits (default); op=remove deletes `paths`; op=reorder moves element `from`->`to` within the sequence at `path`. mode=compute validates and returns the rewritten file without writing; mode=write applies it atomically. Comments and key order are preserved. Used by the Design-mode authoring client.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			payloadJSON, err := readFileOrStdin(cmd, payloadFile)
+			if err != nil {
+				return outputJSON(cmd.OutOrStdout(), lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}, Error: fmt.Sprintf("read payload: %v", err)})
+			}
+			return runLSPEdit(cmd.Context(), args[0], payloadJSON, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&payloadFile, "payload-file", "-", "Path to a JSON payload file, or '-' for stdin")
+	return cmd
+}
+
+func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer) error {
+	result := lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
+
+	// Patch values and the append value are kept as raw JSON so object key order
+	// survives into the engine (decoding into map[string]any would alphabetize it);
+	// they are decoded into order-preserving yaml.Node values below.
+	var req struct {
+		File     string                     `json:"file"`
+		Position int                        `json:"position"`
+		Op       string                     `json:"op"`   // "edit" (default), "remove", "reorder", "append"
+		Mode     string                     `json:"mode"` // "compute" (default) or "write"
+		Content  *string                    `json:"content"`
+		Patch    map[string]json.RawMessage `json:"patch"`
+		Paths    []string                   `json:"paths"`
+		Path     string                     `json:"path"`
+		Value    json.RawMessage            `json:"value"`
+		From     int                        `json:"from"`
+		To       int                        `json:"to"`
+	}
+	if err := json.Unmarshal(payloadJSON, &req); err != nil {
+		result.Error = fmt.Sprintf("parse payload: %v", err)
+		return outputJSON(out, result)
+	}
+	if req.File == "" {
+		result.Error = "file is required"
+		return outputJSON(out, result)
+	}
+	op := req.Op
+	if op == "" {
+		op = "edit"
+	}
+	if op != "edit" && op != "remove" && op != "reorder" && op != "append" {
+		result.Error = fmt.Sprintf("unknown op %q (want \"edit\", \"remove\", \"reorder\", or \"append\")", op)
+		return outputJSON(out, result)
+	}
+	mode := req.Mode
+	if mode == "" {
+		mode = "compute"
+	}
+	if mode != "compute" && mode != "write" {
+		result.Error = fmt.Sprintf("unknown mode %q (want \"compute\" or \"write\")", mode)
+		return outputJSON(out, result)
+	}
+	pos := req.Position
+	if pos == 0 {
+		pos = 1
+	}
+
+	absDir, err := resolveProjectRootForLSP(dir)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve project root: %v", err)
+		return outputJSON(out, result)
+	}
+	abs := req.File
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(absDir, abs)
+	}
+	// When the IDE has the manifest open with unsaved edits, it passes the live
+	// buffer text in `content`; compute against that so the rewrite is derived
+	// from what the user sees, not stale disk (no-clobber). Absent content falls
+	// back to reading the file (closed-file writes, remove/reorder/append).
+	var content []byte
+	if req.Content != nil {
+		content = []byte(*req.Content)
+	} else {
+		content, err = os.ReadFile(abs) //nolint:gosec // G304: path under the project root, supplied by the local IDE client
+		if err != nil {
+			result.Error = fmt.Sprintf("read %s: %v", req.File, err)
+			return outputJSON(out, result)
+		}
+	}
+
+	var full, edited string
+	switch op {
+	case "remove":
+		if len(req.Paths) == 0 {
+			result.Error = "paths is required for op=remove"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.RemoveYAMLPaths(string(content), pos, req.Paths)
+	case "reorder":
+		if req.Path == "" {
+			result.Error = "path is required for op=reorder"
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.ReorderYAMLSequence(string(content), pos, req.Path, req.From, req.To)
+	case "append":
+		if req.Path == "" {
+			result.Error = "path is required for op=append"
+			return outputJSON(out, result)
+		}
+		value, derr := spec.DecodeJSONValue(req.Value)
+		if derr != nil {
+			result.Error = fmt.Sprintf("decode value: %v", derr)
+			return outputJSON(out, result)
+		}
+		full, edited, err = spec.AppendYAMLSequence(string(content), pos, req.Path, value)
+	default:
+		if len(req.Patch) == 0 {
+			result.Error = "patch is required for op=edit"
+			return outputJSON(out, result)
+		}
+		patch := make(map[string]any, len(req.Patch))
+		for k, raw := range req.Patch {
+			node, derr := spec.DecodeJSONValue(raw)
+			if derr != nil {
+				result.Error = fmt.Sprintf("decode patch %q: %v", k, derr)
+				return outputJSON(out, result)
+			}
+			patch[k] = node
+		}
+		full, edited, err = spec.EditYAMLDocument(string(content), pos, patch)
+	}
+	if err != nil {
+		result.Error = err.Error()
+		return outputJSON(out, result)
+	}
+
+	// Validate the edited document; on failure return diagnostics and write nothing.
+	if verr := schema.Validate([]byte(edited)); verr != nil {
+		for _, issue := range schema.GetValidationIssues(verr) {
+			msg := issue.Message
+			if issue.Path != "" && issue.Path != "(root)" {
+				msg = issue.Path + ": " + issue.Message
+			}
+			result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: msg, Severity: "error"})
+		}
+		if len(result.Diagnostics) == 0 {
+			// Non-ValidationError (e.g. schema load failure): surface verbatim.
+			result.Diagnostics = append(result.Diagnostics, lspEditDiagnostic{Message: verr.Error(), Severity: "error"})
+		}
+		return outputJSON(out, result)
+	}
+
+	if mode == "write" {
+		if err := atomicWriteFile(abs, []byte(full)); err != nil {
+			result.Error = fmt.Sprintf("write %s: %v", req.File, err)
+			return outputJSON(out, result)
+		}
+		result.OK = true
+		result.File = req.File
+		return outputJSON(out, result)
+	}
+
+	// compute mode: return the rewritten text without touching disk.
+	result.OK = true
+	result.Full = full
+	result.Edited = edited
+	return outputJSON(out, result)
 }
 
 // readFileOrStdin reads from path, or from the command's stdin when path is "-".

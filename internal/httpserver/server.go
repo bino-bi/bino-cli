@@ -96,6 +96,13 @@ type ContentFunc func(context.Context) ([]byte, string, error)
 // 503 (preview still booting); other errors are reported as 500.
 type EmbeddingFunc func(ctx context.Context, name, kind string) ([]byte, error)
 
+// EmbeddingOverrideFunc records (or, when remove is true, drops) unsaved
+// editor-buffer content for an absolute file path so the embedding renderer
+// reflects the buffer instead of disk. Implementations validate that file is
+// within the project root and should return *HTTPError to signal a rejected
+// path (400/403); other errors are reported as 500.
+type EmbeddingOverrideFunc func(file, content string, remove bool) error
+
 // StaticContent returns a ContentFunc that always responds with identical bytes.
 func StaticContent(body []byte, contentType string) ContentFunc {
 	clone := append([]byte(nil), body...)
@@ -151,8 +158,9 @@ type Server struct {
 	contentFn ContentFunc
 	routes    map[string]ContentFunc
 
-	embeddingMu sync.RWMutex
-	embeddingFn EmbeddingFunc
+	embeddingMu       sync.RWMutex
+	embeddingFn       EmbeddingFunc
+	embeddingOverride EmbeddingOverrideFunc
 
 	// contextCache stores the latest context HTML per path for initial client fetch.
 	// This enables two-phase rendering where clients request context after SSE connects.
@@ -211,6 +219,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
 	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(srv.handleEmbedding))
+	mux.HandleFunc("POST /__bino/embedding/override", srv.handleEmbeddingOverride)
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
@@ -257,6 +266,15 @@ func (s *Server) SetEmbeddingFunc(fn EmbeddingFunc) {
 	s.embeddingMu.Lock()
 	defer s.embeddingMu.Unlock()
 	s.embeddingFn = fn
+}
+
+// SetEmbeddingOverrideFunc installs the function used to handle
+// POST /__bino/embedding/override. Passing nil clears it, causing subsequent
+// requests to receive a 503 response.
+func (s *Server) SetEmbeddingOverrideFunc(fn EmbeddingOverrideFunc) {
+	s.embeddingMu.Lock()
+	defer s.embeddingMu.Unlock()
+	s.embeddingOverride = fn
 }
 
 // SetContentRoutes replaces the map of path-specific content functions served by the root handler.
@@ -392,6 +410,57 @@ func (s *Server) handleEmbedding(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	_, _ = w.Write(body)
 }
+
+// handleEmbeddingOverride records or clears unsaved editor-buffer content for a
+// file so subsequent /__embedding renders reflect the buffer instead of disk.
+// Body JSON: {"file":"<abs path>","content":"<text>"} sets the override;
+// {"file":"<abs path>","clear":true} clears it. The VS Code extension posts
+// this from Node (not the browser), so no CORS header is emitted.
+func (s *Server) handleEmbeddingOverride(w http.ResponseWriter, r *http.Request) {
+	s.embeddingMu.RLock()
+	fn := s.embeddingOverride
+	s.embeddingMu.RUnlock()
+	if fn == nil {
+		http.Error(w, "preview still booting", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		File    string `json:"file"`
+		Content string `json:"content"`
+		Clear   bool   `json:"clear"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxOverrideBytes)).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.File == "" {
+		http.Error(w, "missing file", http.StatusBadRequest)
+		return
+	}
+
+	if err := fn(req.File, req.Content, req.Clear); err != nil {
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) {
+			http.Error(w, httpErr.Message, httpErr.Code)
+			if httpErr.Code >= 500 {
+				s.cfg.Logger.Errorf("embedding override failed for %q: %v", req.File, err)
+			}
+			return
+		}
+		http.Error(w, "failed to apply override", http.StatusInternalServerError)
+		s.cfg.Logger.Errorf("embedding override failed for %q: %v", req.File, err)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// maxOverrideBytes bounds the size of an embedding-override request body. A
+// single manifest buffer is small; 10 MiB is a generous ceiling that guards
+// against a runaway client.
+const maxOverrideBytes = 10 << 20
 
 // handleHealthz reports liveness for production deployments of `bino serve`
 // (load balancers, container orchestrators, uptime probes).
@@ -691,6 +760,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// The embedded preview's EventSource runs inside the VS Code webview (origin
+	// vscode-webview://), so this localhost SSE stream is cross-origin. Without
+	// this header the browser blocks the connection and the preview never
+	// receives refresh events (the canvas stops auto-reloading). No credentials
+	// are used, so "*" is safe for this local-only preview server.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Create a compressed response writer for SSE
 	compType := selectCompression(r.Header.Get("Accept-Encoding"))

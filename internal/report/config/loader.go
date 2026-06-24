@@ -69,6 +69,14 @@ type LoadOptions struct {
 	// reported in one pass. Fatal errors (context cancellation, scan limits)
 	// still abort the load. Ignored when Lenient is true.
 	CollectErrors *[]error
+
+	// Overlay maps absolute, filepath.Clean'd file paths to replacement
+	// content. When a file being loaded matches a key, the overlay content is
+	// parsed instead of reading the file from disk. This lets callers (the
+	// preview's buffer-driven embedding) reflect unsaved editor content for
+	// selected files without writing them. Keys are normalized to absolute
+	// clean paths on lookup, so callers should do the same on set.
+	Overlay map[string]string
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -139,7 +147,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider, opts.CollectErrors)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider, opts.CollectErrors, opts.Overlay)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
@@ -181,10 +189,16 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
+	var content []byte
+	if ov, ok := overlayContent(overlay, path); ok {
+		content = []byte(ov)
+	} else {
+		c, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		content = c
 	}
 
 	// First pass: parse WITHOUT expansion to find LayoutPage param definitions
@@ -407,6 +421,33 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 	}
 
 	return docs, nil
+}
+
+// overlayContent looks up replacement content for path in the overlay map,
+// normalizing both the map keys and the lookup path to absolute, clean form so
+// callers and the loader agree on a single canonical key. A nil/empty overlay
+// returns ("", false), preserving the disk-read path.
+func overlayContent(overlay map[string]string, path string) (string, bool) {
+	if len(overlay) == 0 {
+		return "", false
+	}
+	want := overlayKey(path)
+	for k, v := range overlay {
+		if overlayKey(k) == want {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// overlayKey normalizes a file path to an absolute, filepath.Clean'd form for
+// use as an overlay map key. Paths that cannot be made absolute fall back to a
+// plain Clean so a best-effort match is still possible.
+func overlayKey(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return filepath.Clean(path)
 }
 
 // collectLayoutPageParamNamesFromYAML does a quick parse of YAML content to find

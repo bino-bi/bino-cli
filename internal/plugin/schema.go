@@ -142,3 +142,19 @@ func (a *SchemaAggregator) SchemaForKind(kind string) (json.RawMessage, bool) {
 	s, ok := a.kindSchemas[kind]
 	return s, ok
 }
+
+// KindNames returns every manifest kind (built-in + plugin) from the merged
+// schema's kind enum.
+func (a *SchemaAggregator) KindNames() []string {
+	var doc struct {
+		Properties struct {
+			Kind struct {
+				Enum []string `json:"enum"`
+			} `json:"kind"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(a.MergedSchema(), &doc) != nil {
+		return nil
+	}
+	return doc.Properties.Kind.Enum
+}

@@ -879,6 +879,29 @@ func TestHandleEvents(t *testing.T) {
 			t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
 		}
 	})
+
+	t.Run("sets CORS header so the cross-origin webview EventSource can connect", func(t *testing.T) {
+		srv, err := New(Config{})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		// Cancel up front so the SSE loop exits immediately after the response
+		// headers (and the initial "ready" event) are written.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/__preview/events", nil)
+		w := httptest.NewRecorder()
+		srv.handleEvents(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want %q (webview SSE is cross-origin)", got, "*")
+		}
+		if got := resp.Header.Get("Content-Type"); got != "text/event-stream" {
+			t.Errorf("Content-Type = %q, want text/event-stream", got)
+		}
+	})
 }
 
 func TestStaticContent(t *testing.T) {
