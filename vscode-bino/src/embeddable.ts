@@ -66,3 +66,20 @@ export function getEmbeddableKinds(): string[] {
 export function isEmbeddableKind(kind: string): boolean {
     return getEmbeddableKinds().includes(kind);
 }
+
+/**
+ * Manifest kinds the Designer (schema-driven form) can open. This is a SUPERSET
+ * of the render-embeddable kinds: those render standalone AND are form-editable,
+ * plus DataSet, which is form-editable (declarative transforms) but has no canvas.
+ * Kept extension-owned (not the Go embeddable flag) so DataSet never leaks into
+ * the embedded-preview / live-canvas / artefact-tree paths that assume a render.
+ */
+const DESIGNER_ONLY_KINDS = ['DataSet'];
+
+export function getDesignerEditableKinds(): string[] {
+    return [...getEmbeddableKinds(), ...DESIGNER_ONLY_KINDS];
+}
+
+export function isDesignerEditableKind(kind: string): boolean {
+    return getDesignerEditableKinds().includes(kind);
+}

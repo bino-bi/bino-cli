@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -121,4 +122,85 @@ func (d *DatasetRef) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	return fmt.Errorf("DataSet reference must be a string or inline definition, got %v", node.Kind)
+}
+
+// MarshalYAML implements yaml.Marshaler for FilterNode.
+// It emits whichever member is set (group or leaf condition).
+func (n FilterNode) MarshalYAML() (any, error) {
+	if n.Group != nil {
+		return n.Group, nil
+	}
+	if n.Leaf != nil {
+		return n.Leaf, nil
+	}
+	return nil, nil
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler for FilterNode.
+// A mapping with a "conditions" key is a nested group; otherwise a leaf condition.
+// The custom unmarshal lives only on FilterNode: decoding into FilterGroup
+// recurses back into child FilterNodes and terminates at leaves.
+func (n *FilterNode) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("filter node must be a mapping, got %v", node.Kind)
+	}
+	if yamlMappingHasKey(node, "conditions") {
+		var g FilterGroup
+		if err := node.Decode(&g); err != nil {
+			return fmt.Errorf("invalid filter group: %w", err)
+		}
+		n.Group = &g
+		return nil
+	}
+	var c FilterCondition
+	if err := node.Decode(&c); err != nil {
+		return fmt.Errorf("invalid filter condition: %w", err)
+	}
+	n.Leaf = &c
+	return nil
+}
+
+// yamlMappingHasKey reports whether a YAML mapping node has the given key.
+func yamlMappingHasKey(node *yaml.Node, key string) bool {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
+}
+
+// MarshalJSON implements json.Marshaler for FilterNode.
+// It emits whichever member is set (group or leaf condition).
+func (n FilterNode) MarshalJSON() ([]byte, error) {
+	if n.Group != nil {
+		return json.Marshal(n.Group)
+	}
+	if n.Leaf != nil {
+		return json.Marshal(n.Leaf)
+	}
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler for FilterNode.
+// An object with a "conditions" key is a nested group; otherwise a leaf condition.
+func (n *FilterNode) UnmarshalJSON(data []byte) error {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return fmt.Errorf("filter node must be an object: %w", err)
+	}
+	if _, ok := probe["conditions"]; ok {
+		var g FilterGroup
+		if err := json.Unmarshal(data, &g); err != nil {
+			return fmt.Errorf("invalid filter group: %w", err)
+		}
+		n.Group = &g
+		return nil
+	}
+	var c FilterCondition
+	if err := json.Unmarshal(data, &c); err != nil {
+		return fmt.Errorf("invalid filter condition: %w", err)
+	}
+	n.Leaf = &c
+	return nil
 }

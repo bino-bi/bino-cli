@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -445,4 +446,108 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// dataPrepSpec returns a DataSetSpec exercising every data-prep feature: a
+// nested filter mixing and+or groups, a groupBy with countDistinct and a
+// first aggregate with orderBy, and indexColumns covering hash, a denseRank
+// window (over+overDesc+partition), and a raw expr escape hatch.
+//
+// FilterCondition.Value is `any`; an untyped numeric scalar decodes to int
+// under yaml.v3 but float64 under encoding/json, so the round-trip is compared
+// via canonical JSON (see canonicalJSON) rather than reflect.DeepEqual.
+func dataPrepSpec() *DataSetSpec {
+	return &DataSetSpec{
+		Query: &QueryField{Inline: "SELECT region, product, sales, sku FROM raw"},
+		Filter: &FilterGroup{
+			Op: "and",
+			Conditions: []FilterNode{
+				{Leaf: &FilterCondition{Column: "region", Op: "in", Value: []any{"EMEA", "APAC"}}},
+				{Leaf: &FilterCondition{Column: "sales", Op: "gte", Value: float64(1000)}},
+				{Group: &FilterGroup{
+					Op: "or",
+					Conditions: []FilterNode{
+						{Leaf: &FilterCondition{Column: "product", Op: "regex", Value: "^A"}},
+						{Leaf: &FilterCondition{Column: "product", Op: "notIn", Value: []any{"X", "Y"}}},
+					},
+				}},
+			},
+		},
+		GroupBy: &GroupBy{
+			Columns: []string{"region", "year"},
+			Aggregates: []Aggregate{
+				{Column: "sales", Fn: "sum", As: "total"},
+				{Column: "sku", Fn: "countDistinct", As: "skus"},
+				{Column: "product", Fn: "first", As: "lead_product", OrderBy: "sales", OrderDesc: true},
+			},
+		},
+		IndexColumns: []IndexColumn{
+			{Column: "rowGroupIndex", Fn: "hash", Of: "region"},
+			{Column: "categoryIndex", Fn: "denseRank", Over: "total", OverDesc: true, Partition: []string{"region"}},
+			{Column: "subCategoryIndex", Expr: "row_number() OVER ()"},
+		},
+	}
+}
+
+// TestDataSetDataPrepRoundTrip round-trips a DataSetSpec carrying a nested
+// filter, a groupBy, and indexColumns through BOTH YAML and JSON. This is the
+// highest-value marshaler test: the filter tree exercises the FilterNode union
+// (un)marshalers (group-vs-leaf discrimination on the "conditions" key) in all
+// four directions (YAML/JSON × marshal/unmarshal).
+//
+// The spec is round-tripped directly (not wrapped in a Document) because
+// Document.Spec is typed `any`: yaml.v3 decodes such a field into a generic
+// map rather than the concrete *DataSetSpec, so the union unmarshalers would
+// never run. The existing DatasetRef/QueryField round-trip tests use this same
+// direct-on-the-concrete-type pattern.
+func TestDataSetDataPrepRoundTrip(t *testing.T) {
+	encodings := []struct {
+		name      string
+		marshal   func(any) ([]byte, error)
+		unmarshal func([]byte, any) error
+	}{
+		{"yaml", yaml.Marshal, yaml.Unmarshal},
+		{"json", json.Marshal, json.Unmarshal},
+	}
+
+	for _, enc := range encodings {
+		t.Run(enc.name, func(t *testing.T) {
+			data, err := enc.marshal(dataPrepSpec())
+			if err != nil {
+				t.Fatalf("Marshal error: %v", err)
+			}
+
+			var got DataSetSpec
+			if err := enc.unmarshal(data, &got); err != nil {
+				t.Fatalf("Unmarshal error: %v\nencoded:\n%s", err, string(data))
+			}
+
+			gotJSON := canonicalJSON(t, &got)
+			wantJSON := canonicalJSON(t, dataPrepSpec())
+			if gotJSON != wantJSON {
+				t.Errorf("spec mismatch after %s round-trip:\n got: %s\nwant: %s\nencoded:\n%s",
+					enc.name, gotJSON, wantJSON, string(data))
+			}
+		})
+	}
+}
+
+// canonicalJSON marshals v to JSON and back through a generic value so numeric
+// scalars (int vs float64) normalize to one representation, making YAML and
+// JSON round-trip results comparable.
+func canonicalJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("canonicalJSON marshal: %v", err)
+	}
+	var generic any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatalf("canonicalJSON unmarshal: %v", err)
+	}
+	out, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatalf("canonicalJSON remarshal: %v", err)
+	}
+	return string(out)
 }

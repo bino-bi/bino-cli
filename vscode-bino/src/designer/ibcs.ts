@@ -31,6 +31,49 @@ export const EDGE_OPERATORS: readonly string[] = ['*', '/', '+', '-', 'x', '÷',
 /** Aggregate functions for `attributes[].expression` (schema pattern). */
 export const AGG_FUNCTIONS: readonly string[] = ['set', 'first', 'last', 'min', 'max', 'avg', 'sum'];
 
+/** `dataSetFilterCondition.op` choices (schema `dataSetFilterCondition.op` enum). */
+export const FILTER_OPERATORS: readonly string[] =
+    ['equal', 'notEqual', 'gte', 'gt', 'lte', 'lt', 'in', 'notIn', 'regex'];
+
+/** `dataSetFilterGroup.op` choices (schema `dataSetFilterGroup.op` enum). */
+export const FILTER_GROUP_OPS: readonly string[] = ['and', 'or'];
+
+/** `dataSetAggregate.fn` choices (schema `dataSetAggregate.fn` enum). */
+export const GROUPBY_AGG_FUNCTIONS: readonly string[] =
+    ['sum', 'avg', 'min', 'max', 'first', 'last', 'count', 'countDistinct'];
+
+/** `dataSetIndexColumn.fn` choices (schema `dataSetIndexColumn.fn` enum). */
+export const INDEX_FUNCTIONS: readonly string[] = ['hash', 'rowNumber', 'rank', 'denseRank'];
+
+/**
+ * Coerce a free-text filter value box to the JSON value the schema expects for a
+ * given operator (`dataSetFilterCondition.value`). Returns `undefined` to signal
+ * "omit value" (an empty box → IS NULL semantics for equal/notEqual). The webview
+ * keeps a byte-faithful copy of this rule in `wireFilter`; this canonical version
+ * is used for host seeding and unit tests. The engine binds the value as a SQL
+ * parameter, so numeric-looking strings are emitted as numbers.
+ */
+export function coerceFilterValue(raw: string, op: string): string | number | boolean | string[] | undefined {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+        return undefined;
+    }
+    if (op === 'in' || op === 'notIn') {
+        return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (op === 'regex') {
+        return trimmed;
+    }
+    if (trimmed === 'true') {
+        return true;
+    }
+    if (trimmed === 'false') {
+        return false;
+    }
+    const n = Number(trimmed);
+    return !Number.isNaN(n) ? n : trimmed;
+}
+
 /**
  * The non-array string forms `scenarios`/`variances` accept: inherit from the
  * nearest ancestor card/page, or from the page only. (`auto` is offered for

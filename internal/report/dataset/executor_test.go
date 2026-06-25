@@ -824,6 +824,455 @@ func TestQueryField_ResolveQuery(t *testing.T) {
 	}
 }
 
+// numEquals reports whether v (as decoded from JSON, typically float64) equals
+// the given integer. json.Unmarshal into map[string]any yields float64 for
+// numbers, but we accept int64 too for defensiveness.
+func numEquals(v any, want int) bool {
+	switch n := v.(type) {
+	case float64:
+		return n == float64(want)
+	case int64:
+		return n == int64(want)
+	case json.Number:
+		f, err := n.Float64()
+		return err == nil && f == float64(want)
+	default:
+		return false
+	}
+}
+
+// TestExecute_DeclarativeFilter exercises the declarative `filter` transform
+// end-to-end against real DuckDB: only rows matching `region IN (...)` AND
+// `amount >= ...` survive the compiled WHERE clause.
+func TestExecute_DeclarativeFilter(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasourceYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: inline_sales
+spec:
+  type: inline
+  content:
+    - region: EMEA
+      amount: 1500
+    - region: EMEA
+      amount: 500
+    - region: APAC
+      amount: 2000
+    - region: AMER
+      amount: 3000
+    - region: APAC
+      amount: 800
+`
+	if err := os.WriteFile(filepath.Join(workdir, "datasource.yaml"), []byte(datasourceYAML), 0o644); err != nil {
+		t.Fatalf("write datasource file: %v", err)
+	}
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: filtered_sales
+spec:
+  query: SELECT region, amount FROM inline_sales
+  dependencies:
+    - inline_sales
+  filter:
+    op: and
+    conditions:
+      - {column: region, op: in, value: [EMEA, APAC]}
+      - {column: amount, op: gte, value: 1000}
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	// Only EMEA/1500 and APAC/2000 satisfy both predicates.
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows after filter, got %d: %+v", len(rows), rows)
+	}
+	for _, r := range rows {
+		region, _ := r["region"].(string)
+		if region != "EMEA" && region != "APAC" {
+			t.Errorf("unexpected region %q passed the IN filter", region)
+		}
+		if !numEquals(r["amount"], 1500) && !numEquals(r["amount"], 2000) {
+			t.Errorf("unexpected amount %v passed the gte filter", r["amount"])
+		}
+	}
+}
+
+// TestExecute_DeclarativeGroupBy exercises server-side GROUP BY with sum and
+// countDistinct aggregates: rows collapse to one per group, totals are correct,
+// and non-grouped / non-aggregated source columns are ABSENT from the output.
+func TestExecute_DeclarativeGroupBy(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasourceYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: inline_orders
+spec:
+  type: inline
+  content:
+    - region: EMEA
+      amount: 100
+      sku: A
+    - region: EMEA
+      amount: 200
+      sku: A
+    - region: EMEA
+      amount: 50
+      sku: B
+    - region: APAC
+      amount: 1000
+      sku: C
+    - region: APAC
+      amount: 500
+      sku: C
+`
+	if err := os.WriteFile(filepath.Join(workdir, "datasource.yaml"), []byte(datasourceYAML), 0o644); err != nil {
+		t.Fatalf("write datasource file: %v", err)
+	}
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: grouped_orders
+spec:
+  query: SELECT region, amount, sku FROM inline_orders ORDER BY region
+  dependencies:
+    - inline_orders
+  groupBy:
+    columns: [region]
+    aggregates:
+      - {column: amount, fn: sum, as: total}
+      - {column: sku, fn: countDistinct, as: skus}
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	// Two groups: EMEA and APAC.
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 grouped rows, got %d: %+v", len(rows), rows)
+	}
+
+	totals := map[string]map[string]any{}
+	for _, r := range rows {
+		region, _ := r["region"].(string)
+		totals[region] = r
+
+		// Non-grouped, non-aggregated columns must be DROPPED by true GROUP BY.
+		if _, ok := r["amount"]; ok {
+			t.Errorf("non-aggregated source column 'amount' should be absent, got %v", r["amount"])
+		}
+		if _, ok := r["sku"]; ok {
+			t.Errorf("non-aggregated source column 'sku' should be absent, got %v", r["sku"])
+		}
+	}
+
+	if !numEquals(totals["EMEA"]["total"], 350) {
+		t.Errorf("EMEA total = %v, want 350", totals["EMEA"]["total"])
+	}
+	if !numEquals(totals["EMEA"]["skus"], 2) {
+		t.Errorf("EMEA skus = %v, want 2 (A,B)", totals["EMEA"]["skus"])
+	}
+	if !numEquals(totals["APAC"]["total"], 1500) {
+		t.Errorf("APAC total = %v, want 1500", totals["APAC"]["total"])
+	}
+	if !numEquals(totals["APAC"]["skus"], 1) {
+		t.Errorf("APAC skus = %v, want 1 (C)", totals["APAC"]["skus"])
+	}
+}
+
+// TestExecute_DeclarativeIndexColumnDenseRank exercises the indexColumns
+// transform with a denseRank window function over a dimension, asserting integer
+// ranks 1..n assigned in the expected (ascending) order of the dimension.
+func TestExecute_DeclarativeIndexColumnDenseRank(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasourceYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: inline_regions
+spec:
+  type: inline
+  content:
+    - region: Charlie
+    - region: Alpha
+    - region: Bravo
+`
+	if err := os.WriteFile(filepath.Join(workdir, "datasource.yaml"), []byte(datasourceYAML), 0o644); err != nil {
+		t.Fatalf("write datasource file: %v", err)
+	}
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ranked_regions
+spec:
+  query: SELECT region FROM inline_regions
+  dependencies:
+    - inline_regions
+  indexColumns:
+    - {column: regionIndex, fn: denseRank, over: region}
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d: %+v", len(rows), rows)
+	}
+
+	// dense_rank() OVER (ORDER BY region) assigns ranks by ascending region.
+	wantRank := map[string]int{"Alpha": 1, "Bravo": 2, "Charlie": 3}
+	for _, r := range rows {
+		region, _ := r["region"].(string)
+		want, ok := wantRank[region]
+		if !ok {
+			t.Fatalf("unexpected region %q", region)
+		}
+		if !numEquals(r["regionIndex"], want) {
+			t.Errorf("regionIndex for %q = %v, want %d", region, r["regionIndex"], want)
+		}
+	}
+}
+
+// TestExecute_FullStackWithDataValidationFail composes all three transforms
+// (filter -> groupBy -> denseRank + hash) and runs with DataValidationFail. It
+// proves a COMPUTED categoryIndex (from denseRank) satisfies the bidirectional
+// dependent-required rule (category <-> categoryIndex) in validate.go, so the
+// build PASSES instead of failing on a missing-dependent-required error.
+func TestExecute_FullStackWithDataValidationFail(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	datasourceYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: inline_facts
+spec:
+  type: inline
+  content:
+    - category: North
+      amount: 1500
+      region: EMEA
+    - category: North
+      amount: 500
+      region: EMEA
+    - category: South
+      amount: 2000
+      region: APAC
+    - category: West
+      amount: 100
+      region: AMER
+`
+	if err := os.WriteFile(filepath.Join(workdir, "datasource.yaml"), []byte(datasourceYAML), 0o644); err != nil {
+		t.Fatalf("write datasource file: %v", err)
+	}
+
+	// filter (amount >= 1000) -> groupBy(category, sum) -> denseRank categoryIndex + hash.
+	// After filter+group: North (sum 1500) and South (sum 2000) survive; West drops.
+	// categoryIndex is computed via denseRank, satisfying the category->categoryIndex rule.
+	// The hash output uses a non-standard column name so it does not itself trip a
+	// dependent-required rule (e.g. rowGroupIndex would require rowGroup).
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: validated_facts
+spec:
+  query: SELECT category, amount FROM inline_facts
+  dependencies:
+    - inline_facts
+  filter:
+    conditions:
+      - {column: amount, op: gte, value: 1000}
+  groupBy:
+    columns: [category]
+    aggregates:
+      - {column: amount, fn: sum, as: total}
+  indexColumns:
+    - {column: categoryIndex, fn: denseRank, over: category}
+    - {column: categoryHash, fn: hash, of: category}
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, warnings, err := Execute(ctx, workdir, docs, &ExecuteOptions{DataValidation: DataValidationFail})
+	if err != nil {
+		t.Fatalf("execute with DataValidationFail should PASS (computed categoryIndex satisfies the rule), got error: %v", err)
+	}
+
+	// No validation warning about the dependent-required pair should appear.
+	for _, w := range warnings {
+		if contains(w.Message, "missing-dependent-required") || contains(w.Message, "requires") {
+			t.Errorf("unexpected dependent-required warning: %v", w)
+		}
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	// North and South survive the amount>=1000 filter.
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows after full stack, got %d: %+v", len(rows), rows)
+	}
+	for _, r := range rows {
+		if _, ok := r["category"]; !ok {
+			t.Errorf("row missing 'category': %+v", r)
+		}
+		if _, ok := r["categoryIndex"]; !ok {
+			t.Errorf("row missing computed 'categoryIndex': %+v", r)
+		}
+		// categoryIndex must be numeric for the schema's number-field validation to pass.
+		if !numEquals(r["categoryIndex"], 1) && !numEquals(r["categoryIndex"], 2) {
+			t.Errorf("categoryIndex = %v, want a dense rank (1 or 2)", r["categoryIndex"])
+		}
+	}
+}
+
+// TestExecute_NoOpDataSetCachesResults verifies that a DataSet with none of the
+// three declarative props takes the identity path (byte-identical SQL) and that
+// cache identity holds across two Execute calls — mirroring TestExecute_CachesResults.
+func TestExecute_NoOpDataSetCachesResults(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	cacheDir := filepath.Join(workdir, ".bino", "cache", "datasets")
+
+	datasetYAML := `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: noop-dataset
+spec:
+  query: SELECT 1 as value, 'hello' as message
+`
+	if err := os.WriteFile(filepath.Join(workdir, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset file: %v", err)
+	}
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("first execute: %v", err)
+	}
+	if len(results) != 1 || results[0].Name != "noop-dataset" {
+		t.Fatalf("expected 1 noop-dataset result, got %+v", results)
+	}
+
+	// A cache file must have been written.
+	files, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 cache file, got %d", len(files))
+	}
+
+	// Second execution should reuse the cache and return identical bytes.
+	results2, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("second execute: %v", err)
+	}
+	if len(results2) != 1 {
+		t.Fatalf("expected 1 cached result, got %d", len(results2))
+	}
+	if string(results2[0].Data) != string(results[0].Data) {
+		t.Fatalf("cached no-op result differs from original")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
 }
