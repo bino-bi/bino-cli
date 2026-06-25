@@ -423,8 +423,6 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"inline-ref-bounds",
 		"dataset-source-exclusive",
 		"inline-naming-conflict",
-		// DataSet transform semantic rules
-		"dataset-transform-invalid",
 	}
 
 	if len(rules) != len(expectedIDs) {

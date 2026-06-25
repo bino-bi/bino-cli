@@ -25,8 +25,6 @@ func DefaultRules() []Rule {
 		inlineRefBounds,
 		datasetSourceExclusive,
 		inlineNamingConflict,
-		// DataSet transform semantic rules
-		datasetTransformInvalid,
 	}
 }
 

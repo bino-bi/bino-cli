@@ -1100,19 +1100,6 @@
           "type": "array",
           "items": { "$ref": "#/$defs/dataSourceRefUnion" },
           "description": "List of DataSource dependencies. Each item can be a string reference to a named DataSource or an inline DataSource definition. Inline DataSources are referenced in queries via @inline(N) syntax where N is the zero-based index."
-        },
-        "filter": {
-          "$ref": "#/$defs/dataSetFilterGroup",
-          "description": "Declarative row filter compiled to a server-side SQL WHERE clause over the query result. Nestable AND/OR groups of column conditions. Filter values are bound as SQL parameters; column names are identifier-quoted. Not supported together with 'prql'."
-        },
-        "groupBy": {
-          "$ref": "#/$defs/dataSetGroupBy",
-          "description": "Declarative server-side GROUP BY compiled to SQL. Rows collapse to one per group; only the grouped columns and aggregate outputs survive (this is upstream of and independent from a Table's render-time roll-up). Not supported together with 'prql'."
-        },
-        "indexColumns": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/dataSetIndexColumn" },
-          "description": "Computed index/order columns (e.g. categoryIndex, rowGroupIndex) projected onto the result via a predefined function (hash, rowNumber, rank, denseRank) or a raw SQL expression. This is the supported way to satisfy the category->categoryIndex (and sibling) data-row rule without hand-written SQL. Not supported together with 'prql'."
         }
       },
       "anyOf": [
@@ -1302,19 +1289,6 @@
           "type": "array",
           "items": { "$ref": "#/$defs/dataSourceRefUnion" },
           "description": "DataSource dependencies. Inline DataSources are referenced via @inline(N) syntax."
-        },
-        "filter": {
-          "$ref": "#/$defs/dataSetFilterGroup",
-          "description": "Declarative row filter compiled to a server-side SQL WHERE clause. Nestable AND/OR groups of column conditions. Not supported together with 'prql'."
-        },
-        "groupBy": {
-          "$ref": "#/$defs/dataSetGroupBy",
-          "description": "Declarative server-side GROUP BY compiled to SQL. Rows collapse to one per group. Not supported together with 'prql'."
-        },
-        "indexColumns": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/dataSetIndexColumn" },
-          "description": "Computed index/order columns projected onto the result via a predefined function or a raw SQL expression. Not supported together with 'prql'."
         }
       },
       "anyOf": [
@@ -1322,148 +1296,6 @@
         { "required": ["prql"] },
         { "required": ["source"] }
       ]
-    },
-    "dataSetFilterGroup": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["conditions"],
-      "description": "A logical group of filter conditions combined with AND or OR. Groups nest to express arbitrary boolean trees.",
-      "properties": {
-        "op": {
-          "type": "string",
-          "enum": ["and", "or"],
-          "default": "and",
-          "description": "Logical operator joining the conditions in this group."
-        },
-        "conditions": {
-          "type": "array",
-          "minItems": 1,
-          "description": "Conditions in this group. Each item is either a leaf condition (column/op/value) or a nested group (with its own conditions).",
-          "items": {
-            "oneOf": [
-              { "$ref": "#/$defs/dataSetFilterCondition" },
-              { "$ref": "#/$defs/dataSetFilterGroup" }
-            ]
-          }
-        }
-      }
-    },
-    "dataSetFilterCondition": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["column", "op"],
-      "description": "A single filter predicate on one column.",
-      "properties": {
-        "column": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Column to filter on. Identifier-quoted in the generated SQL."
-        },
-        "op": {
-          "type": "string",
-          "enum": ["equal", "notEqual", "gte", "gt", "lte", "lt", "in", "notIn", "regex"],
-          "description": "Comparison operator. 'in'/'notIn' take an array value; 'regex' takes a string; comparison operators take a scalar; a null value with 'equal'/'notEqual' becomes IS NULL / IS NOT NULL."
-        },
-        "value": {
-          "type": ["string", "number", "boolean", "array", "null"],
-          "items": { "type": ["string", "number", "boolean"] },
-          "description": "Value(s) to compare against. Bound as SQL parameter(s)."
-        }
-      }
-    },
-    "dataSetGroupBy": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["columns"],
-      "description": "Server-side GROUP BY definition. Columns and aggregates become the only output columns.",
-      "properties": {
-        "columns": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Columns to group by. They survive into the output verbatim."
-        },
-        "aggregates": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/dataSetAggregate" },
-          "description": "Aggregate expressions computed per group."
-        }
-      }
-    },
-    "dataSetAggregate": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["column", "fn", "as"],
-      "description": "An aggregate expression over one column, output under an alias.",
-      "properties": {
-        "column": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Column to aggregate. Use '*' with fn 'count' for count(*)."
-        },
-        "fn": {
-          "type": "string",
-          "enum": ["sum", "avg", "min", "max", "first", "last", "count", "countDistinct"],
-          "description": "Aggregate function."
-        },
-        "as": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Output column name. Must be unique across aggregates and group-by columns."
-        },
-        "orderBy": {
-          "type": "string",
-          "description": "For 'first'/'last': column to order by for determinism."
-        },
-        "orderDesc": {
-          "type": "boolean",
-          "description": "For 'first'/'last': order descending instead of ascending."
-        }
-      }
-    },
-    "dataSetIndexColumn": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["column"],
-      "description": "A computed index/order column. Provide exactly one of 'fn' or 'expr'.",
-      "oneOf": [
-        { "required": ["fn"],   "not": { "required": ["expr"] } },
-        { "required": ["expr"], "not": { "required": ["fn"] } }
-      ],
-      "properties": {
-        "column": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Output column name (e.g. categoryIndex)."
-        },
-        "fn": {
-          "type": "string",
-          "enum": ["hash", "rowNumber", "rank", "denseRank"],
-          "description": "Predefined function. 'hash' requires 'of'; the window functions require 'over'. Mutually exclusive with 'expr'."
-        },
-        "of": {
-          "type": "string",
-          "description": "For 'hash': the column to hash."
-        },
-        "over": {
-          "type": "string",
-          "description": "For window functions: the ORDER BY column. Complex/multi-column ordering belongs in 'expr'."
-        },
-        "overDesc": {
-          "type": "boolean",
-          "description": "For window functions: order descending."
-        },
-        "partition": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "For window functions: optional PARTITION BY columns."
-        },
-        "expr": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Raw SQL expression emitted verbatim (escape hatch). Mutually exclusive with 'fn'. Same trust model as 'query'/'prql'."
-        }
-      }
     },
     "reportArtefactSpec": {
       "type": "object",

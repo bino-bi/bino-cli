@@ -608,8 +608,7 @@
     "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run compile -- --watch",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "unit": "vitest run"
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
@@ -618,8 +617,7 @@
     "@typescript-eslint/parser": "^8.61.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.4.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",

@@ -40,7 +40,6 @@ func resolvedDatasetSQL(doc config.Document) (string, error) {
 	baseDir := filepath.Dir(doc.File)
 
 	var query string
-	var isPRQL bool
 	switch {
 	case payload.Spec.Source != "":
 		query = fmt.Sprintf("SELECT * FROM %q", payload.Spec.Source)
@@ -50,7 +49,6 @@ func resolvedDatasetSQL(doc config.Document) (string, error) {
 			return "", fmt.Errorf("resolve prql: %w", err)
 		}
 		query = resolved
-		isPRQL = true
 	case !payload.Spec.Query.IsEmpty():
 		resolved, err := resolveQueryField(payload.Spec.Query, baseDir)
 		if err != nil {
@@ -69,16 +67,7 @@ func resolvedDatasetSQL(doc config.Document) (string, error) {
 		query = rewritten
 	}
 
-	// Apply declarative filter/groupBy/indexColumns so the preview shows
-	// transformed data. Filter values are inlined as SQL literals because the
-	// VS Code rows-preview client POSTs this string to /query and cannot bind
-	// parameters. Identity (no transforms) returns the resolved query unchanged.
-	wrapped, err := dataset.WrapQueryForPreview(doc.Raw, query, isPRQL)
-	if err != nil {
-		return "", fmt.Errorf("apply dataset transforms: %w", err)
-	}
-
-	return wrapped, nil
+	return query, nil
 }
 
 // resolveQueryField returns the inline query string verbatim, or reads the
