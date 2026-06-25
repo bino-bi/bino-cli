@@ -76,6 +76,18 @@ export class BinoCodeLensProvider implements vscode.CodeLensProvider {
             });
 
             codeLenses.push(codeLens);
+
+            // A DataSet is form-editable in the Designer (declarative transforms);
+            // it has no render canvas, so only this lens (not the embedded-preview
+            // one below, which is keyed on getEmbeddableKinds()).
+            if (doc.kind === 'DataSet') {
+                codeLenses.push(new vscode.CodeLens(range, {
+                    title: '$(edit) Designer',
+                    command: 'bino.openDesigner',
+                    arguments: [doc],
+                    tooltip: `Open DataSet "${doc.name}" in the Bino Designer`
+                }));
+            }
         }
 
         // For each embeddable document in this file, add an embedded-preview CodeLens

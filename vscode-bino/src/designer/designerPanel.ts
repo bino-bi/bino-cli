@@ -5,7 +5,7 @@ import { WorkspaceIndexer, LSPDocument } from '../indexer';
 import { SchemaResolver, FieldDef } from '../schemaResolver';
 import { AuthoringClient, formatEditDiagnostics, EditResult } from '../authoringClient';
 import { BinoPreviewManager } from '../preview';
-import { isEmbeddableKind, getEmbeddableKinds } from '../embeddable';
+import { isDesignerEditableKind, getDesignerEditableKinds } from '../embeddable';
 import { WidgetRegistry, WidgetContext, Binding, StandardColumn } from './widgets/registry';
 import { enumSelectWidget } from './widgets/enumSelect';
 import { scenarioWidget } from './widgets/scenario';
@@ -13,6 +13,9 @@ import { varianceWidget } from './widgets/variance';
 import { stackWidget } from './widgets/stack';
 import { aggregateWidget } from './widgets/aggregate';
 import { edgesWidget } from './widgets/edges';
+import { filterWidget } from './widgets/filter';
+import { groupByWidget } from './widgets/groupBy';
+import { indexColumnsWidget } from './widgets/indexColumns';
 import { getDesignerHtml, FormRow } from './designerHtml';
 
 /** The component currently shown in the designer. */
@@ -58,6 +61,9 @@ export class DesignerPanel {
         this.registry.register(stackWidget);
         this.registry.register(aggregateWidget);
         this.registry.register(edgesWidget);
+        this.registry.register(filterWidget);
+        this.registry.register(groupByWidget);
+        this.registry.register(indexColumnsWidget);
         this.registry.register(enumSelectWidget);
     }
 
@@ -71,8 +77,8 @@ export class DesignerPanel {
         if (!doc) {
             return; // user cancelled / nothing embeddable
         }
-        if (!isEmbeddableKind(doc.kind)) {
-            vscode.window.showInformationMessage(`Bino: ${doc.kind} is not an embeddable component.`);
+        if (!isDesignerEditableKind(doc.kind)) {
+            vscode.window.showInformationMessage(`Bino: ${doc.kind} is not a designer-editable component.`);
             return;
         }
 
@@ -133,9 +139,14 @@ export class DesignerPanel {
     private async bindTarget(doc: LSPDocument): Promise<void> {
         this.target = { file: doc.file, docIndex: doc.position, kind: doc.kind, name: doc.name };
         this.binding = undefined;
-        const dataset = this.readDataset();
-        if (dataset) {
-            await this.refreshBinding(dataset);
+        if (doc.kind === 'DataSet') {
+            // A DataSet's own columns are the column source for its transform widgets.
+            await this.refreshBinding(doc.name);
+        } else {
+            const dataset = this.readDataset();
+            if (dataset) {
+                await this.refreshBinding(dataset);
+            }
         }
         await this.renderForm();
         if (this.panel?.title !== undefined) {
@@ -408,7 +419,7 @@ export class DesignerPanel {
         const filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
         const cursorLine = editor.selection.active.line;
         const candidates = this.indexer
-            .getDocuments(getEmbeddableKinds())
+            .getDocuments(getDesignerEditableKinds())
             .filter(d => d.file.replace(/\\/g, '/') === filePath);
         if (candidates.length === 0) { return undefined; }
 
@@ -425,7 +436,7 @@ export class DesignerPanel {
 
     /** Prompt the user to choose an embeddable component. */
     private async pickEmbeddable(): Promise<LSPDocument | undefined> {
-        const docs = this.indexer.getDocuments(getEmbeddableKinds());
+        const docs = this.indexer.getDocuments(getDesignerEditableKinds());
         if (docs.length === 0) {
             vscode.window.showInformationMessage('Bino: no embeddable components in the workspace.');
             return undefined;
