@@ -18,3 +18,23 @@ metadata:
   name: financial_summary
 spec:
   query: SELECT * FROM kpi_table_data ORDER BY rowGroupIndex, categoryIndex
+---
+# Exercises all three declarative data-prep transforms together:
+# filter (drop small line items) -> groupBy (one row per rowGroup, summed
+# actuals) -> indexColumns (compute the rowGroupIndex the pairing rule requires).
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: revenue_by_group
+spec:
+  query: SELECT rowGroup, category, ac1 FROM kpi_table_data
+  filter:
+    conditions:
+      - { column: ac1, op: gte, value: 2000 }
+  groupBy:
+    columns: [rowGroup]
+    aggregates:
+      - { column: ac1, fn: sum, as: ac1 }
+      - { column: category, fn: countDistinct, as: lines }
+  indexColumns:
+    - { column: rowGroupIndex, fn: denseRank, over: rowGroup }

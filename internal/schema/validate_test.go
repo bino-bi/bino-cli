@@ -688,6 +688,132 @@ func TestConvertYAMLToJSON_TimeNormalization(t *testing.T) {
 	}
 }
 
+func TestValidate_DataSetDataPrep(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		// wantPath/wantMessage are checked only when wantErr is true.
+		wantErr     bool
+		wantPath    string
+		wantMessage string
+	}{
+		{
+			name: "valid nested filter (and + or)",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: t
+spec:
+  query: SELECT region, product, sales FROM raw
+  filter:
+    op: and
+    conditions:
+      - {column: region, op: in, value: [EMEA, APAC]}
+      - {column: sales, op: gte, value: 1000}
+      - op: or
+        conditions:
+          - {column: product, op: regex, value: "^A"}
+          - {column: product, op: notIn, value: [X, Y]}
+`,
+			wantErr: false,
+		},
+		{
+			name: "invalid filter op enum",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: t
+spec:
+  query: SELECT 1
+  filter:
+    conditions:
+      - {column: region, op: bogus, value: x}
+`,
+			wantErr:  true,
+			wantPath: "spec.filter.conditions.0.op",
+			// The condition branch lists the nine filter operators; match a
+			// token unique to it so it is not confused with the and/or group
+			// enum the oneOf also tries.
+			wantMessage: "'notIn'",
+		},
+		{
+			name: "indexColumn with both fn and expr (oneOf failure)",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: t
+spec:
+  query: SELECT 1
+  indexColumns:
+    - column: categoryIndex
+      fn: hash
+      of: region
+      expr: "row_number() OVER ()"
+`,
+			wantErr:  true,
+			wantPath: "spec.indexColumns.0",
+			// oneOf {required fn, not expr} / {required expr, not fn}: with
+			// both present each branch's "not" sub-schema fails.
+			wantMessage: "'not' failed",
+		},
+		{
+			name: "unknown extra property under spec.filter",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: t
+spec:
+  query: SELECT 1
+  filter:
+    op: and
+    bogusKey: nope
+    conditions:
+      - {column: region, op: equal, value: x}
+`,
+			wantErr:     true,
+			wantPath:    "spec.filter.bogusKey",
+			wantMessage: "'bogusKey' not allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("expected document to validate, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+
+			ve := &ValidationError{}
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected *ValidationError, got %T", err)
+			}
+
+			found := false
+			for _, issue := range ve.Errors {
+				if strings.Contains(issue.Path, tt.wantPath) &&
+					strings.Contains(issue.Message, tt.wantMessage) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected issue with path containing %q and message containing %q, got: %v",
+					tt.wantPath, tt.wantMessage, ve.Errors)
+			}
+		})
+	}
+}
+
 func TestGetValidationIssues(t *testing.T) {
 	issues := []ValidationIssue{
 		{Path: "test1", Message: "message1"},

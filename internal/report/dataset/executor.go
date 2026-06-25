@@ -77,10 +77,80 @@ type ExecuteOptions struct {
 
 // dataSetSpec mirrors the new minimal DataSet spec structure.
 type dataSetSpec struct {
-	Query        queryField `json:"query"`
-	Prql         queryField `json:"prql"`
-	Source       string     `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
-	Dependencies []string   `json:"dependencies"`
+	Query        queryField    `json:"query"`
+	Prql         queryField    `json:"prql"`
+	Source       string        `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
+	Dependencies []string      `json:"dependencies"`
+	Filter       *filterGroup  `json:"filter,omitempty"`
+	GroupBy      *groupBy      `json:"groupBy,omitempty"`
+	IndexColumns []indexColumn `json:"indexColumns,omitempty"`
+}
+
+// filterGroup mirrors schema.FilterGroup for JSON decoding from doc.Raw.
+type filterGroup struct {
+	Op         string       `json:"op,omitempty"`
+	Conditions []filterNode `json:"conditions"`
+}
+
+// filterNode mirrors schema.FilterNode (a group OR a leaf condition).
+type filterNode struct {
+	Group *filterGroup
+	Leaf  *filterCondition
+}
+
+// UnmarshalJSON discriminates a nested group (has "conditions") from a leaf.
+func (n *filterNode) UnmarshalJSON(data []byte) error {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return fmt.Errorf("filter node must be an object: %w", err)
+	}
+	if _, ok := probe["conditions"]; ok {
+		var g filterGroup
+		if err := json.Unmarshal(data, &g); err != nil {
+			return err
+		}
+		n.Group = &g
+		return nil
+	}
+	var c filterCondition
+	if err := json.Unmarshal(data, &c); err != nil {
+		return err
+	}
+	n.Leaf = &c
+	return nil
+}
+
+// filterCondition mirrors schema.FilterCondition.
+type filterCondition struct {
+	Column string `json:"column"`
+	Op     string `json:"op"`
+	Value  any    `json:"value,omitempty"`
+}
+
+// groupBy mirrors schema.GroupBy.
+type groupBy struct {
+	Columns    []string    `json:"columns"`
+	Aggregates []aggregate `json:"aggregates,omitempty"`
+}
+
+// aggregate mirrors schema.Aggregate.
+type aggregate struct {
+	Column    string `json:"column"`
+	Fn        string `json:"fn"`
+	As        string `json:"as"`
+	OrderBy   string `json:"orderBy,omitempty"`
+	OrderDesc bool   `json:"orderDesc,omitempty"`
+}
+
+// indexColumn mirrors schema.IndexColumn.
+type indexColumn struct {
+	Column    string   `json:"column"`
+	Fn        string   `json:"fn,omitempty"`
+	Of        string   `json:"of,omitempty"`
+	Over      string   `json:"over,omitempty"`
+	OverDesc  bool     `json:"overDesc,omitempty"`
+	Partition []string `json:"partition,omitempty"`
+	Expr      string   `json:"expr,omitempty"`
 }
 
 // queryField represents a query that can be either an inline string or a file reference.
@@ -520,7 +590,8 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			return results, warnings, err
 		}
 
-		data, err := executeDataSet(ctx, session, job, opts)
+		data, execWarnings, err := executeDataSet(ctx, session, job, opts)
+		warnings = append(warnings, execWarnings...)
 		if err != nil {
 			if opts != nil && opts.ContinueOnQueryError {
 				warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
@@ -556,7 +627,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 	return results, warnings, nil
 }
 
-func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, error) {
+func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, []Warning, error) {
 	db := session.DB()
 
 	// Execute the query directly - DataSources are already registered as views
@@ -567,6 +638,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	baseDir := filepath.Dir(job.doc.File)
 
 	var query string
+	var warnings []Warning
 	var err error
 
 	// Check for source pass-through first - this creates a simple SELECT * FROM
@@ -577,25 +649,38 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	case !job.spec.Prql.IsEmpty():
 		query, err = job.spec.Prql.ResolveQuery(baseDir)
 		if err != nil {
-			return nil, fmt.Errorf("resolve prql: %w", err)
+			return nil, warnings, fmt.Errorf("resolve prql: %w", err)
 		}
 	default:
 		query, err = job.spec.Query.ResolveQuery(baseDir)
 		if err != nil {
-			return nil, fmt.Errorf("resolve query: %w", err)
+			return nil, warnings, fmt.Errorf("resolve query: %w", err)
 		}
 	}
 
 	if query == "" {
-		return nil, fmt.Errorf("no query, prql, or source specified")
+		return nil, warnings, fmt.Errorf("no query, prql, or source specified")
 	}
 
 	// Rewrite @inline(N) references to generated datasource names
 	if HasInlineRefs(query) {
 		query, err = RewriteInlineRefs(query, job.spec.Dependencies)
 		if err != nil {
-			return nil, fmt.Errorf("rewrite inline refs: %w", err)
+			return nil, warnings, fmt.Errorf("rewrite inline refs: %w", err)
 		}
+	}
+
+	// Apply declarative filter/groupBy/indexColumns as a server-side SQL wrap.
+	// The no-op path (none present) returns the query byte-identical with args nil.
+	isPRQL := !job.spec.Prql.IsEmpty()
+	var args []any
+	var specWarnings []string
+	query, args, specWarnings, err = buildWrappedQuery(job.spec, query, isPRQL)
+	if err != nil {
+		return nil, warnings, fmt.Errorf("build wrapped query: %w", err)
+	}
+	for _, w := range specWarnings {
+		warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: w})
 	}
 
 	// Log the query before execution
@@ -613,13 +698,13 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		defer cancel()
 	}
 
-	// Execute query
-	rows, err := db.QueryContext(queryCtx, query)
+	// Execute query (args is nil on the no-op path, so this is byte-identical to before)
+	rows, err := db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		// Log failed query execution if logger is available
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
-		return nil, fmt.Errorf("query: %w", err)
+		return nil, warnings, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 
@@ -629,7 +714,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	if err != nil {
 		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
-		return nil, fmt.Errorf("serialize: %w", err)
+		return nil, warnings, fmt.Errorf("serialize: %w", err)
 	}
 
 	// Calculate duration and emit query execution metadata
@@ -647,7 +732,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		Rows:       rowStrings,
 	})
 
-	return data, nil
+	return data, warnings, nil
 }
 
 // logQueryExecError logs a failed query execution if the logger is available.
