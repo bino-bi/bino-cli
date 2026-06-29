@@ -17,7 +17,7 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/graemephi/goldmark-qjs-katex v0.3.0
@@ -27,7 +27,7 @@ require (
 	github.com/mattn/go-isatty v0.0.22
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/pdfcpu/pdfcpu v0.13.0
-	github.com/pelletier/go-toml/v2 v2.4.0
+	github.com/pelletier/go-toml/v2 v2.4.2
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sahilm/fuzzy v0.1.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -35,9 +35,9 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/goldmark v1.8.2
 	go.abhg.dev/goldmark/toc v0.12.0
-	go.lsp.dev/jsonrpc2 v1.0.0
-	go.lsp.dev/protocol v1.0.0
-	go.lsp.dev/uri v1.0.0
+	go.lsp.dev/jsonrpc2 v1.0.1
+	go.lsp.dev/protocol v1.0.1
+	go.lsp.dev/uri v1.0.1
 	golang.org/x/mod v0.37.0
 	golang.org/x/term v0.44.0
 	golang.org/x/text v0.38.0
