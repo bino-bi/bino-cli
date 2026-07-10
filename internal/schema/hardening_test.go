@@ -132,6 +132,63 @@ spec:
 			wantErr: true,
 		},
 		{
+			name: "Table selectedStyle accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales
+spec:
+  dataset: revenue
+  selectedStyle: corporate-style
+`,
+			wantErr: false,
+		},
+		{
+			name: "Table selectedStyle typo rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales
+spec:
+  dataset: revenue
+  selectedStyl: corporate-style
+`,
+			wantErr: true,
+		},
+		{
+			name: "LayoutPage selectedStyle accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  selectedStyle: corporate-style
+  children:
+    - kind: Table
+      ref: sales_table
+`,
+			wantErr: false,
+		},
+		{
+			name: "inline layout child selectedStyle accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Text
+      spec:
+        value: hello
+        selectedStyle: corporate-style
+`,
+			wantErr: false,
+		},
+		{
 			name: "Asset with localPath source valid",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

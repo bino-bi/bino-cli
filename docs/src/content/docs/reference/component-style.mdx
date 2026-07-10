@@ -22,6 +22,39 @@ spec:
 - A YAML object
 - A JSON string (useful when copying from front-end configuration)
 
+## Using named styles
+
+The `metadata.name` of a `ComponentStyle` decides how it is applied:
+
+- `_default` – applied to **all** components automatically.
+- Any other name (e.g. `corporateTheme`) – a **named style** that individual components opt into via `spec.selectedStyle`.
+
+At render time each component merges style layers in this order (later wins):
+built-in `_system` defaults → `_default` → the style named by `selectedStyle`.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporateTheme
+spec:
+  content:
+    global:
+      fontFamily: "'Inter', sans-serif"
+      fontSizePx: 11
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_by_customer
+  selectedStyle: corporateTheme
+```
+
+`selectedStyle` is available on `Table`, `Text`, `ChartStructure`, `ChartTime`, `Tree`, `Grid`, `Image` (as inline child), `LayoutPage`, and `LayoutCard`. It is emitted as the `selected-style` HTML attribute on the corresponding `bn-*` element. For `LayoutPage` and `LayoutCard` it takes effect with a template engine release that forwards `selected-style` to the inner page/card element.
+
 ## Style structure
 
 The style object has the following top-level sections:
@@ -353,6 +386,8 @@ spec:
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
 | `spec.content` | object or string | yes | — | Style definitions as a YAML object or JSON string. Contains component-specific style sections. | see sections above |
+
+Components reference a named style through their own `spec.selectedStyle` attribute; see [Using named styles](#using-named-styles).
 
 #### Content structure
 

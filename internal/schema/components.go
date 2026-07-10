@@ -116,6 +116,10 @@ type HuggingfaceAuthSpec struct {
 
 // LayoutPageSpec represents the spec section of a LayoutPage manifest.
 type LayoutPageSpec struct {
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
 	// Children is a list of component references.
 	// Each element should be a reference like "$component_name".
 	Children []string `yaml:"children" json:"children"`
@@ -125,6 +129,10 @@ type LayoutPageSpec struct {
 type LayoutCardSpec struct {
 	// Title is the card title.
 	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 
 	// Children is a list of component references.
 	// Each element should be a reference like "$component_name".
@@ -147,6 +155,10 @@ type TextSpec struct {
 	// applied factor; "auto" auto-scales silently; "none" disables scaling
 	// (warns on overflow); a number sets an explicit factor.
 	Scale string `yaml:"scale,omitempty" json:"scale,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 }
 
 // ComponentStyleSpec represents the spec section of a ComponentStyle manifest.
@@ -215,6 +227,10 @@ type TableSpec struct {
 
 	// TableTitle is the table title.
 	TableTitle string `yaml:"tableTitle,omitempty" json:"tableTitle,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 }
 
 // StackConfig configures stacked chart rendering.
@@ -243,6 +259,10 @@ type ChartStructureSpec struct {
 
 	// Stack configures stacked bar rendering.
 	Stack *StackConfig `yaml:"stack,omitempty" json:"stack,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 }
 
 // ChartTimeSpec represents the spec section of a ChartTime manifest.
@@ -256,6 +276,10 @@ type ChartTimeSpec struct {
 
 	// Stack configures stacked column/area rendering.
 	Stack *StackConfig `yaml:"stack,omitempty" json:"stack,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 }
 
 // GridSpec represents the spec section of a Grid manifest.
@@ -287,6 +311,10 @@ type GridSpec struct {
 
 	// CellGap is the CSS gap between cells (e.g., "0px", "8px").
 	CellGap string `yaml:"cellGap,omitempty" json:"cellGap,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 
 	// Children defines the grid cell contents as an array of child objects.
 	// Each child has a row, column (string or int), and either a ref to an existing component or inline spec.

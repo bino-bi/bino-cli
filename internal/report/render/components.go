@@ -881,6 +881,7 @@ func renderTextComponent(s textSpec, assetURLs map[string]string) string {
 		writeAttr(&b, "datasets", value)
 	}
 	writeAttr(&b, "scale", s.Scale.String())
+	writeAttr(&b, "selected-style", s.SelectedStyle)
 	b.WriteString("></bn-text>")
 	return b.String()
 }

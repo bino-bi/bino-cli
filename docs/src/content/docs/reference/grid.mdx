@@ -33,6 +33,7 @@ spec:
   showBorders: true         # default: true
   rowHeaderWidth: auto      # CSS width (auto, 100px, 20%)
   cellGap: 0px              # CSS gap between cells
+  selectedStyle: corporate-style # name of a ComponentStyle to apply
   children:
     - row: electronics
       column: q1
@@ -93,6 +94,7 @@ columnHeaders:
 | `showBorders` | boolean | `true` | Whether to display border/divider lines between cells. |
 | `rowHeaderWidth` | string | `"auto"` | CSS width of the row header column (e.g., `"auto"`, `"100px"`, `"20%"`). |
 | `cellGap` | string | `"0px"` | CSS gap between grid cells (e.g., `"0px"`, `"8px"`). |
+| `selectedStyle` | string | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply; merged over the `_system` and `_default` styles. |
 
 ### Children
 
@@ -412,6 +414,7 @@ See [ComponentStyle](/reference/component-style/) for all available grid styling
 | `spec.showBorders` | boolean | no | `true` | Display border/divider lines between cells. | `showBorders: false` |
 | `spec.rowHeaderWidth` | string | no | `"auto"` | CSS width of the row header column. | `rowHeaderWidth: "120px"` |
 | `spec.cellGap` | string | no | `"0px"` | CSS gap between grid cells. | `cellGap: "8px"` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.children` | array | yes | — | Array of grid child definitions specifying position and content. | see below |
 
 #### Header formats

@@ -1917,6 +1917,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "value": {
           "type": "string",
           "description": "Text content. Supports Markdown (converted to HTML at build time) and template expressions like ${data.myDataset[0].ac1}."
@@ -2358,6 +2362,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "titleBusinessUnit": {
           "type": "string",
           "default": "",
@@ -2489,6 +2497,10 @@
       "additionalProperties": false,
       "description": "Configuration for a LayoutCard component. Cards are containers for child components (charts, tables, text) and support card-specific layout properties.",
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "titleImage": {
           "type": "string",
           "default": "",
@@ -2721,6 +2733,10 @@
       "additionalProperties": false,
       "description": "Configuration for an Image component. Displays an image from an asset name or URL.",
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "source": {
           "type": "string",
           "description": "Name of an Asset document (kind: Asset) or URL of the image. If not http, it looks up the asset by name. If empty string ('') or null, the image is omitted."
@@ -2787,6 +2803,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
           "type": "string",
@@ -2909,6 +2929,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
           "type": "string",
@@ -3068,6 +3092,10 @@
       "additionalProperties": false,
       "description": "Configuration for a Tree component. Trees display hierarchical structures with nodes connected by edges, commonly used for driver trees and decomposition diagrams.",
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "edges": {
           "description": "JSON array defining connections between nodes. Each edge specifies a source (from) and target (to) node ID, with optional operator and styling.",
           "oneOf": [
@@ -3255,6 +3283,10 @@
       "additionalProperties": false,
       "description": "Configuration for a Grid component. Grids create CSS grid-based layouts with row and column headers for organizing child components in a tabular structure.",
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "chartTitle": {
           "type": "string",
           "default": "",
@@ -3442,6 +3474,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "tableTitle": {
           "type": "string",

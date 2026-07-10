@@ -19,6 +19,7 @@ spec:
   value: "Quarterly performance overview"
   dataset: kpi_summary   # string or array
   scale: auto             # optional scaling mode
+  selectedStyle: corporate-style   # optional ComponentStyle name
 ```
 
 Fields:
@@ -26,6 +27,7 @@ Fields:
 - `spec.value` – required string. Supports **Markdown** syntax (see below) and **template expressions** (see below).
 - `spec.dataset` – optional dataset reference; either a single string or an array of strings.
 - `spec.scale` – optional scaling mode (see [Scaling](#scaling)).
+- `spec.selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 
 ## Markdown support
 
@@ -198,4 +200,5 @@ spec:
 | `spec.value` | string | yes | — | Text content. Supports Markdown syntax and template expressions `${data.<dataset>[0].field}` and `${t('key')}`. | `value: "**Revenue** grew by *12%*"` |
 | `spec.dataset` | string or array | no | — | Dataset reference for template interpolation. Single name or array of names. Provided by the **withDataset** mixin. | `dataset: kpi_summary` |
 | `spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: explicit factor. When omitted, auto-scales and emits a warning. | `scale: auto` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 

@@ -36,6 +36,7 @@ type layoutPageSpec struct {
 	FooterText          string                   `json:"footerText"`
 	PageFitToContent    *bool                    `json:"pageFitToContent"`
 	FooterDisplayNumber *bool                    `json:"footerDisplayPageNumber"`
+	SelectedStyle       string                   `json:"selectedStyle"`
 	Children            []layoutChild            `json:"children"`
 }
 
@@ -66,6 +67,7 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 	if s.FooterDisplayNumber != nil {
 		writeAttr(b, "footer-display-page-number", fmt.Sprintf("%t", *s.FooterDisplayNumber))
 	}
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // layoutCardSpec defines the structure for LayoutCard components.
@@ -89,6 +91,7 @@ type layoutCardSpec struct {
 	CardGridGap         string                   `json:"cardGridGap"`
 	CardFitToContent    *bool                    `json:"cardFitToContent"`
 	CardShowBorder      *bool                    `json:"cardShowBorder"`
+	SelectedStyle       string                   `json:"selectedStyle"`
 	Children            []layoutChild            `json:"children"`
 }
 
@@ -111,6 +114,7 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "card-grid-gap", s.CardGridGap)
 	writeBoolAttr(b, "card-fit-to-content", s.CardFitToContent)
 	writeBoolAttr(b, "card-show-border", s.CardShowBorder)
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // layoutChild represents a child component within a layout.
@@ -134,9 +138,10 @@ type layoutChildMeta struct {
 
 // textSpec defines the structure for Text components.
 type textSpec struct {
-	Value   string                   `json:"value"`
-	Dataset reportspec.DatasetList   `json:"dataset"`
-	Scale   reportspec.StringOrFloat `json:"scale,omitempty"`
+	Value         string                   `json:"value"`
+	Dataset       reportspec.DatasetList   `json:"dataset"`
+	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle string                   `json:"selectedStyle"`
 }
 
 // stackConfig defines the stacking configuration for chart components.
@@ -169,6 +174,7 @@ type chartStructureSpec struct {
 	Variances                reportspec.StringOrSlice `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle            string                   `json:"selectedStyle"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -193,6 +199,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // chartTimeSpec defines the structure for ChartTime components.
@@ -226,6 +233,7 @@ type chartTimeSpec struct {
 	Variances                reportspec.StringOrSlice `json:"variances"`
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle            string                   `json:"selectedStyle"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -258,6 +266,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // treeSpec defines the structure for Tree components.
@@ -270,6 +279,7 @@ type treeSpec struct {
 	NodeSpacing   *float64        `json:"nodeSpacing"`
 	EdgeStyle     string          `json:"edgeStyle"`
 	ShowOperators *bool           `json:"showOperators"`
+	SelectedStyle string          `json:"selectedStyle"`
 	Nodes         []treeNode      `json:"nodes"`
 }
 
@@ -301,6 +311,7 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "node-spacing", s.NodeSpacing)
 	writeAttr(b, "edge-style", s.EdgeStyle)
 	writeBoolAttr(b, "show-operators", s.ShowOperators)
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // tableSpec defines the structure for Table components.
@@ -336,6 +347,7 @@ type tableSpec struct {
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
 	Attributes               reportspec.AttributesList    `json:"attributes"`
+	SelectedStyle            string                       `json:"selectedStyle"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -370,6 +382,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
 	writeAttr(b, "attributes", s.Attributes.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // writeBoolAttr writes a boolean attribute if the value is non-nil.
@@ -418,11 +431,13 @@ func writeStackAttr(b *strings.Builder, name string, s *stackConfig) {
 
 // imageSpec defines the structure for Image components.
 type imageSpec struct {
-	Source string `json:"source"`
+	Source        string `json:"source"`
+	SelectedStyle string `json:"selectedStyle"`
 }
 
 func (s imageSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "source", s.Source)
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
 // gridSpec defines the structure for Grid components.
@@ -436,6 +451,7 @@ type gridSpec struct {
 	ShowBorders       *bool           `json:"showBorders"`
 	RowHeaderWidth    string          `json:"rowHeaderWidth"`
 	CellGap           string          `json:"cellGap"`
+	SelectedStyle     string          `json:"selectedStyle"`
 	Children          []gridChild     `json:"children"`
 }
 
@@ -487,4 +503,5 @@ func (s gridSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-borders", s.ShowBorders)
 	writeAttr(b, "row-header-width", s.RowHeaderWidth)
 	writeAttr(b, "cell-gap", s.CellGap)
+	writeAttr(b, "selected-style", s.SelectedStyle)
 }
