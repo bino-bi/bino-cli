@@ -3666,6 +3666,11 @@
             }
           ]
         },
+        "interval": {
+          "type": "string",
+          "enum": ["none", "setname", "year", "quarter", "month", "week", "day", "hour", "minute", "second", "millisecond", "auto"],
+          "description": "Repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band (e.g. '2023 | 2024 | 2025'). 'none' (default) disables the feature. 'setname' groups by the dataset's setname column (blank setnames are grouped under '—'). Date values ('year'..'millisecond') bucket rows by the date column; 'auto' detects the granularity from the date span. Cannot be combined with columnthereof (columnthereof wins)."
+        },
         "attributes": {
           "description": "Computed attribute columns rendered between the category and scenario columns, in list order. Maps a column header label to an aggregate expression over the rows behind each table row. Functions: set, first, last, min, max, avg, sum (dataset field or custom '_'-prefixed field) and lit (constant). Use the ordered array form, or a JSON object string whose key order defines column order. Example: [{\"label\": \"Verkaufsleiter\", \"expression\": \"set(_leiter)\"}]",
           "oneOf": [

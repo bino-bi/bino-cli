@@ -346,6 +346,7 @@ type tableSpec struct {
 	Thereof                  reportspec.ThereofList       `json:"thereof"`
 	Partof                   reportspec.PartofList        `json:"partof"`
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
+	Interval                 string                       `json:"interval"`
 	Attributes               reportspec.AttributesList    `json:"attributes"`
 	SelectedStyle            string                       `json:"selectedStyle"`
 }
@@ -381,6 +382,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
+	writeAttr(b, "interval", s.Interval)
 	writeAttr(b, "attributes", s.Attributes.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 }
