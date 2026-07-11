@@ -37,6 +37,15 @@ type Server struct {
 	schema  *schemaModel
 	index   []IndexDoc
 	nameIdx *reportspec.NameIndex
+
+	// draftDiags and projectDiags are merged per-file before publishing, since
+	// PublishDiagnostics fully replaces a document's diagnostic set per call:
+	// draftDiags comes from the per-keystroke Analyzer (ValidateDraft, open
+	// buffers only); projectDiags comes from refreshProjectDiagnostics
+	// (ValidateProject, whole project on disk — lint/env-var/engine-compat
+	// findings that ValidateDraft never sees).
+	draftDiags   map[string][]protocol.Diagnostic
+	projectDiags map[string][]protocol.Diagnostic
 }
 
 // NewServer constructs a Server over the given backend. phase2 advertises the
@@ -63,7 +72,7 @@ func (s *Server) Serve(ctx context.Context, stream jsonrpc2.Stream) error {
 	// spawned goroutine, so handlers observe them without locking.
 	s.ctx = ctx
 	s.cancel = cancel
-	s.analyzer = NewAnalyzer(ctx, s.backend, s.docs, s.publishDiagnostics, s.log, 0)
+	s.analyzer = NewAnalyzer(ctx, s.backend, s.docs, s.publishDraft, s.log, 0)
 
 	_, conn, client := protocol.NewServer(ctx, s, stream)
 	// client is produced by NewServer after the read loop has started, so the
@@ -116,6 +125,76 @@ func (s *Server) publishDiagnostics(u uri.URI, ver int32, diags []protocol.Diagn
 	})
 }
 
+// publishDraft is the Analyzer's publish callback: it records the draft
+// (ValidateDraft) diagnostics for path, then publishes them merged with any
+// cached project-wide diagnostics for the same file.
+func (s *Server) publishDraft(u uri.URI, ver int32, diags []protocol.Diagnostic) {
+	path := u.FsPath()
+	s.mu.Lock()
+	if s.draftDiags == nil {
+		s.draftDiags = make(map[string][]protocol.Diagnostic)
+	}
+	s.draftDiags[path] = diags
+	s.mu.Unlock()
+	s.publishFile(path, ver)
+}
+
+// publishFile publishes the merge of cached draft + project diagnostics for a
+// file. PublishDiagnostics fully replaces a document's diagnostic set per
+// call, so callers must always go through this rather than publishing either
+// source directly.
+func (s *Server) publishFile(path string, ver int32) {
+	s.mu.RLock()
+	merged := make([]protocol.Diagnostic, 0, len(s.draftDiags[path])+len(s.projectDiags[path]))
+	merged = append(merged, s.draftDiags[path]...)
+	merged = append(merged, s.projectDiags[path]...)
+	s.mu.RUnlock()
+	s.publishDiagnostics(uri.File(path), ver, merged)
+}
+
+// refreshProjectDiagnostics re-validates the whole project on disk (schema,
+// lint rules, missing ${VAR}, engine-compat) and publishes the result for
+// every affected file — not just currently open buffers — since these
+// findings are invisible to the per-keystroke, draft-only Analyzer. Intended
+// to run off the hot path (see onProjectChange).
+func (s *Server) refreshProjectDiagnostics() {
+	_, diags, err := s.backend.ValidateProject(s.ctx, false)
+	if err != nil {
+		s.log.Debugf("validate-project failed: %v", err)
+		return
+	}
+	byFile := make(map[string][]Diag)
+	for _, d := range diags {
+		byFile[d.File] = append(byFile[d.File], d)
+	}
+	published := make(map[string][]protocol.Diagnostic, len(byFile))
+	for file, fileDiags := range byFile {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		published[file] = backfillDiagnostics(&Document{Path: file, Text: string(content)}, fileDiags)
+	}
+
+	s.mu.Lock()
+	stale := s.projectDiags
+	s.projectDiags = published
+	s.mu.Unlock()
+
+	// Republish every file that has fresh project diagnostics plus every file
+	// that lost its last one (so its diagnostics get cleared, not left stale).
+	touched := make(map[string]struct{}, len(published)+len(stale))
+	for f := range published {
+		touched[f] = struct{}{}
+	}
+	for f := range stale {
+		touched[f] = struct{}{}
+	}
+	for f := range touched {
+		s.publishFile(f, 0)
+	}
+}
+
 // onProjectChange invalidates caches and re-analyzes open buffers when the
 // project changed on disk (watcher / SSE).
 func (s *Server) onProjectChange() {
@@ -124,6 +203,7 @@ func (s *Server) onProjectChange() {
 	s.index = nil
 	s.nameIdx = nil
 	s.mu.Unlock()
+	go s.refreshProjectDiagnostics()
 	if s.analyzer == nil {
 		return
 	}

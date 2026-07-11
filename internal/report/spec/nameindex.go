@@ -95,7 +95,7 @@ func (idx *NameIndex) walkRefs(file string, docIdx int, node *yaml.Node) {
 			switch key {
 			case "dataset", "dependencies":
 				idx.recordScalarOrSeq(file, docIdx, key, val, "")
-			case "source", "secret", "page", "signingProfile":
+			case "source", "secret", "page", "signingProfile", "selectedStyle":
 				idx.recordScalarOrSeq(file, docIdx, key, val, refFieldKinds[key])
 			case "layoutPages":
 				idx.recordLayoutPages(file, docIdx, val)

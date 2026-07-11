@@ -101,6 +101,44 @@ spec:
 	}
 }
 
+func TestBuildNameIndex_SelectedStyleRef(t *testing.T) {
+	files := map[string]string{
+		"style.yaml": `kind: ComponentStyle
+metadata:
+  name: highlighted
+spec:
+  backgroundColor: yellow
+`,
+		"report.yaml": `kind: Table
+metadata:
+  name: rev_table
+spec:
+  dataset: sales
+  selectedStyle: highlighted
+`,
+	}
+	idx, err := BuildNameIndex(files)
+	if err != nil {
+		t.Fatalf("BuildNameIndex: %v", err)
+	}
+
+	def, ok := idx.Definition("ComponentStyle", "highlighted")
+	if !ok {
+		t.Fatal("Definition(ComponentStyle, highlighted) not found")
+	}
+	if def.File != "style.yaml" {
+		t.Errorf("Definition(ComponentStyle, highlighted).File = %q, want style.yaml", def.File)
+	}
+
+	refs := idx.References("ComponentStyle", "highlighted")
+	if len(refs) != 1 {
+		t.Fatalf("References(ComponentStyle, highlighted) = %d, want 1", len(refs))
+	}
+	if refs[0].Field != "selectedStyle" || refs[0].File != "report.yaml" {
+		t.Errorf("ref site = %+v, want Field=selectedStyle File=report.yaml", refs[0])
+	}
+}
+
 func TestBuildNameIndex_DollarPrefixDataSource(t *testing.T) {
 	files := map[string]string{
 		"r.yaml": `kind: ChartTime

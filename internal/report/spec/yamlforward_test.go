@@ -161,6 +161,27 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_SelectedStyleRef(t *testing.T) {
+	// selectedStyle resolves to a ComponentStyle reference, same as source/page/etc.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  selectedStyle: highlighted
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 20) // on "highlighted"
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosDatasetRef || ctx.RefKind != "ComponentStyle" {
+		t.Errorf("Kind/RefKind = %v/%q, want PosDatasetRef/ComponentStyle", ctx.Kind, ctx.RefKind)
+	}
+	if ctx.Prefix != "highlighted" {
+		t.Errorf("Prefix = %q, want highlighted", ctx.Prefix)
+	}
+}
+
 func TestResolvePositionPath_MultiDoc(t *testing.T) {
 	const content = `kind: DataSource
 metadata:
