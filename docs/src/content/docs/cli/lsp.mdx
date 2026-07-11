@@ -41,14 +41,16 @@ Flags:
 **Completion** — IBCS scenario slots (`ac1–4 / pp1–4 / fc1–4 / pl1–4`) filtered to the columns the
 bound dataset actually emits, a guided builder for the variance grammar
 `d{base}_{compare}_{pos|neg|neu}`, the live `kind:` list, schema-driven fields and enum values,
-references (`dataset:`, `ref:`, `source:`, `layoutPages:`, …) valid at that position, and the
+references (`dataset:`, `ref:`, `source:`, `layoutPages:`, `selectedStyle:`, …) valid at that position, and the
 upstream source's column names inside a DataSet `query:` / `prql:` block.
 
 **Hover** — a dataset reference shows its live column list; a field shows its schema description; a
 scenario or variance token shows its IBCS meaning.
 
-**Live diagnostics** — schema errors, lint findings, missing `${VAR}` environment variables, and
-engine-compat warnings squiggled as you type, with precise line/column.
+**Live diagnostics** — schema and engine-constraint errors squiggled as you type on the buffer
+you're editing; lint findings, missing `${VAR}` environment variables, and engine-compat warnings
+for the whole project, refreshed whenever a file changes on disk (for example on save) — all with
+precise line/column, even for files you don't currently have open.
 
 **Navigation & refactor** — Go to Definition / Find All References / Go to Implementation across the
 project, project-wide Rename of a DataSet / DataSource / component (and every reference), document

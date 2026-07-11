@@ -857,14 +857,14 @@ export class BinoPreviewManager {
         return this.previewStatus;
     }
 
-    /** Run build command */
-    async runBuild(): Promise<boolean> {
+    /** Run build command, optionally for a single named artefact */
+    async runBuild(artefact?: string): Promise<boolean> {
         // Try daemon first
         if (this.daemonClient?.isConnected) {
             this.outputChannel.appendLine('[Build] Starting build via daemon...');
             this.outputChannel.show(true);
             try {
-                const result = await this.daemonClient.build();
+                const result = await this.daemonClient.build(artefact);
                 if (result) {
                     if (result.output) {
                         this.outputChannel.append(result.output);
@@ -904,7 +904,8 @@ export class BinoPreviewManager {
                 encoding: 'utf8'
             };
 
-            cp.exec(`${binPath} build`, options, (error, stdout, stderr) => {
+            const buildCmd = artefact ? `${binPath} build --artifact ${artefact}` : `${binPath} build`;
+            cp.exec(buildCmd, options, (error, stdout, stderr) => {
                 if (stdout) {
                     this.outputChannel.append(stdout);
                 }

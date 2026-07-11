@@ -66,6 +66,7 @@ var refFieldKinds = map[string]string{
 	"secret":         "ConnectionSecret",
 	"page":           "LayoutPage",
 	"signingProfile": "SigningProfile",
+	"selectedStyle":  "ComponentStyle",
 }
 
 // ResolvePositionPath maps a 1-based cursor (line, col) within raw multi-document

@@ -31,6 +31,24 @@ The Bino Reports VS Code extension provides schema-aware YAML editing, navigatio
   </Card>
 </CardGrid>
 
+Beyond YAML editing, the extension also ships a schema-driven **Designer** webview,
+a **DataSource creation Wizard**, a **Tree/Table Editor**, and **PRQL** editing
+support — see sections 9–12 below.
+
+### Architecture
+
+- **`bino lsp`** — a real [Language Server Protocol](/cli/lsp/) process, started
+  automatically over stdio, provides live diagnostics, completion, hover,
+  go-to-definition, find-references, rename, and quick-fixes.
+- **`bino daemon`** — an optional persistent background process (enabled by
+  default, see `bino.daemon.enabled`) that both the LSP and the extension's
+  data/preview/build features share, so indexing, validation, and DuckDB
+  column introspection stay warm across requests instead of paying a
+  cold-start cost on every call.
+- When the daemon is unavailable, the extension automatically falls back to
+  invoking discrete `bino lsp-helper <subcommand>` CLI calls for indexing and
+  data introspection.
+
 ---
 
 ## 1. Prerequisites
@@ -103,14 +121,17 @@ If something is wrong, the command shows a detailed message.
 
 ---
 
-## 4. Bino Explorer
+## 4. Bino Views
 
-The **Bino Reports** explorer view lives in the standard **Explorer** sidebar.
+The **Bino Reports** activity bar container (click the Bino icon in the Activity
+Bar) holds four views:
 
-- View ID: `binoExplorer`
-- Activation: `View → Bino Reports`
+- **Documents** (`binoDocuments`) — all indexed manifests, grouped by kind.
+- **Preview & Build** (`binoPreview`) — preview/build/validate/graph action buttons.
+- **Scaffolding** (`binoActions`) — shortcuts to the `Add *` commands, grouped by category.
+- **Environment** (`binoEnvironment`) — CLI/project info, diagnostics counts, and settings shortcuts.
 
-**What you see:**
+**What you see in Documents:**
 
 - Documents grouped by kind (ReportArtefact, DataSource, DataSet, LayoutPage, LayoutCard, Table, Text, etc.).
 - Count badges on each kind group.
@@ -151,12 +172,18 @@ Right-click on a document in the Bino Explorer to access:
 
 The extension provides completions in YAML files for:
 
-- `dataset:` – suggests DataSet names and `$DataSource` references.
+- `dataset:` / `dependencies:` – suggests DataSet names and `$DataSource` references.
+- `source:` – suggests DataSource names.
+- `secret:` – suggests ConnectionSecret names.
 - `signingProfile:` – suggests SigningProfile names.
+- `selectedStyle:` – suggests defined ComponentStyle names.
 - `kind:` fields – suggests all known Bino kinds.
 - Scenario/variance references – suggests column names based on the referenced dataset/datasource.
+- Inside `query:`/`prql:` blocks – suggests real DuckDB column names from the bound source.
 
-Completion is powered by the `bino lsp-helper index` and `bino lsp-helper columns` commands.
+Completion, hover, diagnostics, and navigation are all served by the `bino lsp`
+[Language Server](/cli/lsp/) — a real LSP process, not the older CLI-subprocess
+model.
 
 **Screenshot placeholder:**
 
@@ -164,17 +191,25 @@ Completion is powered by the `bino lsp-helper index` and `bino lsp-helper column
 ![VS Code completion placeholder](../assets/vscode-bino-completion-placeholder.png)
 ```
 
-### 5.2 Go to Definition
+### 5.2 Go to Definition, Find References, Rename
 
 Ctrl/Cmd+Click (or F12) on:
 
-- `dataset:` values → jumps to DataSet or DataSource.
-- `signingProfile:` → SigningProfile.
+- `dataset:` / `dependencies:` values → jumps to the DataSet or DataSource.
+- `source:` → DataSource.
 - `secret:` → ConnectionSecret.
-- `layout:` and `report:` references.
-- `dependencies:` entries.
+- `signingProfile:` → SigningProfile.
+- `selectedStyle:` → ComponentStyle.
+- `page:` / `layoutPages:` entries → LayoutPage.
+- `ref:` (layout children) → the referenced component, resolved via its sibling `kind`.
 
-Definitions are resolved from the workspace index and support multi-document YAML.
+Shift+F12 (**Find All References**) and F2 (**Rename Symbol**) work on any
+`metadata.name` and update every reference site across the workspace. Quick
+fixes (💡) are offered for a missing `${VAR}` in `.env`, a missing required
+schema field, or a dangling reference (scaffolds the missing manifest).
+
+Definitions/references are resolved from a live workspace name index and
+support multi-document YAML and unsaved edits.
 
 ### 5.3 Hover Information
 
@@ -183,7 +218,8 @@ Hover over dataset/datasource references to see:
 - The kind (DataSet or DataSource).
 - A preview of available columns.
 
-Columns are fetched via `bino lsp-helper columns` with caching (configurable TTL).
+Columns are introspected live via DuckDB (through the `bino daemon` when
+running) with caching (configurable TTL).
 
 **Screenshot placeholder:**
 
@@ -195,25 +231,26 @@ Columns are fetched via `bino lsp-helper columns` with caching (configurable TTL
 
 ## 6. Validation
 
+Live diagnostics are pushed continuously by the `bino lsp` [Language
+Server](/cli/lsp/) as you type (schema errors, engine-constraint violations)
+and, on every disk change, project-wide (lint findings, missing `${VAR}`
+environment variables) — no manual step is required.
+
 ### 6.1 Manual Validation
 
-Use the **Bino: Validate Workspace** command or the toolbar button in the Bino Explorer.
+Use the **Bino: Validate Workspace** command or the toolbar button in the Bino
+Views for an explicit, on-demand re-check — useful right after installing or
+when the daemon isn't running.
 
-- Runs `bino lsp-helper validate` on the workspace.
 - Reports schema and configuration errors as VS Code diagnostics.
 - Problems appear in the **Problems** panel and inline in the editor.
 
 ### 6.2 Validate on Save
 
-Enable in settings:
-
-```jsonc
-{
-  "bino.validateOnSave": true
-}
-```
-
-When enabled, saving a Bino YAML file automatically triggers validation.
+`bino.validateOnSave` (default: `true`) is a fallback for when the `bino
+daemon` isn't running: it re-runs a workspace validation pass on save. When the
+daemon is connected, it already pushes fresh diagnostics on every file change,
+so this setting has no additional effect.
 
 ### 6.3 Diagnostics in the Explorer
 
@@ -259,7 +296,11 @@ Run **Bino: Build Report** (`bino.build`) to execute `bino build` from within VS
 
 ## 8. Dependency Graph Navigation
 
-The extension uses the `bino lsp-helper graph-deps` command and the internal manifest graph to show dependencies and dependents.
+The extension queries the manifest dependency graph (via the `bino daemon`,
+falling back to `bino lsp-helper graph-deps`) to show dependencies and
+dependents as a QuickPick list. For a plain-text tree/flat view instead, run
+**Bino: Show Graph (Tree)** / **Bino: Show Graph (Flat)**, which runs `bino
+graph` in the integrated terminal.
 
 ### 8.1 Opening the Graph
 
@@ -297,50 +338,109 @@ Selecting an item:
 
 ---
 
-## 9. Configuration Reference
+## 9. Designer
+
+Run **Bino: Open Designer** (or right-click a rendered component and choose
+**Open in Designer**) to edit a Table/Chart/Text/Tree/Grid manifest through a
+schema-driven property form instead of raw YAML.
+
+- Fields are generated from the merged JSON schema for the manifest's `kind`.
+- IBCS-specific fields (scenario, variance, stack, aggregate, edges) get
+  purpose-built pickers instead of free-text input.
+- A dataset/column picker is wired to live DuckDB column introspection.
+- Edits are applied as scoped YAML patches (via the same authoring path as
+  quick-fixes and the Add-Element flow), so the rest of the file — comments,
+  formatting, unrelated fields — is left untouched.
+
+---
+
+## 10. DataSource Wizard
+
+Run **Bino: New DataSource from File…** (also available by right-clicking a
+`.csv`/`.tsv`/`.xlsx`/`.xls`/`.parquet` file in the Explorer) or **Bino: New
+DataSource from Database…** to scaffold a new DataSource + DataSet pair.
+
+The wizard:
+
+1. Introspects the source (sampling up to `bino.wizard.sampleRowLimit` rows).
+2. Shows detected columns and inferred types.
+3. Lets you pick which columns to include and preview the generated query.
+4. Scaffolds the DataSource and DataSet manifests into the workspace.
+
+---
+
+## 11. Tree/Table Editor & Rows Preview
+
+- **Bino: Open Tree Editor** (button in the editor title bar for `Tree`-kind
+  manifests) opens a spreadsheet-like grid/property editor for hierarchical
+  `Tree` documents, instead of editing nested YAML by hand.
+- **Bino: Preview Rows (100 rows)** — also available as a CodeLens directly
+  above `DataSource`/`DataSet` manifests — opens a webview showing a live
+  100-row data sample for that source.
+
+---
+
+## 12. PRQL Support
+
+When editing a `query:`/`prql:` block written in [PRQL](https://prql-lang.org/)
+instead of SQL:
+
+- The block gets syntax highlighting.
+- **Bino: Open PRQL Editor** opens the block in a dedicated editor.
+- **Bino: Open PRQL SQL Preview** shows the SQL DuckDB will actually run.
+
+Installing the optional [PRQL VS Code
+extension](https://marketplace.visualstudio.com/items?itemName=PRQL-lang.prql-vscode)
+adds richer PRQL-native editing on top of this.
+
+---
+
+## 13. Configuration Reference
 
 All settings live under the **Bino Reports** section in VS Code Settings.
 
-| Setting                 | Type    | Default | Description                                                   |
-| ----------------------- | ------- | ------- | ------------------------------------------------------------- |
-| `bino.enableCompletion` | boolean | true    | Enable intelligent autocompletion in YAML files.              |
-| `bino.columnCacheTTL`   | number  | 60000   | Column cache TTL (ms) for hover/completion column lookups.    |
-| `bino.validateOnSave`   | boolean | false   | Automatically validate workspace when saving Bino YAML files. |
-| `bino.previewPort`      | number  | 3000    | Port number for the `bino preview` server.                    |
+| Setting                     | Type    | Default | Description                                                                 |
+| ---------------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
+| `bino.binPath`               | string  | `""`    | Path to the `bino` CLI executable. If not set, uses `bino` from `PATH`.       |
+| `bino.columnCacheTTL`        | number  | 60000   | Column cache TTL (ms) for hover/completion column lookups.                   |
+| `bino.validateOnSave`        | boolean | true    | Fallback validation on save when the daemon isn't running (see 6.2).         |
+| `bino.previewPort`           | number  | 3000    | Port number for the `bino preview` server.                                    |
+| `bino.daemon.enabled`        | boolean | true    | Enable the persistent background daemon for faster indexing/validation/data. |
+| `bino.wizard.sampleRowLimit` | number  | 100     | Max sample rows the DataSource wizard fetches when introspecting a source.   |
 
 Example configuration:
 
 ```jsonc
 {
-  "bino.enableCompletion": true,
   "bino.columnCacheTTL": 120000,
   "bino.validateOnSave": true,
-  "bino.previewPort": 3100
+  "bino.previewPort": 3100,
+  "bino.daemon.enabled": true
 }
 ```
 
 ---
 
-## 10. Troubleshooting
+## 14. Troubleshooting
 
-### 10.1 Bino CLI Not Found
+### 14.1 Bino CLI Not Found
 
 - Symptom: Setup check fails, commands log errors like `bino: command not found`.
 - Fix:
   - Ensure the CLI is installed and on your `PATH`.
 
-### 10.2 No Completions or Hovers
+### 14.2 No Completions or Hovers
 
-- Check that the RedHat YAML extension is installed.
-- Confirm the file contains `apiVersion: bino.bi/v1alpha1`.
-- Run **Bino: Refresh Index** to rebuild the workspace index.
+- Confirm the file contains `apiVersion: bino.bi/v1alpha1` and a recognized `kind:`.
+- Check the **Bino Reports** output channel for `bino lsp` startup errors.
+- Run **Bino: Restart Daemon**, or reload the window, to restart the language server.
 
-### 10.3 Validation Errors
+### 14.3 Validation Errors
 
 - Open the **Problems** panel to see details.
 - Use **Go to First Problem** from the Bino Explorer context menu for a document.
 
-### 10.4 Debug Logs
+### 14.4 Debug Logs
 
 - Open the **Bino Reports** output channel:
   - `View → Output`, then select **Bino Reports** from the dropdown.

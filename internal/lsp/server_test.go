@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.lsp.dev/protocol"
@@ -246,6 +249,73 @@ func TestHover_FieldDescription(t *testing.T) {
 	mc, ok := h.Contents.(*protocol.MarkupContent)
 	if !ok || !strings.Contains(mc.Value, "table title") {
 		t.Errorf("field hover should carry the schema description (got %q)", mc.Value)
+	}
+}
+
+// capturingClient records every PublishDiagnostics call so tests can inspect
+// what was actually sent to the editor.
+type capturingClient struct {
+	protocol.UnimplementedClient
+	mu    sync.Mutex
+	calls []*protocol.PublishDiagnosticsParams
+}
+
+func (c *capturingClient) PublishDiagnostics(_ context.Context, p *protocol.PublishDiagnosticsParams) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, p)
+	return nil
+}
+
+func (c *capturingClient) last() *protocol.PublishDiagnosticsParams {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls[len(c.calls)-1]
+}
+
+// TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean guards the
+// live-diagnostics gap: ValidateProject (lint/env-var/engine-compat, whole
+// project on disk) must actually reach the editor, and must not be clobbered
+// by — nor clobber — the per-keystroke ValidateDraft publishes, since
+// PublishDiagnostics fully replaces a document's diagnostic set per call.
+func TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.yaml")
+	if err := os.WriteFile(file, []byte(tableDoc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	be := &fakeBackend{diags: []Diag{
+		{File: file, Line: 1, Column: 1, Severity: "warning", Message: "lint: something", Code: "lint-rule"},
+	}}
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(be, log, true, dir)
+	s.ctx = context.Background()
+	client := &capturingClient{}
+	s.client = client
+
+	s.refreshProjectDiagnostics()
+	if len(client.calls) != 1 {
+		t.Fatalf("expected 1 publish call from refreshProjectDiagnostics, got %d", len(client.calls))
+	}
+	if got := len(client.last().Diagnostics); got != 1 {
+		t.Fatalf("expected 1 project diagnostic published, got %d", got)
+	}
+
+	// A subsequent draft (per-keystroke) publish for the same file must merge
+	// with, not replace, the cached project diagnostic.
+	u := uri.File(file)
+	s.publishDraft(u, 2, []protocol.Diagnostic{{Message: protocol.String("schema error")}})
+	if got := len(client.last().Diagnostics); got != 2 {
+		t.Fatalf("draft publish should merge with cached project diagnostics, got %d: %+v", got, client.last().Diagnostics)
+	}
+
+	// A follow-up project refresh that finds the file clean must clear the
+	// stale project diagnostic while preserving the still-current draft one.
+	be.diags = nil
+	s.refreshProjectDiagnostics()
+	if got := len(client.last().Diagnostics); got != 1 {
+		t.Fatalf("clean project revalidation should clear the stale lint diagnostic, got %d: %+v", got, client.last().Diagnostics)
 	}
 }
 
