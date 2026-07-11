@@ -36,6 +36,7 @@ spec:
   footerText: "Internal use only"
   messageImage: "debug/concordia.png"
   messageText: "Placeholder message"
+  selectedStyle: corporate-style   # optional ComponentStyle name
   children:
     - kind: ChartStructure
       spec: { ... }
@@ -48,6 +49,7 @@ Key fields (see JSON schema for full list):
 - Title row fields: `titleBusinessUnit`, `titleNamespace`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
+- Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
 - Content: `children` – required array of `layoutChild` objects.
 
 ## Page layouts
@@ -753,6 +755,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.pageFormat` | string | no | `xga` | Page size. Values: `xga`, `hd`, `full-hd`, `4k`, `4k2k`, `a4`, `a3`, `a2`, `a1`, `a0`, `letter`, `legal`. | `pageFormat: a4` |
 | `spec.pageOrientation` | string | no | — | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
 | `spec.pageFitToContent` | boolean | no | `false` | When `true`, the page body height shrinks to fit content. When `false` (default), it stretches to fill the full page height. Use `false` when the page contains auto-scaling components. | `pageFitToContent: false` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 
 ### Spec Attributes — Footer and Message
 

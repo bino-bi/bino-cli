@@ -18,10 +18,10 @@ metadata:
   name: corporateTheme
 spec:
   content:
-    fontFamily: "Inter, system-ui, sans-serif"
-    headingColor: "#111827"
-    textColor: "#374151"
-    accentColor: "#1D4ED8"
+    global:
+      fontFamily: "Inter, system-ui, sans-serif"
+      fontSizePx: 12
+      fontColor: "#374151"
 ```
 
 ## 2. Define translations
@@ -40,14 +40,30 @@ spec:
     report.subtitle.q1_2024: "Q1 2024"
 ```
 
-## 3. Use them in layouts
+## 3. Use them in components
 
-The exact wiring between styles/i18n and components depends on the front-end implementation.
-Conceptually:
+Styles named `_default` apply to all components automatically. A named style like
+`corporateTheme` is opted into per component via `spec.selectedStyle`:
 
-- Layouts and components refer to text keys (for example `report.title.sales_overview`) rather than hard-coded strings.
-- Styles are referenced by name in component configuration.
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: revenue_chart
+spec:
+  dataset: revenue_by_region
+  chartTitle: "Revenue by Region"
+  selectedStyle: corporateTheme
+```
 
-Keep your documentation clear about which keys and style names are used where.
+The effective style merges the built-in `_system` defaults, then `_default`, then the
+selected named style. See the [ComponentStyle reference](/reference/component-style/#using-named-styles)
+for the full style structure and the list of supporting kinds; the
+[sales-dashboard sample](https://github.com/bino-bi/bino-cli/tree/main/docs/samples/sales-dashboard)
+wires a named style the same way.
+
+For translations, layouts and components refer to text keys (for example
+`report.title.sales_overview`) rather than hard-coded strings.
 
 <img src={dashboardImg.src} alt="A styled report dashboard with corporate theme applied" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />

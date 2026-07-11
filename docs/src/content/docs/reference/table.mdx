@@ -45,6 +45,7 @@ spec:
   partof: []
   columnthereof: null
   attributes: []                     # computed attribute columns (label + expression)
+  selectedStyle: corporate-style     # name of a ComponentStyle to apply
 ```
 
 ## Fields
@@ -74,6 +75,7 @@ spec:
   - A positive number (`"0.5"`, `"1.2"`, …) – fixed factor applied to the base font size.
 - `thereof`, `partof`, `columnthereof` – drilldown configuration.
 - `attributes` – computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
+- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 
 ## Example: Grouped table with drilldown
 
@@ -314,6 +316,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.partof` | string or array | no | `[]` | Part-of groupings (category level). | see below |
 | `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration. | see below |
 | `spec.attributes` | string or array | no | — | Computed attribute columns (header label → aggregate expression). See [Computed attribute columns](#computed-attribute-columns). | see below |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 
 #### Thereof (drilldown rows)
 

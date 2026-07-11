@@ -27,6 +27,7 @@ spec:
   nodeSpacing: 20             # pixels between siblings
   edgeStyle: orthogonal       # straight | orthogonal | curved
   showOperators: true
+  selectedStyle: corporate-style # name of a ComponentStyle to apply
   nodes:
     - id: roi
       kind: Label
@@ -87,6 +88,10 @@ Style of connection lines between nodes:
 ### showOperators
 
 Whether to display operator symbols between sibling nodes. Default: `true`.
+
+### selectedStyle
+
+Optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 
 ### nodes
 
@@ -410,6 +415,7 @@ spec:
 | `spec.nodeSpacing` | number | no | `20` | Spacing between sibling nodes in pixels. Minimum: 0. | `nodeSpacing: 30` |
 | `spec.edgeStyle` | string | no | `orthogonal` | Style of connection lines. Values: `straight`, `orthogonal`, `curved`. | `edgeStyle: curved` |
 | `spec.showOperators` | boolean | no | `true` | Display operator symbols between sibling nodes. | `showOperators: true` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.nodes` | array | no | — | Node definitions specifying what component to render at each position. | see below |
 
 #### Edge object

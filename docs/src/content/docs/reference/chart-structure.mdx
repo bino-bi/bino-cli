@@ -40,6 +40,7 @@ spec:
     by: scenarios               # scenarios | dimensions
     mode: absolute              # absolute | relative | absolute-relative
     order: dataset              # asc | desc | dataset
+  selectedStyle: corporate-style # name of a ComponentStyle to apply
 ```
 
 ## Fields
@@ -66,6 +67,7 @@ spec:
   - `by` – (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
   - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default). With `by: scenarios` and `order: dataset`, segments stack in the order given in `scenarios`.
+- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 
 ## Example: Top 10 regions with variance
 
@@ -256,6 +258,7 @@ children:
 | `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |
 | `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue"` |
 | `spec.stack` | object | no | — | Stacked bar rendering configuration. | see below |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 
 #### Stack configuration
 
