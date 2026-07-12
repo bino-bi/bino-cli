@@ -420,3 +420,84 @@ func minimalManifest(name string) string {
 		"  inline:\n" +
 		"    content: []\n"
 }
+
+func TestLoadDirIncludesRegistryDocs(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	writeManifest(t, filepath.Join(root, "main.yaml"), "main")
+
+	// Installed registry package: must be loaded despite living under .bino.
+	regScope := filepath.Join(root, ".bino", "registry", "acme")
+	if err := os.MkdirAll(regScope, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	scoped := "apiVersion: bino.bi/v1alpha1\n" +
+		"kind: Table\n" +
+		"metadata:\n" +
+		"  name: \"@acme/revenue-table\"\n" +
+		"spec:\n" +
+		"  dataset: revenue\n"
+	if err := os.WriteFile(filepath.Join(regScope, "revenue-table.yml"), []byte(scoped), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Anything else under .bino stays invisible.
+	cacheDir := filepath.Join(root, ".bino", "cache")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(t, filepath.Join(cacheDir, "skip.yaml"), "cached")
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	docs, err := LoadDir(ctx, root)
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	names := map[string]bool{}
+	for _, d := range docs {
+		names[d.Name] = true
+	}
+	if !names["main"] || !names["@acme/revenue-table"] {
+		t.Fatalf("registry doc not loaded, got names: %v", names)
+	}
+	if names["cached"] {
+		t.Fatalf(".bino/cache doc must stay skipped, got names: %v", names)
+	}
+}
+
+func TestBnignoreExcludesRegistryDocs(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	writeManifest(t, filepath.Join(root, "main.yaml"), "main")
+
+	regScope := filepath.Join(root, ".bino", "registry", "acme")
+	if err := os.MkdirAll(regScope, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(t, filepath.Join(regScope, "excluded.yml"), "excluded")
+
+	if err := os.WriteFile(filepath.Join(root, ".bnignore"), []byte(".bino/registry/acme/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	docs, err := LoadDir(ctx, root)
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Name != "main" {
+		t.Fatalf(".bnignore should exclude the registry scope, got %d docs", len(docs))
+	}
+}

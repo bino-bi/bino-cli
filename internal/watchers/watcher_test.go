@@ -54,3 +54,42 @@ func TestRefreshIgnorePatternsReadsFile(t *testing.T) {
 		t.Fatalf("expected layouts/page.yaml to be watched")
 	}
 }
+
+func TestShouldIgnorePathAllowsRegistry(t *testing.T) {
+	tmp := t.TempDir()
+	watcher := &Watcher{cfg: Config{Root: tmp}}
+
+	cases := []struct {
+		rel    string
+		isDir  bool
+		ignore bool
+	}{
+		{rel: ".bino", isDir: true, ignore: false},
+		{rel: ".bino/registry", isDir: true, ignore: false},
+		{rel: ".bino/registry/acme", isDir: true, ignore: false},
+		{rel: ".bino/registry/acme/table.yml", isDir: false, ignore: false},
+		{rel: ".bino/cache", isDir: true, ignore: true},
+		{rel: ".bino/cache/data.yaml", isDir: false, ignore: true},
+		{rel: ".bino/plugins/bino-plugin-x", isDir: true, ignore: true},
+		{rel: ".bino/daemon.port", isDir: false, ignore: true},
+	}
+	for _, tc := range cases {
+		got := watcher.shouldIgnorePath(filepath.Join(tmp, filepath.FromSlash(tc.rel)), tc.isDir)
+		if got != tc.ignore {
+			t.Errorf("shouldIgnorePath(%q) = %v, want %v", tc.rel, got, tc.ignore)
+		}
+	}
+}
+
+func TestShouldIgnorePathRegistryRespectsBnignore(t *testing.T) {
+	tmp := t.TempDir()
+	watcher := &Watcher{cfg: Config{Root: tmp}}
+	watcher.ignore = gitignore.CompileIgnoreLines(".bino/registry/acme/")
+
+	if !watcher.shouldIgnorePath(filepath.Join(tmp, ".bino", "registry", "acme"), true) {
+		t.Fatal("expected .bnignore to exclude the registry scope dir")
+	}
+	if watcher.shouldIgnorePath(filepath.Join(tmp, ".bino", "registry", "other"), true) {
+		t.Fatal("expected other registry scope to stay watched")
+	}
+}

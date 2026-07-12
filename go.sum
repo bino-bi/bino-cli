@@ -14,8 +14,8 @@ github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiE
 github.com/aymanbagabas/go-osc52/v2 v2.0.1/go.mod h1:uYgXzlJ7ZpABp8OJ+exZzJJhRNQ2ASbcXHWsFqH8hp8=
 github.com/aymanbagabas/go-udiff v0.3.1 h1:LV+qyBQ2pqe0u42ZsUEtPiCaUoqgA9gYRDs3vj1nolY=
 github.com/aymanbagabas/go-udiff v0.3.1/go.mod h1:G0fsKmG+P6ylD0r6N/KgQD/nWzgfnl8ZBcNLgcbrw8E=
-github.com/bino-bi/bino-plugin-sdk v0.0.2 h1:VmPkzHHfNwM7rYlB1w7ygyS9Z+9JMLAyy9A0MqSmMJY=
-github.com/bino-bi/bino-plugin-sdk v0.0.2/go.mod h1:QwaCuREDhgqfGtCgVL3AllDINvtpsIqSMR1r3RLi1Qk=
+github.com/bino-bi/bino-plugin-sdk v0.0.3 h1:zFC5xUhPlOAaCU+pr72vOQgpI2Dj7vn/UHFUKyI3+l4=
+github.com/bino-bi/bino-plugin-sdk v0.0.3/go.mod h1:lQGftmZhve2/ML/9aYNcfj3H7pS9sj9aWsjxfOsOgnY=
 github.com/blang/semver v3.5.1+incompatible h1:cQNTCjp13qL8KC3Nbxr/y2Bqb63oX6wdnnjpJbkM4JQ=
 github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/bmatcuk/doublestar/v4 v4.10.0 h1:zU9WiOla1YA122oLM6i4EXvGW62DvKZVxIe6TYWexEs=

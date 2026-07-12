@@ -89,6 +89,13 @@ func NewWatcher(cfg Config) (*Watcher, error) {
 			return nil, err
 		}
 	}
+	// Watch .bino itself (best-effort) so the creation of .bino/registry by a
+	// first 'bino registry add' during a running session is observed even
+	// though the rest of .bino is ignored.
+	binoDir := filepath.Join(cfg.Root, ".bino")
+	if info, err := os.Stat(binoDir); err == nil && info.IsDir() {
+		_ = yw.watcher.Add(binoDir)
+	}
 
 	cfg.Logger.Infof("Watching %s for changes", cfg.Root)
 	return yw, nil
@@ -245,9 +252,15 @@ func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
 	}
 	rel = filepath.ToSlash(rel)
 
-	// Always ignore .bino directory (cache, daemon state, plugins, config — built-in, not configurable)
+	// Always ignore .bino state (cache, daemon state, plugins, config —
+	// built-in, not configurable), except .bino/registry: installed registry
+	// packages live there and must trigger refreshes. .bino itself stays
+	// watchable so creating .bino/registry mid-session is observed.
 	if rel == ".bino" || strings.HasPrefix(rel, ".bino/") {
-		return true
+		isRegistry := rel == ".bino" || rel == ".bino/registry" || strings.HasPrefix(rel, ".bino/registry/")
+		if !isRegistry {
+			return true
+		}
 	}
 
 	y.ignoreMu.RLock()

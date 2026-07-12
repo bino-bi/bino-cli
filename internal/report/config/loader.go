@@ -105,13 +105,14 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 		totalBytes int64
 	)
 
-	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	skipDirNames := true
+	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if d.IsDir() {
-			if shouldSkipDir(dir, path, d) {
+			if skipDirNames && shouldSkipDir(dir, path, d) {
 				return filepath.SkipDir
 			}
 			if shouldIgnorePath(dir, path, true, ignore) {
@@ -162,7 +163,22 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 
 		docs = append(docs, fileDocs...)
 		return nil
-	})
+	}
+
+	walkErr := filepath.WalkDir(dir, walkFn)
+
+	// Second pass: .bino is machine-managed state and skipped above, but
+	// .bino/registry holds installed registry packages that must join the
+	// manifest set. Name-based dir skips don't apply inside it (a scope may
+	// legitimately be named "vendor"); .bnignore still does, and the scan
+	// limits keep counting across both passes.
+	if walkErr == nil {
+		regDir := filepath.Join(dir, ".bino", "registry")
+		if info, statErr := os.Stat(regDir); statErr == nil && info.IsDir() {
+			skipDirNames = false
+			walkErr = filepath.WalkDir(regDir, walkFn)
+		}
+	}
 
 	if walkErr != nil {
 		return nil, walkErr
