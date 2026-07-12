@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -451,6 +452,180 @@ ComponentStyle defines CSS properties that can be applied to report components.
 	return cmd
 }
 
+// RuleSetManifestData holds data for rendering a RuleSet manifest.
+type RuleSetManifestData struct {
+	Name        string
+	Description string
+	Constraints []string
+	Content     string // Rule-set configuration as JSON
+}
+
+func newAddRuleSetCommand() *cobra.Command {
+	var (
+		flagContent    string
+		flagConstraint []string
+		flagOutput     string
+		flagAppendTo   string
+		flagDesc       string
+		flagNoPrompt   bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "ruleset [name]",
+		Short: "Create a RuleSet manifest",
+		Long: strings.TrimSpace(`
+Create a new RuleSet manifest for IBCS scenario rule overrides.
+
+RuleSet adjusts how scenario columns (ac, fc, pl, bu, pp, py, ...) are named,
+colored, and ordered. A RuleSet named _default adjusts all components; any
+other name is selected per component via the ruleset attribute.
+`),
+		Example: strings.TrimSpace(`
+  # Interactive wizard
+  bino add ruleset
+
+  # With inline content
+  bino add ruleset corporate_rules \
+    --content '{"scenarios": {"pl": {"name": "PLAN", "sortIndex": 900}}}' \
+    --output styles/rules.yaml \
+    --no-prompt
+`),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			workdir, err := pathutil.ResolveWorkdir(".")
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			nonInteractive := flagNoPrompt || !isInteractive()
+
+			var name string
+			if len(args) > 0 {
+				name = args[0]
+			}
+
+			if nonInteractive {
+				var missing []string
+				if name == "" {
+					missing = append(missing, "name (as argument)")
+				}
+				if flagOutput == "" && flagAppendTo == "" {
+					missing = append(missing, "--output or --append-to")
+				}
+				if len(missing) > 0 {
+					return ConfigError(fmt.Errorf("missing required values in non-interactive mode:\n  %s", strings.Join(missing, "\n  ")))
+				}
+			}
+
+			manifests, err := ScanManifests(ctx, workdir)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("scan manifests: %w", err))
+			}
+
+			data := RuleSetManifestData{
+				Name:        name,
+				Description: flagDesc,
+				Constraints: flagConstraint,
+				Content:     flagContent,
+			}
+
+			var outputPath string
+			var appendMode bool
+			if flagAppendTo != "" {
+				outputPath = flagAppendTo
+				appendMode = true
+			} else if flagOutput != "" {
+				outputPath = flagOutput
+			}
+
+			if nonInteractive {
+				return writeRuleSetManifest(cmd, workdir, data, outputPath, appendMode)
+			}
+
+			reader := bufio.NewReader(cmd.InOrStdin())
+			out := cmd.OutOrStdout()
+
+			fmt.Fprintln(out, "Create a new RuleSet manifest.")
+			fmt.Fprintln(out)
+
+			if data.Name == "" {
+				data.Name, err = promptGenericName(reader, out, manifests, "RuleSet")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			if data.Description == "" {
+				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+			}
+
+			// Content
+			if data.Content == "" {
+				fmt.Fprintln(out, "\nEnter the rule-set configuration as JSON or press Enter to open editor:")
+				data.Content, _ = addPromptString(reader, out, "Content (JSON)", "")
+				if data.Content == "" {
+					template := `{
+  "scenarios": {
+    "ac": { "name": "AC", "colorIndex": 10, "sortIndex": 400 },
+    "pl": { "name": "PL", "colorIndex": 50, "sortIndex": 200 }
+  }
+}`
+					data.Content, err = promptWithEditor("bino-ruleset-", ".json", template)
+					if err != nil {
+						data.Content = "{}"
+					}
+				}
+			}
+
+			if outputPath == "" {
+				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "RuleSet", data.Name)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			doc := buildRuleSetDocument(data)
+			manifestBytes, err := renderRuleSetManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "=== Preview ===")
+			fmt.Fprintln(out, string(manifestBytes))
+			fmt.Fprintln(out, "===============")
+
+			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			if !confirmed {
+				fmt.Fprintln(out, "\nCanceled.")
+				return nil
+			}
+
+			return writeRuleSetManifest(cmd, workdir, data, outputPath, appendMode)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().StringVar(&flagContent, "content", "", "Rule-set configuration as JSON")
+	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
+	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
+	cmd.Flags().StringVar(&flagDesc, "description", "", "Description text")
+	cmd.Flags().BoolVar(&flagNoPrompt, "no-prompt", false, "Non-interactive mode")
+
+	return cmd
+}
+
 func newAddInternationalizationCommand() *cobra.Command {
 	var (
 		flagCode       string
@@ -685,6 +860,11 @@ func writeComponentStyleManifest(cmd *cobra.Command, workdir string, data Compon
 	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
+func writeRuleSetManifest(cmd *cobra.Command, workdir string, data RuleSetManifestData, outputPath string, appendMode bool) error {
+	doc := buildRuleSetDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
+}
+
 func writeInternationalizationManifest(cmd *cobra.Command, workdir string, data InternationalizationManifestData, outputPath string, appendMode bool) error {
 	doc := buildInternationalizationDocument(data)
 	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
@@ -753,6 +933,31 @@ func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Docume
 }
 
 func renderComponentStyleManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
+
+func buildRuleSetDocument(data RuleSetManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindRuleSet, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
+
+	spec := &schema.RuleSetSpec{}
+
+	// Keep parsed JSON objects as structured YAML; fall back to the raw string.
+	if data.Content != "" {
+		var parsed any
+		if err := json.Unmarshal([]byte(data.Content), &parsed); err == nil {
+			spec.Content = parsed
+		} else {
+			spec.Content = data.Content
+		}
+	}
+
+	doc.Spec = spec
+	return doc
+}
+
+func renderRuleSetManifest(doc *schema.Document) ([]byte, error) {
 	return yaml.Marshal(doc)
 }
 

@@ -30,6 +30,7 @@ var dirForKind = map[string]string{
 	schema.KindTable:                "components",
 	schema.KindText:                 "components",
 	schema.KindComponentStyle:       "styles",
+	schema.KindRuleSet:              "styles",
 	schema.KindInternationalization: "i18n",
 	schema.KindScalingGroup:         "scaling",
 	schema.KindReportArtefact:       "reports",

@@ -143,7 +143,7 @@ func (b *builder) categorize() {
 			b.artefactDocs = append(b.artefactDocs, doc)
 		case "DocumentArtefact":
 			b.documentArtefactDocs = append(b.documentArtefactDocs, doc)
-		case "ScalingGroup", "ComponentStyle", "Internationalization", "ConnectionSecret", "SigningProfile":
+		case "ScalingGroup", "ComponentStyle", "RuleSet", "Internationalization", "ConnectionSecret", "SigningProfile":
 			// Config/resource kinds — no graph node needed, collected during rendering.
 		}
 	}

@@ -65,6 +65,7 @@ var builtinCategory = map[string]string{
 	"LiveReportArtefact":   "artefact",
 	"DocumentArtefact":     "artefact",
 	"ComponentStyle":       "config",
+	"RuleSet":              "config",
 	"Internationalization": "config",
 	"ScalingGroup":         "config",
 	"SigningProfile":       "config",

@@ -269,6 +269,11 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 		return Result{}, diags, err
 	}
 
+	ruleSets, err := collectRuleSets(docs)
+	if err != nil {
+		return Result{}, diags, err
+	}
+
 	fontAssets, assetComponents, localAssets, err := collectAssets(docs)
 	if err != nil {
 		return Result{}, diags, err
@@ -282,6 +287,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
+	}
+	if renderedRuleSets := renderRuleSets(ruleSets); len(renderedRuleSets) > 0 {
+		segments = append(segments, renderedRuleSets...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)
@@ -406,6 +414,11 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		return FrameResult{}, diags, err
 	}
 
+	ruleSets, err := collectRuleSets(docs)
+	if err != nil {
+		return FrameResult{}, diags, err
+	}
+
 	fontAssets, assetComponents, localAssets, err := collectAssets(docs)
 	if err != nil {
 		return FrameResult{}, diags, err
@@ -420,6 +433,9 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	segments := renderInternationalizations(internationalizations)
 	if renderedStyles := renderComponentStyles(componentStyles); len(renderedStyles) > 0 {
 		segments = append(segments, renderedStyles...)
+	}
+	if renderedRuleSets := renderRuleSets(ruleSets); len(renderedRuleSets) > 0 {
+		segments = append(segments, renderedRuleSets...)
 	}
 	if renderedAssets := renderAssetComponents(assetComponents); len(renderedAssets) > 0 {
 		segments = append(segments, renderedAssets...)

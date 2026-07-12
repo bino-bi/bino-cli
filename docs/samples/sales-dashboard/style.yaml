@@ -7,3 +7,15 @@ spec:
     global:
       fontFamily: "'Noto Sans', sans-serif, Arial"
       fontSizePx: 11
+---
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate-rules
+spec:
+  content:
+    scenarios:
+      pl:
+        name: PLAN
+        colorIndex: 50
+        sortIndex: 900

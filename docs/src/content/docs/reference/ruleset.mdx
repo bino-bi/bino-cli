@@ -1,0 +1,193 @@
+---
+title: RuleSet
+description: Adjust IBCS scenario naming, coloring, and ordering rules.
+---
+
+`RuleSet` manifests adjust the IBCS scenario rules that tables, charts, and titles
+use to display scenario columns: the display name, the IBCS color encoding, and
+the sort order of each scenario prefix (`ac`, `fc`, `pl`, `bu`, `pp`, `py`, ...).
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporateRules
+spec:
+  content: {}  # object or JSON string
+```
+
+`spec.content` can be either:
+
+- A YAML object
+- A JSON string (useful when copying from front-end configuration)
+
+## Using named rule sets
+
+The `metadata.name` of a `RuleSet` decides how it is applied:
+
+- `_default` – applied to **all** components automatically.
+- Any other name (e.g. `corporateRules`) – a **named rule set** that individual components opt into via `spec.ruleset`.
+
+At render time each component merges rule-set layers in this order (later wins):
+built-in `_system` defaults → `_default` → the rule set named by `ruleset`.
+Overrides are partial: anything you leave out keeps its built-in value.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporateRules
+spec:
+  content:
+    scenarios:
+      pl:
+        name: PLAN
+        sortIndex: 900
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_by_customer
+  ruleset: corporateRules
+```
+
+`ruleset` is available on `Table`, `ChartStructure`, `ChartTime`, `LayoutPage`,
+and `LayoutCard`. It is emitted as the `ruleset` HTML attribute on the
+corresponding `bn-*` element.
+
+Besides a rule-set name, `ruleset` accepts two inheritance keywords:
+
+- `inherited-closest` – reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage`.
+- `inherited-page` – reuse the `ruleset` of the surrounding `LayoutPage` (cards are skipped).
+
+A `ruleset` set on a `LayoutPage` or `LayoutCard` also applies to the layout's
+own title row, so scenario labels in page/card titles follow the same rules.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: plan_review
+spec:
+  ruleset: corporateRules
+  children:
+    - kind: Table
+      ref: revenue_table
+      spec:
+        ruleset: inherited-page  # resolves to corporateRules
+```
+
+## Rule-set structure
+
+The rule-set object has two top-level sections, both optional:
+
+| Section | Description |
+|---------|-------------|
+| `scenarios` | Per-scenario-prefix rule overrides, keyed by scenario prefix |
+| `fallback` | Rules applied to scenario names not covered by `scenarios` |
+
+### Scenario rules (`scenarios`)
+
+`scenarios` is a map keyed by scenario prefix. Known prefixes are the base
+scenarios (`ac`, `fc`, `pl`, `bu`, `pp`, `py`), the absolute variances
+(`dac` ... `dpy`), and the relative variances (`drac` ... `drpy`); user-defined
+prefixes are allowed too. Each entry supports:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Display base name. Variants get `1`..`4` appended (e.g. `AC` → `AC1`). |
+| `colorIndex` | number | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. |
+| `sortIndex` | number | Base sort index for column ordering. Variant `n` adds `n*10`. |
+
+Each prefix expands into four variants (`ac` → `ac1`..`ac4`) that inherit the
+base values, with the variant number appended to `name` and `n*10` added to
+`sortIndex`.
+
+### Fallback rules (`fallback`)
+
+Applied to scenario names that have no `scenarios` entry:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `name` | string | `Series` | Display name for unmatched scenarios. |
+| `group` | string | `Series` | Group label for unmatched scenarios. |
+| `colorIndex` | number | `10` | IBCS color encoding (see above). |
+| `sortIndex` | number | `120` | Sort index for unmatched scenarios. |
+
+### Built-in defaults (`_system`)
+
+| Prefix | Name | colorIndex | sortIndex |
+|--------|------|-----------|-----------|
+| `ac` | AC | 10 | 400 |
+| `fc` | FC | 30 | 300 |
+| `pl` | PL | 50 | 200 |
+| `bu` | BU | 50 | 200 |
+| `pp` | PP | 20 | 100 |
+| `py` | PY | 20 | 100 |
+| `dac`..`dpy` | dAC..dPY | as base | base + 1000 |
+| `drac`..`drpy` | drAC..drPY | as base | base + 2000 |
+
+## Complete example
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporateRules
+spec:
+  content:
+    scenarios:
+      pl:
+        name: PLAN
+        colorIndex: 50
+        sortIndex: 900
+      fc:
+        name: FCST
+    fallback:
+      name: Other
+      colorIndex: 20
+```
+
+## JSON string form
+
+You can also provide the content as a JSON string:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: compactRules
+spec:
+  content: >-
+    {"scenarios":{"pl":{"name":"PLAN","sortIndex":900}}}
+```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `RuleSet`. |
+| `metadata.name` | string | yes | — | Unique rule-set identifier. Use `_default` for global overrides. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.content` | object or string | yes | — | Rule-set overrides as a YAML object or JSON string. Deep-merged over the built-in defaults. | see sections above |
+
+Components reference a named rule set through their own `spec.ruleset`
+attribute; see [Using named rule sets](#using-named-rule-sets).

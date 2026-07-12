@@ -27,6 +27,7 @@ type AddConfig struct {
 	ChartStructure       *KindConfig `json:"chartstructure,omitempty"`
 	ChartTime            *KindConfig `json:"charttime,omitempty"`
 	ComponentStyle       *KindConfig `json:"componentstyle,omitempty"`
+	RuleSet              *KindConfig `json:"ruleset,omitempty"`
 	Internationalization *KindConfig `json:"internationalization,omitempty"`
 	ReportArtefact       *KindConfig `json:"reportartefact,omitempty"`
 	LiveReportArtefact   *KindConfig `json:"livereportartefact,omitempty"`
@@ -106,6 +107,8 @@ func (c *AddConfig) GetKindConfig(kind string) *KindConfig {
 		return c.ChartTime
 	case "ComponentStyle":
 		return c.ComponentStyle
+	case "RuleSet":
+		return c.RuleSet
 	case "Internationalization":
 		return c.Internationalization
 	case "ReportArtefact":
@@ -147,6 +150,8 @@ func (c *AddConfig) SetKindConfig(kind string, kc *KindConfig) {
 		c.ChartTime = kc
 	case "ComponentStyle":
 		c.ComponentStyle = kc
+	case "RuleSet":
+		c.RuleSet = kc
 	case "Internationalization":
 		c.Internationalization = kc
 	case "ReportArtefact":
