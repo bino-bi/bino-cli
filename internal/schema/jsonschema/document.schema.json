@@ -360,7 +360,7 @@
         "params": {
           "type": "array",
           "items": { "$ref": "#/$defs/layoutPageParamSpec" },
-          "description": "Parameter definitions for this LayoutPage. When the page is referenced with params, these define the expected parameter names, types, and validation rules."
+          "description": "Parameter definitions for this document. Supported on LayoutPage and referenceable component kinds (Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, Image). When the document is referenced with params, these define the expected parameter names, types, and validation rules."
         },
         "name": {
           "type": "string",
@@ -2746,12 +2746,21 @@
           "default": false,
           "description": "When true and the ref is missing, the child is skipped gracefully instead of erroring."
         },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Parameter values passed to the referenced document, expanded as ${NAME} in its spec. Keys should match parameter names declared in the referenced document's metadata.params. Only valid together with ref."
+        },
         "spec": {
           "type": "object",
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
         }
       },
       "allOf": [
+        {
+          "if": { "required": ["params"] },
+          "then": { "required": ["ref"] }
+        },
         {
           "if": { "properties": { "kind": { "const": "Text" } }, "required": ["kind"] },
           "then": {
@@ -3303,12 +3312,21 @@
           "default": false,
           "description": "When true and the ref is missing, the node is skipped gracefully instead of erroring."
         },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Parameter values passed to the referenced document, expanded as ${NAME} in its spec. Keys should match parameter names declared in the referenced document's metadata.params. Only valid together with ref."
+        },
         "spec": {
           "type": "object",
           "description": "Component specification. Required for Label kind and inline definitions. When ref is set, spec fields override the referenced document's spec values."
         }
       },
       "allOf": [
+        {
+          "if": { "required": ["params"] },
+          "then": { "required": ["ref"] }
+        },
         {
           "if": { "properties": { "kind": { "const": "Label" } }, "required": ["kind"] },
           "then": {
@@ -3511,12 +3529,21 @@
           "default": false,
           "description": "When true and the ref is missing, the child is skipped gracefully instead of erroring."
         },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Parameter values passed to the referenced document, expanded as ${NAME} in its spec. Keys should match parameter names declared in the referenced document's metadata.params. Only valid together with ref."
+        },
         "spec": {
           "type": "object",
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
         }
       },
       "allOf": [
+        {
+          "if": { "required": ["params"] },
+          "then": { "required": ["ref"] }
+        },
         {
           "if": { "properties": { "kind": { "const": "Text" } }, "required": ["kind"] },
           "then": {

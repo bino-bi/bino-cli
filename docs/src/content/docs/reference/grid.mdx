@@ -111,6 +111,7 @@ Each child object has these properties:
 | `kind` | string | Yes | Component type: `Text`, `Table`, `ChartStructure`, `ChartTime`, `Tree`, or `Image`. |
 | `ref` | string | No | Reference to a standalone component document by name. |
 | `optional` | boolean | No | When `true`, skip gracefully if `ref` is missing (default: `false`). |
+| `params` | object | No | Parameter values (string map) passed to the referenced document. Only valid together with `ref`. |
 | `spec` | object | Conditional | Component specification. Required for inline children, optional override for `ref` children. |
 | `metadata` | object | No | Optional metadata including `name` and `constraints`. |
 
@@ -128,6 +129,18 @@ children:
     column: q1
     kind: ChartStructure
     ref: electronics-q1-chart
+```
+
+If the referenced document declares parameters in `metadata.params`, pass values with `params` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components)):
+
+```yaml
+children:
+  - row: electronics
+    column: q1
+    kind: ChartStructure
+    ref: quarterly-chart
+    params:
+      QUARTER: "q1"
 ```
 
 ### Inline component definition

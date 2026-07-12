@@ -419,6 +419,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"dataset-required",
 		"page-layout-slots-used",
 		"card-layout-slots-used",
+		"ref-params",
 		// Inline definition rules
 		"inline-ref-bounds",
 		"dataset-source-exclusive",

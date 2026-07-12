@@ -119,10 +119,11 @@ type layoutSpec struct {
 // and any spec fields provided here act as overrides.
 // When optional is true and the ref is missing, the child is skipped gracefully instead of erroring.
 type layoutChild struct {
-	Kind     string          `json:"kind"`
-	Ref      string          `json:"ref,omitempty"`
-	Optional bool            `json:"optional,omitempty"`
-	Spec     json.RawMessage `json:"spec,omitempty"`
+	Kind     string            `json:"kind"`
+	Ref      string            `json:"ref,omitempty"`
+	Optional bool              `json:"optional,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Spec     json.RawMessage   `json:"spec,omitempty"`
 }
 
 // parseDataSourceSpec extracts the spec from a DataSource manifest.
@@ -207,12 +208,13 @@ type treeNodeSpec struct {
 
 // gridChildSpec represents a child in a Grid for graph building and dataset extraction.
 type gridChildSpec struct {
-	Row      json.RawMessage `json:"row"`
-	Column   json.RawMessage `json:"column"`
-	Kind     string          `json:"kind"`
-	Ref      string          `json:"ref,omitempty"`
-	Optional bool            `json:"optional,omitempty"`
-	Spec     json.RawMessage `json:"spec,omitempty"`
+	Row      json.RawMessage   `json:"row"`
+	Column   json.RawMessage   `json:"column"`
+	Kind     string            `json:"kind"`
+	Ref      string            `json:"ref,omitempty"`
+	Optional bool              `json:"optional,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Spec     json.RawMessage   `json:"spec,omitempty"`
 }
 
 // reportArtefactSpec represents the parsed specification for a ReportArtefact manifest.

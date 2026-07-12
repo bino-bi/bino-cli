@@ -73,6 +73,50 @@ bino registry verify    # fail on any tampered/modified package
 bino build
 ```
 
+## Referencing installed components
+
+Component packages (Text, Table, ChartStructure, ChartTime, Tree, Grid,
+LayoutCard, Image) are consumed with `ref` on a layout child, grid child, or
+tree node — the scoped package name is the document name:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: commentary-page
+spec:
+  children:
+    - kind: Text
+      ref: "@thatscalaguy/test"
+      params:
+        REGION: test
+```
+
+`params` passes values into the referenced document, exactly like
+[LayoutPage params](/guides/layoutpage-params/): the package declares its
+parameters in `metadata.params` and uses `${NAME}` placeholders in its spec:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: "@thatscalaguy/test"
+  params:
+    - name: REGION
+      type: string
+      default: EU
+spec:
+  value: "Report for ${REGION}"
+```
+
+Precedence is the same as for pages: explicit `params` beat declared defaults,
+which beat an environment variable of the same name. `select` params expose a
+`${NAME_LABEL}` companion. Param values must be quoted strings (`YEAR: "2024"`).
+Inline `spec` fields on the child still act as overrides and are merged after
+the params are expanded. Only `${NAME}` placeholders for parameters declared in
+`metadata.params` are preserved for expansion — any other `${VAR}` in a package
+is resolved from the environment at load time.
+
 ## Configuring the registry
 
 The registry URL comes from `bino.toml`, falling back to the public registry:

@@ -217,9 +217,9 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 		content = c
 	}
 
-	// First pass: parse WITHOUT expansion to find LayoutPage param definitions
+	// First pass: parse WITHOUT expansion to find param definitions
 	// This allows us to preserve param references for later expansion
-	paramNames := collectLayoutPageParamNamesFromYAML(string(content))
+	paramNames := collectParamNamesFromYAML(string(content))
 
 	// Create lookup that skips param names (preserves them as-is for later expansion)
 	paramPreservingLookup := func(name string) (string, bool) {
@@ -466,10 +466,11 @@ func overlayKey(path string) string {
 	return filepath.Clean(path)
 }
 
-// collectLayoutPageParamNamesFromYAML does a quick parse of YAML content to find
-// all parameter names defined in LayoutPage metadata.params sections.
+// collectParamNamesFromYAML does a quick parse of YAML content to find all
+// parameter names defined in metadata.params sections of param-capable
+// documents (LayoutPages and referenceable component kinds).
 // This is used to preserve param references during variable expansion.
-func collectLayoutPageParamNamesFromYAML(content string) map[string]struct{} {
+func collectParamNamesFromYAML(content string) map[string]struct{} {
 	paramNames := make(map[string]struct{})
 
 	decoder := yaml.NewDecoder(strings.NewReader(content))
@@ -482,9 +483,9 @@ func collectLayoutPageParamNamesFromYAML(content string) map[string]struct{} {
 			continue
 		}
 
-		// Check if this is a LayoutPage
+		// Check if this document kind can declare params
 		kind, _ := doc["kind"].(string)
-		if kind != "LayoutPage" {
+		if _, ok := ParamCapableKinds[kind]; !ok {
 			continue
 		}
 

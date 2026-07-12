@@ -32,6 +32,7 @@ func DocumentsFromConfig(docs []config.Document) []Document {
 			Name:        d.Name,
 			Labels:      d.Labels,
 			Constraints: d.Constraints,
+			Params:      d.Params,
 			Raw:         d.Raw,
 		})
 	}

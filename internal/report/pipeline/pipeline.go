@@ -819,51 +819,10 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) c
 		return doc
 	}
 
-	envLookup := config.EnvLookup()
+	// Expand params into the document content (explicit params > defaults > ENV)
+	expandedContent, effectiveParams := config.ExpandDocParams(doc.Raw, doc.Params, params)
 
-	// Step 1: Expand param values themselves (they may contain ${VAR} from ENV)
-	expandedParams := make(map[string]string)
-	for k, v := range params {
-		expanded, _ := config.ExpandVars(v, envLookup)
-		expandedParams[k] = expanded
-	}
-
-	// Step 2: Build effective params: explicit params > defaults > ENV fallback
-	// Also add _LABEL variants for select type params
-	effectiveParams := make(map[string]string)
-	for _, def := range doc.Params {
-		// Priority: explicit params > defaults > env
-		if v, ok := expandedParams[def.Name]; ok {
-			effectiveParams[def.Name] = v
-			// For select params, also set the _LABEL variant
-			if def.Type == "select" && def.Options != nil {
-				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, v)
-			}
-		} else if def.Default != nil {
-			effectiveParams[def.Name] = *def.Default
-			// For select params with default, also set the label
-			if def.Type == "select" && def.Options != nil {
-				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, *def.Default)
-			}
-		} else if envVal, found := envLookup(def.Name); found {
-			// Param comes from environment variable - still look up its label
-			effectiveParams[def.Name] = envVal
-			if def.Type == "select" && def.Options != nil {
-				effectiveParams[def.Name+"_LABEL"] = lookupSelectLabel(def.Options.Items, envVal)
-			}
-		}
-	}
-
-	// Step 3: Create lookup chain: params > ENV (fallback for non-param vars)
-	lookup := config.ChainLookup(
-		config.MapLookup(effectiveParams),
-		envLookup,
-	)
-
-	// Step 4: Expand document content
-	expandedContent, _ := config.ExpandVars(string(doc.Raw), lookup)
-
-	// Step 5: Generate unique name suffix based on effective param values
+	// Generate unique name suffix based on effective param values
 	keys := make([]string, 0, len(doc.Params))
 	for _, def := range doc.Params {
 		if v, ok := effectiveParams[def.Name]; ok {
@@ -887,20 +846,6 @@ func expandLayoutPageWithParams(doc config.Document, params map[string]string) c
 		Raw:            []byte(expandedContent),
 		MissingEnvVars: nil, // Params should have resolved any missing vars
 	}
-}
-
-// lookupSelectLabel finds the label for a given value in a list of select option items.
-// If the value is not found or has no label, the value itself is returned.
-func lookupSelectLabel(items []config.LayoutPageParamOptionItem, value string) string {
-	for _, item := range items {
-		if item.Value == value {
-			if item.Label != "" {
-				return item.Label
-			}
-			return value // No label defined, use value
-		}
-	}
-	return value // Value not found in items, use value as-is
 }
 
 // selectLayoutPagesByRefs filters and orders LayoutPage documents by LayoutPageRef entries.

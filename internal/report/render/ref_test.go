@@ -473,3 +473,353 @@ func TestRenderMergeJSONObjects(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderLayoutChildWithRefAndParams(t *testing.T) {
+	ctx := context.Background()
+
+	textDoc := makeTestDoc("Text", "@acme/commentary", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "Text",
+		"metadata": {"name": "@acme/commentary"},
+		"spec": {"value": "Report for ${REGION}"}
+	}`))
+	textDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"ref": "@acme/commentary",
+					"params": {"REGION": "test"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{textDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Report for test") {
+		t.Fatalf("expected param-expanded text in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutChildRefParamsWithOverride(t *testing.T) {
+	ctx := context.Background()
+
+	chartTimeDoc := makeTestDoc("ChartTime", "sampleTimeChart", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "ChartTime",
+		"metadata": {"name": "sampleTimeChart"},
+		"spec": {
+			"dataset": "sales_${REGION}",
+			"chartTitle": "Sales ${REGION}"
+		}
+	}`))
+	chartTimeDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "sampleTimeChart",
+					"params": {"REGION": "eu"},
+					"spec": {"chartTitle": "Overridden Title"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{chartTimeDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	// The override wins over the param-expanded base value.
+	if !strings.Contains(html, `chart-title='Overridden Title'`) {
+		t.Fatalf("expected overridden title in HTML, got:\n%s", html)
+	}
+	// Non-overridden base fields are param-expanded.
+	if !strings.Contains(html, `datasets='sales_eu'`) {
+		t.Fatalf("expected param-expanded dataset in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutChildRefParamDefaults(t *testing.T) {
+	ctx := context.Background()
+
+	textDoc := makeTestDoc("Text", "@acme/commentary", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "Text",
+		"metadata": {"name": "@acme/commentary"},
+		"spec": {"value": "Report for ${REGION}"}
+	}`))
+	def := "EU"
+	textDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION", Default: &def}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"ref": "@acme/commentary"
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{textDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Report for EU") {
+		t.Fatalf("expected default param value in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutChildRefParamBeatsEnv(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("REGION", "from-env")
+
+	textDoc := makeTestDoc("Text", "@acme/commentary", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "Text",
+		"metadata": {"name": "@acme/commentary"},
+		"spec": {"value": "Report for ${REGION}"}
+	}`))
+	textDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"ref": "@acme/commentary",
+					"params": {"REGION": "explicit"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{textDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Report for explicit") {
+		t.Fatalf("expected explicit param to beat env, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutChildRefParamSelectLabel(t *testing.T) {
+	ctx := context.Background()
+
+	textDoc := makeTestDoc("Text", "@acme/commentary", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "Text",
+		"metadata": {"name": "@acme/commentary"},
+		"spec": {"value": "${REGION_LABEL} (${REGION})"}
+	}`))
+	textDoc.Params = []config.LayoutPageParamSpec{{
+		Name: "REGION",
+		Type: "select",
+		Options: &config.LayoutPageParamOptions{Items: []config.LayoutPageParamOptionItem{
+			{Value: "EU", Label: "Europe"},
+		}},
+	}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"ref": "@acme/commentary",
+					"params": {"REGION": "EU"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{textDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Europe (EU)") {
+		t.Fatalf("expected select label expansion in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderGridChildWithRefAndParams(t *testing.T) {
+	ctx := context.Background()
+
+	textDoc := makeTestDoc("Text", "@acme/commentary", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "Text",
+		"metadata": {"name": "@acme/commentary"},
+		"spec": {"value": "Cell for ${REGION}"}
+	}`))
+	textDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Grid",
+					"spec": {
+						"rowHeaders": ["r1"],
+						"columnHeaders": ["c1"],
+						"children": [
+							{
+								"row": 0,
+								"column": 0,
+								"kind": "Text",
+								"ref": "@acme/commentary",
+								"params": {"REGION": "grid-eu"}
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{textDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Cell for grid-eu") {
+		t.Fatalf("expected param-expanded grid cell in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderTreeNodeWithRefAndParams(t *testing.T) {
+	ctx := context.Background()
+
+	chartDoc := makeTestDoc("ChartTime", "regionChart", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "ChartTime",
+		"metadata": {"name": "regionChart"},
+		"spec": {
+			"dataset": "sales_${REGION}",
+			"chartTitle": "Sales ${REGION}"
+		}
+	}`))
+	chartDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Tree",
+					"spec": {
+						"edges": [],
+						"nodes": [
+							{
+								"id": "root",
+								"kind": "ChartTime",
+								"ref": "regionChart",
+								"params": {"REGION": "apac"}
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{chartDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, `chart-title='Sales apac'`) {
+		t.Fatalf("expected param-expanded tree node chart in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderLayoutCardRefWithParams(t *testing.T) {
+	ctx := context.Background()
+
+	cardDoc := makeTestDoc("LayoutCard", "@acme/summary-card", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutCard",
+		"metadata": {"name": "@acme/summary-card"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"spec": {"value": "Card for ${REGION}"}
+				}
+			]
+		}
+	}`))
+	cardDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "LayoutCard",
+					"ref": "@acme/summary-card",
+					"params": {"REGION": "nested-eu"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{cardDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "Card for nested-eu") {
+		t.Fatalf("expected param-expanded nested card child in HTML, got:\n%s", html)
+	}
+}

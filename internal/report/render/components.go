@@ -802,7 +802,7 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		for _, doc := range rc.docs {
 			if doc.Kind == "LayoutPage" && doc.Name == child.Ref {
-				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, Tree, LayoutCard, and Image can be referenced", child.Ref)
+				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, and Image can be referenced", child.Ref)
 			}
 		}
 
@@ -825,11 +825,17 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
 	}
 
+	// Expand params into the referenced document before extracting its spec.
+	refRaw := refDoc.Raw
+	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
+		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
+	}
+
 	// Extract the spec from the referenced document.
 	var refPayload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
-	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
 		return nil, fmt.Errorf("failed to parse ref %q spec: %w", child.Ref, err)
 	}
 
@@ -1061,11 +1067,17 @@ func resolveTreeNodeSpec(node treeNode, rc *renderCtx) (json.RawMessage, error) 
 		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", node.Ref, node.Kind)
 	}
 
+	// Expand params into the referenced document before extracting its spec
+	refRaw := refDoc.Raw
+	if len(node.Params) > 0 || len(refDoc.Params) > 0 {
+		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, node.Params)
+	}
+
 	// Extract spec from referenced document
 	var refPayload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
-	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
 		return nil, fmt.Errorf("parse ref %q spec: %w", node.Ref, err)
 	}
 
@@ -1229,11 +1241,17 @@ func resolveGridChildSpec(child gridChild, rc *renderCtx) (json.RawMessage, erro
 		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
 	}
 
+	// Expand params into the referenced document before extracting its spec
+	refRaw := refDoc.Raw
+	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
+		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
+	}
+
 	// Extract spec from referenced document
 	var refPayload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
-	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
 		return nil, fmt.Errorf("parse ref %q spec: %w", child.Ref, err)
 	}
 

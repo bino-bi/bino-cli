@@ -127,11 +127,12 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 // and any spec fields provided here act as overrides.
 // When optional is true and the ref is missing, the child is skipped gracefully instead of erroring.
 type layoutChild struct {
-	Kind     string          `json:"kind"`
-	Metadata layoutChildMeta `json:"metadata"`
-	Ref      string          `json:"ref,omitempty"`
-	Optional bool            `json:"optional,omitempty"`
-	Spec     json.RawMessage `json:"spec,omitempty"`
+	Kind     string            `json:"kind"`
+	Metadata layoutChildMeta   `json:"metadata"`
+	Ref      string            `json:"ref,omitempty"`
+	Optional bool              `json:"optional,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Spec     json.RawMessage   `json:"spec,omitempty"`
 }
 
 // layoutChildMeta holds metadata for inline layout children.
@@ -295,11 +296,12 @@ type treeSpec struct {
 // Each node can contain a Label, Table, ChartStructure, or ChartTime component.
 // When optional is true and the ref is missing, the node is skipped gracefully instead of erroring.
 type treeNode struct {
-	ID       string          `json:"id"`
-	Kind     string          `json:"kind"`
-	Ref      string          `json:"ref,omitempty"`
-	Optional bool            `json:"optional,omitempty"`
-	Spec     json.RawMessage `json:"spec,omitempty"`
+	ID       string            `json:"id"`
+	Kind     string            `json:"kind"`
+	Ref      string            `json:"ref,omitempty"`
+	Optional bool              `json:"optional,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Spec     json.RawMessage   `json:"spec,omitempty"`
 }
 
 // treeLabelSpec defines a simple label component for tree nodes.
@@ -469,13 +471,14 @@ type gridSpec struct {
 
 // gridChild defines a child (cell) in the grid.
 type gridChild struct {
-	Row      stringOrInt     `json:"row"`
-	Column   stringOrInt     `json:"column"`
-	Kind     string          `json:"kind"`
-	Metadata layoutChildMeta `json:"metadata"`
-	Ref      string          `json:"ref,omitempty"`
-	Optional bool            `json:"optional,omitempty"`
-	Spec     json.RawMessage `json:"spec,omitempty"`
+	Row      stringOrInt       `json:"row"`
+	Column   stringOrInt       `json:"column"`
+	Kind     string            `json:"kind"`
+	Metadata layoutChildMeta   `json:"metadata"`
+	Ref      string            `json:"ref,omitempty"`
+	Optional bool              `json:"optional,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Spec     json.RawMessage   `json:"spec,omitempty"`
 }
 
 // stringOrInt is a type that can unmarshal from either a string or an integer,
