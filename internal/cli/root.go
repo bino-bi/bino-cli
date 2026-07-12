@@ -177,5 +177,6 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newLSPServerCommand())
 	cmd.AddCommand(newSchemaCommand())
 	cmd.AddCommand(newPluginCommand())
+	cmd.AddCommand(newRegistryCommand())
 	return cmd
 }

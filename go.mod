@@ -128,3 +128,5 @@ replace github.com/charmbracelet/colorprofile => github.com/charmbracelet/colorp
 replace github.com/charmbracelet/x/term => github.com/charmbracelet/x/term v0.2.1
 
 replace github.com/lucasb-eyer/go-colorful => github.com/lucasb-eyer/go-colorful v1.2.0
+
+replace github.com/bino-bi/bino-plugin-sdk => ../bino-plugin-sdk

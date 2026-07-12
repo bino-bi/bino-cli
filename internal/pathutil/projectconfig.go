@@ -62,6 +62,13 @@ type ProjectConfig struct {
 	// Plugins declares plugin binaries and their configuration.
 	Plugins map[string]PluginDeclaration `toml:"plugins,omitempty"`
 
+	// Registry configures the package registry connection.
+	Registry RegistryConfig `toml:"registry,omitempty"`
+
+	// Dependencies maps a package coordinate "@scope/name" to an exact
+	// version ("1.2.3" = pinned) or a tag name ("latest", "stable", ...).
+	Dependencies map[string]string `toml:"dependencies,omitempty"`
+
 	// Lint configures linting behavior.
 	Lint LintConfig `toml:"lint,omitempty"`
 
@@ -77,6 +84,16 @@ type ProjectConfig struct {
 
 	// Serve contains default arguments and environment variables for the 'bino serve' command.
 	Serve CommandConfig `toml:"serve,omitempty"`
+}
+
+// RegistryConfig is the [registry] table in bino.toml.
+type RegistryConfig struct {
+	// URL of the registry service. Defaults to the public bino registry.
+	URL string `toml:"url,omitempty"`
+	// Token authenticates access to private packages: a literal value or a
+	// single "${VAR}" environment reference. Falls back to the
+	// BINO_REGISTRY_TOKEN environment variable; empty means anonymous.
+	Token string `toml:"token,omitempty"`
 }
 
 // PluginDeclaration describes a single plugin entry in bino.toml.

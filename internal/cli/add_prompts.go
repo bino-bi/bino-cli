@@ -139,6 +139,28 @@ func huhInput(title, placeholder string, def string, validate func(string) error
 	return value, nil
 }
 
+// huhPassword displays a masked interactive input for secrets.
+func huhPassword(title string) (string, error) {
+	var value string
+	input := huh.NewInput().
+		Title(title).
+		EchoMode(huh.EchoModePassword).
+		Value(&value)
+
+	form := huh.NewForm(
+		huh.NewGroup(input),
+	).WithTheme(getHuhTheme())
+
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return "", errAddCanceled
+		}
+		return "", err
+	}
+
+	return value, nil
+}
+
 // huhConfirm displays an interactive yes/no confirmation.
 func huhConfirm(title string) (bool, error) {
 	var confirmed bool

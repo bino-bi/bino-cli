@@ -67,7 +67,7 @@ Use --global to also remove the global cache directory (~/.bino/).`,
 				if err != nil {
 					return fmt.Errorf("resolve global cache: %w", err)
 				}
-				if err := cleanCacheDir(logger, globalCacheDir, "global"); err != nil {
+				if err := cleanGlobalCacheDir(logger, globalCacheDir); err != nil {
 					return err
 				}
 				// Clean legacy global cache (~/.bn) if it still exists
@@ -110,6 +110,39 @@ func cleanCacheDir(logger logx.Logger, dir, label string) error {
 	logger.Infof("Removing %s cache: %s", label, dir)
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("remove %s cache: %w", label, err)
+	}
+	return nil
+}
+
+// cleanGlobalCacheDir removes everything under ~/.bino except
+// credentials.json — login credentials are not cache: they are not
+// regenerable without re-entering a password, and the server-side token
+// would be orphaned.
+func cleanGlobalCacheDir(logger logx.Logger, dir string) error {
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		logger.Debugf("No global cache directory found at %s", dir)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("stat global cache: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("global cache path is not a directory: %s", dir)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read global cache: %w", err)
+	}
+	logger.Infof("Removing global cache: %s", dir)
+	for _, entry := range entries {
+		if entry.Name() == "credentials.json" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+			return fmt.Errorf("remove global cache entry %s: %w", entry.Name(), err)
+		}
 	}
 	return nil
 }
