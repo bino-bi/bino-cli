@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/andybalholm/brotli v1.2.2
-	github.com/bino-bi/bino-plugin-sdk v0.0.2
+	github.com/bino-bi/bino-plugin-sdk v0.0.3
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/briandowns/spinner v1.23.2
@@ -128,5 +128,3 @@ replace github.com/charmbracelet/colorprofile => github.com/charmbracelet/colorp
 replace github.com/charmbracelet/x/term => github.com/charmbracelet/x/term v0.2.1
 
 replace github.com/lucasb-eyer/go-colorful => github.com/lucasb-eyer/go-colorful v1.2.0
-
-replace github.com/bino-bi/bino-plugin-sdk => ../bino-plugin-sdk
