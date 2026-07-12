@@ -76,6 +76,33 @@ Each checkpoint maps to an array of shell commands executed sequentially. Comman
 
 See [Hooks](/concepts/hooks/) for the full reference of checkpoints, environment variables, and error handling.
 
+## Registry and dependencies
+
+Projects can consume predef packages from a bino registry. The registry
+connection lives in the `[registry]` table, and dependencies are declared in
+the `[dependencies]` table:
+
+```toml
+[registry]
+url = "https://registry.bino.bi"   # optional; this is the default
+token = "${ACME_REGISTRY_TOKEN}"    # optional; literal or ${ENV_VAR}
+
+[dependencies]
+"@acme/quarterly-report" = "1.2.3"  # exact version = pinned
+"@acme/base-layout"      = "latest" # a tag name = follows the tag
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `registry.url` | string | Optional. Registry base URL; defaults to the public registry. |
+| `registry.token` | string | Optional. Access token, either literal or a `${ENV_VAR}` reference expanded at runtime. |
+| `dependencies.*` | string | One entry per package (`@scope/name`), mapping to an exact version or a tag. |
+
+The `[dependencies]` table is normally maintained by `bino registry add` and
+`bino registry remove`; resolved versions are pinned in `bino.lock` next to
+`bino.toml`. See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
+and the [bino registry](/cli/registry/) command reference.
+
 ## Creating a project
 
 When you run `bino init`, a `bino.toml` file is automatically created in the target directory with a freshly generated UUID for the `report-id`:
