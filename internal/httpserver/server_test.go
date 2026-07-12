@@ -579,6 +579,38 @@ func TestHandleEmbedding(t *testing.T) {
 	}
 }
 
+// TestEmbeddingRouteDecodesEscapedScopedName goes through the real ServeMux
+// (not handleEmbedding directly) to prove a percent-encoded registry-scoped
+// name ("@scope/name" sent as %40scope%2Fname) matches the single {name}
+// segment and reaches the handler decoded.
+func TestEmbeddingRouteDecodesEscapedScopedName(t *testing.T) {
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var gotName string
+	srv.SetEmbeddingFunc(func(_ context.Context, name, _ string) ([]byte, error) {
+		gotName = name
+		return []byte("<html>ok</html>"), nil
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"/__embedding/%40acme%2Frevenue-table?kind=Table", nil)
+	w := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotName != "@acme/revenue-table" {
+		t.Errorf("embedding func received name %q, want %q", gotName, "@acme/revenue-table")
+	}
+}
+
 func TestHandleAsset(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")

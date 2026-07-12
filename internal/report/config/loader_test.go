@@ -364,6 +364,45 @@ func overrideConfig(t *testing.T, mutate func(runtimecfg.Config) runtimecfg.Conf
 	t.Cleanup(restore)
 }
 
+func TestLoadDirAcceptsScopedNames(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	multiDoc := "apiVersion: bino.bi/v1alpha1\n" +
+		"kind: Table\n" +
+		"metadata:\n" +
+		"  name: \"@acme/revenue-table\"\n" +
+		"spec:\n" +
+		"  dataset: revenue\n" +
+		"---\n" +
+		minimalManifest("revenue")
+	if err := os.WriteFile(filepath.Join(root, "predefs.yaml"), []byte(multiDoc), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	docs, err := LoadDir(ctx, root)
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("expected 2 documents, got %d", len(docs))
+	}
+	names := map[string]bool{}
+	for _, d := range docs {
+		names[d.Name] = true
+	}
+	if !names["@acme/revenue-table"] {
+		t.Fatalf("scoped-name document not loaded, got names: %v", names)
+	}
+}
+
 func writeManifest(t *testing.T, path, name string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(minimalManifest(name)), 0o600); err != nil {

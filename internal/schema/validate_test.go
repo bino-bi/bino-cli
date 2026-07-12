@@ -704,3 +704,63 @@ func TestGetValidationIssues(t *testing.T) {
 		t.Error("expected nil for nil error")
 	}
 }
+
+func TestValidate_ScopedNames(t *testing.T) {
+	doc := func(kind, name, spec string) string {
+		return fmt.Sprintf("apiVersion: bino.bi/v1alpha1\nkind: %s\nmetadata:\n  name: %q\nspec:\n%s", kind, name, spec)
+	}
+
+	valid := []struct {
+		name string
+		yaml string
+	}{
+		{"scoped Table", doc("Table", "@acme/revenue-table", "  dataset: revenue\n")},
+		{"scoped Text", doc("Text", "@acme/intro_text", "  value: hello\n")},
+		{"scoped minimal tokens", doc("Text", "@a1/x", "  value: hello\n")},
+		{"unscoped name still valid", doc("Text", "intro_text", "  value: hello\n")},
+	}
+	for _, tt := range valid {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate([]byte(tt.yaml)); err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name string
+		yaml string
+	}{
+		{"scoped DataSource rejected", doc("DataSource", "@acme/src", "  type: csv\n  path: data/x.csv\n")},
+		{"scope without name", doc("Text", "@acme", "  value: hello\n")},
+		{"scope with empty name", doc("Text", "@acme/", "  value: hello\n")},
+		{"uppercase scope", doc("Text", "@Acme/x", "  value: hello\n")},
+		{"nested slash", doc("Text", "@acme/x/y", "  value: hello\n")},
+		{"at sign inside name", doc("Text", "x@y", "  value: hello\n")},
+		{"empty scope", doc("Text", "@/x", "  value: hello\n")},
+		{"name part starts with hyphen", doc("Text", "@acme/-x", "  value: hello\n")},
+		{"name part ends with hyphen", doc("Text", "@acme/x-", "  value: hello\n")},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected ValidationError, got %T: %v", err, err)
+			}
+			found := false
+			for _, issue := range ve.Errors {
+				if strings.Contains(issue.Path, "metadata") && strings.Contains(issue.Path, "name") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected an issue on metadata.name, got: %v", ve.Errors)
+			}
+		})
+	}
+}

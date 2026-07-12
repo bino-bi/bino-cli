@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -61,6 +62,55 @@ func TestResolveEmbedTargetComponent(t *testing.T) {
 			t.Fatalf("expected not found, got %+v", got)
 		}
 	})
+}
+
+// TestResolveEmbedTargetScopedName confirms registry-style scoped names
+// ("@scope/name") resolve like any other component name — reference matching
+// is exact string comparison, direct and container kinds alike.
+func TestResolveEmbedTargetScopedName(t *testing.T) {
+	t.Parallel()
+
+	docs := []config.Document{
+		{Kind: "Table", Name: "@acme/revenue-table", Raw: []byte(`{"kind":"Table"}`)},
+		{Kind: "Grid", Name: "@acme/kpi_grid", Raw: []byte(`{"kind":"Grid"}`)},
+	}
+
+	t.Run("direct kind", func(t *testing.T) {
+		t.Parallel()
+		got := resolveEmbedTarget("@acme/revenue-table", "Table", nil, nil, docs)
+		if !got.found() || got.compDoc == nil {
+			t.Fatalf("expected compDoc resolved, got %+v", got)
+		}
+		if got.compDoc.Name != "@acme/revenue-table" {
+			t.Errorf("compDoc.Name = %q, want @acme/revenue-table", got.compDoc.Name)
+		}
+	})
+
+	t.Run("container kind", func(t *testing.T) {
+		t.Parallel()
+		got := resolveEmbedTarget("@acme/kpi_grid", "Grid", nil, nil, docs)
+		if !got.found() || got.compDoc == nil {
+			t.Fatalf("expected compDoc resolved, got %+v", got)
+		}
+	})
+}
+
+// TestSyntheticComponentPageScopedName confirms the synthetic wrapper page for
+// container kinds carries a scoped component name verbatim in its child ref.
+func TestSyntheticComponentPageScopedName(t *testing.T) {
+	t.Parallel()
+
+	page, err := syntheticComponentPage("Grid", "@acme/kpi_grid")
+	if err != nil {
+		t.Fatalf("syntheticComponentPage: %v", err)
+	}
+	if page.Kind != "LayoutPage" {
+		t.Errorf("page.Kind = %q, want LayoutPage", page.Kind)
+	}
+	raw := string(page.Raw)
+	if !strings.Contains(raw, `"ref":"@acme/kpi_grid"`) {
+		t.Errorf("synthetic page child ref must carry the scoped name verbatim, got: %s", raw)
+	}
 }
 
 // TestEmbedByNameOverrideBypassesCache proves the override path: when a live
