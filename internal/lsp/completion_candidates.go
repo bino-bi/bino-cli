@@ -152,6 +152,23 @@ func completeRefs(index []IndexDoc, refKind string) []protocol.CompletionItem {
 	return items
 }
 
+// rulesetKeywordItems offers the engine's ruleset inheritance keywords alongside
+// named RuleSet references.
+func rulesetKeywordItems() []protocol.CompletionItem {
+	return []protocol.CompletionItem{
+		{
+			Label:  "inherited-closest",
+			Kind:   protocol.CompletionItemKindKeyword,
+			Detail: protocol.NewOptional("inherit from the nearest layout card or page"),
+		},
+		{
+			Label:  "inherited-page",
+			Kind:   protocol.CompletionItemKindKeyword,
+			Detail: protocol.NewOptional("inherit from the surrounding layout page"),
+		},
+	}
+}
+
 // scenarioSlots returns the scenario slot names (ac1..pl4) present in a column
 // set, preserving canonical order — the input to the variance builder.
 func scenarioSlots(available map[string]bool) []string {

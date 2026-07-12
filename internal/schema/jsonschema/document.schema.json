@@ -28,6 +28,7 @@
         "Grid",
         "Table",
         "ComponentStyle",
+        "RuleSet",
         "Internationalization",
         "ScalingGroup",
         "ReportArtefact",
@@ -212,6 +213,19 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/componentStyleSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "RuleSet" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/ruleSetSpec" }
         }
       }
     },
@@ -1963,6 +1977,74 @@
       },
       "additionalProperties": false
     },
+    "ruleSetSpec": {
+      "type": "object",
+      "required": ["content"],
+      "properties": {
+        "content": {
+          "description": "IBCS rule-set configuration expressed as an object or JSON string. Rendered as the JSON body of a bn-ruleset element. A document named _default adjusts the global rule-set layer; any other name defines a named rule set selected via the ruleset attribute.",
+          "oneOf": [
+            { "type": "string", "minLength": 2 },
+            { "$ref": "#/$defs/ruleSetContent" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ruleSetContent": {
+      "type": "object",
+      "description": "Rule-set configuration object. Partial overrides are deep-merged over the engine's built-in defaults.",
+      "properties": {
+        "scenarios": {
+          "type": "object",
+          "description": "Per-scenario-prefix rule overrides, keyed by scenario prefix (e.g. ac, fc, pl, bu, pp, py, dac..dpy, drac..drpy, or user-defined prefixes).",
+          "additionalProperties": { "$ref": "#/$defs/ruleSetScenarioRule" }
+        },
+        "fallback": {
+          "type": "object",
+          "description": "Style applied to scenario names not present in scenarios.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Display name for unmatched scenarios."
+            },
+            "group": {
+              "type": "string",
+              "description": "Group label for unmatched scenarios."
+            },
+            "colorIndex": {
+              "type": "number",
+              "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+            },
+            "sortIndex": {
+              "type": "number",
+              "description": "Sort index for column ordering."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "ruleSetScenarioRule": {
+      "type": "object",
+      "description": "Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values (e.g. name 'AC' becomes AC1..AC4, sortIndex + n*10).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display base name; variants get 1..4 appended (e.g. 'AC' -> 'AC1')."
+        },
+        "colorIndex": {
+          "type": "number",
+          "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+        },
+        "sortIndex": {
+          "type": "number",
+          "description": "Base sort index for column ordering; variant n adds n*10."
+        }
+      },
+      "additionalProperties": false
+    },
     "styleContent": {
       "type": "object",
       "description": "Style configuration object for components.",
@@ -2366,6 +2448,10 @@
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
         },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-page' to reuse the rule set of the surrounding page. The effective rule set merges _system, then _default, then the named rule set. Forwarded to the page title and inherited by descendants that use 'inherited-closest' or 'inherited-page'. Maps to the ruleset HTML attribute."
+        },
         "titleBusinessUnit": {
           "type": "string",
           "default": "",
@@ -2500,6 +2586,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-page' to reuse the rule set of the surrounding page. The effective rule set merges _system, then _default, then the named rule set. Forwarded to the card title and inherited by descendants that use 'inherited-closest'. Maps to the ruleset HTML attribute."
         },
         "titleImage": {
           "type": "string",
@@ -2807,6 +2897,10 @@
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
         },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
+        },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
           "type": "string",
@@ -2932,6 +3026,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
         },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "chartTitle": {
@@ -3477,6 +3575,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
         },
         "dataset": { "$ref": "#/$defs/datasetRef" },
         "tableTitle": {

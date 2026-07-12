@@ -1,0 +1,129 @@
+---
+title: Registry and dependencies
+description: Reuse predef packages from a bino registry with pinned, verified dependencies.
+---
+
+A bino registry hosts reusable predef packages — manifests such as layouts,
+styles, or rule sets published under scoped names like `@acme/base-layout`.
+This guide covers declaring dependencies, the lockfile workflow, reproducible
+installs in CI, and authentication.
+
+The full command reference lives at [bino registry](/cli/registry/).
+
+## The moving parts
+
+| File / directory | Role | In git? |
+|------------------|------|---------|
+| `bino.toml` `[dependencies]` | What you depend on (name → version or tag) | yes |
+| `bino.lock` | Exact resolved versions and digests | yes — commit it |
+| `.bino/registry/` | Materialized package files | no — gitignore it |
+
+The build, preview, serve, and LSP all include `.bino/registry/` in the
+manifest set automatically, so installed packages behave like local documents.
+A package whose name collides with a local document of the same kind fails the
+build's duplicate-name validation; rename the local document.
+
+## Declaring dependencies
+
+Dependencies live in `bino.toml`:
+
+```toml
+[dependencies]
+"@acme/quarterly-report" = "1.2.3"    # exact version = pinned
+"@acme/base-layout"      = "latest"   # a tag name = follows the tag
+```
+
+Package names are always `@scope/name`. Values are either an exact version
+(`1.2.3` — held until you change it) or a tag (`latest`, `stable`, ... —
+moves when you run `bino registry update`). There are no version ranges.
+
+You rarely edit this table by hand — `bino registry add` and
+`bino registry remove` maintain it:
+
+```bash
+bino registry add @acme/base-layout            # follows "latest"
+bino registry add @acme/quarterly-report@1.2.3 # pins the version
+bino registry remove @acme/base-layout
+```
+
+`add` resolves the transitive closure (exactly one version per package — a
+conflicting pin fails with a dependency-conflict error), downloads the
+documents, verifies their digests, writes `.bino/registry/<scope>/<name>.yml`,
+and pins everything in `bino.lock`.
+
+Installed packages keep their scoped name as `metadata.name`, which is why
+`@scope/name` is a valid document name — see
+[Name scoping](/concepts/constraints-and-scoped-names/).
+
+## The lockfile workflow
+
+`bino.lock` records the exact version, digest, kind, path, and dependency
+edges of every installed package. Commit it: it is what makes a checkout
+reproducible.
+
+- `bino registry install` – re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
+- `bino registry update` – re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
+- `bino registry verify` – re-hashes the installed files against the locked digests. Digests cover the canonical document form, so reformatting a file does not fail verification — content changes do.
+
+A typical CI job:
+
+```bash
+bino registry install   # reproduce the locked state
+bino registry verify    # fail on any tampered/modified package
+bino build
+```
+
+## Configuring the registry
+
+The registry URL comes from `bino.toml`, falling back to the public registry:
+
+```toml
+[registry]
+url = "https://registry.bino.bi"   # optional; this is the default
+token = "${ACME_REGISTRY_TOKEN}"    # optional; literal or ${ENV_VAR}
+```
+
+The auth commands (`login`, `logout`, `token`) also accept `--registry` and
+the `BINO_REGISTRY_URL` environment variable, since they may run outside a
+project.
+
+## Authentication
+
+Anonymous access works for public packages. For private registries or
+publishing-related workflows, authenticate once:
+
+```bash
+bino registry login
+```
+
+This creates a personal access token (prefixed `bino_pat_`) and stores it in
+`~/.bino/credentials.json` (mode 0600, keyed by registry URL; spared by
+`bino cache clean --global`). Tokens are exchanged for a short-lived session
+token per invocation.
+
+The token used for a request is resolved in this order:
+
+1. `bino.toml` `[registry].token` — a `${ENV_VAR}` value is expanded from the environment; an unset variable is an error.
+2. The `BINO_REGISTRY_TOKEN` environment variable.
+3. The credential stored by `bino registry login` for that URL.
+4. Anonymous.
+
+For CI, create a dedicated token and pass it via the environment:
+
+```bash
+# once, on your machine
+bino registry token create --name "acme-ci" --expires 90d
+
+# in CI
+export BINO_REGISTRY_TOKEN="bino_pat_..."
+bino registry install
+```
+
+Manage tokens with `bino registry token list` and
+`bino registry token revoke <id>`; `bino registry logout` removes and revokes
+the stored credential.
+
+## Publishing
+
+The CLI is consumer-only — there is no `bino publish`. Packages are published
+through the registry service itself.

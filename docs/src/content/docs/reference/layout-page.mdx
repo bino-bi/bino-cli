@@ -37,6 +37,7 @@ spec:
   messageImage: "debug/concordia.png"
   messageText: "Placeholder message"
   selectedStyle: corporate-style   # optional ComponentStyle name
+  ruleset: corporate-rules         # optional RuleSet name
   children:
     - kind: ChartStructure
       spec: { ... }
@@ -50,6 +51,7 @@ Key fields (see JSON schema for full list):
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
 - Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
+- IBCS rules: `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) applied to the page title; child components inherit it via `ruleset: inherited-page` or `ruleset: inherited-closest`.
 - Content: `children` – required array of `layoutChild` objects.
 
 ## Page layouts
@@ -756,6 +758,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.pageOrientation` | string | no | — | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
 | `spec.pageFitToContent` | boolean | no | `false` | When `true`, the page body height shrinks to fit content. When `false` (default), it stretches to fill the full page height. Use `false` when the page contains auto-scaling components. | `pageFitToContent: false` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest applied to the page title and inheritable by children via `inherited-page` / `inherited-closest`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 
 ### Spec Attributes — Footer and Message
 

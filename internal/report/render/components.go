@@ -461,6 +461,27 @@ func renderComponentStyles(styles []componentStyle) []string {
 	return segments
 }
 
+// renderRuleSets generates bn-ruleset elements.
+func renderRuleSets(sets []ruleSet) []string {
+	if len(sets) == 0 {
+		return nil
+	}
+	segments := make([]string, 0, len(sets))
+	for _, set := range sets {
+		if set.value == "" {
+			continue
+		}
+		var b strings.Builder
+		b.WriteString("<bn-ruleset")
+		writeAttr(&b, "name", set.name)
+		b.WriteString(">")
+		b.WriteString(html.EscapeString(set.value))
+		b.WriteString("</bn-ruleset>")
+		segments = append(segments, b.String())
+	}
+	return segments
+}
+
 // renderScalingGroups generates bn-scaling-group elements.
 func renderScalingGroups(groups []scalingGroup) []string {
 	if len(groups) == 0 {

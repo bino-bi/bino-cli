@@ -1,0 +1,163 @@
+---
+title: bino registry
+description: Consume predef packages from a bino registry - add, install, update, verify, and authenticate.
+---
+
+`bino registry` manages packages consumed from a bino registry.
+Dependencies are declared in `bino.toml`'s `[dependencies]` table, resolved
+versions are pinned in `bino.lock` (commit it), and package files are
+materialized under `.bino/registry/` (gitignore it — `bino registry install`
+re-creates it from `bino.lock`).
+
+See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
+for the underlying concepts: package names, pin vs. tag semantics, the
+lockfile, and authentication.
+
+## bino registry add
+
+```bash
+bino registry add <package[@version|@tag]>...
+```
+
+Resolves each package (and its transitive dependencies), downloads the
+verified documents into `.bino/registry/`, pins the result in `bino.lock`,
+and records the dependency in `bino.toml`.
+
+- A bare package name follows the `latest` tag; `@1.2.3` pins that exact version.
+- Prints compatibility warnings when a package declares a CLI or engine range that does not match your setup.
+
+```bash
+# Follow the latest tag
+bino registry add @acme/base-layout
+
+# Pin an exact version
+bino registry add @acme/quarterly-report@1.2.3
+```
+
+## bino registry install
+
+```bash
+bino registry install
+```
+
+Re-materializes `.bino/registry/` from `bino.lock` without re-resolving
+anything, so CI and fresh checkouts reproduce the exact locked versions.
+
+- Errors when `bino.toml` declares dependencies but no `bino.lock` exists, or when the lockfile drifted from `[dependencies]` — run `bino registry update` in both cases.
+
+## bino registry update
+
+```bash
+bino registry update [package...]
+```
+
+Re-resolves the dependencies declared in `bino.toml` and rewrites `bino.lock`.
+Entries that follow a tag move with it; exact-version pins are held. With
+package arguments, only those packages are re-resolved and every other direct
+dependency is held at its locked version.
+
+## bino registry remove
+
+```bash
+bino registry remove <package>...
+```
+
+Removes packages from `bino.toml`'s `[dependencies]` table, then deletes every
+locked package no longer reachable from the remaining declarations. Works
+offline. A transitive dependency still required by another package is kept.
+
+## bino registry list
+
+```bash
+bino registry list
+```
+
+Lists the packages pinned in `bino.lock` with version, tag, kind, origin
+(direct or transitive), and path. Works offline.
+
+## bino registry search
+
+```bash
+bino registry search <query> [flags]
+```
+
+Searches the registry for packages.
+
+- `--kind` – filter by document kind (repeatable).
+- `--scope` – filter by scope (repeatable).
+- `--tag` – filter by tag (repeatable).
+- `--page` – result page, 1-based (default 1).
+- `--per-page` – results per page (default 20).
+
+## bino registry info
+
+```bash
+bino registry info <package[@version|@tag]>
+```
+
+Shows a package's resolved metadata: version, tag, kind, digest, dependencies,
+and download URL. Requires network access.
+
+## bino registry verify
+
+```bash
+bino registry verify
+```
+
+Re-hashes every package file under `.bino/registry/` and compares it with the
+digest pinned in `bino.lock`. Works offline; intended as a CI gate. The digest
+is computed over the canonical document form, so cosmetic reformatting of a
+file does not fail verification. Exits non-zero on any failure.
+
+## bino registry login
+
+```bash
+bino registry login [flags]
+```
+
+Authenticates with email and password (plus an authenticator code when the
+account has two-factor enabled), creates a personal access token, and stores
+it in `~/.bino/credentials.json` (mode 0600). Subsequent registry commands use
+the stored token automatically unless `bino.toml` or `BINO_REGISTRY_TOKEN`
+provides one.
+
+- `--registry` – registry URL (defaults to the project's or `https://registry.bino.bi`).
+- `--email` – account email (prompts when omitted).
+- `--password-stdin` – read the password from stdin.
+- `--with-token` – store an existing personal access token read from stdin.
+- `--expires` – lifetime of the created token (e.g. `90d`, `12h`; default never).
+- `--name` – name for the created token (default `bino-cli @ <hostname>`).
+
+```bash
+# Interactive login
+bino registry login
+
+# Non-interactive (CI)
+echo "$PASSWORD" | bino registry login --email ci@acme.com --password-stdin
+
+# Store an existing token
+echo "$BINO_PAT" | bino registry login --with-token
+```
+
+## bino registry logout
+
+```bash
+bino registry logout [--registry <url>]
+```
+
+Removes the stored credential for the registry and revokes it server-side
+(best effort — the local credential is always removed).
+
+## bino registry token
+
+```bash
+bino registry token create --name <name> [--expires <lifetime>] [--registry <url>]
+bino registry token list [--registry <url>]
+bino registry token revoke <id> [--registry <url>]
+```
+
+Manages personal access tokens.
+
+- `create` – creates a token and prints its plaintext exactly once — it cannot be retrieved later. `--name` is required; `--expires` accepts `90d`-style day counts or Go durations like `12h` (default never).
+- `list` – lists your tokens with ID, name, prefix, creation, last use, and expiry.
+- `revoke` – revokes a token by ID.

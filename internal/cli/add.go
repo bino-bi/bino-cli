@@ -56,6 +56,7 @@ var kindCategories = []KindCategory{
 		Kinds: []KindInfo{
 			{Name: "asset", Description: "Image, font, or file resource"},
 			{Name: "componentstyle", Description: "CSS styling for components"},
+			{Name: "ruleset", Description: "IBCS scenario rule-set overrides"},
 			{Name: "internationalization", Description: "Translations for a locale"},
 		},
 	},
@@ -114,6 +115,7 @@ Subcommands (Visualization):
 Subcommands (Resources):
   asset             Create an Asset manifest (image/font/file)
   componentstyle    Create a ComponentStyle manifest (CSS styling)
+  ruleset           Create a RuleSet manifest (IBCS scenario rules)
   internationalization  Create an Internationalization manifest (translations)
 
 Subcommands (Reports):
@@ -174,6 +176,7 @@ Three interaction modes are supported:
 	// Resources
 	cmd.AddCommand(newAddAssetCommand())
 	cmd.AddCommand(newAddComponentStyleCommand())
+	cmd.AddCommand(newAddRuleSetCommand())
 	cmd.AddCommand(newAddInternationalizationCommand())
 	cmd.AddCommand(newAddScalingGroupCommand())
 

@@ -37,6 +37,7 @@ type layoutPageSpec struct {
 	PageFitToContent    *bool                    `json:"pageFitToContent"`
 	FooterDisplayNumber *bool                    `json:"footerDisplayPageNumber"`
 	SelectedStyle       string                   `json:"selectedStyle"`
+	Ruleset             string                   `json:"ruleset"`
 	Children            []layoutChild            `json:"children"`
 }
 
@@ -68,6 +69,7 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 		writeAttr(b, "footer-display-page-number", fmt.Sprintf("%t", *s.FooterDisplayNumber))
 	}
 	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
 }
 
 // layoutCardSpec defines the structure for LayoutCard components.
@@ -92,6 +94,7 @@ type layoutCardSpec struct {
 	CardFitToContent    *bool                    `json:"cardFitToContent"`
 	CardShowBorder      *bool                    `json:"cardShowBorder"`
 	SelectedStyle       string                   `json:"selectedStyle"`
+	Ruleset             string                   `json:"ruleset"`
 	Children            []layoutChild            `json:"children"`
 }
 
@@ -115,6 +118,7 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "card-fit-to-content", s.CardFitToContent)
 	writeBoolAttr(b, "card-show-border", s.CardShowBorder)
 	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
 }
 
 // layoutChild represents a child component within a layout.
@@ -175,6 +179,7 @@ type chartStructureSpec struct {
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 	SelectedStyle            string                   `json:"selectedStyle"`
+	Ruleset                  string                   `json:"ruleset"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -200,6 +205,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
 }
 
 // chartTimeSpec defines the structure for ChartTime components.
@@ -234,6 +240,7 @@ type chartTimeSpec struct {
 	Stack                    *stackConfig             `json:"stack,omitempty"`
 	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
 	SelectedStyle            string                   `json:"selectedStyle"`
+	Ruleset                  string                   `json:"ruleset"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -267,6 +274,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
 }
 
 // treeSpec defines the structure for Tree components.
@@ -349,6 +357,7 @@ type tableSpec struct {
 	Interval                 string                       `json:"interval"`
 	Attributes               reportspec.AttributesList    `json:"attributes"`
 	SelectedStyle            string                       `json:"selectedStyle"`
+	Ruleset                  string                       `json:"ruleset"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -385,6 +394,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "interval", s.Interval)
 	writeAttr(b, "attributes", s.Attributes.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
 }
 
 // writeBoolAttr writes a boolean attribute if the value is non-nil.

@@ -234,6 +234,203 @@ spec:
 	}
 }
 
+// TestValidate_RuleSet covers the RuleSet kind and the ruleset attribute: valid
+// object/string content, closed content and scenario-rule objects, and the
+// attribute on the component/layout kinds that support it.
+func TestValidate_RuleSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "RuleSet with object content valid",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    scenarios:
+      pl:
+        name: PLAN
+        colorIndex: 50
+        sortIndex: 900
+    fallback:
+      name: Series
+      group: Series
+      colorIndex: 10
+      sortIndex: 120
+`,
+			wantErr: false,
+		},
+		{
+			name: "RuleSet with string content valid",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content: '{"scenarios": {"pl": {"sortIndex": 900}}}'
+`,
+			wantErr: false,
+		},
+		{
+			name: "RuleSet without content rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec: {}
+`,
+			wantErr: true,
+		},
+		{
+			name: "RuleSet scenario entry with group rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    scenarios:
+      pl:
+        group: Series
+`,
+			wantErr: true,
+		},
+		{
+			name: "RuleSet unknown content key rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: RuleSet
+metadata:
+  name: corporate_rules
+spec:
+  content:
+    scenarioss:
+      pl:
+        name: PLAN
+`,
+			wantErr: true,
+		},
+		{
+			name: "Table ruleset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales
+spec:
+  dataset: revenue
+  ruleset: corporate_rules
+`,
+			wantErr: false,
+		},
+		{
+			name: "Table ruleset typo rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales
+spec:
+  dataset: revenue
+  rulesett: corporate_rules
+`,
+			wantErr: true,
+		},
+		{
+			name: "ChartTime ruleset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: chart
+spec:
+  dataset: revenue
+  ruleset: inherited-page
+`,
+			wantErr: false,
+		},
+		{
+			name: "ChartStructure ruleset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: chart
+spec:
+  dataset: revenue
+  ruleset: inherited-closest
+`,
+			wantErr: false,
+		},
+		{
+			name: "LayoutPage ruleset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  ruleset: corporate_rules
+  children:
+    - kind: Table
+      ref: sales_table
+`,
+			wantErr: false,
+		},
+		{
+			name: "inline layout child ruleset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: LayoutCard
+      spec:
+        children:
+          - kind: Table
+            ref: sales_table
+        ruleset: inherited-page
+`,
+			wantErr: false,
+		},
+		{
+			name: "Text ruleset rejected (unsupported kind)",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: note
+spec:
+  value: hello
+  ruleset: corporate_rules
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
 // TestValidate_Scale verifies the tightened scale field (Issue 8): the keywords
 // none/auto, positive numbers and positive numeric strings are accepted, while a
 // misspelled keyword is rejected.

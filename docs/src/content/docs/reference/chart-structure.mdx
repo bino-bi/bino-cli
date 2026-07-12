@@ -41,6 +41,7 @@ spec:
     mode: absolute              # absolute | relative | absolute-relative
     order: dataset              # asc | desc | dataset
   selectedStyle: corporate-style # name of a ComponentStyle to apply
+  ruleset: corporate-rules # name of a RuleSet to apply
 ```
 
 ## Fields
@@ -68,6 +69,7 @@ spec:
   - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default). With `by: scenarios` and `order: dataset`, segments stack in the order given in `scenarios`.
 - `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
 ## Example: Top 10 regions with variance
 
@@ -259,6 +261,7 @@ children:
 | `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue"` |
 | `spec.stack` | object | no | — | Stacked bar rendering configuration. | see below |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 
 #### Stack configuration
 

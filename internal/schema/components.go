@@ -120,6 +120,10 @@ type LayoutPageSpec struct {
 	// (merged over the _system and _default styles).
 	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
 
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
+
 	// Children is a list of component references.
 	// Each element should be a reference like "$component_name".
 	Children []string `yaml:"children" json:"children"`
@@ -133,6 +137,10 @@ type LayoutCardSpec struct {
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
 	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 
 	// Children is a list of component references.
 	// Each element should be a reference like "$component_name".
@@ -164,6 +172,12 @@ type TextSpec struct {
 // ComponentStyleSpec represents the spec section of a ComponentStyle manifest.
 type ComponentStyleSpec struct {
 	// Content is the CSS content or style object.
+	Content any `yaml:"content,omitempty" json:"content,omitempty"`
+}
+
+// RuleSetSpec represents the spec section of a RuleSet manifest.
+type RuleSetSpec struct {
+	// Content is the IBCS rule-set configuration object or JSON string.
 	Content any `yaml:"content,omitempty" json:"content,omitempty"`
 }
 
@@ -231,6 +245,10 @@ type TableSpec struct {
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
 	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
 // StackConfig configures stacked chart rendering.
@@ -263,6 +281,10 @@ type ChartStructureSpec struct {
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
 	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
 // ChartTimeSpec represents the spec section of a ChartTime manifest.
@@ -280,6 +302,10 @@ type ChartTimeSpec struct {
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
 	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
 // GridSpec represents the spec section of a Grid manifest.

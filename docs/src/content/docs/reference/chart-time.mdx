@@ -49,6 +49,7 @@ spec:
     mode: absolute             # absolute | relative | absolute-relative
     order: dataset             # asc | desc | dataset
   selectedStyle: corporate-style # name of a ComponentStyle to apply
+  ruleset: corporate-rules # name of a RuleSet to apply
 ```
 
 ## Fields
@@ -83,6 +84,7 @@ spec:
   - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default).
   - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
 - `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
 ## Example: Monthly revenue line chart
 
@@ -322,6 +324,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue.time"` |
 | `spec.stack` | object | no | — | Stacked rendering configuration. When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces stacked area chart. | see below |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 
 #### Stack configuration
 

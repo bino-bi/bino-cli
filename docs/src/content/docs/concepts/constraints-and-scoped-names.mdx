@@ -504,6 +504,15 @@ If constraints allow two documents with the same name and kind to match a single
 artefact "weeklyReport": duplicate LayoutPage name "mainPage" - defined in report.yaml #3 and report.yaml #7 (after applying constraints)
 ```
 
+### Registry package names
+
+Documents installed from a registry keep their scoped package name
+(e.g. `@acme/base-layout`) as `metadata.name`, so `@scope/name` is a valid
+document name. Installed packages participate in the same per-artefact
+uniqueness rules: a registry package that collides with a local document of
+the same kind fails the duplicate-name validation. See the
+[Registry and dependencies guide](/guides/registry-and-dependencies/).
+
 ## Error handling
 
 Constraints are validated at build/preview/serve time. Errors are reported immediately with helpful hints:

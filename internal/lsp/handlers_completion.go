@@ -57,7 +57,11 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeVariances(scenarioSlots(available)), available == nil
 	case reportspec.PosDatasetRef:
-		return completeRefs(s.getIndex(ctx), pc.RefKind), false
+		refs := completeRefs(s.getIndex(ctx), pc.RefKind)
+		if pc.FieldName == "ruleset" {
+			refs = append(refs, rulesetKeywordItems()...)
+		}
+		return refs, false
 	case reportspec.PosQueryScalar:
 		cols := s.unionColumns(ctx, pc.BoundDatasets)
 		if cols == nil {

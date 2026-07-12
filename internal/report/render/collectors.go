@@ -30,6 +30,12 @@ type componentStyle struct {
 	value string
 }
 
+// ruleSet represents an IBCS rule-set configuration.
+type ruleSet struct {
+	name  string
+	value string
+}
+
 // internationalization represents a locale-specific i18n entry.
 type internationalization struct {
 	code      string
@@ -58,6 +64,15 @@ type componentStyleSpec struct {
 
 func (s componentStyleSpec) normalizedContent() (string, error) {
 	return normalizeSpecContent(s.Content, "component style")
+}
+
+// ruleSetSpec defines the structure for RuleSet manifests.
+type ruleSetSpec struct {
+	Content json.RawMessage `json:"content"`
+}
+
+func (s ruleSetSpec) normalizedContent() (string, error) {
+	return normalizeSpecContent(s.Content, "rule set")
 }
 
 // internationalizationSpec defines the structure for Internationalization manifests.
@@ -175,6 +190,28 @@ func collectComponentStyles(docs []config.Document) ([]componentStyle, error) {
 		styles = append(styles, componentStyle{name: doc.Name, value: value})
 	}
 	return styles, nil
+}
+
+// collectRuleSets extracts rule-set configurations from documents.
+func collectRuleSets(docs []config.Document) ([]ruleSet, error) {
+	var sets []ruleSet
+	for _, doc := range docs {
+		if doc.Kind != "RuleSet" {
+			continue
+		}
+		var payload struct {
+			Spec ruleSetSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, fmt.Errorf("render: parse rule set %s: %w", doc.Name, err)
+		}
+		value, err := payload.Spec.normalizedContent()
+		if err != nil {
+			return nil, fmt.Errorf("render: rule set %s: %w", doc.Name, err)
+		}
+		sets = append(sets, ruleSet{name: doc.Name, value: value})
+	}
+	return sets, nil
 }
 
 // collectAssets extracts font and file assets from documents.
