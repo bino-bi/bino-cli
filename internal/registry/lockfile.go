@@ -55,7 +55,7 @@ func LoadLockfile(projectRoot string) (*Lockfile, error) {
 	}
 	lf := &Lockfile{}
 	if err := toml.Unmarshal(data, lf); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrMalformedLockfile, err)
+		return nil, fmt.Errorf("%w: %w", ErrMalformedLockfile, err)
 	}
 	if lf.LockfileVersion == 0 {
 		lf.LockfileVersion = CurrentLockfileVersion

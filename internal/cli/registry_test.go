@@ -319,7 +319,7 @@ func TestRegistryUpdateMovesTagHoldsPin(t *testing.T) {
 	}
 
 	// The registry moves on: both packages get a 2.0.0.
-	xBody2, xDigest2 := fakeDoc(t, "@acme/x", "Text")
+	xBody2, _ := fakeDoc(t, "@acme/x", "Text")
 	xBody2 = append(xBody2[:len(xBody2)-2], []byte(`,"v":2}}`)...)
 	xDigest2, err := registrydigest.Digest(xBody2)
 	if err != nil {

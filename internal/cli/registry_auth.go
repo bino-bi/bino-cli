@@ -41,7 +41,7 @@ func authRegistryURL(flagURL string) string {
 // authClient builds a client through the normal token resolution chain
 // (project token, env, stored credential) and fails when it would be
 // anonymous — the token management commands always need auth.
-func authClient(flagURL string) (*registry.Client, string, error) {
+func authClient(flagURL string) (*registry.Client, error) {
 	url := authRegistryURL(flagURL)
 	rawToken := ""
 	if workdir, err := os.Getwd(); err == nil {
@@ -53,12 +53,12 @@ func authClient(flagURL string) (*registry.Client, string, error) {
 	}
 	cfg, err := registry.ResolveConfig(url, rawToken)
 	if err != nil {
-		return nil, "", ConfigError(err)
+		return nil, ConfigError(err)
 	}
 	if cfg.Token == "" {
-		return nil, "", ConfigErrorf("not logged in to %s — run 'bino registry login' or set %s", url, registry.EnvToken)
+		return nil, ConfigErrorf("not logged in to %s — run 'bino registry login' or set %s", url, registry.EnvToken)
 	}
-	return registry.NewClient(cfg), url, nil
+	return registry.NewClient(cfg), nil
 }
 
 var expiryDaysRe = regexp.MustCompile(`^(\d+)d$`)
@@ -127,48 +127,12 @@ an existing personal access token read from stdin.`,
 			}
 
 			if flagWithToken {
-				data, err := io.ReadAll(cmd.InOrStdin())
-				if err != nil {
-					return RuntimeError(err)
-				}
-				pat := strings.TrimSpace(string(data))
-				if !strings.HasPrefix(pat, registry.PATPrefix) {
-					return ConfigErrorf("stdin does not look like a personal access token (expected %q prefix)", registry.PATPrefix)
-				}
-				res, err := client.ExchangePAT(ctx, pat)
-				if err != nil {
-					return ExternalError(fmt.Errorf("token rejected by %s: %w", url, err))
-				}
-				if err := storeCredential(url, registry.Credential{PAT: pat, PATID: res.ID}); err != nil {
-					return RuntimeError(err)
-				}
-				out.Success(fmt.Sprintf("Logged in to %s", url))
-				return nil
+				return loginWithToken(ctx, cmd.InOrStdin(), out, client, url)
 			}
 
-			email := strings.TrimSpace(flagEmail)
-			password := ""
-			if flagPasswordStdin {
-				data, err := io.ReadAll(cmd.InOrStdin())
-				if err != nil {
-					return RuntimeError(err)
-				}
-				password = strings.TrimSpace(string(data))
-			}
-			if email == "" || password == "" {
-				if !isInteractive() {
-					return ConfigErrorf("non-interactive login: pass --email and --password-stdin, or --with-token")
-				}
-				if email == "" {
-					if email, err = huhInput("Email", "you@example.com", "", nil); err != nil {
-						return loginCanceled(out, err)
-					}
-				}
-				if password == "" {
-					if password, err = huhPassword("Password"); err != nil {
-						return loginCanceled(out, err)
-					}
-				}
+			email, password, err := loginCredentials(cmd.InOrStdin(), flagEmail, flagPasswordStdin)
+			if err != nil {
+				return loginCanceled(out, err)
 			}
 
 			auth, err := client.AuthWithPassword(ctx, email, password)
@@ -222,6 +186,58 @@ func loginCanceled(out *Output, err error) error {
 		return nil
 	}
 	return err
+}
+
+// loginWithToken stores an existing personal access token read from stdin,
+// validating it against the registry first.
+func loginWithToken(ctx context.Context, stdin io.Reader, out *Output, client *registry.Client, url string) error {
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return RuntimeError(err)
+	}
+	pat := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(pat, registry.PATPrefix) {
+		return ConfigErrorf("stdin does not look like a personal access token (expected %q prefix)", registry.PATPrefix)
+	}
+	res, err := client.ExchangePAT(ctx, pat)
+	if err != nil {
+		return ExternalError(fmt.Errorf("token rejected by %s: %w", url, err))
+	}
+	if err := storeCredential(url, registry.Credential{PAT: pat, PATID: res.ID}); err != nil {
+		return RuntimeError(err)
+	}
+	out.Success(fmt.Sprintf("Logged in to %s", url))
+	return nil
+}
+
+// loginCredentials gathers email and password from flags/stdin, prompting
+// interactively for whatever is missing.
+func loginCredentials(stdin io.Reader, flagEmail string, passwordStdin bool) (email, password string, err error) {
+	email = strings.TrimSpace(flagEmail)
+	if passwordStdin {
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			return "", "", RuntimeError(err)
+		}
+		password = strings.TrimSpace(string(data))
+	}
+	if email != "" && password != "" {
+		return email, password, nil
+	}
+	if !isInteractive() {
+		return "", "", ConfigErrorf("non-interactive login: pass --email and --password-stdin, or --with-token")
+	}
+	if email == "" {
+		if email, err = huhInput("Email", "you@example.com", "", nil); err != nil {
+			return "", "", err
+		}
+	}
+	if password == "" {
+		if password, err = huhPassword("Password"); err != nil {
+			return "", "", err
+		}
+	}
+	return email, password, nil
 }
 
 // promptTOTP asks for an authenticator code, allowing up to three attempts.
@@ -333,7 +349,7 @@ func newRegistryTokenCreateCommand() *cobra.Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			client, _, err := authClient(flagRegistry)
+			client, err := authClient(flagRegistry)
 			if err != nil {
 				return err
 			}
@@ -362,7 +378,7 @@ func newRegistryTokenListCommand() *cobra.Command {
 		Short: "List your personal access tokens",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, err := authClient(flagRegistry)
+			client, err := authClient(flagRegistry)
 			if err != nil {
 				return err
 			}
@@ -400,7 +416,7 @@ func newRegistryTokenRevokeCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := NewOutput(OutputConfig{})
-			client, _, err := authClient(flagRegistry)
+			client, err := authClient(flagRegistry)
 			if err != nil {
 				return err
 			}

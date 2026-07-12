@@ -86,7 +86,7 @@ func editDependencies(projectRoot, name string, edit func(string) string, check 
 		return fmt.Errorf("cannot safely edit %s (dependency %q): %w — edit the [dependencies] table manually", path, name, err)
 	}
 	if err := check(parsed.Dependencies); err != nil {
-		return fmt.Errorf("cannot safely edit %s (dependency %q): %v — edit the [dependencies] table manually", path, name, err)
+		return fmt.Errorf("cannot safely edit %s (dependency %q): %w — edit the [dependencies] table manually", path, name, err)
 	}
 	if err := writeFileAtomic(path, []byte(next)); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
@@ -102,8 +102,8 @@ func keyLineRe(name string) *regexp.Regexp {
 
 // tableExtent returns the [start, end) byte range of a table's body, from
 // just past the header line to the next table header or EOF.
-func tableExtent(content string, headerEnd int) (int, int) {
-	start := headerEnd
+func tableExtent(content string, headerEnd int) (start, end int) {
+	start = headerEnd
 	if start < len(content) && content[start] == '\n' {
 		start++
 	}

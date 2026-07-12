@@ -106,24 +106,24 @@ func registryCommandError(err error) error {
 // downloadVerified fetches one package version and verifies it three ways:
 // the transport ETag and the locally recomputed canonical digest must both
 // equal the expected digest. Nothing is trusted before this passes.
-func downloadVerified(ctx context.Context, client *registry.Client, name, version, wantDigest string) ([]byte, error) {
+func downloadVerified(ctx context.Context, client *registry.Client, name, ver, wantDigest string) ([]byte, error) {
 	scope, base, err := registry.ParseName(name)
 	if err != nil {
 		return nil, err
 	}
-	body, etag, err := client.Download(ctx, scope, base, version)
+	body, etag, err := client.Download(ctx, scope, base, ver)
 	if err != nil {
-		return nil, fmt.Errorf("download %s@%s: %w", name, version, err)
+		return nil, fmt.Errorf("download %s@%s: %w", name, ver, err)
 	}
 	if etag != "" && etag != wantDigest {
-		return nil, fmt.Errorf("download %s@%s: ETag %s does not match expected digest %s", name, version, etag, wantDigest)
+		return nil, fmt.Errorf("download %s@%s: ETag %s does not match expected digest %s", name, ver, etag, wantDigest)
 	}
 	actual, err := registrydigest.Digest(body)
 	if err != nil {
-		return nil, fmt.Errorf("download %s@%s: canonicalize: %w", name, version, err)
+		return nil, fmt.Errorf("download %s@%s: canonicalize: %w", name, ver, err)
 	}
 	if actual != wantDigest {
-		return nil, fmt.Errorf("download %s@%s: content digest %s does not match expected %s — the registry returned content that does not match its digest", name, version, actual, wantDigest)
+		return nil, fmt.Errorf("download %s@%s: content digest %s does not match expected %s — the registry returned content that does not match its digest", name, ver, actual, wantDigest)
 	}
 	return body, nil
 }
