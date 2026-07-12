@@ -350,8 +350,8 @@
         },
         "name": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
-          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'). For DataSource documents the name is additionally constrained to a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$) because it becomes the DuckDB view name."
+          "pattern": "^(@[a-z0-9][a-z0-9_-]*/)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
+          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'), optionally prefixed with a registry scope '@scope/' (e.g. '@acme/revenue_table') for documents pulled from a bino registry. For DataSource documents the name is additionally constrained to a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$) because it becomes the DuckDB view name."
         },
         "labels": {
           "type": "object",
