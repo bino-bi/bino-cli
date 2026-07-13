@@ -160,6 +160,20 @@ children:
       dateInterval: quarter # Override the interval
 ```
 
+### Reference with params
+
+Referenced documents can declare parameters in `metadata.params` (same structure as [LayoutPage parameters](#layoutpage-parameters)) and use `${NAME}` placeholders in their spec. Pass values with the `params` field — explicit values beat declared defaults, which beat an environment variable of the same name. `select` params expose `${NAME_LABEL}`.
+
+```yaml
+children:
+  - kind: Text
+    ref: regional-commentary
+    params:
+      REGION: US # Values must be quoted strings
+```
+
+`params` is only valid together with `ref`. Inline `spec` overrides are merged after the params are expanded. Grid children and tree nodes accept `params` the same way.
+
 ### Supported reference targets
 
 You can reference documents of these kinds:
@@ -168,6 +182,8 @@ You can reference documents of these kinds:
 - `Table`
 - `ChartStructure`
 - `ChartTime`
+- `Tree`
+- `Grid`
 - `LayoutCard`
 - `Image`
 

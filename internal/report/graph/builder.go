@@ -373,6 +373,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 				Kind:     gc.Kind,
 				Ref:      gc.Ref,
 				Optional: gc.Optional,
+				Params:   gc.Params,
 				Spec:     gc.Spec,
 			}
 			childID, err := b.buildLayoutChild(parentName, effectiveFile, lc, childPath)
@@ -425,11 +426,17 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 		return nil, "", fmt.Errorf("layout child in %q: required reference %q of kind %q not found (use optional: true to allow missing refs)", parentName, child.Ref, child.Kind)
 	}
 
+	// Expand params into the referenced document before extracting its spec.
+	refRaw := refDoc.Raw
+	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
+		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
+	}
+
 	// Extract the spec from the referenced document.
 	var refPayload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
-	if err := json.Unmarshal(refDoc.Raw, &refPayload); err != nil {
+	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
 		return nil, "", fmt.Errorf("layout child in %q: failed to parse ref %q spec: %w", parentName, child.Ref, err)
 	}
 

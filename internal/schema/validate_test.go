@@ -764,3 +764,166 @@ func TestValidate_ScopedNames(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_RefParams(t *testing.T) {
+	valid := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "layout child ref with params",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: commentary-page
+spec:
+  children:
+    - kind: Text
+      ref: "@thatscalaguy/test"
+      params:
+        REGION: test
+`,
+		},
+		{
+			name: "grid child ref with params",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: test-grid
+spec:
+  rowHeaders: ["r1"]
+  columnHeaders: ["c1"]
+  children:
+    - row: 0
+      column: 0
+      kind: Table
+      ref: "@acme/revenue-table"
+      params:
+        REGION: EU
+`,
+		},
+		{
+			name: "tree node ref with params",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: test-tree
+spec:
+  edges: []
+  nodes:
+    - id: root
+      kind: Table
+      ref: "@acme/revenue-table"
+      params:
+        REGION: EU
+`,
+		},
+		{
+			name: "component document declaring metadata.params",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: "@thatscalaguy/test"
+  params:
+    - name: REGION
+      type: string
+      default: EU
+spec:
+  value: "Report for ${REGION}"
+`,
+		},
+	}
+	for _, tt := range valid {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate([]byte(tt.yaml)); err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "layout child params without ref",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: commentary-page
+spec:
+  children:
+    - kind: Text
+      params:
+        REGION: test
+      spec:
+        value: hello
+`,
+		},
+		{
+			name: "grid child params without ref",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: test-grid
+spec:
+  rowHeaders: ["r1"]
+  columnHeaders: ["c1"]
+  children:
+    - row: 0
+      column: 0
+      kind: Table
+      params:
+        REGION: EU
+      spec:
+        dataset: revenue
+`,
+		},
+		{
+			name: "tree node params without ref",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: test-tree
+spec:
+  edges: []
+  nodes:
+    - id: root
+      kind: Table
+      params:
+        REGION: EU
+      spec:
+        dataset: revenue
+`,
+		},
+		{
+			name: "layout child param value must be a string",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: commentary-page
+spec:
+  children:
+    - kind: Text
+      ref: "@thatscalaguy/test"
+      params:
+        YEAR: 2024
+`,
+		},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate([]byte(tt.yaml)); err == nil {
+				t.Error("expected validation error, got nil")
+			}
+		})
+	}
+}

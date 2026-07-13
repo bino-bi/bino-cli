@@ -102,6 +102,7 @@ Array of node definitions. Each node specifies what component to render at that 
 - `id` (required) – unique identifier matching `from`/`to` values in edges
 - `kind` (required) – type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, or `Image`
 - `ref` – reference to a standalone document by name (not supported for Label)
+- `params` – parameter values (string map) passed to the referenced document; only valid together with `ref` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components))
 - `spec` – inline component specification (required if no ref)
 
 ## Node kinds
@@ -462,5 +463,6 @@ spec:
 | `nodes[].id` | string | yes | — | Unique identifier matching `from`/`to` values in edges. |
 | `nodes[].kind` | string | yes | — | Component type. Values: `Label`, `Table`, `ChartStructure`, `ChartTime`, `Image`. |
 | `nodes[].ref` | string | no | — | Reference to standalone document by name (not supported for Label). |
+| `nodes[].params` | object | no | — | Parameter values (string map) passed to the referenced document. Only valid together with `ref`. |
 | `nodes[].spec` | object | conditional | — | Inline component spec. Required if no `ref` is provided. |
 

@@ -351,3 +351,104 @@ func containsAt(s, substr string, start int) bool {
 	}
 	return false
 }
+
+func TestBuildLayoutChildRefWithParams(t *testing.T) {
+	ctx := context.Background()
+
+	chartTimeDoc := makeDoc("ChartTime", "regionChart", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "ChartTime",
+		"metadata": {"name": "regionChart"},
+		"spec": {
+			"dataset": "sales_${REGION}",
+			"chartTitle": "Sales ${REGION}"
+		}
+	}`))
+	chartTimeDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION"}}
+
+	layoutPageDoc := makeDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "regionChart",
+					"params": {"REGION": "eu"}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{chartTimeDoc, layoutPageDoc}
+	g, err := Build(ctx, docs)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	// The component node's dataset dependency must reflect the expanded param.
+	var found bool
+	for _, node := range g.Nodes {
+		if node.Kind != NodeComponent || node.Attributes["parent"] != "mainPage" {
+			continue
+		}
+		found = true
+		if got := node.Attributes["dataset"]; got != "sales_eu" {
+			t.Fatalf("expected dataset attribute sales_eu, got %q", got)
+		}
+	}
+	if !found {
+		t.Fatalf("expected component node for ref child")
+	}
+}
+
+func TestBuildLayoutChildRefParamDefaults(t *testing.T) {
+	ctx := context.Background()
+
+	chartTimeDoc := makeDoc("ChartTime", "regionChart", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "ChartTime",
+		"metadata": {"name": "regionChart"},
+		"spec": {
+			"dataset": "sales_${REGION}",
+			"chartTitle": "Sales ${REGION}"
+		}
+	}`))
+	def := "us"
+	chartTimeDoc.Params = []config.LayoutPageParamSpec{{Name: "REGION", Default: &def}}
+
+	layoutPageDoc := makeDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "ChartTime",
+					"ref": "regionChart"
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{chartTimeDoc, layoutPageDoc}
+	g, err := Build(ctx, docs)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	var found bool
+	for _, node := range g.Nodes {
+		if node.Kind != NodeComponent || node.Attributes["parent"] != "mainPage" {
+			continue
+		}
+		found = true
+		if got := node.Attributes["dataset"]; got != "sales_us" {
+			t.Fatalf("expected dataset attribute sales_us from default, got %q", got)
+		}
+	}
+	if !found {
+		t.Fatalf("expected component node for ref child")
+	}
+}

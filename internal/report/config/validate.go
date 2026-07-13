@@ -239,10 +239,11 @@ var ValidLayoutPageParamTypes = map[string]struct{}{
 	"date_time": {},
 }
 
-// ValidateLayoutPageParams validates the parameter definitions in a LayoutPage document.
+// ValidateLayoutPageParams validates the parameter definitions in a param-capable
+// document (LayoutPage or a referenceable component kind).
 // Returns a list of warnings and an error if validation fails.
 func ValidateLayoutPageParams(doc Document) (warnings []string, err error) {
-	if doc.Kind != "LayoutPage" {
+	if _, ok := ParamCapableKinds[doc.Kind]; !ok {
 		return nil, nil
 	}
 
@@ -250,29 +251,29 @@ func ValidateLayoutPageParams(doc Document) (warnings []string, err error) {
 	for i, param := range doc.Params {
 		// Name is required
 		if param.Name == "" {
-			return warnings, fmt.Errorf("LayoutPage %q: param[%d] missing required 'name' field", doc.Name, i)
+			return warnings, fmt.Errorf("%s %q: param[%d] missing required 'name' field", doc.Kind, doc.Name, i)
 		}
 
 		// Check for duplicate names
 		if _, seen := seenNames[param.Name]; seen {
-			return warnings, fmt.Errorf("LayoutPage %q: duplicate param name %q", doc.Name, param.Name)
+			return warnings, fmt.Errorf("%s %q: duplicate param name %q", doc.Kind, doc.Name, param.Name)
 		}
 		seenNames[param.Name] = struct{}{}
 
 		// Validate type
 		if _, valid := ValidLayoutPageParamTypes[param.Type]; !valid {
-			return warnings, fmt.Errorf("LayoutPage %q: param %q has invalid type %q (valid: string, number, boolean, select, date, date_time)", doc.Name, param.Name, param.Type)
+			return warnings, fmt.Errorf("%s %q: param %q has invalid type %q (valid: string, number, boolean, select, date, date_time)", doc.Kind, doc.Name, param.Name, param.Type)
 		}
 
 		// Validate select type has options
 		if param.Type == "select" && (param.Options == nil || len(param.Options.Items) == 0) {
-			return warnings, fmt.Errorf("LayoutPage %q: param %q of type 'select' requires options.items", doc.Name, param.Name)
+			return warnings, fmt.Errorf("%s %q: param %q of type 'select' requires options.items", doc.Kind, doc.Name, param.Name)
 		}
 
 		// Validate number type constraints
 		if param.Type == "number" && param.Options != nil {
 			if param.Options.Min != nil && param.Options.Max != nil && *param.Options.Min > *param.Options.Max {
-				return warnings, fmt.Errorf("LayoutPage %q: param %q has min > max", doc.Name, param.Name)
+				return warnings, fmt.Errorf("%s %q: param %q has min > max", doc.Kind, doc.Name, param.Name)
 			}
 		}
 	}
@@ -293,37 +294,48 @@ func ValidateLayoutPageRefParams(ref LayoutPageRef, pageDocs map[string]Document
 		return nil, nil
 	}
 
+	return ValidateRefParams("LayoutPage", ref.Page, ref.Params, pageDoc.Params)
+}
+
+// ValidateRefParams validates parameter values passed by a reference against the
+// target document's parameter definitions.
+// Returns warnings for unknown params (params passed but not defined) and errors for:
+// - Missing required params
+// - Invalid param values (type mismatch, out of range, etc.)
+func ValidateRefParams(targetKind, targetName string, refParams map[string]string, declared []LayoutPageParamSpec) (warnings []string, err error) {
+	subject := fmt.Sprintf("%s %q", targetKind, targetName)
+
 	// Build param definitions map
 	paramDefs := make(map[string]LayoutPageParamSpec)
-	for _, p := range pageDoc.Params {
+	for _, p := range declared {
 		paramDefs[p.Name] = p
 	}
 
 	// Check for unknown params (warn but don't error)
-	for paramName := range ref.Params {
+	for paramName := range refParams {
 		if _, defined := paramDefs[paramName]; !defined {
-			warnings = append(warnings, fmt.Sprintf("LayoutPage %q: unknown param %q passed (not defined in metadata.params)", ref.Page, paramName))
+			warnings = append(warnings, fmt.Sprintf("%s: unknown param %q passed (not defined in metadata.params)", subject, paramName))
 		}
 	}
 
 	// Check required params are provided
-	for _, paramDef := range pageDoc.Params {
-		_, provided := ref.Params[paramDef.Name]
+	for _, paramDef := range declared {
+		_, provided := refParams[paramDef.Name]
 		hasDefault := paramDef.Default != nil
 
 		if paramDef.Required && !provided && !hasDefault {
-			return warnings, fmt.Errorf("LayoutPage %q: missing required param %q", ref.Page, paramDef.Name)
+			return warnings, fmt.Errorf("%s: missing required param %q", subject, paramDef.Name)
 		}
 	}
 
 	// Validate param values
-	for paramName, paramValue := range ref.Params {
+	for paramName, paramValue := range refParams {
 		paramDef, defined := paramDefs[paramName]
 		if !defined {
 			continue // Already warned about unknown params
 		}
 
-		if err := validateParamValue(ref.Page, paramName, paramValue, paramDef); err != nil {
+		if err := validateParamValue(subject, paramName, paramValue, paramDef); err != nil {
 			return warnings, err
 		}
 	}
@@ -332,7 +344,8 @@ func ValidateLayoutPageRefParams(ref LayoutPageRef, pageDocs map[string]Document
 }
 
 // validateParamValue validates a single param value against its definition.
-func validateParamValue(pageName, paramName, value string, def LayoutPageParamSpec) error {
+// The subject identifies the target document in messages, e.g. `LayoutPage "sales"`.
+func validateParamValue(subject, paramName, value string, def LayoutPageParamSpec) error {
 	switch def.Type {
 	case "number":
 		// Value might contain ${VAR} which can't be validated statically
@@ -342,15 +355,15 @@ func validateParamValue(pageName, paramName, value string, def LayoutPageParamSp
 		// Try to parse as number
 		var num float64
 		if _, err := fmt.Sscanf(value, "%f", &num); err != nil {
-			return fmt.Errorf("LayoutPage %q: param %q value %q is not a valid number", pageName, paramName, value)
+			return fmt.Errorf("%s: param %q value %q is not a valid number", subject, paramName, value)
 		}
 		// Check range constraints
 		if def.Options != nil {
 			if def.Options.Min != nil && num < *def.Options.Min {
-				return fmt.Errorf("LayoutPage %q: param %q value %v is below minimum %v", pageName, paramName, num, *def.Options.Min)
+				return fmt.Errorf("%s: param %q value %v is below minimum %v", subject, paramName, num, *def.Options.Min)
 			}
 			if def.Options.Max != nil && num > *def.Options.Max {
-				return fmt.Errorf("LayoutPage %q: param %q value %v is above maximum %v", pageName, paramName, num, *def.Options.Max)
+				return fmt.Errorf("%s: param %q value %v is above maximum %v", subject, paramName, num, *def.Options.Max)
 			}
 		}
 
@@ -359,7 +372,7 @@ func validateParamValue(pageName, paramName, value string, def LayoutPageParamSp
 			return nil
 		}
 		if value != "true" && value != "false" {
-			return fmt.Errorf("LayoutPage %q: param %q value %q is not a valid boolean (must be 'true' or 'false')", pageName, paramName, value)
+			return fmt.Errorf("%s: param %q value %q is not a valid boolean (must be 'true' or 'false')", subject, paramName, value)
 		}
 
 	case "select":
@@ -381,7 +394,7 @@ func validateParamValue(pageName, paramName, value string, def LayoutPageParamSp
 			for _, item := range def.Options.Items {
 				validValues = append(validValues, item.Value)
 			}
-			return fmt.Errorf("LayoutPage %q: param %q value %q is not a valid option (valid: %v)", pageName, paramName, value, validValues)
+			return fmt.Errorf("%s: param %q value %q is not a valid option (valid: %v)", subject, paramName, value, validValues)
 		}
 	}
 

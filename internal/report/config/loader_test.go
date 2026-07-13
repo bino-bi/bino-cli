@@ -501,3 +501,60 @@ func TestBnignoreExcludesRegistryDocs(t *testing.T) {
 		t.Fatalf(".bnignore should exclude the registry scope, got %d docs", len(docs))
 	}
 }
+
+func TestLoadDirPreservesComponentParamPlaceholders(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	predef := "apiVersion: bino.bi/v1alpha1\n" +
+		"kind: Text\n" +
+		"metadata:\n" +
+		"  name: \"@acme/commentary\"\n" +
+		"  params:\n" +
+		"    - name: REGION\n" +
+		"spec:\n" +
+		"  value: \"Report for ${REGION}\"\n"
+	if err := os.WriteFile(filepath.Join(root, "predef.yaml"), []byte(predef), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	load := func(t *testing.T) {
+		t.Helper()
+		docs, err := LoadDir(ctx, root)
+		if err != nil {
+			t.Fatalf("load dir: %v", err)
+		}
+		if len(docs) != 1 {
+			t.Fatalf("expected 1 document, got %d", len(docs))
+		}
+		doc := docs[0]
+		if !strings.Contains(string(doc.Raw), "${REGION}") {
+			t.Fatalf("param placeholder not preserved, raw: %s", doc.Raw)
+		}
+		if len(doc.Params) != 1 || doc.Params[0].Name != "REGION" {
+			t.Fatalf("metadata.params not captured, got %+v", doc.Params)
+		}
+		if len(doc.MissingEnvVars) != 0 {
+			t.Fatalf("declared param must not count as missing env var, got %v", doc.MissingEnvVars)
+		}
+	}
+
+	// The placeholder must survive load even when REGION is set in the
+	// environment, so it can be expanded later with ref params.
+	t.Run("env set", func(t *testing.T) {
+		t.Setenv("REGION", "from-env")
+		load(t)
+	})
+
+	// With REGION unset, the declared param must not be reported missing.
+	t.Run("env unset", func(t *testing.T) {
+		load(t)
+	})
+}

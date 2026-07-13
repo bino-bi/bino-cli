@@ -214,6 +214,36 @@ spec:
 
 The `_LABEL` suffix is available for any `select` type parameter with defined options. If the label is not defined for an item, the value is used instead.
 
+## Parameters on referenced components
+
+Standalone component documents (Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, Image) declare parameters in `metadata.params` exactly like a LayoutPage. Anything that references such a document with `ref` — a layout child, grid child, or tree node — passes values via `params`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: regional-commentary
+  params:
+    - name: REGION
+      type: string
+      default: EU
+spec:
+  value: "Report for ${REGION}"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: commentary-page
+spec:
+  children:
+    - kind: Text
+      ref: regional-commentary
+      params:
+        REGION: US
+```
+
+Precedence, defaults, required params, and `${NAME_LABEL}` work identically to LayoutPage params. This is especially useful for predef packages installed from a registry — see [Registry and dependencies](/guides/registry-and-dependencies/).
+
 ## Practical examples
 
 ### Multi-region report

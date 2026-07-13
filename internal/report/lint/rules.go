@@ -21,6 +21,7 @@ func DefaultRules() []Rule {
 		datasetRequired,
 		pageLayoutSlotsUsed,
 		cardLayoutSlotsUsed,
+		refParams,
 		// Inline definition rules
 		inlineRefBounds,
 		datasetSourceExclusive,
