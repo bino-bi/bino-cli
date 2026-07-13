@@ -7,6 +7,14 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 // https://astro.build/config
 export default defineConfig({
 	site: "https://cli.bino.bi",
+	// Astro 6 deprecated `markdown.gfm` and leaves it undefined by default.
+	// Plain .md falls back to gfm=true internally, but @astrojs/mdx 5.x treats
+	// undefined as false and drops remark-gfm, breaking tables on every .mdx
+	// page. Setting it explicitly restores GFM for MDX (logs a deprecation
+	// warning at build time; harmless).
+	markdown: {
+		gfm: true,
+	},
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
