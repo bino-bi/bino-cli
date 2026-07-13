@@ -195,6 +195,74 @@ func TestCompletion_RefQuotesRegistryNamesInPlainContext(t *testing.T) {
 	}
 }
 
+func TestCompletion_UnquotedAtRefStillCompletes(t *testing.T) {
+	s, root := newRegistryTestServer(t)
+	// The unquoted @ makes the whole document unparseable — exactly while the
+	// author types a registry ref. Completion must repair, resolve with the
+	// sibling kind, and replace the raw token with a QUOTED value.
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: @acme/kpi-c
+`
+	u := uri.File(filepath.Join(root, "page.yaml"))
+	s.docs.Set(u, doc, 1)
+	res, _ := s.Completion(context.Background(), completionParams(u, 6, 22))
+	items := completionItems(t, res)
+	reg := findItem(items, "@acme/kpi-card")
+	if reg == nil {
+		t.Fatalf("registry package missing from repaired ref completion, got %v", completionLabels(t, res))
+	}
+	edit, ok := reg.TextEdit.(*protocol.TextEdit)
+	if !ok {
+		t.Fatalf("expected TextEdit, got %T", reg.TextEdit)
+	}
+	if edit.NewText != `"@acme/kpi-card"` {
+		t.Errorf("NewText = %q, want the quoted name", edit.NewText)
+	}
+	wantRange := protocol.Range{
+		Start: protocol.Position{Line: 6, Character: 11},
+		End:   protocol.Position{Line: 6, Character: 11 + uint32(len("@acme/kpi-c"))},
+	}
+	if edit.Range != wantRange {
+		t.Errorf("TextEdit range = %+v, want the raw token span %+v", edit.Range, wantRange)
+	}
+}
+
+func TestCodeAction_QuoteAtValue(t *testing.T) {
+	s, root := newRegistryTestServer(t)
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: @acme/kpi-card
+`
+	u := uri.File(filepath.Join(root, "page.yaml"))
+	s.docs.Set(u, doc, 1)
+	actions, _ := s.CodeAction(context.Background(), &protocol.CodeActionParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: u},
+		Range:        protocol.Range{Start: protocol.Position{Line: 6, Character: 14}, End: protocol.Position{Line: 6, Character: 14}},
+	})
+	var quote *protocol.CodeAction
+	for _, a := range actions {
+		if ca, ok := a.(*protocol.CodeAction); ok && strings.HasPrefix(ca.Title, "Quote '@acme/kpi-card'") {
+			quote = ca
+		}
+	}
+	if quote == nil {
+		t.Fatalf("expected a quote quick fix, got %d actions", len(actions))
+	}
+	edits := quote.Edit.Changes[u]
+	if len(edits) != 1 || edits[0].NewText != `"@acme/kpi-card"` {
+		t.Errorf("quote edit should wrap the value in quotes, got %+v", edits)
+	}
+}
+
 func TestCompletion_ParamKeys(t *testing.T) {
 	s, root := newRegistryTestServer(t)
 	u := openLayoutDoc(t, s, root)

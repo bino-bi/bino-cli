@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -106,6 +107,33 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 	}
 	return ctx, true
 }
+
+// RepairUnquotedAt scans the cursor line for an unquoted `@...` scalar value
+// (`ref: @scope/name`) — invalid YAML, since `@` is a reserved indicator, so
+// the whole document fails to parse and position resolution goes dark exactly
+// while an author types a registry ref. It returns the content with that token
+// quoted, the token itself, and the token's raw (1-based, end-exclusive) span
+// in the original content. ok=false when the line doesn't match.
+func RepairUnquotedAt(content string, line int) (repaired, token string, raw Range, ok bool) {
+	lines := strings.Split(content, "\n")
+	if line < 1 || line > len(lines) {
+		return "", "", Range{}, false
+	}
+	m := unquotedAtValueRe.FindStringSubmatchIndex(lines[line-1])
+	if m == nil {
+		return "", "", Range{}, false
+	}
+	src := lines[line-1]
+	start, end := m[2], m[3] // the @token submatch, 0-based byte offsets
+	token = src[start:end]
+	lines[line-1] = src[:start] + `"` + token + `"` + src[end:]
+	raw = Range{StartLine: line, StartCol: start + 1, EndLine: line, EndCol: end + 1}
+	return strings.Join(lines, "\n"), token, raw, true
+}
+
+// unquotedAtValueRe matches a mapping value starting with the YAML-reserved
+// `@` (optionally inside a sequence item), e.g. `ref: @acme/kpi`.
+var unquotedAtValueRe = regexp.MustCompile(`^\s*(?:-\s+)?[A-Za-z][A-Za-z0-9_-]*:\s+(@\S*)\s*$`)
 
 // selectDocument picks the document whose content owns the cursor line and
 // returns its 0-based index, root mapping node, and the exclusive upper line

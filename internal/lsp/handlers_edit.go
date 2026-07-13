@@ -89,7 +89,32 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 	if a := s.addMissingParamsAction(ctx, docURI, params.Range); a != nil {
 		actions = append(actions, a)
 	}
+	if a := s.quoteAtValueAction(docURI, params.Range); a != nil {
+		actions = append(actions, a)
+	}
 	return actions, nil
+}
+
+// quoteAtValueAction offers to quote an unquoted `@...` value on the cursor
+// line — a YAML parse error (`@` is a reserved indicator) that every hand-typed
+// registry ref hits.
+func (s *Server) quoteAtValueAction(u uri.URI, rng protocol.Range) *protocol.CodeAction {
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return nil
+	}
+	_, token, raw, ok := reportspec.RepairUnquotedAt(doc.Text, int(rng.Start.Line)+1)
+	if !ok {
+		return nil
+	}
+	quickFix := protocol.CodeActionKindQuickFix
+	return &protocol.CodeAction{
+		Title: "Quote '" + token + "' (YAML reserves '@')",
+		Kind:  &quickFix,
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: RangeToProtocol(raw), NewText: "\"" + token + "\""}}},
+		},
+	}
 }
 
 // addMissingParamsAction offers to insert the params a ref target requires

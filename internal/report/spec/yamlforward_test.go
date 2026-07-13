@@ -346,6 +346,51 @@ spec:
 	}
 }
 
+func TestRepairUnquotedAt(t *testing.T) {
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: @acme/kpi-c
+`
+	repaired, token, raw, ok := RepairUnquotedAt(doc, 7)
+	if !ok {
+		t.Fatal("expected a repair for the unquoted @ value")
+	}
+	if token != "@acme/kpi-c" {
+		t.Errorf("token = %q, want @acme/kpi-c", token)
+	}
+	want := Range{StartLine: 7, StartCol: 12, EndLine: 7, EndCol: 12 + len("@acme/kpi-c")}
+	if raw != want {
+		t.Errorf("raw = %+v, want %+v", raw, want)
+	}
+	// The repaired content must parse and resolve to a kind-aware ref position.
+	ctx, rok := ResolvePositionPath(repaired, 7, 14)
+	if !rok || ctx.Kind != PosDatasetRef || ctx.RefKind != "Table" {
+		t.Errorf("repaired resolve = ok=%v kind=%v refKind=%q, want PosDatasetRef/Table", rok, ctx.Kind, ctx.RefKind)
+	}
+
+	for _, tt := range []struct {
+		name, line string
+		wantOK     bool
+	}{
+		{"sequence item form", "    - ref: @x/y", true},
+		{"bare @ just typed", "      ref: @", true},
+		{"already quoted", `      ref: "@x/y"`, false},
+		{"plain local name", "      ref: intro", false},
+		{"no space after colon", "      ref:@x", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, gotOK := RepairUnquotedAt(tt.line, 1)
+			if gotOK != tt.wantOK {
+				t.Errorf("RepairUnquotedAt(%q) ok = %v, want %v", tt.line, gotOK, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestResolvePositionPath_MultiDoc(t *testing.T) {
 	const content = `kind: DataSource
 metadata:

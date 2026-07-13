@@ -22,15 +22,40 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		return nil, nil
 	}
 	line, col := doc.PositionToLineCol(params.Position)
-	pc, ok := reportspec.ResolvePositionPath(doc.Text, line, col)
+	pc, rawValue, ok := resolveForCompletion(doc.Text, line, col)
 	if !ok {
 		return nil, nil
 	}
-	items, incomplete := s.assembleCompletion(ctx, pc)
+	items, incomplete := s.assembleCompletion(ctx, pc, rawValue)
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
 	}
 	return protocol.CompletionItemSlice(items), nil
+}
+
+// resolveForCompletion resolves the cursor, falling back to a quoted repair of
+// an unquoted `@...` value on the cursor line (invalid YAML that breaks the
+// whole-document parse) so completion keeps working while an author types a
+// registry ref. rawValue reports that the buffer carries the token unquoted:
+// the accepted completion must then replace the raw span with a quoted value.
+func resolveForCompletion(text string, line, col int) (pc reportspec.PositionContext, rawValue bool, ok bool) {
+	if pc, ok := reportspec.ResolvePositionPath(text, line, col); ok {
+		return pc, false, true
+	}
+	repaired, _, raw, ok := reportspec.RepairUnquotedAt(text, line)
+	if !ok {
+		return reportspec.PositionContext{}, false, false
+	}
+	rcol := col
+	if col > raw.StartCol {
+		rcol = col + 1 // account for the inserted opening quote
+	}
+	pc, ok = reportspec.ResolvePositionPath(repaired, line, rcol)
+	if !ok {
+		return reportspec.PositionContext{}, false, false
+	}
+	pc.ReplaceRange = raw // replace the raw unquoted token; NewText adds quotes
+	return pc, true, true
 }
 
 // CompletionResolve is a passthrough; items already carry their documentation.
@@ -38,7 +63,7 @@ func (s *Server) CompletionResolve(_ context.Context, item *protocol.CompletionI
 	return item, nil
 }
 
-func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext) (items []protocol.CompletionItem, incomplete bool) {
+func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext, rawValue bool) (items []protocol.CompletionItem, incomplete bool) {
 	// A completion panic must never crash the server or break the editor session;
 	// log it and return no suggestions.
 	defer func() {
@@ -64,7 +89,7 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 			refs = append(refs, rulesetKeywordItems()...)
 		}
 		if pc.FieldName == "ref" {
-			applyRefTextEdits(refs, pc)
+			applyRefTextEdits(refs, pc, rawValue)
 		}
 		return refs, false
 	case reportspec.PosParamKey:
@@ -98,12 +123,13 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 // applyRefTextEdits pins each ref candidate to the resolved value range so
 // clients replace the exact scalar, quoting names YAML reserves (`@scope/...`)
 // when the buffer carries no quotes yet — a plain scalar cannot start with `@`,
-// so a prefix already starting with `@` implies existing quotes.
-func applyRefTextEdits(items []protocol.CompletionItem, pc reportspec.PositionContext) {
+// so a prefix already starting with `@` implies existing quotes, UNLESS the
+// resolve went through the unquoted-`@` repair (rawValue).
+func applyRefTextEdits(items []protocol.CompletionItem, pc reportspec.PositionContext, rawValue bool) {
 	rng := RangeToProtocol(pc.ReplaceRange)
 	for i := range items {
 		text := items[i].Label
-		if strings.HasPrefix(text, "@") && !strings.HasPrefix(pc.Prefix, "@") {
+		if strings.HasPrefix(text, "@") && (rawValue || !strings.HasPrefix(pc.Prefix, "@")) {
 			text = "\"" + text + "\""
 		}
 		items[i].TextEdit = &protocol.TextEdit{Range: rng, NewText: text}
