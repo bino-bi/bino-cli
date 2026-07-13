@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -41,19 +42,26 @@ const (
 	// PosFreeValue is a scalar value with no special completion semantics; the
 	// completion layer may upgrade it to an enum when the schema says so.
 	PosFreeValue
+	// PosParamKey is a key position inside a ref child's `params:` mapping —
+	// suggest the target document's declared param names.
+	PosParamKey
+	// PosParamValue is a value position inside a ref child's `params:` mapping.
+	PosParamValue
 )
 
 // PositionContext is the resolver's verdict for a cursor: the dotted path, the
 // enclosing manifest kind, and enough context to assemble candidates.
 type PositionContext struct {
 	Kind          PositionKind
-	Path          string // dotted path (same vocabulary as ResolvePathPosition)
-	EnclosingKind string // the document's `kind:` value
-	FieldName     string // the immediate field name under the cursor
-	RefKind       string // for PosDatasetRef: the valid target kind
-	Prefix        string // already-typed value text (for filtering / replace)
-	ReplaceRange  Range  // where an accepted completion should be written
-	DocIndex      int    // 0-based document ordinal within a multi-doc file
+	Path          string   // dotted path (same vocabulary as ResolvePathPosition)
+	EnclosingKind string   // the document's `kind:` value
+	FieldName     string   // the immediate field name under the cursor
+	RefKind       string   // for PosDatasetRef / param positions: the valid target kind
+	RefName       string   // for `ref` values and param positions: the target ref/page name
+	PresentKeys   []string // for PosParamKey / `ref` values: params already present on the child
+	Prefix        string   // already-typed value text (for filtering / replace)
+	ReplaceRange  Range    // where an accepted completion should be written
+	DocIndex      int      // 0-based document ordinal within a multi-doc file
 	BoundDatasets []string
 }
 
@@ -100,6 +108,33 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 	return ctx, true
 }
 
+// RepairUnquotedAt scans the cursor line for an unquoted `@...` scalar value
+// (`ref: @scope/name`) — invalid YAML, since `@` is a reserved indicator, so
+// the whole document fails to parse and position resolution goes dark exactly
+// while an author types a registry ref. It returns the content with that token
+// quoted, the token itself, and the token's raw (1-based, end-exclusive) span
+// in the original content. ok=false when the line doesn't match.
+func RepairUnquotedAt(content string, line int) (repaired, token string, raw Range, ok bool) {
+	lines := strings.Split(content, "\n")
+	if line < 1 || line > len(lines) {
+		return "", "", Range{}, false
+	}
+	m := unquotedAtValueRe.FindStringSubmatchIndex(lines[line-1])
+	if m == nil {
+		return "", "", Range{}, false
+	}
+	src := lines[line-1]
+	start, end := m[2], m[3] // the @token submatch, 0-based byte offsets
+	token = src[start:end]
+	lines[line-1] = src[:start] + `"` + token + `"` + src[end:]
+	raw = Range{StartLine: line, StartCol: start + 1, EndLine: line, EndCol: end + 1}
+	return strings.Join(lines, "\n"), token, raw, true
+}
+
+// unquotedAtValueRe matches a mapping value starting with the YAML-reserved
+// `@` (optionally inside a sequence item), e.g. `ref: @acme/kpi`.
+var unquotedAtValueRe = regexp.MustCompile(`^\s*(?:-\s+)?[A-Za-z][A-Za-z0-9_-]*:\s+(@\S*)\s*$`)
+
 // selectDocument picks the document whose content owns the cursor line and
 // returns its 0-based index, root mapping node, and the exclusive upper line
 // bound (the next document's start, or a sentinel past EOF).
@@ -128,6 +163,13 @@ func selectDocument(nodes []*yaml.Node, line int) (idx int, root *yaml.Node, end
 	return chosen, root, endLine
 }
 
+// refTarget identifies the component reference (sibling kind + ref/page name)
+// a `params:` mapping belongs to.
+type refTarget struct {
+	kind string
+	name string
+}
+
 // walker carries the per-resolution cursor and document context through the
 // recursive descent.
 type walker struct {
@@ -136,6 +178,7 @@ type walker struct {
 	enclosingKind string
 	docIndex      int
 	boundDatasets []string
+	refTarget     refTarget
 }
 
 // descend walks node looking for the deepest node owning the cursor, building
@@ -163,6 +206,16 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 	if k := mappingChildValue(node, "kind"); k != "" {
 		w.enclosingKind = k
 	}
+	// A mapping with `kind`+`ref` (layout/grid/tree child) or `page`+`params`
+	// (layoutPages object form) is a component reference: remember it so a
+	// nested `params:` position resolves against the referenced document.
+	if r := mappingChildValue(node, "ref"); r != "" {
+		if k := mappingChildValue(node, "kind"); k != "" {
+			w.refTarget = refTarget{kind: k, name: r}
+		}
+	} else if p := mappingChildValue(node, "page"); p != "" && mappingChild(node, "params") != nil {
+		w.refTarget = refTarget{kind: "LayoutPage", name: p}
+	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
 		val := node.Content[i+1]
@@ -183,17 +236,19 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 				if isContainer(val) {
 					return w.descend(val, childPath, upper)
 				}
-				return w.classifyValue(val, key.Value, childPath, path), true
+				return w.classifyValue(node, val, key.Value, childPath, path), true
 			}
 			keyEnd := key.Column + len(key.Value)
 			if w.cursorCol <= keyEnd {
-				return w.keyContext(node, path), true
+				kctx := w.keyContext(node, path)
+				kctx.Prefix = key.Value // the key token under the cursor (hover/filtering)
+				return kctx, true
 			}
 			// Between the key token and an empty / next-line value.
 			if isContainer(val) {
 				return w.descend(val, childPath, upper)
 			}
-			return w.classifyValue(val, key.Value, childPath, path), true
+			return w.classifyValue(node, val, key.Value, childPath, path), true
 		}
 
 		// Cursor is on a line below the key.
@@ -201,7 +256,19 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 			return w.descend(val, childPath, upper)
 		}
 		if isMultilineScalar(val) && w.cursorLine >= val.Line {
-			return w.classifyValue(val, key.Value, childPath, path), true
+			return w.classifyValue(node, val, key.Value, childPath, path), true
+		}
+		// An empty `params:` parses as a null scalar, so a cursor indented beneath
+		// it is the first param key, not a new sibling of the child mapping.
+		if key.Value == "params" && w.refTarget.name != "" && w.cursorCol > key.Column {
+			return PositionContext{
+				Kind:         PosParamKey,
+				Path:         joinPath(childPath),
+				FieldName:    "params",
+				RefKind:      w.refTarget.kind,
+				RefName:      w.refTarget.name,
+				ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
+			}, true
 		}
 		// A single-line scalar value with the cursor on a blank line beneath it:
 		// the author is starting a new sibling key under this mapping.
@@ -240,8 +307,20 @@ func (w *walker) descendSequence(node *yaml.Node, path []string, parentEnd int) 
 	return w.newSequenceItem(field, path), true
 }
 
-// keyContext builds a PosKey result for the given mapping path.
-func (w *walker) keyContext(_ *yaml.Node, path []string) PositionContext {
+// keyContext builds a PosKey result for the given mapping path, or a
+// PosParamKey when the mapping is a component reference's `params:` block.
+func (w *walker) keyContext(node *yaml.Node, path []string) PositionContext {
+	if lastSegment(path) == "params" && w.refTarget.name != "" {
+		return PositionContext{
+			Kind:         PosParamKey,
+			Path:         joinPath(path),
+			FieldName:    "params",
+			RefKind:      w.refTarget.kind,
+			RefName:      w.refTarget.name,
+			PresentKeys:  mappingKeys(node),
+			ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
+		}
+	}
 	return PositionContext{
 		Kind:         PosKey,
 		Path:         joinPath(path),
@@ -250,10 +329,10 @@ func (w *walker) keyContext(_ *yaml.Node, path []string) PositionContext {
 	}
 }
 
-// classifyValue classifies a value node reached via key `field`. parentPath is
-// the path of the enclosing mapping (used to read sibling keys, e.g. a child's
-// `kind` for a `ref`).
-func (w *walker) classifyValue(val *yaml.Node, field string, valPath, parentPath []string) PositionContext {
+// classifyValue classifies a value node reached via key `field`. parent is the
+// enclosing mapping node (used to read sibling keys, e.g. a child's `kind` for
+// a `ref`); parentPath is its dotted path.
+func (w *walker) classifyValue(parent, val *yaml.Node, field string, valPath, parentPath []string) PositionContext {
 	ctx := PositionContext{
 		Path:         joinPath(valPath),
 		FieldName:    field,
@@ -269,7 +348,22 @@ func (w *walker) classifyValue(val *yaml.Node, field string, valPath, parentPath
 		ctx.Kind = PosQueryScalar
 		return ctx
 	}
-	if rk, ok := w.refKindFor(field, parentPath); ok {
+	if lastSegment(parentPath) == "params" && w.refTarget.name != "" {
+		ctx.Kind = PosParamValue
+		ctx.RefKind = w.refTarget.kind
+		ctx.RefName = w.refTarget.name
+		return ctx
+	}
+	if field == "ref" {
+		// The target kind is the sibling `kind:` of the same child mapping; the
+		// sibling `params:` keys feed the add-required-params quick fix.
+		ctx.Kind = PosDatasetRef
+		ctx.RefKind = mappingChildValue(parent, "kind")
+		ctx.RefName = scalarText(val)
+		ctx.PresentKeys = mappingKeys(mappingChild(parent, "params"))
+		return ctx
+	}
+	if rk, ok := refKindFor(field); ok {
 		ctx.Kind = PosDatasetRef
 		ctx.RefKind = rk
 		return ctx
@@ -321,22 +415,19 @@ func (w *walker) newSequenceItem(field string, parentPath []string) PositionCont
 	return ctx
 }
 
-// refKindFor reports the target kind a reference field points at. `ref` resolves
-// to the sibling `kind` value of its child object; `dataset` resolves by the
-// `$`-prefix convention; the rest come from refFieldKinds.
-func (w *walker) refKindFor(field string, parentPath []string) (string, bool) {
+// refKindFor reports the target kind a simple reference field points at.
+// `dataset` resolves by the `$`-prefix convention at use sites; `ref` is
+// resolved contextually in classifyValue (sibling `kind`).
+func refKindFor(field string) (string, bool) {
 	switch field {
 	case "dataset":
 		return "DataSet", true // refined to DataSource by the $-prefix at use sites
-	case "ref":
-		return "", true // target kind is the sibling `kind`; left for the caller/index
 	case "layoutPages":
 		return "LayoutPage", true
 	}
 	if k, ok := refFieldKinds[field]; ok {
 		return k, true
 	}
-	_ = parentPath
 	return "", false
 }
 
@@ -383,7 +474,11 @@ func valueRange(n *yaml.Node, curLine, curCol int) Range {
 	if n == nil || n.Kind != yaml.ScalarNode || n.Value == "" {
 		return atCursor(curLine, curCol)
 	}
-	return Range{StartLine: n.Line, StartCol: n.Column, EndLine: n.Line, EndCol: n.Column + len(n.Value)}
+	col := n.Column
+	if n.Style == yaml.SingleQuotedStyle || n.Style == yaml.DoubleQuotedStyle {
+		col++ // Column points at the opening quote; the range covers the content only
+	}
+	return Range{StartLine: n.Line, StartCol: col, EndLine: n.Line, EndCol: col + len(n.Value)}
 }
 
 func atCursor(line, col int) Range {
@@ -439,6 +534,20 @@ func scalarOrSeqValues(n *yaml.Node) []string {
 	default:
 	}
 	return nil
+}
+
+// mappingKeys returns the key names of a mapping node (nil-safe).
+func mappingKeys(n *yaml.Node) []string {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return nil
+	}
+	out := make([]string, 0, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value != "" {
+			out = append(out, n.Content[i].Value)
+		}
+	}
+	return out
 }
 
 func mappingChild(n *yaml.Node, key string) *yaml.Node {

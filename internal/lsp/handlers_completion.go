@@ -2,12 +2,14 @@ package lsp
 
 import (
 	"context"
+	"fmt"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	"go.lsp.dev/protocol"
 
+	"bino.bi/bino/internal/report/config"
 	reportspec "bino.bi/bino/internal/report/spec"
 )
 
@@ -20,15 +22,40 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		return nil, nil
 	}
 	line, col := doc.PositionToLineCol(params.Position)
-	pc, ok := reportspec.ResolvePositionPath(doc.Text, line, col)
+	pc, rawValue, ok := resolveForCompletion(doc.Text, line, col)
 	if !ok {
 		return nil, nil
 	}
-	items, incomplete := s.assembleCompletion(ctx, pc)
+	items, incomplete := s.assembleCompletion(ctx, pc, rawValue)
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
 	}
 	return protocol.CompletionItemSlice(items), nil
+}
+
+// resolveForCompletion resolves the cursor, falling back to a quoted repair of
+// an unquoted `@...` value on the cursor line (invalid YAML that breaks the
+// whole-document parse) so completion keeps working while an author types a
+// registry ref. rawValue reports that the buffer carries the token unquoted:
+// the accepted completion must then replace the raw span with a quoted value.
+func resolveForCompletion(text string, line, col int) (pc reportspec.PositionContext, rawValue bool, ok bool) {
+	if pc, ok := reportspec.ResolvePositionPath(text, line, col); ok {
+		return pc, false, true
+	}
+	repaired, _, raw, ok := reportspec.RepairUnquotedAt(text, line)
+	if !ok {
+		return reportspec.PositionContext{}, false, false
+	}
+	rcol := col
+	if col > raw.StartCol {
+		rcol = col + 1 // account for the inserted opening quote
+	}
+	pc, ok = reportspec.ResolvePositionPath(repaired, line, rcol)
+	if !ok {
+		return reportspec.PositionContext{}, false, false
+	}
+	pc.ReplaceRange = raw // replace the raw unquoted token; NewText adds quotes
+	return pc, true, true
 }
 
 // CompletionResolve is a passthrough; items already carry their documentation.
@@ -36,7 +63,7 @@ func (s *Server) CompletionResolve(_ context.Context, item *protocol.CompletionI
 	return item, nil
 }
 
-func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext) (items []protocol.CompletionItem, incomplete bool) {
+func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext, rawValue bool) (items []protocol.CompletionItem, incomplete bool) {
 	// A completion panic must never crash the server or break the editor session;
 	// log it and return no suggestions.
 	defer func() {
@@ -57,11 +84,26 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeVariances(scenarioSlots(available)), available == nil
 	case reportspec.PosDatasetRef:
-		refs := completeRefs(s.getIndex(ctx), pc.RefKind)
+		refs := completeRefs(s.getIndex(ctx), pc.RefKind, s.packageOrigins())
 		if pc.FieldName == "ruleset" {
 			refs = append(refs, rulesetKeywordItems()...)
 		}
+		if pc.FieldName == "ref" {
+			applyRefTextEdits(refs, pc, rawValue)
+		}
 		return refs, false
+	case reportspec.PosParamKey:
+		decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
+		if !ok {
+			return nil, false
+		}
+		return completeParamKeys(decls, keySet(pc.PresentKeys)), false
+	case reportspec.PosParamValue:
+		decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
+		if !ok {
+			return nil, false
+		}
+		return completeParamValues(findParam(decls, pc.FieldName)), false
 	case reportspec.PosQueryScalar:
 		cols := s.unionColumns(ctx, pc.BoundDatasets)
 		if cols == nil {
@@ -76,6 +118,34 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 	default:
 		return nil, false
 	}
+}
+
+// applyRefTextEdits pins each ref candidate to the resolved value range so
+// clients replace the exact scalar, quoting names YAML reserves (`@scope/...`)
+// when the buffer carries no quotes yet — a plain scalar cannot start with `@`,
+// so a prefix already starting with `@` implies existing quotes, UNLESS the
+// resolve went through the unquoted-`@` repair (rawValue).
+func applyRefTextEdits(items []protocol.CompletionItem, pc reportspec.PositionContext, rawValue bool) {
+	rng := RangeToProtocol(pc.ReplaceRange)
+	for i := range items {
+		text := items[i].Label
+		if strings.HasPrefix(text, "@") && (rawValue || !strings.HasPrefix(pc.Prefix, "@")) {
+			text = "\"" + text + "\""
+		}
+		items[i].TextEdit = &protocol.TextEdit{Range: rng, NewText: text}
+	}
+}
+
+// keySet converts a key list to a membership set (nil for empty).
+func keySet(keys []string) map[string]bool {
+	if len(keys) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		set[k] = true
+	}
+	return set
 }
 
 // unionColumns returns the deduped, order-preserving union of the bound
@@ -152,6 +222,9 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		if pc.Prefix == "" {
 			return ""
 		}
+		if pc.FieldName == "ref" || pc.FieldName == "page" {
+			return s.refTargetHover(ctx, pc)
+		}
 		cctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer cancel()
 		cols, err := s.backend.Columns(cctx, strings.TrimPrefix(pc.Prefix, "$"))
@@ -159,9 +232,82 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 			return ""
 		}
 		return "**" + pc.Prefix + "** columns:\n\n" + "`" + strings.Join(cols, "`, `") + "`"
+	case reportspec.PosParamKey, reportspec.PosParamValue:
+		decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
+		if !ok {
+			return ""
+		}
+		name := pc.FieldName
+		if pc.Kind == reportspec.PosParamKey {
+			name = pc.Prefix
+		}
+		return paramDeclMarkdown(findParam(decls, name))
 	case reportspec.PosKey, reportspec.PosFreeValue:
 		return s.getSchema(ctx).fieldDoc(pc.EnclosingKind, pc.FieldName)
 	default:
 		return ""
 	}
+}
+
+// refTargetHover summarizes a component/page reference target: its kind,
+// registry origin (from bino.lock), and declared params.
+func (s *Server) refTargetHover(ctx context.Context, pc reportspec.PositionContext) string {
+	name := pc.Prefix
+	def, ok := s.getNameIndex(ctx).Definition(pc.RefKind, name)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "**%s** — %s", name, def.Kind)
+	if o, ok := s.packageOrigins()[normPath(def.File)]; ok {
+		fmt.Fprintf(&b, " · registry %s", o.Version)
+		if o.Tag != "" {
+			fmt.Fprintf(&b, " (tag: %s)", o.Tag)
+		}
+	}
+	if decls, ok := s.paramsForTarget(ctx, def.Kind, name); ok && len(decls) > 0 {
+		b.WriteString("\n\n| Param | Type | Default | Description |\n|---|---|---|---|\n")
+		for _, p := range decls {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", p.Name, paramDetail(p), paramDefaultCell(p), p.Description)
+		}
+	}
+	return b.String()
+}
+
+// paramDefaultCell renders a declaration's default for the hover table.
+func paramDefaultCell(p config.LayoutPageParamSpec) string {
+	if p.Default == nil {
+		return "—"
+	}
+	return "`" + *p.Default + "`"
+}
+
+// paramDeclMarkdown renders one param declaration for hover.
+func paramDeclMarkdown(p *config.LayoutPageParamSpec) string {
+	if p == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "**%s** — %s", p.Name, paramDetail(*p))
+	if p.Description != "" {
+		fmt.Fprintf(&b, "\n\n%s", p.Description)
+	}
+	if p.Options != nil {
+		if len(p.Options.Items) > 0 {
+			b.WriteString("\n\nOptions:")
+			for _, o := range p.Options.Items {
+				fmt.Fprintf(&b, "\n- `%s`", o.Value)
+				if o.Label != "" {
+					fmt.Fprintf(&b, " — %s", o.Label)
+				}
+			}
+		}
+		if p.Options.Min != nil {
+			fmt.Fprintf(&b, "\n\nMin: %v", *p.Options.Min)
+		}
+		if p.Options.Max != nil {
+			fmt.Fprintf(&b, "\n\nMax: %v", *p.Options.Max)
+		}
+	}
+	return b.String()
 }
