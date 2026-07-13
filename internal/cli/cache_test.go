@@ -10,7 +10,7 @@ import (
 
 func TestCleanGlobalCacheDirPreservesCredentials(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"credentials.json", "state.json"} {
+	for _, name := range []string{"credentials.json", "config.toml", "state.json"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -23,8 +23,10 @@ func TestCleanGlobalCacheDirPreservesCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "credentials.json")); err != nil {
-		t.Error("credentials.json must survive a global cache clean")
+	for _, kept := range []string{"credentials.json", "config.toml"} {
+		if _, err := os.Stat(filepath.Join(dir, kept)); err != nil {
+			t.Errorf("%s must survive a global cache clean", kept)
+		}
 	}
 	for _, gone := range []string{"state.json", "templates"} {
 		if _, err := os.Stat(filepath.Join(dir, gone)); !os.IsNotExist(err) {

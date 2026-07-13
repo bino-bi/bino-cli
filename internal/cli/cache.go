@@ -115,9 +115,10 @@ func cleanCacheDir(logger logx.Logger, dir, label string) error {
 }
 
 // cleanGlobalCacheDir removes everything under ~/.bino except
-// credentials.json — login credentials are not cache: they are not
-// regenerable without re-entering a password, and the server-side token
-// would be orphaned.
+// credentials.json and config.toml — login credentials and user
+// configuration are not cache: credentials are not regenerable without
+// re-entering a password (and the server-side token would be orphaned),
+// and config.toml holds deliberate user settings.
 func cleanGlobalCacheDir(logger logx.Logger, dir string) error {
 	info, err := os.Stat(dir)
 	if os.IsNotExist(err) {
@@ -137,7 +138,7 @@ func cleanGlobalCacheDir(logger logx.Logger, dir string) error {
 	}
 	logger.Infof("Removing global cache: %s", dir)
 	for _, entry := range entries {
-		if entry.Name() == "credentials.json" {
+		if entry.Name() == "credentials.json" || entry.Name() == "config.toml" {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {

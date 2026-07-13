@@ -11,7 +11,9 @@ re-creates it from `bino.lock`).
 
 See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
 for the underlying concepts: package names, pin vs. tag semantics, the
-lockfile, and authentication.
+lockfile, and authentication. The registry URL resolution order (project
+config, environment, global `~/.bino/config.toml`, public default) is
+described there as well.
 
 ## bino registry add
 
@@ -121,7 +123,7 @@ it in `~/.bino/credentials.json` (mode 0600). Subsequent registry commands use
 the stored token automatically unless `bino.toml` or `BINO_REGISTRY_TOKEN`
 provides one.
 
-- `--registry` – registry URL (defaults to the project's or `https://registry.bino.bi`).
+- `--registry` – registry URL (overrides `bino.toml`, `BINO_REGISTRY_URL`, and `~/.bino/config.toml`; default `https://registry.bino.bi`).
 - `--email` – account email (prompts when omitted).
 - `--password-stdin` – read the password from stdin.
 - `--with-token` – store an existing personal access token read from stdin.

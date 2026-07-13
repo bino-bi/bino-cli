@@ -38,4 +38,7 @@ Remove all caches (local and global):
 bino cache clean --global
 ```
 
+`--global` spares `~/.bino/credentials.json` and `~/.bino/config.toml` —
+credentials and user configuration are not cache.
+
 Clearing caches may increase build time for the next run but can fix issues caused by stale intermediate data.
