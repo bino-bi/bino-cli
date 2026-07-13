@@ -471,34 +471,47 @@ func TestLoadDirIncludesRegistryDocs(t *testing.T) {
 	}
 }
 
-func TestBnignoreExcludesRegistryDocs(t *testing.T) {
-	ctx := context.Background()
-	root := t.TempDir()
-	writeManifest(t, filepath.Join(root, "main.yaml"), "main")
+func TestBnignoreDoesNotExcludeRegistryDocs(t *testing.T) {
+	// Installed packages are lock-managed content: a .bnignore ignoring
+	// `.bino/` (the recommended .gitignore entry, commonly mirrored) or a
+	// specific scope must not silently drop dependencies from the manifest
+	// set — that surfaces as a baffling "required reference not found" at
+	// build time. Excluding a package goes through `bino registry remove`.
+	for _, pattern := range []string{".bino/\n", ".bino/registry/acme/\n"} {
+		t.Run(strings.TrimSpace(pattern), func(t *testing.T) {
+			ctx := context.Background()
+			root := t.TempDir()
+			writeManifest(t, filepath.Join(root, "main.yaml"), "main")
 
-	regScope := filepath.Join(root, ".bino", "registry", "acme")
-	if err := os.MkdirAll(regScope, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeManifest(t, filepath.Join(regScope, "excluded.yml"), "excluded")
+			regScope := filepath.Join(root, ".bino", "registry", "acme")
+			if err := os.MkdirAll(regScope, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeManifest(t, filepath.Join(regScope, "installed.yml"), "installed")
 
-	if err := os.WriteFile(filepath.Join(root, ".bnignore"), []byte(".bino/registry/acme/\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+			if err := os.WriteFile(filepath.Join(root, ".bnignore"), []byte(pattern), 0o644); err != nil {
+				t.Fatal(err)
+			}
 
-	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
-		cfg.MaxManifestFiles = 10
-		cfg.MaxManifestDocs = 5
-		cfg.MaxManifestBytes = 1_000_000
-		return cfg
-	})
+			overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+				cfg.MaxManifestFiles = 10
+				cfg.MaxManifestDocs = 5
+				cfg.MaxManifestBytes = 1_000_000
+				return cfg
+			})
 
-	docs, err := LoadDir(ctx, root)
-	if err != nil {
-		t.Fatalf("load dir: %v", err)
-	}
-	if len(docs) != 1 || docs[0].Name != "main" {
-		t.Fatalf(".bnignore should exclude the registry scope, got %d docs", len(docs))
+			docs, err := LoadDir(ctx, root)
+			if err != nil {
+				t.Fatalf("load dir: %v", err)
+			}
+			names := map[string]bool{}
+			for _, d := range docs {
+				names[d.Name] = true
+			}
+			if !names["main"] || !names["installed"] {
+				t.Fatalf("installed package must load despite .bnignore %q, got names: %v", strings.TrimSpace(pattern), names)
+			}
+		})
 	}
 }
 

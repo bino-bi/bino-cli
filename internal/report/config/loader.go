@@ -169,13 +169,17 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 
 	// Second pass: .bino is machine-managed state and skipped above, but
 	// .bino/registry holds installed registry packages that must join the
-	// manifest set. Name-based dir skips don't apply inside it (a scope may
-	// legitimately be named "vendor"); .bnignore still does, and the scan
+	// manifest set. Installed packages are lock-managed content, so neither
+	// name-based dir skips (a scope may legitimately be named "vendor") nor
+	// .bnignore apply here — a project ignoring `.bino/` (mirroring the
+	// recommended .gitignore) must not silently lose its dependencies.
+	// Excluding a package goes through `bino registry remove`. Only the scan
 	// limits keep counting across both passes.
 	if walkErr == nil {
 		regDir := filepath.Join(dir, ".bino", "registry")
 		if info, statErr := os.Stat(regDir); statErr == nil && info.IsDir() {
 			skipDirNames = false
+			ignore = nil
 			walkErr = filepath.WalkDir(regDir, walkFn)
 		}
 	}

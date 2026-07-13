@@ -81,15 +81,18 @@ func TestShouldIgnorePathAllowsRegistry(t *testing.T) {
 	}
 }
 
-func TestShouldIgnorePathRegistryRespectsBnignore(t *testing.T) {
+func TestShouldIgnorePathRegistryBypassesBnignore(t *testing.T) {
+	// Installed packages are lock-managed content: a .bnignore ignoring
+	// `.bino/` (the recommended .gitignore entry, commonly mirrored) or a
+	// specific scope must not suppress refreshes for dependencies — this
+	// mirrors the loader's registry second pass.
 	tmp := t.TempDir()
 	watcher := &Watcher{cfg: Config{Root: tmp}}
-	watcher.ignore = gitignore.CompileIgnoreLines(".bino/registry/acme/")
+	watcher.ignore = gitignore.CompileIgnoreLines(".bino/", ".bino/registry/acme/")
 
-	if !watcher.shouldIgnorePath(filepath.Join(tmp, ".bino", "registry", "acme"), true) {
-		t.Fatal("expected .bnignore to exclude the registry scope dir")
-	}
-	if watcher.shouldIgnorePath(filepath.Join(tmp, ".bino", "registry", "other"), true) {
-		t.Fatal("expected other registry scope to stay watched")
+	for _, rel := range []string{".bino", ".bino/registry", ".bino/registry/acme", ".bino/registry/acme/table.yml"} {
+		if watcher.shouldIgnorePath(filepath.Join(tmp, filepath.FromSlash(rel)), rel != ".bino/registry/acme/table.yml") {
+			t.Errorf("registry path %q must stay watched despite .bnignore", rel)
+		}
 	}
 }
