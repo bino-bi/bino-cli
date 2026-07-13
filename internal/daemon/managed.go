@@ -70,9 +70,10 @@ func NewManagedState(ctx context.Context, cfg ManagedStateConfig) (*ManagedState
 
 // Watch starts a debounced file watcher that calls State.Refresh on project
 // changes. onRefresh, if non-nil, is invoked after each successful refresh with
-// a coalesced reason string (the daemon uses this to broadcast SSE events). The
-// watcher and its goroutines stop when ctx is done.
-func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, reason string)) error {
+// the batch of raw reasons (the daemon uses these to broadcast SSE events;
+// CoalesceReasons summarizes them for display). The watcher and its goroutines
+// stop when ctx is done.
+func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, reasons []string)) error {
 	refreshCh := make(chan string, 16)
 	enqueue := func(reason string) {
 		select {
@@ -114,15 +115,15 @@ func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, r
 				if len(reasons) == 0 {
 					continue
 				}
-				coalesced := coalesceRefreshReasons(reasons)
+				batch := append([]string(nil), reasons...)
 				reasons = reasons[:0]
 				if err := m.State.Refresh(ctx); err != nil {
 					m.logger.Errorf("Refresh failed: %v", err)
 					continue
 				}
-				m.logger.Infof("Refreshed (%s)", coalesced)
+				m.logger.Infof("Refreshed (%s)", CoalesceReasons(batch))
 				if onRefresh != nil {
-					onRefresh(m.State, coalesced)
+					onRefresh(m.State, batch)
 				}
 			}
 		}
@@ -141,8 +142,8 @@ func (m *ManagedState) Close() {
 	}
 }
 
-// coalesceRefreshReasons summarizes a batch of watcher reasons for logging.
-func coalesceRefreshReasons(reasons []string) string {
+// CoalesceReasons summarizes a batch of watcher reasons for display.
+func CoalesceReasons(reasons []string) string {
 	if len(reasons) == 0 {
 		return "unknown"
 	}

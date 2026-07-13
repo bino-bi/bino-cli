@@ -55,6 +55,11 @@
           "when": "bino.projectDetected"
         },
         {
+          "id": "binoDependencies",
+          "name": "Dependencies",
+          "when": "bino.projectDetected"
+        },
+        {
           "id": "binoEnvironment",
           "name": "Environment",
           "when": "bino.projectDetected"
@@ -69,6 +74,78 @@
       }
     ],
     "commands": [
+      {
+        "command": "bino.registrySearch",
+        "title": "Search Registry…",
+        "category": "Bino",
+        "icon": "$(search)"
+      },
+      {
+        "command": "bino.registryAddDependency",
+        "title": "Add Dependency…",
+        "category": "Bino",
+        "icon": "$(add)"
+      },
+      {
+        "command": "bino.registryInstall",
+        "title": "Install Dependencies from Lockfile",
+        "category": "Bino",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "bino.registryUpdateAll",
+        "title": "Update All Dependencies",
+        "category": "Bino",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "bino.registryUpdatePackage",
+        "title": "Update Package",
+        "category": "Bino",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "bino.registryRemovePackage",
+        "title": "Remove Package",
+        "category": "Bino",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "bino.registryOpenPackageFile",
+        "title": "Open Installed File",
+        "category": "Bino",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "bino.registryCopyRef",
+        "title": "Copy Component Reference",
+        "category": "Bino",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "bino.registryInsertRef",
+        "title": "Insert Component Reference…",
+        "category": "Bino",
+        "icon": "$(insert)"
+      },
+      {
+        "command": "bino.registryRefresh",
+        "title": "Refresh Dependencies",
+        "category": "Bino",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bino.registryLogin",
+        "title": "Registry Login",
+        "category": "Bino",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "bino.registryLogout",
+        "title": "Registry Logout",
+        "category": "Bino",
+        "icon": "$(sign-out)"
+      },
       {
         "command": "bino.newDataSourceFromFile",
         "title": "New DataSource from File…",
@@ -376,6 +453,21 @@
           "command": "bino.validateWorkspace",
           "when": "view == binoDocuments",
           "group": "navigation@2"
+        },
+        {
+          "command": "bino.registrySearch",
+          "when": "view == binoDependencies",
+          "group": "navigation@0"
+        },
+        {
+          "command": "bino.registryUpdateAll",
+          "when": "view == binoDependencies",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bino.registryRefresh",
+          "when": "view == binoDependencies",
+          "group": "navigation@2"
         }
       ],
       "explorer/context": [
@@ -386,6 +478,54 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "bino.registrySearch",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryAddDependency",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryInstall",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryUpdateAll",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryInsertRef",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryLogin",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryLogout",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryRefresh",
+          "when": "false"
+        },
+        {
+          "command": "bino.registryUpdatePackage",
+          "when": "false"
+        },
+        {
+          "command": "bino.registryRemovePackage",
+          "when": "false"
+        },
+        {
+          "command": "bino.registryOpenPackageFile",
+          "when": "false"
+        },
+        {
+          "command": "bino.registryCopyRef",
+          "when": "false"
+        },
         {
           "command": "bino.newDataSourceFromFile",
           "when": "bino.projectDetected"
@@ -537,6 +677,31 @@
           "command": "bino.showDependentsForItem",
           "when": "view == binoDocuments && viewItem =~ /^bino(Document|Artefact)$/",
           "group": "graph@3"
+        },
+        {
+          "command": "bino.registryInsertRef",
+          "when": "view == binoDependencies && viewItem == binoPackage",
+          "group": "use@1"
+        },
+        {
+          "command": "bino.registryCopyRef",
+          "when": "view == binoDependencies && viewItem == binoPackage",
+          "group": "use@2"
+        },
+        {
+          "command": "bino.registryOpenPackageFile",
+          "when": "view == binoDependencies && viewItem == binoPackage",
+          "group": "use@3"
+        },
+        {
+          "command": "bino.registryUpdatePackage",
+          "when": "view == binoDependencies && viewItem == binoPackage",
+          "group": "manage@1"
+        },
+        {
+          "command": "bino.registryRemovePackage",
+          "when": "view == binoDependencies && viewItem == binoPackage",
+          "group": "manage@2"
         }
       ],
       "editor/title": [

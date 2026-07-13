@@ -140,9 +140,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 
 			// Start file watcher; broadcast index/diagnostics updates to SSE clients
 			// after each refresh.
-			if err := managed.Watch(ctx, func(st *daemon.State, reason string) {
+			if err := managed.Watch(ctx, func(st *daemon.State, reasons []string) {
 				server.BroadcastEvent("index-updated", map[string]any{
-					"reason":    reason,
+					"reason":    daemon.CoalesceReasons(reasons),
 					"documents": len(st.Documents()),
 				})
 				diags := st.Diagnostics()
@@ -150,6 +150,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 					"valid":       len(diags) == 0,
 					"diagnostics": diags,
 				})
+				if daemon.RegistryReason(reasons) {
+					server.BroadcastEvent("registry-changed", map[string]any{"reasons": reasons})
+				}
 			}); err != nil {
 				return RuntimeError(err)
 			}

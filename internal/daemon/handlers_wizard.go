@@ -16,7 +16,10 @@ import (
 
 // daemonCapabilities lists the optional endpoints this daemon build serves, so a
 // client can detect a stale daemon (spawned from an older binary) and restart it.
-var daemonCapabilities = []string{"introspect-draft", "typed-select", "preview-dataset", "dataset-schema"}
+var daemonCapabilities = []string{
+	"introspect-draft", "typed-select", "preview-dataset", "dataset-schema",
+	"registry-packages", "registry-search", "registry-info", "registry-events",
+}
 
 // introspectDraftResponse mirrors datasource.ProbeResult plus the daemon version
 // (for the client staleness handshake) and a non-fatal error string.

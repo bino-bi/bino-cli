@@ -19,6 +19,8 @@ import { DesignerPanel } from './designer/designerPanel';
 import { PreviewTreeProvider } from './previewTree';
 import { ActionsTreeProvider } from './actionsTree';
 import { EnvironmentTreeProvider } from './environmentTree';
+import { DependenciesTreeProvider } from './dependenciesTree';
+import { registerRegistryCommands } from './registryCommands';
 import { DaemonClient } from './daemonClient';
 
 let indexer: WorkspaceIndexer | undefined;
@@ -252,6 +254,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             treeDataProvider: environmentTreeProvider,
         })
     );
+
+    // Register Dependencies tree (registry packages) — refreshes on the
+    // daemon's registry-changed SSE event and on connection changes.
+    const dependenciesTreeProvider = new DependenciesTreeProvider(() => daemonClient);
+    context.subscriptions.push(
+        vscode.window.createTreeView('binoDependencies', {
+            treeDataProvider: dependenciesTreeProvider,
+        })
+    );
+    if (daemonClient) {
+        context.subscriptions.push(
+            daemonClient.on('registry-changed', () => {
+                outputChannel.appendLine('[Daemon] Registry changed via SSE push');
+                dependenciesTreeProvider.refresh();
+            }),
+            daemonClient.onStatusChange(() => dependenciesTreeProvider.refresh())
+        );
+    }
+    registerRegistryCommands(context, {
+        daemonClient: () => daemonClient,
+        projectRoot: () => indexer?.getProjectRootForUri(),
+        runInTerminal: (args: string) => runInTerminal(args),
+        depsTree: dependenciesTreeProvider,
+    });
 
     // Register commands
     context.subscriptions.push(

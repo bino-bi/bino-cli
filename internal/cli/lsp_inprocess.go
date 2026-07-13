@@ -35,7 +35,7 @@ func (b *lspInProcessBackend) Start(ctx context.Context) error {
 		// Surface but don't fail — an invalid project should still get diagnostics.
 		_ = err
 	}
-	return b.managed.Watch(ctx, func(_ *daemon.State, _ string) {
+	return b.managed.Watch(ctx, func(_ *daemon.State, _ []string) {
 		if fn := b.onChange.Load(); fn != nil {
 			(*fn)()
 		}

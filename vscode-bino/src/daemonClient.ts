@@ -14,6 +14,49 @@ interface PortFile {
 /** Status of the daemon connection */
 export type DaemonStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+/** One declared package parameter (mirrors the daemon's RegistryParam). */
+export interface RegistryParam {
+    name: string;
+    type?: string;
+    required?: boolean;
+    default?: string;
+    description?: string;
+    options?: string[];
+}
+
+/** One project dependency (mirrors the daemon's RegistryPackage). */
+export interface RegistryPackage {
+    name: string;
+    version?: string;
+    tag?: string;
+    kind?: string;
+    path?: string;
+    direct: boolean;
+    declaredRef?: string;
+    installed: boolean;
+    dependencies?: string[];
+    params?: RegistryParam[];
+}
+
+/** One registry search hit (mirrors the daemon's proxied SearchItem). */
+export interface RegistrySearchItem {
+    package: string;
+    kind: string;
+    description: string;
+    latestVersion: string;
+    pullsTotal: number;
+}
+
+/** The registry search response envelope. */
+export interface RegistrySearchResult {
+    page: number;
+    perPage: number;
+    totalItems: number;
+    totalPages: number;
+    items: RegistrySearchItem[];
+    error?: string;
+}
+
 /**
  * DaemonClient manages the connection to a persistent `bino daemon` process.
  * It discovers or spawns the daemon, communicates over HTTP, and listens for
@@ -197,6 +240,34 @@ export class DaemonClient {
     /** GET /dataset-schema — the canonical standard dataset columns */
     async datasetSchema(): Promise<{ columns: any[] } | undefined> {
         return this.fetchJSON('/dataset-schema');
+    }
+
+    /** GET /registry/packages — offline dependency report (bino.lock + bino.toml + store) */
+    async getRegistryPackages(): Promise<{ packages: RegistryPackage[]; error?: string } | undefined> {
+        return this.fetchJSON('/registry/packages');
+    }
+
+    /** GET /registry/search — proxied full-text registry search */
+    async searchRegistry(query: string, opts?: { kinds?: string[]; page?: number; perPage?: number }): Promise<RegistrySearchResult | undefined> {
+        const params = new URLSearchParams();
+        if (query) {
+            params.set('q', query);
+        }
+        for (const kind of opts?.kinds ?? []) {
+            params.append('kind', kind);
+        }
+        if (opts?.page) {
+            params.set('page', String(opts.page));
+        }
+        if (opts?.perPage) {
+            params.set('perPage', String(opts.perPage));
+        }
+        return this.fetchJSON(`/registry/search?${params.toString()}`);
+    }
+
+    /** GET /registry/info — resolve a spec ("@scope/name[@ref]") + installed version */
+    async getRegistryInfo(spec: string): Promise<any | undefined> {
+        return this.fetchJSON(`/registry/info?spec=${encodeURIComponent(spec)}`);
     }
 
     /**
