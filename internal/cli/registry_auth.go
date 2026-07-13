@@ -18,31 +18,35 @@ import (
 	"bino.bi/bino/internal/registry"
 )
 
+// registryFlagHelp is the shared --registry help text of the auth commands.
+const registryFlagHelp = "Registry URL (overrides bino.toml, BINO_REGISTRY_URL, and ~/.bino/config.toml; default " + registry.DefaultURL + ")"
+
 // authRegistryURL resolves the registry for the auth commands, which must
 // work outside a bino project: --registry flag, then the enclosing project's
-// [registry].url, then BINO_REGISTRY_URL, then the public default.
-func authRegistryURL(flagURL string) string {
+// [registry].url, then BINO_REGISTRY_URL, then the global config
+// (~/.bino/config.toml), then the public default.
+func authRegistryURL(flagURL string) (string, error) {
 	if u := strings.TrimSpace(flagURL); u != "" {
-		return strings.TrimRight(u, "/")
+		return strings.TrimRight(u, "/"), nil
 	}
 	if workdir, err := os.Getwd(); err == nil {
 		if root, err := pathutil.FindProjectRoot(workdir); err == nil {
 			if cfg, err := pathutil.LoadProjectConfig(root); err == nil && cfg.Registry.URL != "" {
-				return strings.TrimRight(strings.TrimSpace(cfg.Registry.URL), "/")
+				return strings.TrimRight(strings.TrimSpace(cfg.Registry.URL), "/"), nil
 			}
 		}
 	}
-	if u := strings.TrimSpace(os.Getenv(registry.EnvURL)); u != "" {
-		return strings.TrimRight(u, "/")
-	}
-	return registry.DefaultURL
+	return registry.FallbackURL()
 }
 
 // authClient builds a client through the normal token resolution chain
 // (project token, env, stored credential) and fails when it would be
 // anonymous — the token management commands always need auth.
 func authClient(flagURL string) (*registry.Client, error) {
-	url := authRegistryURL(flagURL)
+	url, err := authRegistryURL(flagURL)
+	if err != nil {
+		return nil, ConfigError(err)
+	}
 	rawToken := ""
 	if workdir, err := os.Getwd(); err == nil {
 		if root, err := pathutil.FindProjectRoot(workdir); err == nil {
@@ -118,7 +122,10 @@ an existing personal access token read from stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := NewOutput(OutputConfig{})
-			url := authRegistryURL(flagRegistry)
+			url, err := authRegistryURL(flagRegistry)
+			if err != nil {
+				return ConfigError(err)
+			}
 			client := registry.NewClient(registry.Config{URL: url})
 
 			expiresIn, err := parseExpiry(flagExpires)
@@ -171,7 +178,7 @@ an existing personal access token read from stdin.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagRegistry, "registry", "", "Registry URL (defaults to the project's or "+registry.DefaultURL+")")
+	cmd.Flags().StringVar(&flagRegistry, "registry", "", registryFlagHelp)
 	cmd.Flags().StringVar(&flagEmail, "email", "", "Account email (prompts when omitted)")
 	cmd.Flags().BoolVar(&flagPasswordStdin, "password-stdin", false, "Read the password from stdin")
 	cmd.Flags().BoolVar(&flagWithToken, "with-token", false, "Store an existing personal access token read from stdin")
@@ -275,7 +282,10 @@ func newRegistryLogoutCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := NewOutput(OutputConfig{})
-			url := authRegistryURL(flagRegistry)
+			url, err := authRegistryURL(flagRegistry)
+			if err != nil {
+				return ConfigError(err)
+			}
 			creds, err := registry.LoadCredentials()
 			if err != nil {
 				return RuntimeError(err)
@@ -313,7 +323,7 @@ func newRegistryLogoutCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagRegistry, "registry", "", "Registry URL (defaults to the project's or "+registry.DefaultURL+")")
+	cmd.Flags().StringVar(&flagRegistry, "registry", "", registryFlagHelp)
 	return cmd
 }
 
@@ -364,7 +374,7 @@ func newRegistryTokenCreateCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagRegistry, "registry", "", "Registry URL (defaults to the project's or "+registry.DefaultURL+")")
+	cmd.Flags().StringVar(&flagRegistry, "registry", "", registryFlagHelp)
 	cmd.Flags().StringVar(&flagExpires, "expires", "", "Token lifetime (e.g. 90d, 12h; default never)")
 	cmd.Flags().StringVar(&flagName, "name", "", "Token name")
 	_ = cmd.MarkFlagRequired("name")
@@ -404,7 +414,7 @@ func newRegistryTokenListCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagRegistry, "registry", "", "Registry URL (defaults to the project's or "+registry.DefaultURL+")")
+	cmd.Flags().StringVar(&flagRegistry, "registry", "", registryFlagHelp)
 	return cmd
 }
 
@@ -431,6 +441,6 @@ func newRegistryTokenRevokeCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagRegistry, "registry", "", "Registry URL (defaults to the project's or "+registry.DefaultURL+")")
+	cmd.Flags().StringVar(&flagRegistry, "registry", "", registryFlagHelp)
 	return cmd
 }

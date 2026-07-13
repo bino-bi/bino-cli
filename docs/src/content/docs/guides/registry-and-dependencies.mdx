@@ -75,7 +75,15 @@ bino build
 
 ## Configuring the registry
 
-The registry URL comes from `bino.toml`, falling back to the public registry:
+The registry URL is resolved in this order:
+
+1. The `--registry` flag (auth commands only).
+2. `bino.toml` `[registry].url` — the per-project setting, committed with the project.
+3. The `BINO_REGISTRY_URL` environment variable.
+4. `~/.bino/config.toml` `[registry].url` — the per-user (global) setting.
+5. The public registry, `https://registry.bino.bi`.
+
+Per project, in `bino.toml`:
 
 ```toml
 [registry]
@@ -83,9 +91,21 @@ url = "https://registry.bino.bi"   # optional; this is the default
 token = "${ACME_REGISTRY_TOKEN}"    # optional; literal or ${ENV_VAR}
 ```
 
-The auth commands (`login`, `logout`, `token`) also accept `--registry` and
-the `BINO_REGISTRY_URL` environment variable, since they may run outside a
-project.
+To point every project on a machine at a private registry, use the global
+config instead:
+
+```toml
+# ~/.bino/config.toml
+[registry]
+url = "https://registry.corp.example.com"
+```
+
+A project's `bino.toml` always wins over the environment variable and the
+global config. The global config holds only the URL — tokens live in
+`~/.bino/credentials.json` (via `bino registry login`) or
+`BINO_REGISTRY_TOKEN`. A malformed `~/.bino/config.toml` is an error, not
+silently ignored. Like `credentials.json`, it is spared by
+`bino cache clean --global`.
 
 ## Authentication
 

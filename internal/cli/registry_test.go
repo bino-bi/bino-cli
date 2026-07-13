@@ -106,6 +106,43 @@ func runRegistry(t *testing.T, args ...string) error {
 	return cmd.ExecuteContext(context.Background())
 }
 
+func TestRegistryGlobalConfigURL(t *testing.T) {
+	body, digest := fakeDoc(t, "@acme/solo", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/solo": {tag: "latest", version: "1.0.0", kind: "Text", body: body, digest: digest},
+	}
+	srv, _ := fakeRegistryServer(t, packages)
+
+	// The registry URL comes from ~/.bino/config.toml — the project's
+	// bino.toml has no [registry] table.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(registry.EnvURL, "")
+	if err := os.MkdirAll(filepath.Join(home, ".bino"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	global := fmt.Sprintf("[registry]\nurl = %q\n", srv.URL)
+	if err := os.WriteFile(filepath.Join(home, ".bino", "config.toml"), []byte(global), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("report-id = \"test\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	if err := runRegistry(t, "add", "@acme/solo"); err != nil {
+		t.Fatalf("add via global config URL: %v", err)
+	}
+	lock, err := registry.LoadLockfile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Get("@acme/solo") == nil {
+		t.Errorf("lockfile missing @acme/solo: %+v", lock.Packages)
+	}
+}
+
 func TestRegistryAddInstallVerifyRemove(t *testing.T) {
 	greetingBody, greetingDigest := fakeDoc(t, "@acme/greeting", "Text")
 	styleBody, styleDigest := fakeDoc(t, "@acme/style", "ComponentStyle")

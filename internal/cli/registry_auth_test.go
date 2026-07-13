@@ -3,9 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -114,12 +116,71 @@ func fakeAuthServer(t *testing.T, state *fakeAuthState) *httptest.Server {
 	return srv
 }
 
-// authTestEnv isolates HOME (credentials) and cwd (no project).
+// authTestEnv isolates HOME (credentials, global config), the registry env
+// vars, and cwd (no project).
 func authTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv(registry.EnvToken, "")
+	t.Setenv(registry.EnvURL, "")
 	t.Chdir(t.TempDir())
+}
+
+func TestAuthRegistryURLResolution(t *testing.T) {
+	const globalToml = "[registry]\nurl = \"https://global.example.com\"\n"
+	tests := []struct {
+		name    string
+		flag    string
+		project string // bino.toml [registry].url; empty = no [registry] table
+		env     string
+		global  string // ~/.bino/config.toml content; empty = no file
+		want    string
+		wantErr bool
+	}{
+		{name: "flag wins over everything", flag: "https://flag.example.com/", project: "https://project.example.com", env: "https://env.example.com", global: globalToml, want: "https://flag.example.com"},
+		{name: "project beats env and global", project: "https://project.example.com", env: "https://env.example.com", global: globalToml, want: "https://project.example.com"},
+		{name: "env beats global", env: "https://env.example.com", global: globalToml, want: "https://env.example.com"},
+		{name: "global beats default", global: globalToml, want: "https://global.example.com"},
+		{name: "default when nothing set", want: registry.DefaultURL},
+		{name: "malformed global errors", global: "[[registry\n", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv(registry.EnvURL, tt.env)
+			if tt.global != "" {
+				if err := os.MkdirAll(filepath.Join(home, ".bino"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(home, ".bino", "config.toml"), []byte(tt.global), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			dir := t.TempDir()
+			if tt.project != "" {
+				content := fmt.Sprintf("report-id = \"test\"\n\n[registry]\nurl = %q\n", tt.project)
+				if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Chdir(dir)
+
+			got, err := authRegistryURL(tt.flag)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("url = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }
 
 func runRegistryIn(t *testing.T, stdin string, args ...string) error {

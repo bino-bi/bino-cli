@@ -94,7 +94,7 @@ token = "${ACME_REGISTRY_TOKEN}"    # optional; literal or ${ENV_VAR}
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `registry.url` | string | Optional. Registry base URL; defaults to the public registry. |
+| `registry.url` | string | Optional. Registry base URL; overrides `BINO_REGISTRY_URL` and the global `~/.bino/config.toml`; defaults to the public registry. |
 | `registry.token` | string | Optional. Access token, either literal or a `${ENV_VAR}` reference expanded at runtime. |
 | `dependencies.*` | string | One entry per package (`@scope/name`), mapping to an exact version or a tag. |
 
