@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -85,7 +86,79 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 	if a := s.scaffoldRefAction(ctx, docURI, params.Range); a != nil {
 		actions = append(actions, a)
 	}
+	if a := s.addMissingParamsAction(ctx, docURI, params.Range); a != nil {
+		actions = append(actions, a)
+	}
 	return actions, nil
+}
+
+// addMissingParamsAction offers to insert the params a ref target requires
+// (required, no default) that the child does not pass yet. It is position-driven
+// like scaffoldRefAction: ref-params lint findings carry no position to anchor a
+// diagnostic-driven fix on.
+func (s *Server) addMissingParamsAction(ctx context.Context, u uri.URI, rng protocol.Range) *protocol.CodeAction {
+	pc, ok := s.resolve(u, rng.Start)
+	if !ok || pc.RefName == "" {
+		return nil
+	}
+	onRefValue := pc.Kind == reportspec.PosDatasetRef && pc.FieldName == "ref"
+	if !onRefValue && pc.Kind != reportspec.PosParamKey {
+		return nil
+	}
+	decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
+	if !ok {
+		return nil
+	}
+	present := keySet(pc.PresentKeys)
+	base := paramsPatchBase(pc)
+	patch := make(map[string]any)
+	for _, p := range decls {
+		if p.Required && p.Default == nil && !present[p.Name] {
+			patch[base+"."+p.Name] = ""
+		}
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return nil
+	}
+	full, _, err := reportspec.EditYAMLDocument(doc.Text, pc.DocIndex+1, patch)
+	if err != nil {
+		return nil
+	}
+	quickFix := protocol.CodeActionKindQuickFix
+	return &protocol.CodeAction{
+		Title: "Add required params for '" + pc.RefName + "'",
+		Kind:  &quickFix,
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: wholeDocRange(doc), NewText: full}}},
+		},
+	}
+}
+
+// paramsPatchBase converts a resolver path to the EditYAMLDocument path of the
+// child's params mapping: `spec.children.0.ref` → `spec.children[0].params`.
+func paramsPatchBase(pc reportspec.PositionContext) string {
+	segs := strings.Split(pc.Path, ".")
+	if pc.Kind == reportspec.PosDatasetRef {
+		segs[len(segs)-1] = "params" // replace the trailing "ref"
+	}
+	var b strings.Builder
+	for _, seg := range segs {
+		if _, err := strconv.Atoi(seg); err == nil {
+			b.WriteByte('[')
+			b.WriteString(seg)
+			b.WriteByte(']')
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('.')
+		}
+		b.WriteString(seg)
+	}
+	return b.String()
 }
 
 // insertFieldAction inserts a missing required field, reading the parent path and

@@ -182,6 +182,170 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_RefParams(t *testing.T) {
+	// A layout child's ref/params positions resolve against the sibling `kind`
+	// and the referenced document's name.
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: "@acme/kpi-card"
+      params:
+        REGION: eu
+        LIMIT: '10'
+    - kind: Text
+      ref: intro
+      params:
+`
+	tests := []struct {
+		name        string
+		line, col   int
+		wantKind    PositionKind
+		wantRefKind string
+		wantRefName string
+		wantPresent []string
+		wantPrefix  string
+	}{
+		{
+			name: "ref value carries sibling kind and present params", line: 7, col: 14,
+			wantKind: PosDatasetRef, wantRefKind: "Table", wantRefName: "@acme/kpi-card",
+			wantPresent: []string{"REGION", "LIMIT"}, wantPrefix: "@acme/kpi-card",
+		},
+		{
+			name: "param key position", line: 9, col: 10,
+			wantKind: PosParamKey, wantRefKind: "Table", wantRefName: "@acme/kpi-card",
+			wantPresent: []string{"REGION", "LIMIT"},
+		},
+		{
+			name: "param value position", line: 9, col: 17,
+			wantKind: PosParamValue, wantRefKind: "Table", wantRefName: "@acme/kpi-card",
+			wantPrefix: "eu",
+		},
+		{
+			name: "empty params mapping is a param key slot", line: 14, col: 9,
+			wantKind: PosParamKey, wantRefKind: "Text", wantRefName: "intro",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, ok := ResolvePositionPath(doc, tt.line, tt.col)
+			if !ok {
+				t.Fatal("ok=false")
+			}
+			if ctx.Kind != tt.wantKind {
+				t.Fatalf("Kind = %v, want %v", ctx.Kind, tt.wantKind)
+			}
+			if ctx.RefKind != tt.wantRefKind {
+				t.Errorf("RefKind = %q, want %q", ctx.RefKind, tt.wantRefKind)
+			}
+			if ctx.RefName != tt.wantRefName {
+				t.Errorf("RefName = %q, want %q", ctx.RefName, tt.wantRefName)
+			}
+			if tt.wantPrefix != "" && ctx.Prefix != tt.wantPrefix {
+				t.Errorf("Prefix = %q, want %q", ctx.Prefix, tt.wantPrefix)
+			}
+			if tt.wantPresent != nil {
+				if len(ctx.PresentKeys) != len(tt.wantPresent) {
+					t.Fatalf("PresentKeys = %v, want %v", ctx.PresentKeys, tt.wantPresent)
+				}
+				for i := range tt.wantPresent {
+					if ctx.PresentKeys[i] != tt.wantPresent[i] {
+						t.Errorf("PresentKeys = %v, want %v", ctx.PresentKeys, tt.wantPresent)
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestResolvePositionPath_QuotedRefReplaceRange(t *testing.T) {
+	// yaml.v3 puts a quoted scalar's Column on the opening quote while Value
+	// excludes the quotes; the replace range must cover the content only.
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: "@acme/kpi-card"
+`
+	ctx, ok := ResolvePositionPath(doc, 7, 14)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	want := Range{StartLine: 7, StartCol: 13, EndLine: 7, EndCol: 13 + len("@acme/kpi-card")}
+	if ctx.ReplaceRange != want {
+		t.Errorf("ReplaceRange = %+v, want %+v", ctx.ReplaceRange, want)
+	}
+}
+
+func TestResolvePositionPath_LayoutPagesObjectParams(t *testing.T) {
+	// The layoutPages object form ({page, params}) resolves params against the
+	// referenced LayoutPage.
+	const doc = `kind: ReportArtefact
+metadata:
+  name: art
+spec:
+  layoutPages:
+    - page: regional
+      params:
+        REGION: eu
+`
+	ctx, ok := ResolvePositionPath(doc, 8, 17) // on "eu"
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosParamValue || ctx.RefKind != "LayoutPage" || ctx.RefName != "regional" {
+		t.Errorf("Kind/RefKind/RefName = %v/%q/%q, want PosParamValue/LayoutPage/regional",
+			ctx.Kind, ctx.RefKind, ctx.RefName)
+	}
+	if ctx.FieldName != "REGION" {
+		t.Errorf("FieldName = %q, want REGION", ctx.FieldName)
+	}
+}
+
+func TestResolvePositionPath_RefWithoutSiblingKind(t *testing.T) {
+	// A ref with no sibling kind keeps the empty RefKind (offer-everything).
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - ref: orphan
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 13)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosDatasetRef || ctx.RefKind != "" {
+		t.Errorf("Kind/RefKind = %v/%q, want PosDatasetRef with empty RefKind", ctx.Kind, ctx.RefKind)
+	}
+}
+
+func TestResolvePositionPath_MetadataParamsDeclaration(t *testing.T) {
+	// metadata.params declaration items (a sequence) keep their plain key/value
+	// classification — no PosParamKey false positive.
+	const doc = `kind: Table
+metadata:
+  name: kpi
+  params:
+    - name: REGION
+      type: select
+spec:
+  dataset: sales
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 8) // on the item's `type` key
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKey {
+		t.Errorf("Kind = %v, want PosKey inside a metadata.params item", ctx.Kind)
+	}
+}
+
 func TestResolvePositionPath_MultiDoc(t *testing.T) {
 	const content = `kind: DataSource
 metadata:

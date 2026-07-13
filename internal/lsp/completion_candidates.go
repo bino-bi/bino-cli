@@ -2,9 +2,11 @@ package lsp
 
 import (
 	"sort"
+	"strings"
 
 	"go.lsp.dev/protocol"
 
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 )
 
@@ -135,21 +137,132 @@ func completeColumns(cols []string) []protocol.CompletionItem {
 }
 
 // completeRefs offers manifest names valid at a reference position. An empty
-// refKind (e.g. a layout child `ref:` whose target kind is contextual) offers
-// every document.
-func completeRefs(index []IndexDoc, refKind string) []protocol.CompletionItem {
+// refKind (e.g. a layout child `ref:` with no sibling kind yet) offers every
+// document. origins annotates names installed from the package registry.
+func completeRefs(index []IndexDoc, refKind string, origins map[string]pkgOrigin) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(index))
 	for _, d := range index {
 		if refKind != "" && d.Kind != refKind {
 			continue
 		}
-		items = append(items, protocol.CompletionItem{
-			Label:  d.Name,
-			Kind:   protocol.CompletionItemKindReference,
-			Detail: protocol.NewOptional(d.Kind),
-		})
+		item := protocol.CompletionItem{
+			Label:      d.Name,
+			Kind:       protocol.CompletionItemKindReference,
+			Detail:     protocol.NewOptional(d.Kind),
+			FilterText: protocol.NewOptional(d.Name),
+		}
+		if o, ok := origins[normPath(d.File)]; ok {
+			item.Detail = protocol.NewOptional(d.Kind + " · " + o.Name + "@" + o.Version + " (registry)")
+			if o.Tag != "" {
+				item.Documentation = protocol.String("Follows tag '" + o.Tag + "'.")
+			}
+		}
+		items = append(items, item)
 	}
 	return items
+}
+
+// completeParamKeys offers the target document's declared params not already
+// present in the `params:` mapping.
+func completeParamKeys(declared []config.LayoutPageParamSpec, present map[string]bool) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(declared))
+	for _, p := range declared {
+		if present[p.Name] {
+			continue
+		}
+		item := protocol.CompletionItem{
+			Label:            p.Name,
+			Kind:             protocol.CompletionItemKindField,
+			Detail:           protocol.NewOptional(paramDetail(p)),
+			InsertText:       protocol.NewOptional(p.Name + ": "),
+			InsertTextFormat: protocol.InsertTextFormatPlainText,
+		}
+		if doc := paramDoc(p); doc != "" {
+			item.Documentation = protocol.String(doc)
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+// completeParamValues offers the value candidates a declared param admits.
+func completeParamValues(decl *config.LayoutPageParamSpec) []protocol.CompletionItem {
+	if decl == nil {
+		return nil
+	}
+	switch decl.Type {
+	case "select":
+		if decl.Options == nil {
+			return nil
+		}
+		items := make([]protocol.CompletionItem, 0, len(decl.Options.Items))
+		for _, o := range decl.Options.Items {
+			item := protocol.CompletionItem{Label: o.Value, Kind: protocol.CompletionItemKindEnumMember}
+			if o.Label != "" {
+				item.Documentation = protocol.String(o.Label)
+			}
+			if decl.Default != nil && o.Value == *decl.Default {
+				item.Detail = protocol.NewOptional("default")
+			}
+			items = append(items, item)
+		}
+		return items
+	case "boolean":
+		return []protocol.CompletionItem{
+			{Label: "true", Kind: protocol.CompletionItemKindValue},
+			{Label: "false", Kind: protocol.CompletionItemKindValue},
+		}
+	default:
+		if decl.Default != nil && *decl.Default != "" {
+			return []protocol.CompletionItem{{
+				Label:  *decl.Default,
+				Kind:   protocol.CompletionItemKindValue,
+				Detail: protocol.NewOptional("default"),
+			}}
+		}
+		return nil
+	}
+}
+
+// paramDetail renders a declaration's type plus its required/default marker.
+func paramDetail(p config.LayoutPageParamSpec) string {
+	t := p.Type
+	if t == "" {
+		t = "string"
+	}
+	switch {
+	case p.Default != nil:
+		return t + " · default: " + *p.Default
+	case p.Required:
+		return t + " · required"
+	}
+	return t
+}
+
+// paramDoc renders a declaration's description plus select options.
+func paramDoc(p config.LayoutPageParamSpec) string {
+	doc := p.Description
+	if p.Type == "select" && p.Options != nil && len(p.Options.Items) > 0 {
+		values := make([]string, 0, len(p.Options.Items))
+		for _, it := range p.Options.Items {
+			values = append(values, it.Value)
+		}
+		if doc != "" {
+			doc += "\n\n"
+		}
+		doc += "Options: " + strings.Join(values, ", ")
+	}
+	return doc
+}
+
+// findParam returns the declaration named name, or nil.
+func findParam(declared []config.LayoutPageParamSpec, name string) *config.LayoutPageParamSpec {
+	for i := range declared {
+		if declared[i].Name == name {
+			return &declared[i]
+		}
+	}
+	return nil
 }
 
 // rulesetKeywordItems offers the engine's ruleset inheritance keywords alongside

@@ -12,6 +12,7 @@ import (
 	"go.lsp.dev/uri"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/registry"
 	reportspec "bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/version"
 )
@@ -37,6 +38,7 @@ type Server struct {
 	schema  *schemaModel
 	index   []IndexDoc
 	nameIdx *reportspec.NameIndex
+	lock    *registry.Lockfile
 
 	// draftDiags and projectDiags are merged per-file before publishing, since
 	// PublishDiagnostics fully replaces a document's diagnostic set per call:
@@ -202,6 +204,7 @@ func (s *Server) onProjectChange() {
 	s.schema = nil
 	s.index = nil
 	s.nameIdx = nil
+	s.lock = nil
 	s.mu.Unlock()
 	go s.refreshProjectDiagnostics()
 	if s.analyzer == nil {
