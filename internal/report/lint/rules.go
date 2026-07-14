@@ -19,6 +19,7 @@ func DefaultRules() []Rule {
 		artefactLayoutPageRequired,
 		textContentRequired,
 		datasetRequired,
+		tableSumTitleUnused,
 		pageLayoutSlotsUsed,
 		cardLayoutSlotsUsed,
 		refParams,

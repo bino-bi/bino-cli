@@ -16,6 +16,7 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `artefact-layoutpage-required` | Artefact LayoutPage Required | Warning  | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
 | `text-content-required`        | Text Content Required        | Warning  | Text components must have a non-empty `spec.value` field.                                      |
 | `dataset-required`             | Dataset Required             | Warning  | Table, ChartStructure, and ChartTime components must have a `spec.dataset` binding.            |
+| `table-sum-title-unused`       | Table Sum Title Unused       | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.            |
 | `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
 | `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
 | `card-layout-slots-used`       | Card Layout Slots Used       | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
@@ -94,7 +95,6 @@ kind: Table
 metadata:
   name: sales-table
 spec:
-  tableTitle: Sales Overview
   # Missing dataset!
 ```
 
@@ -113,6 +113,34 @@ spec:
     - revenue
     - costs
 ```
+
+### table-sum-title-unused
+
+`spec.sumTitle` labels the **grand-total row** at the bottom of a table. That row only exists for `type: sum` and `type: opt`. On `type: list` (the default), `type: sumnototal` and `type: optnototal` no total row is generated, so the label is silently dropped.
+
+**Example problem:**
+
+```yaml
+kind: Table
+metadata:
+  name: sales-table
+spec:
+  dataset: sales-data
+  type: list # renders no total row …
+  sumTitle: Total # … so this label is never shown
+```
+
+**Fix:** render a total row, or drop the label.
+
+```yaml
+# Render the grand-total row and label it
+spec:
+  dataset: sales-data
+  type: sum
+  sumTitle: Total # leave empty to use the IBCS ❖ symbol
+```
+
+The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Grid` children, and in `Tree` nodes. A child that inherits its type from a referenced Table via `ref` is checked against the *effective* type, so overriding only `sumTitle` on a `type: sum` component does not warn.
 
 ### missing-required-reference
 

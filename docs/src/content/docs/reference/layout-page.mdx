@@ -141,7 +141,6 @@ spec:
     - kind: Table
       spec:
         dataset: revenue_by_customer
-        tableTitle: "Top customers"
         type: list
         limit: 10
 ```
@@ -455,8 +454,9 @@ spec:
     - kind: Table
       spec:
         dataset: sales-by-region
+        type: sum
         # Parameters can be used in any string field
-        tableTitle: "${REGION} Sales Data"
+        sumTitle: "${REGION} Sales Data"
 ```
 
 ### Default Values
@@ -600,7 +600,8 @@ spec:
     - kind: Table
       spec:
         dataset: sales-data
-        tableTitle: "Sales for ${PERIOD_LABEL}"
+        type: sum
+        sumTitle: "Sales for ${PERIOD_LABEL}"
 
 ---
 # Use it multiple times in a report
@@ -669,7 +670,6 @@ spec:
     - kind: Table
       spec:
         dataset: sales-data
-        tableTitle: "Details"
 
 ---
 apiVersion: bino.bi/v1alpha1

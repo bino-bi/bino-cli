@@ -3608,9 +3608,9 @@
           "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
         },
         "dataset": { "$ref": "#/$defs/datasetRef" },
-        "tableTitle": {
+        "sumTitle": {
           "type": "string",
-          "description": "A descriptive title for the table data."
+          "description": "Label of the grand-total row at the bottom of the table. Only rendered for 'type: sum' and 'type: opt'; the other table types have no total row and ignore this value. Defaults to the IBCS total symbol when empty. Maps to the sum-title HTML attribute."
         },
         "filter": {
           "type": "string",
@@ -3683,7 +3683,7 @@
         "type": {
           "type": "string",
           "enum": ["list", "sum", "opt", "sumnototal", "optnototal"],
-          "description": "Sets the table type."
+          "description": "Sets the table type. Only 'sum' and 'opt' render a grand-total row at the bottom of the table, labelled by 'sumTitle'. Defaults to 'list'."
         },
         "scenarios": {
           "description": "List of scenarios displayed in the table. Can be a YAML array or a JSON string. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",

@@ -204,7 +204,8 @@ spec:
     - kind: Table
       spec:
         dataset: sales-data
-        tableTitle: "${REGION_LABEL} Sales"
+        type: sum
+        sumTitle: "${REGION_LABEL} Sales"
 
     - kind: ChartStructure
       spec:
@@ -297,7 +298,6 @@ spec:
     - kind: Table
       spec:
         dataset: regional-sales
-        tableTitle: "Top Products"
         limit: 10
     - kind: ChartTime
       spec:
@@ -444,7 +444,6 @@ spec:
     - kind: Table
       spec:
         dataset: product-specs
-        tableTitle: "Specifications"
 
 ---
 apiVersion: bino.bi/v1alpha1

@@ -239,8 +239,12 @@ type TableSpec struct {
 	// Should be a reference like "$dataset_name".
 	Dataset string `yaml:"dataset" json:"dataset"`
 
-	// TableTitle is the table title.
-	TableTitle string `yaml:"tableTitle,omitempty" json:"tableTitle,omitempty"`
+	// Type is the table type. Only "sum" and "opt" render a grand-total row.
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+
+	// SumTitle labels the grand-total row. It is only rendered for the "sum"
+	// and "opt" table types; when empty the IBCS total symbol is used.
+	SumTitle string `yaml:"sumTitle,omitempty" json:"sumTitle,omitempty"`
 
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
