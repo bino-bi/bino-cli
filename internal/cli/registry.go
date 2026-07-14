@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +18,11 @@ import (
 	"bino.bi/bino/internal/registry"
 	"bino.bi/bino/internal/version"
 )
+
+// errResourceMismatch flags a resource download whose bytes do not match the
+// hash the caller expected, so callers can map it onto a re-resolve hint
+// without string-matching the error text.
+var errResourceMismatch = errors.New("resource content hash mismatch")
 
 func newRegistryCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -128,6 +135,107 @@ func downloadVerified(ctx context.Context, client *registry.Client, name, ver, w
 	return body, nil
 }
 
+// downloadVerifiedResource fetches one bundled resource and verifies its
+// bytes' own sha256 exactly match the expected content hash. Unlike
+// documents, resources are opaque binaries with no canonical form to
+// recompute — a plain sha256 over the raw bytes is the whole check.
+func downloadVerifiedResource(ctx context.Context, client *registry.Client, name, ver, resourceName, wantHash string) ([]byte, error) {
+	scope, base, err := registry.ParseName(name)
+	if err != nil {
+		return nil, err
+	}
+	body, etag, err := client.DownloadResource(ctx, scope, base, ver, resourceName)
+	if err != nil {
+		return nil, fmt.Errorf("download resource %s of %s@%s: %w", resourceName, name, ver, err)
+	}
+	if etag != "" && etag != wantHash {
+		return nil, fmt.Errorf("%w: download resource %s of %s@%s: ETag %s does not match expected content hash %s", errResourceMismatch, resourceName, name, ver, etag, wantHash)
+	}
+	sum := sha256.Sum256(body)
+	actual := "sha256:" + hex.EncodeToString(sum[:])
+	if actual != wantHash {
+		return nil, fmt.Errorf("%w: download resource %s of %s@%s: content hash %s does not match expected %s — the registry returned content that does not match its advertised hash", errResourceMismatch, resourceName, name, ver, actual, wantHash)
+	}
+	return body, nil
+}
+
+// syncResources reconciles one package's bundled resources with the
+// registry's current list: an on-disk file whose sha256 already matches the
+// listed content hash is left alone (bandwidth optimization mirroring the
+// server's own dedup philosophy), anything missing or changed is downloaded
+// and verified, and any resource file no longer listed is deleted. Returns
+// the resulting entries, sorted by name.
+func syncResources(ctx context.Context, p registryProject, client *registry.Client, name, ver string) ([]registry.ResourceEntry, error) {
+	scope, base, err := registry.ParseName(name)
+	if err != nil {
+		return nil, err
+	}
+	metas, err := client.ListResources(ctx, scope, base, ver)
+	if err != nil {
+		return nil, fmt.Errorf("list resources for %s@%s: %w", name, ver, err)
+	}
+
+	wanted := make(map[string]bool, len(metas))
+	entries := make([]registry.ResourceEntry, 0, len(metas))
+	for _, m := range metas {
+		wanted[m.Name] = true
+		if abs, _, pathErr := registry.ResourcePath(p.Root, name, m.Name); pathErr == nil {
+			if data, readErr := os.ReadFile(abs); readErr == nil {
+				sum := sha256.Sum256(data)
+				if "sha256:"+hex.EncodeToString(sum[:]) == m.ContentHash {
+					entries = append(entries, registry.ResourceEntry{Name: m.Name, ContentHash: m.ContentHash})
+					continue
+				}
+			}
+		}
+		body, err := downloadVerifiedResource(ctx, client, name, ver, m.Name, m.ContentHash)
+		if err != nil {
+			return nil, err
+		}
+		if err := registry.WriteResource(p.Root, name, m.Name, body); err != nil {
+			return nil, err
+		}
+		entries = append(entries, registry.ResourceEntry{Name: m.Name, ContentHash: m.ContentHash})
+	}
+
+	if err := pruneStaleResources(p.Root, name, wanted); err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
+}
+
+// pruneStaleResources deletes any resource file materialized for a package
+// that is no longer in the server's current list (deleted upstream since the
+// lockfile was last written). A missing package directory is not an error.
+func pruneStaleResources(projectRoot, name string, wanted map[string]bool) error {
+	dirAbs, _, err := registry.PackageDir(projectRoot, name)
+	if err != nil {
+		return err
+	}
+	_, base, err := registry.ParseName(name)
+	if err != nil {
+		return err
+	}
+	docName := base + ".yml"
+	entries, err := os.ReadDir(dirAbs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", dirAbs, err)
+	}
+	for _, de := range entries {
+		if de.IsDir() || de.Name() == docName || wanted[de.Name()] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dirAbs, de.Name())); err != nil {
+			return fmt.Errorf("remove stale resource %s: %w", de.Name(), err)
+		}
+	}
+	return nil
+}
+
 // registrySync materializes a resolved closure: downloads and verifies every
 // package into memory first (a failure writes nothing), then writes files,
 // rewrites bino.lock to exactly the closure, and sweeps files of packages
@@ -164,6 +272,10 @@ func registrySync(ctx context.Context, p registryProject, client *registry.Clien
 		if err != nil {
 			return nil, RuntimeError(err)
 		}
+		resources, err := syncResources(ctx, p, client, r.Name, r.Version)
+		if err != nil {
+			return nil, ExternalError(err)
+		}
 		lock.Upsert(registry.Entry{
 			Name:         r.Name,
 			Version:      r.Version,
@@ -173,6 +285,7 @@ func registrySync(ctx context.Context, p registryProject, client *registry.Clien
 			Path:         rel,
 			Direct:       r.Direct,
 			Dependencies: r.Dependencies,
+			Resources:    resources,
 		})
 	}
 	if err := registry.SaveLockfile(p.Root, lock); err != nil {
