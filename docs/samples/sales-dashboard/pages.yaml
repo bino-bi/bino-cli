@@ -4,7 +4,7 @@ metadata:
   name: sales-dashboard-page
 spec:
   pageLayout: 2x2
-  titleBusinessUnit: "Acme Corp"
+  titleBusinessUnit: "Acme **Corp**<br />Group Controlling"
   titleMeasures:
     - name: "Revenue"
       unit: "EUR k"
@@ -12,6 +12,7 @@ spec:
   titleDateEnd: "2025-06-30"
   titleDateFormat: month
   titleDateLink: interval
+  messageText: "Revenue **above plan** in all regions.<br />Eastern Europe grew by *20.8%* versus prior year."
   footerText: "Acme Corp - Monthly Sales Report"
   children:
     - kind: ChartStructure

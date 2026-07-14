@@ -49,8 +49,8 @@ spec:
 
 Important fields mirror `LayoutPage` but are scoped to a card:
 
-- Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
-- Footer: `footerText`.
+- Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values. `titleBusinessUnit` supports inline Markdown and inline HTML, including `<br />` for an explicit line break — see [LayoutPage](/reference/layout-page/#formatting-the-message-and-the-business-unit).
+- Footer: `footerText` (plain text).
 - Layout: `cardLayout`, `cardCustomTemplate`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
 - Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the card frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner card element.
 - IBCS rules: `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) applied to the card title; also accepts `inherited-page` to reuse the surrounding page's rule set. Child components inherit it via `ruleset: inherited-closest`.
@@ -252,7 +252,7 @@ Child components inside a card can use `inherited-closest` to resolve from the n
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
 | `spec.titleImage` | string | no | `""` | URL or asset name for the card title image. | `titleImage: "debug/concordia.png"` |
-| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. | `titleBusinessUnit: "Sales"` |
+| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. Supports [inline Markdown and HTML](/reference/layout-page/#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
 | `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `inherited-page`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
 | `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, or `inherited-page`. | `titleVariances: ["dpp1_ac1_pos"]` |
 | `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-page`. | `titleOrder: ac1` |

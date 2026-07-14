@@ -10,8 +10,12 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
@@ -589,7 +593,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 	if docName != "" {
 		writeAttr(&b, "data-bino-page", docName)
 	}
-	pageSpec.writeAttrs(&b)
+	pageSpec.writeAttrs(&b, rc.assetURLs)
 	b.WriteString(">\n")
 
 	// Filter children by constraints
@@ -625,7 +629,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-layout-card")
-	cardSpec.writeAttrs(&b)
+	cardSpec.writeAttrs(&b, rc.assetURLs)
 	b.WriteString(">\n")
 
 	// Filter children by constraints
@@ -934,6 +938,62 @@ func renderMarkdown(s string, assetURLs map[string]string) string {
 		return s
 	}
 	return strings.TrimSpace(buf.String())
+}
+
+// renderInlineMarkdown converts a short Markdown string (the page message, the
+// title business unit) to HTML.
+//
+// Unlike renderMarkdown it recognizes inline constructs only: emphasis, code
+// spans, links, raw inline HTML such as <br />, and strikethrough. Block
+// constructs stay literal, because these fields hold values like
+// "1. Quartal 2024" or "# 1 Vertrieb" that must not turn into a list or a
+// heading. A single paragraph is unwrapped so the result stays inline; a value
+// without any markup therefore comes back unchanged.
+func renderInlineMarkdown(s string, assetURLs map[string]string) string {
+	if s == "" {
+		return ""
+	}
+	opts := []goldmark.Option{
+		goldmark.WithParser(newInlineParser()),
+		goldmark.WithExtensions(extension.Strikethrough),
+		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+	}
+	if len(assetURLs) > 0 {
+		opts = append(opts, goldmark.WithExtensions(NewAssetExtension(assetURLs)))
+	}
+	md := goldmark.New(opts...)
+
+	source := []byte(s)
+	doc := md.Parser().Parse(text.NewReader(source))
+	var buf bytes.Buffer
+	if err := md.Renderer().Render(&buf, source, doc); err != nil {
+		return s
+	}
+	out := strings.TrimSpace(buf.String())
+
+	// A lone paragraph carries no meaning of its own here, and unwrapping it
+	// keeps plain values byte-identical.
+	if doc.ChildCount() == 1 && doc.FirstChild().Kind() == ast.KindParagraph {
+		out = strings.TrimSuffix(strings.TrimPrefix(out, "<p>"), "</p>")
+	}
+	return out
+}
+
+// newInlineParser builds a goldmark parser whose only block parser is the
+// paragraph parser, which makes headings, lists, tables, block quotes,
+// thematic breaks and code blocks unrepresentable.
+func newInlineParser() parser.Parser {
+	return parser.NewParser(
+		parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),
+		parser.WithInlineParsers(
+			util.Prioritized(parser.NewCodeSpanParser(), 100),
+			util.Prioritized(parser.NewLinkParser(), 200),
+			util.Prioritized(parser.NewAutoLinkParser(), 300),
+			util.Prioritized(parser.NewRawHTMLParser(), 400),
+			util.Prioritized(parser.NewEmphasisParser(), 500),
+		),
+		parser.WithParagraphTransformers(),
+	)
 }
 
 // renderChartStructureComponent renders a ChartStructure component as HTML.
