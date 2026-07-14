@@ -41,8 +41,8 @@ type layoutPageSpec struct {
 	Children            []layoutChild            `json:"children"`
 }
 
-func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
-	writeAttr(b, "title-business-unit", s.TitleBusinessUnit)
+func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
+	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
 	writeAttr(b, "title-namespace", s.TitleNamespace)
 	writeAttr(b, "title-date-start", s.TitleDateStart.String())
 	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
@@ -59,7 +59,7 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "page-format", s.PageFormat)
 	writeAttr(b, "page-orientation", s.PageOrientation)
 	writeAttr(b, "page-number", s.PageNumber)
-	writeAttr(b, "message-text", s.MessageText)
+	writeAttr(b, "message-text", renderInlineMarkdown(s.MessageText, assetURLs))
 	writeAttr(b, "message-image", s.MessageImage)
 	writeAttr(b, "footer-text", s.FooterText)
 	if s.PageFitToContent != nil {
@@ -98,9 +98,9 @@ type layoutCardSpec struct {
 	Children            []layoutChild            `json:"children"`
 }
 
-func (s layoutCardSpec) writeAttrs(b *strings.Builder) {
+func (s layoutCardSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
 	writeAttr(b, "title-image", s.TitleImage)
-	writeAttr(b, "title-business-unit", s.TitleBusinessUnit)
+	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
 	writeAttr(b, "title-scenarios", s.TitleScenarios.String())
 	writeAttr(b, "title-variances", s.TitleVariances.String())
 	writeAttr(b, "title-order", s.TitleOrder)

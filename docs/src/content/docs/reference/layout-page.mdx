@@ -54,6 +54,39 @@ Key fields (see JSON schema for full list):
 - IBCS rules: `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) applied to the page title; child components inherit it via `ruleset: inherited-page` or `ruleset: inherited-closest`.
 - Content: `children` – required array of `layoutChild` objects.
 
+## Formatting the message and the business unit
+
+`messageText` and `titleBusinessUnit` accept inline Markdown and inline HTML. The value is converted
+to HTML at build time and sanitized by the template engine before it is rendered — only safe tags
+(`<b>`, `<i>`, `<strong>`, `<em>`, `<br>`, `<a>`, …) survive; event handlers and `javascript:` URLs
+are stripped.
+
+Use `<br />` for an explicit line break. A plain newline in the YAML does **not** break the line —
+it is a soft break and collapses to a space, exactly like in a [`Text`](/reference/text/) component:
+
+```yaml
+spec:
+  titleBusinessUnit: "Acme **Corp**<br />Group Controlling"
+  messageText: >-
+    Revenue **above plan** in all regions.<br />
+    Eastern Europe grew by *20.8%* versus prior year.
+```
+
+Only inline Markdown is interpreted — bold, italic, code spans, links, strikethrough. Block Markdown
+is deliberately **not** interpreted, so ordinary values keep their literal meaning: `1. Quartal 2024`
+stays a plain string instead of turning into a numbered list, and `# 1 Vertrieb` does not become a
+heading. For block content (headings, lists, tables) use a [`Text`](/reference/text/) component.
+
+Images from [`Asset`](/reference/asset/) manifests can be embedded with the `asset:` URL scheme
+(`![Logo](asset:brandLogo)`), though the message row has a dedicated `messageImage` field for its logo.
+
+The other title fields (`titleMeasures`, `titleScenarios`, …) and `footerText` are plain text.
+
+:::note
+Requires template engine `v1.0.0-alpha.17` or newer. On older engines the markup is shown as literal
+text. Set `engine-version` in `bino.toml`, or run `bino update` to fetch the latest engine.
+:::
+
 ## Page layouts
 
 `pageLayout` controls how components are arranged. The enum includes:
@@ -751,7 +784,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the title header. | `titleBusinessUnit: "Sales"` |
+| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the title header. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
 | `spec.titleNamespace` | string | no | `"_system"` | i18n namespace for the title. | `titleNamespace: _system` |
 | `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
 | `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
@@ -784,7 +817,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.footerDisplayPageNumber` | boolean | no | `true` | Show or hide the page number in the footer. | `footerDisplayPageNumber: true` |
 | `spec.footerText` | string | no | — | Footer text. | `footerText: "Internal use only"` |
 | `spec.messageImage` | string | no | `""` | URL or asset name for the message row image. | `messageImage: "debug/concordia.png"` |
-| `spec.messageText` | string | no | `""` | Message text displayed above the title. | `messageText: "Draft"` |
+| `spec.messageText` | string | no | `""` | Message text displayed above the title. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit). | `messageText: "Draft<br />Q3 2026"` |
 
 ### Spec Attributes — Children
 
