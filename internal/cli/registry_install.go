@@ -64,6 +64,21 @@ anything, so CI and fresh checkouts reproduce the exact locked versions.`,
 				if _, err := registry.WritePackage(p.Root, e.Name, bodies[e.Name]); err != nil {
 					return RuntimeError(err)
 				}
+				for _, r := range e.Resources {
+					body, err := downloadVerifiedResource(ctx, client, e.Name, e.Version, r.Name, r.ContentHash)
+					if err != nil {
+						var apiErr *registry.APIError
+						if errors.Is(err, errResourceMismatch) || (errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound) {
+							return ExternalErrorWithHint(
+								fmt.Errorf("resource %q of %s@%s is pinned in %s but no longer matches what the registry serves", r.Name, e.Name, e.Version, registry.LockfileName),
+								"run 'bino registry update' to re-resolve to the resource's current state")
+						}
+						return ExternalError(err)
+					}
+					if err := registry.WriteResource(p.Root, e.Name, r.Name, body); err != nil {
+						return RuntimeError(err)
+					}
+				}
 			}
 
 			plan := make([]registry.Resolved, 0, len(entries))

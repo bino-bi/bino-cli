@@ -21,14 +21,21 @@ var ErrMalformedLockfile = errors.New("malformed " + LockfileName)
 
 // Entry records one resolved package in the lock file.
 type Entry struct {
-	Name         string   `toml:"name"`          // "@scope/name" (dedup key)
-	Version      string   `toml:"version"`       // resolved immutable version
-	Tag          string   `toml:"tag,omitempty"` // followed tag; omitted when pinned
-	Digest       string   `toml:"digest"`        // "sha256:<hex>" over the canonical document
-	Kind         string   `toml:"kind"`
-	Path         string   `toml:"path"` // project-relative, slash-form
-	Direct       bool     `toml:"direct"`
-	Dependencies []string `toml:"dependencies"` // direct edges, bare "@scope/name"
+	Name         string          `toml:"name"`          // "@scope/name" (dedup key)
+	Version      string          `toml:"version"`       // resolved immutable version
+	Tag          string          `toml:"tag,omitempty"` // followed tag; omitted when pinned
+	Digest       string          `toml:"digest"`        // "sha256:<hex>" over the canonical document
+	Kind         string          `toml:"kind"`
+	Path         string          `toml:"path"` // project-relative, slash-form
+	Direct       bool            `toml:"direct"`
+	Dependencies []string        `toml:"dependencies"`        // direct edges, bare "@scope/name"
+	Resources    []ResourceEntry `toml:"resources,omitempty"` // bundled resources, version-pinned alongside the document
+}
+
+// ResourceEntry records one bundled resource of a locked package.
+type ResourceEntry struct {
+	Name        string `toml:"name"`
+	ContentHash string `toml:"content_hash"` // "sha256:<hex>" over the raw bytes
 }
 
 // IsPinned reports whether the entry pins an exact version rather than
@@ -69,6 +76,9 @@ func SaveLockfile(projectRoot string, lf *Lockfile) error {
 	sort.Slice(lf.Packages, func(i, j int) bool { return lf.Packages[i].Name < lf.Packages[j].Name })
 	for i := range lf.Packages {
 		sort.Strings(lf.Packages[i].Dependencies)
+		sort.Slice(lf.Packages[i].Resources, func(a, b int) bool {
+			return lf.Packages[i].Resources[a].Name < lf.Packages[i].Resources[b].Name
+		})
 	}
 	data, err := toml.Marshal(lf)
 	if err != nil {

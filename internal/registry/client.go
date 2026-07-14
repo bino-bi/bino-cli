@@ -21,6 +21,9 @@ const (
 	// maxBodyBytes caps response bodies; packages are single YAML documents
 	// (server-side limit 5 MiB).
 	maxBodyBytes = 8 << 20
+	// maxResourceBytes caps resource downloads; resources can be up to 50 MiB
+	// server-side, plus a small overhead allowance.
+	maxResourceBytes = 50<<20 + 1<<20
 	// maxRetryAfter caps how long a single 429 retry may wait.
 	maxRetryAfter = 30 * time.Second
 )
@@ -113,6 +116,42 @@ func (c *Client) Download(ctx context.Context, scope, name, version string) (bod
 	return body, strings.Trim(etag, `"`), nil
 }
 
+// ResourceMeta describes one binary resource bundled with a package version.
+type ResourceMeta struct {
+	Name        string `json:"name"`
+	ContentHash string `json:"content_hash"`
+	Size        int64  `json:"size"`
+	MimeType    string `json:"mime_type"`
+}
+
+// ListResources lists the binary resources bundled with a package version.
+func (c *Client) ListResources(ctx context.Context, scope, name, version string) ([]ResourceMeta, error) {
+	u := fmt.Sprintf("%s/api/registry/resources/%s/%s/%s", c.baseURL, url.PathEscape(scope), url.PathEscape(name), url.PathEscape(version))
+	var out []ResourceMeta
+	body, _, err := c.get(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("registry: decode resources response: %w", err)
+	}
+	return out, nil
+}
+
+// DownloadResource fetches one bundled resource's bytes. It returns the body
+// and the content hash advertised in the ETag header ("sha256:<hex>",
+// unquoted).
+func (c *Client) DownloadResource(ctx context.Context, scope, name, version, resourceName string) (body []byte, contentHash string, err error) {
+	u := fmt.Sprintf("%s/api/registry/resources/%s/%s/%s/%s", c.baseURL,
+		url.PathEscape(scope), url.PathEscape(name), url.PathEscape(version), url.PathEscape(resourceName))
+	body, header, err := c.getWithLimit(ctx, u, maxResourceBytes)
+	if err != nil {
+		return nil, "", err
+	}
+	etag := strings.TrimPrefix(header.Get("ETag"), "W/")
+	return body, strings.Trim(etag, `"`), nil
+}
+
 // SearchParams are the query parameters for the search endpoint.
 type SearchParams struct {
 	Query   string
@@ -195,13 +234,20 @@ func (c *Client) bearer(ctx context.Context) (string, error) {
 	return c.exchJWT, c.exchErr
 }
 
-// get performs an authenticated GET, retrying once on 429 per Retry-After.
+// get performs an authenticated GET, retrying once on 429 per Retry-After,
+// capped at the default maxBodyBytes.
 func (c *Client) get(ctx context.Context, u string) ([]byte, http.Header, error) {
+	return c.getWithLimit(ctx, u, maxBodyBytes)
+}
+
+// getWithLimit is get with an explicit body-size cap, for call sites (like
+// resource downloads) that need a larger limit than the default.
+func (c *Client) getWithLimit(ctx context.Context, u string, maxBytes int64) ([]byte, http.Header, error) {
 	auth, err := c.bearer(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.request(ctx, http.MethodGet, u, nil, auth)
+	return c.request(ctx, http.MethodGet, u, nil, auth, maxBytes)
 }
 
 // doJSON performs a request with a JSON body (nil = none), decoding a 2xx
@@ -216,7 +262,7 @@ func (c *Client) doJSON(ctx context.Context, method, u, auth string, reqBody, ou
 			return err
 		}
 	}
-	body, _, err := c.request(ctx, method, u, payload, auth)
+	body, _, err := c.request(ctx, method, u, payload, auth, maxBodyBytes)
 	if err != nil {
 		return err
 	}
@@ -229,9 +275,9 @@ func (c *Client) doJSON(ctx context.Context, method, u, auth string, reqBody, ou
 }
 
 // request performs an HTTP request with auth, one 429 retry per Retry-After,
-// and non-2xx mapping to APIError.
-func (c *Client) request(ctx context.Context, method, u string, reqBody []byte, auth string) ([]byte, http.Header, error) {
-	body, header, status, err := c.doOnce(ctx, method, u, reqBody, auth)
+// and non-2xx mapping to APIError. maxBytes caps the response body.
+func (c *Client) request(ctx context.Context, method, u string, reqBody []byte, auth string, maxBytes int64) ([]byte, http.Header, error) {
+	body, header, status, err := c.doOnce(ctx, method, u, reqBody, auth, maxBytes)
 	if err == nil && status == http.StatusTooManyRequests {
 		wait := retryAfter(header)
 		select {
@@ -239,7 +285,7 @@ func (c *Client) request(ctx context.Context, method, u string, reqBody []byte, 
 			return nil, nil, ctx.Err()
 		case <-time.After(wait):
 		}
-		body, header, status, err = c.doOnce(ctx, method, u, reqBody, auth)
+		body, header, status, err = c.doOnce(ctx, method, u, reqBody, auth, maxBytes)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -254,7 +300,7 @@ func (c *Client) request(ctx context.Context, method, u string, reqBody []byte, 
 	return body, header, nil
 }
 
-func (c *Client) doOnce(ctx context.Context, method, u string, reqBody []byte, auth string) (body []byte, header http.Header, status int, err error) {
+func (c *Client) doOnce(ctx context.Context, method, u string, reqBody []byte, auth string, maxBytes int64) (body []byte, header http.Header, status int, err error) {
 	var reader io.Reader
 	if reqBody != nil {
 		reader = bytes.NewReader(reqBody)
@@ -274,7 +320,7 @@ func (c *Client) doOnce(ctx context.Context, method, u string, reqBody []byte, a
 		return nil, nil, 0, fmt.Errorf("registry: %w", err)
 	}
 	defer resp.Body.Close()
-	body, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
+	body, err = io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("registry: read response: %w", err)
 	}

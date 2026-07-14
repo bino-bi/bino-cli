@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -178,6 +180,25 @@ file does not fail verification.`,
 					status = "MISSING"
 				} else if digest, digErr := registrydigest.Digest(body); digErr != nil || digest != e.Digest {
 					status = "MODIFIED"
+				}
+				if status == "OK" {
+					for _, r := range e.Resources {
+						resAbs, _, err := registry.ResourcePath(p.Root, e.Name, r.Name)
+						if err != nil {
+							status = "MODIFIED"
+							break
+						}
+						data, readErr := os.ReadFile(resAbs)
+						if readErr != nil {
+							status = "MISSING"
+							break
+						}
+						sum := sha256.Sum256(data)
+						if "sha256:"+hex.EncodeToString(sum[:]) != r.ContentHash {
+							status = "MODIFIED"
+							break
+						}
+					}
 				}
 				if status != "OK" {
 					bad++

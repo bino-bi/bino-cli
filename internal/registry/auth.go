@@ -58,7 +58,7 @@ func (c *Client) AuthWithPassword(ctx context.Context, identity, password string
 	if err != nil {
 		return AuthResult{}, err
 	}
-	body, _, status, err := c.doOnce(ctx, http.MethodPost, c.baseURL+"/api/collections/users/auth-with-password", payload, "")
+	body, _, status, err := c.doOnce(ctx, http.MethodPost, c.baseURL+"/api/collections/users/auth-with-password", payload, "", maxBodyBytes)
 	if err != nil {
 		return AuthResult{}, err
 	}

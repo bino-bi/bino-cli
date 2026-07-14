@@ -125,6 +125,54 @@ func TestLockfileFutureVersionRoundTrips(t *testing.T) {
 	}
 }
 
+func TestLockfileResourcesRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	lf := &Lockfile{LockfileVersion: CurrentLockfileVersion, Packages: []Entry{
+		{
+			Name: "@acme/revenue-table", Version: "1.0.0", Digest: "sha256:aaaa", Kind: "DataSource",
+			Path: ".bino/registry/acme/revenue-table/revenue-table.yml", Direct: true,
+			Resources: []ResourceEntry{
+				{Name: "sales.csv", ContentHash: "sha256:cccc"},
+				{Name: "notes.txt", ContentHash: "sha256:bbbb"},
+			},
+		},
+	}}
+	if err := SaveLockfile(dir, lf); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := LoadLockfile(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	e := got.Get("@acme/revenue-table")
+	if e == nil || len(e.Resources) != 2 {
+		t.Fatalf("entry: %+v", e)
+	}
+	// Sorted by name on save.
+	if e.Resources[0].Name != "notes.txt" || e.Resources[1].Name != "sales.csv" {
+		t.Errorf("resources not sorted: %+v", e.Resources)
+	}
+	if e.Resources[1].ContentHash != "sha256:cccc" {
+		t.Errorf("resource content hash mismatch: %+v", e.Resources[1])
+	}
+}
+
+func TestLockfileMissingResourcesKeyIsNil(t *testing.T) {
+	dir := t.TempDir()
+	content := "lockfile_version = 1\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nkind = \"Text\"\npath = \".bino/registry/acme/x/x.yml\"\ndirect = true\ndependencies = []\n"
+	if err := os.WriteFile(filepath.Join(dir, LockfileName), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lf, err := LoadLockfile(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	e := lf.Get("@acme/x")
+	if e == nil || e.Resources != nil {
+		t.Errorf("expected nil resources for an old-shape lockfile, got %+v", e)
+	}
+}
+
 func TestLockfileUpsertRemove(t *testing.T) {
 	lf := &Lockfile{LockfileVersion: 1}
 	lf.Upsert(Entry{Name: "@a/x", Version: "1.0.0"})

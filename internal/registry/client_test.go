@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -132,6 +133,71 @@ func TestClientDownloadETag(t *testing.T) {
 	}
 	if string(body) != `{"kind":"Table"}` {
 		t.Errorf("body = %q", body)
+	}
+}
+
+func TestClientListResources(t *testing.T) {
+	var gotPath string
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Write([]byte(`[{"name":"sales.csv","content_hash":"sha256:aaaa","size":42,"mime_type":"text/csv"}]`))
+	}))
+	res, err := c.ListResources(context.Background(), "acme", "revenue-table", "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/api/registry/resources/acme/revenue-table/1.0.0" {
+		t.Errorf("path = %s", gotPath)
+	}
+	if len(res) != 1 || res[0].Name != "sales.csv" || res[0].ContentHash != "sha256:aaaa" || res[0].Size != 42 || res[0].MimeType != "text/csv" {
+		t.Errorf("unexpected result: %+v", res)
+	}
+}
+
+func TestClientDownloadResource(t *testing.T) {
+	var gotPath string
+	body := []byte("id,amount\n1,10\n")
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("ETag", `"sha256:bbbb"`)
+		w.Write(body)
+	}))
+	got, digest, err := c.DownloadResource(context.Background(), "acme", "revenue-table", "1.0.0", "sales.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/api/registry/resources/acme/revenue-table/1.0.0/sales.csv" {
+		t.Errorf("path = %s", gotPath)
+	}
+	if digest != "sha256:bbbb" {
+		t.Errorf("digest = %q", digest)
+	}
+	if string(got) != string(body) {
+		t.Errorf("body = %q", got)
+	}
+}
+
+func TestClientDownloadResourceAllowsLargeBodyButDownloadDoesNot(t *testing.T) {
+	big := bytes.Repeat([]byte("a"), (8<<20)+1) // just over the default 8 MiB cap
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"sha256:big"`)
+		w.Write(big)
+	}))
+	got, _, err := c.DownloadResource(context.Background(), "acme", "revenue-table", "1.0.0", "big.bin")
+	if err != nil {
+		t.Fatalf("resource download should allow > 8 MiB: %v", err)
+	}
+	if len(got) != len(big) {
+		t.Errorf("resource body truncated: got %d bytes, want %d", len(got), len(big))
+	}
+	// The same oversized body served from Download must still be truncated to
+	// the original, smaller cap.
+	docBody, _, err := c.Download(context.Background(), "acme", "revenue-table", "1.0.0")
+	if err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if len(docBody) != maxBodyBytes {
+		t.Errorf("Download body = %d bytes, want capped at %d", len(docBody), maxBodyBytes)
 	}
 }
 
