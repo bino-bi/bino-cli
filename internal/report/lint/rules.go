@@ -23,6 +23,8 @@ func DefaultRules() []Rule {
 		pageLayoutSlotsUsed,
 		cardLayoutSlotsUsed,
 		refParams,
+		assetReferenceUndefined,
+		assetSourceMissing,
 		// Inline definition rules
 		inlineRefBounds,
 		datasetSourceExclusive,

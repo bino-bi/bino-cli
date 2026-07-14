@@ -421,6 +421,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"page-layout-slots-used",
 		"card-layout-slots-used",
 		"ref-params",
+		"asset-reference-undefined",
+		"asset-source-missing",
 		// Inline definition rules
 		"inline-ref-bounds",
 		"dataset-source-exclusive",

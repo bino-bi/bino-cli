@@ -251,7 +251,7 @@ Child components inside a card can use `inherited-closest` to resolve from the n
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.titleImage` | string | no | `""` | URL or asset name for the card title image. | `titleImage: "debug/concordia.png"` |
+| `spec.titleImage` | string | no | `""` | Name of an [Asset](/reference/asset/) document, or an absolute URL, for the card title image. | `titleImage: "logo"` |
 | `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. Supports [inline Markdown and HTML](/reference/layout-page/#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
 | `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `inherited-page`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
 | `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, or `inherited-page`. | `titleVariances: ["dpp1_ac1_pos"]` |
