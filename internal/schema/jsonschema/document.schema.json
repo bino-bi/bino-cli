@@ -365,7 +365,7 @@
         "name": {
           "type": "string",
           "pattern": "^(@[a-z0-9][a-z0-9_-]*/)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
-          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'), optionally prefixed with a registry scope '@scope/' (e.g. '@acme/revenue_table') for documents pulled from a bino registry. For DataSource documents the name is additionally constrained to a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$) because it becomes the DuckDB view name."
+          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'), optionally prefixed with a registry scope '@scope/' (e.g. '@acme/revenue-table') for documents pulled from a bino registry. For DataSource documents the name is additionally constrained: either a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$), or a full '@scope/name' registry identity — because it becomes the DuckDB view name, a '@scope/name' DataSource must be double-quoted when referenced in a DataSet's raw SQL query, e.g. FROM \"@acme/revenue-table\"."
         },
         "labels": {
           "type": "object",
@@ -474,8 +474,8 @@
     },
     "sqlIdentifier": {
       "type": "string",
-      "pattern": "^[a-z_][a-z0-9_]*$",
-      "description": "Name of the DuckDB view created from this DataSource. Must be a valid unquoted SQL identifier in lowercase (letter or underscore followed by lowercase letters, digits, or underscores), for example 'coffee_sales_daily'. Use this name in DataSet queries."
+      "pattern": "^([a-z_][a-z0-9_]*|@[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*)$",
+      "description": "Name of the DuckDB view created from this DataSource. Either a valid unquoted SQL identifier in lowercase (letter or underscore followed by lowercase letters, digits, or underscores), for example 'coffee_sales_daily' — use this form directly (unquoted) in DataSet queries — or, for a DataSource pulled from a bino registry, its full '@scope/name' identity, for example '@acme/revenue-table'; reference this form double-quoted in DataSet queries, e.g. FROM \"@acme/revenue-table\"."
     },
     "dataFileFormat": {
       "type": "string",

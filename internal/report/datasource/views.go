@@ -556,9 +556,11 @@ func buildPostgresAttachSQL(spec sourceSpec) (attachName string, attachSQL strin
 
 	if secretName := strings.TrimSpace(spec.Connection.Secret); secretName != "" {
 		// Use ATTACH with SECRET for authentication
-		// Quote the secret name to handle names with special characters like hyphens
+		// Quote both names to handle characters like hyphens, '@', and '/'
+		// (attachName embeds the DataSource's metadata.name, which may be a
+		// full "@scope/name" registry identity).
 		return attachName, fmt.Sprintf(
-			"ATTACH '%s' AS %s (TYPE postgres, SECRET %q)",
+			"ATTACH '%s' AS %q (TYPE postgres, SECRET %q)",
 			escapeSQLString(connStr),
 			attachName,
 			secretName,
@@ -567,7 +569,7 @@ func buildPostgresAttachSQL(spec sourceSpec) (attachName string, attachSQL strin
 
 	// Without a secret, use connection string directly
 	return attachName, fmt.Sprintf(
-		"ATTACH '%s' AS %s (TYPE postgres)",
+		"ATTACH '%s' AS %q (TYPE postgres)",
 		escapeSQLString(connStr),
 		attachName,
 	)
@@ -585,9 +587,11 @@ func buildMySQLAttachSQL(spec sourceSpec) (attachName string, attachSQL string) 
 
 	if secretName := strings.TrimSpace(spec.Connection.Secret); secretName != "" {
 		// Use ATTACH with SECRET for authentication
-		// Quote the secret name to handle names with special characters like hyphens
+		// Quote both names to handle characters like hyphens, '@', and '/'
+		// (attachName embeds the DataSource's metadata.name, which may be a
+		// full "@scope/name" registry identity).
 		return attachName, fmt.Sprintf(
-			"ATTACH '%s' AS %s (TYPE mysql, SECRET %q)",
+			"ATTACH '%s' AS %q (TYPE mysql, SECRET %q)",
 			escapeSQLString(connStr),
 			attachName,
 			secretName,
@@ -596,7 +600,7 @@ func buildMySQLAttachSQL(spec sourceSpec) (attachName string, attachSQL string) 
 
 	// Without a secret, use connection string directly
 	return attachName, fmt.Sprintf(
-		"ATTACH '%s' AS %s (TYPE mysql)",
+		"ATTACH '%s' AS %q (TYPE mysql)",
 		escapeSQLString(connStr),
 		attachName,
 	)

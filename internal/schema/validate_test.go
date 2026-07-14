@@ -718,6 +718,8 @@ func TestValidate_ScopedNames(t *testing.T) {
 		{"scoped Text", doc("Text", "@acme/intro_text", "  value: hello\n")},
 		{"scoped minimal tokens", doc("Text", "@a1/x", "  value: hello\n")},
 		{"unscoped name still valid", doc("Text", "intro_text", "  value: hello\n")},
+		{"scoped DataSource", doc("DataSource", "@acme/revenue-table", "  type: csv\n  path: data/x.csv\n")},
+		{"unscoped DataSource still valid", doc("DataSource", "revenue_table", "  type: csv\n  path: data/x.csv\n")},
 	}
 	for _, tt := range valid {
 		t.Run(tt.name, func(t *testing.T) {
@@ -731,7 +733,6 @@ func TestValidate_ScopedNames(t *testing.T) {
 		name string
 		yaml string
 	}{
-		{"scoped DataSource rejected", doc("DataSource", "@acme/src", "  type: csv\n  path: data/x.csv\n")},
 		{"scope without name", doc("Text", "@acme", "  value: hello\n")},
 		{"scope with empty name", doc("Text", "@acme/", "  value: hello\n")},
 		{"uppercase scope", doc("Text", "@Acme/x", "  value: hello\n")},
@@ -740,6 +741,11 @@ func TestValidate_ScopedNames(t *testing.T) {
 		{"empty scope", doc("Text", "@/x", "  value: hello\n")},
 		{"name part starts with hyphen", doc("Text", "@acme/-x", "  value: hello\n")},
 		{"name part ends with hyphen", doc("Text", "@acme/x-", "  value: hello\n")},
+		{"unscoped DataSource with hyphen rejected", doc("DataSource", "revenue-table", "  type: csv\n  path: data/x.csv\n")},
+		{"unscoped DataSource uppercase rejected", doc("DataSource", "Revenue_Table", "  type: csv\n  path: data/x.csv\n")},
+		{"scoped DataSource uppercase name rejected", doc("DataSource", "@acme/Revenue_Table", "  type: csv\n  path: data/x.csv\n")},
+		{"scoped DataSource nested slash rejected", doc("DataSource", "@acme/revenue/table", "  type: csv\n  path: data/x.csv\n")},
+		{"scoped DataSource name starts with hyphen rejected", doc("DataSource", "@acme/-revenue", "  type: csv\n  path: data/x.csv\n")},
 	}
 	for _, tt := range invalid {
 		t.Run(tt.name, func(t *testing.T) {
