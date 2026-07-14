@@ -23,7 +23,8 @@ type TableManifestData struct {
 	Description string
 	Constraints []string
 	Dataset     string
-	Title       string
+	Type        string
+	SumTitle    string
 }
 
 // ChartStructureManifestData holds data for rendering a ChartStructure manifest.
@@ -48,7 +49,8 @@ type ChartTimeManifestData struct {
 func newAddTableCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagDataset    string
-		flagTitle      string
+		flagType       string
+		flagSumTitle   string
 		flagConstraint []string
 		flagOutput     string
 		flagAppendTo   string
@@ -118,7 +120,8 @@ A Table component displays data from a DataSet in a formatted table.
 				Description: flagDesc,
 				Constraints: flagConstraint,
 				Dataset:     flagDataset,
-				Title:       flagTitle,
+				Type:        flagType,
+				SumTitle:    flagSumTitle,
 			}
 
 			var outputPath string
@@ -169,9 +172,14 @@ A Table component displays data from a DataSet in a formatted table.
 				}
 			}
 
-			// Title
-			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Table title (optional)", "")
+			// Table type
+			if data.Type == "" {
+				data.Type, _ = addPromptString(reader, out, "Table type (list, sum, opt, sumnototal, optnototal)", "list")
+			}
+
+			// Sum row label — only the sum and opt types render a total row to label.
+			if data.SumTitle == "" && (data.Type == "sum" || data.Type == "opt") {
+				data.SumTitle, _ = addPromptString(reader, out, "Label for the grand-total row (optional)", "")
 			}
 
 			// Constraints
@@ -236,7 +244,8 @@ A Table component displays data from a DataSet in a formatted table.
 	}
 
 	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name (required)")
-	cmd.Flags().StringVar(&flagTitle, "title", "", "Table title")
+	cmd.Flags().StringVar(&flagType, "type", "", "Table type: list, sum, opt, sumnototal, optnototal (default list)")
+	cmd.Flags().StringVar(&flagSumTitle, "sum-title", "", "Label for the grand-total row; only rendered for --type sum or opt")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -749,8 +758,9 @@ func buildTableDocument(data TableManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.TableSpec{
-		Dataset:    "$" + data.Dataset,
-		TableTitle: data.Title,
+		Dataset:  "$" + data.Dataset,
+		Type:     data.Type,
+		SumTitle: data.SumTitle,
 	}
 
 	doc.Spec = spec

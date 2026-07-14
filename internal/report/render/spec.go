@@ -327,7 +327,7 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 // tableSpec defines the structure for Table components.
 type tableSpec struct {
 	Dataset                  reportspec.DatasetList       `json:"dataset"`
-	TableTitle               string                       `json:"tableTitle"`
+	SumTitle                 string                       `json:"sumTitle"`
 	Filter                   string                       `json:"filter"`
 	Order                    string                       `json:"order"`
 	OrderDirection           string                       `json:"orderDirection"`
@@ -364,7 +364,7 @@ type tableSpec struct {
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "datasets", s.Dataset.Join(","))
-	writeAttr(b, "table-title", s.TableTitle)
+	writeAttr(b, "sum-title", s.SumTitle)
 	writeAttr(b, "filter", s.Filter)
 	writeAttr(b, "order", s.Order)
 	writeAttr(b, "order-direction", s.OrderDirection)

@@ -388,6 +388,90 @@ spec:
 	}
 }
 
+// tableTitle was renamed to sumTitle. Because tableSpecBase sets
+// additionalProperties:false, the old name must now be rejected everywhere a
+// Table spec can appear — standalone, as a layout child, and as a tree node.
+func TestValidate_TableSumTitle(t *testing.T) {
+	standalone := func(prop string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: t1
+spec:
+  dataset: ds
+  type: sum
+  ` + prop + `
+`
+	}
+	layoutChild := func(prop string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: test-page
+spec:
+  pageLayout: full
+  children:
+    - kind: Table
+      metadata:
+        name: t1
+      spec:
+        dataset: ds
+        type: sum
+        ` + prop + `
+`
+	}
+	treeNode := func(prop string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: tree1
+spec:
+  edges: []
+  nodes:
+    - id: n1
+      kind: Table
+      spec:
+        dataset: ds
+        type: sum
+        ` + prop + `
+`
+	}
+
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{name: "sumTitle on a standalone Table", yaml: standalone(`sumTitle: Total`), wantErr: false},
+		{name: "sumTitle on a layout child", yaml: layoutChild(`sumTitle: Total`), wantErr: false},
+		{name: "sumTitle on a tree node", yaml: treeNode(`sumTitle: Total`), wantErr: false},
+		{name: "legacy tableTitle on a standalone Table", yaml: standalone(`tableTitle: Total`), wantErr: true},
+		{name: "legacy tableTitle on a layout child", yaml: layoutChild(`tableTitle: Total`), wantErr: true},
+		{name: "legacy tableTitle on a tree node", yaml: treeNode(`tableTitle: Total`), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("expected document to validate, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), "tableTitle") {
+				t.Errorf("error should name the offending property, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_WrongType(t *testing.T) {
 	tests := []struct {
 		name        string

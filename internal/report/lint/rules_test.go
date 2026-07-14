@@ -417,6 +417,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"artefact-layoutpage-required",
 		"text-content-required",
 		"dataset-required",
+		"table-sum-title-unused",
 		"page-layout-slots-used",
 		"card-layout-slots-used",
 		"ref-params",

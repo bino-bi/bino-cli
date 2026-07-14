@@ -169,8 +169,9 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "sales_table",
 				},
 				Spec: &TableSpec{
-					Dataset:    "$sales_data",
-					TableTitle: "Sales Overview",
+					Dataset:  "$sales_data",
+					Type:     "sum",
+					SumTitle: "Sales Overview",
 				},
 			},
 		},
@@ -411,12 +412,13 @@ func TestDocumentRoundTripYAML(t *testing.T) {
 				APIVersion: APIVersion,
 				Kind:       KindTable,
 				Metadata:   Metadata{Name: "my_table"},
-				Spec:       &TableSpec{Dataset: "$my_data", TableTitle: "Data Table"},
+				Spec:       &TableSpec{Dataset: "$my_data", Type: "sum", SumTitle: "Data Table"},
 			},
 			contains: []string{
 				"kind: Table",
 				"dataset: $my_data",
-				"tableTitle: Data Table",
+				"type: sum",
+				"sumTitle: Data Table",
 			},
 		},
 	}
