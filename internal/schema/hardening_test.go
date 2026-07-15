@@ -460,3 +460,373 @@ func TestValidate_Scale(t *testing.T) {
 		})
 	}
 }
+
+// TestValidate_XYCharts covers the ChartScatter/ChartBubble spec defs:
+// dual-form measure mappings (bare token vs object), the measure-token
+// pattern, required properties per kind, and the closed sub-objects.
+func TestValidate_XYCharts(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "scatter minimal bare tokens",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter object-form axes with iso and facet",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x:
+    measure: ac1
+    label: Margin
+    unit: "%"
+    min: 0
+    max: 40
+    refLine: 20
+  y:
+    measure: ac2
+    label: Net sales
+    unit: mEUR
+    highlight:
+      from: 30
+  iso:
+    values: [100, 200, 300]
+    label: Gross profit
+    unit: mUSD
+    highlight:
+      from: 300
+  level: category
+  seriesLevel: rowgroup
+  facet:
+    level: rowgroup
+    columns: 3
+  labels:
+    points: auto
+    max: 12
+  legend:
+    show: true
+    position: bottom
+  aspect: "21:9"
+  limit: 50
+  scale: none
+  ruleset: inherited-page
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter variance token with sentiment suffix",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: variance_scatter
+spec:
+  dataset: product_data
+  x: drac1_pl1_pos
+  y: dac1_pp1
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter iso values auto",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  iso:
+    values: auto
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter labels explicit point list",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  labels:
+    points: [RX-2000, X2-200]
+    values: false
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter invalid scenario slot rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac5
+  y: ac2
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter malformed variance token rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: dxac1_pp1
+  y: ac2
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter missing y rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter spec typo rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  serieslevel: rowgroup
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter facet without level rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  facet:
+    columns: 2
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter size rejected (bubble-only property)",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  size: ac3
+`,
+			wantErr: true,
+		},
+		{
+			name: "bubble minimal bare tokens",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+  size: ac3
+`,
+			wantErr: false,
+		},
+		{
+			name: "bubble size object with scaling group and share",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+  size:
+    measure: ac3
+    label: Net sales
+    unit: mEUR
+    group: netsales_area
+  share: ac4
+  compareWith: pp
+`,
+			wantErr: false,
+		},
+		{
+			name: "bubble missing size rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+`,
+			wantErr: true,
+		},
+		{
+			name: "bubble invalid compareWith rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+  size: ac3
+  compareWith: py
+`,
+			wantErr: true,
+		},
+		{
+			name: "bubble iso rejected (scatter-only property)",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+  size: ac3
+  iso:
+    values: auto
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter ref child override without required axes accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartScatter
+      ref: products
+      spec:
+        chartTitle: Override
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter inline child without axes rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartScatter
+      spec:
+        dataset: product_data
+`,
+			wantErr: true,
+		},
+		{
+			name: "bubble grid child inline accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: overview
+spec:
+  rowHeaders: [Portfolio]
+  columnHeaders: [Actual]
+  children:
+    - kind: ChartBubble
+      row: 0
+      column: 0
+      spec:
+        dataset: business_units
+        x: ac1
+        y: ac2
+        size: ac3
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter tree node ref accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"b"}]'
+  nodes:
+    - id: a
+      kind: ChartScatter
+      ref: products
+`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

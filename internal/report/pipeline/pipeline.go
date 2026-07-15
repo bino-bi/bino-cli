@@ -357,7 +357,7 @@ type RenderOptions struct {
 
 	// RootComponent, when set, renders the named standalone component directly
 	// inside <bn-context> with no wrapping LayoutPage. Only leaf component kinds
-	// (Text, Table, ChartStructure, ChartTime, Image) are supported. Used by the
+	// (Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image) are supported. Used by the
 	// embedding endpoint to preview a single component.
 	RootComponent string
 }

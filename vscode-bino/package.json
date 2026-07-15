@@ -361,6 +361,16 @@
         "category": "Bino"
       },
       {
+        "command": "bino.addChartScatter",
+        "title": "Add ChartScatter",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addChartBubble",
+        "title": "Add ChartBubble",
+        "category": "Bino"
+      },
+      {
         "command": "bino.addReportArtefact",
         "title": "Add ReportArtefact",
         "category": "Bino"
@@ -576,6 +586,14 @@
         },
         {
           "command": "bino.addChartTime",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartScatter",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartBubble",
           "when": "false"
         },
         {

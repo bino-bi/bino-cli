@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -278,6 +279,88 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 }
 
+// chartScatterSpec defines the structure for ChartScatter components (bn-chart-scatter, IBCS C09).
+type chartScatterSpec struct {
+	Dataset       reportspec.DatasetList   `json:"dataset"`
+	ChartTitle    string                   `json:"chartTitle"`
+	Filter        string                   `json:"filter"`
+	X             json.RawMessage          `json:"x"`
+	Y             json.RawMessage          `json:"y"`
+	Iso           json.RawMessage          `json:"iso,omitempty"`
+	Level         string                   `json:"level"`
+	SeriesLevel   string                   `json:"seriesLevel"`
+	Facet         json.RawMessage          `json:"facet,omitempty"`
+	Labels        json.RawMessage          `json:"labels,omitempty"`
+	Legend        json.RawMessage          `json:"legend,omitempty"`
+	Aspect        string                   `json:"aspect"`
+	Limit         *int                     `json:"limit"`
+	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle string                   `json:"selectedStyle"`
+	Ruleset       string                   `json:"ruleset"`
+}
+
+func (s chartScatterSpec) writeAttrs(b *strings.Builder) {
+	writeAttr(b, "datasets", s.Dataset.Join(","))
+	writeAttr(b, "chart-title", s.ChartTitle)
+	writeAttr(b, "filter", s.Filter)
+	writeMeasureAttr(b, "x", s.X)
+	writeMeasureAttr(b, "y", s.Y)
+	writeJSONObjAttr(b, "iso", s.Iso)
+	writeAttr(b, "level", s.Level)
+	writeAttr(b, "series-level", s.SeriesLevel)
+	writeJSONObjAttr(b, "facet", s.Facet)
+	writeJSONObjAttr(b, "labels", s.Labels)
+	writeJSONObjAttr(b, "legend", s.Legend)
+	writeAttr(b, "aspect", s.Aspect)
+	writeIntAttr(b, "limit", s.Limit)
+	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
+}
+
+// chartBubbleSpec defines the structure for ChartBubble components (bn-chart-bubble, IBCS C10).
+type chartBubbleSpec struct {
+	Dataset       reportspec.DatasetList   `json:"dataset"`
+	ChartTitle    string                   `json:"chartTitle"`
+	Filter        string                   `json:"filter"`
+	X             json.RawMessage          `json:"x"`
+	Y             json.RawMessage          `json:"y"`
+	Size          json.RawMessage          `json:"size"`
+	Share         json.RawMessage          `json:"share,omitempty"`
+	CompareWith   string                   `json:"compareWith"`
+	Level         string                   `json:"level"`
+	SeriesLevel   string                   `json:"seriesLevel"`
+	Facet         json.RawMessage          `json:"facet,omitempty"`
+	Labels        json.RawMessage          `json:"labels,omitempty"`
+	Legend        json.RawMessage          `json:"legend,omitempty"`
+	Aspect        string                   `json:"aspect"`
+	Limit         *int                     `json:"limit"`
+	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle string                   `json:"selectedStyle"`
+	Ruleset       string                   `json:"ruleset"`
+}
+
+func (s chartBubbleSpec) writeAttrs(b *strings.Builder) {
+	writeAttr(b, "datasets", s.Dataset.Join(","))
+	writeAttr(b, "chart-title", s.ChartTitle)
+	writeAttr(b, "filter", s.Filter)
+	writeMeasureAttr(b, "x", s.X)
+	writeMeasureAttr(b, "y", s.Y)
+	writeMeasureAttr(b, "size", s.Size)
+	writeMeasureAttr(b, "share", s.Share)
+	writeAttr(b, "compare-with", s.CompareWith)
+	writeAttr(b, "level", s.Level)
+	writeAttr(b, "series-level", s.SeriesLevel)
+	writeJSONObjAttr(b, "facet", s.Facet)
+	writeJSONObjAttr(b, "labels", s.Labels)
+	writeJSONObjAttr(b, "legend", s.Legend)
+	writeAttr(b, "aspect", s.Aspect)
+	writeIntAttr(b, "limit", s.Limit)
+	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
+}
+
 // treeSpec defines the structure for Tree components.
 // Trees display hierarchical structures with nodes connected by edges,
 // commonly used for driver trees and decomposition diagrams.
@@ -441,6 +524,37 @@ func writeStackAttr(b *strings.Builder, name string, s *stackConfig) {
 		return
 	}
 	writeAttr(b, name, string(data))
+}
+
+// writeMeasureAttr writes a dual-form measure mapping attribute: a JSON string
+// scalar is emitted as its bare token (x='ac1' — the engine treats any value
+// not starting with '{' as shorthand for {"measure": value}), a JSON object is
+// emitted compacted. Other JSON values are dropped; the schema rejects them.
+func writeMeasureAttr(b *strings.Builder, name string, raw json.RawMessage) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return
+	}
+	var s string
+	if err := json.Unmarshal(trimmed, &s); err == nil {
+		writeAttr(b, name, s)
+		return
+	}
+	writeJSONObjAttr(b, name, trimmed)
+}
+
+// writeJSONObjAttr writes an object-valued attribute as compact JSON.
+// Non-object JSON values are dropped; the schema rejects them.
+func writeJSONObjAttr(b *strings.Builder, name string, raw json.RawMessage) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, trimmed); err != nil {
+		return
+	}
+	writeAttr(b, name, buf.String())
 }
 
 // imageSpec defines the structure for Image components.

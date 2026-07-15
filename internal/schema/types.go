@@ -34,6 +34,8 @@ const (
 	KindTable                = "Table"
 	KindChartStructure       = "ChartStructure"
 	KindChartTime            = "ChartTime"
+	KindChartScatter         = "ChartScatter"
+	KindChartBubble          = "ChartBubble"
 	KindTree                 = "Tree"
 	KindGrid                 = "Grid"
 	KindAsset                = "Asset"

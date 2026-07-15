@@ -366,6 +366,42 @@ func TestDatasetRequired_ChartTimeHasDataset(t *testing.T) {
 	}
 }
 
+func TestDatasetRequired_ChartScatterMissingDataset(t *testing.T) {
+	docs := []Document{
+		{
+			File:     "/test/chart.yaml",
+			Position: 1,
+			Kind:     "ChartScatter",
+			Name:     "margin-scatter",
+			Raw:      rawDoc("ChartScatter", "margin-scatter", nil),
+		},
+	}
+
+	findings := datasetRequired.Check(context.Background(), docs)
+
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings))
+	}
+}
+
+func TestDatasetRequired_ChartBubbleHasDataset(t *testing.T) {
+	docs := []Document{
+		{
+			File:     "/test/chart.yaml",
+			Position: 1,
+			Kind:     "ChartBubble",
+			Name:     "portfolio",
+			Raw:      rawDoc("ChartBubble", "portfolio", map[string]any{"dataset": "units"}),
+		},
+	}
+
+	findings := datasetRequired.Check(context.Background(), docs)
+
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings, got %d", len(findings))
+	}
+}
+
 func TestDatasetRequired_EmptyStringDataset(t *testing.T) {
 	docs := []Document{
 		{

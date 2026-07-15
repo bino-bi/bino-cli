@@ -312,6 +312,60 @@ type ChartTimeSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
+// ChartScatterSpec represents the spec section of a ChartScatter manifest (IBCS C09).
+type ChartScatterSpec struct {
+	// Dataset is a reference to a DataSet (required).
+	// Should be a reference like "$dataset_name".
+	Dataset string `yaml:"dataset" json:"dataset"`
+
+	// X is the horizontal axis measure token (required), e.g. "ac1" or "dac1_pp1".
+	// The object form with label/unit/min/max is authored in YAML directly.
+	X string `yaml:"x" json:"x"`
+
+	// Y is the vertical axis measure token (required).
+	Y string `yaml:"y" json:"y"`
+
+	// ChartTitle is the chart title.
+	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
+}
+
+// ChartBubbleSpec represents the spec section of a ChartBubble manifest (IBCS C10).
+type ChartBubbleSpec struct {
+	// Dataset is a reference to a DataSet (required).
+	// Should be a reference like "$dataset_name".
+	Dataset string `yaml:"dataset" json:"dataset"`
+
+	// X is the horizontal axis measure token (required), e.g. "ac1" or "dac1_pp1".
+	// The object form with label/unit/min/max is authored in YAML directly.
+	X string `yaml:"x" json:"x"`
+
+	// Y is the vertical axis measure token (required).
+	Y string `yaml:"y" json:"y"`
+
+	// Size is the bubble size measure token (required). Bubble area is
+	// proportional to the value; values must be >= 0.
+	Size string `yaml:"size" json:"size"`
+
+	// ChartTitle is the chart title.
+	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
+}
+
 // GridSpec represents the spec section of a Grid manifest.
 // Grid creates a CSS grid-based layout with row and column headers
 // for organizing child components in a tabular structure.

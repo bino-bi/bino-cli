@@ -49,6 +49,8 @@ var kindCategories = []KindCategory{
 			{Name: "table", Description: "Data table from a DataSet"},
 			{Name: "chartstructure", Description: "Structural chart (bar, pie, etc.)"},
 			{Name: "charttime", Description: "Time-series chart"},
+			{Name: "chartscatter", Description: "Scatter chart (IBCS C09)"},
+			{Name: "chartbubble", Description: "Bubble portfolio chart (IBCS C10)"},
 		},
 	},
 	{
@@ -111,6 +113,8 @@ Subcommands (Visualization):
   table             Create a Table manifest (data table)
   chartstructure    Create a ChartStructure manifest (structural chart)
   charttime         Create a ChartTime manifest (time-series chart)
+  chartscatter      Create a ChartScatter manifest (scatter chart)
+  chartbubble       Create a ChartBubble manifest (bubble chart)
 
 Subcommands (Resources):
   asset             Create an Asset manifest (image/font/file)
@@ -172,6 +176,8 @@ Three interaction modes are supported:
 	cmd.AddCommand(newAddTableCommand())
 	cmd.AddCommand(newAddChartStructureCommand())
 	cmd.AddCommand(newAddChartTimeCommand())
+	cmd.AddCommand(newAddChartScatterCommand())
+	cmd.AddCommand(newAddChartBubbleCommand())
 
 	// Resources
 	cmd.AddCommand(newAddAssetCommand())
