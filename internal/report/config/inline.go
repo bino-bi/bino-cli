@@ -17,7 +17,7 @@ import (
 // Returns the augmented document list with synthetic documents appended.
 //
 // Documents that may contain inline definitions:
-//   - ChartStructure, ChartTime, Table, Text: spec.dataset can be inline
+//   - ChartStructure, ChartTime, ChartScatter, ChartBubble, Table, Text: spec.dataset can be inline
 //   - Tree: spec.nodes[].spec.dataset can be inline (for Table, ChartStructure, ChartTime nodes)
 //   - DataSet: spec.dependencies can contain inline DataSources, spec.source can be inline
 //   - LayoutPage, LayoutCard: children[].spec.dataset can be inline, children[].spec.nodes[].spec.dataset for Tree
@@ -28,7 +28,7 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 	for i := range docs {
 		doc := &docs[i]
 		switch doc.Kind {
-		case "ChartStructure", "ChartTime", "Table", "Text":
+		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Table", "Text":
 			if err := materializeComponentInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("%s %q: %w", doc.Kind, doc.Name, err)
 			}
@@ -244,7 +244,7 @@ type componentSpec struct {
 }
 
 // materializeComponentInlines processes inline definitions in component specs
-// (ChartStructure, ChartTime, Table, Text).
+// (ChartStructure, ChartTime, ChartScatter, ChartBubble, Table, Text).
 func materializeComponentInlines(doc *Document, registry *inlineRegistry) error {
 	var comp componentSpec
 	if err := json.Unmarshal(doc.Raw, &comp); err != nil {
@@ -536,7 +536,7 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 
 		// Only process component kinds that can have datasets
 		switch child.Kind {
-		case "ChartStructure", "ChartTime", "Table", "Text":
+		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Table", "Text":
 			// Parse the child's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(child.Spec, &cs); err != nil {
@@ -646,7 +646,7 @@ func materializeTreeDocInlines(doc *Document, registry *inlineRegistry) error {
 
 		// Only process component kinds that can have datasets
 		switch node.Kind {
-		case "Table", "ChartStructure", "ChartTime":
+		case "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble":
 			// Parse the node's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(node.Spec, &cs); err != nil {
@@ -785,7 +785,7 @@ func materializeGridDocInlines(doc *Document, registry *inlineRegistry) error {
 
 		// Only process component kinds that can have datasets
 		switch child.Kind {
-		case "Table", "ChartStructure", "ChartTime", "Text":
+		case "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Text":
 			// Parse the child's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(child.Spec, &cs); err != nil {
@@ -889,7 +889,7 @@ func rewriteGridDocChildDataset(doc *Document, childIndex int, resolvedNames []s
 }
 
 // materializeTreeNodesInlines processes inline datasets in Tree nodes.
-// Tree nodes can contain Table, ChartStructure, ChartTime components with inline datasets.
+// Tree nodes can contain Table, ChartStructure, ChartTime, ChartScatter, ChartBubble components with inline datasets.
 func materializeTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json.RawMessage, registry *inlineRegistry) error {
 	var treeSpec treeSpec
 	if err := json.Unmarshal(treeSpecRaw, &treeSpec); err != nil {
@@ -909,7 +909,7 @@ func materializeTreeNodesInlines(doc *Document, childIndex int, treeSpecRaw json
 
 		// Only process component kinds that can have datasets
 		switch node.Kind {
-		case "Table", "ChartStructure", "ChartTime":
+		case "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble":
 			// Parse the node's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(node.Spec, &cs); err != nil {
@@ -1028,7 +1028,7 @@ func rewriteTreeNodeDataset(doc *Document, childIndex, nodeIndex int, resolvedNa
 }
 
 // materializeGridChildrenInlines processes inline datasets in Grid children.
-// Grid children can contain Table, ChartStructure, ChartTime, Text components with inline datasets.
+// Grid children can contain Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Text components with inline datasets.
 func materializeGridCellsInlines(doc *Document, childIndex int, gridSpecRaw json.RawMessage, registry *inlineRegistry) error {
 	var gSpec struct {
 		Children []gridChildSpec `json:"children"`
@@ -1050,7 +1050,7 @@ func materializeGridCellsInlines(doc *Document, childIndex int, gridSpecRaw json
 
 		// Only process component kinds that can have datasets
 		switch gridChild.Kind {
-		case "Table", "ChartStructure", "ChartTime", "Text":
+		case "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Text":
 			// Parse the child's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(gridChild.Spec, &cs); err != nil {

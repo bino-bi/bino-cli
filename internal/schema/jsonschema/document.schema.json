@@ -24,6 +24,8 @@
         "LayoutCard",
         "ChartStructure",
         "ChartTime",
+        "ChartScatter",
+        "ChartBubble",
         "Tree",
         "Grid",
         "Table",
@@ -161,6 +163,32 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/chartTimeSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ChartScatter" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/chartScatterSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ChartBubble" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/chartBubbleSpec" }
         }
       }
     },
@@ -1707,7 +1735,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["ChartStructure", "ChartTime", "Tree", "Table", "LayoutCard", "Text"],
+          "enum": ["ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Table", "LayoutCard", "Text"],
           "description": "Kind of the component to capture (for example 'ChartStructure', 'ChartTime', 'Table')."
         },
         "name": {
@@ -2730,7 +2758,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "Tree", "Grid", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Grid", "LayoutCard", "Image"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -2791,6 +2819,22 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartScatter" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartScatterSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartScatterSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBubble" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
           }
         },
         {
@@ -3193,6 +3237,340 @@
         }
       }
     },
+    "xyMeasureToken": {
+      "type": "string",
+      "pattern": "^((ac|pp|fc|pl)[1-4]|(dr|d)(ac|pp|fc|pl)[1-4]_(ac|pp|fc|pl)[1-4](_(pos|neg|neu))?)$",
+      "description": "Scenario slot (ac1-ac4, pp1-pp4, fc1-fc4, pl1-pl4) or variance token: d[base]_[delta] for absolute or dr[base]_[delta] for relative variance, with an optional _pos/_neg/_neu sentiment suffix (ignored on axes). Examples: ac1, dac1_pp1, drac1_pl1."
+    },
+    "xyAxisMapping": {
+      "description": "Axis measure mapping. Either a bare measure token (shorthand for { measure: token }) or an object with the measure plus optional axis settings.",
+      "oneOf": [
+        { "$ref": "#/$defs/xyMeasureToken" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["measure"],
+          "properties": {
+            "measure": { "$ref": "#/$defs/xyMeasureToken" },
+            "label": {
+              "type": "string",
+              "description": "Axis title displayed next to the axis."
+            },
+            "unit": {
+              "type": "string",
+              "description": "Unit suffix displayed after the axis title, e.g. 'mEUR' or '% of net sales'. Values are drawn as delivered - scale in the DataSet SQL."
+            },
+            "min": {
+              "type": "number",
+              "description": "Lower axis domain bound. Points outside an explicit domain are clipped with a warning."
+            },
+            "max": {
+              "type": "number",
+              "description": "Upper axis domain bound. Must be greater than min or both overrides are dropped."
+            },
+            "refLine": {
+              "type": "number",
+              "description": "Draws a reference line perpendicular to this axis at the given value."
+            },
+            "highlight": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Shades a band of the plot along this axis. Open ends run to the domain edge.",
+              "properties": {
+                "from": { "type": "number", "description": "Band start value." },
+                "to": { "type": "number", "description": "Band end value." }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "xyIso": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Hyperbolic iso-lines x*y = k for a third derived measure (IBCS 09B-09D). Requires a strictly positive domain on both axes.",
+      "properties": {
+        "values": {
+          "description": "Iso-line constants: 'auto' derives them from the data, or provide explicit k values.",
+          "oneOf": [
+            { "const": "auto" },
+            { "type": "array", "items": { "type": "number" }, "minItems": 1 }
+          ]
+        },
+        "label": {
+          "type": "string",
+          "description": "Caption of the derived measure, rendered at the iso-line exits."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit suffix for the iso-line caption."
+        },
+        "highlight": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Shades the region where x*y >= from.",
+          "properties": {
+            "from": { "type": "number", "description": "Iso value the shading starts at." }
+          }
+        }
+      }
+    },
+    "xyFacet": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Splits the plot into small-multiple panels on a hierarchy level above the series level.",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["rowgroup", "category"],
+          "description": "Hierarchy level whose values become the facet panels."
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of panels per row. Omitted renders all panels in one row."
+        }
+      }
+    },
+    "xyLabels": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Point label configuration. Defaults differ per kind: ChartScatter uses points 'auto' without values, ChartBubble labels all bubbles with values.",
+      "properties": {
+        "points": {
+          "description": "Which points get a name label: 'auto' picks up to max collision-free candidates, 'all' labels every point, 'none' disables labels, or list explicit point names.",
+          "oneOf": [
+            { "enum": ["auto", "none", "all"] },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "values": {
+          "type": "boolean",
+          "description": "Render the measure value with the label (inside the bubble for ChartBubble)."
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Candidate cap when points is 'auto'."
+        }
+      }
+    },
+    "xyLegend": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Series legend configuration.",
+      "properties": {
+        "show": {
+          "type": "boolean",
+          "description": "Toggles the legend. Defaults to true."
+        },
+        "position": {
+          "type": "string",
+          "enum": ["right", "bottom"],
+          "description": "Legend placement. Defaults to 'right'."
+        }
+      }
+    },
+    "chartScatterSpec": { "allOf": [{ "$ref": "#/$defs/chartScatterSpecBase" }], "required": ["dataset", "x", "y"] },
+    "chartScatterSpecBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for a ChartScatter component (IBCS chart template C09): an XY scattergram with two numeric value axes, points colored by series, selective proximate labels, optional highlight bands, and hyperbolic iso-lines.",
+      "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
+        },
+        "dataset": { "$ref": "#/$defs/datasetRef" },
+        "chartTitle": {
+          "type": "string",
+          "description": "Custom chart title."
+        },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the chart's data to filter rows before rendering, e.g. \"category = 'New SBUs'\"."
+        },
+        "x": {
+          "$ref": "#/$defs/xyAxisMapping",
+          "description": "Horizontal axis measure mapping: a bare measure token or an object with measure, label, unit, min, max, refLine, and highlight. All plain scenario measures across x and y must share one scenario family."
+        },
+        "y": {
+          "$ref": "#/$defs/xyAxisMapping",
+          "description": "Vertical axis measure mapping: a bare measure token or an object with measure, label, unit, min, max, refLine, and highlight."
+        },
+        "iso": {
+          "$ref": "#/$defs/xyIso",
+          "description": "Hyperbolic iso-lines x*y = k for a third derived measure. Maps to the iso HTML attribute."
+        },
+        "level": {
+          "type": "string",
+          "enum": ["auto", "category", "subcategory"],
+          "description": "Hierarchy level that identifies one point (one row = one point, duplicates are dropped with a warning). 'auto' uses the deepest populated level."
+        },
+        "seriesLevel": {
+          "type": "string",
+          "enum": ["auto", "rowgroup", "category", "none"],
+          "description": "Hierarchy level whose values become the color series. Must be strictly above the point level; 'auto' uses the point level's parent, 'none' renders a single series. Maps to the series-level HTML attribute."
+        },
+        "facet": {
+          "$ref": "#/$defs/xyFacet",
+          "description": "Small-multiple panels on a level above the series level."
+        },
+        "labels": {
+          "$ref": "#/$defs/xyLabels",
+          "description": "Point label configuration. Defaults to auto-picked collision-free name labels (max 12) without values."
+        },
+        "legend": {
+          "$ref": "#/$defs/xyLegend",
+          "description": "Series legend configuration."
+        },
+        "aspect": {
+          "type": "string",
+          "pattern": "^\\s*\\d+(\\.\\d+)?\\s*:\\s*\\d+(\\.\\d+)?\\s*$",
+          "description": "Plot aspect ratio as 'w:h', e.g. '16:9' (the default). XY charts have no data-driven height.",
+          "examples": ["16:9", "21:9", "4:3"]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of points per facet panel, keeping the first rows in dataset order. 0 means no limit."
+        },
+        "scale": {
+          "oneOf": [
+            { "enum": ["none", "auto"] },
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^(0?\\.[0-9]+|[1-9][0-9]*(\\.[0-9]+)?)$" }
+          ],
+          "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
+        }
+      }
+    },
+    "chartBubbleSpec": { "allOf": [{ "$ref": "#/$defs/chartBubbleSpecBase" }], "required": ["dataset", "x", "y", "size"] },
+    "chartBubbleSpecBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for a ChartBubble component (IBCS chart template C10): an XY portfolio chart with area-true bubbles sized by a third measure, optional pie-share slices, and a comparison-scenario overlay.",
+      "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
+        },
+        "dataset": { "$ref": "#/$defs/datasetRef" },
+        "chartTitle": {
+          "type": "string",
+          "description": "Custom chart title."
+        },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the chart's data to filter rows before rendering, e.g. \"category = 'New SBUs'\"."
+        },
+        "x": {
+          "$ref": "#/$defs/xyAxisMapping",
+          "description": "Horizontal axis measure mapping: a bare measure token or an object with measure, label, unit, min, max, refLine, and highlight. All plain scenario measures across x, y, size, and share must share one scenario family."
+        },
+        "y": {
+          "$ref": "#/$defs/xyAxisMapping",
+          "description": "Vertical axis measure mapping: a bare measure token or an object with measure, label, unit, min, max, refLine, and highlight."
+        },
+        "size": {
+          "description": "Bubble size measure: a bare measure token or an object. Bubble area is proportional to the value; values must be >= 0 (negative values drop the point with a warning).",
+          "oneOf": [
+            { "$ref": "#/$defs/xyMeasureToken" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["measure"],
+              "properties": {
+                "measure": { "$ref": "#/$defs/xyMeasureToken" },
+                "label": {
+                  "type": "string",
+                  "description": "Caption of the size measure in the size legend."
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Unit suffix for the size legend."
+                },
+                "group": {
+                  "type": "string",
+                  "description": "Name of a ScalingGroup manifest (metadata.name) for cross-chart value-to-area synchronization. Every chart referencing the same group renders an identical value-to-area mapping; the group value is the bubble area in px^2 per data unit. An unknown group name is a blocking render error."
+                }
+              }
+            }
+          ]
+        },
+        "share": {
+          "description": "Pie-share measure (IBCS 10E): a fraction between 0 and 1 rendered as a pie slice from 12 o'clock in the hue's dark shade. A bare measure token or an object with a measure.",
+          "oneOf": [
+            { "$ref": "#/$defs/xyMeasureToken" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["measure"],
+              "properties": {
+                "measure": { "$ref": "#/$defs/xyMeasureToken" }
+              }
+            }
+          ]
+        },
+        "compareWith": {
+          "type": "string",
+          "enum": ["ac", "pp", "fc", "pl"],
+          "description": "Comparison scenario family rendered as a structural overlay behind the primary bubbles (IBCS 10D). Reads the same slot numbers of the comparison family (e.g. x ac1 compares against pp1). Must differ from the primary scenario family; not allowed when an axis uses a variance token. Maps to the compare-with HTML attribute."
+        },
+        "level": {
+          "type": "string",
+          "enum": ["auto", "category", "subcategory"],
+          "description": "Hierarchy level that identifies one bubble (one row = one bubble, duplicates are dropped with a warning). 'auto' uses the deepest populated level."
+        },
+        "seriesLevel": {
+          "type": "string",
+          "enum": ["auto", "rowgroup", "category", "none"],
+          "description": "Hierarchy level whose values become the color series. Must be strictly above the point level; 'auto' uses the point level's parent, 'none' renders a single series. Maps to the series-level HTML attribute."
+        },
+        "facet": {
+          "$ref": "#/$defs/xyFacet",
+          "description": "Small-multiple panels on a level above the series level."
+        },
+        "labels": {
+          "$ref": "#/$defs/xyLabels",
+          "description": "Bubble label configuration. Defaults to labeling all bubbles with contrast-colored values (hidden when they do not fit)."
+        },
+        "legend": {
+          "$ref": "#/$defs/xyLegend",
+          "description": "Series legend configuration. The bubble chart additionally renders a size legend (and a compare legend when compareWith is set)."
+        },
+        "aspect": {
+          "type": "string",
+          "pattern": "^\\s*\\d+(\\.\\d+)?\\s*:\\s*\\d+(\\.\\d+)?\\s*$",
+          "description": "Plot aspect ratio as 'w:h', e.g. '16:9' (the default). XY charts have no data-driven height.",
+          "examples": ["16:9", "21:9", "4:3"]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of bubbles per facet panel, keeping the largest by size. 0 means no limit."
+        },
+        "scale": {
+          "oneOf": [
+            { "enum": ["none", "auto"] },
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^(0?\\.[0-9]+|[1-9][0-9]*(\\.[0-9]+)?)$" }
+          ],
+          "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor. Note: a fixed factor also scales bubble areas from a ScalingGroup (factor squared).",
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
+        }
+      }
+    },
     "treeSpec": { "allOf": [{ "$ref": "#/$defs/treeSpecBase" }], "required": ["edges"] },
     "treeSpecBase": {
       "type": "object",
@@ -3300,12 +3678,12 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "Image"],
+          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image"],
           "description": "The type of component to render in this node."
         },
         "ref": {
           "type": "string",
-          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, and Image kinds."
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and Image kinds."
         },
         "optional": {
           "type": "boolean",
@@ -3357,6 +3735,22 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartScatter" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartScatterSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartScatterSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBubble" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
           }
         },
         {
@@ -3513,7 +3907,7 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "Tree", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Image"],
           "description": "The type of component to render in this child."
         },
         "metadata": {
@@ -3574,6 +3968,22 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartTimeSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartScatter" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartScatterSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartScatterSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBubble" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
           }
         },
         {

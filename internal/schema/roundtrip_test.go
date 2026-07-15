@@ -205,6 +205,39 @@ func TestDocumentRoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name: "ChartScatter",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindChartScatter,
+				Metadata: Metadata{
+					Name: "margin_scatter",
+				},
+				Spec: &ChartScatterSpec{
+					Dataset:    "$products",
+					X:          "ac1",
+					Y:          "ac2",
+					ChartTitle: "Margin vs. Net Sales",
+				},
+			},
+		},
+		{
+			name: "ChartBubble",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindChartBubble,
+				Metadata: Metadata{
+					Name: "portfolio_bubble",
+				},
+				Spec: &ChartBubbleSpec{
+					Dataset:    "$business_units",
+					X:          "ac1",
+					Y:          "ac2",
+					Size:       "ac3",
+					ChartTitle: "Portfolio",
+				},
+			},
+		},
+		{
 			name: "Asset image",
 			doc: &Document{
 				APIVersion: APIVersion,
