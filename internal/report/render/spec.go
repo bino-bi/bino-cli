@@ -279,7 +279,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 }
 
-// chartScatterSpec defines the structure for ChartScatter components (bn-chart-scatter, IBCS C09).
+// chartScatterSpec defines the structure for ChartScatter components (bn-chart-scatter).
 type chartScatterSpec struct {
 	Dataset       reportspec.DatasetList   `json:"dataset"`
 	ChartTitle    string                   `json:"chartTitle"`
@@ -318,7 +318,7 @@ func (s chartScatterSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 }
 
-// chartBubbleSpec defines the structure for ChartBubble components (bn-chart-bubble, IBCS C10).
+// chartBubbleSpec defines the structure for ChartBubble components (bn-chart-bubble).
 type chartBubbleSpec struct {
 	Dataset       reportspec.DatasetList   `json:"dataset"`
 	ChartTitle    string                   `json:"chartTitle"`

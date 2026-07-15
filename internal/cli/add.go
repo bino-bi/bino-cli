@@ -49,8 +49,8 @@ var kindCategories = []KindCategory{
 			{Name: "table", Description: "Data table from a DataSet"},
 			{Name: "chartstructure", Description: "Structural chart (bar, pie, etc.)"},
 			{Name: "charttime", Description: "Time-series chart"},
-			{Name: "chartscatter", Description: "Scatter chart (IBCS C09)"},
-			{Name: "chartbubble", Description: "Bubble portfolio chart (IBCS C10)"},
+			{Name: "chartscatter", Description: "XY scatter chart"},
+			{Name: "chartbubble", Description: "Bubble portfolio chart"},
 		},
 	},
 	{

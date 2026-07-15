@@ -312,7 +312,7 @@ type ChartTimeSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
-// ChartScatterSpec represents the spec section of a ChartScatter manifest (IBCS C09).
+// ChartScatterSpec represents the spec section of a ChartScatter manifest.
 type ChartScatterSpec struct {
 	// Dataset is a reference to a DataSet (required).
 	// Should be a reference like "$dataset_name".
@@ -337,7 +337,7 @@ type ChartScatterSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
-// ChartBubbleSpec represents the spec section of a ChartBubble manifest (IBCS C10).
+// ChartBubbleSpec represents the spec section of a ChartBubble manifest.
 type ChartBubbleSpec struct {
 	// Dataset is a reference to a DataSet (required).
 	// Should be a reference like "$dataset_name".

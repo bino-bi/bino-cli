@@ -742,7 +742,7 @@ func newAddChartScatterCommand() *cobra.Command { //nolint:gocognit // mirrors t
 		Use:   "chartscatter [name]",
 		Short: "Create a ChartScatter manifest",
 		Long: strings.TrimSpace(`
-Create a new ChartScatter manifest for XY scatter charts (IBCS C09).
+Create a new ChartScatter manifest for XY scatter charts.
 
 ChartScatter plots one point per row from a DataSet on two numeric value
 axes. The x and y measures are scenario slots (ac1-ac4, pp1-pp4, fc1-fc4,
@@ -983,7 +983,7 @@ func newAddChartBubbleCommand() *cobra.Command { //nolint:gocognit // mirrors th
 		Use:   "chartbubble [name]",
 		Short: "Create a ChartBubble manifest",
 		Long: strings.TrimSpace(`
-Create a new ChartBubble manifest for XY bubble portfolio charts (IBCS C10).
+Create a new ChartBubble manifest for XY bubble portfolio charts.
 
 ChartBubble plots one bubble per row from a DataSet on two numeric value
 axes, with the bubble area sized by a third measure. The x, y, and size

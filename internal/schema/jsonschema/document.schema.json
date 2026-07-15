@@ -3288,7 +3288,7 @@
     "xyIso": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Hyperbolic iso-lines x*y = k for a third derived measure (IBCS 09B-09D). Requires a strictly positive domain on both axes.",
+      "description": "Hyperbolic iso-lines x*y = k for a third derived measure. Requires a strictly positive domain on both axes.",
       "properties": {
         "values": {
           "description": "Iso-line constants: 'auto' derives them from the data, or provide explicit k values.",
@@ -3376,7 +3376,7 @@
     "chartScatterSpecBase": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Configuration for a ChartScatter component (IBCS chart template C09): an XY scattergram with two numeric value axes, points colored by series, selective proximate labels, optional highlight bands, and hyperbolic iso-lines.",
+      "description": "Configuration for a ChartScatter component: an XY scattergram with two numeric value axes, points colored by series, selective proximate labels, optional highlight bands, and hyperbolic iso-lines.",
       "properties": {
         "selectedStyle": {
           "type": "string",
@@ -3455,7 +3455,7 @@
     "chartBubbleSpecBase": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Configuration for a ChartBubble component (IBCS chart template C10): an XY portfolio chart with area-true bubbles sized by a third measure, optional pie-share slices, and a comparison-scenario overlay.",
+      "description": "Configuration for a ChartBubble component: an XY portfolio chart with area-true bubbles sized by a third measure, optional pie-share slices, and a comparison-scenario overlay.",
       "properties": {
         "selectedStyle": {
           "type": "string",
@@ -3509,7 +3509,7 @@
           ]
         },
         "share": {
-          "description": "Pie-share measure (IBCS 10E): a fraction between 0 and 1 rendered as a pie slice from 12 o'clock in the hue's dark shade. A bare measure token or an object with a measure.",
+          "description": "Pie-share measure: a fraction between 0 and 1 rendered as a pie slice from 12 o'clock in the hue's dark shade. A bare measure token or an object with a measure.",
           "oneOf": [
             { "$ref": "#/$defs/xyMeasureToken" },
             {
@@ -3525,7 +3525,7 @@
         "compareWith": {
           "type": "string",
           "enum": ["ac", "pp", "fc", "pl"],
-          "description": "Comparison scenario family rendered as a structural overlay behind the primary bubbles (IBCS 10D). Reads the same slot numbers of the comparison family (e.g. x ac1 compares against pp1). Must differ from the primary scenario family; not allowed when an axis uses a variance token. Maps to the compare-with HTML attribute."
+          "description": "Comparison scenario family rendered as a structural overlay behind the primary bubbles. Reads the same slot numbers of the comparison family (e.g. x ac1 compares against pp1). Must differ from the primary scenario family; not allowed when an axis uses a variance token. Maps to the compare-with HTML attribute."
         },
         "level": {
           "type": "string",
