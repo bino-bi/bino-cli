@@ -1,10 +1,9 @@
 ---
 title: ChartBubble
-description: Configure IBCS-compliant XY bubble portfolio charts with area-true bubbles, pie shares, and scenario overlays.
+description: Configure XY bubble portfolio charts with area-true bubbles, pie shares, and scenario overlays.
 ---
 
-`ChartBubble` manifests describe XY bubble portfolio charts
-([IBCS chart template C10](https://www.ibcs.com/resource/chart-template-10/)):
+`ChartBubble` manifests describe XY bubble portfolio charts:
 one area-true bubble per data row on two numeric value axes, with the
 bubble area sized by a third measure. Optional pie-share slices, a
 comparison-scenario overlay, and cross-chart size synchronization via
@@ -67,10 +66,10 @@ Bubble-specific rules:
 - `size` values must be `>= 0`; rows with negative size are dropped with a
   warning. Bubble **area** (not radius) is proportional to the value.
 - `share` values are fractions between 0 and 1, rendered as a pie slice
-  from 12 o'clock in the hue's dark shade (IBCS 10E); out-of-range values
+  from 12 o'clock in the hue's dark shade; out-of-range values
   are clamped with a warning.
 - `compareWith` renders a second bubble set of the comparison family
-  structurally behind the primary set (IBCS 10D). It reads the same slot
+  structurally behind the primary set. It reads the same slot
   numbers of the comparison family (e.g. x `ac1` compares against `pp1`),
   must differ from the primary family, and cannot be combined with
   variance tokens on the axes.
@@ -104,7 +103,7 @@ pin identical axis `min`/`max` on the participating charts.
 - `limit` – max bubbles per facet panel, keeping the **largest by size**;
   `0` means unlimited.
 
-## Example: Portfolio matrix (IBCS 10A)
+## Example: Portfolio matrix
 
 ```yaml
 ---
@@ -130,7 +129,7 @@ spec:
     unit: "mEUR"
 ```
 
-## Example: Plan comparison overlay (IBCS 10D)
+## Example: Plan comparison overlay
 
 ```yaml
 ---
