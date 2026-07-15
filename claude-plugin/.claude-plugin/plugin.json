@@ -1,7 +1,7 @@
 {
   "name": "bino",
   "displayName": "bino-report",
-  "version": "0.86.0",
+  "version": "0.87.0",
   "description": "Co-author and autopilot pixel-perfect IBCS PDF reports with bino — Report-as-Code (YAML + SQL). Registers the bino MCP server and ships IBCS knowledge, slash commands, and a checkpointed autopilot pipeline.",
   "author": {
     "name": "bino bi",
