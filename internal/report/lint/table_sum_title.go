@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -108,27 +105,13 @@ func tableSpecsByName(docs []Document) map[string]map[string]any {
 // every Table nested in a LayoutPage/LayoutCard/Grid 'children' list or a Tree
 // 'nodes' list, at any depth. Inline children are not materialized as separate
 // documents (only inline DataSets and DataSources are), so the rule has to
-// descend into them itself.
-//
-// The path handed to visit locates the Table object within the document. Its
-// segments are dot-separated with bare numeric indices ("spec.children.1"),
-// which is the only form spec.ResolvePathPosition can resolve back to a line
-// and column — that is what anchors the editor diagnostic on the offending key.
-// Map keys are visited in sorted order so findings come out deterministically.
+// descend into them itself. See walkNodes for the path convention.
 func walkTables(node any, path string, visit func(table map[string]any, path string)) {
-	switch value := node.(type) {
-	case map[string]any:
-		if kind, _ := value["kind"].(string); kind == "Table" {
-			visit(value, path)
+	walkNodes(node, path, func(obj map[string]any, objPath string) {
+		if kind, _ := obj["kind"].(string); kind == "Table" {
+			visit(obj, objPath)
 		}
-		for _, key := range slices.Sorted(maps.Keys(value)) {
-			walkTables(value[key], joinLintPath(path, key), visit)
-		}
-	case []any:
-		for i, item := range value {
-			walkTables(item, joinLintPath(path, strconv.Itoa(i)), visit)
-		}
-	}
+	})
 }
 
 // stringField reads a string field from a decoded JSON object, tolerating a nil

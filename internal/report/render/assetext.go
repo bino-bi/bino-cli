@@ -5,6 +5,7 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -43,6 +44,41 @@ func (t *assetTransformer) Transform(node *ast.Document, reader text.Reader, pc 
 		}
 		return ast.WalkContinue, nil
 	})
+}
+
+// CollectAssetRefs returns the asset names referenced by "asset:" image
+// destinations in a Markdown string, in document order and without duplicates.
+// It parses with goldmark, so references inside code spans or fenced blocks are
+// not reported — the same input the renderer's assetTransformer acts on.
+func CollectAssetRefs(source string) []string {
+	if !strings.Contains(source, assetURLPrefix) {
+		return nil
+	}
+	src := []byte(source)
+	doc := goldmark.New(goldmark.WithExtensions(extension.GFM)).Parser().Parse(text.NewReader(src))
+
+	var names []string
+	seen := make(map[string]bool)
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		img, ok := n.(*ast.Image)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		dest := string(img.Destination)
+		if !strings.HasPrefix(dest, assetURLPrefix) {
+			return ast.WalkContinue, nil
+		}
+		name := dest[len(assetURLPrefix):]
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+		return ast.WalkContinue, nil
+	})
+	return names
 }
 
 // assetExtension registers the assetTransformer with goldmark.

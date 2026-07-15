@@ -96,7 +96,7 @@ At build time bino resolves `asset:brandLogo` to the actual URL based on the ass
 | `remoteURL`    | The URL as-is                         |
 | `inlineBase64` | `data:image/png;base64,…`             |
 
-If the name does not match any asset the image renders as a broken link (`#asset-not-found:name`).
+If the name does not match any asset the image renders as a broken link (`#asset-not-found:name`). The [`asset-reference-undefined`](/appendix/lint-rules/#asset-reference-undefined) lint rule reports this before you build.
 
 This works in two contexts:
 
@@ -141,6 +141,27 @@ metadata:
 spec:
   value: "![Logo](asset:companyLogo) **ACME Corp**"
 ```
+
+## Using assets in image properties
+
+Three properties take an image directly, rather than through Markdown:
+
+| Property | Kind |
+|----------|------|
+| `spec.messageImage` | [LayoutPage](/reference/layout-page/) — the message row logo |
+| `spec.titleImage` | [LayoutCard](/reference/layout-card/) — the card title logo |
+| `spec.source` | Image component |
+
+Each takes the **`metadata.name` of an asset** — with or without the `asset:` prefix — or an absolute URL:
+
+```yaml
+spec:
+  messageImage: companyLogo # or: asset:companyLogo
+```
+
+A bare file path is **not** a valid value. Assets are served only under `/assets/files/<name>`; bino does not serve your project directory, so `messageImage: images/logo.png` cannot load even when that file exists next to the manifest. Declare an `Asset` with a `localPath` source instead, and reference it by name.
+
+Unresolvable references are reported by the [`asset-reference-undefined`](/appendix/lint-rules/#asset-reference-undefined) lint rule, and an asset whose `localPath` file is missing by [`asset-source-missing`](/appendix/lint-rules/#asset-source-missing).
 
 ## Attribute Reference
 

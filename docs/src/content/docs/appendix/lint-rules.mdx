@@ -20,6 +20,8 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
 | `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
 | `card-layout-slots-used`       | Card Layout Slots Used       | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
+| `asset-reference-undefined`    | Asset Reference Undefined    | Warning  | Image references must name a declared Asset document or a reachable URL.                       |
+| `asset-source-missing`         | Asset Source Missing         | Warning  | An Asset's `spec.source.localPath` must point at an existing file.                             |
 | `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
 | `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
 | `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
@@ -261,6 +263,72 @@ spec:
 ```
 
 **Fix:** Add a second child or change `cardLayout: full`.
+
+### asset-reference-undefined
+
+Images are referenced by the **name of an `Asset` document**, not by file path. This rule checks every image reference and warns when it cannot resolve, which otherwise fails silently: the name is passed through to the browser as if it were a URL, and you get a broken image with no error.
+
+It covers `messageImage` (LayoutPage), `titleImage` (LayoutCard), `source` (Image) — including components defined inline in `children` or `nodes` — and `asset:` image references inside Markdown (`messageText`, `titleBusinessUnit`, and a Text component's `value`).
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: dashboard
+spec:
+  pageLayout: full
+  messageImage: logo # No Asset document is named "logo"
+  messageText: "Report by ![logo](asset:compnay) " # Typo! Should be "company"
+```
+
+**Fix:** declare the `Asset` and reference it by its `metadata.name`.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: images/logo.png # Relative to this manifest
+```
+
+A reference resolves when it is one of:
+
+- the `metadata.name` of an `Asset` document (`messageImage: logo`), optionally with the `asset:` prefix (`messageImage: asset:logo`);
+- an absolute URL or data URI the browser can fetch (`https://…`, `data:image/png;base64,…`).
+
+A value that looks like a file path (`images/logo.png`) is checked against the filesystem, relative to the manifest, and warns when the file is absent. Note that bino serves **only** declared Assets — a bare path is not served even when the file exists, so prefer declaring an `Asset`.
+
+Font Assets do not count: they are not available to image references.
+
+**See also:** [Asset](/reference/asset/)
+
+### asset-source-missing
+
+An `Asset` whose `spec.source.localPath` points at a file that is not on disk. The path is resolved relative to the manifest that declares it, the same way the renderer resolves it.
+
+This is a build error at render time; the rule surfaces it while you are still editing, instead of at the next build.
+
+**Example problem:**
+
+```yaml
+kind: Asset
+metadata:
+  name: logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: images/logo.png # File was moved or deleted
+```
+
+**Fix:** restore the file, or correct `localPath`. Assets sourced from `remoteURL` or `inlineBase64` are not checked.
+
+**See also:** [Asset](/reference/asset/)
 
 ### inline-ref-bounds
 
