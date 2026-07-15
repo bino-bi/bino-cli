@@ -1,0 +1,219 @@
+---
+title: ChartBubble
+description: Configure IBCS-compliant XY bubble portfolio charts with area-true bubbles, pie shares, and scenario overlays.
+---
+
+`ChartBubble` manifests describe XY bubble portfolio charts
+([IBCS chart template C10](https://www.ibcs.com/resource/chart-template-10/)):
+one area-true bubble per data row on two numeric value axes, with the
+bubble area sized by a third measure. Optional pie-share slices, a
+comparison-scenario overlay, and cross-chart size synchronization via
+[`ScalingGroup`](/reference/scaling-group/) manifests.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: business_units
+  x:                          # measure token or object
+    measure: ac1
+    label: "Market attractiveness"
+    min: 0
+    max: 1
+    refLine: 0.5
+  y: ac2                      # bare token shorthand for { measure: ac2 }
+  size:                       # bubble-only, required: bubble area measure
+    measure: ac3
+    label: "Net sales"
+    unit: "mEUR"
+    group: netsales_area      # optional ScalingGroup for cross-chart sizing
+  share: ac4                  # optional pie-share measure (fraction 0..1)
+  compareWith: pp             # optional comparison family: ac | pp | fc | pl
+  level: auto                 # auto | category | subcategory
+  seriesLevel: auto           # auto | rowgroup | category | none
+  facet:                      # small-multiple panels
+    level: rowgroup           # rowgroup | category
+    columns: 3
+  labels:
+    points: all               # auto | none | all | [name, ...]
+    values: true
+    max: 12
+  legend:
+    show: true
+    position: right           # right | bottom
+  aspect: "16:9"              # plot aspect ratio "w:h"
+  limit: 0                    # max bubbles per panel (largest kept), 0 = unlimited
+  filter: "rowGroup = 'Region A'"
+  chartTitle: "Business unit portfolio"
+  scale: auto                 # "" | none | auto | 0.5 | 1.2 | …
+  selectedStyle: corporate-style
+  ruleset: corporate-rules
+```
+
+## Measure tokens
+
+`x`, `y`, `size`, and `share` accept either a bare **measure token** or an
+object whose `measure` property is a token — see the
+[ChartScatter measure-token section](/reference/chart-scatter/#measure-tokens)
+for the grammar. All plain scenario measures across the four mappings must
+share one scenario family.
+
+Bubble-specific rules:
+
+- `size` values must be `>= 0`; rows with negative size are dropped with a
+  warning. Bubble **area** (not radius) is proportional to the value.
+- `share` values are fractions between 0 and 1, rendered as a pie slice
+  from 12 o'clock in the hue's dark shade (IBCS 10E); out-of-range values
+  are clamped with a warning.
+- `compareWith` renders a second bubble set of the comparison family
+  structurally behind the primary set (IBCS 10D). It reads the same slot
+  numbers of the comparison family (e.g. x `ac1` compares against `pp1`),
+  must differ from the primary family, and cannot be combined with
+  variance tokens on the axes.
+
+## Cross-chart size synchronization
+
+By default bubble sizes are normalized per chart (the largest value gets
+the maximum radius). To make bubble areas comparable across charts, set
+`size.group` to the name of a [`ScalingGroup`](/reference/scaling-group/)
+manifest; its `value` is the bubble area in px² per data unit. Every chart
+referencing the same group renders an identical value-to-area mapping. An
+unknown group name is a blocking render error. For full comparability also
+pin identical axis `min`/`max` on the participating charts.
+
+## Fields
+
+- `dataset` – required dataset name or array.
+- `x`, `y` – required axis measure mappings (token or object with
+  `measure`, `label`, `unit`, `min`, `max`, `refLine`, `highlight`).
+- `size` – required bubble size mapping (token or object with `measure`,
+  `label`, `unit`, `group`).
+- `share` – optional pie-share mapping (token or object with `measure`).
+- `compareWith` – optional comparison scenario family: `ac`, `pp`, `fc`,
+  or `pl`.
+- `level`, `seriesLevel`, `facet`, `legend`, `aspect`, `filter`,
+  `chartTitle`, `scale`, `selectedStyle`, `ruleset` – same semantics as
+  [`ChartScatter`](/reference/chart-scatter/#fields).
+- `labels` – bubble labels; defaults differ from the scatter chart:
+  `points: all`, `values: true` (contrast-colored values inside the
+  bubbles, hidden when they do not fit), `max: 12`.
+- `limit` – max bubbles per facet panel, keeping the **largest by size**;
+  `0` means unlimited.
+
+## Example: Portfolio matrix (IBCS 10A)
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: bcg_portfolio
+spec:
+  dataset: business_units
+  chartTitle: "Business unit portfolio"
+  x:
+    measure: ac1
+    label: "Relative market share"
+    refLine: 1
+  y:
+    measure: ac2
+    label: "Market growth"
+    unit: "%"
+    refLine: 0.1
+  size:
+    measure: ac3
+    label: "Net sales"
+    unit: "mEUR"
+```
+
+## Example: Plan comparison overlay (IBCS 10D)
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio_vs_plan
+spec:
+  dataset: business_units
+  x: ac1
+  y: ac2
+  size: ac3
+  compareWith: pl
+```
+
+## Example: Synchronized sizes across two charts
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: netsales_area
+spec:
+  value: 800
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio_emea
+spec:
+  dataset: units_emea
+  x: { measure: ac1, min: 0, max: 1 }
+  y: { measure: ac2, min: 0, max: 1 }
+  size: { measure: ac3, group: netsales_area }
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio_apac
+spec:
+  dataset: units_apac
+  x: { measure: ac1, min: 0, max: 1 }
+  y: { measure: ac2, min: 0, max: 1 }
+  size: { measure: ac3, group: netsales_area }
+```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ChartBubble`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). | `dataset: business_units` |
+| `spec.x` | string or object | yes | — | Horizontal axis measure mapping. Maps to the `x` HTML attribute. | `x: ac1` |
+| `spec.y` | string or object | yes | — | Vertical axis measure mapping. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "%" }` |
+| `spec.size` | string or object | yes | — | Bubble size measure mapping (`measure`, `label`, `unit`, `group`). Area ∝ value; values must be ≥ 0. | `size: { measure: ac3, group: netsales_area }` |
+| `spec.share` | string or object | no | — | Pie-share measure (fraction 0..1). | `share: ac4` |
+| `spec.compareWith` | string | no | — | Comparison scenario family rendered behind the primary set. Values: `ac`, `pp`, `fc`, `pl`. Maps to the `compare-with` HTML attribute. | `compareWith: pp` |
+| `spec.level` | string | no | `auto` | Bubble identity level. Values: `auto`, `category`, `subcategory`. | `level: category` |
+| `spec.seriesLevel` | string | no | `auto` | Series/color level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute. | `seriesLevel: rowgroup` |
+| `spec.facet` | object | no | — | Small-multiple panels: `level` (required, `rowgroup` or `category`) and `columns` (≥ 1). | `facet: { level: rowgroup }` |
+| `spec.labels` | object | no | `points: all`, `values: true`, `max: 12` | Bubble labels: `points` (`auto`, `none`, `all`, or a name list), `values` (boolean), `max` (≥ 1). | `labels: { values: false }` |
+| `spec.legend` | object | no | `show: true`, `position: right` | Series legend; a size legend (and compare legend) renders alongside. | `legend: { position: bottom }` |
+| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. | `aspect: "4:3"` |
+| `spec.limit` | integer | no | `0` | Max bubbles per facet panel (largest by size kept). `0` means unlimited. | `limit: 20` |
+| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "rowGroup = 'Region A'"` |
+| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Portfolio"` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (also scales ScalingGroup bubble areas, factor squared). | `scale: auto` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+
+See [`ChartScatter`](/reference/chart-scatter/) for the XY scattergram
+without a size measure.

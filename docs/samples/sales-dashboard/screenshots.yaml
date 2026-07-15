@@ -33,3 +33,7 @@ spec:
       name: table_card
     - kind: LayoutCard
       name: summary_card
+    - kind: ChartScatter
+      name: margin_scatter
+    - kind: ChartBubble
+      name: portfolio_bubble

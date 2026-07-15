@@ -188,3 +188,61 @@ spec:
       ac1: 2200
       pp1: 1900
       pl1: 2100
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: portfolio_data
+spec:
+  type: inline
+  content:
+    - category: "Alpha Suite"
+      categoryIndex: 1
+      operation: "+"
+      ac1: 32.5
+      ac2: 18.4
+      ac3: 18400
+      ac4: 0.62
+      pp1: 28.0
+      pp2: 16.1
+      pp3: 16100
+    - category: "Beta Platform"
+      categoryIndex: 2
+      operation: "+"
+      ac1: 21.0
+      ac2: 32.9
+      ac3: 32900
+      ac4: 0.48
+      pp1: 22.5
+      pp2: 30.2
+      pp3: 30200
+    - category: "Gamma Tools"
+      categoryIndex: 3
+      operation: "+"
+      ac1: 12.4
+      ac2: 8.7
+      ac3: 8700
+      ac4: 0.25
+      pp1: 14.8
+      pp2: 9.9
+      pp3: 9900
+    - category: "Delta Services"
+      categoryIndex: 4
+      operation: "+"
+      ac1: 26.8
+      ac2: 12.3
+      ac3: 12300
+      ac4: 0.71
+      pp1: 24.1
+      pp2: 10.8
+      pp3: 10800
+    - category: "Epsilon Cloud"
+      categoryIndex: 5
+      operation: "+"
+      ac1: 17.9
+      ac2: 24.6
+      ac3: 24600
+      ac4: 0.55
+      pp1: 15.2
+      pp2: 19.7
+      pp3: 19700

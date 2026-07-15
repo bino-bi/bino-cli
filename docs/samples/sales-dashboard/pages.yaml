@@ -331,3 +331,54 @@ spec:
         order: inherited-page
         orderDirection: inherited-page
         grouped: true
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: xy-charts-page
+spec:
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Margin"
+      unit: "%"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  pageLayout: split-vertical
+  footerText: "Acme Corp - Product Portfolio"
+  children:
+    - kind: ChartScatter
+      metadata:
+        name: margin_scatter
+      spec:
+        dataset: product_portfolio
+        chartTitle: "Margin vs. net sales"
+        x:
+          measure: ac1
+          label: "Margin"
+          unit: "% of net sales"
+          min: 0
+          max: 40
+        y:
+          measure: ac2
+          label: "Net sales"
+          unit: "mEUR"
+          highlight:
+            from: 30
+        labels:
+          points: auto
+          max: 8
+    - kind: ChartBubble
+      metadata:
+        name: portfolio_bubble
+      spec:
+        dataset: product_portfolio
+        chartTitle: "Product portfolio"
+        x: ac1
+        y: ac2
+        size:
+          measure: ac3
+          label: "Net sales"
+          unit: "kEUR"
+        share: ac4
+        labels:
+          values: false

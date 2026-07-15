@@ -18,3 +18,10 @@ metadata:
   name: financial_summary
 spec:
   query: SELECT * FROM kpi_table_data ORDER BY rowGroupIndex, categoryIndex
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: product_portfolio
+spec:
+  query: SELECT * FROM portfolio_data ORDER BY categoryIndex

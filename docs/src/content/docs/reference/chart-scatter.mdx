@@ -1,0 +1,217 @@
+---
+title: ChartScatter
+description: Configure IBCS-compliant XY scatter charts with iso-lines, highlight bands, and small multiples.
+---
+
+`ChartScatter` manifests describe XY scattergrams
+([IBCS chart template C09](https://www.ibcs.com/resource/chart-template-09/)):
+two numeric value axes, one point per data row, points colored by series,
+selective collision-free labels, optional highlight bands, and hyperbolic
+iso-lines `x·y = k` for a third derived measure.
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: product_margin
+spec:
+  dataset: products
+  x:                          # measure token or object
+    measure: ac1
+    label: "Margin"
+    unit: "% of net sales"
+    min: 0
+    max: 40
+    refLine: 20               # reference line perpendicular to this axis
+    highlight: { from: 30 }   # shaded band along this axis
+  y: ac2                      # bare token shorthand for { measure: ac2 }
+  iso:                        # scatter-only: iso-lines x*y = k
+    values: [100, 200, 300]   # or "auto"
+    label: "Gross profit"
+    unit: "mUSD"
+    highlight: { from: 300 }
+  level: auto                 # auto | category | subcategory
+  seriesLevel: auto           # auto | rowgroup | category | none
+  facet:                      # small-multiple panels
+    level: rowgroup           # rowgroup | category
+    columns: 3
+  labels:
+    points: auto              # auto | none | all | [name, ...]
+    values: false
+    max: 12
+  legend:
+    show: true
+    position: right           # right | bottom
+  aspect: "16:9"              # plot aspect ratio "w:h"
+  limit: 0                    # max points per panel, 0 = unlimited
+  filter: "category = 'New SBUs'"
+  chartTitle: "Margin vs. net sales"
+  scale: auto                 # "" | none | auto | 0.5 | 1.2 | …
+  selectedStyle: corporate-style
+  ruleset: corporate-rules
+```
+
+## Measure tokens
+
+The `x` and `y` mappings accept either a bare **measure token** or an object
+whose `measure` property is a token:
+
+- **Scenario slots**: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4` —
+  the row columns of the dataset.
+- **Variance tokens**: `d<base>_<delta>` (absolute) or `dr<base>_<delta>`
+  (relative), e.g. `dac1_pp1` (AC minus PY) or `drac1_pl1` (AC vs. plan in
+  percent). An optional `_pos`/`_neg`/`_neu` sentiment suffix is accepted
+  and ignored on axes.
+
+All plain scenario measures across `x` and `y` must share one scenario
+family (e.g. don't mix `ac1` with `pp2`); the family selects the IBCS mark
+treatment through the rule set. Variance tokens don't count toward the
+family.
+
+A bare string is shorthand for the object form: `x: ac1` equals
+`x: { measure: ac1 }`.
+
+## Data mapping
+
+One dataset row is one point — aggregate in the DataSet SQL; duplicate
+point identities keep the first row and raise a warning. Values are drawn
+as delivered (no auto-SI scaling).
+
+- `level` picks the hierarchy column that identifies a point (`auto` uses
+  the deepest populated level of `rowGroup` → `category` → `subCategory`).
+- `seriesLevel` picks the level whose values become the color series; it
+  must be strictly above the point level. `none` renders a single series.
+- `facet` splits the plot into small-multiple panels on a level above the
+  series level.
+
+Iso-lines require a strictly positive domain on both axes.
+
+## Fields
+
+- `dataset` – required dataset name or array.
+- `x`, `y` – required axis measure mappings (token or object with
+  `measure`, `label`, `unit`, `min`, `max`, `refLine`, `highlight`).
+- `iso` – optional iso-line configuration (`values`, `label`, `unit`,
+  `highlight.from` shades the region where `x·y >= from`).
+- `level`, `seriesLevel` – point identity and series grouping levels.
+- `facet` – small-multiple configuration (`level` required, `columns`).
+- `labels` – point labels: `points` is `auto` (up to `max` collision-free
+  candidates), `all`, `none`, or an explicit list of point names; `values`
+  adds the measure value. Defaults: `points: auto`, `values: false`,
+  `max: 12`.
+- `legend` – series legend (`show` defaults to `true`, `position` to
+  `right`).
+- `aspect` – plot aspect ratio `"w:h"` (default `16:9`); XY charts have no
+  data-driven height.
+- `limit` – max points per facet panel, keeping the first rows in dataset
+  order; `0` means unlimited.
+- `filter` – optional AlaSQL WHERE fragment.
+- `chartTitle` – optional title.
+- `scale` – proportional font scaling, same semantics as the other charts
+  (`none`, `auto`, or a fixed factor).
+- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set.
+
+## Example: Basic scattergram (IBCS 09A)
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: product_portfolio
+spec:
+  dataset: products
+  chartTitle: "Product portfolio"
+  x:
+    measure: ac1
+    label: "Margin"
+    unit: "% of net sales"
+    min: 0
+    max: 40
+  y:
+    measure: ac2
+    label: "Net sales"
+    unit: "mUSD"
+    highlight: { from: 30 }
+  labels:
+    points: auto
+    max: 12
+```
+
+## Example: Iso-lines with highlight (IBCS 09D)
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: gross_profit_scatter
+spec:
+  dataset: products
+  x: { measure: ac1, label: "Margin", unit: "%", min: 0, max: 40 }
+  y: { measure: ac2, label: "Net sales", unit: "mUSD", min: 0 }
+  iso:
+    values: [100, 200, 300]
+    label: "Gross profit"
+    unit: "mUSD"
+    highlight: { from: 300 }
+```
+
+## Example: Variance scatter with small multiples
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: growth_vs_plan
+spec:
+  dataset: business_units
+  x: { measure: drac1_pp1, label: "Growth", unit: "%", refLine: 0 }
+  y: { measure: drac1_pl1, label: "Plan deviation", unit: "%", refLine: 0 }
+  seriesLevel: rowgroup
+  facet:
+    level: rowgroup
+    columns: 4
+```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ChartScatter`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). | `dataset: products` |
+| `spec.x` | string or object | yes | — | Horizontal axis measure mapping. Maps to the `x` HTML attribute. | `x: ac1` |
+| `spec.y` | string or object | yes | — | Vertical axis measure mapping. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "mEUR" }` |
+| `spec.iso` | object | no | — | Hyperbolic iso-lines `x·y = k`. Requires a strictly positive domain on both axes. | `iso: { values: [100, 200] }` |
+| `spec.level` | string | no | `auto` | Point identity level. Values: `auto`, `category`, `subcategory`. | `level: category` |
+| `spec.seriesLevel` | string | no | `auto` | Series/color level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute. | `seriesLevel: rowgroup` |
+| `spec.facet` | object | no | — | Small-multiple panels: `level` (required, `rowgroup` or `category`) and `columns` (≥ 1). | `facet: { level: rowgroup }` |
+| `spec.labels` | object | no | `points: auto`, `values: false`, `max: 12` | Point labels: `points` (`auto`, `none`, `all`, or a name list), `values` (boolean), `max` (≥ 1). | `labels: { points: all }` |
+| `spec.legend` | object | no | `show: true`, `position: right` | Series legend: `show` (boolean) and `position` (`right` or `bottom`). | `legend: { position: bottom }` |
+| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. | `aspect: "21:9"` |
+| `spec.limit` | integer | no | `0` | Max points per facet panel (first rows in dataset order). `0` means unlimited. | `limit: 50` |
+| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "category = 'New SBUs'"` |
+| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Portfolio"` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+
+See [`ChartBubble`](/reference/chart-bubble/) for the XY portfolio variant
+with a third size measure.
