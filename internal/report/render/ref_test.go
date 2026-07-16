@@ -823,3 +823,111 @@ func TestRenderLayoutCardRefWithParams(t *testing.T) {
 		t.Fatalf("expected param-expanded nested card child in HTML, got:\n%s", html)
 	}
 }
+
+func TestRenderTreeNodeLayoutCardInline(t *testing.T) {
+	ctx := context.Background()
+
+	// LayoutPage with a Tree whose node is an inline LayoutCard containing a Text child.
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Tree",
+					"spec": {
+						"edges": [],
+						"nodes": [
+							{
+								"id": "root",
+								"kind": "LayoutCard",
+								"spec": {
+									"children": [
+										{
+											"kind": "Text",
+											"spec": {"value": "Card in tree"}
+										}
+									]
+								}
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "<bn-layout-card") {
+		t.Fatalf("expected bn-layout-card element for LayoutCard tree node, got:\n%s", html)
+	}
+	if !strings.Contains(html, "<div slot='root'>") {
+		t.Fatalf("expected tree node slot div for LayoutCard node, got:\n%s", html)
+	}
+	if !strings.Contains(html, "Card in tree") {
+		t.Fatalf("expected card child text in HTML, got:\n%s", html)
+	}
+}
+
+func TestRenderTreeNodeLayoutCardWithRef(t *testing.T) {
+	ctx := context.Background()
+
+	// Standalone LayoutCard document that can be referenced from a tree node.
+	cardDoc := makeTestDoc("LayoutCard", "summaryCard", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutCard",
+		"metadata": {"name": "summaryCard"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Text",
+					"spec": {"value": "Referenced card content"}
+				}
+			]
+		}
+	}`))
+
+	layoutPageDoc := makeTestDoc("LayoutPage", "mainPage", json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "mainPage"},
+		"spec": {
+			"children": [
+				{
+					"kind": "Tree",
+					"spec": {
+						"edges": [],
+						"nodes": [
+							{
+								"id": "root",
+								"kind": "LayoutCard",
+								"ref": "summaryCard"
+							}
+						]
+					}
+				}
+			]
+		}
+	}`))
+
+	docs := []config.Document{cardDoc, layoutPageDoc}
+	result, _, err := GenerateHTMLFromDocuments(ctx, docs, "de", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("GenerateHTMLFromDocuments failed: %v", err)
+	}
+
+	html := string(result.HTML)
+	if !strings.Contains(html, "<bn-layout-card") {
+		t.Fatalf("expected bn-layout-card element for referenced LayoutCard tree node, got:\n%s", html)
+	}
+	if !strings.Contains(html, "Referenced card content") {
+		t.Fatalf("expected referenced card child text in HTML, got:\n%s", html)
+	}
+}
