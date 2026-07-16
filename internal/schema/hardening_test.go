@@ -66,6 +66,84 @@ spec:
 	}
 }
 
+// TestValidate_TreeNodeRefPartialSpec covers the exact false positive from
+// example-reports#86: a tree node (or layout child) referencing a chart
+// component may override only individual fields (e.g. filter) without
+// re-supplying the referenced spec's required dataset, while inline nodes
+// still require it.
+func TestValidate_TreeNodeRefPartialSpec(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "tree node ref with filter-only spec accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"category_1"}]'
+  nodes:
+    - id: category_1
+      kind: ChartStructure
+      ref: 202_country_chart
+      optional: true
+      spec:
+        filter: rowGroup IN ('europe')
+`,
+			wantErr: false,
+		},
+		{
+			name: "layout child ref with filter-only spec accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartStructure
+      ref: 202_country_chart
+      spec:
+        filter: rowGroup IN ('europe')
+`,
+			wantErr: false,
+		},
+		{
+			name: "inline tree node with filter-only spec rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"category_1"}]'
+  nodes:
+    - id: category_1
+      kind: ChartStructure
+      spec:
+        filter: rowGroup IN ('europe')
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
 // TestValidate_Strictness covers the additionalProperties:false cases (Issue 2):
 // misspelled spec fields, unknown top-level keys, and unknown keys inside a
 // ConnectionSecret are all rejected, while valid documents still pass.
