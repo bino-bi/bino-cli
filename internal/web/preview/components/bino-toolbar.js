@@ -89,9 +89,18 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .assets-btn:hover, .graph-btn:hover, .explorer-btn:hover {
+    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover {
       background: var(--bino-surface-hover);
       border-color: #9ca3af;
+    }
+    .graph-btn:disabled, .present-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .present-btn:disabled {
+      background: var(--bino-surface);
+      border-color: var(--bino-border-light);
+      color: var(--bino-text-secondary);
     }
     .assets-icon, .graph-icon, .explorer-icon {
       font-size: var(--bino-font-size-md);
@@ -111,7 +120,7 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .present-btn:hover {
+    .present-btn:hover:not(:disabled) {
       background: #16a34a;
     }
     .present-icon {
@@ -268,22 +277,22 @@ class BinoToolbar extends LitElement {
         <span class="assets-icon">\u25A6</span>
         <span>Assets (${(this.documents || []).length})</span>
       </button>
-      ${this.graph ? html`
-        <button class="graph-btn" title="Dependency graph" @click=${this._onGraphClick}>
-          <span class="graph-icon">\u229E</span>
-          <span>Graph</span>
-        </button>
-      ` : ''}
+      <button class="graph-btn" ?disabled=${!this.graph}
+        title=${this.graph ? 'Dependency graph' : 'Dependency graph is only available for a single artefact'}
+        @click=${this._onGraphClick}>
+        <span class="graph-icon">\u229E</span>
+        <span>Graph</span>
+      </button>
       <button class="explorer-btn" title="Data Explorer" @click=${this._onExplorerClick}>
         <span class="explorer-icon">\u2636</span>
         <span>Explorer</span>
       </button>
-      ${presURL ? html`
-        <button class="present-btn" title="Open presentation" @click=${function() { window.open(presURL, '_blank'); }}>
-          <span class="present-icon">\u25B6</span>
-          <span>Present</span>
-        </button>
-      ` : ''}
+      <button class="present-btn" ?disabled=${!presURL}
+        title=${presURL ? 'Open presentation' : 'Presentation is only available for a report artefact'}
+        @click=${function() { if (presURL) window.open(presURL, '_blank'); }}>
+        <span class="present-icon">\u25B6</span>
+        <span>Present</span>
+      </button>
       <span class="spacer"></span>
       ${this._refreshError ? html`
         <span class="refresh-error-msg" title=${this._refreshError}>
