@@ -24,7 +24,7 @@ spec:
   axisLabelsMode: smart      # smart | long | short
   dateInterval: auto         # year | quarter | month | week | day | hour | minute | second | millisecond | auto
   filter: "region_group = 'EMEA'"
-  level: auto                # rowcategory | category | subcategory | auto
+  level: auto                # rowgroup | category | subcategory (+ index variants) | auto
   order: auto                # category | categoryindex | rowgroup | rowgroupindex | ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   orderDirection: asc
   measureScale: M
@@ -62,7 +62,7 @@ spec:
 - `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` – optional filter expression.
-- `level` – aggregation level: `rowcategory`, `category`, `subcategory`, or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
+- `level` – aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` – keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
 - `order` – sort key; if you use a scenario, it must appear in `scenarios`. Set to `auto` to detect from the dataset silently. When left blank, it is detected with a warning.
 - `orderDirection` – sort direction (`asc` or `desc`).
 - `measureScale`, `measureUnit` – SI prefix and unit string.
@@ -302,7 +302,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.axisLabelsMode` | string | no | — | Axis label rendering. Values: `smart` (context-aware), `long`, `short`. | `axisLabelsMode: smart` |
 | `spec.dateInterval` | string | no | auto-detect | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. | `dateInterval: month` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
-| `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowcategory`, `category`, `subcategory`, `auto`. | `level: category` |
+| `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`. | `level: category` |
 | `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `order: ac1` |
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |

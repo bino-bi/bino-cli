@@ -2987,8 +2987,8 @@
         },
         "level": {
           "type": "string",
-          "enum": ["rowcategory", "category", "subcategory"],
-          "description": "Determines the level on which the chart is aggregated."
+          "enum": ["auto", "rowgroup", "rowgroupindex", "category", "categoryindex", "subcategory", "subcategoryindex"],
+          "description": "Determines the level on which the chart is aggregated. Index variants preserve the original dataset order. When set to 'auto', the level is detected from the dataset silently; when left blank, it is detected with a warning."
         },
         "order": {
           "type": "string",
@@ -3127,8 +3127,8 @@
         },
         "level": {
           "type": "string",
-          "enum": ["rowcategory", "category", "subcategory"],
-          "description": "Determines the level on which the chart is aggregated."
+          "enum": ["auto", "rowgroup", "rowgroupindex", "category", "categoryindex", "subcategory", "subcategoryindex"],
+          "description": "Determines the level on which the chart is aggregated. Index variants preserve the original dataset order. When set to 'auto', the level is detected from the dataset silently; when left blank, it is detected with a warning."
         },
         "order": {
           "type": "string",
