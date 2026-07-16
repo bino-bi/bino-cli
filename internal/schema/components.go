@@ -114,6 +114,16 @@ type HuggingfaceAuthSpec struct {
 	TokenFromEnv string `yaml:"tokenFromEnv,omitempty" json:"tokenFromEnv,omitempty"`
 }
 
+// LayoutChild references a standalone component document rendered as a child
+// of a LayoutPage or LayoutCard.
+type LayoutChild struct {
+	// Kind is the component kind of the referenced document (e.g. "Table").
+	Kind string `yaml:"kind" json:"kind"`
+
+	// Ref is the metadata.name of the referenced document.
+	Ref string `yaml:"ref,omitempty" json:"ref,omitempty"`
+}
+
 // LayoutPageSpec represents the spec section of a LayoutPage manifest.
 type LayoutPageSpec struct {
 	// SelectedStyle names a ComponentStyle manifest applied to this component
@@ -125,14 +135,13 @@ type LayoutPageSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 
 	// Children is a list of component references.
-	// Each element should be a reference like "$component_name".
-	Children []string `yaml:"children" json:"children"`
+	Children []LayoutChild `yaml:"children" json:"children"`
 }
 
 // LayoutCardSpec represents the spec section of a LayoutCard manifest.
 type LayoutCardSpec struct {
-	// Title is the card title.
-	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+	// TitleBusinessUnit is the free-text title line of the card header.
+	TitleBusinessUnit string `yaml:"titleBusinessUnit,omitempty" json:"titleBusinessUnit,omitempty"`
 
 	// SelectedStyle names a ComponentStyle manifest applied to this component
 	// (merged over the _system and _default styles).
@@ -143,8 +152,7 @@ type LayoutCardSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 
 	// Children is a list of component references.
-	// Each element should be a reference like "$component_name".
-	Children []string `yaml:"children" json:"children"`
+	Children []LayoutChild `yaml:"children" json:"children"`
 }
 
 // TextSpec represents the spec section of a Text manifest.

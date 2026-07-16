@@ -46,9 +46,17 @@ export class SchemaResolver {
             this.defs = (this.schema as any).$defs || {};
             this.buildKindMappings();
             return true;
-        } catch {
+        } catch (err) {
+            console.warn(`bino: failed to load ${schemaPath}:`, err);
             return false;
         }
+    }
+
+    /** Get the kinds a LayoutPage/LayoutCard child may reference (layoutChild kind enum) */
+    getLayoutChildKinds(): string[] {
+        const layoutChild = this.defs['layoutChild'] as Record<string, unknown> | undefined;
+        const kindProp = (layoutChild as any)?.properties?.kind;
+        return kindProp?.enum || [];
     }
 
     /** Get the list of all known kind values */

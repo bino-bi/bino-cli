@@ -88,6 +88,114 @@ spec:
 	}
 }
 
+func TestValidate_LayoutChildrenOptional(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "LayoutPage without children is a valid skeleton",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: new_page
+spec: {}
+`,
+		},
+		{
+			name: "LayoutPage with empty children is a valid skeleton",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: new_page
+spec:
+  children: []
+`,
+		},
+		{
+			name: "LayoutPage with referenced children",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: new_page
+spec:
+  children:
+    - kind: Text
+      ref: header_text
+`,
+		},
+		{
+			name: "LayoutCard without children is a valid skeleton",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: new_card
+spec: {}
+`,
+		},
+		{
+			name: "LayoutCard with empty children is a valid skeleton",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: new_card
+spec:
+  titleBusinessUnit: Sales
+  children: []
+`,
+		},
+		{
+			name: "inline LayoutCard child without children stays rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: new_page
+spec:
+  children:
+    - kind: LayoutCard
+      spec:
+        titleBusinessUnit: Sales
+`,
+			wantErr: true,
+		},
+		{
+			name: "inline LayoutCard child with empty children stays rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: new_page
+spec:
+  children:
+    - kind: LayoutCard
+      spec:
+        titleBusinessUnit: Sales
+        children: []
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_MissingRequiredField(t *testing.T) {
 	tests := []struct {
 		name        string

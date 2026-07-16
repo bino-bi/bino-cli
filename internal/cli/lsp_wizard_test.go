@@ -119,6 +119,49 @@ func TestRunLSPScaffoldCreatesValidManifests(t *testing.T) {
 	}
 }
 
+// TestRunLSPCreateLayoutPage covers the Add-element palette's create path: a
+// LayoutPage skeleton (no children yet) and one with referenced children must
+// both be written and placed by project convention.
+func TestRunLSPCreateLayoutPage(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{name: "empty spec", payload: `{"kind":"LayoutPage","name":"test_page","spec":{}}`},
+		{name: "empty children", payload: `{"kind":"LayoutPage","name":"test_page","spec":{"children":[]}}`},
+		{name: "referenced children", payload: `{"kind":"LayoutPage","name":"test_page","spec":{"children":[{"kind":"Text","ref":"header_text"}]}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("name = \"test\"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			var buf bytes.Buffer
+			if err := runLSPCreate(context.Background(), dir, []byte(tt.payload), &buf); err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			var res lspCreateResult
+			if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
+				t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+			}
+			if !res.OK || res.Error != "" || len(res.Diagnostics) > 0 {
+				t.Fatalf("create failed: ok=%v error=%q diagnostics=%+v", res.OK, res.Error, res.Diagnostics)
+			}
+
+			b, err := os.ReadFile(filepath.Join(dir, res.File))
+			if err != nil {
+				t.Fatalf("read %s: %v", res.File, err)
+			}
+			if err := schema.Validate(b); err != nil {
+				t.Fatalf("file %s failed schema.Validate:\n%s\nerror: %v", res.File, b, err)
+			}
+		})
+	}
+}
+
 // seedEditProject writes a project root with a single Text manifest carrying a
 // comment, and returns the project dir and the manifest's absolute path.
 func seedEditProject(t *testing.T) (dir, manifest string) {

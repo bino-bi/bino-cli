@@ -116,7 +116,11 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Description: "Main report page",
 				},
 				Spec: &LayoutPageSpec{
-					Children: []string{"$header", "$content", "$footer"},
+					Children: []LayoutChild{
+						{Kind: "Text", Ref: "header"},
+						{Kind: "Table", Ref: "content"},
+						{Kind: "Text", Ref: "footer"},
+					},
 				},
 			},
 		},
@@ -129,8 +133,11 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "summary_card",
 				},
 				Spec: &LayoutCardSpec{
-					Title:    "Summary",
-					Children: []string{"$chart1", "$table1"},
+					TitleBusinessUnit: "Summary",
+					Children: []LayoutChild{
+						{Kind: "ChartStructure", Ref: "chart1"},
+						{Kind: "Table", Ref: "table1"},
+					},
 				},
 			},
 		},
@@ -446,13 +453,18 @@ func TestDocumentRoundTripYAML(t *testing.T) {
 				APIVersion: APIVersion,
 				Kind:       KindLayoutPage,
 				Metadata:   Metadata{Name: "page1"},
-				Spec:       &LayoutPageSpec{Children: []string{"$a", "$b"}},
+				Spec: &LayoutPageSpec{Children: []LayoutChild{
+					{Kind: "Text", Ref: "a"},
+					{Kind: "Table", Ref: "b"},
+				}},
 			},
 			contains: []string{
 				"kind: LayoutPage",
 				"children:",
-				"- $a",
-				"- $b",
+				"- kind: Text",
+				"ref: a",
+				"- kind: Table",
+				"ref: b",
 			},
 		},
 		{
