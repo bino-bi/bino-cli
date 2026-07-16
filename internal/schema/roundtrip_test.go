@@ -238,6 +238,22 @@ func TestDocumentRoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name: "ChartBullet",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindChartBullet,
+				Metadata: Metadata{
+					Name: "kpi_bullet",
+				},
+				Spec: &ChartBulletSpec{
+					Dataset:    "$kpis",
+					Actual:     "ac1",
+					Target:     "pl1",
+					ChartTitle: "KPI overview vs. plan",
+				},
+			},
+		},
+		{
 			name: "Asset image",
 			doc: &Document{
 				APIVersion: APIVersion,

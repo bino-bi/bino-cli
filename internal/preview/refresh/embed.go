@@ -276,6 +276,7 @@ var directEmbeddableComponentKinds = map[string]struct{}{
 	"ChartTime":      {},
 	"ChartScatter":   {},
 	"ChartBubble":    {},
+	"ChartBullet":    {},
 	"Image":          {},
 }
 

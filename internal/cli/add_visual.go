@@ -70,6 +70,17 @@ type ChartBubbleManifestData struct {
 	Title       string
 }
 
+// ChartBulletManifestData holds data for rendering a ChartBullet manifest.
+type ChartBulletManifestData struct {
+	Name        string
+	Description string
+	Constraints []string
+	Dataset     string
+	Actual      string
+	Target      string
+	Title       string
+}
+
 func newAddTableCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
 		flagDataset    string
@@ -1218,6 +1229,242 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 	return cmd
 }
 
+func newAddChartBulletCommand() *cobra.Command { //nolint:gocognit // mirrors the other visualization wizards
+	var (
+		flagDataset    string
+		flagActual     string
+		flagTarget     string
+		flagTitle      string
+		flagConstraint []string
+		flagOutput     string
+		flagAppendTo   string
+		flagDesc       string
+		flagNoPrompt   bool
+		flagOpenEditor bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "chartbullet [name]",
+		Short: "Create a ChartBullet manifest",
+		Long: strings.TrimSpace(`
+Create a new ChartBullet manifest for IBCS bullet graphs.
+
+ChartBullet renders one row per KPI with a solid actual bar and a target
+marker; the default mode normalizes targets and draws variance bars. The
+actual and target measures are plain scenario slots (ac1-ac4, pp1-pp4,
+fc1-fc4, pl1-pl4); leave them empty to auto-detect (actual: ac1, target:
+pl1 > pp1 > fc1).
+`),
+		Example: strings.TrimSpace(`
+  # Interactive wizard
+  bino add chartbullet
+
+  # With options
+  bino add chartbullet kpi_overview \
+    --dataset kpis \
+    --target pl1 \
+    --title "KPI overview vs. plan" \
+    --output components/charts.yaml \
+    --no-prompt
+`),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			workdir, err := pathutil.ResolveWorkdir(".")
+			if err != nil {
+				return ConfigError(err)
+			}
+
+			nonInteractive := flagNoPrompt || !isInteractive()
+
+			var name string
+			if len(args) > 0 {
+				name = args[0]
+			}
+
+			if nonInteractive {
+				var missing []string
+				if name == "" {
+					missing = append(missing, "name (as argument)")
+				}
+				if flagDataset == "" {
+					missing = append(missing, "--dataset")
+				}
+				if flagOutput == "" && flagAppendTo == "" {
+					missing = append(missing, "--output or --append-to")
+				}
+				if len(missing) > 0 {
+					return ConfigError(fmt.Errorf("missing required values in non-interactive mode:\n  %s", strings.Join(missing, "\n  ")))
+				}
+			}
+			for _, token := range []struct{ flag, value string }{{"--actual", flagActual}, {"--target", flagTarget}} {
+				if token.value != "" && !scenarioSlotRegex.MatchString(token.value) {
+					return ConfigError(fmt.Errorf("%s: invalid measure token %q (expected a plain scenario slot like ac1; variance tokens are not allowed)", token.flag, token.value))
+				}
+			}
+
+			manifests, err := ScanManifests(ctx, workdir)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("scan manifests: %w", err))
+			}
+
+			data := ChartBulletManifestData{
+				Name:        name,
+				Description: flagDesc,
+				Constraints: flagConstraint,
+				Dataset:     flagDataset,
+				Actual:      flagActual,
+				Target:      flagTarget,
+				Title:       flagTitle,
+			}
+
+			var outputPath string
+			var appendMode bool
+			if flagAppendTo != "" {
+				outputPath = flagAppendTo
+				appendMode = true
+			} else if flagOutput != "" {
+				outputPath = flagOutput
+			}
+
+			if nonInteractive {
+				return writeChartBulletManifest(cmd, workdir, data, outputPath, appendMode)
+			}
+
+			reader := bufio.NewReader(cmd.InOrStdin())
+			out := cmd.OutOrStdout()
+
+			fmt.Fprintln(out, "Create a new ChartBullet manifest.")
+			fmt.Fprintln(out, "Press Ctrl+C to cancel at any time.")
+			fmt.Fprintln(out)
+
+			// Name
+			if data.Name == "" {
+				data.Name, err = promptGenericName(reader, out, manifests, "ChartBullet")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			if data.Description == "" {
+				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+			}
+
+			// Dataset selection
+			if data.Dataset == "" {
+				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			// Measures (optional — empty keeps auto-detection)
+			if data.Actual == "" {
+				data.Actual, err = promptOptionalMeasureToken(reader, out, "Actual measure (e.g. ac1, empty = auto)")
+				if err != nil {
+					return RuntimeError(err)
+				}
+			}
+			if data.Target == "" {
+				data.Target, err = promptOptionalMeasureToken(reader, out, "Target measure (e.g. pl1, empty = auto)")
+				if err != nil {
+					return RuntimeError(err)
+				}
+			}
+
+			// Title
+			if data.Title == "" {
+				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+			}
+
+			// Constraints
+			if len(data.Constraints) == 0 {
+				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				if err != nil {
+					return RuntimeError(err)
+				}
+				if addConstraints {
+					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+				}
+			}
+
+			// Output
+			if outputPath == "" {
+				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartBullet", data.Name)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+			}
+
+			// Preview
+			doc := buildChartBulletDocument(data)
+			manifestBytes, err := renderChartBulletManifest(doc)
+			if err != nil {
+				return RuntimeError(fmt.Errorf("render preview: %w", err))
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "=== Preview ===")
+			fmt.Fprintln(out, string(manifestBytes))
+			fmt.Fprintln(out, "===============")
+
+			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			if !confirmed {
+				fmt.Fprintln(out, "\nCanceled.")
+				return nil
+			}
+
+			if err := writeChartBulletManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
+				return err
+			}
+
+			if flagOpenEditor {
+				if editor := getEditor(); editor != "" {
+					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
+					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
+					execCmd.Stdin = os.Stdin
+					execCmd.Stdout = os.Stdout
+					execCmd.Stderr = os.Stderr
+					_ = execCmd.Run()
+				}
+			}
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name (required)")
+	cmd.Flags().StringVar(&flagActual, "actual", "", "Actual measure token (optional, e.g. ac1; empty = auto-detect)")
+	cmd.Flags().StringVar(&flagTarget, "target", "", "Target measure token (optional, e.g. pl1; empty = auto-detect)")
+	cmd.Flags().StringVar(&flagTitle, "title", "", "Chart title")
+	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
+	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
+	cmd.Flags().StringVar(&flagDesc, "description", "", "Description text")
+	cmd.Flags().BoolVar(&flagNoPrompt, "no-prompt", false, "Non-interactive mode")
+	cmd.Flags().BoolVar(&flagOpenEditor, "open-editor", false, "Open in $EDITOR after creation")
+
+	_ = cmd.RegisterFlagCompletionFunc("dataset", completeDatasets)
+	_ = cmd.RegisterFlagCompletionFunc("actual", completeMeasureTokens)
+	_ = cmd.RegisterFlagCompletionFunc("target", completeMeasureTokens)
+
+	return cmd
+}
+
 // Helper functions
 
 func promptDatasetSelection(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
@@ -1257,6 +1504,26 @@ func promptMeasureToken(reader *bufio.Reader, out io.Writer, label string) (stri
 			return value, nil
 		}
 		fmt.Fprintf(out, "Invalid measure token %q. Expected a scenario slot like ac1 or a variance token like dac1_pp1.\n", value)
+	}
+}
+
+// scenarioSlotRegex validates plain scenario slots (ac1-ac4, pp1-pp4,
+// fc1-fc4, pl1-pl4). ChartBullet rejects variance tokens — its variance is
+// implicit (actual vs target).
+var scenarioSlotRegex = regexp.MustCompile(`^(ac|pp|fc|pl)[1-4]$`)
+
+// promptOptionalMeasureToken prompts for a plain scenario slot; empty input
+// keeps the auto-detection.
+func promptOptionalMeasureToken(reader *bufio.Reader, out io.Writer, label string) (string, error) {
+	for {
+		value, err := addPromptString(reader, out, label, "")
+		if err != nil || value == "" {
+			return value, err
+		}
+		if scenarioSlotRegex.MatchString(value) {
+			return value, nil
+		}
+		fmt.Fprintf(out, "Invalid measure token %q. Expected a plain scenario slot like ac1, or leave empty for auto-detection.\n", value)
 	}
 }
 
@@ -1305,6 +1572,11 @@ func writeChartScatterManifest(cmd *cobra.Command, workdir string, data ChartSca
 
 func writeChartBubbleManifest(cmd *cobra.Command, workdir string, data ChartBubbleManifestData, outputPath string, appendMode bool) error {
 	doc := buildChartBubbleDocument(data)
+	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
+}
+
+func writeChartBulletManifest(cmd *cobra.Command, workdir string, data ChartBulletManifestData, outputPath string, appendMode bool) error {
+	doc := buildChartBulletDocument(data)
 	return WriteSchemaDocument(doc, workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
@@ -1404,5 +1676,25 @@ func buildChartBubbleDocument(data ChartBubbleManifestData) *schema.Document {
 }
 
 func renderChartBubbleManifest(doc *schema.Document) ([]byte, error) {
+	return yaml.Marshal(doc)
+}
+
+func buildChartBulletDocument(data ChartBulletManifestData) *schema.Document {
+	doc := schema.NewDocument(schema.KindChartBullet, data.Name)
+	doc.Metadata.Description = data.Description
+	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
+
+	spec := &schema.ChartBulletSpec{
+		Dataset:    "$" + data.Dataset,
+		Actual:     data.Actual,
+		Target:     data.Target,
+		ChartTitle: data.Title,
+	}
+
+	doc.Spec = spec
+	return doc
+}
+
+func renderChartBulletManifest(doc *schema.Document) ([]byte, error) {
 	return yaml.Marshal(doc)
 }

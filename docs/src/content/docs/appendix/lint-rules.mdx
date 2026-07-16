@@ -15,7 +15,7 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `report-artefact-required`     | Report Artefact Required     | Warning  | At least one ReportArtefact document must be defined.                                          |
 | `artefact-layoutpage-required` | Artefact LayoutPage Required | Warning  | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
 | `text-content-required`        | Text Content Required        | Warning  | Text components must have a non-empty `spec.value` field.                                      |
-| `dataset-required`             | Dataset Required             | Warning  | Table, ChartStructure, ChartTime, ChartScatter, and ChartBubble components must have a `spec.dataset` binding. |
+| `dataset-required`             | Dataset Required             | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
 | `table-sum-title-unused`       | Table Sum Title Unused       | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.            |
 | `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
 | `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
@@ -88,7 +88,7 @@ spec:
 
 ### dataset-required
 
-Data visualization components (`Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
+Data visualization components (`Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
 
 **Example problem:**
 

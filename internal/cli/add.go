@@ -51,6 +51,7 @@ var kindCategories = []KindCategory{
 			{Name: "charttime", Description: "Time-series chart"},
 			{Name: "chartscatter", Description: "XY scatter chart"},
 			{Name: "chartbubble", Description: "Bubble portfolio chart"},
+			{Name: "chartbullet", Description: "Bullet KPI chart"},
 		},
 	},
 	{
@@ -115,6 +116,7 @@ Subcommands (Visualization):
   charttime         Create a ChartTime manifest (time-series chart)
   chartscatter      Create a ChartScatter manifest (scatter chart)
   chartbubble       Create a ChartBubble manifest (bubble chart)
+  chartbullet       Create a ChartBullet manifest (bullet KPI chart)
 
 Subcommands (Resources):
   asset             Create an Asset manifest (image/font/file)
@@ -178,6 +180,7 @@ Three interaction modes are supported:
 	cmd.AddCommand(newAddChartTimeCommand())
 	cmd.AddCommand(newAddChartScatterCommand())
 	cmd.AddCommand(newAddChartBubbleCommand())
+	cmd.AddCommand(newAddChartBulletCommand())
 
 	// Resources
 	cmd.AddCommand(newAddAssetCommand())

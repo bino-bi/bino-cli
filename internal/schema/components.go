@@ -366,6 +366,33 @@ type ChartBubbleSpec struct {
 	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
 }
 
+// ChartBulletSpec represents the spec section of a ChartBullet manifest.
+type ChartBulletSpec struct {
+	// Dataset is a reference to a DataSet (required).
+	// Should be a reference like "$dataset_name".
+	Dataset string `yaml:"dataset" json:"dataset"`
+
+	// Actual is the actual-value measure token (optional), e.g. "ac1".
+	// Only plain scenario slots are allowed; empty auto-detects (ac1).
+	// The object form with label/unit is authored in YAML directly.
+	Actual string `yaml:"actual,omitempty" json:"actual,omitempty"`
+
+	// Target is the target measure token (optional), e.g. "pl1".
+	// Empty auto-detects (pl1 > pp1 > fc1).
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+
+	// ChartTitle is the chart title.
+	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
+
+	// SelectedStyle names a ComponentStyle manifest applied to this component
+	// (merged over the _system and _default styles).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
+	// Ruleset names a RuleSet manifest selecting the IBCS scenario rule set
+	// (merged over the _system and _default rule sets).
+	Ruleset string `yaml:"ruleset,omitempty" json:"ruleset,omitempty"`
+}
+
 // GridSpec represents the spec section of a Grid manifest.
 // Grid creates a CSS grid-based layout with row and column headers
 // for organizing child components in a tabular structure.

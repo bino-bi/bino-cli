@@ -502,7 +502,7 @@ related content.
 // promptLayoutChildren prompts for child component selection.
 func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) ([]string, error) {
 	// Filter to component kinds that can be children
-	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "LayoutCard")
+	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "LayoutCard")
 
 	if len(components) == 0 {
 		fmt.Fprintln(out, "No components found. You can add children manually later.")
@@ -528,7 +528,7 @@ func completeLayoutComponents(cmd *cobra.Command, _ []string, _ string) ([]strin
 	ctx := cmd.Context()
 	workdir, _ := pathutil.ResolveWorkdir(".")
 	manifests, _ := ScanManifests(ctx, workdir)
-	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "LayoutCard")
+	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "LayoutCard")
 	names := make([]string, len(components))
 	for i, m := range components {
 		names[i] = m.Name

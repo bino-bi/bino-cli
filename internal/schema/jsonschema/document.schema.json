@@ -26,6 +26,7 @@
         "ChartTime",
         "ChartScatter",
         "ChartBubble",
+        "ChartBullet",
         "Tree",
         "Grid",
         "Table",
@@ -189,6 +190,19 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/chartBubbleSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "ChartBullet" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/chartBulletSpec" }
         }
       }
     },
@@ -1735,7 +1749,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Table", "LayoutCard", "Text"],
+          "enum": ["ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Table", "LayoutCard", "Text"],
           "description": "Kind of the component to capture (for example 'ChartStructure', 'ChartTime', 'Table')."
         },
         "name": {
@@ -2758,7 +2772,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Grid", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard", "Image"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -2835,6 +2849,14 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBullet" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBulletSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBulletSpec" } } }
           }
         },
         {
@@ -3571,6 +3593,130 @@
         }
       }
     },
+    "scenarioSlotToken": {
+      "type": "string",
+      "pattern": "^(ac|pp|fc|pl)[1-4]$",
+      "description": "Plain scenario slot (ac1-ac4, pp1-pp4, fc1-fc4, pl1-pl4). Variance tokens are not allowed here — the bullet variance is implicit (actual vs target). Examples: ac1, pl1."
+    },
+    "bulletMeasureMapping": {
+      "description": "Bullet measure mapping. Either a bare scenario slot (shorthand for { measure: slot }) or an object with the measure plus an optional label and unit.",
+      "oneOf": [
+        { "$ref": "#/$defs/scenarioSlotToken" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["measure"],
+          "properties": {
+            "measure": { "$ref": "#/$defs/scenarioSlotToken" },
+            "label": {
+              "type": "string",
+              "description": "Caption of the measure, shown above the first row (actual) or at the target line (target)."
+            },
+            "unit": {
+              "type": "string",
+              "description": "Unit caption rendered once as 'in <unit>' in the chart header. Values are drawn as delivered - scale in the DataSet SQL."
+            }
+          }
+        }
+      ]
+    },
+    "chartBulletSpec": { "allOf": [{ "$ref": "#/$defs/chartBulletSpecBase" }], "required": ["dataset"] },
+    "chartBulletSpecBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for a ChartBullet component: an IBCS bullet graph with one row per KPI, a solid actual bar, and a target marker. The default mode normalizes targets (one aligned target line across rows) and draws integrated variance bars; the classic Stephen Few look is opt-in via normalize 'none' and ranges.",
+      "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "ruleset": {
+          "type": "string",
+          "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
+        },
+        "dataset": { "$ref": "#/$defs/datasetRef" },
+        "chartTitle": {
+          "type": "string",
+          "description": "Custom chart title."
+        },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment applied to the chart's data to filter rows before rendering, e.g. \"rowGroup = 'Revenue'\"."
+        },
+        "actual": {
+          "$ref": "#/$defs/bulletMeasureMapping",
+          "description": "Actual-value measure: a bare scenario slot or an object with measure, label, and unit. Omitted auto-detects ac1 (else the first available scenario)."
+        },
+        "target": {
+          "$ref": "#/$defs/bulletMeasureMapping",
+          "description": "Target measure: a bare scenario slot or an object with measure, label, and unit. Omitted auto-detects pl1 > pp1 > fc1; without any target scenario the chart renders actual bars only."
+        },
+        "ranges": {
+          "type": "array",
+          "items": { "type": "number", "exclusiveMinimum": 0 },
+          "minItems": 1,
+          "maxItems": 2,
+          "description": "Qualitative range bands as ascending fractions of the target, e.g. [0.6, 0.9]. At most two bands (IBCS rejects a third band of arbitrary length). Classic mode only - ignored while normalize is 'target'."
+        },
+        "normalize": {
+          "type": "string",
+          "enum": ["target", "none"],
+          "description": "Target normalization. 'target' (the default) scales every row to fractions of its target so one continuous target line spans all rows; 'none' draws classic per-row scales with tick strips."
+        },
+        "variances": {
+          "type": "string",
+          "enum": ["auto", "none"],
+          "description": "Variance bars between actual and target. 'auto' (the default) draws them in normalized mode, favorable/unfavorable per the IBCS variance colors; 'none' disables them."
+        },
+        "level": {
+          "type": "string",
+          "enum": ["auto", "rowgroup", "category", "subcategory"],
+          "description": "Hierarchy level that identifies one KPI row. 'auto' uses the deepest populated level."
+        },
+        "order": {
+          "type": "string",
+          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "subcategory", "subcategoryindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
+          "description": "Sort key of the KPI rows. Omitted or 'auto' uses the dataset's suggested order."
+        },
+        "orderDirection": {
+          "type": "string",
+          "enum": ["asc", "desc"],
+          "description": "Sorting direction. Maps to the order-direction HTML attribute."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of KPI rows, keeping the first rows in sort order. Truncates without a REST aggregate. 0 means no limit."
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Value label configuration, e.g. { show: 'auto', decimals: 1 }.",
+          "properties": {
+            "show": {
+              "type": "string",
+              "enum": ["auto", "none"],
+              "description": "Toggles the value labels right of the bars. Defaults to 'auto'."
+            },
+            "decimals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4,
+              "description": "Decimal places of the value labels. Defaults to 1."
+            }
+          }
+        },
+        "scale": {
+          "oneOf": [
+            { "enum": ["none", "auto"] },
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^(0?\\.[0-9]+|[1-9][0-9]*(\\.[0-9]+)?)$" }
+          ],
+          "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
+          "examples": ["none", "auto", 0.5, 0.8, 1.2]
+        }
+      }
+    },
     "treeSpec": { "allOf": [{ "$ref": "#/$defs/treeSpecBase" }], "required": ["edges"] },
     "treeSpecBase": {
       "type": "object",
@@ -3670,7 +3816,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind"],
-      "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, or LayoutCard component, either inline or by reference.",
+      "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, or LayoutCard component, either inline or by reference.",
       "properties": {
         "id": {
           "type": "string",
@@ -3678,12 +3824,12 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image", "LayoutCard"],
+          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "LayoutCard"],
           "description": "The type of component to render in this node."
         },
         "ref": {
           "type": "string",
-          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, and LayoutCard kinds."
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, and LayoutCard kinds."
         },
         "optional": {
           "type": "boolean",
@@ -3751,6 +3897,14 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBullet" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBulletSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBulletSpec" } } }
           }
         },
         {
@@ -3915,7 +4069,7 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Image"],
           "description": "The type of component to render in this child."
         },
         "metadata": {
@@ -3992,6 +4146,14 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ChartBullet" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/chartBulletSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/chartBulletSpec" } } }
           }
         },
         {

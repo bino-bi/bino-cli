@@ -402,6 +402,24 @@ func TestDatasetRequired_ChartBubbleHasDataset(t *testing.T) {
 	}
 }
 
+func TestDatasetRequired_ChartBulletMissingDataset(t *testing.T) {
+	docs := []Document{
+		{
+			File:     "/test/chart.yaml",
+			Position: 1,
+			Kind:     "ChartBullet",
+			Name:     "kpi-bullet",
+			Raw:      rawDoc("ChartBullet", "kpi-bullet", nil),
+		},
+	}
+
+	findings := datasetRequired.Check(context.Background(), docs)
+
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings))
+	}
+}
+
 func TestDatasetRequired_EmptyStringDataset(t *testing.T) {
 	docs := []Document{
 		{

@@ -904,3 +904,313 @@ spec:
 		})
 	}
 }
+
+// TestValidate_ChartBullet covers the ChartBullet spec defs: the plain
+// scenario-slot pattern (variance tokens rejected), dual-form actual/target
+// mappings, the ranges array, the mode enums, and the closed sub-objects.
+func TestValidate_ChartBullet(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "bullet minimal dataset only",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+`,
+			wantErr: false,
+		},
+		{
+			name: "bullet bare token measures",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  actual: ac1
+  target: pl1
+`,
+			wantErr: false,
+		},
+		{
+			name: "bullet object-form measures with all options",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  chartTitle: KPI overview
+  actual:
+    measure: ac1
+    label: AC
+    unit: EUR k
+  target:
+    measure: pl1
+    label: Plan
+  ranges: [0.6, 0.9]
+  normalize: none
+  variances: none
+  level: category
+  order: ac1
+  orderDirection: desc
+  limit: 6
+  labels:
+    show: auto
+    decimals: 0
+  filter: "rowGroup = 'Revenue'"
+  scale: none
+  selectedStyle: kpi-style
+  ruleset: inherited-page
+`,
+			wantErr: false,
+		},
+		{
+			name: "bullet missing dataset rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  actual: ac1
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet variance token rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  actual: drac1_pl1
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet invalid scenario slot rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  target: banana
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet invalid normalize rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  normalize: percent
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet invalid variances rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  variances: "on"
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet invalid level rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  level: series
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet ranges with string entry rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  ranges: [0.6, high]
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet empty ranges rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  ranges: []
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet three ranges rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  ranges: [0.5, 0.7, 0.9]
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet unknown property rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  aspect: "16:9"
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet target object unknown field rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  target:
+    measure: pl1
+    refLine: 20
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet labels unknown field rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpis
+spec:
+  dataset: kpi_data
+  labels:
+    show: auto
+    points: all
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet ref child override without dataset accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartBullet
+      ref: kpis
+      spec:
+        chartTitle: Override
+`,
+			wantErr: false,
+		},
+		{
+			name: "bullet inline child without dataset rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: ChartBullet
+      spec:
+        actual: ac1
+`,
+			wantErr: true,
+		},
+		{
+			name: "bullet tree node ref accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"b"}]'
+  nodes:
+    - id: a
+      kind: ChartBullet
+      ref: kpis
+`,
+			wantErr: false,
+		},
+		{
+			name: "bullet grid child inline accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: overview
+spec:
+  rowHeaders: [KPIs]
+  columnHeaders: [Actual]
+  children:
+    - kind: ChartBullet
+      row: 0
+      column: 0
+      spec:
+        dataset: kpi_data
+        target: pl1
+`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

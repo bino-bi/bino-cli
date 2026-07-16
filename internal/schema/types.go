@@ -36,6 +36,7 @@ const (
 	KindChartTime            = "ChartTime"
 	KindChartScatter         = "ChartScatter"
 	KindChartBubble          = "ChartBubble"
+	KindChartBullet          = "ChartBullet"
 	KindTree                 = "Tree"
 	KindGrid                 = "Grid"
 	KindAsset                = "Asset"

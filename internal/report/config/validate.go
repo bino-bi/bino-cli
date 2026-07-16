@@ -35,6 +35,7 @@ var builtinUniqueNameKinds = map[string]struct{}{
 	"ChartTime":            {},
 	"ChartScatter":         {},
 	"ChartBubble":          {},
+	"ChartBullet":          {},
 	"Table":                {},
 	"Text":                 {},
 	"SigningProfile":       {},

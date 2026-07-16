@@ -157,7 +157,7 @@ var textContentRequired = Rule{
 var datasetRequired = Rule{
 	ID:          "dataset-required",
 	Name:        "Dataset Required",
-	Description: "Table, ChartStructure, ChartTime, ChartScatter, and ChartBubble components must have a 'dataset' binding.",
+	Description: "Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a 'dataset' binding.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 
@@ -167,6 +167,7 @@ var datasetRequired = Rule{
 			"ChartTime":      true,
 			"ChartScatter":   true,
 			"ChartBubble":    true,
+			"ChartBullet":    true,
 		}
 
 		for _, doc := range docs {
