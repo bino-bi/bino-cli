@@ -1046,7 +1046,7 @@ func renderChartBubbleComponent(s chartBubbleSpec) string {
 
 // renderTreeComponent renders a Tree component as HTML.
 // Tree charts use slotted content for nodes, so we render node slots inside the element.
-// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, or ChartBubble component.
+// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, or LayoutCard component.
 func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-tree")
@@ -1076,7 +1076,7 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 }
 
 // renderTreeNode renders a single node in a tree chart.
-// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and Image kinds with ref or inline spec.
+// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, and LayoutCard kinds with ref or inline spec.
 func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	// Resolve spec (handle ref if present)
 	effectiveSpec, err := resolveTreeNodeSpec(node, rc)
@@ -1130,6 +1130,12 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 			return "", fmt.Errorf("unmarshal image spec: %w", err)
 		}
 		return renderImageComponent(s), nil
+	case "LayoutCard":
+		var s layoutCardSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal layout card spec: %w", err)
+		}
+		return renderLayoutCardContainer(s, rc)
 	default:
 		return "", fmt.Errorf("unsupported tree node kind %q", node.Kind)
 	}

@@ -100,7 +100,7 @@ Array of node definitions. Each node specifies what component to render at that 
 #### Node properties
 
 - `id` (required) – unique identifier matching `from`/`to` values in edges
-- `kind` (required) – type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, or `Image`
+- `kind` (required) – type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `Image`, or `LayoutCard`
 - `ref` – reference to a standalone document by name (not supported for Label)
 - `params` – parameter values (string map) passed to the referenced document; only valid together with `ref` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components))
 - `spec` – inline component specification (required if no ref)
@@ -193,6 +193,30 @@ nodes:
   - id: icon
     kind: Image
     ref: status_icon
+```
+
+### LayoutCard
+
+Embed a card container in a tree node. Cards wrap one or more child components (charts, tables, text). Can be defined inline or by reference.
+
+```yaml
+nodes:
+  # Inline card with children
+  - id: summary
+    kind: LayoutCard
+    spec:
+      children:
+        - kind: Text
+          spec:
+            value: "Quarterly summary"
+        - kind: Table
+          spec:
+            dataset: revenue_breakdown
+
+  # Reference to standalone LayoutCard document
+  - id: kpis
+    kind: LayoutCard
+    ref: kpi_card
 ```
 
 ## Example: ROI Driver Tree with Labels

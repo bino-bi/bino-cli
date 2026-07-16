@@ -830,3 +830,77 @@ spec:
 		})
 	}
 }
+
+func TestValidate_TreeNodeLayoutCard(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "layout card tree node inline accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"b"}]'
+  nodes:
+    - id: a
+      kind: LayoutCard
+      spec:
+        children:
+          - kind: Text
+            spec:
+              value: Hello
+`,
+			wantErr: false,
+		},
+		{
+			name: "layout card tree node ref accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"b"}]'
+  nodes:
+    - id: a
+      kind: LayoutCard
+      ref: summary_card
+`,
+			wantErr: false,
+		},
+		{
+			name: "layout card tree node inline without children rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Tree
+metadata:
+  name: drivers
+spec:
+  edges: '[{"from":"a","to":"b"}]'
+  nodes:
+    - id: a
+      kind: LayoutCard
+      spec:
+        titleBusinessUnit: Sales
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

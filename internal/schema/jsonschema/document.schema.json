@@ -3670,7 +3670,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind"],
-      "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, or ChartTime component, either inline or by reference.",
+      "description": "A node in the tree chart. Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, or LayoutCard component, either inline or by reference.",
       "properties": {
         "id": {
           "type": "string",
@@ -3678,12 +3678,12 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image"],
+          "enum": ["Label", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image", "LayoutCard"],
           "description": "The type of component to render in this node."
         },
         "ref": {
           "type": "string",
-          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and Image kinds."
+          "description": "Reference to a standalone document by name (metadata.name). When set, the referenced document's spec is used. Only valid for Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, and LayoutCard kinds."
         },
         "optional": {
           "type": "boolean",
@@ -3759,6 +3759,14 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/imageSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "LayoutCard" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/layoutCardSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/layoutCardSpec" } } }
           }
         }
       ]
