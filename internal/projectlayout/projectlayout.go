@@ -29,6 +29,7 @@ var dirForKind = map[string]string{
 	schema.KindChartTime:            "components",
 	schema.KindChartScatter:         "components",
 	schema.KindChartBubble:          "components",
+	schema.KindChartBullet:          "components",
 	schema.KindTable:                "components",
 	schema.KindText:                 "components",
 	schema.KindComponentStyle:       "styles",

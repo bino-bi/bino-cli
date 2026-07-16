@@ -597,6 +597,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ['bino.addChartTime', 'add charttime'],
         ['bino.addChartScatter', 'add chartscatter'],
         ['bino.addChartBubble', 'add chartbubble'],
+        ['bino.addChartBullet', 'add chartbullet'],
         ['bino.addReportArtefact', 'add reportartefact'],
         ['bino.addLiveReportArtefact', 'add livereportartefact'],
         ['bino.addSigningProfile', 'add signingprofile'],
@@ -1021,6 +1022,7 @@ function getIconForKind(kind: string): string {
         case 'ChartTime':
         case 'ChartScatter':
         case 'ChartBubble':
+        case 'ChartBullet':
             return 'graph';
         default:
             return 'file-code';

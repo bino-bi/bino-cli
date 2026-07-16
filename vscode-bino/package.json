@@ -371,6 +371,11 @@
         "category": "Bino"
       },
       {
+        "command": "bino.addChartBullet",
+        "title": "Add ChartBullet",
+        "category": "Bino"
+      },
+      {
         "command": "bino.addReportArtefact",
         "title": "Add ReportArtefact",
         "category": "Bino"
@@ -594,6 +599,10 @@
         },
         {
           "command": "bino.addChartBubble",
+          "when": "false"
+        },
+        {
+          "command": "bino.addChartBullet",
           "when": "false"
         },
         {

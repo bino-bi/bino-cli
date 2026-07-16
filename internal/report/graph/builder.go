@@ -123,7 +123,7 @@ func (b *builder) categorize() {
 	for _, doc := range b.docs {
 		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
 		switch doc.Kind {
-		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image", "Asset", "Grid":
+		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Grid":
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
 		}
@@ -137,7 +137,7 @@ func (b *builder) categorize() {
 			b.layoutPageDocs = append(b.layoutPageDocs, doc)
 		case "LayoutCard":
 			b.layoutCardDocs = append(b.layoutCardDocs, doc)
-		case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image", "Asset", "Grid":
+		case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Grid":
 			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
@@ -222,7 +222,7 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image", "Asset", "Grid"}
+	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Grid"}
 	for _, kind := range kinds {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {
@@ -335,7 +335,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 		node.DependsOn = append(node.DependsOn, children...)
 		b.nodes[id] = node
 		return id, nil
-	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Image":
+	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Image":
 		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(indexPath))
 		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)))
 		if err != nil {
@@ -411,7 +411,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 	if !found {
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		if lpDoc, lpFound := b.docIndex["LayoutPage:"+child.Ref]; lpFound {
-			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Tree, Grid, LayoutCard, and Image can be referenced",
+			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, LayoutCard, and Image can be referenced",
 				parentName, child.Ref, lpDoc.Name)
 		}
 

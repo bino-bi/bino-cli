@@ -382,3 +382,43 @@ spec:
         share: ac4
         labels:
           values: false
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: bullet-page
+spec:
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PL"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  footerText: "Acme Corp - Revenue vs. Plan"
+  children:
+    - kind: ChartBullet
+      metadata:
+        name: revenue_bullet
+      spec:
+        dataset: revenue_by_region
+        chartTitle: "Revenue vs. plan by region"
+        actual: ac1
+        target:
+          measure: pl1
+          label: "Plan"
+        order: ac1
+        orderDirection: desc
+    - kind: ChartBullet
+      metadata:
+        name: revenue_bullet_classic
+      spec:
+        dataset: revenue_by_region
+        chartTitle: "Revenue vs. plan (classic bullet)"
+        actual: ac1
+        target: pl1
+        normalize: none
+        ranges: [0.6, 0.9]
+        variances: none
+        labels:
+          decimals: 0

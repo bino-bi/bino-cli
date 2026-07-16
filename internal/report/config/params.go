@@ -13,6 +13,7 @@ var ParamCapableKinds = map[string]struct{}{
 	"ChartTime":      {},
 	"ChartScatter":   {},
 	"ChartBubble":    {},
+	"ChartBullet":    {},
 	"Tree":           {},
 	"Grid":           {},
 	"LayoutCard":     {},

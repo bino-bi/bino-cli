@@ -79,7 +79,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range docs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Grid", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
 		}
@@ -91,7 +91,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 	}
 	for _, doc := range globalDocs {
 		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Tree", "Grid", "Image":
+		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
 			key := doc.Kind + ":" + doc.Name
 			rc.globalIndex[key] = doc
 		}
@@ -117,7 +117,7 @@ func collectReferencedDatasources(docs []config.Document, globalDocs []config.Do
 // collectDatasourceRefsFromDoc extracts $-prefixed dataset references from a single document.
 func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 	switch doc.Kind {
-	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Image":
+	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image":
 		var p struct {
 			Spec struct {
 				Dataset spec.DatasetList `json:"dataset"`
@@ -744,6 +744,12 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 			return "", false, fmt.Errorf("render chart bubble child: %w", err)
 		}
 		component = renderChartBubbleComponent(s)
+	case "ChartBullet":
+		var s chartBulletSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render chart bullet child: %w", err)
+		}
+		component = renderChartBulletComponent(s)
 	case "Tree":
 		var s treeSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -818,7 +824,7 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
 		for _, doc := range rc.docs {
 			if doc.Kind == "LayoutPage" && doc.Name == child.Ref {
-				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Tree, Grid, LayoutCard, and Image can be referenced", child.Ref)
+				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, LayoutCard, and Image can be referenced", child.Ref)
 			}
 		}
 
@@ -1044,9 +1050,18 @@ func renderChartBubbleComponent(s chartBubbleSpec) string {
 	return b.String()
 }
 
+// renderChartBulletComponent renders a ChartBullet component as HTML.
+func renderChartBulletComponent(s chartBulletSpec) string {
+	var b strings.Builder
+	b.WriteString("<bn-chart-bullet")
+	s.writeAttrs(&b)
+	b.WriteString("></bn-chart-bullet>")
+	return b.String()
+}
+
 // renderTreeComponent renders a Tree component as HTML.
 // Tree charts use slotted content for nodes, so we render node slots inside the element.
-// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, or LayoutCard component.
+// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, or LayoutCard component.
 func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-tree")
@@ -1076,7 +1091,7 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 }
 
 // renderTreeNode renders a single node in a tree chart.
-// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image, and LayoutCard kinds with ref or inline spec.
+// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, and LayoutCard kinds with ref or inline spec.
 func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	// Resolve spec (handle ref if present)
 	effectiveSpec, err := resolveTreeNodeSpec(node, rc)
@@ -1124,6 +1139,12 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 			return "", fmt.Errorf("unmarshal chart bubble spec: %w", err)
 		}
 		return renderChartBubbleComponent(s), nil
+	case "ChartBullet":
+		var s chartBulletSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart bullet spec: %w", err)
+		}
+		return renderChartBulletComponent(s), nil
 	case "Image":
 		var s imageSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -1261,7 +1282,7 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 }
 
 // renderGridChild renders a single child (cell) in a grid.
-// It handles Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Tree, and Image kinds with ref or inline spec.
+// It handles Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, and Image kinds with ref or inline spec.
 func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	// Resolve spec (handle ref if present)
 	effectiveSpec, err := resolveGridChildSpec(child, rc)
@@ -1309,6 +1330,12 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 			return "", fmt.Errorf("unmarshal chart bubble spec: %w", err)
 		}
 		return renderChartBubbleComponent(s), nil
+	case "ChartBullet":
+		var s chartBulletSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal chart bullet spec: %w", err)
+		}
+		return renderChartBulletComponent(s), nil
 	case "Tree":
 		var s treeSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -1466,7 +1493,7 @@ func layoutPageMatchesFormat(pageFormat, targetFormat string) bool {
 // ComponentFromSpec renders a component HTML from its kind and spec JSON.
 // This is an exported function that can be used by other packages (e.g., markdown)
 // to render components consistently without duplicating spec types.
-// Supported kinds: Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, Image.
+// Supported kinds: Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image.
 // The assetURLs parameter is optional and used to resolve asset: image references in Text markdown.
 func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[string]string) (string, error) {
 	switch kind {
@@ -1506,6 +1533,12 @@ func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[strin
 			return "", fmt.Errorf("parse chart bubble spec: %w", err)
 		}
 		return renderChartBubbleComponent(s), nil
+	case "ChartBullet":
+		var s chartBulletSpec
+		if err := json.Unmarshal(specRaw, &s); err != nil {
+			return "", fmt.Errorf("parse chart bullet spec: %w", err)
+		}
+		return renderChartBulletComponent(s), nil
 	case "Image":
 		var s imageSpec
 		if err := json.Unmarshal(specRaw, &s); err != nil {

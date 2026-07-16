@@ -1,0 +1,209 @@
+---
+title: ChartBullet
+description: Configure IBCS bullet graphs with actual bars, target markers, and variance bars.
+---
+
+`ChartBullet` manifests describe IBCS bullet graphs: one horizontal row per
+KPI with a solid actual bar and a target marker. The default mode applies
+the IBCS improvements over the classic Stephen Few bullet graph —
+**normalized targets** (every row is scaled to fractions of its target, so
+one continuous target line spans all rows and KPIs become visually
+comparable) and **integrated variance bars** between actual and target in
+the IBCS variance colors. The classic look with per-row scales and
+qualitative gray bands is opt-in.
+
+:::note
+`ChartBullet` requires a template-engine release that ships the
+`bn-chart-bullet` component. With older engines the manifest validates and
+the element renders, but displays nothing.
+:::
+
+## Spec outline
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpi_overview
+spec:
+  dataset: kpis
+  actual:                     # measure token or object; omitted = auto (ac1)
+    measure: ac1
+    label: "AC"
+    unit: "EUR k"             # rendered once as "in EUR k" in the header
+  target:                     # omitted = auto (pl1 > pp1 > fc1)
+    measure: pl1
+    label: "Plan"
+  normalize: target           # target (default, IBCS) | none (classic)
+  variances: auto             # auto (default) | none
+  ranges: [0.6, 0.9]          # classic mode only: max 2 gray bands as fractions of target
+  level: auto                 # auto | rowgroup | category | subcategory
+  order: ac1                  # auto | hierarchy column | scenario slot
+  orderDirection: desc        # asc | desc
+  limit: 0                    # max KPI rows, 0 = unlimited (truncates, no REST row)
+  labels:
+    show: auto                # auto | none
+    decimals: 1
+  filter: "rowGroup = 'Revenue'"
+  chartTitle: "KPI overview vs. plan"
+  scale: auto                 # "" | none | auto | 0.5 | 1.2 | …
+  selectedStyle: corporate-style
+  ruleset: corporate-rules
+```
+
+## Measure tokens
+
+The `actual` and `target` mappings accept either a bare **scenario slot**
+or an object whose `measure` property is a slot:
+
+- **Scenario slots**: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4` —
+  the row columns of the dataset.
+- **Variance tokens are not allowed** — the bullet variance is implicit
+  (actual vs. target), so `dac1_pl1`-style tokens have no meaning here.
+
+A bare string is shorthand for the object form: `actual: ac1` equals
+`actual: { measure: ac1 }`.
+
+Both measures auto-detect when omitted: `actual` prefers `ac1` (else the
+first available scenario), `target` prefers `pl1`, then `pp1`, then `fc1`.
+A dataset without any target scenario renders plain actual bars with a
+warning.
+
+## Data mapping
+
+One KPI row aggregates all dataset rows sharing the same `level` value
+(plain `SUM`, so cost KPIs show positive magnitudes). Values are drawn as
+delivered (no auto-SI scaling).
+
+- `level` picks the hierarchy column that identifies a KPI row (`auto`
+  uses the deepest populated level of `rowGroup` → `category` →
+  `subCategory`).
+- `normalize: target` (the default) maps every row to fractions of its
+  target: the target line aligns across rows at 100% and the rows become
+  visually comparable. Rows whose target is missing or not positive cannot
+  be normalized and render as label + value only, with a warning.
+- `normalize: none` draws the classic bullet: absolute values on per-row
+  scales with tick strips and per-row target ticks.
+- The favorable/unfavorable reading of a variance follows the row's
+  `operation` column: `"-"` marks cost-type KPIs and inverts the sentiment
+  (an actual below a cost target is favorable).
+
+## Fields
+
+- `dataset` – required dataset name or array.
+- `actual`, `target` – optional measure mappings (slot or object with
+  `measure`, `label`, `unit`); omitted values auto-detect.
+- `ranges` – optional qualitative bands as ascending fractions of the
+  target, at most two (IBCS rejects a third band of arbitrary length).
+  Classic mode only; ignored with a warning while `normalize` is `target`.
+- `normalize` – `target` (default) or `none`.
+- `variances` – `auto` (default; variance bars in normalized mode) or
+  `none`.
+- `level` – KPI row level.
+- `order`, `orderDirection` – row sorting; omitted uses the dataset's
+  suggested order.
+- `limit` – max KPI rows; truncates without a REST aggregate (summing
+  heterogeneous KPIs would be meaningless). `0` means unlimited.
+- `labels` – value labels: `show` (`auto` or `none`) and `decimals`
+  (0–4, default 1).
+- `filter` – optional AlaSQL WHERE fragment.
+- `chartTitle` – optional title.
+- `scale` – proportional font scaling, same semantics as the other charts
+  (`none`, `auto`, or a fixed factor); bullet charts auto-fit against the
+  parent height.
+- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. The target marker's treatment follows the target scenario's rule-set family (PL solid, FC dashed, PP gray).
+
+## Example: Minimal auto-detected bullet
+
+Everything auto-detects — actual `ac1`, target `pl1` > `pp1` > `fc1`,
+level and order from the dataset:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: kpi_overview
+spec:
+  dataset: kpis
+```
+
+## Example: Explicit target with sorting
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: revenue_bullet
+spec:
+  dataset: revenue_by_region
+  chartTitle: "Revenue vs. plan by region"
+  actual: ac1
+  target:
+    measure: pl1
+    label: "Plan"
+  order: ac1
+  orderDirection: desc
+```
+
+## Example: Classic Stephen Few look
+
+Per-row scales, up to two gray bands, no variance bars:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartBullet
+metadata:
+  name: revenue_bullet_classic
+spec:
+  dataset: revenue_by_region
+  chartTitle: "Revenue vs. plan (classic bullet)"
+  actual: ac1
+  target: pl1
+  normalize: none
+  ranges: [0.6, 0.9]
+  variances: none
+  labels:
+    decimals: 0
+```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ChartBullet`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). Maps to the `datasets` HTML attribute. | `dataset: kpis` |
+| `spec.actual` | string or object | no | auto (`ac1`) | Actual-value measure mapping (plain scenario slot). Maps to the `actual` HTML attribute. | `actual: ac1` |
+| `spec.target` | string or object | no | auto (`pl1` > `pp1` > `fc1`) | Target measure mapping (plain scenario slot). Maps to the `target` HTML attribute. | `target: { measure: pl1, label: "Plan" }` |
+| `spec.ranges` | array of numbers | no | — | Up to two ascending positive fractions of the target (classic mode gray bands). Maps to the `ranges` HTML attribute. | `ranges: [0.6, 0.9]` |
+| `spec.normalize` | string | no | `target` | Target normalization. Values: `target`, `none`. | `normalize: none` |
+| `spec.variances` | string | no | `auto` | Variance bars. Values: `auto`, `none`. | `variances: none` |
+| `spec.level` | string | no | `auto` | KPI row level. Values: `auto`, `rowgroup`, `category`, `subcategory`. | `level: category` |
+| `spec.order` | string | no | auto | Sort key: `auto`, a hierarchy column, or a scenario slot. | `order: ac1` |
+| `spec.orderDirection` | string | no | `asc` | Sorting direction. Values: `asc`, `desc`. Maps to the `order-direction` HTML attribute. | `orderDirection: desc` |
+| `spec.limit` | integer | no | `0` | Max KPI rows (truncates, no REST aggregate). `0` means unlimited. | `limit: 6` |
+| `spec.labels` | object | no | `show: auto`, `decimals: 1` | Value labels: `show` (`auto` or `none`) and `decimals` (0–4). | `labels: { decimals: 0 }` |
+| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "rowGroup = 'Revenue'"` |
+| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "KPI overview"` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+
+See [`ChartStructure`](/reference/chart-structure/) for general bar charts
+with explicit scenario and variance columns.

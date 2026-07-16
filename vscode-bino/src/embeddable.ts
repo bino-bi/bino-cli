@@ -16,6 +16,7 @@ const FALLBACK_RENDER_EMBEDDABLE_KINDS = [
     'ChartTime',
     'ChartScatter',
     'ChartBubble',
+    'ChartBullet',
     'Text',
     'Tree',
     'Grid'

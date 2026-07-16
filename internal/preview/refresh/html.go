@@ -355,8 +355,7 @@ func withPreviewPageMetadata(ctx []byte, pageMeta []previewPageMeta) []byte {
 		return ctx
 	}
 	insertAt := idx + len(openTag)
-	updated := make([]byte, 0, len(ctx)+len(attr))
-	updated = append(updated, ctx[:insertAt]...)
+	updated := append([]byte(nil), ctx[:insertAt]...)
 	updated = append(updated, attr...)
 	updated = append(updated, ctx[insertAt:]...)
 	return updated

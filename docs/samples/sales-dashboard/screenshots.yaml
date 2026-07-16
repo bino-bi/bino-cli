@@ -37,3 +37,5 @@ spec:
       name: margin_scatter
     - kind: ChartBubble
       name: portfolio_bubble
+    - kind: ChartBullet
+      name: revenue_bullet

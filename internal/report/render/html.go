@@ -334,7 +334,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Table", "Image":
+		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Image":
 			// These kinds are normally only rendered when referenced via ref in a
 			// LayoutPage. When rootComponent names one of them, render it directly
 			// into the context so it can be embedded without a wrapping LayoutPage.
@@ -477,7 +477,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "Table", "Image":
+		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Image":
 			// These kinds can be referenced as layout children but cannot be rendered as root.
 			// Skip them silently - they will be rendered when referenced via ref in a LayoutPage.
 			continue

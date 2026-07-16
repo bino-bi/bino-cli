@@ -361,6 +361,45 @@ func (s chartBubbleSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 }
 
+// chartBulletSpec defines the structure for ChartBullet components (bn-chart-bullet).
+type chartBulletSpec struct {
+	Dataset        reportspec.DatasetList   `json:"dataset"`
+	ChartTitle     string                   `json:"chartTitle"`
+	Filter         string                   `json:"filter"`
+	Actual         json.RawMessage          `json:"actual,omitempty"`
+	Target         json.RawMessage          `json:"target,omitempty"`
+	Ranges         []float64                `json:"ranges,omitempty"`
+	Normalize      string                   `json:"normalize"`
+	Variances      string                   `json:"variances"`
+	Level          string                   `json:"level"`
+	Order          string                   `json:"order"`
+	OrderDirection string                   `json:"orderDirection"`
+	Limit          *int                     `json:"limit"`
+	Labels         json.RawMessage          `json:"labels,omitempty"`
+	Scale          reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle  string                   `json:"selectedStyle"`
+	Ruleset        string                   `json:"ruleset"`
+}
+
+func (s chartBulletSpec) writeAttrs(b *strings.Builder) {
+	writeAttr(b, "datasets", s.Dataset.Join(","))
+	writeAttr(b, "chart-title", s.ChartTitle)
+	writeAttr(b, "filter", s.Filter)
+	writeMeasureAttr(b, "actual", s.Actual)
+	writeMeasureAttr(b, "target", s.Target)
+	writeFloatSliceAttr(b, "ranges", s.Ranges)
+	writeAttr(b, "normalize", s.Normalize)
+	writeAttr(b, "variances", s.Variances)
+	writeAttr(b, "level", s.Level)
+	writeAttr(b, "order", s.Order)
+	writeAttr(b, "order-direction", s.OrderDirection)
+	writeIntAttr(b, "limit", s.Limit)
+	writeJSONObjAttr(b, "labels", s.Labels)
+	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "selected-style", s.SelectedStyle)
+	writeAttr(b, "ruleset", s.Ruleset)
+}
+
 // treeSpec defines the structure for Tree components.
 // Trees display hierarchical structures with nodes connected by edges,
 // commonly used for driver trees and decomposition diagrams.
@@ -512,6 +551,19 @@ func writeCSVAttr(b *strings.Builder, name string, values []string) {
 		return
 	}
 	writeAttr(b, name, strings.Join(values, ","))
+}
+
+// writeFloatSliceAttr writes a numeric-array attribute as compact JSON if
+// non-empty (e.g. ranges='[0.6,0.9]'). writeJSONObjAttr drops arrays.
+func writeFloatSliceAttr(b *strings.Builder, name string, values []float64) {
+	if len(values) == 0 {
+		return
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return
+	}
+	writeAttr(b, name, string(data))
 }
 
 // writeStackAttr writes a stack config as a JSON string attribute.
