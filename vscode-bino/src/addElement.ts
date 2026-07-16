@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceIndexer, KindInfo } from './indexer';
 import { DataSourceWizardManager } from './wizard/wizardPanel';
-import { AuthoringClient } from './authoringClient';
+import { AuthoringClient, formatEditDiagnostics } from './authoringClient';
 import { SchemaResolver, FieldDef } from './schemaResolver';
 
 /**
@@ -30,6 +30,11 @@ const OTHER_LABEL = 'Other';
 interface KindPick extends vscode.QuickPickItem {
     kindName: string;
     category: string;
+}
+
+/** A children-pick entry: one existing component document. */
+interface ChildPick extends vscode.QuickPickItem {
+    childKind: string;
 }
 
 /**
@@ -135,6 +140,9 @@ export class AddElementCommand {
         // interactive CLI scaffolder — as the escape hatch instead.
         const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
         if (this.needsGuidedWidgets(fields)) {
+            vscode.window.showInformationMessage(
+                `Bino: ${kind} needs the interactive wizard — running \`bino add ${kind.toLowerCase()}\` in the terminal.`
+            );
             this.runAdd(kind);
             return;
         }
@@ -173,6 +181,16 @@ export class AddElementCommand {
             }
         }
 
+        // Layout containers reference existing components as children; offer a
+        // skippable multi-pick so a new page/card starts out usable.
+        if (category === 'layout' && fields.some(f => f.key === 'children')) {
+            const children = await this.promptChildren(kind);
+            if (children === null) {
+                return; // user cancelled
+            }
+            spec.children = children;
+        }
+
         // Prompt for each required scalar/enum field (objects and arrays are left
         // for the designer's rich widgets; the create path reports any still
         // missing as diagnostics).
@@ -198,6 +216,9 @@ export class AddElementCommand {
             // conditional requirement the flat field list can't express (e.g.
             // ConnectionSecret type:postgres needs a `postgres` object). Fall back
             // to `bino add <kind>` rather than dead-ending on the diagnostics.
+            vscode.window.showWarningMessage(
+                `Bino: could not create ${kind} (${formatEditDiagnostics(result)}) — continuing with \`bino add ${kind.toLowerCase()}\` in the terminal.`
+            );
             this.runAdd(kind);
             return;
         }
@@ -256,6 +277,37 @@ export class AddElementCommand {
             return null;
         }
         return picked.label.startsWith('$(circle-slash)') ? '' : picked.label;
+    }
+
+    /**
+     * Prompt for existing components to reference as children of a new layout
+     * container. Returns `{kind, ref}` entries — empty when the pick is skipped
+     * (confirmed with nothing selected) or no components exist yet — or null
+     * when the user cancels.
+     */
+    private async promptChildren(kind: string): Promise<Array<{ kind: string; ref: string }> | null> {
+        const childKinds = this.schema.getLayoutChildKinds();
+        if (childKinds.length === 0) {
+            return [];
+        }
+        const components = this.indexer.getDocuments(childKinds);
+        if (components.length === 0) {
+            return [];
+        }
+        const items: ChildPick[] = components.map(d => ({
+            label: d.name,
+            description: d.kind,
+            childKind: d.kind,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+            title: `New ${kind}: children`,
+            placeHolder: 'Pick components to show on it (confirm with none selected to skip)',
+            canPickMany: true,
+        });
+        if (picked === undefined) {
+            return null;
+        }
+        return picked.map(p => ({ kind: p.childKind, ref: p.label }));
     }
 
     /**

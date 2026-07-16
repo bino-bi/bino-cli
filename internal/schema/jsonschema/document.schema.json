@@ -137,7 +137,7 @@
       },
       "then": {
         "properties": {
-          "spec": { "$ref": "#/$defs/layoutCardSpec" }
+          "spec": { "$ref": "#/$defs/layoutCardSpecBase" }
         }
       }
     },
@@ -2613,13 +2613,11 @@
         },
         "children": {
           "type": "array",
-          "items": { "$ref": "#/$defs/layoutChild" },
-          "minItems": 1
+          "items": { "$ref": "#/$defs/layoutChild" }
         }
-      },
-      "required": ["children"]
+      }
     },
-    "layoutCardSpec": { "allOf": [{ "$ref": "#/$defs/layoutCardSpecBase" }], "required": ["children"] },
+    "layoutCardSpec": { "allOf": [{ "$ref": "#/$defs/layoutCardSpecBase" }], "required": ["children"], "properties": { "children": { "minItems": 1 } } },
     "layoutCardSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -2760,7 +2758,6 @@
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/layoutChild" },
-          "minItems": 1,
           "description": "Child components to render inside the card slots."
         }
       }

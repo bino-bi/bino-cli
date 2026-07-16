@@ -54,7 +54,7 @@ Important fields mirror `LayoutPage` but are scoped to a card:
 - Layout: `cardLayout`, `cardCustomTemplate`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
 - Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the card frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner card element.
 - IBCS rules: `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) applied to the card title; also accepts `inherited-page` to reuse the surrounding page's rule set. Child components inherit it via `ruleset: inherited-closest`.
-- Content: `children` – required array of `layoutChild` objects.
+- Content: `children` – array of `layoutChild` objects. A standalone LayoutCard document may leave it empty or omitted while scaffolding (the `card-layout-slots-used` lint rule warns when a used card does not fill its layout slots); a card defined inline as a child still requires at least one entry.
 
 ## Card inside a page
 

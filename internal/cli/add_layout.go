@@ -22,7 +22,7 @@ type LayoutPageManifestData struct {
 	Name        string
 	Description string
 	Constraints []string
-	Children    []string              // Component names
+	Children    []schema.LayoutChild  // Referenced component documents
 	Params      []LayoutPageParamData // Parameter definitions
 }
 
@@ -32,7 +32,33 @@ type LayoutCardManifestData struct {
 	Description string
 	Constraints []string
 	Title       string
-	Children    []string // Component names
+	Children    []schema.LayoutChild // Referenced component documents
+}
+
+// layoutChildKinds are the component kinds a LayoutPage/LayoutCard child may
+// reference (mirrors the layoutChild kind enum in document.schema.json).
+var layoutChildKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard"}
+
+// resolveLayoutChildren maps component names (from --children) to typed child
+// references by looking up each name's kind among the scanned manifests.
+func resolveLayoutChildren(names []string, manifests []ManifestInfo) ([]schema.LayoutChild, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	components := FilterByKind(manifests, layoutChildKinds...)
+	byName := make(map[string]string, len(components))
+	for _, m := range components {
+		byName[m.Name] = m.Kind
+	}
+	children := make([]schema.LayoutChild, 0, len(names))
+	for _, name := range names {
+		kind, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown component %q: no %s manifest with that name found", name, strings.Join(layoutChildKinds, "/"))
+		}
+		children = append(children, schema.LayoutChild{Kind: kind, Ref: name})
+	}
+	return children, nil
 }
 
 func newAddLayoutPageCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
@@ -107,11 +133,16 @@ populate with component references later.
 				return RuntimeError(fmt.Errorf("scan manifests: %w", err))
 			}
 
+			children, err := resolveLayoutChildren(flagChildren, manifests)
+			if err != nil {
+				return ConfigError(err)
+			}
+
 			data := LayoutPageManifestData{
 				Name:        name,
 				Description: flagDesc,
 				Constraints: flagConstraint,
-				Children:    flagChildren,
+				Children:    children,
 			}
 
 			var outputPath string
@@ -353,12 +384,17 @@ related content.
 				return RuntimeError(fmt.Errorf("scan manifests: %w", err))
 			}
 
+			children, err := resolveLayoutChildren(flagChildren, manifests)
+			if err != nil {
+				return ConfigError(err)
+			}
+
 			data := LayoutCardManifestData{
 				Name:        name,
 				Description: flagDesc,
 				Constraints: flagConstraint,
 				Title:       flagTitle,
-				Children:    flagChildren,
+				Children:    children,
 			}
 
 			var outputPath string
@@ -500,9 +536,9 @@ related content.
 }
 
 // promptLayoutChildren prompts for child component selection.
-func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) ([]string, error) {
+func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) ([]schema.LayoutChild, error) {
 	// Filter to component kinds that can be children
-	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "LayoutCard")
+	components := FilterByKind(manifests, layoutChildKinds...)
 
 	if len(components) == 0 {
 		fmt.Fprintln(out, "No components found. You can add children manually later.")
@@ -515,12 +551,12 @@ func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []Manif
 		return nil, err
 	}
 
-	names := make([]string, len(selected))
+	children := make([]schema.LayoutChild, len(selected))
 	for i, item := range selected {
-		names[i] = item.Name
+		children[i] = schema.LayoutChild{Kind: item.Kind, Ref: item.Name}
 	}
 
-	return names, nil
+	return children, nil
 }
 
 // completeLayoutComponents provides shell completion for layout child components.
@@ -528,7 +564,7 @@ func completeLayoutComponents(cmd *cobra.Command, _ []string, _ string) ([]strin
 	ctx := cmd.Context()
 	workdir, _ := pathutil.ResolveWorkdir(".")
 	manifests, _ := ScanManifests(ctx, workdir)
-	components := FilterByKind(manifests, "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "LayoutCard")
+	components := FilterByKind(manifests, layoutChildKinds...)
 	names := make([]string, len(components))
 	for i, m := range components {
 		names[i] = m.Name
@@ -593,10 +629,9 @@ func buildLayoutPageDocument(data LayoutPageManifestData) *schema.Document {
 	doc.Metadata.Description = data.Description
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
-	// Add $ prefix to children for reference syntax
-	children := make([]string, len(data.Children))
-	for i, child := range data.Children {
-		children[i] = "$" + child
+	children := data.Children
+	if children == nil {
+		children = []schema.LayoutChild{}
 	}
 
 	spec := &schema.LayoutPageSpec{
@@ -681,10 +716,9 @@ func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]a
 		}
 	}
 
-	// Add children with $ prefix
-	children := make([]string, len(data.Children))
-	for i, child := range data.Children {
-		children[i] = "$" + child
+	children := data.Children
+	if children == nil {
+		children = []schema.LayoutChild{}
 	}
 	if m, ok := doc["spec"].(map[string]any); ok {
 		m["children"] = children
@@ -702,15 +736,14 @@ func buildLayoutCardDocument(data LayoutCardManifestData) *schema.Document {
 	doc.Metadata.Description = data.Description
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
-	// Add $ prefix to children for reference syntax
-	children := make([]string, len(data.Children))
-	for i, child := range data.Children {
-		children[i] = "$" + child
+	children := data.Children
+	if children == nil {
+		children = []schema.LayoutChild{}
 	}
 
 	spec := &schema.LayoutCardSpec{
-		Title:    data.Title,
-		Children: children,
+		TitleBusinessUnit: data.Title,
+		Children:          children,
 	}
 
 	doc.Spec = spec
