@@ -1214,3 +1214,39 @@ spec:
 		})
 	}
 }
+
+// TestValidate_ChartLevel covers the level enum on ChartStructure and
+// ChartTime: it must accept every aggregation level the template engine
+// supports (rowGroup/category/subCategory plus index variants, and auto)
+// and reject unknown values such as the historic "rowcategory".
+func TestValidate_ChartLevel(t *testing.T) {
+	kinds := []string{"ChartStructure", "ChartTime"}
+	cases := []struct {
+		level   string
+		wantErr bool
+	}{
+		{"auto", false},
+		{"rowgroup", false},
+		{"rowgroupindex", false},
+		{"category", false},
+		{"categoryindex", false},
+		{"subcategory", false},
+		{"subcategoryindex", false},
+		{"rowcategory", true}, // not an engine level; was wrongly allowed
+		{"foo", true},
+	}
+	for _, kind := range kinds {
+		for _, c := range cases {
+			t.Run(kind+"/"+c.level, func(t *testing.T) {
+				yaml := "apiVersion: bino.bi/v1alpha1\nkind: " + kind + "\nmetadata:\n  name: c\nspec:\n  dataset: d\n  level: " + c.level + "\n"
+				err := Validate([]byte(yaml))
+				if c.wantErr && err == nil {
+					t.Errorf("level %q: expected validation error, got nil", c.level)
+				}
+				if !c.wantErr && err != nil {
+					t.Errorf("level %q: expected valid, got: %v", c.level, err)
+				}
+			})
+		}
+	}
+}
