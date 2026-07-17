@@ -18,26 +18,34 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       box-shadow: var(--bino-shadow-header);
     }
     .title {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bino-space-sm);
       font-weight: 600;
       color: var(--bino-text-muted);
+    }
+    .mark {
+      height: 20px;
+      width: auto;
+      display: block;
     }
     select {
       padding: 0.375rem 0.625rem;
       border-radius: var(--bino-radius);
       border: 1px solid var(--bino-border-light);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       font-size: var(--bino-font-size-md);
       color: var(--bino-text-muted);
       cursor: pointer;
       min-width: var(--bino-search-width);
     }
     select:hover {
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     select:focus {
       outline: none;
       border-color: var(--bino-primary);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      box-shadow: 0 0 0 3px var(--bino-focus-ring);
     }
     .warning-badge {
       display: none;
@@ -54,7 +62,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       user-select: none;
     }
     .warning-badge:hover {
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
     }
     .warning-badge.visible {
       display: inline-flex;
@@ -79,7 +87,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     .graph-btn:disabled, .present-btn:disabled {
       opacity: 0.5;
@@ -99,9 +107,9 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       gap: var(--bino-space-xs);
       padding: var(--bino-space-xs) 0.625rem;
       border-radius: 999px;
-      background: #22c55e;
-      border: 1px solid #16a34a;
-      color: #fff;
+      background: var(--bino-accent);
+      border: 1px solid var(--bino-accent-strong);
+      color: var(--bino-on-accent);
       font-size: var(--bino-font-size-sm);
       font-weight: 600;
       font-family: var(--bino-font-sans);
@@ -109,7 +117,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       user-select: none;
     }
     .present-btn:hover:not(:disabled) {
-      background: #16a34a;
+      background: var(--bino-accent-strong);
     }
     .present-icon {
       font-size: var(--bino-font-size-md);
@@ -138,7 +146,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       display: block;
       height: 100%;
       width: 40%;
-      background: var(--bino-primary);
+      background: var(--bino-accent);
       border-radius: 1px;
       animation: progress-slide 1.2s ease-in-out infinite;
     }
@@ -148,12 +156,18 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .progress-bar.error::after {
       width: 100%;
-      background: #dc2626;
+      background: var(--bino-error);
       animation: none;
     }
     @keyframes progress-slide {
       0% { transform: translateX(-100%); }
       100% { transform: translateX(350%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .progress-bar::after {
+        animation: none;
+        width: 100%;
+      }
     }
     .refresh-error-msg {
       display: inline-flex;
@@ -161,9 +175,9 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       gap: var(--bino-space-xs);
       padding: var(--bino-space-xs) 0.625rem;
       border-radius: 999px;
-      background: #fee2e2;
-      border: 1px solid #fca5a5;
-      color: #991b1b;
+      background: var(--bino-error-bg);
+      border: 1px solid var(--bino-error-border);
+      color: var(--bino-error);
       font-size: var(--bino-font-size-sm);
       font-weight: 600;
       max-width: 32rem;
@@ -173,7 +187,10 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       cursor: help;
     }
   `;constructor(){super(),this.artifacts=[],this.documents=[],this.graph=null,this.currentPath="/",this._errorCount=0,this._badgeVisible=!1,this._refreshing=!1,this._refreshError="",this._panelDismissed=!1,this._boundOnErrorsChanged=this._onErrorsChanged.bind(this),this._boundOnPanelDismissed=this._onPanelDismissed.bind(this),this._boundOnRefreshing=this._onRefreshing.bind(this),this._boundOnRefreshDone=this._onRefreshDone.bind(this),this._boundOnRefreshError=this._onRefreshError.bind(this),this._boundOnNoPayload=this._onNoPayload.bind(this)}connectedCallback(){super.connectedCallback(),document.addEventListener("bino-errors-changed",this._boundOnErrorsChanged),document.addEventListener("bino-panel-dismissed",this._boundOnPanelDismissed),document.addEventListener("bn-preview:refreshing",this._boundOnRefreshing),document.addEventListener("bn-preview:refresh-done",this._boundOnRefreshDone),document.addEventListener("bn-preview:refresh-error",this._boundOnRefreshError),document.addEventListener("bn-preview:no-payload",this._boundOnNoPayload)}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("bino-errors-changed",this._boundOnErrorsChanged),document.removeEventListener("bino-panel-dismissed",this._boundOnPanelDismissed),document.removeEventListener("bn-preview:refreshing",this._boundOnRefreshing),document.removeEventListener("bn-preview:refresh-done",this._boundOnRefreshDone),document.removeEventListener("bn-preview:refresh-error",this._boundOnRefreshError),document.removeEventListener("bn-preview:no-payload",this._boundOnNoPayload)}render(){var e=this,t=this.currentPath||"/",r=this.artifacts||[],n=[],i=[];r.forEach(function(h){h.isDoc?i.push(h):n.push(h)});var s=t!=="/"&&!t.startsWith("/doc/")&&!t.startsWith("/pres/"),c=s?"/pres"+t:null;return b`
-      <span class="title">bino preview</span>
+      <span class="title">
+        <img class="mark" src="/__bino/assets/bino-mark.png" alt="">
+        <span>bino preview</span>
+      </span>
       <select id="artefact-select" @change=${this._onSelectChange}>
         <option value="/" ?selected=${t==="/"}>All Pages</option>
         ${n.length>0?b`
@@ -245,7 +262,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
       border-bottom: 1px solid var(--bino-warning-border);
       font-weight: 600;
       color: var(--bino-warning-text);
@@ -259,7 +276,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       padding: 0 4px;
     }
     .close-btn:hover {
-      color: #78350f;
+      color: var(--bino-gray-900);
     }
     ul {
       list-style: none;
@@ -268,17 +285,17 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     li {
       padding: 8px 12px;
-      border-bottom: 1px solid #fde68a;
+      border-bottom: 1px solid var(--bino-yellow-300);
       cursor: pointer;
       display: flex;
       align-items: flex-start;
       gap: 8px;
     }
     li:hover {
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
     }
     li.highlighted {
-      background: #fde68a;
+      background: var(--bino-yellow-400);
       border-left: 3px solid var(--bino-warning);
     }
     li:last-child {
@@ -294,14 +311,14 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .badge.warning {
       background: var(--bino-warning-border);
-      color: #78350f;
+      color: var(--bino-gray-900);
     }
     .badge.error {
-      background: #fca5a5;
-      color: #7f1d1d;
+      background: var(--bino-error);
+      color: #fff;
     }
     .message {
-      color: #78350f;
+      color: var(--bino-warning-text);
     }
   `;constructor(){super(),this._errors=[],this._visible=!1,this._scanTimer=null,this._observer=null,this._badges=[],this._highlightTimer=null,this._boundOnShowErrors=this._onShowErrors.bind(this),this._boundOnContentUpdated=this._debouncedScan.bind(this)}connectedCallback(){super.connectedCallback(),document.addEventListener("bino-show-errors",this._boundOnShowErrors),document.addEventListener("bn-preview:content-updated",this._boundOnContentUpdated),this._startObserver(),this._debouncedScan()}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("bino-show-errors",this._boundOnShowErrors),document.removeEventListener("bn-preview:content-updated",this._boundOnContentUpdated),this._observer&&(this._observer.disconnect(),this._observer=null),this._removeBadges()}updated(e){e.has("_visible")&&(this._visible?this.setAttribute("visible",""):this.removeAttribute("visible"))}render(){if(!this._visible||this._errors.length===0)return b``;var e=this,t=this._errors.length;return b`
       <div class="header">
@@ -316,7 +333,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
             </li>
           `})}
       </ul>
-    `}_startObserver(){var e=this;this._observer=new MutationObserver(function(t){e._onMutation(t)}),this._observer.observe(document.body,{childList:!0,subtree:!0,attributes:!0,attributeFilter:["has-error","has-errors"]})}_onMutation(e){var t=!1;e.forEach(function(r){r.type==="attributes"&&(r.attributeName==="has-error"||r.attributeName==="has-errors")&&(t=!0),r.type==="childList"&&r.addedNodes.length>0&&r.addedNodes.forEach(function(n){n.nodeType===1&&n.hasAttribute&&(n.hasAttribute("has-error")||n.hasAttribute("has-errors"))&&(t=!0),n.nodeType===1&&n.querySelector&&n.querySelector("[has-error], [has-errors]")&&(t=!0)})}),t&&this._debouncedScan()}_debouncedScan(){var e=this;this._scanTimer&&clearTimeout(this._scanTimer),this._scanTimer=setTimeout(function(){e._scanForErrors()},100)}_parseErrors(e){if(!e)return[];try{var t=JSON.parse(e);return Array.isArray(t)?t:[]}catch{return[]}}_scanForErrors(){var e=[],t=document.querySelectorAll("[has-error], [has-errors]"),r=this;t.forEach(function(n){var i=n.getAttribute("has-error")||n.getAttribute("has-errors"),s=r._parseErrors(i);s.forEach(function(c){e.push({element:n,error:c})})}),this._errors=e,document.dispatchEvent(new CustomEvent("bino-errors-changed",{detail:{count:e.length}})),e.length>0?(this._visible=!0,this._injectBadges(e)):(this._visible=!1,this._removeBadges())}_highlightForElement(e){var t=this,r=this.renderRoot.querySelectorAll("li"),n=null;r.forEach(function(i,s){i.classList.remove("highlighted"),t._errors[s]&&t._errors[s].element===e&&(i.classList.add("highlighted"),n||(n=i))}),n&&n.scrollIntoView({block:"nearest",behavior:"smooth"}),this._highlightTimer&&clearTimeout(this._highlightTimer),this._highlightTimer=setTimeout(function(){r.forEach(function(i){i.classList.remove("highlighted")})},4e3)}_onClose(){this._visible=!1,document.dispatchEvent(new CustomEvent("bino-panel-dismissed"))}_onShowErrors(){this._errors.length>0&&(this._visible=!0)}_scrollToElement(e){e&&(e.scrollIntoView({behavior:"smooth",block:"center"}),e.classList.remove("bn-error-highlight"),e.offsetWidth,e.classList.add("bn-error-highlight"),setTimeout(function(){e.classList.remove("bn-error-highlight")},700))}_injectBadges(e){this._removeBadges();var t=this,r=new Map;e.forEach(function(n,i){r.has(n.element)||r.set(n.element,[]),r.get(n.element).push({error:n.error,index:i})}),r.forEach(function(n,i){var s=document.createElement("div");s.className="bn-error-indicator-badge",s.style.cssText="position:absolute;top:2px;right:2px;width:18px;height:18px;background:#f59e0b;color:#fff;font-size:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10000;cursor:pointer;user-select:none;line-height:1;",s.textContent="\u26A0",s.title=n.map(function(m){return m.error.message||m.error.id||"Error"}).join(`
+    `}_startObserver(){var e=this;this._observer=new MutationObserver(function(t){e._onMutation(t)}),this._observer.observe(document.body,{childList:!0,subtree:!0,attributes:!0,attributeFilter:["has-error","has-errors"]})}_onMutation(e){var t=!1;e.forEach(function(r){r.type==="attributes"&&(r.attributeName==="has-error"||r.attributeName==="has-errors")&&(t=!0),r.type==="childList"&&r.addedNodes.length>0&&r.addedNodes.forEach(function(n){n.nodeType===1&&n.hasAttribute&&(n.hasAttribute("has-error")||n.hasAttribute("has-errors"))&&(t=!0),n.nodeType===1&&n.querySelector&&n.querySelector("[has-error], [has-errors]")&&(t=!0)})}),t&&this._debouncedScan()}_debouncedScan(){var e=this;this._scanTimer&&clearTimeout(this._scanTimer),this._scanTimer=setTimeout(function(){e._scanForErrors()},100)}_parseErrors(e){if(!e)return[];try{var t=JSON.parse(e);return Array.isArray(t)?t:[]}catch{return[]}}_scanForErrors(){var e=[],t=document.querySelectorAll("[has-error], [has-errors]"),r=this;t.forEach(function(n){var i=n.getAttribute("has-error")||n.getAttribute("has-errors"),s=r._parseErrors(i);s.forEach(function(c){e.push({element:n,error:c})})}),this._errors=e,document.dispatchEvent(new CustomEvent("bino-errors-changed",{detail:{count:e.length}})),e.length>0?(this._visible=!0,this._injectBadges(e)):(this._visible=!1,this._removeBadges())}_highlightForElement(e){var t=this,r=this.renderRoot.querySelectorAll("li"),n=null;r.forEach(function(i,s){i.classList.remove("highlighted"),t._errors[s]&&t._errors[s].element===e&&(i.classList.add("highlighted"),n||(n=i))}),n&&n.scrollIntoView({block:"nearest",behavior:"smooth"}),this._highlightTimer&&clearTimeout(this._highlightTimer),this._highlightTimer=setTimeout(function(){r.forEach(function(i){i.classList.remove("highlighted")})},4e3)}_onClose(){this._visible=!1,document.dispatchEvent(new CustomEvent("bino-panel-dismissed"))}_onShowErrors(){this._errors.length>0&&(this._visible=!0)}_scrollToElement(e){e&&(e.scrollIntoView({behavior:"smooth",block:"center"}),e.classList.remove("bn-error-highlight"),e.offsetWidth,e.classList.add("bn-error-highlight"),setTimeout(function(){e.classList.remove("bn-error-highlight")},700))}_injectBadges(e){this._removeBadges();var t=this,r=new Map;e.forEach(function(n,i){r.has(n.element)||r.set(n.element,[]),r.get(n.element).push({error:n.error,index:i})}),r.forEach(function(n,i){var s=document.createElement("div");s.className="bn-error-indicator-badge",s.style.cssText="position:absolute;top:2px;right:2px;width:18px;height:18px;background:#fbc02d;color:#11161a;font-size:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10000;cursor:pointer;user-select:none;line-height:1;",s.textContent="\u26A0",s.title=n.map(function(m){return m.error.message||m.error.id||"Error"}).join(`
 `),s.addEventListener("click",function(m){m.stopPropagation(),t._visible=!0,t._highlightForElement(i)});var c=i.parentNode;if(c){var h=window.getComputedStyle(c);h.position==="static"&&(c.style.position="relative"),i.insertAdjacentElement("afterend",s)}t._badges.push(s)})}_removeBadges(){this._badges.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e)}),this._badges=[]}};customElements.define("bino-error-panel",Ae);var Ce=class extends z{static properties={_results:{state:!0},_activeIndex:{state:!0},_open:{state:!0}};static styles=L`
     :host {
       position: relative;
@@ -344,14 +361,14 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       font-size: var(--bino-font-size-base);
       font-family: inherit;
       color: var(--bino-text);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       transition: width var(--bino-transition-normal), border-color var(--bino-transition-fast), box-shadow var(--bino-transition-fast);
     }
     input:focus {
       width: var(--bino-search-width-focus);
       outline: none;
       border-color: var(--bino-primary);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      box-shadow: 0 0 0 3px var(--bino-focus-ring);
       background: var(--bino-surface);
     }
     input::placeholder {
@@ -389,7 +406,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       border-bottom: none;
     }
     .result:hover, .result.active {
-      background: #f0f4ff;
+      background: var(--bino-surface-active);
     }
     .result-name {
       font-weight: 500;
@@ -415,7 +432,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       color: var(--bino-text-secondary);
     }
     mark {
-      background: #fef08a;
+      background: var(--bino-yellow-400);
       color: inherit;
       border-radius: 2px;
       padding: 0 1px;
@@ -437,14 +454,14 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
                 </div>
               `})}
       </div>
-    `}_highlightMatch(e,t){if(!t)return e.name;var r=t.toLowerCase(),n=e.name.toLowerCase().indexOf(r);if(n===-1)return e.name;var i=e.name.substring(0,n),s=e.name.substring(n,n+t.length),c=e.name.substring(n+t.length);return b`${i}<mark>${s}</mark>${c}`}_onInput(e){var t=this,r=e.target.value.trim();clearTimeout(this._debounceTimer),this._debounceTimer=setTimeout(function(){t._query=r,t._search(r)},150)}_onKeydown(e){if(e.key==="Escape"){this._close(),e.target.blur();return}if(e.key==="ArrowDown"){e.preventDefault(),this._moveActive(1);return}if(e.key==="ArrowUp"){e.preventDefault(),this._moveActive(-1);return}if(e.key==="Enter"){e.preventDefault(),this._activeIndex>=0&&this._activeIndex<this._results.length?this._selectResult(this._activeIndex):this._results.length>0&&this._selectResult(0);return}}_onFocus(){this._query&&this._results.length>0&&(this._open=!0)}_search(e){if(this._activeIndex=-1,!e||e.length<2){this._results=[],this._close();return}var t=e.toLowerCase(),r=[],n=new Set,i=document.querySelectorAll("[data-bino-kind]");i.forEach(function(c){var h=c.getAttribute("data-bino-kind")||"",m=c.getAttribute("data-bino-name")||"",$=h+":"+m;n.has($)||(h.toLowerCase().indexOf(t)!==-1||m.toLowerCase().indexOf(t)!==-1)&&(n.add($),r.push({type:"element",kind:h,name:m,el:c}))});var s=document.querySelectorAll("bn-layout-page[data-bino-page]");s.forEach(function(c){var h=c.getAttribute("data-bino-page")||"",m="page:"+h;n.has(m)||h.toLowerCase().indexOf(t)!==-1&&(n.add(m),r.push({type:"page",kind:"LayoutPage",name:h,el:c}))}),r.length<50&&s.forEach(function(c){for(var h=c.getAttribute("data-bino-page")||"",m=c.shadowRoot||c,$=m.querySelectorAll("*"),E=0;E<$.length&&r.length<50;E++){var f=$[E];if(!(f.tagName==="SCRIPT"||f.tagName==="STYLE"))for(var w=f.childNodes,g=0;g<w.length;g++){var S=w[g];if(S.nodeType===3){var k=S.textContent.trim();if(!(!k||k.length<2)){var y=k.toLowerCase().indexOf(t);if(y!==-1){var d=k.substring(Math.max(0,y-30),Math.min(k.length,y+e.length+30)),v="text:"+h+":"+k.substring(y,y+Math.min(40,k.length-y));if(n.has(v))continue;n.add(v),r.push({type:"text",kind:"text in "+h,name:d,el:f,query:e});break}}}}}}),this._results=r,this._open=!0}_moveActive(e){if(this._results.length!==0){var t=this._activeIndex+e;t<0&&(t=this._results.length-1),t>=this._results.length&&(t=0),this._activeIndex=t,this.updateComplete.then(()=>{var r=this.renderRoot.querySelectorAll(".result");r[t]&&r[t].scrollIntoView({block:"nearest"})})}}_selectResult(e){var t=this._results[e];if(!(!t||!t.el)){this._close(),t.el.scrollIntoView({behavior:"smooth",block:"center"});var r=t.el,n=r.style.outline,i=r.style.outlineOffset;r.style.outline="2px solid "+(getComputedStyle(document.documentElement).getPropertyValue("--bino-primary").trim()||"#3b82f6"),r.style.outlineOffset="2px",setTimeout(function(){r.style.outline=n,r.style.outlineOffset=i},3e3)}}_close(){this._open=!1,this._activeIndex=-1}};customElements.define("bino-search",Ce);var Oe=class extends z{static properties={_documents:{state:!0},_open:{state:!0},_selectedDoc:{state:!0},_filterKind:{state:!0}};static styles=L`
+    `}_highlightMatch(e,t){if(!t)return e.name;var r=t.toLowerCase(),n=e.name.toLowerCase().indexOf(r);if(n===-1)return e.name;var i=e.name.substring(0,n),s=e.name.substring(n,n+t.length),c=e.name.substring(n+t.length);return b`${i}<mark>${s}</mark>${c}`}_onInput(e){var t=this,r=e.target.value.trim();clearTimeout(this._debounceTimer),this._debounceTimer=setTimeout(function(){t._query=r,t._search(r)},150)}_onKeydown(e){if(e.key==="Escape"){this._close(),e.target.blur();return}if(e.key==="ArrowDown"){e.preventDefault(),this._moveActive(1);return}if(e.key==="ArrowUp"){e.preventDefault(),this._moveActive(-1);return}if(e.key==="Enter"){e.preventDefault(),this._activeIndex>=0&&this._activeIndex<this._results.length?this._selectResult(this._activeIndex):this._results.length>0&&this._selectResult(0);return}}_onFocus(){this._query&&this._results.length>0&&(this._open=!0)}_search(e){if(this._activeIndex=-1,!e||e.length<2){this._results=[],this._close();return}var t=e.toLowerCase(),r=[],n=new Set,i=document.querySelectorAll("[data-bino-kind]");i.forEach(function(c){var h=c.getAttribute("data-bino-kind")||"",m=c.getAttribute("data-bino-name")||"",$=h+":"+m;n.has($)||(h.toLowerCase().indexOf(t)!==-1||m.toLowerCase().indexOf(t)!==-1)&&(n.add($),r.push({type:"element",kind:h,name:m,el:c}))});var s=document.querySelectorAll("bn-layout-page[data-bino-page]");s.forEach(function(c){var h=c.getAttribute("data-bino-page")||"",m="page:"+h;n.has(m)||h.toLowerCase().indexOf(t)!==-1&&(n.add(m),r.push({type:"page",kind:"LayoutPage",name:h,el:c}))}),r.length<50&&s.forEach(function(c){for(var h=c.getAttribute("data-bino-page")||"",m=c.shadowRoot||c,$=m.querySelectorAll("*"),E=0;E<$.length&&r.length<50;E++){var f=$[E];if(!(f.tagName==="SCRIPT"||f.tagName==="STYLE"))for(var w=f.childNodes,g=0;g<w.length;g++){var S=w[g];if(S.nodeType===3){var k=S.textContent.trim();if(!(!k||k.length<2)){var y=k.toLowerCase().indexOf(t);if(y!==-1){var d=k.substring(Math.max(0,y-30),Math.min(k.length,y+e.length+30)),v="text:"+h+":"+k.substring(y,y+Math.min(40,k.length-y));if(n.has(v))continue;n.add(v),r.push({type:"text",kind:"text in "+h,name:d,el:f,query:e});break}}}}}}),this._results=r,this._open=!0}_moveActive(e){if(this._results.length!==0){var t=this._activeIndex+e;t<0&&(t=this._results.length-1),t>=this._results.length&&(t=0),this._activeIndex=t,this.updateComplete.then(()=>{var r=this.renderRoot.querySelectorAll(".result");r[t]&&r[t].scrollIntoView({block:"nearest"})})}}_selectResult(e){var t=this._results[e];if(!(!t||!t.el)){this._close(),t.el.scrollIntoView({behavior:"smooth",block:"center"});var r=t.el,n=r.style.outline,i=r.style.outlineOffset;r.style.outline="2px solid "+(getComputedStyle(document.documentElement).getPropertyValue("--bino-primary").trim()||"#0b727e"),r.style.outlineOffset="2px",setTimeout(function(){r.style.outline=n,r.style.outlineOffset=i},3e3)}}_close(){this._open=!1,this._activeIndex=-1}};customElements.define("bino-search",Ce);var Oe=class extends z{static properties={_documents:{state:!0},_open:{state:!0},_selectedDoc:{state:!0},_filterKind:{state:!0}};static styles=L`
     :host {
       font-family: var(--bino-font-sans);
     }
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.35);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       align-items: center;
@@ -452,8 +469,8 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .modal {
       background: var(--bino-surface);
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      border-radius: var(--bino-radius-lg);
+      box-shadow: var(--bino-shadow-page);
       width: 640px;
       max-width: calc(100vw - 2rem);
       max-height: 80vh;
@@ -544,8 +561,8 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       font-size: var(--bino-font-size-xs);
       font-weight: 600;
       text-transform: uppercase;
-      background: #e0e7ff;
-      color: #3730a3;
+      background: var(--bino-celeste-100);
+      color: var(--bino-celeste-800);
       white-space: nowrap;
     }
     .doc-info {
@@ -571,7 +588,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       border-top: 2px solid var(--bino-border);
       padding: var(--bino-space-md) var(--bino-space-lg);
       flex-shrink: 0;
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .detail-row {
       display: flex;
@@ -603,16 +620,16 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       padding: 1px 6px;
       border-radius: 4px;
       font-size: var(--bino-font-size-xs);
-      background: #e5e7eb;
+      background: var(--bino-gray-200);
       color: var(--bino-text-muted);
     }
     .pill.label-pill {
-      background: #dbeafe;
-      color: #1e40af;
+      background: var(--bino-gray-100);
+      color: var(--bino-gray-700);
     }
     .pill.constraint-pill {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--bino-yellow-200);
+      color: var(--bino-gray-800);
     }
     .empty {
       padding: var(--bino-space-xl);
@@ -685,12 +702,12 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
           </div>
         `:C}
       </div>
-    `}_filteredDocs(){if(!this._filterKind)return this._documents;var e=this._filterKind;return this._documents.filter(function(t){return t.kind===e})}_uniqueKinds(){var e={},t=[];return this._documents.forEach(function(r){e[r.kind]||(e[r.kind]=!0,t.push(r.kind))}),t}_countKind(e){var t=0;return this._documents.forEach(function(r){r.kind===e&&t++}),t}_onOpen(e){this._documents=e.detail&&e.detail.documents||[],this._open=!0,this._selectedDoc=null,this._filterKind=""}_onChanged(e){if(this._open&&(this._documents=e.detail&&e.detail.documents||[],this._selectedDoc)){var t=this._selectedDoc,r=this._documents.some(function(n){return n.kind===t.kind&&n.name===t.name&&n.file===t.file});r||(this._selectedDoc=null)}}_onKeydown(e){this._open&&e.key==="Escape"&&this._close()}_onBackdropClick(){this._close()}_stopPropagation(e){e.stopPropagation()}_close(){this._open=!1,this._selectedDoc=null}};customElements.define("bino-assets-modal",Oe);var U=170,ee=38,ze=20,Et=56,ae=30,St={ReportArtefact:{bg:"#dbeafe",stroke:"#3b82f6",text:"#1e40af"},DocumentArtefact:{bg:"#dbeafe",stroke:"#3b82f6",text:"#1e40af"},LayoutPage:{bg:"#dcfce7",stroke:"#22c55e",text:"#166534"},LayoutCard:{bg:"#ccfbf1",stroke:"#14b8a6",text:"#115e59"},Component:{bg:"#f3e8ff",stroke:"#a855f7",text:"#6b21a8"},DataSet:{bg:"#ffedd5",stroke:"#f97316",text:"#9a3412"},DataSource:{bg:"#fee2e2",stroke:"#ef4444",text:"#991b1b"},MarkdownFile:{bg:"#f3f4f6",stroke:"#9ca3af",text:"#374151"}},At={ReportArtefact:"Artefact",DocumentArtefact:"DocArtefact",LayoutPage:"Page",LayoutCard:"Card",Component:"Component",DataSet:"DataSet",DataSource:"Source",MarkdownFile:"Markdown"};function ot(o){return St[o]||{bg:"#f3f4f6",stroke:"#9ca3af",text:"#374151"}}function Ct(o){return At[o]||o}function Ot(o,e){return e||(e=20),!o||o.length<=e?o||"":o.substring(0,e-1)+"\u2026"}function zt(o){if(!o||!o.rootId)return null;var e=o.nodes||{},t={},r={};function n(i){if(!i)return null;var s=e[i];if(!s)return null;if(t[i])return{id:i,kind:s.kind,name:s.name||i,children:[],cycle:!0};if(r[i])return{id:i,kind:s.kind,name:s.name||i,children:[],ref:!0};t[i]=!0,r[i]=!0;for(var c=[],h=s.dependsOn||[],m=0;m<h.length;m++){var $=n(h[m]);$&&c.push($)}return t[i]=!1,{id:i,kind:s.kind,name:s.name||i,children:c}}return n(o.rootId)}function at(o){if(!o)return 0;if(o.children.length===0)return o.w=U,U;for(var e=0,t=0;t<o.children.length;t++)e+=at(o.children[t]);return e+=(o.children.length-1)*ze,o.w=Math.max(e,U),o.w}function Lt(o){if(!o)return{nodes:[],edges:[],width:0,height:0};at(o);var e=[],t=[],r=0,n=0;function i(s,c,h){if(s){var m=c-U/2;if(e.push({id:s.id,kind:s.kind,name:s.name,x:m,y:h,cx:c,ref:s.ref||!1,cycle:s.cycle||!1}),c+U/2>r&&(r=c+U/2),h+ee>n&&(n=h+ee),s.children.length!==0){for(var $=h+ee+Et,E=0,f=0;f<s.children.length;f++)E+=s.children[f].w;E+=(s.children.length-1)*ze;for(var w=c-E/2,f=0;f<s.children.length;f++){var g=s.children[f],S=w+g.w/2;t.push({x1:c,y1:h+ee,x2:S,y2:$}),i(g,S,$),w+=g.w+ze}}}}return i(o,o.w/2+ae,ae),{nodes:e,edges:t,width:r+ae,height:n+ae}}var Le=class extends z{static properties={_graphData:{state:!0},_open:{state:!0}};static styles=L`
+    `}_filteredDocs(){if(!this._filterKind)return this._documents;var e=this._filterKind;return this._documents.filter(function(t){return t.kind===e})}_uniqueKinds(){var e={},t=[];return this._documents.forEach(function(r){e[r.kind]||(e[r.kind]=!0,t.push(r.kind))}),t}_countKind(e){var t=0;return this._documents.forEach(function(r){r.kind===e&&t++}),t}_onOpen(e){this._documents=e.detail&&e.detail.documents||[],this._open=!0,this._selectedDoc=null,this._filterKind=""}_onChanged(e){if(this._open&&(this._documents=e.detail&&e.detail.documents||[],this._selectedDoc)){var t=this._selectedDoc,r=this._documents.some(function(n){return n.kind===t.kind&&n.name===t.name&&n.file===t.file});r||(this._selectedDoc=null)}}_onKeydown(e){this._open&&e.key==="Escape"&&this._close()}_onBackdropClick(){this._close()}_stopPropagation(e){e.stopPropagation()}_close(){this._open=!1,this._selectedDoc=null}};customElements.define("bino-assets-modal",Oe);var U=170,ee=38,ze=20,Et=56,ae=30,St={ReportArtefact:{bg:"#d4f7f9",stroke:"#0b727e",text:"#0c454c"},DocumentArtefact:{bg:"#d4f7f9",stroke:"#0b727e",text:"#0c454c"},LayoutPage:{bg:"#d6ecdd",stroke:"#1f7a3d",text:"#1f7a3d"},LayoutCard:{bg:"#ecfcfd",stroke:"#5cdae5",text:"#0c5a64"},Component:{bg:"#f7aace",stroke:"#e23e8c",text:"#c11f6e"},DataSet:{bg:"#fff0a8",stroke:"#d99e0b",text:"#1f262a"},DataSource:{bg:"#f6ddda",stroke:"#c0392b",text:"#c0392b"},MarkdownFile:{bg:"#eef2f3",stroke:"#9aa7ad",text:"#333c41"}},At={ReportArtefact:"Artefact",DocumentArtefact:"DocArtefact",LayoutPage:"Page",LayoutCard:"Card",Component:"Component",DataSet:"DataSet",DataSource:"Source",MarkdownFile:"Markdown"};function ot(o){return St[o]||{bg:"#eef2f3",stroke:"#9aa7ad",text:"#333c41"}}function Ct(o){return At[o]||o}function Ot(o,e){return e||(e=20),!o||o.length<=e?o||"":o.substring(0,e-1)+"\u2026"}function zt(o){if(!o||!o.rootId)return null;var e=o.nodes||{},t={},r={};function n(i){if(!i)return null;var s=e[i];if(!s)return null;if(t[i])return{id:i,kind:s.kind,name:s.name||i,children:[],cycle:!0};if(r[i])return{id:i,kind:s.kind,name:s.name||i,children:[],ref:!0};t[i]=!0,r[i]=!0;for(var c=[],h=s.dependsOn||[],m=0;m<h.length;m++){var $=n(h[m]);$&&c.push($)}return t[i]=!1,{id:i,kind:s.kind,name:s.name||i,children:c}}return n(o.rootId)}function at(o){if(!o)return 0;if(o.children.length===0)return o.w=U,U;for(var e=0,t=0;t<o.children.length;t++)e+=at(o.children[t]);return e+=(o.children.length-1)*ze,o.w=Math.max(e,U),o.w}function Lt(o){if(!o)return{nodes:[],edges:[],width:0,height:0};at(o);var e=[],t=[],r=0,n=0;function i(s,c,h){if(s){var m=c-U/2;if(e.push({id:s.id,kind:s.kind,name:s.name,x:m,y:h,cx:c,ref:s.ref||!1,cycle:s.cycle||!1}),c+U/2>r&&(r=c+U/2),h+ee>n&&(n=h+ee),s.children.length!==0){for(var $=h+ee+Et,E=0,f=0;f<s.children.length;f++)E+=s.children[f].w;E+=(s.children.length-1)*ze;for(var w=c-E/2,f=0;f<s.children.length;f++){var g=s.children[f],S=w+g.w/2;t.push({x1:c,y1:h+ee,x2:S,y2:$}),i(g,S,$),w+=g.w+ze}}}}return i(o,o.w/2+ae,ae),{nodes:e,edges:t,width:r+ae,height:n+ae}}var Le=class extends z{static properties={_graphData:{state:!0},_open:{state:!0}};static styles=L`
     :host { font-family: var(--bino-font-sans); }
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.35);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       align-items: center;
@@ -698,8 +715,8 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .modal {
       background: var(--bino-surface);
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      border-radius: var(--bino-radius-lg);
+      box-shadow: var(--bino-shadow-page);
       width: 90vw;
       max-width: 1200px;
       max-height: 85vh;
@@ -735,7 +752,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       flex: 1;
       overflow: auto;
       min-height: 0;
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
       padding: var(--bino-space-md);
     }
     svg { display: block; }
@@ -780,7 +797,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
         </div>
       </div>
     `}_renderSVG(e){if(!e||e.nodes.length===0)return b`<div class='empty'>No graph data available</div>`;var t=e.width,r=e.height,n=e.edges.map(function(s){var c=(s.y1+s.y2)/2;return ke`<path d=${"M"+s.x1+","+s.y1+" C"+s.x1+","+c+" "+s.x2+","+c+" "+s.x2+","+s.y2}
-        fill='none' stroke='#cbd5e1' stroke-width='1.5'/>`}),i=e.nodes.map(function(s){var c=ot(s.kind),h=s.ref||s.cycle?"0.5":"1",m=Ct(s.kind),$=Ot(s.name),E=s.cycle?" [cycle]":s.ref?" [ref]":"";return ke`
+        fill='none' stroke='#cbd4d8' stroke-width='1.5'/>`}),i=e.nodes.map(function(s){var c=ot(s.kind),h=s.ref||s.cycle?"0.5":"1",m=Ct(s.kind),$=Ot(s.name),E=s.cycle?" [cycle]":s.ref?" [ref]":"";return ke`
         <g opacity=${h}>
           <rect x=${s.x} y=${s.y} width=${U} height=${ee}
             rx='6' fill=${c.bg} stroke=${c.stroke} stroke-width='1.5'/>
@@ -810,7 +827,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       flex-direction: column;
@@ -862,7 +879,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .refresh-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
       color: var(--bino-text);
     }
     .refresh-btn.refreshing {
@@ -879,6 +896,11 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .refresh-btn.refreshing .refresh-icon {
+        animation: none;
+      }
     }
     .close-btn {
       background: none;
@@ -901,7 +923,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     .sidebar {
       border-right: none;
       overflow-y: auto;
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
       flex-shrink: 0;
     }
     .splitter-v {
@@ -940,7 +962,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       font-size: var(--bino-font-size-xs);
       font-weight: 700;
       text-transform: uppercase;
-      color: var(--bino-text-secondary);
+      color: var(--bino-primary);
       letter-spacing: 0.05em;
     }
     .sidebar-item {
@@ -973,12 +995,12 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       text-transform: uppercase;
     }
     .badge-source {
-      background: #fee2e2;
-      color: #991b1b;
+      background: var(--bino-bad-soft);
+      color: var(--bino-bad);
     }
     .badge-dataset {
-      background: #ffedd5;
-      color: #9a3412;
+      background: var(--bino-yellow-200);
+      color: var(--bino-gray-800);
     }
     .sidebar-info-btn {
       flex-shrink: 0;
@@ -1032,22 +1054,22 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       border: none;
       outline: none;
       resize: none;
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-family: var(--bino-font-mono);
       font-size: var(--bino-font-size-sm);
       line-height: 1.5;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      background: var(--bino-gray-900);
+      color: var(--bino-gray-100);
       box-sizing: border-box;
     }
     .sql-editor::placeholder {
-      color: #6c7086;
+      color: var(--bino-gray-500);
     }
     .editor-toolbar {
       display: flex;
       align-items: center;
       gap: var(--bino-space-sm);
       padding: var(--bino-space-xs) var(--bino-space-md);
-      background: #f1f3f5;
+      background: var(--bino-surface-inset);
       border-top: 1px solid var(--bino-border);
       flex-shrink: 0;
     }
@@ -1064,15 +1086,15 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
     }
     .editor-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     .editor-btn.primary {
-      background: var(--bino-primary);
-      border-color: var(--bino-primary);
-      color: #fff;
+      background: var(--bino-accent);
+      border-color: var(--bino-accent-strong);
+      color: var(--bino-on-accent);
     }
     .editor-btn.primary:hover {
-      background: var(--bino-primary-hover);
+      background: var(--bino-accent-strong);
     }
     .editor-btn:disabled {
       opacity: 0.5;
@@ -1098,7 +1120,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       background: var(--bino-surface);
       border: 1px solid var(--bino-border);
       border-radius: var(--bino-radius);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--bino-shadow-dropdown);
     }
     .history-item {
       display: flex;
@@ -1124,7 +1146,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-family: var(--bino-font-mono);
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text);
     }
@@ -1151,7 +1173,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       gap: 0;
       border-bottom: 1px solid var(--bino-border);
       flex-shrink: 0;
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .tab-btn {
       padding: var(--bino-space-xs) var(--bino-space-md);
@@ -1189,7 +1211,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       z-index: 1;
     }
     th {
-      background: #f1f3f5;
+      background: var(--bino-surface-inset);
       padding: 6px 12px;
       text-align: left;
       font-weight: 600;
@@ -1221,7 +1243,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       user-select: none;
     }
     tr:nth-child(even) {
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
     }
     tr:hover {
       background: var(--bino-surface-hover);
@@ -1235,7 +1257,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       flex-shrink: 0;
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text-secondary);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .pagination button {
       padding: 2px 8px;
@@ -1271,7 +1293,7 @@ var qe=(function(){"use strict";let o=()=>{},e={morphStyle:"outerHTML",callbacks
       border-top: 1px solid var(--bino-border);
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text-secondary);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       flex-shrink: 0;
     }
     .error-msg {

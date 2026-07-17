@@ -61,7 +61,7 @@ class BinoDataExplorer extends LitElement {
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       flex-direction: column;
@@ -113,7 +113,7 @@ class BinoDataExplorer extends LitElement {
     }
     .refresh-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
       color: var(--bino-text);
     }
     .refresh-btn.refreshing {
@@ -130,6 +130,11 @@ class BinoDataExplorer extends LitElement {
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .refresh-btn.refreshing .refresh-icon {
+        animation: none;
+      }
     }
     .close-btn {
       background: none;
@@ -152,7 +157,7 @@ class BinoDataExplorer extends LitElement {
     .sidebar {
       border-right: none;
       overflow-y: auto;
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
       flex-shrink: 0;
     }
     .splitter-v {
@@ -191,7 +196,7 @@ class BinoDataExplorer extends LitElement {
       font-size: var(--bino-font-size-xs);
       font-weight: 700;
       text-transform: uppercase;
-      color: var(--bino-text-secondary);
+      color: var(--bino-primary);
       letter-spacing: 0.05em;
     }
     .sidebar-item {
@@ -224,12 +229,12 @@ class BinoDataExplorer extends LitElement {
       text-transform: uppercase;
     }
     .badge-source {
-      background: #fee2e2;
-      color: #991b1b;
+      background: var(--bino-bad-soft);
+      color: var(--bino-bad);
     }
     .badge-dataset {
-      background: #ffedd5;
-      color: #9a3412;
+      background: var(--bino-yellow-200);
+      color: var(--bino-gray-800);
     }
     .sidebar-info-btn {
       flex-shrink: 0;
@@ -283,22 +288,22 @@ class BinoDataExplorer extends LitElement {
       border: none;
       outline: none;
       resize: none;
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-family: var(--bino-font-mono);
       font-size: var(--bino-font-size-sm);
       line-height: 1.5;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      background: var(--bino-gray-900);
+      color: var(--bino-gray-100);
       box-sizing: border-box;
     }
     .sql-editor::placeholder {
-      color: #6c7086;
+      color: var(--bino-gray-500);
     }
     .editor-toolbar {
       display: flex;
       align-items: center;
       gap: var(--bino-space-sm);
       padding: var(--bino-space-xs) var(--bino-space-md);
-      background: #f1f3f5;
+      background: var(--bino-surface-inset);
       border-top: 1px solid var(--bino-border);
       flex-shrink: 0;
     }
@@ -315,15 +320,15 @@ class BinoDataExplorer extends LitElement {
     }
     .editor-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     .editor-btn.primary {
-      background: var(--bino-primary);
-      border-color: var(--bino-primary);
-      color: #fff;
+      background: var(--bino-accent);
+      border-color: var(--bino-accent-strong);
+      color: var(--bino-on-accent);
     }
     .editor-btn.primary:hover {
-      background: var(--bino-primary-hover);
+      background: var(--bino-accent-strong);
     }
     .editor-btn:disabled {
       opacity: 0.5;
@@ -349,7 +354,7 @@ class BinoDataExplorer extends LitElement {
       background: var(--bino-surface);
       border: 1px solid var(--bino-border);
       border-radius: var(--bino-radius);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--bino-shadow-dropdown);
     }
     .history-item {
       display: flex;
@@ -375,7 +380,7 @@ class BinoDataExplorer extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-family: var(--bino-font-mono);
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text);
     }
@@ -402,7 +407,7 @@ class BinoDataExplorer extends LitElement {
       gap: 0;
       border-bottom: 1px solid var(--bino-border);
       flex-shrink: 0;
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .tab-btn {
       padding: var(--bino-space-xs) var(--bino-space-md);
@@ -440,7 +445,7 @@ class BinoDataExplorer extends LitElement {
       z-index: 1;
     }
     th {
-      background: #f1f3f5;
+      background: var(--bino-surface-inset);
       padding: 6px 12px;
       text-align: left;
       font-weight: 600;
@@ -472,7 +477,7 @@ class BinoDataExplorer extends LitElement {
       user-select: none;
     }
     tr:nth-child(even) {
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
     }
     tr:hover {
       background: var(--bino-surface-hover);
@@ -486,7 +491,7 @@ class BinoDataExplorer extends LitElement {
       flex-shrink: 0;
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text-secondary);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .pagination button {
       padding: 2px 8px;
@@ -522,7 +527,7 @@ class BinoDataExplorer extends LitElement {
       border-top: 1px solid var(--bino-border);
       font-size: var(--bino-font-size-xs);
       color: var(--bino-text-secondary);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       flex-shrink: 0;
     }
     .error-msg {

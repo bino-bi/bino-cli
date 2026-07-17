@@ -4,52 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>bino preview · starting…</title>
+  <link rel="icon" type="image/png" href="/__bino/assets/favicon.png">
+  <link rel="stylesheet" href="/__bino/shared/fonts.css">
   <style>
+    /* BinoBI DS literals — this page must stay standalone (no tokens.css) */
     :root {
       color-scheme: light dark;
-      --bg: #0f172a;
-      --fg: #e2e8f0;
-      --fg-dim: #94a3b8;
-      --accent: #38bdf8;
-      --error-bg: #7f1d1d;
-      --error-fg: #fee2e2;
-      --bar-bg: rgba(148, 163, 184, 0.2);
-      --bar-fill: #38bdf8;
+      --bg: #ffffff;
+      --bg-wash: radial-gradient(80rem 40rem at 50% -10%, #ecfcfd, #ffffff);
+      --fg: #11161a;
+      --fg-dim: #6b777d;
+      --accent: #5cdae5;
+      --error-bg: #f6ddda;
+      --error-fg: #c0392b;
+      --bar-bg: rgba(17, 22, 26, 0.08);
+      --bar-fill: #5cdae5;
     }
-    @media (prefers-color-scheme: light) {
+    @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #f8fafc;
-        --fg: #0f172a;
-        --fg-dim: #475569;
-        --accent: #0284c7;
-        --error-bg: #fee2e2;
-        --error-fg: #7f1d1d;
-        --bar-bg: rgba(148, 163, 184, 0.25);
-        --bar-fill: #0284c7;
+        --bg: #11161a;
+        --bg-wash: #11161a;
+        --fg: #eef2f3;
+        --fg-dim: #9aa7ad;
+        --accent: #66dde8;
+        --error-bg: rgba(192, 57, 43, 0.2);
+        --error-fg: #f6ddda;
+        --bar-bg: rgba(154, 167, 173, 0.25);
+        --bar-fill: #66dde8;
       }
     }
-    html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif; }
+    body { background: var(--bg-wash); }
     main { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; box-sizing: border-box; }
     .card { width: 100%; max-width: 520px; text-align: center; }
-    .logo { font-size: 1rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-dim); margin-bottom: 1.5rem; }
+    .logo { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .logo img { width: 56px; height: 56px; }
+    .logo span { font-size: 0.875rem; font-weight: 600; color: var(--fg-dim); }
     .spinner { width: 56px; height: 56px; margin: 0 auto 1.5rem; border-radius: 50%; border: 4px solid var(--bar-bg); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; border-top-color: var(--bar-bg); }
+    }
     .phase { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
     .detail { font-size: 0.95rem; color: var(--fg-dim); margin: 0 0 1.5rem; min-height: 1.4em; }
     .progress { width: 100%; height: 6px; background: var(--bar-bg); border-radius: 999px; overflow: hidden; margin-bottom: 1rem; opacity: 0; transition: opacity 0.2s ease; }
     .progress.visible { opacity: 1; }
     .progress > span { display: block; height: 100%; width: 0%; background: var(--bar-fill); border-radius: 999px; transition: width 0.25s ease; }
     .hint { font-size: 0.85rem; color: var(--fg-dim); }
-    .error { display: none; margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--error-bg); color: var(--error-fg); border-radius: 8px; text-align: left; }
+    .error { display: none; margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--error-bg); color: var(--error-fg); border-radius: 16px; text-align: left; }
     .error.visible { display: block; }
     .error h2 { margin: 0 0 0.5rem; font-size: 1rem; }
-    .error pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .error pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   </style>
 </head>
 <body>
   <main>
     <div class="card">
-      <div class="logo">bino preview</div>
+      <div class="logo">
+        <img src="/__bino/assets/bino-mark.png" alt="" width="56" height="56">
+        <span>bino preview</span>
+      </div>
       <div class="spinner" aria-hidden="true"></div>
       <p class="phase" id="bn-boot-phase">Starting preview…</p>
       <p class="detail" id="bn-boot-detail"></p>

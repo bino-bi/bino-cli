@@ -1,0 +1,23 @@
+/* IBM Plex Mono — self-hosted from @fontsource/ibm-plex-mono (latin subset).
+   Files are copied into static/fonts/ by bundle.go during go generate. */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/__bino/static/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/__bino/static/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/__bino/static/fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}

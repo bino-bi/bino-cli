@@ -34,14 +34,14 @@ class BinoSearch extends LitElement {
       font-size: var(--bino-font-size-base);
       font-family: inherit;
       color: var(--bino-text);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       transition: width var(--bino-transition-normal), border-color var(--bino-transition-fast), box-shadow var(--bino-transition-fast);
     }
     input:focus {
       width: var(--bino-search-width-focus);
       outline: none;
       border-color: var(--bino-primary);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      box-shadow: 0 0 0 3px var(--bino-focus-ring);
       background: var(--bino-surface);
     }
     input::placeholder {
@@ -79,7 +79,7 @@ class BinoSearch extends LitElement {
       border-bottom: none;
     }
     .result:hover, .result.active {
-      background: #f0f4ff;
+      background: var(--bino-surface-active);
     }
     .result-name {
       font-weight: 500;
@@ -105,7 +105,7 @@ class BinoSearch extends LitElement {
       color: var(--bino-text-secondary);
     }
     mark {
-      background: #fef08a;
+      background: var(--bino-yellow-400);
       color: inherit;
       border-radius: 2px;
       padding: 0 1px;
@@ -356,7 +356,7 @@ class BinoSearch extends LitElement {
     var el = result.el;
     var originalOutline = el.style.outline;
     var originalOutlineOffset = el.style.outlineOffset;
-    el.style.outline = '2px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--bino-primary').trim() || '#3b82f6');
+    el.style.outline = '2px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--bino-primary').trim() || '#0b727e');
     el.style.outlineOffset = '2px';
 
     setTimeout(function() {

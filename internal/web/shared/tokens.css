@@ -1,26 +1,71 @@
+/* BinoBI design system tokens for the CLI chrome (preview/serve).
+   Two layers: DS primitives, then the semantic --bino-* tokens the
+   components consume. Report content (bn-*) is never styled from here. */
 :root {
-  --bino-bg: #f5f6fb;
+  /* Primitives — BinoBI DS */
+  --bino-gray-50: #f6f8f9;
+  --bino-gray-100: #eef2f3;
+  --bino-gray-200: #e0e6e9;
+  --bino-gray-300: #cbd4d8;
+  --bino-gray-400: #9aa7ad;
+  --bino-gray-500: #6b777d;
+  --bino-gray-600: #4a555b;
+  --bino-gray-700: #333c41;
+  --bino-gray-800: #1f262a;
+  --bino-gray-900: #11161a;
+  --bino-black: #0a0d0f;
+
+  --bino-celeste-50: #ecfcfd;
+  --bino-celeste-100: #d4f7f9;
+  --bino-celeste-200: #aef0f4;
+  --bino-celeste-300: #82e5ee;
+  --bino-celeste-400: #66dde8;
+  --bino-celeste-500: #5cdae5;
+  --bino-celeste-600: #2dbfcd;
+  --bino-celeste-700: #0b727e;
+  --bino-celeste-800: #0c5a64;
+  --bino-celeste-900: #0c454c;
+
+  --bino-yellow-200: #fff0a8;
+  --bino-yellow-300: #ffe783;
+  --bino-yellow-400: #ffda4d;
+  --bino-yellow-500: #fbc02d;
+  --bino-yellow-600: #d99e0b;
+
+  --bino-magenta-500: #ef6baa;
+  --bino-magenta-600: #e23e8c;
+  --bino-magenta-700: #c11f6e;
+
+  --bino-good: #1f7a3d;
+  --bino-good-soft: #d6ecdd;
+  --bino-bad: #c0392b;
+  --bino-bad-soft: #f6ddda;
+
+  /* Semantic */
+  --bino-bg: var(--bino-gray-50);
   --bino-surface: #ffffff;
-  --bino-text: #111827;
-  --bino-text-secondary: #6b7280;
-  --bino-text-muted: #374151;
-  --bino-border: #e5e7eb;
-  --bino-border-light: #d1d5db;
-  --bino-primary: #3b82f6;
-  --bino-primary-hover: #2563eb;
-  --bino-primary-ring: rgba(59, 130, 246, 0.1);
-  --bino-warning: #f59e0b;
-  --bino-warning-bg: #fffbeb;
-  --bino-warning-border: #fcd34d;
-  --bino-warning-text: #92400e;
-  --bino-error: #dc2626;
-  --bino-error-bg: #fef2f2;
-  --bino-radius: 6px;
-  --bino-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --bino-shadow-page: 0 14px 40px rgba(15, 23, 42, 0.12);
-  --bino-shadow-header: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --bino-shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.1);
-  --bino-shadow-panel: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  --bino-text: var(--bino-gray-900);
+  --bino-text-secondary: var(--bino-gray-500);
+  --bino-text-muted: var(--bino-gray-700);
+  --bino-border: var(--bino-gray-200);
+  --bino-border-light: var(--bino-gray-300);
+  --bino-primary: var(--bino-celeste-700);
+  --bino-primary-hover: var(--bino-celeste-800);
+  --bino-primary-ring: var(--bino-celeste-400);
+  --bino-warning: var(--bino-yellow-500);
+  --bino-warning-bg: var(--bino-yellow-200);
+  --bino-warning-border: var(--bino-yellow-400);
+  --bino-warning-text: var(--bino-gray-800);
+  --bino-error: var(--bino-bad);
+  --bino-error-bg: var(--bino-bad-soft);
+  --bino-radius: 10px;
+  --bino-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', 'Noto Sans', Arial, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol';
+  --bino-shadow-page: 0 12px 28px rgba(17, 22, 26, 0.1), 0 4px 10px rgba(17, 22, 26, 0.05);
+  --bino-shadow-header: 0 1px 3px rgba(17, 22, 26, 0.07), 0 1px 2px rgba(17, 22, 26, 0.04);
+  --bino-shadow-dropdown: 0 4px 12px rgba(17, 22, 26, 0.08), 0 2px 4px rgba(17, 22, 26, 0.04);
+  --bino-shadow-panel: 0 -4px 12px rgba(17, 22, 26, 0.08);
 
   /* Spacing */
   --bino-space-xs: 0.25rem;
@@ -47,13 +92,41 @@
   --bino-font-size-sm: 0.75rem;
   --bino-font-size-base: 0.8125rem;
   --bino-font-size-md: 0.875rem;
+  --bino-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Transitions */
-  --bino-transition-fast: 0.15s ease;
-  --bino-transition-normal: 0.2s ease;
+  --bino-transition-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --bino-transition-normal: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Additional surfaces */
-  --bino-surface-hover: #f3f4f6;
-  --bino-surface-active: #eff6ff;
-  --bino-active-text: #1d4ed8;
+  --bino-surface-hover: var(--bino-gray-100);
+  --bino-surface-active: var(--bino-celeste-50);
+  --bino-active-text: var(--bino-celeste-700);
+  --bino-surface-subtle: var(--bino-gray-50);
+  --bino-surface-inset: var(--bino-gray-100);
+
+  /* Accent / CTA (celeste can't carry white text — pair with on-accent) */
+  --bino-accent: var(--bino-celeste-500);
+  --bino-accent-strong: var(--bino-celeste-600);
+  --bino-on-accent: var(--bino-gray-900);
+  --bino-focus-ring: var(--bino-celeste-400);
+
+  /* Misc */
+  --bino-radius-lg: 16px;
+  --bino-radius-pill: 999px;
+  --bino-border-hover: var(--bino-gray-400);
+  --bino-error-border: #e9bab5;
+  --bino-scrim: rgba(10, 13, 15, 0.45);
+}
+
+::selection {
+  background: var(--bino-celeste-200);
+  color: var(--bino-gray-900);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --bino-transition-fast: 0s;
+    --bino-transition-normal: 0s;
+  }
 }

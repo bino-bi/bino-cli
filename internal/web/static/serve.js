@@ -25,7 +25,7 @@ var Ke=Object.defineProperty;var Ee=(n,e)=>()=>(n&&(e=n(n=0)),e);var Je=(n,e)=>{
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--bino-text-secondary);
+      color: var(--bino-primary);
     }
     .sitemap {
       border-bottom: 1px solid var(--bino-border);
@@ -64,8 +64,8 @@ var Ke=Object.defineProperty;var Ee=(n,e)=>()=>(n&&(e=n(n=0)),e);var Je=(n,e)=>{
     }
     .param-group.missing {
       background: var(--bino-error-bg);
-      border: 1px solid #fecaca;
-      border-radius: 8px;
+      border: 1px solid var(--bino-error-border);
+      border-radius: var(--bino-radius);
       padding: 0.75rem;
       margin: -0.25rem;
     }
@@ -104,7 +104,7 @@ var Ke=Object.defineProperty;var Ee=(n,e)=>()=>(n&&(e=n(n=0)),e);var Je=(n,e)=>{
     }
     .param-select {
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b777d' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 0.75rem center;
       padding-right: 2rem;
@@ -203,9 +203,9 @@ var Ke=Object.defineProperty;var Ee=(n,e)=>()=>(n&&(e=n(n=0)),e);var Je=(n,e)=>{
     }
     .apply-btn {
       padding: 0.625rem var(--bino-space-md);
-      background: var(--bino-primary);
-      color: var(--bino-surface);
-      border: none;
+      background: var(--bino-accent);
+      color: var(--bino-on-accent);
+      border: 1px solid var(--bino-accent-strong);
       border-radius: var(--bino-radius);
       font-size: var(--bino-font-size-md);
       font-weight: 500;
@@ -213,10 +213,11 @@ var Ke=Object.defineProperty;var Ee=(n,e)=>()=>(n&&(e=n(n=0)),e);var Je=(n,e)=>{
       transition: background var(--bino-transition-fast);
     }
     .apply-btn:hover {
-      background: var(--bino-primary-hover);
+      background: var(--bino-accent-strong);
     }
     .apply-btn:disabled {
-      background: #9ca3af;
+      background: var(--bino-gray-400);
+      border-color: var(--bino-gray-400);
       cursor: not-allowed;
     }
     @media print {

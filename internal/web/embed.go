@@ -11,7 +11,7 @@ import (
 
 //go:generate go run bundle.go
 
-//go:embed shared/tokens.css preview/preview.css preview/loading.html serve/serve.css static/preview.js static/serve.js
+//go:embed shared/tokens.css shared/fonts.css preview/preview.css preview/loading.html serve/serve.css static/preview.js static/serve.js static/fonts assets/bino-mark.png assets/favicon.png
 var assets embed.FS
 
 // LoadingPageHTML returns the embedded boot/loading page served while the
@@ -22,8 +22,10 @@ func LoadingPageHTML() ([]byte, error) {
 
 // mimeTypes maps file extensions to MIME types for embedded assets.
 var mimeTypes = map[string]string{
-	".css": "text/css; charset=utf-8",
-	".js":  "application/javascript; charset=utf-8",
+	".css":   "text/css; charset=utf-8",
+	".js":    "application/javascript; charset=utf-8",
+	".png":   "image/png",
+	".woff2": "font/woff2",
 }
 
 // Handler returns an http.Handler that serves embedded web assets under the

@@ -46,9 +46,9 @@ bn-layout-page {
   display: flex;
   align-items: flex-start;
   gap: var(--bino-space-md);
-  background: #fef3c7;
+  background: var(--bino-warning-bg);
   border: 1px solid var(--bino-warning-border);
-  border-radius: 8px;
+  border-radius: var(--bino-radius);
   padding: var(--bino-space-lg);
   max-width: 480px;
   margin: var(--bino-space-xl) auto;
@@ -64,7 +64,7 @@ bn-layout-page {
 }
 .bino-missing-text p {
   margin: 0;
-  color: #78350f;
+  color: var(--bino-warning-text);
   font-size: var(--bino-font-size-md);
   line-height: 1.5;
 }
