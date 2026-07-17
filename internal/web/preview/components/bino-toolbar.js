@@ -30,26 +30,34 @@ class BinoToolbar extends LitElement {
       box-shadow: var(--bino-shadow-header);
     }
     .title {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bino-space-sm);
       font-weight: 600;
       color: var(--bino-text-muted);
+    }
+    .mark {
+      height: 20px;
+      width: auto;
+      display: block;
     }
     select {
       padding: 0.375rem 0.625rem;
       border-radius: var(--bino-radius);
       border: 1px solid var(--bino-border-light);
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
       font-size: var(--bino-font-size-md);
       color: var(--bino-text-muted);
       cursor: pointer;
       min-width: var(--bino-search-width);
     }
     select:hover {
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     select:focus {
       outline: none;
       border-color: var(--bino-primary);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      box-shadow: 0 0 0 3px var(--bino-focus-ring);
     }
     .warning-badge {
       display: none;
@@ -66,7 +74,7 @@ class BinoToolbar extends LitElement {
       user-select: none;
     }
     .warning-badge:hover {
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
     }
     .warning-badge.visible {
       display: inline-flex;
@@ -91,7 +99,7 @@ class BinoToolbar extends LitElement {
     }
     .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover {
       background: var(--bino-surface-hover);
-      border-color: #9ca3af;
+      border-color: var(--bino-border-hover);
     }
     .graph-btn:disabled, .present-btn:disabled {
       opacity: 0.5;
@@ -111,9 +119,9 @@ class BinoToolbar extends LitElement {
       gap: var(--bino-space-xs);
       padding: var(--bino-space-xs) 0.625rem;
       border-radius: 999px;
-      background: #22c55e;
-      border: 1px solid #16a34a;
-      color: #fff;
+      background: var(--bino-accent);
+      border: 1px solid var(--bino-accent-strong);
+      color: var(--bino-on-accent);
       font-size: var(--bino-font-size-sm);
       font-weight: 600;
       font-family: var(--bino-font-sans);
@@ -121,7 +129,7 @@ class BinoToolbar extends LitElement {
       user-select: none;
     }
     .present-btn:hover:not(:disabled) {
-      background: #16a34a;
+      background: var(--bino-accent-strong);
     }
     .present-icon {
       font-size: var(--bino-font-size-md);
@@ -150,7 +158,7 @@ class BinoToolbar extends LitElement {
       display: block;
       height: 100%;
       width: 40%;
-      background: var(--bino-primary);
+      background: var(--bino-accent);
       border-radius: 1px;
       animation: progress-slide 1.2s ease-in-out infinite;
     }
@@ -160,12 +168,18 @@ class BinoToolbar extends LitElement {
     }
     .progress-bar.error::after {
       width: 100%;
-      background: #dc2626;
+      background: var(--bino-error);
       animation: none;
     }
     @keyframes progress-slide {
       0% { transform: translateX(-100%); }
       100% { transform: translateX(350%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .progress-bar::after {
+        animation: none;
+        width: 100%;
+      }
     }
     .refresh-error-msg {
       display: inline-flex;
@@ -173,9 +187,9 @@ class BinoToolbar extends LitElement {
       gap: var(--bino-space-xs);
       padding: var(--bino-space-xs) 0.625rem;
       border-radius: 999px;
-      background: #fee2e2;
-      border: 1px solid #fca5a5;
-      color: #991b1b;
+      background: var(--bino-error-bg);
+      border: 1px solid var(--bino-error-border);
+      color: var(--bino-error);
       font-size: var(--bino-font-size-sm);
       font-weight: 600;
       max-width: 32rem;
@@ -246,7 +260,10 @@ class BinoToolbar extends LitElement {
     var presURL = isReportArt ? '/pres' + currentPath : null;
 
     return html`
-      <span class="title">bino preview</span>
+      <span class="title">
+        <img class="mark" src="/__bino/assets/bino-mark.png" alt="">
+        <span>bino preview</span>
+      </span>
       <select id="artefact-select" @change=${this._onSelectChange}>
         <option value="/" ?selected=${currentPath === '/'}>All Pages</option>
         ${reportArts.length > 0 ? html`

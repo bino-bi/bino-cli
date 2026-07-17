@@ -30,7 +30,7 @@ class BinoErrorPanel extends LitElement {
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
       border-bottom: 1px solid var(--bino-warning-border);
       font-weight: 600;
       color: var(--bino-warning-text);
@@ -44,7 +44,7 @@ class BinoErrorPanel extends LitElement {
       padding: 0 4px;
     }
     .close-btn:hover {
-      color: #78350f;
+      color: var(--bino-gray-900);
     }
     ul {
       list-style: none;
@@ -53,17 +53,17 @@ class BinoErrorPanel extends LitElement {
     }
     li {
       padding: 8px 12px;
-      border-bottom: 1px solid #fde68a;
+      border-bottom: 1px solid var(--bino-yellow-300);
       cursor: pointer;
       display: flex;
       align-items: flex-start;
       gap: 8px;
     }
     li:hover {
-      background: #fef3c7;
+      background: var(--bino-yellow-300);
     }
     li.highlighted {
-      background: #fde68a;
+      background: var(--bino-yellow-400);
       border-left: 3px solid var(--bino-warning);
     }
     li:last-child {
@@ -79,14 +79,14 @@ class BinoErrorPanel extends LitElement {
     }
     .badge.warning {
       background: var(--bino-warning-border);
-      color: #78350f;
+      color: var(--bino-gray-900);
     }
     .badge.error {
-      background: #fca5a5;
-      color: #7f1d1d;
+      background: var(--bino-error);
+      color: #fff;
     }
     .message {
-      color: #78350f;
+      color: var(--bino-warning-text);
     }
   `;
 
@@ -297,8 +297,9 @@ class BinoErrorPanel extends LitElement {
     elementMap.forEach(function(items, el) {
       var badge = document.createElement('div');
       badge.className = 'bn-error-indicator-badge';
+      // Light-DOM inline literals: yellow-500 / gray-900 (keep in sync with tokens.css)
       badge.style.cssText = 'position:absolute;top:2px;right:2px;width:18px;height:18px;' +
-        'background:#f59e0b;color:#fff;font-size:12px;border-radius:50%;display:flex;' +
+        'background:#fbc02d;color:#11161a;font-size:12px;border-radius:50%;display:flex;' +
         'align-items:center;justify-content:center;z-index:10000;cursor:pointer;' +
         'user-select:none;line-height:1;';
       badge.textContent = '\u26A0';

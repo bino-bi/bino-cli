@@ -216,7 +216,9 @@ func WithStyles(frameHTML []byte) []byte {
 
 	styleBlock := []byte(`
 <link id="bn-serve-style" rel="stylesheet" href="/__bino/shared/tokens.css">
+<link rel="stylesheet" href="/__bino/shared/fonts.css">
 <link rel="stylesheet" href="/__bino/serve/serve.css">
+<link rel="icon" type="image/png" href="/__bino/assets/favicon.png">
 `)
 
 	// Find </head> and inject styles before it

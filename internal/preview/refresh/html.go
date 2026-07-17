@@ -246,7 +246,8 @@ func buildErrorPage(message, hint string) []byte {
 		hint = "Ensure at least one LayoutPage is defined and referenced by your report artefact."
 	}
 	var b strings.Builder
-	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Rainbow Preview Error</title>\n  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#fef2f2; color:#7f1d1d; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; } bn-context { display:flex; align-items:center; justify-content:center; width:100%; } .card { background:#fff; border:1px solid #fecaca; border-radius:12px; padding:2rem; max-width:520px; box-shadow:0 10px 30px rgba(185, 28, 28, 0.15);} h1 { margin-top:0; font-size:1.5rem;} p { line-height:1.5; } </style>\n</head>\n<body>\n  <bn-context>\n    <div class=\"card\">\n      <h1>Cannot Render Preview</h1>\n      <p>")
+	// Standalone page — BinoBI DS values inlined (gray-50/700/900, gray-200 border, bad red, DS lg shadow).
+	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>bino preview</title>\n  <link rel=\"icon\" type=\"image/png\" href=\"/__bino/assets/favicon.png\">\n  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif; background:#f6f8f9; color:#333c41; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; } bn-context { display:flex; align-items:center; justify-content:center; width:100%; } .card { background:#fff; border:1px solid #e0e6e9; border-top:3px solid #c0392b; border-radius:16px; padding:2rem; max-width:520px; box-shadow:0 12px 28px rgba(17, 22, 26, 0.10), 0 4px 10px rgba(17, 22, 26, 0.05);} h1 { margin-top:0; font-size:1.5rem; color:#11161a;} p { line-height:1.5; } </style>\n</head>\n<body>\n  <bn-context>\n    <div class=\"card\">\n      <h1>Cannot render preview</h1>\n      <p>")
 	b.WriteString(html.EscapeString(message))
 	b.WriteString("</p>\n      <p>")
 	b.WriteString(html.EscapeString(hint))
@@ -259,7 +260,9 @@ var previewStyleMarker = []byte("bn-preview-style")
 func previewStyleBlock() []byte {
 	return []byte(
 		"\n\t<link id=\"bn-preview-style\" rel=\"stylesheet\" href=\"/__bino/shared/tokens.css\">\n" +
+			"\t<link rel=\"stylesheet\" href=\"/__bino/shared/fonts.css\">\n" +
 			"\t<link rel=\"stylesheet\" href=\"/__bino/preview/preview.css\">\n" +
+			"\t<link rel=\"icon\" type=\"image/png\" href=\"/__bino/assets/favicon.png\">\n" +
 			"\t<script type=\"module\" src=\"/__bino/static/preview.js\"></script>\n",
 	)
 }

@@ -3,7 +3,8 @@
   "private": true,
   "description": "Source dependencies for the embedded preview/serve UIs. Bundled at build time by ./bundle.go via esbuild's Go API.",
   "dependencies": {
-    "lit": "3.2.1",
-    "idiomorph": "0.7.4"
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "idiomorph": "0.7.4",
+    "lit": "3.2.1"
   }
 }

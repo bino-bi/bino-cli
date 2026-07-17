@@ -15,7 +15,7 @@ class BinoAssetsModal extends LitElement {
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.35);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       align-items: center;
@@ -23,8 +23,8 @@ class BinoAssetsModal extends LitElement {
     }
     .modal {
       background: var(--bino-surface);
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      border-radius: var(--bino-radius-lg);
+      box-shadow: var(--bino-shadow-page);
       width: 640px;
       max-width: calc(100vw - 2rem);
       max-height: 80vh;
@@ -115,8 +115,8 @@ class BinoAssetsModal extends LitElement {
       font-size: var(--bino-font-size-xs);
       font-weight: 600;
       text-transform: uppercase;
-      background: #e0e7ff;
-      color: #3730a3;
+      background: var(--bino-celeste-100);
+      color: var(--bino-celeste-800);
       white-space: nowrap;
     }
     .doc-info {
@@ -142,7 +142,7 @@ class BinoAssetsModal extends LitElement {
       border-top: 2px solid var(--bino-border);
       padding: var(--bino-space-md) var(--bino-space-lg);
       flex-shrink: 0;
-      background: #f9fafb;
+      background: var(--bino-surface-subtle);
     }
     .detail-row {
       display: flex;
@@ -174,16 +174,16 @@ class BinoAssetsModal extends LitElement {
       padding: 1px 6px;
       border-radius: 4px;
       font-size: var(--bino-font-size-xs);
-      background: #e5e7eb;
+      background: var(--bino-gray-200);
       color: var(--bino-text-muted);
     }
     .pill.label-pill {
-      background: #dbeafe;
-      color: #1e40af;
+      background: var(--bino-gray-100);
+      color: var(--bino-gray-700);
     }
     .pill.constraint-pill {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--bino-yellow-200);
+      color: var(--bino-gray-800);
     }
     .empty {
       padding: var(--bino-space-xl);

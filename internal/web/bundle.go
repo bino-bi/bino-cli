@@ -47,6 +47,26 @@ func main() {
 	if len(result.Errors) > 0 {
 		os.Exit(1)
 	}
+
+	copyFonts(wd)
+}
+
+// copyFonts copies the IBM Plex Mono woff2 subsets used by shared/fonts.css
+// from the @fontsource package into static/fonts/ so they are committed and
+// embedded alongside the JS bundles.
+func copyFonts(wd string) {
+	srcDir := filepath.Join(wd, "node_modules", "@fontsource", "ibm-plex-mono", "files")
+	dstDir := filepath.Join(wd, "static", "fonts")
+	must(os.MkdirAll(dstDir, 0o755))
+	for _, name := range []string{
+		"ibm-plex-mono-latin-400-normal.woff2",
+		"ibm-plex-mono-latin-500-normal.woff2",
+		"ibm-plex-mono-latin-600-normal.woff2",
+	} {
+		data, err := os.ReadFile(filepath.Join(srcDir, name))
+		must(err)
+		must(os.WriteFile(filepath.Join(dstDir, name), data, 0o644))
+	}
 }
 
 func must(err error) {

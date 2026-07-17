@@ -6,15 +6,16 @@ var H_GAP = 20;
 var V_GAP = 56;
 var PAD = 30;
 
+// SVG attribute literals from the BinoBI DS palette (celeste/good/magenta/yellow/bad/gray)
 var KIND_COLORS = {
-  ReportArtefact:   { bg: '#dbeafe', stroke: '#3b82f6', text: '#1e40af' },
-  DocumentArtefact: { bg: '#dbeafe', stroke: '#3b82f6', text: '#1e40af' },
-  LayoutPage:       { bg: '#dcfce7', stroke: '#22c55e', text: '#166534' },
-  LayoutCard:       { bg: '#ccfbf1', stroke: '#14b8a6', text: '#115e59' },
-  Component:        { bg: '#f3e8ff', stroke: '#a855f7', text: '#6b21a8' },
-  DataSet:          { bg: '#ffedd5', stroke: '#f97316', text: '#9a3412' },
-  DataSource:       { bg: '#fee2e2', stroke: '#ef4444', text: '#991b1b' },
-  MarkdownFile:     { bg: '#f3f4f6', stroke: '#9ca3af', text: '#374151' },
+  ReportArtefact:   { bg: '#d4f7f9', stroke: '#0b727e', text: '#0c454c' },
+  DocumentArtefact: { bg: '#d4f7f9', stroke: '#0b727e', text: '#0c454c' },
+  LayoutPage:       { bg: '#d6ecdd', stroke: '#1f7a3d', text: '#1f7a3d' },
+  LayoutCard:       { bg: '#ecfcfd', stroke: '#5cdae5', text: '#0c5a64' },
+  Component:        { bg: '#f7aace', stroke: '#e23e8c', text: '#c11f6e' },
+  DataSet:          { bg: '#fff0a8', stroke: '#d99e0b', text: '#1f262a' },
+  DataSource:       { bg: '#f6ddda', stroke: '#c0392b', text: '#c0392b' },
+  MarkdownFile:     { bg: '#eef2f3', stroke: '#9aa7ad', text: '#333c41' },
 };
 
 var SHORT_KIND = {
@@ -29,7 +30,7 @@ var SHORT_KIND = {
 };
 
 function colorFor(kind) {
-  return KIND_COLORS[kind] || { bg: '#f3f4f6', stroke: '#9ca3af', text: '#374151' };
+  return KIND_COLORS[kind] || { bg: '#eef2f3', stroke: '#9aa7ad', text: '#333c41' };
 }
 
 function shortKind(kind) {
@@ -147,7 +148,7 @@ class BinoGraphModal extends LitElement {
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.35);
+      background: var(--bino-scrim);
       z-index: var(--bino-z-modal);
       display: flex;
       align-items: center;
@@ -155,8 +156,8 @@ class BinoGraphModal extends LitElement {
     }
     .modal {
       background: var(--bino-surface);
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      border-radius: var(--bino-radius-lg);
+      box-shadow: var(--bino-shadow-page);
       width: 90vw;
       max-width: 1200px;
       max-height: 85vh;
@@ -192,7 +193,7 @@ class BinoGraphModal extends LitElement {
       flex: 1;
       overflow: auto;
       min-height: 0;
-      background: #fafbfc;
+      background: var(--bino-surface-subtle);
       padding: var(--bino-space-md);
     }
     svg { display: block; }
@@ -278,7 +279,7 @@ class BinoGraphModal extends LitElement {
     var edgePaths = layout.edges.map(function(e) {
       var midY = (e.y1 + e.y2) / 2;
       return svg`<path d=${'M' + e.x1 + ',' + e.y1 + ' C' + e.x1 + ',' + midY + ' ' + e.x2 + ',' + midY + ' ' + e.x2 + ',' + e.y2}
-        fill='none' stroke='#cbd5e1' stroke-width='1.5'/>`;
+        fill='none' stroke='#cbd4d8' stroke-width='1.5'/>`;
     });
 
     var nodeGroups = layout.nodes.map(function(n) {
