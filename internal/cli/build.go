@@ -70,6 +70,10 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 
 		// Downgrade dataset query errors to warnings (legacy behavior).
 		warnOnQueryErrors bool
+
+		// Stateless single-shot mode (see build_stateless.go).
+		stateless       bool
+		statelessFormat string
 	)
 
 	cmd := &cobra.Command{
@@ -92,8 +96,24 @@ IDs for byte-reproducible builds.
 Use --artefact/--exclude-artefact to control which metadata.name entries produce output.`),
 		Example: strings.TrimSpace(`  bino build
   bino build --work-dir ./reports --artefact weekly --artefact monthly --out-dir dist`),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			// Stateless single-shot mode bypasses project-root discovery entirely:
+			// read a self-contained YAML, render it, stream bytes to stdout, and
+			// report any error as JSON on stderr. See build_stateless.go.
+			if stateless {
+				var inputArg string
+				if len(args) > 0 {
+					inputArg = args[0]
+				}
+				if serr := runStatelessBuild(cmd, statelessFormat, inputArg); serr != nil {
+					emitStatelessError(cmd, serr)
+					os.Exit(serr.exitCode())
+				}
+				return nil
+			}
+
 			logger := logx.FromContext(ctx).Channel("build")
 			startTime := time.Now()
 
@@ -410,6 +430,14 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
 		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
+
+	// Stateless single-shot mode: render a self-contained report YAML to bytes
+	// on stdout with no project on disk. Errors are reported as JSON on stderr.
+	// See build_stateless.go for the full contract and error-code set.
+	cmd.Flags().BoolVar(&stateless, "stateless", false,
+		"Stateless single-shot mode: read a self-contained report YAML from [<file>|-], render it, and write the artifact bytes to stdout (JSON error on stderr, no files written)")
+	cmd.Flags().StringVar(&statelessFormat, "format", "pdf",
+		"Stateless output format: 'pdf' or 'png' (only used with --stateless)")
 
 	// Accept both UK and US spellings for artefact flags
 	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
