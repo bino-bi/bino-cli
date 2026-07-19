@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { appBase } from '../../shared/dom-utils.js';
 
 var PAGE_SIZES = [25, 50, 100, 250];
 var HISTORY_LIMIT = 20;
@@ -1094,7 +1095,7 @@ class BinoDataExplorer extends LitElement {
     this._activeTab = 'results';
     this._recordHistory(sqlText);
 
-    fetch('/__explorer/query', {
+    fetch(appBase() + '/__explorer/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1123,7 +1124,7 @@ class BinoDataExplorer extends LitElement {
     this._error = '';
     this._activeTab = 'summarize';
 
-    fetch('/__explorer/summarize', {
+    fetch(appBase() + '/__explorer/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql: sqlText }),
@@ -1146,7 +1147,7 @@ class BinoDataExplorer extends LitElement {
     var self = this;
     this._exporting = true;
 
-    fetch('/__explorer/export', {
+    fetch(appBase() + '/__explorer/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql: sqlText }),
@@ -1179,7 +1180,7 @@ class BinoDataExplorer extends LitElement {
 
   _fetchMetadata(done) {
     var self = this;
-    fetch('/__explorer/metadata')
+    fetch(appBase() + '/__explorer/metadata')
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         self._metadata = data;

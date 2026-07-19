@@ -1,4 +1,4 @@
-import { normalizePath, waitForEngine, swapContext } from '../shared/dom-utils.js';
+import { normalizePath, appBase, viewPath, waitForEngine, swapContext } from '../shared/dom-utils.js';
 import './components/bino-toolbar.js';
 import './components/bino-error-panel.js';
 import './components/bino-search.js';
@@ -14,11 +14,12 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
   // Bumped on each user-visible runtime change so a quick devtools check
   // confirms whether the page is on the latest preview-app.js. Increment
   // when fixing a hot-reload bug here.
-  console.info('bn preview runtime v10 (bundled idiomorph + lit)');
+  console.info('bn preview runtime v11 (proxy base-prefix aware)');
 
   var parser = new DOMParser();
-  var normalizedPath = normalizePath(window.location.pathname || '/');
-  var source = new EventSource('/__preview/events');
+  var basePrefix = appBase();
+  var normalizedPath = viewPath();
+  var source = new EventSource(basePrefix + '/__preview/events');
   var sseReady = false;
   var engineReady = false;
 
@@ -94,7 +95,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
 
   function fetchAndSwapContext(reason) {
     var seq = ++contextFetchSeq;
-    fetch('/__preview/context?path=' + encodeURIComponent(normalizedPath))
+    fetch(basePrefix + '/__preview/context?path=' + encodeURIComponent(normalizedPath))
       .then(function (resp) {
         if (!resp.ok) {
           console.warn('bn preview: context fetch failed', resp.status, reason);

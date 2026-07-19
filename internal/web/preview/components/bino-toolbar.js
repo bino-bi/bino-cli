@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { appBase } from '../../shared/dom-utils.js';
 
 class BinoToolbar extends LitElement {
   static properties = {
@@ -257,11 +258,11 @@ class BinoToolbar extends LitElement {
 
     // Show Present button only when a specific ReportArtefact is selected
     var isReportArt = currentPath !== '/' && !currentPath.startsWith('/doc/') && !currentPath.startsWith('/pres/');
-    var presURL = isReportArt ? '/pres' + currentPath : null;
+    var presURL = isReportArt ? appBase() + '/pres' + currentPath : null;
 
     return html`
       <span class="title">
-        <img class="mark" src="/__bino/assets/bino-mark.png" alt="">
+        <img class="mark" src=${appBase() + '/__bino/assets/bino-mark.png'} alt="">
         <span>bino preview</span>
       </span>
       <select id="artefact-select" @change=${this._onSelectChange}>
@@ -349,7 +350,7 @@ class BinoToolbar extends LitElement {
   _onSelectChange(e) {
     var newPath = e.target.value;
     if (newPath) {
-      window.location.href = newPath;
+      window.location.href = appBase() + newPath;
     }
   }
 

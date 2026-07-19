@@ -40,6 +40,34 @@ export function normalizePath(value) {
 }
 
 /**
+ * Path prefix the app is served under, derived from an injected <base> tag.
+ * Reverse proxies (e.g. bino-cloud) mount the preview under a path prefix
+ * and inject <base href="{prefix}/">; direct local serving has no <base>
+ * tag. Returns '' or a prefix without a trailing slash.
+ * @returns {string}
+ */
+export function appBase() {
+  var baseEl = document.querySelector('base');
+  if (!baseEl || !baseEl.href) return '';
+  var path = new URL(baseEl.href, window.location.href).pathname;
+  return path === '/' ? '' : path.replace(/\/+$/, '');
+}
+
+/**
+ * The current view path as bino's server routes it: the browser location
+ * with any appBase() proxy prefix stripped.
+ * @returns {string}
+ */
+export function viewPath() {
+  var base = appBase();
+  var path = window.location.pathname || '/';
+  if (base && (path === base || path.indexOf(base + '/') === 0)) {
+    path = path.slice(base.length);
+  }
+  return normalizePath(path);
+}
+
+/**
  * Wait for the bn-context custom element to be defined.
  * Resolves immediately if already defined.
  * @returns {Promise<void>}
