@@ -85,6 +85,15 @@
       var errorMsgEl = document.getElementById('bn-boot-error-message');
       var reloadScheduled = false;
 
+      // Reverse proxies (bino-cloud) mount the preview under a path prefix
+      // and inject <base href="{prefix}/">; direct serving has no <base> tag.
+      var baseEl = document.querySelector('base');
+      var basePrefix = '';
+      if (baseEl && baseEl.href) {
+        var basePath = new URL(baseEl.href, window.location.href).pathname;
+        if (basePath !== '/') basePrefix = basePath.replace(/\/+$/, '');
+      }
+
       var labels = {
         starting: 'Starting preview…',
         duckdb: 'Loading DuckDB engine',
@@ -132,7 +141,7 @@
 
       // Pull the latest snapshot once in case boot finished before this tab
       // connected to the SSE stream.
-      fetch('/__preview/boot-status', { cache: 'no-store' })
+      fetch(basePrefix + '/__preview/boot-status', { cache: 'no-store' })
         .then(function (r) {
           if (r.status === 204) return null;
           if (!r.ok) return null;
@@ -142,7 +151,7 @@
         .catch(function () { /* ignore */ });
 
       if (!window.EventSource) return;
-      var source = new EventSource('/__preview/events');
+      var source = new EventSource(basePrefix + '/__preview/events');
       source.addEventListener('boot-status', function (event) {
         try {
           applyStatus(JSON.parse(event.data || '{}'));
