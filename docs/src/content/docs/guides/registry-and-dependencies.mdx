@@ -154,16 +154,17 @@ silently ignored. Like `credentials.json`, it is spared by
 ## Authentication
 
 Anonymous access works for public packages. For private registries or
-publishing-related workflows, authenticate once:
+publishing-related workflows, create a personal access token (prefixed
+`bino_pat_`) in the registry web UI (Settings → Tokens), then authenticate
+once:
 
 ```bash
 bino registry login
 ```
 
-This creates a personal access token (prefixed `bino_pat_`) and stores it in
-`~/.bino/credentials.json` (mode 0600, keyed by registry URL; spared by
-`bino cache clean --global`). Tokens are exchanged for a short-lived session
-token per invocation.
+This validates the token and stores it in `~/.bino/credentials.json` (mode
+0600, keyed by registry URL; spared by `bino cache clean --global`). Tokens
+are exchanged for a short-lived session token per invocation.
 
 The token used for a request is resolved in this order:
 
@@ -172,20 +173,16 @@ The token used for a request is resolved in this order:
 3. The credential stored by `bino registry login` for that URL.
 4. Anonymous.
 
-For CI, create a dedicated token and pass it via the environment:
+For CI, create a dedicated token in the web UI and pass it via the
+environment:
 
 ```bash
-# once, on your machine
-bino registry token create --name "acme-ci" --expires 90d
-
-# in CI
 export BINO_REGISTRY_TOKEN="bino_pat_..."
 bino registry install
 ```
 
-Manage tokens with `bino registry token list` and
-`bino registry token revoke <id>`; `bino registry logout` removes and revokes
-the stored credential.
+Tokens are listed and revoked in the web UI; `bino registry logout` removes
+and revokes the stored credential.
 
 ## Publishing
 

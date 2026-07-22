@@ -49,7 +49,6 @@ the build's duplicate-name validation; rename the local document.`,
 	cmd.AddCommand(newRegistryVerifyCommand())
 	cmd.AddCommand(newRegistryLoginCommand())
 	cmd.AddCommand(newRegistryLogoutCommand())
-	cmd.AddCommand(newRegistryTokenCommand())
 
 	return cmd
 }

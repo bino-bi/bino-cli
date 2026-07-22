@@ -117,27 +117,21 @@ file does not fail verification. Exits non-zero on any failure.
 bino registry login [flags]
 ```
 
-Authenticates with email and password (plus an authenticator code when the
-account has two-factor enabled), creates a personal access token, and stores
-it in `~/.bino/credentials.json` (mode 0600). Subsequent registry commands use
-the stored token automatically unless `bino.toml` or `BINO_REGISTRY_TOKEN`
-provides one.
+Stores a personal access token in `~/.bino/credentials.json` (mode 0600).
+Subsequent registry commands use the stored token automatically unless
+`bino.toml` or `BINO_REGISTRY_TOKEN` provides one.
+
+Personal access tokens are created and managed in the registry web UI
+(Settings → Tokens) — create one there first, then paste it when prompted.
 
 - `--registry` – registry URL (overrides `bino.toml`, `BINO_REGISTRY_URL`, and `~/.bino/config.toml`; default `https://registry.bino.bi`).
-- `--email` – account email (prompts when omitted).
-- `--password-stdin` – read the password from stdin.
-- `--with-token` – store an existing personal access token read from stdin.
-- `--expires` – lifetime of the created token (e.g. `90d`, `12h`; default never).
-- `--name` – name for the created token (default `bino-cli @ <hostname>`).
+- `--with-token` – read the personal access token from stdin instead of prompting.
 
 ```bash
-# Interactive login
+# Interactive: paste the token created in the web UI
 bino registry login
 
 # Non-interactive (CI)
-echo "$PASSWORD" | bino registry login --email ci@acme.com --password-stdin
-
-# Store an existing token
 echo "$BINO_PAT" | bino registry login --with-token
 ```
 
@@ -149,17 +143,3 @@ bino registry logout [--registry <url>]
 
 Removes the stored credential for the registry and revokes it server-side
 (best effort — the local credential is always removed).
-
-## bino registry token
-
-```bash
-bino registry token create --name <name> [--expires <lifetime>] [--registry <url>]
-bino registry token list [--registry <url>]
-bino registry token revoke <id> [--registry <url>]
-```
-
-Manages personal access tokens.
-
-- `create` – creates a token and prints its plaintext exactly once — it cannot be retrieved later. `--name` is required; `--expires` accepts `90d`-style day counts or Go durations like `12h` (default never).
-- `list` – lists your tokens with ID, name, prefix, creation, last use, and expiry.
-- `revoke` – revokes a token by ID.
