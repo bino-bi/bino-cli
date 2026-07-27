@@ -23,8 +23,8 @@ require (
 	github.com/graemephi/goldmark-qjs-katex v0.3.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0
-	github.com/klauspost/compress v1.19.0
-	github.com/mattn/go-isatty v0.0.23
+	github.com/klauspost/compress v1.19.1
+	github.com/mattn/go-isatty v0.0.24
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/pdfcpu/pdfcpu v0.13.0
 	github.com/pelletier/go-toml/v2 v2.4.3
