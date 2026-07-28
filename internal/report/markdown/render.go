@@ -70,6 +70,30 @@ type ComponentStyleEntry struct {
 	Value string
 }
 
+// normalizeI18nContent returns spec.content as a JSON string. The content may
+// be a JSON object or a string holding JSON; anything else yields "".
+func normalizeI18nContent(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return ""
+		}
+		s = strings.TrimSpace(s)
+		if !json.Valid([]byte(s)) {
+			return ""
+		}
+		return s
+	}
+	if !json.Valid(trimmed) {
+		return ""
+	}
+	return string(trimmed)
+}
+
 // NewRenderContext creates a render context from documents.
 func NewRenderContext(docs []config.Document, datasetResults []dataset.Result, datasourceResults []datasource.Result, engineVersion string) *RenderContext {
 	rc := &RenderContext{
@@ -94,17 +118,24 @@ func NewRenderContext(docs []config.Document, datasetResults []dataset.Result, d
 		if doc.Kind == "Internationalization" {
 			var payload struct {
 				Spec struct {
-					Code      string `json:"code"`
-					Namespace string `json:"namespace"`
-					Value     string `json:"value"`
+					Code      string          `json:"code"`
+					Namespace string          `json:"namespace"`
+					Content   json.RawMessage `json:"content"`
 				} `json:"spec"`
 			}
-			if err := json.Unmarshal(doc.Raw, &payload); err == nil && payload.Spec.Value != "" {
-				rc.Internationalizations = append(rc.Internationalizations, I18nEntry{
-					Code:      payload.Spec.Code,
-					Namespace: payload.Spec.Namespace,
-					Value:     payload.Spec.Value,
-				})
+			if err := json.Unmarshal(doc.Raw, &payload); err == nil {
+				if value := normalizeI18nContent(payload.Spec.Content); value != "" {
+					namespace := strings.TrimSpace(payload.Spec.Namespace)
+					if namespace == "" {
+						// The engine reads the "_system" namespace by default.
+						namespace = "_system"
+					}
+					rc.Internationalizations = append(rc.Internationalizations, I18nEntry{
+						Code:      payload.Spec.Code,
+						Namespace: namespace,
+						Value:     value,
+					})
+				}
 			}
 		}
 	}

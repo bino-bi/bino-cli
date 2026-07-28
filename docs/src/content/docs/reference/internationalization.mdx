@@ -1,10 +1,31 @@
 ---
 title: Internationalization
-description: Manage translations for report text by language and namespace.
+description: Override the engine's built-in labels and add translations by language and namespace.
 ---
 
-`Internationalization` manifests hold localized messages for one language and optional namespace.
-Layouts and components refer to keys; the renderer selects messages based on `ReportArtefact.language` and namespaces.
+`Internationalization` manifests hold translation overrides for one language. At render
+time every manifest is loaded into the browser-side translation store; components then
+look labels up under the locale set by `ReportArtefact.language`.
+
+## How lookups work
+
+Three rules determine whether your translations are used:
+
+1. **The locale code must match exactly.** Components look up
+   `store[namespace][locale][key]` where `locale` is the artefact's
+   `spec.language` — `de` or `en`. There is no BCP 47 normalization: a manifest
+   with `code: de-DE` is **never** consulted when the report renders with
+   `language: de`. Always use plain `de` or `en`.
+2. **The default namespace is `_system`.** That is the namespace every component
+   reads, and where the engine's built-in labels live. When `spec.namespace` is
+   omitted, your content merges into `_system` on top of the built-ins, so a
+   partial override just works. A named namespace is only consulted by
+   components whose [`i18nNamespace`](#scoped-overrides-with-i18nnamespace)
+   points at it (missing keys still fall back to `_system` per key).
+3. **Keys are fixed, dotted strings.** The built-in vocabulary below is what
+   components actually request — a key like `global.ac1` is a literal string,
+   not a path. Free-form keys are only useful from a `Text` component's
+   `${t('…')}` templates.
 
 ## Spec outline
 
@@ -12,53 +33,165 @@ Layouts and components refer to keys; the renderer selects messages based on `Re
 apiVersion: bino.bi/v1alpha1
 kind: Internationalization
 metadata:
-  name: systemTexts_de
+  name: labels_de
 spec:
-  code: de-DE
-  namespace: _system
-  content: {} # object or JSON string
+  code: de              # must equal ReportArtefact.language ('de' or 'en')
+  content:              # merges into the '_system' namespace on top of the built-ins
+    global.ac1: Ist
+    global.pp1: VJ
+    bn-table.there_of: davon
 ```
 
 Fields:
 
-- `spec.code` – locale code, for example `de-DE` or `en-US`.
-- `spec.namespace` – optional namespace to group keys.
-- `spec.content` – key/value map as object or JSON string.
+- `spec.code` – language code, exactly `de` or `en` (must equal the artefact's `spec.language`).
+- `spec.namespace` – storage namespace, default `_system`. Only set this for [scoped overrides](#scoped-overrides-with-i18nnamespace).
+- `spec.content` – key/value map as YAML object or JSON string.
 
-## YAML object content
+Multiple manifests for the same namespace and code merge in document order (later wins per key).
+
+## Built-in token vocabulary
+
+These are the keys the components read (values shown are the `de` / `en` defaults).
+Scaffold a complete override file with every token via:
+
+```bash
+bino add i18n german --code de --defaults --output i18n/de.yaml --no-prompt
+```
+
+### Scenario labels (`global.` prefix — read by tables, charts, and titles)
+
+| Key | de | en |
+|-----|----|----|
+| `global.ac1` … `global.ac4` | AC, AC2, AC3, AC4 | AC, AC2, AC3, AC4 |
+| `global.pp1` … `global.pp4` | PY, PY2, PY3, PY4 | PY, PY2, PY3, PY4 |
+| `global.fc1` … `global.fc4` | FC, FC2, FC3, FC4 | FC, FC2, FC3, FC4 |
+| `global.pl1` … `global.pl4` | PL, PL2, PL3, PL4 | PL, PL2, PL3, PL4 |
+
+### Sort indicators and variance symbols (`global.` prefix)
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `global.ORDER_asc` / `global.ORDER_desc` | ↑ / ↓ | Sort direction indicators |
+| `global.ibcssymbol_delta_ac` | `Δ{%}` | Absolute variance symbol (e.g. ΔPY) |
+| `global.ibcssymbol_delta_generic` | `Δ({%})` | Absolute variance, generic form |
+| `global.ibcssymbol_delta_ac_relative` | `Δ{%}%` | Relative variance symbol (e.g. ΔPY%) |
+| `global.ibcssymbol_delta_generic_relative` | `Δ({%})%` | Relative variance, generic form |
+
+The `{%}` token is replaced at render time with the comparison scenario's abbreviation.
+
+### Table labels (`bn-table.` prefix)
+
+| Key | de | en |
+|-----|----|----|
+| `bn-table.there_of` | davon | there of |
+| `bn-table.part_of` | in % von | in % of |
+| `bn-table.SUM_TOTAL` | ❖ | ❖ |
+| `bn-table.REST` | REST | REST |
+| `bn-table.in` | in | — |
+
+### Title connectors (`bn-title.` prefix)
+
+| Key | de | en |
+|-----|----|----|
+| `bn-title.SEPERATOR_WS` | `, ` | `, ` |
+| `bn-title.CONNECTOR_WS` | ` und ` | ` and ` |
+| `bn-title.in` | in | in |
+
+Note the key really is spelled `SEPERATOR_WS`.
+
+The scatter, bubble, and bullet charts have additional message keys under
+`bn-chart-scatter.`, `bn-chart-bubble.`, and `bn-chart-bullet.`; the
+`--defaults` scaffold includes all of them.
+
+## Overriding labels globally
+
+Omit `spec.namespace` and override only the keys you need — everything else
+keeps its built-in label:
 
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
 kind: Internationalization
 metadata:
-  name: systemTexts_de
+  name: labels_de
 spec:
-  code: de-DE
-  namespace: _system
+  code: de
   content:
-    report.title.sales_overview: "Sales Overview"
-    report.subtitle.q1_2024: "Q1 2024"
-    card.title.revenue: "Revenue"
-    card.title.ebit: "EBIT"
+    global.ac1: Ist
+    global.pl1: Plan
+    global.pp1: Vorjahr
 ```
 
-## JSON string content
+With `language: de` on the artefact, every table and chart now shows "Ist",
+"Plan", and "Vorjahr" instead of "AC", "PL", and "PY".
+
+## Scoped overrides with `i18nNamespace`
+
+To apply a translation set only to part of a report, store it under a named
+namespace and point components at it with `i18nNamespace`. The property is
+available on `ReportArtefact` (applies to everything), `LayoutPage`,
+`LayoutCard`, `Grid`, `Tree`, and every leaf component, and inherits to
+children — the nearest ancestor wins, and an explicit `i18nNamespace: ""` opts
+a component out.
 
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
 kind: Internationalization
 metadata:
-  name: productTexts_en
+  name: audited_labels_de
 spec:
-  code: en-US
-  namespace: products
-  content: >-
-    {"product.applications":"Applications","product.infrastructure":"Infrastructure"}
+  code: de
+  namespace: audited
+  content:
+    global.ac1: Ist (geprüft)
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: audited_page
+spec:
+  i18nNamespace: audited      # this page's title and all children use it
+  children:
+    - kind: Table
+      spec:
+        dataset: revenue
+        scenarios: [ac1, pp1]
 ```
 
-You can organize translations by language, business domain, or report, as long as namespaces and keys stay consistent with layout conventions.
+Keys missing from the named namespace fall back to `_system` per key, so a
+scoped namespace only needs the keys it changes.
+
+`titleNamespace` on `LayoutPage`/`LayoutCard` is **deprecated**: it only ever
+applied to the page or card title. `i18nNamespace` takes precedence and also
+inherits to children.
+
+## Free-form keys in Text components
+
+`Text` components evaluate `${t('…')}` in their `value` template against the
+same store, so you can define your own keys:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: report_texts_de
+spec:
+  code: de
+  content:
+    report.title: Umsatzübersicht
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: heading
+spec:
+  value: "${t('report.title')}"
+```
+
+An unknown key renders as the key itself (it never breaks the component).
 
 ## Attribute Reference
 
@@ -78,25 +211,12 @@ You can organize translations by language, business domain, or report, as long a
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.code` | string | yes | — | Locale code (BCP 47 tag). | `code: de-DE` |
-| `spec.namespace` | string | no | — | Optional lookup namespace for the translation block. Components reference translations by namespace. | `namespace: _system` |
-| `spec.content` | object or string | yes | — | Key-value map of translations. Can be a YAML object or a JSON string. | see below |
+| `spec.code` | string | yes | — | Language code; must exactly equal an artefact `spec.language` (`de` or `en`). | `code: de` |
+| `spec.namespace` | string | no | `_system` | Storage namespace. The default merges into the bundle every component reads; a named namespace is only consulted via `i18nNamespace`. | `namespace: audited` |
+| `spec.content` | object or string | yes | — | Key-value map of translations. Can be a YAML object or a JSON string. | see above |
 
-#### Content as YAML object
+## Lint rules
 
-```yaml
-spec:
-  content:
-    report.title: "Sales Overview"
-    card.title.revenue: "Revenue"
-    card.title.ebit: "EBIT"
-```
-
-#### Content as JSON string
-
-```yaml
-spec:
-  content: >-
-    {"report.title":"Sales Overview","card.title.revenue":"Revenue"}
-```
-
+- `i18n-code-unused` — warns when `spec.code` matches no artefact language (catches `de-DE`).
+- `i18n-namespace-unreferenced` — warns when a named namespace is never referenced by any `i18nNamespace`.
+- `i18n-title-namespace-deprecated` — warns on `titleNamespace` usage.

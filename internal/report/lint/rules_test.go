@@ -477,6 +477,9 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"ref-params",
 		"asset-reference-undefined",
 		"asset-source-missing",
+		"i18n-code-unused",
+		"i18n-namespace-unreferenced",
+		"i18n-title-namespace-deprecated",
 		// Inline definition rules
 		"inline-ref-bounds",
 		"dataset-source-exclusive",

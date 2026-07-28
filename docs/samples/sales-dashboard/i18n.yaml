@@ -1,0 +1,18 @@
+# Translation overrides for the sales dashboard.
+# The code must exactly equal the artefact's spec.language ('en' here); with no
+# namespace the content merges into '_system' — the bundle every component
+# reads — so only the overridden keys change and all other labels keep their
+# built-in defaults. Scaffold a file with every available token via:
+#   bino add i18n english --code en --defaults --output i18n/en.yaml --no-prompt
+---
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: sales_labels_en
+  description: English label overrides for the sales dashboard
+spec:
+  code: en
+  content:
+    global.ac1: Actual
+    global.pp1: Prior Year
+    bn-table.there_of: of which

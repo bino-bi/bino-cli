@@ -24,10 +24,15 @@ import (
 //
 // Pre-release inclusion follows npm semantics: a pre-release version only
 // satisfies a range when at least one comparator in that range explicitly
-// mentions a pre-release token. The default range below uses ">=1.0.0-alpha"
-// so every 1.x pre-release / release matches, while 2.0.0+ is excluded.
+// mentions a pre-release token. The default range below mentions a pre-release
+// so every matching 1.x pre-release / release matches, while 2.0.0+ is excluded.
+//
+// The alpha.19 floor is required by i18n: this CLI stores Internationalization
+// content in the engine's "_system" namespace by default, which is only safe
+// since the engine merges bundles instead of replacing them (older engines
+// would wipe the built-in labels on a partial override).
 var SupportedEngineRanges = []string{
-	">=1.0.0-alpha, <2.0.0-0",
+	">=1.0.0-alpha.19, <2.0.0-0",
 }
 
 // CompatibilityError indicates that the resolved template engine version is

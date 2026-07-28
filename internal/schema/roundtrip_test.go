@@ -319,7 +319,8 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "en_translations",
 				},
 				Spec: &InternationalizationSpec{
-					Code: "en",
+					Code:      "en",
+					Namespace: "external",
 					Content: map[string]string{
 						"greeting": "Hello",
 						"farewell": "Goodbye",

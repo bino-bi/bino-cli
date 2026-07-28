@@ -17,6 +17,7 @@ type dateString = reportspec.DateString
 type layoutPageSpec struct {
 	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
 	TitleNamespace      string                   `json:"titleNamespace"`
+	I18nNamespace       string                   `json:"i18nNamespace"`
 	TitleDateStart      dateString               `json:"titleDateStart"`
 	TitleDateEnd        dateString               `json:"titleDateEnd"`
 	TitleDateFormat     string                   `json:"titleDateFormat"`
@@ -44,7 +45,7 @@ type layoutPageSpec struct {
 
 func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
 	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
-	writeAttr(b, "title-namespace", s.TitleNamespace)
+	writeAttr(b, "title-namespace", firstNonEmpty(s.I18nNamespace, s.TitleNamespace))
 	writeAttr(b, "title-date-start", s.TitleDateStart.String())
 	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
@@ -73,6 +74,14 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	writeAttr(b, "ruleset", s.Ruleset)
 }
 
+// firstNonEmpty returns a when it is non-empty, otherwise b.
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 // layoutCardSpec defines the structure for LayoutCard components.
 // Cards use card-* prefixed layout properties instead of page-* properties.
 type layoutCardSpec struct {
@@ -88,6 +97,7 @@ type layoutCardSpec struct {
 	TitleDateFormat     string                   `json:"titleDateFormat"`
 	TitleDateLink       string                   `json:"titleDateLink"`
 	TitleNamespace      string                   `json:"titleNamespace"`
+	I18nNamespace       string                   `json:"i18nNamespace"`
 	FooterText          string                   `json:"footerText"`
 	CardLayout          string                   `json:"cardLayout"`
 	CardCustomTemplate  string                   `json:"cardCustomTemplate"`
@@ -111,7 +121,7 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
 	writeAttr(b, "title-date-link", s.TitleDateLink)
-	writeAttr(b, "title-namespace", s.TitleNamespace)
+	writeAttr(b, "title-namespace", firstNonEmpty(s.I18nNamespace, s.TitleNamespace))
 	writeAttr(b, "footer-text", s.FooterText)
 	writeAttr(b, "card-layout", s.CardLayout)
 	writeAttr(b, "card-custom-template", s.CardCustomTemplate)
@@ -147,6 +157,7 @@ type textSpec struct {
 	Value         string                   `json:"value"`
 	Dataset       reportspec.DatasetList   `json:"dataset"`
 	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace string                   `json:"i18nNamespace"`
 	SelectedStyle string                   `json:"selectedStyle"`
 }
 
@@ -159,29 +170,27 @@ type stackConfig struct {
 
 // chartStructureSpec defines the structure for ChartStructure components.
 type chartStructureSpec struct {
-	Dataset                  reportspec.DatasetList   `json:"dataset"`
-	ChartTitle               string                   `json:"chartTitle"`
-	Filter                   string                   `json:"filter"`
-	Level                    string                   `json:"level"`
-	Order                    string                   `json:"order"`
-	OrderDirection           string                   `json:"orderDirection"`
-	MeasureScale             string                   `json:"measureScale"`
-	MeasureUnit              string                   `json:"measureUnit"`
-	PercentageScaling        reportspec.StringOrFloat `json:"percentageScaling"`
-	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
-	Internationalisation     string                   `json:"internationalisation"`
-	InternationalisationMode string                   `json:"internationalisationMode"`
-	Translation              string                   `json:"translation"`
-	ShowCategories           *bool                    `json:"showCategories"`
-	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
-	Limit                    *int                     `json:"limit"`
-	PixelPerUnit             *float64                 `json:"pixelPerUnit"`
-	Scenarios                reportspec.StringOrSlice `json:"scenarios"`
-	Variances                reportspec.StringOrSlice `json:"variances"`
-	Stack                    *stackConfig             `json:"stack,omitempty"`
-	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
-	SelectedStyle            string                   `json:"selectedStyle"`
-	Ruleset                  string                   `json:"ruleset"`
+	Dataset           reportspec.DatasetList   `json:"dataset"`
+	ChartTitle        string                   `json:"chartTitle"`
+	Filter            string                   `json:"filter"`
+	Level             string                   `json:"level"`
+	Order             string                   `json:"order"`
+	OrderDirection    string                   `json:"orderDirection"`
+	MeasureScale      string                   `json:"measureScale"`
+	MeasureUnit       string                   `json:"measureUnit"`
+	PercentageScaling reportspec.StringOrFloat `json:"percentageScaling"`
+	UnitScaling       reportspec.StringOrFloat `json:"unitScaling"`
+	I18nNamespace     string                   `json:"i18nNamespace"`
+	ShowCategories    *bool                    `json:"showCategories"`
+	ShowMeasureScale  *bool                    `json:"showMeasureScale"`
+	Limit             *int                     `json:"limit"`
+	PixelPerUnit      *float64                 `json:"pixelPerUnit"`
+	Scenarios         reportspec.StringOrSlice `json:"scenarios"`
+	Variances         reportspec.StringOrSlice `json:"variances"`
+	Stack             *stackConfig             `json:"stack,omitempty"`
+	Scale             reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle     string                   `json:"selectedStyle"`
+	Ruleset           string                   `json:"ruleset"`
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -195,9 +204,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "measure-unit", s.MeasureUnit)
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
-	writeAttr(b, "internationalisation", s.Internationalisation)
-	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "translation", s.Translation)
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
@@ -212,37 +219,35 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 
 // chartTimeSpec defines the structure for ChartTime components.
 type chartTimeSpec struct {
-	Dataset                  reportspec.DatasetList   `json:"dataset"`
-	ChartTitle               string                   `json:"chartTitle"`
-	ChartMode                string                   `json:"chartMode"`
-	AxisLabelsMode           string                   `json:"axisLabelsMode"`
-	DateInterval             string                   `json:"dateInterval"`
-	Filter                   string                   `json:"filter"`
-	Level                    string                   `json:"level"`
-	Order                    string                   `json:"order"`
-	OrderDirection           string                   `json:"orderDirection"`
-	MeasureScale             string                   `json:"measureScale"`
-	MeasureUnit              string                   `json:"measureUnit"`
-	Internationalisation     string                   `json:"internationalisation"`
-	InternationalisationMode string                   `json:"internationalisationMode"`
-	Translation              string                   `json:"translation"`
-	ShowCategories           *bool                    `json:"showCategories"`
-	ShowMeasureScale         *bool                    `json:"showMeasureScale"`
-	ShowOverlayAvg           *bool                    `json:"showOverlayAvg"`
-	ShowOverlayMedian        *bool                    `json:"showOverlayMedian"`
-	Limit                    *int                     `json:"limit"`
-	MaxBars                  *int                     `json:"maxBars"`
-	LineFullWidth            *bool                    `json:"lineFullWidth"`
-	IntervalSpanLimit        *int                     `json:"intervalSpanLimit"`
-	PercentageScaling        reportspec.StringOrFloat `json:"percentageScaling"`
-	UnitScaling              reportspec.StringOrFloat `json:"unitScaling"`
-	SyncSpaceLeft            *float64                 `json:"syncSpaceLeft"`
-	Scenarios                reportspec.StringOrSlice `json:"scenarios"`
-	Variances                reportspec.StringOrSlice `json:"variances"`
-	Stack                    *stackConfig             `json:"stack,omitempty"`
-	Scale                    reportspec.StringOrFloat `json:"scale,omitempty"`
-	SelectedStyle            string                   `json:"selectedStyle"`
-	Ruleset                  string                   `json:"ruleset"`
+	Dataset           reportspec.DatasetList   `json:"dataset"`
+	ChartTitle        string                   `json:"chartTitle"`
+	ChartMode         string                   `json:"chartMode"`
+	AxisLabelsMode    string                   `json:"axisLabelsMode"`
+	DateInterval      string                   `json:"dateInterval"`
+	Filter            string                   `json:"filter"`
+	Level             string                   `json:"level"`
+	Order             string                   `json:"order"`
+	OrderDirection    string                   `json:"orderDirection"`
+	MeasureScale      string                   `json:"measureScale"`
+	MeasureUnit       string                   `json:"measureUnit"`
+	I18nNamespace     string                   `json:"i18nNamespace"`
+	ShowCategories    *bool                    `json:"showCategories"`
+	ShowMeasureScale  *bool                    `json:"showMeasureScale"`
+	ShowOverlayAvg    *bool                    `json:"showOverlayAvg"`
+	ShowOverlayMedian *bool                    `json:"showOverlayMedian"`
+	Limit             *int                     `json:"limit"`
+	MaxBars           *int                     `json:"maxBars"`
+	LineFullWidth     *bool                    `json:"lineFullWidth"`
+	IntervalSpanLimit *int                     `json:"intervalSpanLimit"`
+	PercentageScaling reportspec.StringOrFloat `json:"percentageScaling"`
+	UnitScaling       reportspec.StringOrFloat `json:"unitScaling"`
+	SyncSpaceLeft     *float64                 `json:"syncSpaceLeft"`
+	Scenarios         reportspec.StringOrSlice `json:"scenarios"`
+	Variances         reportspec.StringOrSlice `json:"variances"`
+	Stack             *stackConfig             `json:"stack,omitempty"`
+	Scale             reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle     string                   `json:"selectedStyle"`
+	Ruleset           string                   `json:"ruleset"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -257,9 +262,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "order-direction", s.OrderDirection)
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "internationalisation", s.Internationalisation)
-	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "translation", s.Translation)
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeBoolAttr(b, "show-overlay-avg", s.ShowOverlayAvg)
@@ -295,6 +298,7 @@ type chartScatterSpec struct {
 	Aspect        string                   `json:"aspect"`
 	Limit         *int                     `json:"limit"`
 	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace string                   `json:"i18nNamespace"`
 	SelectedStyle string                   `json:"selectedStyle"`
 	Ruleset       string                   `json:"ruleset"`
 }
@@ -314,6 +318,7 @@ func (s chartScatterSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "aspect", s.Aspect)
 	writeIntAttr(b, "limit", s.Limit)
 	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -336,6 +341,7 @@ type chartBubbleSpec struct {
 	Aspect        string                   `json:"aspect"`
 	Limit         *int                     `json:"limit"`
 	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace string                   `json:"i18nNamespace"`
 	SelectedStyle string                   `json:"selectedStyle"`
 	Ruleset       string                   `json:"ruleset"`
 }
@@ -357,6 +363,7 @@ func (s chartBubbleSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "aspect", s.Aspect)
 	writeIntAttr(b, "limit", s.Limit)
 	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -377,6 +384,7 @@ type chartBulletSpec struct {
 	Limit          *int                     `json:"limit"`
 	Labels         json.RawMessage          `json:"labels,omitempty"`
 	Scale          reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace  string                   `json:"i18nNamespace"`
 	SelectedStyle  string                   `json:"selectedStyle"`
 	Ruleset        string                   `json:"ruleset"`
 }
@@ -396,6 +404,7 @@ func (s chartBulletSpec) writeAttrs(b *strings.Builder) {
 	writeIntAttr(b, "limit", s.Limit)
 	writeJSONObjAttr(b, "labels", s.Labels)
 	writeAttr(b, "scale", s.Scale.String())
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -410,6 +419,7 @@ type treeSpec struct {
 	NodeSpacing   *float64        `json:"nodeSpacing"`
 	EdgeStyle     string          `json:"edgeStyle"`
 	ShowOperators *bool           `json:"showOperators"`
+	I18nNamespace string          `json:"i18nNamespace"`
 	SelectedStyle string          `json:"selectedStyle"`
 	Nodes         []treeNode      `json:"nodes"`
 }
@@ -427,12 +437,14 @@ type treeNode struct {
 }
 
 // treeLabelSpec defines a simple label component for tree nodes.
-// SelectedStyle is not authorable on labels (the schema rejects it); it is
-// populated only via style inheritance from the enclosing tree/page/artefact.
+// SelectedStyle and I18nNamespace are not authorable on labels (the schema
+// rejects them); they are populated only via inheritance from the enclosing
+// tree/page/artefact.
 type treeLabelSpec struct {
 	Value         string                   `json:"value"`
 	Dataset       reportspec.DatasetList   `json:"dataset"`
 	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace string                   `json:"i18nNamespace,omitempty"`
 	SelectedStyle string                   `json:"selectedStyle,omitempty"`
 }
 
@@ -451,40 +463,38 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 
 // tableSpec defines the structure for Table components.
 type tableSpec struct {
-	Dataset                  reportspec.DatasetList       `json:"dataset"`
-	SumTitle                 string                       `json:"sumTitle"`
-	Filter                   string                       `json:"filter"`
-	Order                    string                       `json:"order"`
-	OrderDirection           string                       `json:"orderDirection"`
-	MeasureScale             string                       `json:"measureScale"`
-	MeasureType              string                       `json:"measureType"`
-	MeasureUnit              string                       `json:"measureUnit"`
-	Internationalisation     string                       `json:"internationalisation"`
-	InternationalisationMode string                       `json:"internationalisationMode"`
-	Translation              string                       `json:"translation"`
-	CategoryWidth            string                       `json:"categoryWidth"`
-	DataFormat               string                       `json:"dataFormat"`
-	DataFormatDigitsDecimal  *int                         `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent  *int                         `json:"dataFormatDigitsPercent"`
-	Grouped                  *bool                        `json:"grouped"`
-	ShowGroupTitle           *bool                        `json:"showGroupTitle"`
-	ShowMeasureScale         *bool                        `json:"showMeasureScale"`
-	Limit                    *int                         `json:"limit"`
-	Type                     string                       `json:"type"`
-	Scenarios                reportspec.StringOrSlice     `json:"scenarios"`
-	Variances                reportspec.StringOrSlice     `json:"variances"`
-	BarColumns               []string                     `json:"barColumns"`
-	BarColumnWidth           string                       `json:"barColumnWidth"`
-	UnitScaling              *float64                     `json:"unitScaling"`
-	PercentageScaling        *float64                     `json:"percentageScaling"`
-	Scale                    reportspec.StringOrFloat     `json:"scale,omitempty"`
-	Thereof                  reportspec.ThereofList       `json:"thereof"`
-	Partof                   reportspec.PartofList        `json:"partof"`
-	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
-	Interval                 string                       `json:"interval"`
-	Attributes               reportspec.AttributesList    `json:"attributes"`
-	SelectedStyle            string                       `json:"selectedStyle"`
-	Ruleset                  string                       `json:"ruleset"`
+	Dataset                 reportspec.DatasetList       `json:"dataset"`
+	SumTitle                string                       `json:"sumTitle"`
+	Filter                  string                       `json:"filter"`
+	Order                   string                       `json:"order"`
+	OrderDirection          string                       `json:"orderDirection"`
+	MeasureScale            string                       `json:"measureScale"`
+	MeasureType             string                       `json:"measureType"`
+	MeasureUnit             string                       `json:"measureUnit"`
+	I18nNamespace           string                       `json:"i18nNamespace"`
+	CategoryWidth           string                       `json:"categoryWidth"`
+	DataFormat              string                       `json:"dataFormat"`
+	DataFormatDigitsDecimal *int                         `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int                         `json:"dataFormatDigitsPercent"`
+	Grouped                 *bool                        `json:"grouped"`
+	ShowGroupTitle          *bool                        `json:"showGroupTitle"`
+	ShowMeasureScale        *bool                        `json:"showMeasureScale"`
+	Limit                   *int                         `json:"limit"`
+	Type                    string                       `json:"type"`
+	Scenarios               reportspec.StringOrSlice     `json:"scenarios"`
+	Variances               reportspec.StringOrSlice     `json:"variances"`
+	BarColumns              []string                     `json:"barColumns"`
+	BarColumnWidth          string                       `json:"barColumnWidth"`
+	UnitScaling             *float64                     `json:"unitScaling"`
+	PercentageScaling       *float64                     `json:"percentageScaling"`
+	Scale                   reportspec.StringOrFloat     `json:"scale,omitempty"`
+	Thereof                 reportspec.ThereofList       `json:"thereof"`
+	Partof                  reportspec.PartofList        `json:"partof"`
+	Columnthereof           reportspec.ColumnthereofList `json:"columnthereof"`
+	Interval                string                       `json:"interval"`
+	Attributes              reportspec.AttributesList    `json:"attributes"`
+	SelectedStyle           string                       `json:"selectedStyle"`
+	Ruleset                 string                       `json:"ruleset"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -496,9 +506,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-type", s.MeasureType)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "internationalisation", s.Internationalisation)
-	writeAttr(b, "internationalisation-mode", s.InternationalisationMode)
-	writeAttr(b, "translation", s.Translation)
+	writeAttr(b, "namespace", s.I18nNamespace)
 	writeAttr(b, "category-width", s.CategoryWidth)
 	writeAttr(b, "data-format", s.DataFormat)
 	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
@@ -634,6 +642,7 @@ type gridSpec struct {
 	ShowBorders       *bool           `json:"showBorders"`
 	RowHeaderWidth    string          `json:"rowHeaderWidth"`
 	CellGap           string          `json:"cellGap"`
+	I18nNamespace     string          `json:"i18nNamespace"`
 	SelectedStyle     string          `json:"selectedStyle"`
 	Children          []gridChild     `json:"children"`
 }

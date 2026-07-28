@@ -14,7 +14,7 @@ import (
 func renderDocsWithArtefactStyle(t *testing.T, docs []config.Document, artefactStyle, rootComponent string) string {
 	t.Helper()
 
-	result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, nil, "en", "", "", ModePreview, nil, nil, "v1.0.0", nil, nil, rootComponent, artefactStyle)
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, nil, "en", "", "", ModePreview, nil, nil, "v1.0.0", nil, nil, rootComponent, artefactStyle, "")
 	if err != nil {
 		t.Fatalf("GenerateHTMLFromDocumentsWithDatasets failed: %v", err)
 	}

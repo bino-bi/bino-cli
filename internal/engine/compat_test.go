@@ -11,12 +11,14 @@ func TestCheckCompatibility_DefaultRanges(t *testing.T) {
 		version string
 		ok      bool
 	}{
-		{"v1.0.0-alpha.14", true},
-		{"1.0.0-alpha.14", true}, // leading v optional
-		{"v1.0.0-alpha", true},
+		{"v1.0.0-alpha.19", true},
+		{"1.0.0-alpha.19", true}, // leading v optional
+		{"v1.0.0-alpha.20", true},
 		{"v1.0.0-rc.1", true},
 		{"v1.0.0", true},
 		{"v1.5.2", true},
+		{"v1.0.0-alpha.14", false}, // pre-merge i18n engines are unsafe
+		{"v1.0.0-alpha", false},
 		{"v0.9.0", false},
 		{"v2.0.0-alpha.1", false},
 		{"v2.0.0", false},

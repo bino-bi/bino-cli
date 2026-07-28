@@ -319,6 +319,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	}
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
+	rc.inheritedNamespace = strings.TrimSpace(artifact.Spec.I18nNamespace)
 
 	// Render each LayoutPage as a slide — the page is embedded as-is inside a <section>.
 	var slides strings.Builder
@@ -450,6 +451,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	}
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
+	rc.inheritedNamespace = strings.TrimSpace(artifact.Spec.I18nNamespace)
 
 	var slides strings.Builder
 	for _, doc := range docs {
@@ -524,9 +526,13 @@ func renderPresentationSlide(doc config.Document, defaultFormat string, rc *rend
 	if payload.Spec.PageOrientation == "" {
 		payload.Spec.PageOrientation = "landscape"
 	}
-	// Inherit the artefact-level style when the page doesn't set its own.
+	// Inherit the artefact-level style and i18n namespace when the page
+	// doesn't set its own.
 	if payload.Spec.SelectedStyle == "" {
 		payload.Spec.SelectedStyle = rc.inheritedStyle
+	}
+	if payload.Spec.I18nNamespace == "" {
+		payload.Spec.I18nNamespace = rc.inheritedNamespace
 	}
 
 	slideAttrs := extractSlideAttrs(doc.Labels)

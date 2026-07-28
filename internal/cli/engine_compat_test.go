@@ -45,8 +45,8 @@ func TestEngineCompatFinding_Unsupported(t *testing.T) {
 
 func TestEngineCompatFinding_Supported(t *testing.T) {
 	dir := t.TempDir()
-	writeProjectWithEngine(t, dir, "v1.0.0-alpha.14")
-	_, fatal := engineCompatFinding(dir, "v1.0.0-alpha.14")
+	writeProjectWithEngine(t, dir, "v1.0.0-alpha.19")
+	_, fatal := engineCompatFinding(dir, "v1.0.0-alpha.19")
 	if fatal {
 		t.Error("expected fatal=false for supported pin")
 	}
@@ -87,7 +87,7 @@ func TestEngineCompatDiagnostic_Unsupported(t *testing.T) {
 
 func TestEngineCompatDiagnostic_Supported(t *testing.T) {
 	dir := t.TempDir()
-	writeProjectWithEngine(t, dir, "v1.0.0-alpha.14")
+	writeProjectWithEngine(t, dir, "v1.0.0-alpha.19")
 	_, ok := engineCompatDiagnostic(dir)
 	if ok {
 		t.Error("expected no diagnostic for supported pin")

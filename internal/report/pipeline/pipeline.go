@@ -364,6 +364,10 @@ type RenderOptions struct {
 	// SelectedStyle is the artefact-level ComponentStyle name inherited as a
 	// default by LayoutPages and their descendants (nearest ancestor wins).
 	SelectedStyle string
+
+	// I18nNamespace is the artefact-level i18n namespace inherited as a
+	// default by LayoutPages and their descendants (nearest ancestor wins).
+	I18nNamespace string
 }
 
 // DatasetPayload carries dataset results through pipeline hooks.
@@ -461,7 +465,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.RootComponent, opts.SelectedStyle)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.RootComponent, opts.SelectedStyle, opts.I18nNamespace)
 
 	// End render step
 	if opts.ExecutionPlan != nil {
@@ -565,6 +569,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
 		SelectedStyle:            artifact.Spec.SelectedStyle,
+		I18nNamespace:            artifact.Spec.I18nNamespace,
 	})
 }
 
@@ -1053,7 +1058,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.SelectedStyle)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.SelectedStyle, opts.I18nNamespace)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
@@ -1152,6 +1157,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
 		SelectedStyle:            artifact.Spec.SelectedStyle,
+		I18nNamespace:            artifact.Spec.I18nNamespace,
 	})
 }
 

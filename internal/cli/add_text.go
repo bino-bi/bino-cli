@@ -42,6 +42,7 @@ type InternationalizationManifestData struct {
 	Description string
 	Constraints []string
 	Code        string            // Locale code (e.g., "en", "de", "fr")
+	Namespace   string            // Lookup namespace; empty means the renderer default ("_system")
 	Content     map[string]string // Translation key-value pairs
 }
 
@@ -629,6 +630,8 @@ other name is selected per component via the ruleset attribute.
 func newAddInternationalizationCommand() *cobra.Command {
 	var (
 		flagCode       string
+		flagNamespace  string
+		flagDefaults   bool
 		flagConstraint []string
 		flagOutput     string
 		flagAppendTo   string
@@ -654,6 +657,10 @@ Internationalization manifests define translations for a specific locale.
     --code de \
     --output i18n/de.yaml \
     --no-prompt
+
+  # Full default token set as a starting point for overrides
+  bino add i18n german --code de --defaults \
+    --output i18n/de.yaml --no-prompt
 `),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -672,18 +679,8 @@ Internationalization manifests define translations for a specific locale.
 			}
 
 			if nonInteractive {
-				var missing []string
-				if name == "" {
-					missing = append(missing, "name (as argument)")
-				}
-				if flagCode == "" {
-					missing = append(missing, "--code")
-				}
-				if flagOutput == "" && flagAppendTo == "" {
-					missing = append(missing, "--output or --append-to")
-				}
-				if len(missing) > 0 {
-					return ConfigError(fmt.Errorf("missing required values in non-interactive mode:\n  %s", strings.Join(missing, "\n  ")))
+				if err := validateI18nNonInteractiveFlags(name, flagCode, flagOutput, flagAppendTo); err != nil {
+					return ConfigError(err)
 				}
 			}
 
@@ -697,6 +694,7 @@ Internationalization manifests define translations for a specific locale.
 				Description: flagDesc,
 				Constraints: flagConstraint,
 				Code:        flagCode,
+				Namespace:   flagNamespace,
 				Content:     make(map[string]string),
 			}
 
@@ -710,6 +708,11 @@ Internationalization manifests define translations for a specific locale.
 			}
 
 			if nonInteractive {
+				if flagDefaults {
+					if err := applyI18nDefaultTokens(&data); err != nil {
+						return ConfigError(err)
+					}
+				}
 				return writeInternationalizationManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
@@ -734,33 +737,23 @@ Internationalization manifests define translations for a specific locale.
 				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
 			}
 
-			// Locale code
 			if data.Code == "" {
-				options := []SelectOption{
-					{Label: "en", Description: "English"},
-					{Label: "de", Description: "German"},
-					{Label: "fr", Description: "French"},
-					{Label: "es", Description: "Spanish"},
-					{Label: "Other", Description: "Enter custom code"},
-				}
-
-				idx, err := addPromptSelect(reader, out, "Locale code", options)
+				data.Code, err = promptI18nLocaleCode(reader, out)
 				if err != nil {
 					return RuntimeError(err)
 				}
-
-				if idx == 4 {
-					data.Code, _ = addPromptString(reader, out, "Locale code", "")
-				} else {
-					codes := []string{"en", "de", "fr", "es"}
-					data.Code = codes[idx]
-				}
 			}
 
-			// Sample translations
-			fmt.Fprintln(out, "\nAdd sample translations (you can edit the file later):")
-			data.Content["report.title"] = "Report Title"
-			data.Content["report.date"] = "Date"
+			if flagDefaults {
+				if err := applyI18nDefaultTokens(&data); err != nil {
+					return ConfigError(err)
+				}
+			} else {
+				// Sample translations
+				fmt.Fprintln(out, "\nAdd sample translations (you can edit the file later):")
+				data.Content["report.title"] = "Report Title"
+				data.Content["report.date"] = "Date"
+			}
 
 			if outputPath == "" {
 				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Internationalization", data.Name)
@@ -796,6 +789,8 @@ Internationalization manifests define translations for a specific locale.
 	}
 
 	cmd.Flags().StringVar(&flagCode, "code", "", "Locale code (e.g., en, de, fr)")
+	cmd.Flags().StringVar(&flagNamespace, "namespace", "", "Lookup namespace (default: _system, the namespace every component reads)")
+	cmd.Flags().BoolVar(&flagDefaults, "defaults", false, "Pre-fill the content with the engine's complete default token set for the locale (de or en)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -805,6 +800,65 @@ Internationalization manifests define translations for a specific locale.
 	_ = cmd.RegisterFlagCompletionFunc("code", completeLocaleCodes)
 
 	return cmd
+}
+
+// validateI18nNonInteractiveFlags reports the values that are required but
+// missing when the i18n command runs without prompts.
+func validateI18nNonInteractiveFlags(name, code, output, appendTo string) error {
+	var missing []string
+	if name == "" {
+		missing = append(missing, "name (as argument)")
+	}
+	if code == "" {
+		missing = append(missing, "--code")
+	}
+	if output == "" && appendTo == "" {
+		missing = append(missing, "--output or --append-to")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required values in non-interactive mode:\n  %s", strings.Join(missing, "\n  "))
+	}
+	return nil
+}
+
+// promptI18nLocaleCode asks for the locale code, offering common codes plus a
+// free-form entry.
+func promptI18nLocaleCode(reader *bufio.Reader, out io.Writer) (string, error) {
+	options := []SelectOption{
+		{Label: "en", Description: "English"},
+		{Label: "de", Description: "German"},
+		{Label: "fr", Description: "French"},
+		{Label: "es", Description: "Spanish"},
+		{Label: "Other", Description: "Enter custom code"},
+	}
+
+	idx, err := addPromptSelect(reader, out, "Locale code", options)
+	if err != nil {
+		return "", err
+	}
+
+	if idx == 4 {
+		code, _ := addPromptString(reader, out, "Locale code", "")
+		return code, nil
+	}
+	codes := []string{"en", "de", "fr", "es"}
+	return codes[idx], nil
+}
+
+// applyI18nDefaultTokens pre-fills the manifest content with the engine's
+// complete default token set for the locale. Explicit keys already present in
+// the content win.
+func applyI18nDefaultTokens(data *InternationalizationManifestData) error {
+	tokens, ok := defaultI18nTokens[data.Code]
+	if !ok {
+		return fmt.Errorf("--defaults is available for the engine's built-in locales (%s); got %q", strings.Join(defaultI18nLocales(), ", "), data.Code)
+	}
+	for key, value := range tokens {
+		if _, exists := data.Content[key]; !exists {
+			data.Content[key] = value
+		}
+	}
+	return nil
 }
 
 // Completion functions
@@ -967,8 +1021,9 @@ func buildInternationalizationDocument(data InternationalizationManifestData) *s
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.InternationalizationSpec{
-		Code:    data.Code,
-		Content: data.Content,
+		Code:      data.Code,
+		Namespace: data.Namespace,
+		Content:   data.Content,
 	}
 
 	doc.Spec = spec

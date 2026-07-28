@@ -1431,6 +1431,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) applied as the default style for every LayoutPage and component in this artefact. A selectedStyle set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins). Maps to the selected-style HTML attribute."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace inherited as the default by every LayoutPage and component in this artefact. An i18nNamespace set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins)."
         }
       },
       "additionalProperties": false
@@ -1981,6 +1985,10 @@
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
         },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "value": {
           "type": "string",
           "description": "Text content. Supports Markdown (converted to HTML at build time) and template expressions like ${data.myDataset[0].ac1}."
@@ -2469,12 +2477,13 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$",
-          "description": "Locale code applied to the payload (e.g. de-DE)."
+          "description": "Locale code applied to the payload. Must exactly match a ReportArtefact language ('de' or 'en') to take effect; there is no BCP 47 normalization, so 'de-DE' never matches."
         },
         "namespace": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional lookup namespace for the translation block."
+          "default": "_system",
+          "description": "Lookup namespace the translations are stored under. Defaults to '_system', the namespace every component reads; entries merge over the built-in labels. A named namespace is only consulted by components whose i18nNamespace points at it."
         },
         "content": {
           "description": "Internationalization payload expressed as JSON or an inline object.",
@@ -2503,7 +2512,11 @@
           "default": "",
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted. Supports inline Markdown (bold, italic, code, links, strikethrough) and inline HTML, converted to HTML at build time and sanitized before rendering. Use <br /> for an explicit line break. Block Markdown (headings, lists, tables) is not interpreted, so a value like '1. Quartal 2024' stays literal."
         },
-        "titleNamespace": { "type": "string", "default": "_system", "description": "Namespace used for title translations via the internationalization store." },
+        "titleNamespace": { "type": "string", "default": "_system", "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children." },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace for the page title and, via inheritance, all children (their own i18nNamespace wins). Takes precedence over the deprecated titleNamespace."
+        },
         "titleDateStart": {
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})?)?$",
@@ -2714,7 +2727,11 @@
         "titleNamespace": {
           "type": "string",
           "default": "_system",
-          "description": "Namespace used for title translations."
+          "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace for the card title and, via inheritance, all children (their own i18nNamespace wins). Takes precedence over the deprecated titleNamespace."
         },
         "footerText": {
           "type": "string",
@@ -3024,9 +3041,10 @@
             { "type": "number" }
           ]
         },
-        "internationalisation": { "type": "string" },
-        "internationalisationMode": { "type": "string" },
-        "translation": { "type": "string" },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
           "type": "boolean",
@@ -3150,9 +3168,10 @@
           "type": "string",
           "description": "Measure unit displayed in the chart."
         },
-        "internationalisation": { "type": "string" },
-        "internationalisationMode": { "type": "string" },
-        "translation": { "type": "string" },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
           "type": "boolean",
@@ -3405,6 +3424,10 @@
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
         },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "ruleset": {
           "type": "string",
           "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
@@ -3483,6 +3506,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
         },
         "ruleset": {
           "type": "string",
@@ -3631,6 +3658,10 @@
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
         },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "ruleset": {
           "type": "string",
           "description": "Name of a RuleSet manifest (metadata.name) selecting the IBCS scenario rule set, or 'inherited-closest' / 'inherited-page' to reuse the rule set of the surrounding layout. The effective rule set merges _system, then _default, then the named rule set. Maps to the ruleset HTML attribute."
@@ -3727,6 +3758,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace inherited by the children of this container (their own i18nNamespace wins). Inherited from the enclosing artefact/page/card when not set."
         },
         "edges": {
           "description": "JSON array defining connections between nodes. Each edge specifies a source (from) and target (to) node ID, with optional operator and styling.",
@@ -3959,6 +3994,10 @@
         "selectedStyle": {
           "type": "string",
           "description": "Name of a ComponentStyle manifest (metadata.name) to apply to this component. The effective style merges _system, then _default, then the named style. Maps to the selected-style HTML attribute."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace inherited by the children of this container (their own i18nNamespace wins). Inherited from the enclosing artefact/page/card when not set."
         },
         "chartTitle": {
           "type": "string",
@@ -4221,9 +4260,10 @@
           "type": "string",
           "description": "Measure unit displayed in the table."
         },
-        "internationalisation": { "type": "string" },
-        "internationalisationMode": { "type": "string" },
-        "translation": { "type": "string" },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+        },
         "categoryWidth": {
           "type": "string",
           "enum": ["w5", "w10", "w15", "w20", "w25", "w50", "inf"],
