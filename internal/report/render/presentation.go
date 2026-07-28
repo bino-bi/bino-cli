@@ -318,6 +318,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		renderModeStr = "preview"
 	}
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
+	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 
 	// Render each LayoutPage as a slide — the page is embedded as-is inside a <section>.
 	var slides strings.Builder
@@ -448,6 +449,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 		assetURLMap[ac.name] = ac.value
 	}
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
+	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 
 	var slides strings.Builder
 	for _, doc := range docs {
@@ -521,6 +523,10 @@ func renderPresentationSlide(doc config.Document, defaultFormat string, rc *rend
 	}
 	if payload.Spec.PageOrientation == "" {
 		payload.Spec.PageOrientation = "landscape"
+	}
+	// Inherit the artefact-level style when the page doesn't set its own.
+	if payload.Spec.SelectedStyle == "" {
+		payload.Spec.SelectedStyle = rc.inheritedStyle
 	}
 
 	slideAttrs := extractSlideAttrs(doc.Labels)

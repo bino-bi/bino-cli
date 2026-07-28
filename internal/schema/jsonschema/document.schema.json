@@ -1427,6 +1427,10 @@
           "type": "string",
           "minLength": 1,
           "description": "Name of a SigningProfile manifest that should be used to digitally sign the generated PDF. If omitted, the artefact is not signed."
+        },
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) applied as the default style for every LayoutPage and component in this artefact. A selectedStyle set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins). Maps to the selected-style HTML attribute."
         }
       },
       "additionalProperties": false

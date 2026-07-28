@@ -100,7 +100,6 @@ spec:
         unitScaling: 0.001
         percentageScaling: 25
         chartTitle: "Revenue by Region"
-        selectedStyle: corporate-style
         ruleset: corporate-rules
 ---
 apiVersion: bino.bi/v1alpha1

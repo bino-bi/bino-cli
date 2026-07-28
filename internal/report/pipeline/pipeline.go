@@ -360,6 +360,10 @@ type RenderOptions struct {
 	// (Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image) are supported. Used by the
 	// embedding endpoint to preview a single component.
 	RootComponent string
+
+	// SelectedStyle is the artefact-level ComponentStyle name inherited as a
+	// default by LayoutPages and their descendants (nearest ancestor wins).
+	SelectedStyle string
 }
 
 // DatasetPayload carries dataset results through pipeline hooks.
@@ -457,7 +461,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		renderStepID = opts.ExecutionPlan.StartStep(buildlog.StepRenderHTML, "pipeline")
 	}
 
-	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.RootComponent)
+	result, renderDiags, err := render.GenerateHTMLFromDocumentsWithDatasets(ctx, docs, datasetResults, opts.Language, opts.Orientation, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.RootComponent, opts.SelectedStyle)
 
 	// End render step
 	if opts.ExecutionPlan != nil {
@@ -560,6 +564,7 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 		PluginOptions:            opts.PluginOptions,
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
+		SelectedStyle:            artifact.Spec.SelectedStyle,
 	})
 }
 
@@ -1048,7 +1053,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.SelectedStyle)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}
@@ -1146,6 +1151,7 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 		PluginOptions:            opts.PluginOptions,
 		PostRenderHTMLHook:       opts.PostRenderHTMLHook,
 		PostDatasetHook:          opts.PostDatasetHook,
+		SelectedStyle:            artifact.Spec.SelectedStyle,
 	})
 }
 

@@ -427,10 +427,13 @@ type treeNode struct {
 }
 
 // treeLabelSpec defines a simple label component for tree nodes.
+// SelectedStyle is not authorable on labels (the schema rejects it); it is
+// populated only via style inheritance from the enclosing tree/page/artefact.
 type treeLabelSpec struct {
-	Value   string                   `json:"value"`
-	Dataset reportspec.DatasetList   `json:"dataset"`
-	Scale   reportspec.StringOrFloat `json:"scale,omitempty"`
+	Value         string                   `json:"value"`
+	Dataset       reportspec.DatasetList   `json:"dataset"`
+	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	SelectedStyle string                   `json:"selectedStyle,omitempty"`
 }
 
 func (s treeSpec) writeAttrs(b *strings.Builder) {

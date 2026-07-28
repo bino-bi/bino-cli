@@ -53,7 +53,24 @@ spec:
   selectedStyle: corporateTheme
 ```
 
-`selectedStyle` is available on `Table`, `Text`, `ChartStructure`, `ChartTime`, `Tree`, `Grid`, `Image` (as inline child), `LayoutPage`, and `LayoutCard`. It is emitted as the `selected-style` HTML attribute on the corresponding `bn-*` element. For `LayoutPage` and `LayoutCard` it takes effect with a template engine release that forwards `selected-style` to the inner page/card element.
+`selectedStyle` is available on `ReportArtefact`, `Table`, `Text`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `Image` (as inline child), `LayoutPage`, and `LayoutCard`. It is emitted as the `selected-style` HTML attribute on the corresponding `bn-*` element. For `LayoutPage` and `LayoutCard` it takes effect with a template engine release that forwards `selected-style` to the inner page/card element.
+
+## Style inheritance
+
+A `selectedStyle` set on a container becomes the **default** for everything inside it. The nearest ancestor wins:
+
+```
+component's own selectedStyle
+  > enclosing Grid / Tree / LayoutCard
+  > LayoutPage
+  > ReportArtefact
+```
+
+Set it once on the `ReportArtefact` and every page and component in that artefact uses it — unless a page, card, grid, tree, or leaf component sets its own `selectedStyle`, which then applies to that element and its descendants. Tree `Label` nodes inherit the style too (they cannot set their own).
+
+To exclude a single component from inheritance, set `selectedStyle: ""` explicitly — it falls back to `_system` + `_default` styling.
+
+Inheritance is resolved at build time per artefact. `bino preview` shows the artefact-level style only when previewing through an artefact; the plain all-pages preview has no artefact context (page-level inheritance still applies).
 
 ## Style structure
 

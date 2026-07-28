@@ -37,6 +37,7 @@ type ReportArtefactSpec struct {
 	Author         string            `json:"author"`
 	Keywords       []string          `json:"keywords"`
 	SigningProfile string            `json:"signingProfile,omitempty"`
+	SelectedStyle  string            `json:"selectedStyle,omitempty"`
 }
 
 // ArtefactByName filters and orders ReportArtefact manifests.

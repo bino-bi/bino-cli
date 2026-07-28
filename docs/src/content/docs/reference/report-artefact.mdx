@@ -31,6 +31,7 @@ spec:
   author: "Group Controlling"
   keywords: ["sales", "quarterly", "internal"]
   signingProfile: corporateSigner
+  selectedStyle: corporateTheme
 ```
 
 Fields:
@@ -46,6 +47,24 @@ Fields:
 - `spec.author` – optional author name.
 - `spec.keywords` – optional list of metadata keywords.
 - `spec.signingProfile` – optional reference to a `SigningProfile` manifest.
+- `spec.selectedStyle` – optional reference to a named [`ComponentStyle`](/reference/component-style/) applied as the default style for every page and component in this artefact. A `selectedStyle` set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
+
+## Default style
+
+Set `spec.selectedStyle` once on the artefact to theme the whole report:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: sales_report
+spec:
+  filename: sales-report.pdf
+  title: "Sales Overview"
+  selectedStyle: corporateTheme
+```
+
+Every LayoutPage and component in the artefact now renders with `corporateTheme` unless it selects its own style. See [Component style — Style inheritance](/reference/component-style/#style-inheritance) for the full precedence rules.
 
 ## Minimal artefact
 
