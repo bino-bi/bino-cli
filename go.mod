@@ -23,9 +23,9 @@ require (
 	github.com/graemephi/goldmark-qjs-katex v0.3.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0
-	github.com/klauspost/compress v1.19.0
-	github.com/mattn/go-isatty v0.0.23
-	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/klauspost/compress v1.19.1
+	github.com/mattn/go-isatty v0.0.24
+	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/pdfcpu/pdfcpu v0.13.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
@@ -33,7 +33,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	github.com/yuin/goldmark v1.8.4
+	github.com/yuin/goldmark v1.8.5
 	go.abhg.dev/goldmark/toc v0.12.0
 	go.lsp.dev/jsonrpc2 v1.0.1
 	go.lsp.dev/protocol v1.0.1
@@ -112,6 +112,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260625142307-59b4966ccb57 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
