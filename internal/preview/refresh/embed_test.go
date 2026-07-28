@@ -138,7 +138,7 @@ func TestEmbedByNameOverrideBypassesCache(t *testing.T) {
 	state := NewState()
 	// Pre-seed the cache and a disk snapshot for the SAME key so we can prove
 	// the override path ignores both.
-	cacheKey := "Table:standalone_table"
+	cacheKey := "Table:standalone_table:"
 	state.embeddingCache = map[string][]byte{cacheKey: []byte("STALE-CACHED-HTML")}
 	state.lastDocs = []config.Document{{
 		Kind: "Table", Name: "standalone_table", Raw: []byte(`{"kind":"Table"}`),
@@ -148,7 +148,7 @@ func TestEmbedByNameOverrideBypassesCache(t *testing.T) {
 	// fresh overlaid load resolves nothing and returns 404 before rendering.
 	state.SetLiveOverride(file, "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: not_embeddable\nspec:\n  source: x\n  query: SELECT 1\n")
 
-	_, err = EmbedByName(context.Background(), "standalone_table", "Table", mu, state, cfg, srv)
+	_, err = EmbedByName(context.Background(), "standalone_table", "Table", "", mu, state, cfg, srv)
 	if err == nil {
 		t.Fatal("expected not-found error from overlaid load, got nil (cache or disk snapshot was used)")
 	}
@@ -180,16 +180,69 @@ func TestEmbedByNameDiskPathUsesCache(t *testing.T) {
 
 	mu := &sync.Mutex{}
 	state := NewState()
-	cacheKey := "Table:standalone_table"
+	cacheKey := "Table:standalone_table:"
 	want := []byte("CACHED-HTML")
 	state.embeddingCache = map[string][]byte{cacheKey: want}
 
-	got, err := EmbedByName(context.Background(), "standalone_table", "Table", mu, state, cfg, srv)
+	got, err := EmbedByName(context.Background(), "standalone_table", "Table", "", mu, state, cfg, srv)
 	if err != nil {
 		t.Fatalf("EmbedByName (disk path) = %v", err)
 	}
 	if string(got) != string(want) {
 		t.Errorf("disk path returned %q, want cached %q", got, want)
+	}
+}
+
+// TestEmbedByNameCacheKeyIncludesLanguage guards the bug that the language
+// override would otherwise introduce: the same component rendered under two
+// languages must not collide on one cache entry, or whichever language rendered
+// first stays pinned until the next refresh.
+func TestEmbedByNameCacheKeyIncludesLanguage(t *testing.T) {
+	t.Parallel()
+
+	srv, err := httpserver.New(httpserver.Config{})
+	if err != nil {
+		t.Fatalf("httpserver.New: %v", err)
+	}
+	cfg := &Config{Workdir: t.TempDir()}
+
+	mu := &sync.Mutex{}
+	state := NewState()
+	german := []byte("GERMAN-HTML")
+	state.embeddingCache = map[string][]byte{"Table:standalone_table:de": german}
+
+	got, err := EmbedByName(context.Background(), "standalone_table", "Table", "de", mu, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName(de) = %v", err)
+	}
+	if string(got) != string(german) {
+		t.Errorf("EmbedByName(de) = %q, want cached %q", got, german)
+	}
+
+	// English must miss the German entry. With an empty workdir there is nothing
+	// to resolve, so a miss surfaces as a 404 rather than the German body.
+	if _, err := EmbedByName(context.Background(), "standalone_table", "Table", "en", mu, state, cfg, srv); err == nil {
+		t.Fatal("EmbedByName(en) returned the German cache entry; the key ignores language")
+	}
+}
+
+// TestEmbedByNameRejectsUnsupportedLanguage covers the guard: i18n lookup is an
+// exact string match, so a locale outside the schema enum would render silently
+// untranslated instead of failing.
+func TestEmbedByNameRejectsUnsupportedLanguage(t *testing.T) {
+	t.Parallel()
+
+	srv, err := httpserver.New(httpserver.Config{})
+	if err != nil {
+		t.Fatalf("httpserver.New: %v", err)
+	}
+
+	_, err = EmbedByName(context.Background(), "standalone_table", "Table", "de-DE",
+		&sync.Mutex{}, NewState(), &Config{Workdir: t.TempDir()}, srv)
+
+	var httpErr *httpserver.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Code != http.StatusBadRequest {
+		t.Fatalf("EmbedByName(de-DE) = %v, want 400 HTTPError", err)
 	}
 }
 
@@ -269,7 +322,7 @@ func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
 
 	t.Run("embedComponentOpts", func(t *testing.T) {
 		t.Parallel()
-		opts := embedComponentOpts(cfg, "standalone_table")
+		opts := embedComponentOpts(cfg, "standalone_table", "")
 		if opts.PluginOptions == nil {
 			t.Fatal("embedComponentOpts dropped PluginOptions")
 		}
@@ -278,6 +331,16 @@ func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
 		}
 		if opts.PluginOptions.DataBaseURL != "" {
 			t.Errorf("DataBaseURL = %q, want empty (same-origin relative URLs)", opts.PluginOptions.DataBaseURL)
+		}
+	})
+
+	t.Run("embedComponentOpts language", func(t *testing.T) {
+		t.Parallel()
+		if got := embedComponentOpts(cfg, "standalone_table", "en").Language; got != "en" {
+			t.Errorf("Language = %q, want %q", got, "en")
+		}
+		if got := embedComponentOpts(cfg, "standalone_table", "").Language; got != config.DefaultArtefactLanguage {
+			t.Errorf("Language = %q, want the artefact default %q", got, config.DefaultArtefactLanguage)
 		}
 	})
 }
@@ -338,7 +401,7 @@ func TestSyntheticPageArtefactAdoptsPageFormat(t *testing.T) {
 		Name: "bn201_example_table_and_text",
 		Raw:  []byte(`{"kind":"LayoutPage","spec":{"pageFormat":"a4","pageOrientation":"landscape"}}`),
 	}
-	art := syntheticPageArtefact(page)
+	art := syntheticPageArtefact(page, "")
 
 	if art.Spec.Format != "a4" {
 		t.Errorf("synthetic artefact format = %q, want %q (the page format must win, else the page is filtered out)", art.Spec.Format, "a4")
@@ -351,5 +414,21 @@ func TestSyntheticPageArtefactAdoptsPageFormat(t *testing.T) {
 	}
 	if art.Document.Kind != "ReportArtefact" {
 		t.Errorf("synthetic artefact kind = %q, want ReportArtefact", art.Document.Kind)
+	}
+}
+
+// TestSyntheticPageArtefactLanguage covers the LayoutPage/container preview path,
+// which used to hardcode the default language — so an authored Internationalization
+// bundle could never be previewed in anything but German.
+func TestSyntheticPageArtefactLanguage(t *testing.T) {
+	t.Parallel()
+
+	page := config.Document{Kind: "LayoutPage", Name: "page", Raw: []byte(`{"kind":"LayoutPage"}`)}
+
+	if got := syntheticPageArtefact(page, "en").Spec.Language; got != "en" {
+		t.Errorf("synthetic artefact language = %q, want %q", got, "en")
+	}
+	if got := syntheticPageArtefact(page, "").Spec.Language; got != config.DefaultArtefactLanguage {
+		t.Errorf("synthetic artefact language = %q, want the artefact default %q", got, config.DefaultArtefactLanguage)
 	}
 }

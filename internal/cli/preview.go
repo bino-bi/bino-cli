@@ -309,8 +309,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// Wire the embedding endpoint to the refresh state and config so
 				// /__embedding/{name} can render any named artefact, LayoutPage or
 				// standalone component as build-equivalent isolated HTML.
-				server.SetEmbeddingFunc(func(ctx context.Context, name, kind string) ([]byte, error) {
-					return refresh.EmbedByName(ctx, name, kind, refreshMu, refreshState, &refreshCfg, server)
+				server.SetEmbeddingFunc(func(ctx context.Context, name, kind, language string) ([]byte, error) {
+					return refresh.EmbedByName(ctx, name, kind, language, refreshMu, refreshState, &refreshCfg, server)
 				})
 
 				// Wire the buffer-override endpoint so the VS Code extension can
