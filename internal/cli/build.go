@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"bino.bi/bino/internal/chrome"
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
@@ -29,6 +30,28 @@ import (
 )
 
 const componentReadyConsolePrefix = "componentRegisterIsRendered:"
+
+// resolveChromePath falls back to the chrome manager when no path was configured
+// via --chrome-path or bino.toml. The manager honors CHROME_PATH and the binary
+// downloaded by `bino setup`, neither of which chromedp's own findExecPath
+// consults. An empty result leaves chromedp to scan PATH as before.
+func resolveChromePath(configured string) string {
+	if configured != "" {
+		return configured
+	}
+
+	mgr, err := chrome.NewManager()
+	if err != nil {
+		return ""
+	}
+
+	path, err := mgr.ResolveExecPath()
+	if err != nil {
+		return ""
+	}
+
+	return path
+}
 
 // newBuildCommand creates the build subcommand.
 // The build command respects context cancellation at multiple checkpoints:
@@ -143,7 +166,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			outDir = env.Resolver.ResolveString("out-dir", "out-dir", outDir)
-			chromePath = env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath)
+			chromePath = resolveChromePath(env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath))
 			logFormat = env.Resolver.ResolveString("log-format", "log-format", logFormat)
 			noGraph = env.Resolver.ResolveBool("no-graph", "no-graph", noGraph)
 			noLint = env.Resolver.ResolveBool("no-lint", "no-lint", noLint)

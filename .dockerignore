@@ -1,0 +1,38 @@
+# Keep the build context to the Go module and its embedded assets. Every
+# //go:embed in this repo reads from internal/, so docs/ and vscode-bino/ are
+# safe to drop — together with dist/ and .git they are most of the context.
+
+.git
+.github
+.gitignore
+.golangci.yml
+.goreleaser.yaml
+.DS_Store
+
+# AI/dev tooling and internal notes
+.agents
+.claude
+.claude-plugin
+.cursorignore
+.cursorrules
+CLAUDE.md
+__INTERNAL
+claude-plugin
+skills-lock.json
+
+# Local build output
+dist
+Dockerfile
+.dockerignore
+
+# Node dependency trees — gitignored, but COPY . . would still pick them up
+**/node_modules
+
+# Not needed to compile or run the CLI
+docs
+homebrew
+installer
+vscode-bino
+
+# Secrets / local env
+.env*

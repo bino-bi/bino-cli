@@ -47,3 +47,13 @@ updates:
       day: monday
       time: "06:00"
     open-pull-requests-limit: 3
+
+  # CLI image. The builder and runtime stages must stay on the same Debian
+  # release, and the golang tag must not outpace go.mod — review both together.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 3

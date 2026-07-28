@@ -17,8 +17,15 @@ permissions:
 
 # DuckDB version MUST match the duckdb-go driver version in go.mod.
 # duckdb-go v2.5.5 → duckdb-go-bindings v0.3.3 → DuckDB v1.4.4
+#
+# ENGINE_VERSION is the bn-template-engine baked into the container image. It MUST
+# satisfy engine.SupportedEngineRanges (internal/engine/compat.go) and should match
+# the ENGINE_VERSION default in the Dockerfile. It cannot be resolved dynamically:
+# the engine's GitHub "latest" release skips pre-releases and still points at 0.x.
 env:
   DUCKDB_VERSION: "v1.4.4"
+  ENGINE_VERSION: "v1.0.0-alpha.18"
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   # Resolve tag for both push and workflow_dispatch triggers
@@ -147,9 +154,12 @@ jobs:
           - goos: linux
             goarch: amd64
             runner: ubuntu-24.04
-          # - goos: linux
-          #   goarch: arm64
-          #   runner: ubuntu-24.04-arm
+          # chrome-headless-shell has no official linux/arm64 build, so this binary
+          # needs a system chromium plus --chrome-path (or CHROME_PATH) to render
+          # PDFs. The container image ships one; see the build-image job.
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
           - goos: windows
             goarch: amd64
             runner: windows-latest
@@ -257,6 +267,198 @@ jobs:
           name: build-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
           retention-days: 7
+
+  # Container images, built natively on amd64 and arm64 runners (no QEMU) and
+  # pushed by digest. publish-image merges each variant's two digests into one
+  # manifest list. The image builds from source and shares nothing with the
+  # tarballs above, so it runs in parallel with `build` and `release`.
+  build-image:
+    name: Build Image (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [ test, resolve-tag ]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      # Combinations are enumerated rather than expressed as variant × platform:
+      # two `include` entries both carrying `platform` would overwrite each other
+      # instead of producing a cross product.
+      matrix:
+        include:
+          - variant: slim
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - variant: slim
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - variant: full
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - variant: full
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Prepare build metadata
+        id: prep
+        run: |
+          echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata (labels only)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: ${{ matrix.variant }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.resolve-tag.outputs.version }}
+            COMMIT=${{ steps.prep.outputs.commit }}
+            DATE=${{ steps.prep.outputs.date }}
+            ENGINE_VERSION=${{ env.ENGINE_VERSION }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=image-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.variant }}-${{ matrix.arch }}
+          # Provenance is attested once over the merged index by publish-image,
+          # consistent with the `release` job. Buildx's own inline attestation
+          # manifests would only clutter the index.
+          provenance: false
+          sbom: false
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digest-${{ matrix.variant }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-image:
+    name: Publish Image (${{ matrix.variant }})
+    needs: [ build-image, resolve-tag ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: slim
+            suffix: "-slim"
+          - variant: full
+            suffix: ""
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: image-digest-${{ matrix.variant }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+            suffix=${{ matrix.suffix }}
+          tags: |
+            type=semver,pattern=v{{version}},value=${{ needs.resolve-tag.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-tag.outputs.tag }}
+            type=raw,value=latest,enable=${{ !contains(needs.resolve-tag.outputs.tag, '-') }}
+
+      # Tags and annotations are read from the DOCKER_METADATA_OUTPUT_* env vars
+      # rather than interpolated into the script, to keep untrusted-looking values
+      # out of the shell.
+      - name: Create and push manifest list
+        working-directory: /tmp/digests
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(-t "$tag")
+          done <<< "$DOCKER_METADATA_OUTPUT_TAGS"
+          while IFS= read -r annotation; do
+            [ -n "$annotation" ] && args+=(--annotation "$annotation")
+          done <<< "$DOCKER_METADATA_OUTPUT_ANNOTATIONS"
+          for digest in *; do
+            args+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${args[@]}"
+
+      - name: Resolve index digest
+        id: index
+        run: |
+          docker buildx imagetools inspect "${IMAGE_NAME}:${DOCKER_METADATA_OUTPUT_VERSION}"
+          digest=$(docker buildx imagetools inspect "${IMAGE_NAME}:${DOCKER_METADATA_OUTPUT_VERSION}" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
 
   release:
     name: Release

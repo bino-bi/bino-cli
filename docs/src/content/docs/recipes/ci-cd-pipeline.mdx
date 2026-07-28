@@ -31,6 +31,25 @@ bino setup
 Set `CI=1` in your environment to disable the interactive update check.
 </Aside>
 
+### Or skip the install and use the container image
+
+If your runner can run containers, the image already contains bino and Chromium:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -e POSTGRES_PASSWORD \
+  ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+```
+
+<Aside type="note">
+Prefer this `docker run` step over GitHub Actions' `jobs.<id>.container`. Container jobs run
+JavaScript actions such as `actions/checkout` inside the image, which needs a Node.js runtime the bino
+image does not provide.
+</Aside>
+
+See [Running bino in Docker](/guides/docker/) for tag pinning and file ownership.
+
 ## Build and upload
 
 A typical CI job:
@@ -156,6 +175,8 @@ build-reports:
 ```
   </TabItem>
 </Tabs>
+
+None of this is needed with the [container image](/guides/docker/) — Chromium is already inside it.
 
 ## Post-build hooks for upload
 

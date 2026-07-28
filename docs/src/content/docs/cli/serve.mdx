@@ -22,6 +22,7 @@ Common flags:
 - `--port` – HTTP port (default: `8080`).
 - `--addr` – full listen address (overrides `--port`, e.g. `0.0.0.0:8080`).
 - `--log-sql` – log executed SQL queries.
+- `--data-mode` – dataset delivery: `url` (default) fetches data over HTTP from the serve process, `inline` embeds it gzip+base64 in the HTML.
 
 ## How it works
 
@@ -130,6 +131,23 @@ Serve bound to all interfaces (for Docker/Kubernetes):
 
 ```bash
 bino serve --live sales-dashboard --addr 0.0.0.0:8080
+```
+
+The default bind is `127.0.0.1`, which is unreachable from outside a container, so `--addr` is
+mandatory there. It is also the only serve flag that cannot be set from `bino.toml` — pass it on the
+command line.
+
+See [Recipe: Deploy a live dashboard](/recipes/live-dashboard-deployment/) for Compose and Kubernetes
+manifests, and [Running bino in Docker](/guides/docker/) for the image itself.
+
+## Health check
+
+`GET /healthz` returns `200` with the body `ok` and requires no authentication. It reports that the
+process is up and serving HTTP; it does not verify database connectivity or that any route renders.
+Use it for container health checks and Kubernetes probes.
+
+```bash
+curl -fsS http://localhost:8080/healthz
 ```
 
 ## Comparison with preview

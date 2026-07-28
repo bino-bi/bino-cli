@@ -13,8 +13,9 @@ import { Aside } from "@astrojs/starlight/components";
 bino provides pre-built binaries for:
 
 - macOS (Intel, Apple Silicon)
-- Linux x86_64
+- Linux x86_64, arm64
 - Windows x86_64
+- Linux containers (`linux/amd64`, `linux/arm64`) via the official image
 
 ## Install using the bundled installer script (recommended)
 
@@ -156,6 +157,21 @@ brew upgrade bino-cli
 
    This should print the installed version and exit with status code 0.
 
+## Run bino in a container
+
+If you would rather not install anything, the official image already contains bino *and* its
+rendering engine — there is no `bino setup` step:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+```
+
+Your project is mounted at `/work`, and the PDFs land in `dist/` on your machine.
+
+See [Running bino in Docker](/guides/docker/) for bind mounts, file ownership, and offline behaviour,
+and [Recipe: Deploy a live dashboard](/recipes/live-dashboard-deployment/) for serving a
+`LiveReportArtefact`.
+
 ## Updating bino
 
 To update bino to the latest version, run:
@@ -172,3 +188,4 @@ bino also performs a background check for updates once every 24 hours and will n
 
 - Continue with [Your first report](/getting-started/first-report/) to scaffold and build a sample report.
 - See the [CLI overview](/cli/) for a quick tour of available commands.
+- Prefer containers? See [Running bino in Docker](/guides/docker/).
