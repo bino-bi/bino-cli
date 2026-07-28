@@ -9,6 +9,12 @@ import (
 	"bino.bi/bino/internal/report/config"
 )
 
+// The engine resolves each component's namespace at runtime from its own
+// i18n-namespace attribute or the nearest ancestor carrying one (layout card,
+// layout page, tree, grid, or bn-context). The CLI therefore only emits the
+// attribute where it is authored — it never stamps inherited values on
+// children — and writes the artefact-level namespace on <bn-context>.
+
 // renderDocsWithArtefactNamespace renders documents with an artefact-level
 // i18nNamespace and returns the generated HTML.
 func renderDocsWithArtefactNamespace(t *testing.T, docs []config.Document, artefactNamespace, rootComponent string) string {
@@ -21,158 +27,125 @@ func renderDocsWithArtefactNamespace(t *testing.T, docs []config.Document, artef
 	return string(result.HTML)
 }
 
-func TestI18nNamespaceInherit_ArtefactToPageTitle(t *testing.T) {
-	html := renderDocsWithArtefactNamespace(t, []config.Document{pageDoc(`{"children": []}`)}, "corp", "")
+func TestI18nNamespace_ArtefactLevelOnContext(t *testing.T) {
+	doc := pageDoc(`{"children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test"}}]}`)
+	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
 
-	if !strings.Contains(openTag(t, html, "bn-layout-page"), `title-namespace='corp'`) {
-		t.Fatalf("expected artefact namespace as title-namespace on <bn-layout-page>, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-context"), `i18n-namespace='corp'`) {
+		t.Fatalf("expected artefact namespace on <bn-context>, got:\n%s", html)
+	}
+	// Runtime inheritance: no stamping on pages or children.
+	if strings.Contains(openTag(t, html, "bn-layout-page"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on <bn-layout-page>, got:\n%s", html)
+	}
+	if strings.Contains(openTag(t, html, "bn-table"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on <bn-table>, got:\n%s", html)
 	}
 }
 
-func TestI18nNamespaceInherit_ArtefactToChildren(t *testing.T) {
+func TestI18nNamespace_NoArtefactValueNoAttr(t *testing.T) {
+	doc := pageDoc(`{"children": []}`)
+	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "", "")
+
+	if strings.Contains(openTag(t, html, "bn-context"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace on <bn-context>, got:\n%s", html)
+	}
+}
+
+func TestI18nNamespace_AuthoredOnComponents(t *testing.T) {
 	tests := []struct {
 		kind string
 		spec string
 		tag  string
 	}{
-		{"Table", `{"dataset": "test"}`, "bn-table"},
-		{"Text", `{"value": "hello"}`, "bn-text"},
-		{"ChartStructure", `{"dataset": "test"}`, "bn-chart-structure"},
-		{"ChartTime", `{"dataset": "test"}`, "bn-chart-time"},
-		{"ChartScatter", `{"dataset": "test"}`, "bn-chart-scatter"},
-		{"ChartBubble", `{"dataset": "test"}`, "bn-chart-bubble"},
-		{"ChartBullet", `{"dataset": "test"}`, "bn-chart-bullet"},
+		{"Table", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-table"},
+		{"Text", `{"value": "hello", "i18nNamespace": "own-ns"}`, "bn-text"},
+		{"ChartStructure", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-chart-structure"},
+		{"ChartTime", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-chart-time"},
+		{"ChartScatter", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-chart-scatter"},
+		{"ChartBubble", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-chart-bubble"},
+		{"ChartBullet", `{"dataset": "test", "i18nNamespace": "own-ns"}`, "bn-chart-bullet"},
+		{"Tree", `{"edges": [], "nodes": [], "i18nNamespace": "own-ns"}`, "bn-tree"},
+		{"Grid", `{"children": [], "i18nNamespace": "own-ns"}`, "bn-grid"},
+		{"LayoutCard", `{"children": [], "i18nNamespace": "own-ns"}`, "bn-layout-card"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.kind, func(t *testing.T) {
 			doc := pageDoc(`{"children": [{"kind": "` + tt.kind + `", "metadata": {"name": "child"}, "spec": ` + tt.spec + `}]}`)
 			html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-			if !strings.Contains(openTag(t, html, tt.tag), `namespace='corp'`) {
-				t.Fatalf("expected inherited namespace='corp' on <%s>, got:\n%s", tt.tag, html)
+			if !strings.Contains(openTag(t, html, tt.tag), `i18n-namespace='own-ns'`) {
+				t.Fatalf("expected authored i18n-namespace='own-ns' on <%s>, got:\n%s", tt.tag, html)
 			}
 		})
 	}
 }
 
-func TestI18nNamespaceInherit_PageOverridesArtefact(t *testing.T) {
+func TestI18nNamespace_PageEmitsOwnAttr(t *testing.T) {
 	doc := pageDoc(`{
 		"i18nNamespace": "page-ns",
 		"children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test"}}]
 	}`)
 	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
 
-	if !strings.Contains(openTag(t, html, "bn-layout-page"), `title-namespace='page-ns'`) {
-		t.Fatalf("expected page's own namespace as title-namespace, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-layout-page"), `i18n-namespace='page-ns'`) {
+		t.Fatalf("expected page's own i18n-namespace attr, got:\n%s", html)
 	}
-	if !strings.Contains(openTag(t, html, "bn-table"), `namespace='page-ns'`) {
-		t.Fatalf("expected page namespace inherited by <bn-table>, got:\n%s", html)
+	// The child inherits at runtime; nothing stamped.
+	if strings.Contains(openTag(t, html, "bn-table"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on <bn-table>, got:\n%s", html)
 	}
 }
 
-func TestI18nNamespaceInherit_TitleNamespaceStaysTitleOnly(t *testing.T) {
+func TestI18nNamespace_TitleNamespaceEmittedVerbatim(t *testing.T) {
+	doc := pageDoc(`{"titleNamespace": "legacy", "children": []}`)
+	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "", "")
+
+	pageTag := openTag(t, html, "bn-layout-page")
+	if !strings.Contains(pageTag, `title-namespace='legacy'`) {
+		t.Fatalf("expected deprecated titleNamespace as title-namespace, got:\n%s", html)
+	}
+	if strings.Contains(pageTag, "i18n-namespace=") {
+		t.Fatalf("expected titleNamespace NOT to become i18n-namespace, got:\n%s", html)
+	}
+}
+
+func TestI18nNamespace_CardEmitsBothAttrs(t *testing.T) {
 	doc := pageDoc(`{
-		"titleNamespace": "legacy",
-		"children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test"}}]
+		"children": [{"kind": "LayoutCard", "metadata": {"name": "card"}, "spec": {
+			"titleNamespace": "legacy",
+			"i18nNamespace": "card-ns",
+			"children": [{"kind": "Table", "metadata": {"name": "inner"}, "spec": {"dataset": "test"}}]
+		}}]
 	}`)
 	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "", "")
 
-	if !strings.Contains(openTag(t, html, "bn-layout-page"), `title-namespace='legacy'`) {
-		t.Fatalf("expected deprecated titleNamespace on title-namespace, got:\n%s", html)
+	cardTag := openTag(t, html, "bn-layout-card")
+	if !strings.Contains(cardTag, `i18n-namespace='card-ns'`) || !strings.Contains(cardTag, `title-namespace='legacy'`) {
+		t.Fatalf("expected both namespace attrs on <bn-layout-card>, got:\n%s", cardTag)
 	}
-	if strings.Contains(openTag(t, html, "bn-table"), "namespace=") {
-		t.Fatalf("expected titleNamespace NOT to inherit to children, got:\n%s", html)
+	if strings.Contains(openTag(t, html, "bn-table"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on the card's <bn-table>, got:\n%s", html)
 	}
 }
 
-func TestI18nNamespaceInherit_I18nNamespaceWinsOverTitleNamespace(t *testing.T) {
-	doc := pageDoc(`{"titleNamespace": "legacy", "i18nNamespace": "modern", "children": []}`)
+func TestI18nNamespace_TreeLabelHasNoAttr(t *testing.T) {
+	doc := pageDoc(`{"children": [{"kind": "Tree", "metadata": {"name": "tree"}, "spec": {
+		"edges": [],
+		"i18nNamespace": "tree-ns",
+		"nodes": [{"id": "n1", "kind": "Label", "spec": {"value": "label"}}]
+	}}]}`)
 	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "", "")
 
-	if !strings.Contains(openTag(t, html, "bn-layout-page"), `title-namespace='modern'`) {
-		t.Fatalf("expected i18nNamespace to win over titleNamespace, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-tree"), `i18n-namespace='tree-ns'`) {
+		t.Fatalf("expected tree's own i18n-namespace attr, got:\n%s", html)
+	}
+	if strings.Contains(openTag(t, html, "bn-text"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace on the Label <bn-text> (inherits at runtime), got:\n%s", html)
 	}
 }
 
-func TestI18nNamespaceInherit_ChildOwnNamespaceWins(t *testing.T) {
-	doc := pageDoc(`{"children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test", "i18nNamespace": "own-ns"}}]}`)
-	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-
-	if !strings.Contains(openTag(t, html, "bn-table"), `namespace='own-ns'`) {
-		t.Fatalf("expected child's own namespace to win, got:\n%s", html)
-	}
-}
-
-func TestI18nNamespaceInherit_CardAndSiblingIsolation(t *testing.T) {
-	doc := pageDoc(`{
-		"i18nNamespace": "page-ns",
-		"children": [
-			{"kind": "LayoutCard", "metadata": {"name": "card"}, "spec": {
-				"i18nNamespace": "card-ns",
-				"children": [{"kind": "Table", "metadata": {"name": "inner"}, "spec": {"dataset": "test"}}]
-			}},
-			{"kind": "Text", "metadata": {"name": "sibling"}, "spec": {"value": "hi"}}
-		]
-	}`)
-	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-
-	if !strings.Contains(openTag(t, html, "bn-layout-card"), `title-namespace='card-ns'`) {
-		t.Fatalf("expected card's own namespace as its title-namespace, got:\n%s", html)
-	}
-	if !strings.Contains(openTag(t, html, "bn-table"), `namespace='card-ns'`) {
-		t.Fatalf("expected card namespace inherited by <bn-table> inside the card, got:\n%s", html)
-	}
-	if !strings.Contains(openTag(t, html, "bn-text"), `namespace='page-ns'`) {
-		t.Fatalf("expected page namespace on the sibling <bn-text> outside the card, got:\n%s", html)
-	}
-}
-
-func TestI18nNamespaceInherit_GridAndTreeChildren(t *testing.T) {
-	t.Run("grid cells", func(t *testing.T) {
-		doc := pageDoc(`{"children": [{"kind": "Grid", "metadata": {"name": "grid"}, "spec": {
-			"i18nNamespace": "grid-ns",
-			"children": [{"row": "r1", "column": "c1", "kind": "Text", "spec": {"value": "cell"}}]
-		}}]}`)
-		html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-		if !strings.Contains(openTag(t, html, "bn-text"), `namespace='grid-ns'`) {
-			t.Fatalf("expected grid namespace inherited by the cell <bn-text>, got:\n%s", html)
-		}
-	})
-
-	t.Run("tree nodes and labels", func(t *testing.T) {
-		doc := pageDoc(`{"children": [{"kind": "Tree", "metadata": {"name": "tree"}, "spec": {
-			"edges": [],
-			"nodes": [
-				{"id": "n1", "kind": "Label", "spec": {"value": "label"}},
-				{"id": "n2", "kind": "Table", "spec": {"dataset": "test"}}
-			]
-		}}]}`)
-		html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-		if !strings.Contains(openTag(t, html, "bn-text"), `namespace='corp'`) {
-			t.Fatalf("expected inherited namespace on the Label <bn-text>, got:\n%s", html)
-		}
-		if !strings.Contains(openTag(t, html, "bn-table"), `namespace='corp'`) {
-			t.Fatalf("expected inherited namespace on the node <bn-table>, got:\n%s", html)
-		}
-	})
-}
-
-func TestI18nNamespaceInherit_EmptyStringOptsOut(t *testing.T) {
-	doc := pageDoc(`{"children": [
-		{"kind": "Table", "metadata": {"name": "optout"}, "spec": {"dataset": "test", "i18nNamespace": ""}},
-		{"kind": "Text", "metadata": {"name": "inherits"}, "spec": {"value": "hi"}}
-	]}`)
-	html := renderDocsWithArtefactNamespace(t, []config.Document{doc}, "corp", "")
-
-	if strings.Contains(openTag(t, html, "bn-table"), "namespace=") {
-		t.Fatalf("expected no namespace on the opted-out <bn-table>, got:\n%s", html)
-	}
-	if !strings.Contains(openTag(t, html, "bn-text"), `namespace='corp'`) {
-		t.Fatalf("expected sibling <bn-text> to still inherit, got:\n%s", html)
-	}
-}
-
-func TestI18nNamespaceInherit_StandaloneRootComponent(t *testing.T) {
+func TestI18nNamespace_StandaloneRootInheritsFromContext(t *testing.T) {
 	textDoc := makeTestDoc("Text", "standalone", json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
 		"kind": "Text",
@@ -181,13 +154,16 @@ func TestI18nNamespaceInherit_StandaloneRootComponent(t *testing.T) {
 	}`))
 	html := renderDocsWithArtefactNamespace(t, []config.Document{textDoc}, "embed-ns", "standalone")
 
-	if !strings.Contains(openTag(t, html, "bn-text"), `namespace='embed-ns'`) {
-		t.Fatalf("expected artefact namespace on standalone <bn-text>, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-context"), `i18n-namespace='embed-ns'`) {
+		t.Fatalf("expected artefact namespace on <bn-context>, got:\n%s", html)
+	}
+	if strings.Contains(openTag(t, html, "bn-text"), "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on standalone <bn-text>, got:\n%s", html)
 	}
 }
 
-func TestI18nNamespaceInherit_Presentation(t *testing.T) {
-	doc := pageDoc(`{"children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test"}}]}`)
+func TestI18nNamespace_Presentation(t *testing.T) {
+	doc := pageDoc(`{"i18nNamespace": "page-ns", "children": [{"kind": "Table", "metadata": {"name": "child"}, "spec": {"dataset": "test"}}]}`)
 	artifact := config.Artifact{
 		Document: makeTestDoc("ReportArtefact", "deck", json.RawMessage(`{"kind": "ReportArtefact", "metadata": {"name": "deck"}, "spec": {}}`)),
 		Spec:     config.ReportArtefactSpec{I18nNamespace: "corp"},
@@ -199,11 +175,11 @@ func TestI18nNamespaceInherit_Presentation(t *testing.T) {
 	}
 	html := string(result.HTML)
 
-	if !strings.Contains(openTag(t, html, "bn-layout-page"), `title-namespace='corp'`) {
-		t.Fatalf("expected artefact namespace on the slide <bn-layout-page>, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-context"), `i18n-namespace='corp'`) {
+		t.Fatalf("expected artefact namespace on the presentation <bn-context>, got:\n%s", html)
 	}
-	if !strings.Contains(openTag(t, html, "bn-table"), `namespace='corp'`) {
-		t.Fatalf("expected artefact namespace inherited by the slide's <bn-table>, got:\n%s", html)
+	if !strings.Contains(openTag(t, html, "bn-layout-page"), `i18n-namespace='page-ns'`) {
+		t.Fatalf("expected page's own i18n-namespace on the slide, got:\n%s", html)
 	}
 }
 

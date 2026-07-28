@@ -372,7 +372,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.unitScaling` | number | no | `0.01` | Pixels per unit for absolute variance bars (`d_` prefix columns). | `unitScaling: 0.02` |
 | `spec.percentageScaling` | number | no | `0.5` | Pixels per percentage point for relative variance pins (`dr_` prefix columns). | `percentageScaling: 1` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling of the entire table. `""` or omitted: auto-scale with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
-| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the `namespace` HTML attribute. | `i18nNamespace: audited` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
 | `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level). | see below |
 | `spec.partof` | string or array | no | `[]` | Part-of groupings (category level). | see below |
 | `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration. | see below |

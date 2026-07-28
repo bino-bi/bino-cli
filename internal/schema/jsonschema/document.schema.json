@@ -1987,7 +1987,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "value": {
           "type": "string",
@@ -2512,7 +2512,7 @@
           "default": "",
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted. Supports inline Markdown (bold, italic, code, links, strikethrough) and inline HTML, converted to HTML at build time and sanitized before rendering. Use <br /> for an explicit line break. Block Markdown (headings, lists, tables) is not interpreted, so a value like '1. Quartal 2024' stays literal."
         },
-        "titleNamespace": { "type": "string", "default": "_system", "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children." },
+        "titleNamespace": { "type": "string", "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children." },
         "i18nNamespace": {
           "type": "string",
           "description": "I18n namespace for the page title and, via inheritance, all children (their own i18nNamespace wins). Takes precedence over the deprecated titleNamespace."
@@ -2726,7 +2726,6 @@
         },
         "titleNamespace": {
           "type": "string",
-          "default": "_system",
           "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children."
         },
         "i18nNamespace": {
@@ -3043,7 +3042,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
@@ -3170,7 +3169,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "showCategories": { "type": "boolean" },
         "showMeasureScale": {
@@ -3426,7 +3425,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "ruleset": {
           "type": "string",
@@ -3509,7 +3508,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "ruleset": {
           "type": "string",
@@ -3660,7 +3659,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "ruleset": {
           "type": "string",
@@ -3761,7 +3760,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace inherited by the children of this container (their own i18nNamespace wins). Inherited from the enclosing artefact/page/card when not set."
+          "description": "I18n namespace inherited by the children of this container at runtime (their own i18nNamespace wins). Resolved from the enclosing artefact/page/card when not set. Maps to the i18n-namespace HTML attribute."
         },
         "edges": {
           "description": "JSON array defining connections between nodes. Each edge specifies a source (from) and target (to) node ID, with optional operator and styling.",
@@ -3997,7 +3996,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace inherited by the children of this container (their own i18nNamespace wins). Inherited from the enclosing artefact/page/card when not set."
+          "description": "I18n namespace inherited by the children of this container at runtime (their own i18nNamespace wins). Resolved from the enclosing artefact/page/card when not set. Maps to the i18n-namespace HTML attribute."
         },
         "chartTitle": {
           "type": "string",
@@ -4262,7 +4261,7 @@
         },
         "i18nNamespace": {
           "type": "string",
-          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Inherited from the enclosing artefact/page/card/grid/tree when not set. Maps to the namespace HTML attribute."
+          "description": "I18n namespace consulted for this component's labels; keys missing there fall back to '_system'. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the i18n-namespace HTML attribute."
         },
         "categoryWidth": {
           "type": "string",

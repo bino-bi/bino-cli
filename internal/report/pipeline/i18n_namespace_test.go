@@ -10,8 +10,9 @@ import (
 )
 
 // TestRenderArtefactHTML_I18nNamespaceInheritance verifies that an
-// artefact-level i18nNamespace is stamped as title-namespace on pages and as
-// namespace on child components.
+// artefact-level i18nNamespace is written as the i18n-namespace attribute on
+// <bn-context>, from which the engine resolves it at runtime — nothing is
+// stamped on pages or child components.
 func TestRenderArtefactHTML_I18nNamespaceInheritance(t *testing.T) {
 	ctx := context.Background()
 
@@ -58,14 +59,14 @@ func TestRenderArtefactHTML_I18nNamespaceInheritance(t *testing.T) {
 	}
 
 	html := string(result.HTML)
-	pageTag := html[strings.Index(html, "<bn-layout-page"):]
-	pageTag = pageTag[:strings.Index(pageTag, ">")]
-	if !strings.Contains(pageTag, `title-namespace='corp'`) {
-		t.Fatalf("expected artefact i18nNamespace as title-namespace on <bn-layout-page>, got:\n%s", pageTag)
+	contextTag := html[strings.Index(html, "<bn-context"):]
+	contextTag = contextTag[:strings.Index(contextTag, ">")]
+	if !strings.Contains(contextTag, `i18n-namespace='corp'`) {
+		t.Fatalf("expected artefact i18nNamespace on <bn-context>, got:\n%s", contextTag)
 	}
 	textTag := html[strings.Index(html, "<bn-text"):]
 	textTag = textTag[:strings.Index(textTag, ">")]
-	if !strings.Contains(textTag, `namespace='corp'`) {
-		t.Fatalf("expected artefact i18nNamespace on <bn-text>, got:\n%s", textTag)
+	if strings.Contains(textTag, "i18n-namespace=") {
+		t.Fatalf("expected no i18n-namespace stamped on <bn-text> (runtime inheritance), got:\n%s", textTag)
 	}
 }

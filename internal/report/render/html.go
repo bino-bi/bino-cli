@@ -18,7 +18,7 @@ const (
 	defaultLayoutPageFormat = "xga"
 )
 
-// baseTemplate format args: locale, engineVersion, engineVersion, fontMarkup, orientationAttr, locale, body
+// baseTemplate format args: locale, engineVersion, engineVersion, fontMarkup, contextAttrs, locale, body
 var baseTemplate = strings.TrimSpace(`<!DOCTYPE html>
 <html dir='ltr' lang='%s'>
 
@@ -88,6 +88,18 @@ var contextTemplate = strings.TrimSpace(`<bn-context%s locale='%s'>
 %s
 </bn-context>
 `)
+
+// i18nNamespaceAttr renders the artefact-level i18n namespace as an
+// i18n-namespace attribute for <bn-context>, or "" when unset. The engine
+// resolves a component's namespace from the nearest ancestor carrying the
+// attribute, so the context acts as the artefact-wide default provider.
+func i18nNamespaceAttr(namespace string) string {
+	trimmed := strings.TrimSpace(namespace)
+	if trimmed == "" {
+		return ""
+	}
+	return fmt.Sprintf(" i18n-namespace='%s'", html.EscapeString(trimmed))
+}
 
 // PluginOptions bundles plugin-related parameters and data-delivery options
 // for rendering. All fields are optional.
@@ -231,7 +243,9 @@ func GenerateHTMLFromDocuments(ctx context.Context, docs []config.Document, loca
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
 // The artefactStyle parameter is the artefact-level ComponentStyle name inherited as a default by pages
 // and their descendants (nearest ancestor wins). Empty means no artefact-level default.
-// The artefactNamespace parameter is the artefact-level i18n namespace inherited the same way.
+// The artefactNamespace parameter is the artefact-level i18n namespace; it is written as the
+// i18n-namespace attribute on <bn-context>, from which the engine resolves it at runtime for
+// every component without a nearer provider.
 func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderOrientation string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions, rootComponent string, artefactStyle string, artefactNamespace string) (Result, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
@@ -324,7 +338,6 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
-	rc.inheritedNamespace = strings.TrimSpace(artefactNamespace)
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -346,7 +359,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			if rootComponent == "" || doc.Name != rootComponent {
 				continue
 			}
-			htmlContent, err := renderStandaloneComponentDoc(doc, assetURLMap, rc.inheritedStyle, rc.inheritedNamespace)
+			htmlContent, err := renderStandaloneComponentDoc(doc, assetURLMap, rc.inheritedStyle)
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: component %s: %w", doc.Name, err)
 			}
@@ -365,15 +378,15 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 
 	fontMarkup := renderFontLinks(fontAssets)
-	orientationAttr := ""
+	contextAttrs := i18nNamespaceAttr(artefactNamespace)
 	// render-orientation is only added in build mode for PDF generation
 	if mode == ModeBuild {
 		if trimmed := strings.TrimSpace(renderOrientation); trimmed != "" {
-			orientationAttr = fmt.Sprintf(" render-orientation='%s'", html.EscapeString(trimmed))
+			contextAttrs += fmt.Sprintf(" render-orientation='%s'", html.EscapeString(trimmed))
 		}
 	}
 	headMarkup := fontMarkup + extraHeadMarkup
-	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, headMarkup, orientationAttr, html.EscapeString(locale), body.String())
+	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, headMarkup, contextAttrs, html.EscapeString(locale), body.String())
 	return Result{HTML: []byte(markup), LocalAssets: localAssets, EmittedData: emitted}, diags, nil
 }
 
@@ -387,7 +400,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 // constraints from refs that don't exist at all. If nil, docs is used (treating all missing refs as errors).
 // The artefactStyle parameter is the artefact-level ComponentStyle name inherited as a default by pages
 // and their descendants (nearest ancestor wins). Empty means no artefact-level default.
-// The artefactNamespace parameter is the artefact-level i18n namespace inherited the same way.
+// The artefactNamespace parameter is the artefact-level i18n namespace; it is written as the
+// i18n-namespace attribute on <bn-context>, from which the engine resolves it at runtime for
+// every component without a nearer provider.
 func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions, artefactStyle string, artefactNamespace string) (FrameResult, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
@@ -474,7 +489,6 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
-	rc.inheritedNamespace = strings.TrimSpace(artefactNamespace)
 
 	for _, doc := range docs {
 		switch doc.Kind {
@@ -512,7 +526,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 
 	// Context: standalone <bn-context> block for SSE delivery
 	// No render-orientation in preview mode
-	contextMarkup := fmt.Sprintf(contextTemplate, "", html.EscapeString(locale), body.String())
+	contextMarkup := fmt.Sprintf(contextTemplate, i18nNamespaceAttr(artefactNamespace), html.EscapeString(locale), body.String())
 
 	return FrameResult{
 		FrameHTML:   []byte(frameMarkup),

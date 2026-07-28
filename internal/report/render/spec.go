@@ -45,7 +45,8 @@ type layoutPageSpec struct {
 
 func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
 	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
-	writeAttr(b, "title-namespace", firstNonEmpty(s.I18nNamespace, s.TitleNamespace))
+	writeAttr(b, "title-namespace", s.TitleNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "title-date-start", s.TitleDateStart.String())
 	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
@@ -72,14 +73,6 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	}
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
-}
-
-// firstNonEmpty returns a when it is non-empty, otherwise b.
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // layoutCardSpec defines the structure for LayoutCard components.
@@ -121,7 +114,8 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	writeAttr(b, "title-date-end", s.TitleDateEnd.String())
 	writeAttr(b, "title-date-format", s.TitleDateFormat)
 	writeAttr(b, "title-date-link", s.TitleDateLink)
-	writeAttr(b, "title-namespace", firstNonEmpty(s.I18nNamespace, s.TitleNamespace))
+	writeAttr(b, "title-namespace", s.TitleNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "footer-text", s.FooterText)
 	writeAttr(b, "card-layout", s.CardLayout)
 	writeAttr(b, "card-custom-template", s.CardCustomTemplate)
@@ -204,7 +198,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "measure-unit", s.MeasureUnit)
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
@@ -262,7 +256,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "order-direction", s.OrderDirection)
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeBoolAttr(b, "show-categories", s.ShowCategories)
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeBoolAttr(b, "show-overlay-avg", s.ShowOverlayAvg)
@@ -318,7 +312,7 @@ func (s chartScatterSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "aspect", s.Aspect)
 	writeIntAttr(b, "limit", s.Limit)
 	writeAttr(b, "scale", s.Scale.String())
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -363,7 +357,7 @@ func (s chartBubbleSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "aspect", s.Aspect)
 	writeIntAttr(b, "limit", s.Limit)
 	writeAttr(b, "scale", s.Scale.String())
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -404,7 +398,7 @@ func (s chartBulletSpec) writeAttrs(b *strings.Builder) {
 	writeIntAttr(b, "limit", s.Limit)
 	writeJSONObjAttr(b, "labels", s.Labels)
 	writeAttr(b, "scale", s.Scale.String())
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
 }
@@ -437,14 +431,14 @@ type treeNode struct {
 }
 
 // treeLabelSpec defines a simple label component for tree nodes.
-// SelectedStyle and I18nNamespace are not authorable on labels (the schema
-// rejects them); they are populated only via inheritance from the enclosing
-// tree/page/artefact.
+// SelectedStyle is not authorable on labels (the schema rejects it); it is
+// populated only via style inheritance from the enclosing tree/page/artefact.
+// (The i18n namespace needs no field: the engine resolves it from the nearest
+// ancestor's i18n-namespace attribute at runtime.)
 type treeLabelSpec struct {
 	Value         string                   `json:"value"`
 	Dataset       reportspec.DatasetList   `json:"dataset"`
 	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
-	I18nNamespace string                   `json:"i18nNamespace,omitempty"`
 	SelectedStyle string                   `json:"selectedStyle,omitempty"`
 }
 
@@ -458,6 +452,7 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "node-spacing", s.NodeSpacing)
 	writeAttr(b, "edge-style", s.EdgeStyle)
 	writeBoolAttr(b, "show-operators", s.ShowOperators)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 }
 
@@ -506,7 +501,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-type", s.MeasureType)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
-	writeAttr(b, "namespace", s.I18nNamespace)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "category-width", s.CategoryWidth)
 	writeAttr(b, "data-format", s.DataFormat)
 	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
@@ -696,5 +691,6 @@ func (s gridSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-borders", s.ShowBorders)
 	writeAttr(b, "row-header-width", s.RowHeaderWidth)
 	writeAttr(b, "cell-gap", s.CellGap)
+	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 }

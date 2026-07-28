@@ -131,9 +131,11 @@ With `language: de` on the artefact, every table and chart now shows "Ist",
 To apply a translation set only to part of a report, store it under a named
 namespace and point components at it with `i18nNamespace`. The property is
 available on `ReportArtefact` (applies to everything), `LayoutPage`,
-`LayoutCard`, `Grid`, `Tree`, and every leaf component, and inherits to
-children — the nearest ancestor wins, and an explicit `i18nNamespace: ""` opts
-a component out.
+`LayoutCard`, `Grid`, `Tree`, and every leaf component. Inheritance is resolved
+by the engine at render time: a component without its own value uses the nearest
+ancestor that has one — card, then page, then tree/grid containers, then the
+artefact. To opt a component out of an inherited namespace, pin it explicitly
+with `i18nNamespace: _system`.
 
 ```yaml
 ---
