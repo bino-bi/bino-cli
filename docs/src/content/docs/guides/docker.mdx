@@ -1,0 +1,264 @@
+---
+title: Running bino in Docker
+description: Use the official container image to run bino without installing anything locally.
+---
+
+The official container image ships the `bino` binary together with everything it needs to render:
+a Chromium build, fonts, the DuckDB extensions, and the template engine. Nothing is downloaded at
+runtime, so there is no `bino setup` step and the image behaves the same on your laptop, on a CI
+runner, and in an air-gapped cluster.
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Use it when you would rather not install bino locally, when a team needs a pinned toolchain, or when
+you want to serve a `LiveReportArtefact` as a long-running service.
+
+## The image
+
+Two variants are published from the same source:
+
+| Variant | Image                                | Size    | Contains                                     |
+| ------- | ------------------------------------ | ------- | -------------------------------------------- |
+| Full    | `ghcr.io/bino-bi/bino-cli:latest`      | ~1.1 GB | Everything, including Chromium and fonts     |
+| Slim    | `ghcr.io/bino-bi/bino-cli:latest-slim` | ~410 MB | Everything except Chromium                   |
+
+The slim variant runs `serve`, `lint`, `graph`, `lsp`, and `mcp`. It cannot run `build` or `preview`,
+which need a browser to render. Use it for `bino serve` deployments, where a browser is never involved.
+
+| Property          | Value                                                     |
+| ----------------- | --------------------------------------------------------- |
+| Registry          | `ghcr.io/bino-bi/bino-cli`                                 |
+| Tags              | `latest`, `X.Y`, `vX.Y.Z` — each with a `-slim` counterpart |
+| Architectures     | `linux/amd64`, `linux/arm64`                               |
+| Base              | Debian bookworm (glibc)                                    |
+| Entrypoint        | `bino`                                                     |
+| Working directory | `/work`                                                    |
+| User              | uid `1000`, group `0`                                      |
+| `HOME`            | `/opt/bino`                                                |
+| Exposed port      | `8080`                                                     |
+
+## Pull and verify
+
+```bash
+docker pull ghcr.io/bino-bi/bino-cli:latest
+docker run --rm ghcr.io/bino-bi/bino-cli:latest version
+```
+
+The entrypoint is `bino`, so everything after the image name is a bino subcommand:
+
+```bash
+docker run --rm ghcr.io/bino-bi/bino-cli:latest --help
+```
+
+<Aside type="tip">
+Pin an immutable tag everywhere except throwaway experiments. `latest` moves with every release, and
+a report that renders today should render identically next quarter.
+</Aside>
+
+## Run bino against your project
+
+Mount the bundle root — the directory containing `bino.toml` — at `/work`:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/bino-bi/bino-cli:latest lint
+docker run --rm -v "$PWD:/work" ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+```
+
+`/work` is a bind mount, not a copy, so the PDFs land in `dist/` inside your real project directory.
+
+Forward secrets and substitution variables with `-e`. Naming a variable without a value passes it
+through from your shell, so nothing sensitive ends up in your shell history:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -e DB_HOST \
+  -e POSTGRES_PASSWORD \
+  ghcr.io/bino-bi/bino-cli:latest \
+  build --out-dir dist/
+```
+
+These reach both the `${VAR}` substitution in your manifests and the `*FromEnv` fields of a
+`ConnectionSecret` — see [Using database data](/guides/data-from-databases/).
+
+<Aside type="note">
+`/work` must be writable. `bino build` writes `dist/` and a `.bino/cache/` directory inside the
+bundle, so a read-only mount will fail.
+</Aside>
+
+### File ownership
+
+The container runs as uid `1000`. What that means for the files bino writes depends on the host:
+
+| Platform                        | Behaviour                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| macOS, Windows (Docker Desktop) | The file-sharing layer maps ownership to your user. Generated files are yours; nothing to do.  |
+| Linux                           | Files are created as uid `1000`. On a single-user machine that is usually already you.         |
+
+On Linux with a different uid, override the user. The image's caches are group-`0` readable, so any
+uid works as long as you keep group `0`:
+
+```bash
+docker run --rm \
+  -u "$(id -u):0" \
+  -v "$PWD:/work" \
+  ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+```
+
+<Aside type="caution">
+Do not override `HOME` when you override the user. The pre-installed DuckDB extensions and template
+engine live under `/opt/bino/.bino`; with a different `HOME` bino cannot find them and tries to
+download them at runtime, which defeats the point of the image and fails without network access.
+</Aside>
+
+### A shell wrapper
+
+Typing the full `docker run` line gets old. Add a function to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+bino() {
+  docker run --rm -it \
+    -v "$PWD:/work" \
+    -p 8080:8080 \
+    ghcr.io/bino-bi/bino-cli:latest "$@"
+}
+```
+
+Now `bino lint`, `bino build`, and `bino version` behave as if bino were installed locally.
+
+<Aside type="note">
+`bino init` and `bino add` are interactive, so keep `-it`. In CI, drop `-t` — there is no TTY — and
+pass `-y` to run non-interactively.
+</Aside>
+
+## Scaffolding a new bundle
+
+`bino init` creates its target directory relative to the working directory, so mount the *parent*:
+
+```bash
+docker run --rm -it -v "$PWD:/work" ghcr.io/bino-bi/bino-cli:latest \
+  init standard -d monthly-report --title "Monthly Sales" --language en -y
+```
+
+The built-in `minimal` and `standard` scaffolds are embedded in the binary and need no network.
+Remote templates (`bino init owner/report-template`) do — see [Project templates](/concepts/templates/).
+
+## Interactive preview
+
+`bino preview` binds `127.0.0.1` and, unlike `serve`, has no `--addr` flag. Inside a container that
+is the *container's* own loopback, so publishing the port with `-p` gives you a port with nothing
+behind it.
+
+<Tabs>
+  <TabItem label="Linux">
+
+Share the host network stack:
+
+```bash
+docker run --rm -it --network host -v "$PWD:/work" \
+  ghcr.io/bino-bi/bino-cli:latest preview --port 45678
+```
+
+Then open `http://127.0.0.1:45678/`.
+
+  </TabItem>
+  <TabItem label="macOS / Windows">
+
+Docker Desktop does not expose a container's loopback to the host, so `--network host` will not help.
+Use `bino serve` instead — it accepts `--addr` and can bind all interfaces:
+
+```bash
+docker run --rm -it -v "$PWD:/work" -p 8080:8080 \
+  ghcr.io/bino-bi/bino-cli:latest \
+  serve --live sales-dashboard --addr 0.0.0.0:8080
+```
+
+You lose file watching and hot reload, but you get a navigable report at `http://localhost:8080/`.
+
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+For day-to-day authoring, a locally installed bino is still the better tool — the container is at its
+best for reproducible builds and for serving.
+</Aside>
+
+## Environment variables
+
+| Variable                    | Purpose                                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `HOME`                      | `/opt/bino` in the image. Locates the pre-installed extensions and template engine. |
+| `BINO_DISABLE_UPDATE_CHECK` | Set to `1` in the image. Suppresses the 24-hour update check and its network call.  |
+| `CHROME_PATH`               | `/usr/bin/chromium` in the full image. Unset in the slim image.                     |
+| `BNR_MAX_QUERY_ROWS`        | Maximum rows returned per query.                                                    |
+| `BNR_MAX_QUERY_DURATION_MS` | Maximum query runtime in milliseconds.                                              |
+| `NO_COLOR`                  | Disable ANSI colour — useful when logs go to a collector.                           |
+
+See [Runtime limits and environment variables](/appendix/runtime-limits/) for the full list.
+
+## What works offline
+
+Everything below is baked into the image and needs no network at all:
+
+- The `bino` binary.
+- Chromium and a font set for PDF rendering (full variant) — you never run `bino setup`.
+- The DuckDB extensions `excel`, `httpfs`, `postgres`, `mysql`, `prql`, and `webdavfs`.
+- The bn-template-engine bundle.
+
+You can verify an image end-to-end by cutting off its network entirely:
+
+```bash
+docker run --rm --network none -v "$PWD:/work" \
+  ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/
+```
+
+These features still reach the network:
+
+| Feature                                           | Why                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| Remote project templates (`bino init owner/repo`) | Fetched from the source repository.                               |
+| `bino registry`                                   | Talks to the package registry.                                     |
+| Presentations                                     | The Reveal.js runtime is loaded from `cdn.jsdelivr.net` at view time. |
+| DataSources reading HTTP, S3, or a database       | They reach *your* data, not ours.                                  |
+| `bino update`                                     | Do not use it here — change the image tag instead.                 |
+
+<Aside type="caution">
+Presentations are the one feature that is not offline-capable. Without egress the slide deck renders
+blank; the PDF output of the same `ReportArtefact` is unaffected. See [Presentations](/guides/presentations/).
+</Aside>
+
+### The bundled template engine
+
+Each image carries exactly one template engine version, recorded as an image label:
+
+```bash
+docker image inspect ghcr.io/bino-bi/bino-cli:latest \
+  --format '{{ index .Config.Labels "bi.bino.engine-version" }}'
+```
+
+<Aside type="caution">
+Do not pin an `engine-version` in `bino.toml` that differs from the one in the image, and never pin
+`engine-version = "SNAPSHOT"`. bino does not fall back to a download for a pinned version, so the
+build fails with a missing-engine error. Either omit the pin and let bino use the bundled engine, or
+pin exactly the version the image carries.
+</Aside>
+
+## Troubleshooting
+
+| Symptom                                   | Cause                                                            | Fix                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `bino: executable file not found`         | The entrypoint is already `bino`; you repeated the binary name.   | `docker run --rm IMAGE build`, not `... IMAGE bino build`.                  |
+| bino reports an empty project             | Nothing mounted at `/work`, or the wrong directory was mounted.   | Run from the bundle root and pass `-v "$PWD:/work"`.                         |
+| `"google-chrome": executable file not found` | You are on the slim variant, which ships no browser.           | Use the full image for `build` and `preview`.                                |
+| Generated files owned by uid 1000 (Linux) | The container user differs from yours.                            | Add `-u "$(id -u):0"` and leave `HOME` alone.                                |
+| Browser cannot reach `bino preview`       | preview binds the container loopback and has no `--addr`.         | `--network host` on Linux, or use `bino serve --addr 0.0.0.0:8080`.         |
+| Browser cannot reach `bino serve`         | serve defaults to `127.0.0.1`.                                    | Always pass `--addr 0.0.0.0:8080` in a container.                            |
+| `template engine ... not found`           | `engine-version` in `bino.toml` is not the version in the image.  | Remove the pin, or match the bundled version.                                |
+| Slides render blank or unstyled           | Reveal.js is fetched from a CDN at view time.                     | Allow egress to `cdn.jsdelivr.net`, or ship the report as PDF.               |
+| `unresolved variable ${...}`              | The variable was not forwarded into the container.                | Add `-e VAR` or `--env-file`.                                                |
+| Database connection refused               | `localhost` inside the container is the container itself.         | Use `host.docker.internal`, the Compose service name, or the real hostname.  |
+
+---
+
+Next: [Recipe: Deploy a live dashboard](/recipes/live-dashboard-deployment/) puts `bino serve` behind
+Docker Compose and Kubernetes.

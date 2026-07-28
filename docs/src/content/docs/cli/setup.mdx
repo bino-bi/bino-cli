@@ -1,10 +1,12 @@
 ---
 title: bino setup
-description: Install Chrome headless shell and template engine used for PDF rendering.
+description: Install Chrome headless shell, the template engine, and DuckDB extensions.
 ---
 
-bino relies on Chrome headless shell and a template engine to render PDFs.
-Use `bino setup` to download and configure these dependencies.
+bino relies on Chrome headless shell and a template engine to render PDFs, and on DuckDB extensions
+to read your data. Use `bino setup` to download and configure these dependencies.
+
+import { Aside } from "@astrojs/starlight/components";
 
 ## Usage
 
@@ -18,6 +20,10 @@ bino setup [flags]
 
 - `--template-engine` – download or update the bn-template-engine.
 - `--engine-version` – specific template engine version to download (default: latest). For example `v0.37.0`.
+
+### DuckDB extension flags
+
+- `--duckdb-extensions` – download every DuckDB extension the CLI can use into the local cache.
 
 ### General flags
 
@@ -44,6 +50,12 @@ Install a specific template engine version:
 bino setup --template-engine --engine-version v0.37.0
 ```
 
+Install the DuckDB extensions only:
+
+```bash
+bino setup --duckdb-extensions
+```
+
 Preview what would be installed without downloading:
 
 ```bash
@@ -61,6 +73,22 @@ If you need to use a custom Chrome or Chromium installation, set the `CHROME_PAT
 The template engine (`bn-template-engine`) is a JavaScript runtime used to render HTML templates. It is downloaded separately from Chrome headless shell and cached in `~/.bino/cdn/bn-template-engine/`.
 
 Multiple versions can be installed side by side. By default, bino uses the latest locally installed version unless a specific version is pinned in `bino.toml` via the `engine-version` field. See [Project configuration](/concepts/project-configuration) for more details.
+
+## DuckDB extensions
+
+bino queries data through DuckDB, which loads extensions on demand — `excel` and `httpfs` for file and URL sources, `postgres` and `mysql` for databases, `prql` for PRQL datasets, and `webdavfs` for WebDAV secrets. They are normally downloaded the first time they are needed and cached in `~/.bino/cache/duckdb/extensions/`.
+
+`bino setup --duckdb-extensions` downloads all of them up front. Use it to prepare an air-gapped machine, or to warm a CI cache so builds never block on an extension download:
+
+```bash
+bino setup --duckdb-extensions
+```
+
+Extensions are version- and platform-specific, so the cache from one machine only transfers to another with the same OS, architecture, and bino release.
+
+<Aside type="note">
+The [container image](/guides/docker/) already has all of these baked in — you never run `bino setup` there.
+</Aside>
 
 ## Troubleshooting
 

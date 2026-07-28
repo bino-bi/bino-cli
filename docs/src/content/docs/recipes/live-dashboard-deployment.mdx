@@ -1,0 +1,424 @@
+---
+title: "Recipe: Deploy a live dashboard"
+description: Serve a LiveReportArtefact from the container image with Docker, Compose, and Kubernetes.
+sidebar:
+  order: 5
+---
+
+This recipe takes a report bundle that already builds and puts it on the network as an interactive
+web application, using `bino serve` inside the official container image. It goes from a single
+`docker run` to a Compose stack to a Kubernetes Deployment with health probes.
+
+import { Aside } from "@astrojs/starlight/components";
+
+## Prerequisites
+
+- A bino report bundle with at least one working `ReportArtefact`.
+- The container image — see [Running bino in Docker](/guides/docker/).
+- A reverse proxy for anything reachable beyond your laptop (see [TLS and access control](#tls-and-access-control)).
+
+`bino serve` renders HTML, never PDFs, so the `-slim` image variant is enough — it saves about 700 MB
+per pod by leaving Chromium out.
+
+## Define the LiveReportArtefact
+
+`bino serve` serves exactly one `LiveReportArtefact`, named with `--live`. It maps URL routes onto
+existing `ReportArtefact`s and declares the query parameters each route accepts:
+
+```yaml
+# manifests/live.yaml
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  title: "Sales Dashboard"
+  description: "Interactive sales reporting"
+  routes:
+    "/":
+      artefact: overview-report
+    "/region":
+      artefact: region-report
+      title: "Regional Sales"
+      queryParams:
+        - name: REGION
+          type: select
+          default: "all"
+          description: "Filter by region"
+          options:
+            items:
+              - value: "all"
+                label: "All Regions"
+              - value: "EU"
+                label: "Europe"
+              - value: "US"
+                label: "United States"
+        - name: YEAR
+          type: number
+          default: "2026"
+          description: "Reporting year"
+          options:
+            min: 2000
+            max: 2030
+```
+
+A root route `"/"` is required, and every `artefact` must name a `ReportArtefact` that exists in the
+bundle. See the [LiveReportArtefact reference](/reference/live-report-artefact/) for all parameter types.
+
+<Aside type="note">
+Give every parameter a `default` or `optional: true` in a deployed dashboard. A parameter with
+neither is required, and a request that omits it gets an HTML form asking for the value instead of a
+report — fine for a human with a browser, confusing for a link someone shared.
+</Aside>
+
+## Run it with docker run
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -v "$PWD:/work" \
+  -e DB_HOST \
+  -e POSTGRES_PASSWORD \
+  ghcr.io/bino-bi/bino-cli:latest-slim \
+  serve --live sales-dashboard --addr 0.0.0.0:8080
+```
+
+<Aside type="caution">
+`--addr 0.0.0.0:8080` is not optional. `bino serve` binds `127.0.0.1` by default, which is the
+container's own loopback, so `-p 8080:8080` would publish a port with nothing behind it. `--addr` is
+also the one serve flag that cannot be set from `bino.toml` — it must be on the command line.
+</Aside>
+
+Confirm it is up:
+
+```bash
+curl -fsS http://localhost:8080/healthz
+```
+
+The bundle must stay mounted and readable for the whole life of the container. `serve` reloads
+manifests from disk whenever a request misses the render cache — this is not a build-once,
+ship-static model.
+
+### Move flags into bino.toml
+
+Everything except `--addr` can move into the project's `bino.toml`, which keeps the container command
+short and puts the configuration under version control:
+
+```toml
+[serve.args]
+live = "sales-dashboard"
+log-sql = false
+
+[serve.env]
+BNR_MAX_QUERY_ROWS = "250000"
+BNR_MAX_QUERY_DURATION_MS = "60000"
+```
+
+The container command then collapses to `serve --addr 0.0.0.0:8080`. Real environment variables win
+over `[serve.env]`, so a Kubernetes `Secret` still overrides the file.
+
+## Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  dashboard:
+    image: ghcr.io/bino-bi/bino-cli:latest-slim
+    command: ["serve", "--live", "sales-dashboard", "--addr", "0.0.0.0:8080"]
+    volumes:
+      - ./:/work
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+      BNR_MAX_QUERY_ROWS: "250000"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: analytics
+      POSTGRES_USER: reporting
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
+Your `ConnectionSecret` reaches the database at the service name `db`, not `localhost`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: ConnectionSecret
+metadata:
+  name: postgresCredentials
+spec:
+  type: postgres
+  postgres:
+    host: "${DB_HOST:localhost}"
+    passwordFromEnv: POSTGRES_PASSWORD
+```
+
+<Aside type="note">
+The first request after startup is slow: `serve` pre-renders every route once to enumerate the assets
+it needs. Budget for that with `start_period` in a Compose `healthcheck`, and with a `startupProbe` in
+Kubernetes.
+</Aside>
+
+## Kubernetes
+
+### Bake the bundle into an image
+
+Because `serve` reads manifests from disk at request time, the bundle has to be present in every pod
+for the pod's whole life. The cleanest way to do that is a two-line derived image — immutable,
+identical across replicas, and no ReadWriteMany volume:
+
+```dockerfile
+# Dockerfile
+FROM ghcr.io/bino-bi/bino-cli:v0.90.0-slim
+COPY --chown=1000:0 . /work
+```
+
+```bash
+docker build -t registry.example.com/reports/sales-dashboard:2026-07-28 .
+docker push registry.example.com/reports/sales-dashboard:2026-07-28
+```
+
+A ConfigMap works for a bundle of a handful of small manifests, and a git-sync sidecar works if you
+want the bundle to track a branch — but both reintroduce the question of what a given pod is serving
+at any moment. A tagged image answers it.
+
+### Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sales-dashboard
+  labels:
+    app.kubernetes.io/name: sales-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sales-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sales-dashboard
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bino
+          image: registry.example.com/reports/sales-dashboard:2026-07-28
+          args: ["serve", "--live", "sales-dashboard", "--addr", "0.0.0.0:8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: postgres.data.svc.cluster.local
+            - name: BNR_MAX_QUERY_ROWS
+              value: "250000"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sales-dashboard-db
+                  key: password
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+```
+
+<Aside type="note">
+`runAsGroup: 0` matters. The image's baked caches under `/opt/bino/.bino` are owned by uid 1000 with
+group 0 and group-readable, which is what lets a cluster-assigned uid still find the template engine
+and the DuckDB extensions.
+</Aside>
+
+### Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: sales-dashboard
+spec:
+  selector:
+    app.kubernetes.io/name: sales-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+```
+
+Create the secret out of band:
+
+```bash
+kubectl create secret generic sales-dashboard-db \
+  --from-literal=password="$POSTGRES_PASSWORD"
+```
+
+Environment variables are read at request time, not only at startup — `${VAR}` substitution and the
+`*FromEnv` fields of a `ConnectionSecret` are resolved per render. Everything the report needs to
+reach its data must be in the container environment, not just in the build environment.
+
+### About the probes
+
+`GET /healthz` returns `200` with the body `ok`. It is unauthenticated and it does not render a
+report — it tells you the process is up and the HTTP mux is serving, nothing more. That makes it the
+right target for all three probes and the wrong tool for "is my data pipeline healthy".
+
+- **`startupProbe` — be generous.** On boot, `serve` renders every route once to enumerate assets. A
+  bundle with a dozen routes over a slow warehouse can take minutes. The example allows
+  `60 × 5s = 5 minutes`; measure your own boot and add headroom. Liveness and readiness do not run
+  until the startup probe passes, so a generous budget costs nothing at steady state.
+- **`livenessProbe` — never point it at a report route.** A slow render would trip the probe and
+  restart the pod mid-request, making the next render slower still.
+- **Data-freshness checks belong outside.** If you need to know that a route actually renders, use an
+  external synthetic check against a route whose parameters all have defaults.
+
+### Scaling
+
+<Aside type="caution">
+Renders are serialised by a process-wide lock: one pod renders one report at a time, no matter how
+many CPUs it has. Scale out with `replicas`, not with a bigger CPU limit.
+</Aside>
+
+- Concurrency equals replica count. Two replicas serve two simultaneous renders.
+- Each replica keeps its own render cache — an LRU of 100 entries keyed by the query parameters — so
+  the hit rate falls as you add replicas. If your users hit the same parameter combinations
+  repeatedly, sticky routing recovers most of it:
+
+  ```yaml
+  spec:
+    sessionAffinity: ClientIP
+  ```
+
+- A `HorizontalPodAutoscaler` on CPU works poorly here, because a pod blocked on a query looks idle.
+  Scale on request concurrency, or just size for peak.
+
+### TLS and access control
+
+<Aside type="caution">
+`bino serve` has no authentication, no TLS, and no CORS handling. Anything that can reach the port can
+read every route and every query-parameter combination of your report. Never expose it directly to the
+internet.
+</Aside>
+
+Terminate TLS and enforce authentication in a reverse proxy in front of the Service:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sales-dashboard
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start?rd=$escaped_request_uri"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["reports.example.com"]
+      secretName: sales-dashboard-tls
+  rules:
+    - host: reports.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sales-dashboard
+                port:
+                  name: http
+```
+
+On a single host, Caddy, nginx, or Traefik in front of the Compose service does the same job. Add a
+`NetworkPolicy` so only the ingress controller can reach port 8080 directly.
+
+<Aside type="note">
+`/healthz` is unauthenticated by design so kubelet can reach it. It returns nothing but `ok`, so
+leaving it open is harmless — but do not treat its presence as a secret.
+</Aside>
+
+### Refreshing the data
+
+A running `serve` process reloads manifests on a cache miss but answers repeat URLs from its render
+cache, so fresh data appears when a new parameter combination is requested or when the pod restarts.
+For a predictable refresh, restart on a schedule or roll a new bundle image:
+
+```bash
+kubectl rollout restart deployment/sales-dashboard
+```
+
+Wire the image build into the pipeline from [Recipe: CI/CD pipeline](/recipes/ci-cd-pipeline/), and use
+a `pre-serve` hook if a pod needs to warm data before it takes traffic:
+
+```toml
+[serve.hooks]
+pre-serve = ["./scripts/warmup.sh"]
+```
+
+Hooks run with `BINO_MODE=serve`, `BINO_LISTEN_ADDR`, and `BINO_LIVE_ARTEFACT` set — see [Hooks](/concepts/hooks/).
+
+## Troubleshooting
+
+| Symptom                                       | Cause                                                   | Fix                                                              |
+| --------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
+| Connection refused from outside the container | serve bound `127.0.0.1`.                                 | Pass `--addr 0.0.0.0:8080`; it cannot come from `bino.toml`.       |
+| `--live flag is required`                     | No artefact named.                                       | Pass `--live <name>` or set `live` under `[serve.args]`.           |
+| Pod restarts in a loop before serving traffic | `startupProbe` budget shorter than the boot pre-render.  | Raise `failureThreshold`.                                          |
+| A route shows a form instead of the report    | A required query parameter has no value.                 | Give it a `default` or `optional: true`, or pass it in the URL.    |
+| Renders queue up under load                   | Renders are serialised per process.                      | Add replicas.                                                      |
+| OOMKilled                                     | A large result set exceeded the memory limit.            | Raise the limit and lower `BNR_MAX_QUERY_ROWS`.                    |
+| Data never changes                            | The render cache answered the repeat request.            | Restart the pod, or roll a new image tag.                          |
+
+---
+
+See also: [bino serve](/cli/serve/) for the full flag reference,
+[Running bino in Docker](/guides/docker/) for the image itself, and
+[LiveReportArtefact](/reference/live-report-artefact/) for route and parameter options.
