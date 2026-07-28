@@ -91,10 +91,13 @@ type ContentFunc func(context.Context) ([]byte, string, error)
 // no preview chrome (toolbar, modals, preview stylesheet, preview JS bundle).
 // The optional kind disambiguates names that collide across kinds (names are
 // unique per kind, not globally); an empty kind resolves by a fixed priority.
+// The optional language overrides the artefact language for this render; an
+// empty language means "use whatever the manifest says". This package leaves
+// the set of valid languages to the implementation.
 // The output is build-equivalent so it can be safely embedded in an iframe.
 // Implementations should return *HTTPError to signal 404 (unknown name) or
 // 503 (preview still booting); other errors are reported as 500.
-type EmbeddingFunc func(ctx context.Context, name, kind string) ([]byte, error)
+type EmbeddingFunc func(ctx context.Context, name, kind, language string) ([]byte, error)
 
 // EmbeddingOverrideFunc records (or, when remove is true, drops) unsaved
 // editor-buffer content for an absolute file path so the embedding renderer
@@ -391,7 +394,7 @@ func (s *Server) handleEmbedding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := fn(r.Context(), name, r.URL.Query().Get("kind"))
+	body, err := fn(r.Context(), name, r.URL.Query().Get("kind"), r.URL.Query().Get("language"))
 	if err != nil {
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) {

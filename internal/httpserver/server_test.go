@@ -496,7 +496,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "success returns html with cache headers",
-			embedFn: func(context.Context, string, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string, string) ([]byte, error) {
 				return []byte("<html>ok</html>"), nil
 			},
 			pathName:   "foo",
@@ -508,7 +508,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "HTTPError 404 propagates",
-			embedFn: func(context.Context, string, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string, string) ([]byte, error) {
 				return nil, NewHTTPError(http.StatusNotFound, "no embeddable artefact named \"foo\"")
 			},
 			pathName:   "foo",
@@ -517,7 +517,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "HTTPError 503 propagates",
-			embedFn: func(context.Context, string, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string, string) ([]byte, error) {
 				return nil, NewHTTPError(http.StatusServiceUnavailable, "still booting")
 			},
 			pathName:   "foo",
@@ -526,7 +526,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name: "plain error maps to 500",
-			embedFn: func(context.Context, string, string) ([]byte, error) {
+			embedFn: func(context.Context, string, string, string) ([]byte, error) {
 				return nil, errors.New("boom")
 			},
 			pathName:   "foo",
@@ -535,7 +535,7 @@ func TestHandleEmbedding(t *testing.T) {
 		},
 		{
 			name:       "missing path value returns 404",
-			embedFn:    func(context.Context, string, string) ([]byte, error) { return []byte("ok"), nil },
+			embedFn:    func(context.Context, string, string, string) ([]byte, error) { return []byte("ok"), nil },
 			pathName:   "",
 			method:     http.MethodGet,
 			wantStatus: http.StatusNotFound,
@@ -590,7 +590,7 @@ func TestEmbeddingRouteDecodesEscapedScopedName(t *testing.T) {
 	}
 
 	var gotName string
-	srv.SetEmbeddingFunc(func(_ context.Context, name, _ string) ([]byte, error) {
+	srv.SetEmbeddingFunc(func(_ context.Context, name, _, _ string) ([]byte, error) {
 		gotName = name
 		return []byte("<html>ok</html>"), nil
 	})
@@ -608,6 +608,41 @@ func TestEmbeddingRouteDecodesEscapedScopedName(t *testing.T) {
 	}
 	if gotName != "@acme/revenue-table" {
 		t.Errorf("embedding func received name %q, want %q", gotName, "@acme/revenue-table")
+	}
+}
+
+// TestEmbeddingRoutePassesKindAndLanguage proves both query parameters reach the
+// embedding func. The language is what lets a caller preview one component under
+// a different Internationalization bundle; this package forwards it verbatim and
+// leaves the valid set to the implementation.
+func TestEmbeddingRoutePassesKindAndLanguage(t *testing.T) {
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var gotKind, gotLanguage string
+	srv.SetEmbeddingFunc(func(_ context.Context, _, kind, language string) ([]byte, error) {
+		gotKind, gotLanguage = kind, language
+		return []byte("<html>ok</html>"), nil
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"/__embedding/revenue-table?kind=Table&language=en", nil)
+	w := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotKind != "Table" {
+		t.Errorf("embedding func received kind %q, want %q", gotKind, "Table")
+	}
+	if gotLanguage != "en" {
+		t.Errorf("embedding func received language %q, want %q", gotLanguage, "en")
 	}
 }
 
