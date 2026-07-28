@@ -194,6 +194,10 @@ type InternationalizationSpec struct {
 	// Code is the locale code (e.g., "en", "de", "fr").
 	Code string `yaml:"code" json:"code"`
 
+	// Namespace is the lookup namespace the translations are stored under.
+	// Empty means the renderer's default namespace ("_system").
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// Content is a map of translation keys to values.
 	Content map[string]string `yaml:"content,omitempty" json:"content,omitempty"`
 }

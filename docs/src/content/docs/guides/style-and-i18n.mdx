@@ -26,18 +26,22 @@ spec:
 
 ## 2. Define translations
 
+The `code` must exactly equal the artefact's `spec.language` (`de` or `en` — never a
+regional tag like `en-US`), and with no `namespace` the content merges into the
+`_system` bundle every component reads, overriding only the keys you set:
+
 ```yaml
 ---
 apiVersion: bino.bi/v1alpha1
 kind: Internationalization
 metadata:
-  name: systemTexts_en
+  name: labels_en
 spec:
-  code: en-US
-  namespace: _system
+  code: en
   content:
-    report.title.sales_overview: "Sales Overview"
-    report.subtitle.q1_2024: "Q1 2024"
+    global.ac1: "Actual"
+    global.pl1: "Budget"
+    bn-table.there_of: "of which"
 ```
 
 ## 3. Use them in components
@@ -68,7 +72,11 @@ per component — pages and components inherit it as their default, and any elem
 still select its own style (nearest ancestor wins). See
 [Style inheritance](/reference/component-style/#style-inheritance).
 
-For translations, layouts and components refer to text keys (for example
-`report.title.sales_overview`) rather than hard-coded strings.
+Translations apply globally by default. To scope a translation set to part of a
+report, store it under a named `spec.namespace` and point pages or components at it
+with `i18nNamespace` (inheritable, nearest ancestor wins). `Text` components can also
+reference free-form keys with `${t('my.key')}` in their `value` template. The full
+token vocabulary and the `bino add i18n --defaults` scaffold are in the
+[Internationalization reference](/reference/internationalization/).
 
 <img src={dashboardImg.src} alt="A styled report dashboard with corporate theme applied" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />

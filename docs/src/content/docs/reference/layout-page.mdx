@@ -785,7 +785,8 @@ You can combine both: use constraints to filter which pages are included, and pa
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
 | `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the title header. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
-| `spec.titleNamespace` | string | no | `"_system"` | i18n namespace for the title. | `titleNamespace: _system` |
+| `spec.titleNamespace` | string | no | `"_system"` | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children. | `titleNamespace: _system` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for the page title and, via inheritance, all children (their own `i18nNamespace` wins). Takes precedence over `titleNamespace`. | `i18nNamespace: audited` |
 | `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
 | `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
 | `spec.titleDateFormat` | string | no | `none` | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`. none is a simple datestring with no format | `titleDateFormat: quarter` |

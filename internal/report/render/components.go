@@ -63,6 +63,8 @@ type renderCtx struct {
 	// inheritedStyle is the ComponentStyle name inherited from the enclosing
 	// artefact/page/card/grid/tree as a default for child components.
 	// A component's own selectedStyle wins (nearest ancestor wins).
+	// (i18nNamespace needs no such plumbing: the engine resolves the
+	// i18n-namespace attribute from the nearest ancestor at runtime.)
 	inheritedStyle string
 }
 
@@ -991,6 +993,7 @@ func renderTextComponent(s textSpec, assetURLs map[string]string) string {
 		writeAttr(&b, "datasets", value)
 	}
 	writeAttr(&b, "scale", s.Scale.String())
+	writeAttr(&b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(&b, "selected-style", s.SelectedStyle)
 	b.WriteString("></bn-text>")
 	return b.String()

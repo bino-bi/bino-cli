@@ -128,7 +128,6 @@ metadata:
             label: "Latin America"
 spec:
   titleBusinessUnit: "Operations — ${REGION}"
-  titleNamespace: _system
   titleDateStart: 2024-01-01
   titleDateEnd: 2024-12-31
   titleDateFormat: week
@@ -218,7 +217,9 @@ No layout changes. No copy-paste. The new region inherits the same dashboard lay
 
 ## Multi-language support
 
-Add an `Internationalization` manifest to translate labels per language:
+Add an `Internationalization` manifest to translate labels per language. The `code`
+must exactly equal the artefact's `language` (`de` or `en`); free-form keys like these
+are referenced from `Text` components via `${t('deliveries_total')}`:
 
 ```yaml
 # manifests/i18n.yaml
@@ -228,9 +229,8 @@ kind: Internationalization
 metadata:
   name: ops-labels-en
 spec:
-  language: en
-  namespace: _system
-  translations:
+  code: en
+  content:
     deliveries_total: "Total deliveries"
     on_time_pct: "On-time %"
     avg_hours: "Avg. delivery (hours)"
@@ -240,9 +240,8 @@ kind: Internationalization
 metadata:
   name: ops-labels-de
 spec:
-  language: de
-  namespace: _system
-  translations:
+  code: de
+  content:
     deliveries_total: "Lieferungen gesamt"
     on_time_pct: "Pünktlich %"
     avg_hours: "Ø Lieferzeit (Stunden)"

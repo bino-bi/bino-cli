@@ -26,7 +26,7 @@ const (
 //
 //	locale, engineCDN, engineVersion, engineCDN, engineVersion,
 //	revealCDN, revealCDN, theme,
-//	extraHead, locale, contextBody, slides,
+//	extraHead, contextAttrs, locale, contextBody, slides,
 //	revealCDN, revealConfig
 var presentationTemplate = strings.TrimSpace(`<!DOCTYPE html>
 <html dir='ltr' lang='%s'>
@@ -65,7 +65,7 @@ var presentationTemplate = strings.TrimSpace(`<!DOCTYPE html>
 %s
 </head>
 <body>
-  <bn-context locale='%s'>
+  <bn-context%s locale='%s'>
 %s
   <div class='reveal'>
     <div class='slides'>
@@ -202,8 +202,8 @@ var presentationFrameTemplate = strings.TrimSpace(`<!DOCTYPE html>
 `)
 
 // presentationContextTemplate wraps slides in a <bn-context> block for SSE delivery.
-// Format args: locale, contextBody, slides
-var presentationContextTemplate = strings.TrimSpace(`<bn-context locale='%s'>
+// Format args: contextAttrs, locale, contextBody, slides
+var presentationContextTemplate = strings.TrimSpace(`<bn-context%s locale='%s'>
 %s
 <div class='reveal'>
   <div class='slides'>
@@ -367,6 +367,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		revealJSCDN, revealJSCDN,
 		html.EscapeString(presCfg.Theme),
 		headMarkup,
+		i18nNamespaceAttr(artifact.Spec.I18nNamespace),
 		html.EscapeString(locale),
 		contextBody.String(),
 		slides.String(),
@@ -489,6 +490,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 
 	// Context: bn-context block with slides for SSE delivery
 	contextMarkup := fmt.Sprintf(presentationContextTemplate,
+		i18nNamespaceAttr(artifact.Spec.I18nNamespace),
 		html.EscapeString(locale),
 		contextBody.String(),
 		slides.String(),

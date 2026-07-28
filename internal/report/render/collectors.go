@@ -132,9 +132,15 @@ func collectInternationalizations(docs []config.Document) ([]internationalizatio
 		if err != nil {
 			return nil, fmt.Errorf("render: internationalization %s: %w", doc.Name, err)
 		}
+		namespace := strings.TrimSpace(payload.Spec.Namespace)
+		if namespace == "" {
+			// The engine reads the "_system" namespace by default; an entry
+			// without a namespace attribute would otherwise be unreachable.
+			namespace = "_system"
+		}
 		entries = append(entries, internationalization{
 			code:      payload.Spec.Code,
-			namespace: payload.Spec.Namespace,
+			namespace: namespace,
 			value:     value,
 		})
 	}

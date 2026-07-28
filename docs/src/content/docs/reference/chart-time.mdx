@@ -29,9 +29,6 @@ spec:
   orderDirection: asc
   measureScale: M
   measureUnit: "EUR"
-  internationalisation: "_system"
-  internationalisationMode: "default"
-  translation: "chart.revenue.time"
   showCategories: true
   showMeasureScale: true
   showOverlayAvg: true
@@ -319,9 +316,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "fc1"]` |
 | `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dfc1_ac1_pos"]` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `""` or omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
-| `spec.internationalisation` | string | no | — | i18n namespace. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
-| `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |
-| `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue.time"` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
 | `spec.stack` | object | no | — | Stacked rendering configuration. When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces stacked area chart. | see below |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |

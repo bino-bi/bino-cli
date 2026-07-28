@@ -100,7 +100,7 @@ Expressions are evaluated at runtime in the browser with access to bound dataset
 Available variables inside `${...}`:
 
 - `data.<datasetName>` – the bound dataset rows (array of objects).
-- `t('<key>')` – returns a translated string from the active Internationalization manifest.
+- `t('<key>')` – looks the key up in the component's i18n namespace (set via `i18nNamespace`, default `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
 
 ```yaml
 spec:

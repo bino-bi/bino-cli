@@ -26,9 +26,6 @@ spec:
   measureUnit: "EUR"
   percentageScaling: "default" # name or number
   unitScaling: "default"        # name or number
-  internationalisation: "_system"
-  internationalisationMode: "default"
-  translation: "chart.revenue.by_region"
   showCategories: true
   showMeasureScale: true
   limit: 10
@@ -256,9 +253,7 @@ children:
 | `spec.scenarios` | string or array | no | — | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "py1"]` |
 | `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dpy1_ac1_pos"]` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `""` or omitted: auto-scale to fit parent height with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
-| `spec.internationalisation` | string | no | — | i18n namespace. Maps to the `internationalisation` HTML attribute. | `internationalisation: "_system"` |
-| `spec.internationalisationMode` | string | no | — | i18n mode. | `internationalisationMode: "default"` |
-| `spec.translation` | string | no | — | Translation key prefix. | `translation: "chart.revenue"` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
 | `spec.stack` | object | no | — | Stacked bar rendering configuration. | see below |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |

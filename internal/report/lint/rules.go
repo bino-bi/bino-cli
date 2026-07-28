@@ -25,6 +25,9 @@ func DefaultRules() []Rule {
 		refParams,
 		assetReferenceUndefined,
 		assetSourceMissing,
+		i18nCodeUnused,
+		i18nNamespaceUnreferenced,
+		i18nTitleNamespaceDeprecated,
 		// Inline definition rules
 		inlineRefBounds,
 		datasetSourceExclusive,
