@@ -350,9 +350,10 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Description: "Monthly sales report PDF",
 				},
 				Spec: &ReportArtefactSpec{
-					Filename:    "report_{{date}}.pdf",
-					LayoutPages: []string{"$main_page"},
-					Format:      "pdf",
+					Filename:      "report_{{date}}.pdf",
+					LayoutPages:   []string{"$main_page"},
+					Format:        "pdf",
+					SelectedStyle: "corporate-style",
 				},
 			},
 		},

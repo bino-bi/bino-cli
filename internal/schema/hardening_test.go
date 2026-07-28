@@ -251,6 +251,34 @@ spec:
 			wantErr: false,
 		},
 		{
+			name: "ReportArtefact selectedStyle accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: report
+spec:
+  filename: report.pdf
+  title: Report
+  selectedStyle: corporate-style
+`,
+			wantErr: false,
+		},
+		{
+			name: "ReportArtefact selectedStyle typo rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: report
+spec:
+  filename: report.pdf
+  title: Report
+  selectedStyl: corporate-style
+`,
+			wantErr: true,
+		},
+		{
 			name: "inline layout child selectedStyle accepted",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

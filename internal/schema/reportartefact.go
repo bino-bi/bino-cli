@@ -34,6 +34,11 @@ type ReportArtefactSpec struct {
 	// SigningProfile is the name of a SigningProfile manifest for digital signatures.
 	SigningProfile string `yaml:"signingProfile,omitempty" json:"signingProfile,omitempty"`
 
+	// SelectedStyle names a ComponentStyle manifest applied as the default style
+	// for every LayoutPage and component in this artefact. A selectedStyle set on
+	// a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+
 	// LayoutPages lists the LayoutPage names to include in the report.
 	// Each name is rendered with a $ prefix in YAML (e.g., $page_name).
 	LayoutPages []string `yaml:"layoutPages,omitempty" json:"layoutPages,omitempty"`

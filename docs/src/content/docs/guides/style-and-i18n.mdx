@@ -63,6 +63,11 @@ for the full style structure and the list of supporting kinds; the
 [sales-dashboard sample](https://github.com/bino-bi/bino-cli/tree/main/docs/samples/sales-dashboard)
 wires a named style the same way.
 
+To theme a whole report at once, set `selectedStyle` on the `ReportArtefact` instead of
+per component — pages and components inherit it as their default, and any element can
+still select its own style (nearest ancestor wins). See
+[Style inheritance](/reference/component-style/#style-inheritance).
+
 For translations, layouts and components refer to text keys (for example
 `report.title.sales_overview`) rather than hard-coded strings.
 

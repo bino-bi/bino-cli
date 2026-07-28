@@ -60,6 +60,10 @@ type renderCtx struct {
 	pluginRenderer PluginComponentRenderer
 	// renderMode is "build" or "preview".
 	renderMode string
+	// inheritedStyle is the ComponentStyle name inherited from the enclosing
+	// artefact/page/card/grid/tree as a default for child components.
+	// A component's own selectedStyle wins (nearest ancestor wins).
+	inheritedStyle string
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
@@ -97,6 +101,36 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 		}
 	}
 	return rc
+}
+
+// withInheritedStyle returns a render context whose children inherit the given
+// style as their default selectedStyle. Returns rc unchanged when the style is
+// already the inherited one, otherwise a shallow copy so sibling branches are
+// unaffected.
+func (rc *renderCtx) withInheritedStyle(style string) *renderCtx {
+	if style == rc.inheritedStyle {
+		return rc
+	}
+	c := *rc
+	c.inheritedStyle = style
+	return &c
+}
+
+// applyInheritedStyle injects the inherited style as a default selectedStyle
+// into a resolved component spec. The spec's own selectedStyle wins via
+// mergeJSONObjects override semantics. A no-op when inherited is empty.
+func applyInheritedStyle(specRaw json.RawMessage, inherited string) (json.RawMessage, error) {
+	if inherited == "" {
+		return specRaw, nil
+	}
+	base, err := json.Marshal(map[string]string{"selectedStyle": inherited})
+	if err != nil {
+		return nil, fmt.Errorf("marshal inherited style: %w", err)
+	}
+	if len(specRaw) == 0 || string(specRaw) == "null" {
+		return base, nil
+	}
+	return mergeJSONObjects(base, specRaw)
 }
 
 // collectReferencedDatasources scans component documents for $-prefixed dataset
@@ -576,6 +610,10 @@ func renderLayoutPage(raw json.RawMessage, docName string, targetFormat string, 
 			payload.Spec.PageOrientation = "landscape"
 		}
 	}
+	// Inherit the artefact-level style when the page doesn't set its own.
+	if payload.Spec.SelectedStyle == "" {
+		payload.Spec.SelectedStyle = rc.inheritedStyle
+	}
 
 	htmlOut, err = renderLayoutContainer("bn-layout-page", payload.Spec, docName, rc)
 	if err != nil {
@@ -602,9 +640,12 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 		return "", err
 	}
 
+	// Children inherit the page's effective style as their default.
+	childRC := rc.withInheritedStyle(pageSpec.SelectedStyle)
+
 	slotIdx := 0
 	for _, child := range filteredChildren {
-		childHTML, skip, err := renderLayoutChild(child, rc)
+		childHTML, skip, err := renderLayoutChild(child, childRC)
 		if err != nil {
 			return "", err
 		}
@@ -638,9 +679,12 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		return "", err
 	}
 
+	// Children inherit the card's effective style as their default.
+	childRC := rc.withInheritedStyle(cardSpec.SelectedStyle)
+
 	slotIdx := 0
 	for _, child := range filteredChildren {
-		childHTML, skip, err := renderLayoutChild(child, rc)
+		childHTML, skip, err := renderLayoutChild(child, childRC)
 		if err != nil {
 			return "", err
 		}
@@ -693,6 +737,14 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 	return result, nil
 }
 
+// builtinLayoutChildKinds lists the child kinds rendered by renderLayoutChild
+// itself (as opposed to plugin kinds), which all support selectedStyle.
+var builtinLayoutChildKinds = map[string]bool{
+	"Text": true, "Table": true, "ChartStructure": true, "ChartTime": true,
+	"ChartScatter": true, "ChartBubble": true, "ChartBullet": true,
+	"Tree": true, "LayoutCard": true, "Grid": true, "Image": true,
+}
+
 // renderLayoutChild renders a child component within a layout.
 // Returns (html, skip, error) where skip=true means the child should be skipped (missing ref).
 func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip bool, err error) {
@@ -704,6 +756,15 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 	// If ref resolution returned nil (missing ref), skip this child.
 	if effectiveSpec == nil {
 		return "", true, nil
+	}
+
+	// Inject the inherited style as a default; plugin kinds are excluded because
+	// their specs are validated by the plugin and may reject unknown fields.
+	if builtinLayoutChildKinds[child.Kind] {
+		effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
+		if err != nil {
+			return "", false, fmt.Errorf("apply inherited style to %s child: %w", child.Kind, err)
+		}
 	}
 
 	var component string
@@ -1068,9 +1129,12 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 	s.writeAttrs(&b)
 	b.WriteString(">")
 
+	// Nodes inherit the tree's effective style as their default.
+	nodeRC := rc.withInheritedStyle(s.SelectedStyle)
+
 	// Render node content as slotted elements
 	for _, node := range s.Nodes {
-		nodeContent, err := renderTreeNode(node, rc)
+		nodeContent, err := renderTreeNode(node, nodeRC)
 		if err != nil {
 			return "", fmt.Errorf("render tree node %q: %w", node.ID, err)
 		}
@@ -1100,6 +1164,12 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	}
 	if effectiveSpec == nil {
 		return "", nil // Ref was filtered, skip this node
+	}
+
+	// Inject the inherited style as a default; the node's own selectedStyle wins.
+	effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
+	if err != nil {
+		return "", fmt.Errorf("apply inherited style to %s node: %w", node.Kind, err)
 	}
 
 	switch node.Kind {
@@ -1228,6 +1298,7 @@ func renderTreeLabelComponent(s treeLabelSpec) string {
 		writeAttr(&b, "datasets", value)
 	}
 	writeAttr(&b, "scale", s.Scale.String())
+	writeAttr(&b, "selected-style", s.SelectedStyle)
 	b.WriteString("></bn-text>")
 	return b.String()
 }
@@ -1258,9 +1329,12 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	s.writeAttrs(&b)
 	b.WriteString(">")
 
+	// Cells inherit the grid's effective style as their default.
+	childRC := rc.withInheritedStyle(s.SelectedStyle)
+
 	// Render child content as slotted elements
 	for _, child := range s.Children {
-		childContent, err := renderGridChild(child, rc)
+		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
 			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)
 		}
@@ -1291,6 +1365,12 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	}
 	if effectiveSpec == nil {
 		return "", nil // Ref was filtered or optional ref missing, skip this child
+	}
+
+	// Inject the inherited style as a default; the child's own selectedStyle wins.
+	effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
+	if err != nil {
+		return "", fmt.Errorf("apply inherited style to %s grid child: %w", child.Kind, err)
 	}
 
 	switch child.Kind {
@@ -1554,12 +1634,18 @@ func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[strin
 // component element, with no wrapping LayoutPage. Only the leaf component kinds
 // supported by ComponentFromSpec apply; container kinds (Tree, Grid, LayoutCard)
 // need child ref resolution and must be rendered inside a LayoutPage.
-func renderStandaloneComponentDoc(doc config.Document, assetURLs map[string]string) (string, error) {
+// The inheritedStyle parameter is injected as the default selectedStyle; the
+// document's own selectedStyle wins.
+func renderStandaloneComponentDoc(doc config.Document, assetURLs map[string]string, inheritedStyle string) (string, error) {
 	var payload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
 	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
 		return "", fmt.Errorf("parse %s %q: %w", doc.Kind, doc.Name, err)
 	}
-	return ComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
+	effectiveSpec, err := applyInheritedStyle(payload.Spec, inheritedStyle)
+	if err != nil {
+		return "", fmt.Errorf("apply inherited style to %s %q: %w", doc.Kind, doc.Name, err)
+	}
+	return ComponentFromSpec(doc.Kind, effectiveSpec, assetURLs)
 }
