@@ -19,12 +19,14 @@ permissions:
 # duckdb-go v2.5.5 → duckdb-go-bindings v0.3.3 → DuckDB v1.4.4
 #
 # ENGINE_VERSION is the bn-template-engine baked into the container image. It MUST
-# satisfy engine.SupportedEngineRanges (internal/engine/compat.go) and should match
+# satisfy engine.SupportedEngineRanges (internal/engine/compat.go) and MUST match
 # the ENGINE_VERSION default in the Dockerfile. It cannot be resolved dynamically:
 # the engine's GitHub "latest" release skips pre-releases and still points at 0.x.
+# TestDockerEngineVersionPin (internal/engine/pin_test.go) enforces both rules —
+# it drifted below the supported floor for four releases before that test existed.
 env:
   DUCKDB_VERSION: "v1.4.4"
-  ENGINE_VERSION: "v1.0.0-alpha.18"
+  ENGINE_VERSION: "v1.0.0-next.20"
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
@@ -356,6 +358,28 @@ jobs:
           # manifests would only clutter the index.
           provenance: false
           sbom: false
+
+      # Renders a real report with the baked engine, so an image whose
+      # ENGINE_VERSION does not satisfy SupportedEngineRanges cannot reach the
+      # registry — the failure mode that shipped in every v0.91.x image. The
+      # sample uses only inline DataSources and carries an i18n.yaml, so
+      # --network none also asserts the "offline after docker pull" claim and
+      # the sample exercises the engine floor that i18n requires. The runner
+      # architecture matches matrix.platform, so the digest pulls natively.
+      # Scoped to the ReportArtefact: the sample's ScreenshotArtefact captures
+      # a dozen components and dominates the runtime without testing anything
+      # this step is here to test.
+      - name: Smoke-test the built image
+        if: matrix.variant == 'full'
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/docs/samples/sales-dashboard:/work" \
+            -u "$(id -u):0" \
+            "${IMAGE_NAME}@${DIGEST}" \
+            build --out-dir dist/ --artefact sales-dashboard
+          test -s docs/samples/sales-dashboard/dist/sales-dashboard.pdf
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
 
       - name: Export digest
         env:
