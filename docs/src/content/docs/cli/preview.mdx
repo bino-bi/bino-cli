@@ -15,7 +15,11 @@ bino preview [flags]
 Common flags:
 
 - `--work-dir` – report bundle directory (default: `.`).
-- `--port` – HTTP port (default: `45678`).
+- `--port` – HTTP port (default: `45678`), bound on `127.0.0.1`.
+- `--addr` – full listen address, overriding `--port` (e.g. `0.0.0.0:8080`). Needed inside a
+  container, where the default loopback bind is the container's own. A non-loopback bind exposes
+  the unauthenticated `/__explorer/query` SQL endpoint to anything that can reach it, and
+  suppresses the automatic browser open.
 - `--artefact` – preview only specified artefact names (can be repeated).
 - `--exclude-artefact` – skip specified artefact names (can be repeated).
 - `--log-sql` – log executed SQL queries.

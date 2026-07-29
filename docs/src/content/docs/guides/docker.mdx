@@ -8,7 +8,7 @@ a Chromium build, fonts, the DuckDB extensions, and the template engine. Nothing
 runtime, so there is no `bino setup` step and the image behaves the same on your laptop, on a CI
 runner, and in an air-gapped cluster.
 
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside } from "@astrojs/starlight/components";
 
 Use it when you would rather not install bino locally, when a team needs a pinned toolchain, or when
 you want to serve a `LiveReportArtefact` as a long-running service.
@@ -145,38 +145,24 @@ Remote templates (`bino init owner/report-template`) do — see [Project templat
 
 ## Interactive preview
 
-`bino preview` binds `127.0.0.1` and, unlike `serve`, has no `--addr` flag. Inside a container that
-is the *container's* own loopback, so publishing the port with `-p` gives you a port with nothing
-behind it.
-
-<Tabs>
-  <TabItem label="Linux">
-
-Share the host network stack:
-
-```bash
-docker run --rm -it --network host -v "$PWD:/work" \
-  ghcr.io/bino-bi/bino-cli:latest preview --port 45678
-```
-
-Then open `http://127.0.0.1:45678/`.
-
-  </TabItem>
-  <TabItem label="macOS / Windows">
-
-Docker Desktop does not expose a container's loopback to the host, so `--network host` will not help.
-Use `bino serve` instead — it accepts `--addr` and can bind all interfaces:
+`bino preview` binds `127.0.0.1` by default. Inside a container that is the *container's* own
+loopback, so publishing the port with `-p` gives you a port with nothing behind it. Pass `--addr`
+to bind all interfaces instead:
 
 ```bash
 docker run --rm -it -v "$PWD:/work" -p 8080:8080 \
-  ghcr.io/bino-bi/bino-cli:latest \
-  serve --live sales-dashboard --addr 0.0.0.0:8080
+  ghcr.io/bino-bi/bino-cli:latest preview --addr 0.0.0.0:8080
 ```
 
-You lose file watching and hot reload, but you get a navigable report at `http://localhost:8080/`.
+Then open `http://localhost:8080/`. This works the same on Linux, macOS and Windows — no
+`--network host`, which Docker Desktop does not support in a useful way anyway.
 
-  </TabItem>
-</Tabs>
+<Aside type="caution">
+A wildcard bind exposes everything the preview server serves to anything that can reach the
+published port, including `POST /__explorer/query`, which runs arbitrary DuckDB SQL against your
+project with no authentication. Publish to loopback only (`-p 127.0.0.1:8080:8080`) unless you
+control the network.
+</Aside>
 
 <Aside type="tip">
 For day-to-day authoring, a locally installed bino is still the better tool — the container is at its
@@ -251,7 +237,7 @@ pin exactly the version the image carries.
 | bino reports an empty project             | Nothing mounted at `/work`, or the wrong directory was mounted.   | Run from the bundle root and pass `-v "$PWD:/work"`.                         |
 | `"google-chrome": executable file not found` | You are on the slim variant, which ships no browser.           | Use the full image for `build` and `preview`.                                |
 | Generated files owned by uid 1000 (Linux) | The container user differs from yours.                            | Add `-u "$(id -u):0"` and leave `HOME` alone.                                |
-| Browser cannot reach `bino preview`       | preview binds the container loopback and has no `--addr`.         | `--network host` on Linux, or use `bino serve --addr 0.0.0.0:8080`.         |
+| Browser cannot reach `bino preview`       | preview defaults to the container's own loopback.                 | Always pass `--addr 0.0.0.0:8080` in a container.                            |
 | Browser cannot reach `bino serve`         | serve defaults to `127.0.0.1`.                                    | Always pass `--addr 0.0.0.0:8080` in a container.                            |
 | `template engine ... not found`           | `engine-version` in `bino.toml` is not the version in the image.  | Remove the pin, or match the bundled version.                                |
 | Slides render blank or unstyled           | Reveal.js is fetched from a CDN at view time.                     | Allow egress to `cdn.jsdelivr.net`, or ship the report as PDF.               |
