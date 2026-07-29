@@ -1,6 +1,6 @@
 ---
 title: bino add
-description: Interactively create DataSet and DataSource manifests.
+description: Interactively create DataSource, DataSet and Internationalization manifests.
 ---
 
 `bino add` provides interactive wizards for creating new manifest documents.
@@ -10,12 +10,14 @@ It supports three interaction modes: fully interactive, semi-interactive (with p
 
 - `bino add dataset` – create a DataSet manifest
 - `bino add datasource` – create a DataSource manifest
+- `bino add internationalization` (alias `i18n`) – create an Internationalization manifest
 
 ## Usage
 
 ```bash
 bino add dataset [name] [flags]
 bino add datasource [name] [flags]
+bino add i18n [name] [flags]
 ```
 
 ## Interaction Modes
@@ -212,9 +214,67 @@ bino add datasource events \
 
 ---
 
+## bino add i18n
+
+Create an Internationalization manifest holding translation overrides for one language.
+
+The subcommand is also available under its full name, `bino add internationalization`.
+
+### Flags
+
+Language (required in non-interactive mode):
+
+- `--code` – locale code; must exactly match a `ReportArtefact` `spec.language` (`de` or `en`)
+
+Configuration:
+
+- `--namespace` – storage namespace; defaults to `_system`, the bundle every component reads
+- `--defaults` – pre-fill `spec.content` with the engine's complete built-in token set for the locale
+- `--constraint` – constraints in `field:operator:value` format, repeatable
+- `--description` – optional description
+
+Output:
+
+- `--output`, `-o` – output file path (creates new file)
+- `--append-to` – append to existing multi-document YAML file
+
+Behavior:
+
+- `--no-prompt` – disable interactive prompts (fail if required values missing)
+
+### Examples
+
+Create a translation set interactively:
+
+```bash
+bino add internationalization
+```
+
+Create an empty German set to fill in by hand:
+
+```bash
+bino add i18n german \
+  --code de \
+  --output i18n/de.yaml \
+  --no-prompt
+```
+
+Scaffold every built-in token with its default value, as a starting point for overrides:
+
+```bash
+bino add i18n german --code de --defaults \
+  --output i18n/de.yaml --no-prompt
+```
+
+`--defaults` is only available for the locales the engine ships bundles for (`de` and `en`).
+See the [Internationalization reference](/reference/internationalization/) for what each
+token controls.
+
+---
+
 ## Name Validation
 
-DataSet and DataSource names must follow these rules:
+Manifest names must follow these rules:
 
 - Start with a lowercase letter
 - Contain only lowercase letters, numbers, and underscores
