@@ -44,6 +44,12 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-table.part_of":   "in % von",
 		"bn-table.SUM_TOTAL": "❖",
 		"bn-table.REST":      "REST",
+		"bn-table.no-data":   "==Keine Daten==",
+
+		"bn-chart-time.no-data": "==Keine Daten==",
+
+		"bn-chart-structure.no-data": "==Keine Daten==",
+		"bn-chart-structure.REST":    "REST",
 
 		"bn-chart-scatter.axis.in":            "in",
 		"bn-chart-scatter.legend.title":       "",
@@ -122,12 +128,19 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-title.CONNECTOR_WS": " and ",
 		"bn-title.in":           "in",
 
+		"bn-table.in":        "in",
 		"bn-table.category":  " ",
 		"bn-table.operation": " ",
 		"bn-table.there_of":  "there of",
 		"bn-table.part_of":   "in % of",
 		"bn-table.SUM_TOTAL": "❖",
 		"bn-table.REST":      "REST",
+		"bn-table.no-data":   "==No Data==",
+
+		"bn-chart-time.no-data": "==No Data==",
+
+		"bn-chart-structure.no-data": "==No Data==",
+		"bn-chart-structure.REST":    "REST",
 
 		"bn-chart-scatter.axis.in":            "in",
 		"bn-chart-scatter.legend.title":       "",

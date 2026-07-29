@@ -2486,14 +2486,352 @@
           "description": "Lookup namespace the translations are stored under. Defaults to '_system', the namespace every component reads; entries merge over the built-in labels. A named namespace is only consulted by components whose i18nNamespace points at it."
         },
         "content": {
-          "description": "Internationalization payload expressed as JSON or an inline object.",
+          "description": "Internationalization payload: a flat map of dotted translation keys to label strings, or a JSON string holding the same map.",
           "oneOf": [
             { "type": "string", "minLength": 2 },
-            { "type": "object" }
+            { "$ref": "#/$defs/internationalizationContent" }
           ]
         }
       },
       "additionalProperties": false
+    },
+    "internationalizationContent": {
+      "type": "object",
+      "description": "Flat translation map: dotted keys to label strings, merged over the engine's built-in bundle for spec.code. Write keys flat ('global.ac1: Actual'), not as a nested 'global:' block. The named properties below are the engine's built-in tokens; any other key is also accepted and can be read from a Text with t('my.key'). Scaffold a file holding every token with its default value via `bino add i18n <name> --code <de|en> --defaults`.",
+      "properties": {
+        "global.ac1": {
+          "type": "string",
+          "description": "Actual scenario label, series 1."
+        },
+        "global.pp1": {
+          "type": "string",
+          "description": "Previous-period scenario label, series 1."
+        },
+        "global.fc1": {
+          "type": "string",
+          "description": "Forecast scenario label, series 1."
+        },
+        "global.pl1": {
+          "type": "string",
+          "description": "Plan scenario label, series 1."
+        },
+        "global.ac2": {
+          "type": "string",
+          "description": "Actual scenario label, series 2."
+        },
+        "global.pp2": {
+          "type": "string",
+          "description": "Previous-period scenario label, series 2."
+        },
+        "global.fc2": {
+          "type": "string",
+          "description": "Forecast scenario label, series 2."
+        },
+        "global.pl2": {
+          "type": "string",
+          "description": "Plan scenario label, series 2."
+        },
+        "global.ac3": {
+          "type": "string",
+          "description": "Actual scenario label, series 3."
+        },
+        "global.pp3": {
+          "type": "string",
+          "description": "Previous-period scenario label, series 3."
+        },
+        "global.fc3": {
+          "type": "string",
+          "description": "Forecast scenario label, series 3."
+        },
+        "global.pl3": {
+          "type": "string",
+          "description": "Plan scenario label, series 3."
+        },
+        "global.ac4": {
+          "type": "string",
+          "description": "Actual scenario label, series 4."
+        },
+        "global.pp4": {
+          "type": "string",
+          "description": "Previous-period scenario label, series 4."
+        },
+        "global.fc4": {
+          "type": "string",
+          "description": "Forecast scenario label, series 4."
+        },
+        "global.pl4": {
+          "type": "string",
+          "description": "Plan scenario label, series 4."
+        },
+        "global.ORDER_asc": {
+          "type": "string",
+          "description": "Indicator appended to an ascending-sorted column header."
+        },
+        "global.ORDER_desc": {
+          "type": "string",
+          "description": "Indicator appended to a descending-sorted column header."
+        },
+        "global.ibcssymbol_delta_ac": {
+          "type": "string",
+          "description": "Absolute-variance symbol against actual. '{%}' is replaced at render time with the comparison scenario's abbreviation."
+        },
+        "global.ibcssymbol_delta_generic": {
+          "type": "string",
+          "description": "Absolute-variance symbol, generic (parenthesised) form. '{%}' is replaced at render time with the comparison scenario's abbreviation."
+        },
+        "global.ibcssymbol_delta_ac_relative": {
+          "type": "string",
+          "description": "Relative-variance symbol against actual. '{%}' is replaced at render time with the comparison scenario's abbreviation."
+        },
+        "global.ibcssymbol_delta_generic_relative": {
+          "type": "string",
+          "description": "Relative-variance symbol, generic (parenthesised) form. '{%}' is replaced at render time with the comparison scenario's abbreviation."
+        },
+        "bn-title.SEPERATOR_WS": {
+          "type": "string",
+          "description": "Separator placed between title segments. The engine really does spell the key 'SEPERATOR_WS'."
+        },
+        "bn-title.CONNECTOR_WS": {
+          "type": "string",
+          "description": "Connector placed before the final title segment."
+        },
+        "bn-title.in": {
+          "type": "string",
+          "description": "Prefix introducing the measure unit in a title, as in 'in k\u20ac'."
+        },
+        "bn-table.in": {
+          "type": "string",
+          "description": "Prefix introducing the measure scale and unit in a column header, as in 'in k\u20ac'."
+        },
+        "bn-table.category": {
+          "type": "string",
+          "description": "Header text above the category column."
+        },
+        "bn-table.operation": {
+          "type": "string",
+          "description": "Header text above the operation (+/-) column."
+        },
+        "bn-table.there_of": {
+          "type": "string",
+          "description": "Row-header prefix for rows drilled out of their parent."
+        },
+        "bn-table.part_of": {
+          "type": "string",
+          "description": "Row-header prefix for rows expressed as a share of their parent."
+        },
+        "bn-table.SUM_TOTAL": {
+          "type": "string",
+          "description": "Label of the grand-total row when spec.sumTitle is not set."
+        },
+        "bn-table.REST": {
+          "type": "string",
+          "description": "Label of the row aggregating every row beyond spec.limit."
+        },
+        "bn-table.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-time.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-structure.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-structure.REST": {
+          "type": "string",
+          "description": "Label of the bar aggregating every row beyond spec.limit."
+        },
+        "bn-chart-scatter.axis.in": {
+          "type": "string",
+          "description": "Prefix introducing the measure unit on an axis caption, as in 'in k\u20ac'."
+        },
+        "bn-chart-scatter.legend.title": {
+          "type": "string",
+          "description": "Legend heading. Empty by default, which hides it."
+        },
+        "bn-chart-scatter.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-scatter.xy-prop-json": {
+          "type": "string",
+          "description": "Diagnostic: an axis or label property did not parse as JSON. Placeholder: {{prop}}."
+        },
+        "bn-chart-scatter.xy-measure-invalid": {
+          "type": "string",
+          "description": "Diagnostic: a measure is neither a scenario column nor a variance token. Placeholders: {{prop}}, {{measure}}."
+        },
+        "bn-chart-scatter.xy-family-mixed": {
+          "type": "string",
+          "description": "Diagnostic: measures span more than one scenario family. Placeholder: {{families}}."
+        },
+        "bn-chart-scatter.xy-level-order": {
+          "type": "string",
+          "description": "Diagnostic: facet, series and point levels do not strictly descend the hierarchy. Placeholder: {{detail}}."
+        },
+        "bn-chart-scatter.xy-duplicate-point": {
+          "type": "string",
+          "description": "Diagnostic: duplicate point identities were dropped, first row wins. Placeholders: {{count}}, {{names}}."
+        },
+        "bn-chart-scatter.xy-point-clipped": {
+          "type": "string",
+          "description": "Diagnostic: points outside the explicit min/max were excluded. Placeholder: {{count}}."
+        },
+        "bn-chart-scatter.xy-variance-nodata": {
+          "type": "string",
+          "description": "Diagnostic: rows without variance data were excluded. Placeholder: {{count}}."
+        },
+        "bn-chart-scatter.xy-label-unknown": {
+          "type": "string",
+          "description": "Diagnostic: one or more label names are unknown. Placeholder: {{names}}."
+        },
+        "bn-chart-scatter.xy-series-overflow": {
+          "type": "string",
+          "description": "Diagnostic: more series than palette colours, so colours repeat with a tint step."
+        },
+        "bn-chart-scatter.xy-point-budget": {
+          "type": "string",
+          "description": "Diagnostic: the point budget was exceeded; consider spec.limit. Placeholder: {{count}}."
+        },
+        "bn-chart-scatter.xy-iso-domain": {
+          "type": "string",
+          "description": "Diagnostic: iso-lines were skipped because an axis domain is not strictly positive."
+        },
+        "bn-chart-bubble.axis.in": {
+          "type": "string",
+          "description": "Prefix introducing the measure unit on an axis caption, as in 'in k\u20ac'."
+        },
+        "bn-chart-bubble.legend.title": {
+          "type": "string",
+          "description": "Legend heading. Empty by default, which hides it."
+        },
+        "bn-chart-bubble.legend.size": {
+          "type": "string",
+          "description": "Legend heading for the bubble-size scale."
+        },
+        "bn-chart-bubble.legend.compare": {
+          "type": "string",
+          "description": "Legend heading for the compareWith scenario series."
+        },
+        "bn-chart-bubble.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-bubble.xy-prop-json": {
+          "type": "string",
+          "description": "Diagnostic: an axis or label property did not parse as JSON. Placeholder: {{prop}}."
+        },
+        "bn-chart-bubble.xy-measure-invalid": {
+          "type": "string",
+          "description": "Diagnostic: a measure is neither a scenario column nor a variance token. Placeholders: {{prop}}, {{measure}}."
+        },
+        "bn-chart-bubble.xy-family-mixed": {
+          "type": "string",
+          "description": "Diagnostic: measures span more than one scenario family. Placeholder: {{families}}."
+        },
+        "bn-chart-bubble.xy-level-order": {
+          "type": "string",
+          "description": "Diagnostic: facet, series and point levels do not strictly descend the hierarchy. Placeholder: {{detail}}."
+        },
+        "bn-chart-bubble.xy-duplicate-point": {
+          "type": "string",
+          "description": "Diagnostic: duplicate point identities were dropped, first row wins. Placeholders: {{count}}, {{names}}."
+        },
+        "bn-chart-bubble.xy-point-clipped": {
+          "type": "string",
+          "description": "Diagnostic: points outside the explicit min/max were excluded. Placeholder: {{count}}."
+        },
+        "bn-chart-bubble.xy-variance-nodata": {
+          "type": "string",
+          "description": "Diagnostic: rows without variance data were excluded. Placeholder: {{count}}."
+        },
+        "bn-chart-bubble.xy-label-unknown": {
+          "type": "string",
+          "description": "Diagnostic: one or more label names are unknown. Placeholder: {{names}}."
+        },
+        "bn-chart-bubble.xy-series-overflow": {
+          "type": "string",
+          "description": "Diagnostic: more series than palette colours, so colours repeat with a tint step."
+        },
+        "bn-chart-bubble.xy-point-budget": {
+          "type": "string",
+          "description": "Diagnostic: the point budget was exceeded; consider spec.limit. Placeholder: {{count}}."
+        },
+        "bn-chart-bubble.xy-compare-variance": {
+          "type": "string",
+          "description": "Diagnostic: compareWith cannot be combined with variance measures on the axes."
+        },
+        "bn-chart-bubble.bubble-size-negative": {
+          "type": "string",
+          "description": "Diagnostic: bubbles with a negative size value were excluded. Placeholder: {{count}}."
+        },
+        "bn-chart-bubble.bubble-share-range": {
+          "type": "string",
+          "description": "Diagnostic: share values outside [0,1] were clamped. Placeholder: {{count}}."
+        },
+        "bn-chart-bubble.bubble-scale-group-unknown": {
+          "type": "string",
+          "description": "Diagnostic: size.group names no ScalingGroup in scope. Placeholder: {{group}}."
+        },
+        "bn-chart-bubble.bubble-scale-overflow": {
+          "type": "string",
+          "description": "Diagnostic: group-scaled bubbles exceeded the panel and were drawn true-size. Placeholder: {{count}}."
+        },
+        "bn-chart-bullet.axis.in": {
+          "type": "string",
+          "description": "Prefix introducing the measure unit on an axis caption, as in 'in k\u20ac'."
+        },
+        "bn-chart-bullet.no-data": {
+          "type": "string",
+          "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-bullet.target": {
+          "type": "string",
+          "description": "Legend label for the target marker."
+        },
+        "bn-chart-bullet.bullet-prop-json": {
+          "type": "string",
+          "description": "Diagnostic: a property did not parse as JSON. Placeholder: {{prop}}."
+        },
+        "bn-chart-bullet.bullet-measure-invalid": {
+          "type": "string",
+          "description": "Diagnostic: a measure is not a scenario column (ac1-pl4). Placeholders: {{prop}}, {{measure}}."
+        },
+        "bn-chart-bullet.bullet-measure-same": {
+          "type": "string",
+          "description": "Diagnostic: actual and target map the same scenario. Placeholder: {{measure}}."
+        },
+        "bn-chart-bullet.bullet-target-none": {
+          "type": "string",
+          "description": "Diagnostic: no target scenario was found, so only actual bars are drawn."
+        },
+        "bn-chart-bullet.bullet-target-missing": {
+          "type": "string",
+          "description": "Diagnostic: rows without a target value lose their variance and marker. Placeholder: {{count}}."
+        },
+        "bn-chart-bullet.bullet-target-invalid": {
+          "type": "string",
+          "description": "Diagnostic: rows with a target of zero or less cannot be normalized. Placeholder: {{count}}."
+        },
+        "bn-chart-bullet.bullet-mixed-operation": {
+          "type": "string",
+          "description": "Diagnostic: a KPI group mixes '+' and '-' rows, so sentiment falls back to '+'. Placeholder: {{count}}."
+        },
+        "bn-chart-bullet.bullet-ranges-ignored": {
+          "type": "string",
+          "description": "Diagnostic: ranges is ignored in normalized (IBCS) mode; set normalize to 'none'."
+        },
+        "bn-chart-bullet.bullet-ranges-invalid": {
+          "type": "string",
+          "description": "Diagnostic: ranges expects up to 2 ascending positive fractions of the target. Placeholder: {{detail}}."
+        }
+      },
+      "additionalProperties": {
+        "type": "string",
+        "description": "Free-form translation key. Any dotted key is accepted; read it in a Text with t('my.key')."
+      }
     },
     "layoutPageSpec": {
       "type": "object",
