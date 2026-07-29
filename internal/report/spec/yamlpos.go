@@ -684,6 +684,12 @@ func ParseYAMLNodes(content string) ([]*yaml.Node, error) {
 // When a path is only partially resolved (e.g., "spec.children" where "children" doesn't
 // exist under "spec"), the position of the last matched key is returned, so the user
 // sees the parent where the missing field should be added.
+//
+// Mapping keys may themselves contain dots — Internationalization content is a flat
+// map of tokens like "global.ac1" — so at every mapping node the longest run of
+// remaining segments that matches a literal key wins before falling back to a single
+// segment. Without that, "spec.content.global.ac1" would look for a "global" mapping
+// under "content", miss, and report the "content:" line instead of the offending key.
 func ResolvePathPosition(node *yaml.Node, path string) (line, col int, ok bool) {
 	if node == nil || path == "" || path == "(root)" {
 		if node != nil {
@@ -697,43 +703,56 @@ func ResolvePathPosition(node *yaml.Node, path string) (line, col int, ok bool) 
 	// Track the key node of the last successfully matched segment
 	lastKeyLine, lastKeyCol := node.Line, node.Column
 
-	for _, part := range parts {
-		found := false
+	for i := 0; i < len(parts); {
+		consumed := 0
 
 		switch current.Kind {
 		case yaml.MappingNode:
-			// Mapping nodes have alternating key/value pairs in Content
-			for i := 0; i+1 < len(current.Content); i += 2 {
-				keyNode := current.Content[i]
-				valueNode := current.Content[i+1]
-				if keyNode.Value == part {
-					lastKeyLine, lastKeyCol = keyNode.Line, keyNode.Column
-					current = valueNode
-					found = true
-					break
+			// Longest match first, so a literal "global.ac1" key beats "global".
+			for end := len(parts); end > i; end-- {
+				keyNode, valueNode := lookupMappingKey(current, strings.Join(parts[i:end], "."))
+				if keyNode == nil {
+					continue
 				}
+				lastKeyLine, lastKeyCol = keyNode.Line, keyNode.Column
+				current = valueNode
+				consumed = end - i
+				break
 			}
 
 		case yaml.SequenceNode:
 			// Try to parse as array index
 			var idx int
-			if _, err := fmt.Sscanf(part, "%d", &idx); err == nil && idx >= 0 && idx < len(current.Content) {
+			if _, err := fmt.Sscanf(parts[i], "%d", &idx); err == nil && idx >= 0 && idx < len(current.Content) {
 				current = current.Content[idx]
 				lastKeyLine, lastKeyCol = current.Line, current.Column
-				found = true
+				consumed = 1
 			}
 
 		default:
 		}
 
-		if !found {
+		if consumed == 0 {
 			// Path segment not found — return the position of the last matched key.
 			// This gives the user the location of the parent where the field should exist.
 			return lastKeyLine, lastKeyCol, true
 		}
+		i += consumed
 	}
 
 	return current.Line, current.Column, true
+}
+
+// lookupMappingKey returns the key and value nodes for name in a mapping node,
+// or (nil, nil) when the mapping has no such key.
+func lookupMappingKey(mapping *yaml.Node, name string) (key, value *yaml.Node) {
+	// Mapping nodes have alternating key/value pairs in Content
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == name {
+			return mapping.Content[i], mapping.Content[i+1]
+		}
+	}
+	return nil, nil
 }
 
 // ExtractSourceSnippet extracts lines around the given 1-based line number

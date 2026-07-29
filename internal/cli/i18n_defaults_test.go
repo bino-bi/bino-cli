@@ -25,9 +25,10 @@ func TestDefaultI18nTokens(t *testing.T) {
 		t.Errorf("unexpected there_of labels: de=%q en=%q", de["bn-table.there_of"], en["bn-table.there_of"])
 	}
 
-	// The engine's en bundle has no bn-table.in key; everything else matches.
+	// Every locale ships the same key set. A key present in one bundle but not
+	// the other makes t() return the raw key to the reader in that locale.
 	for key := range de {
-		if _, ok := en[key]; !ok && key != "bn-table.in" {
+		if _, ok := en[key]; !ok {
 			t.Errorf("key %q exists in de but not en", key)
 		}
 	}

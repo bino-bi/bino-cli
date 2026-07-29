@@ -1356,3 +1356,88 @@ func TestValidate_ChartLevel(t *testing.T) {
 		}
 	}
 }
+
+// TestValidate_Internationalization pins the typed spec.content: built-in tokens
+// and free-form keys are both accepted, but values must be strings.
+//
+// Note what is deliberately NOT rejected: a mistyped token like `global.acl`.
+// Free-form keys must stay legal because Text components read `t('my.key')`,
+// so the tail is `additionalProperties: {type: string}` and never `false`.
+// Tightening that would break the documented Text workflow; catching typos
+// belongs in a lint rule, which can name the file and line.
+func TestValidate_Internationalization(t *testing.T) {
+	doc := func(spec string) string {
+		return "apiVersion: bino.bi/v1alpha1\nkind: Internationalization\nmetadata:\n  name: labels\nspec:\n" + spec
+	}
+
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name:    "built-in tokens accepted",
+			yaml:    doc("  code: en\n  content:\n    global.ac1: Actual\n    bn-table.there_of: of which\n"),
+			wantErr: false,
+		},
+		{
+			name:    "free-form key accepted",
+			yaml:    doc("  code: de\n  content:\n    report.title: Umsatzübersicht\n"),
+			wantErr: false,
+		},
+		{
+			name:    "mistyped token still accepted (see doc comment)",
+			yaml:    doc("  code: en\n  content:\n    global.acl: Actual\n"),
+			wantErr: false,
+		},
+		{
+			name:    "JSON string content accepted",
+			yaml:    doc(`  code: en` + "\n" + `  content: '{"global.ac1":"Actual"}'` + "\n"),
+			wantErr: false,
+		},
+		{
+			name:    "named namespace accepted",
+			yaml:    doc("  code: de\n  namespace: audited\n  content:\n    global.ac1: Ist\n"),
+			wantErr: false,
+		},
+		{
+			name:    "numeric value rejected",
+			yaml:    doc("  code: en\n  content:\n    report.year: 2024\n"),
+			wantErr: true,
+		},
+		{
+			// yaml.v3 only treats true/True/TRUE as booleans, so this is the
+			// form that actually reaches the validator as a bool.
+			name:    "boolean value rejected",
+			yaml:    doc("  code: en\n  content:\n    global.ac1: true\n"),
+			wantErr: true,
+		},
+		{
+			name:    "nested content rejected",
+			yaml:    doc("  code: en\n  content:\n    global:\n      ac1: Actual\n"),
+			wantErr: true,
+		},
+		{
+			name:    "missing content rejected",
+			yaml:    doc("  code: en\n"),
+			wantErr: true,
+		},
+		{
+			name:    "spec key typo rejected",
+			yaml:    doc("  code: en\n  contnet:\n    global.ac1: Actual\n"),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

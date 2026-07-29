@@ -236,3 +236,48 @@ func TestExtractSourceSnippet(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePathPosition_DottedMappingKeys(t *testing.T) {
+	// Internationalization content is a flat map whose keys contain dots, so a
+	// naive strings.Split on the path never matches them.
+	content := `kind: Internationalization
+spec:
+  code: de
+  content:
+    global.ac1: Ist
+    bn-table.there_of: davon
+    report.title: Umsatz`
+
+	nodes, err := ParseYAMLNodes(content)
+	if err != nil {
+		t.Fatalf("ParseYAMLNodes() error = %v", err)
+	}
+	root := nodes[0]
+
+	tests := []struct {
+		name     string
+		path     string
+		wantLine int
+	}{
+		{name: "dotted key", path: "spec.content.global.ac1", wantLine: 5},
+		{name: "dotted key with underscore", path: "spec.content.bn-table.there_of", wantLine: 6},
+		{name: "free-form dotted key", path: "spec.content.report.title", wantLine: 7},
+		// A fully resolved path returns the value node, and a mapping value
+		// begins on its first entry's line — pre-existing behavior.
+		{name: "the content mapping itself", path: "spec.content", wantLine: 5},
+		{name: "unknown key falls back to the content key", path: "spec.content.bn-table.nope", wantLine: 4},
+		{name: "plain nested path still resolves", path: "spec.code", wantLine: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			line, _, ok := ResolvePathPosition(root, tt.path)
+			if !ok {
+				t.Fatalf("ResolvePathPosition(%q) ok = false", tt.path)
+			}
+			if line != tt.wantLine {
+				t.Errorf("ResolvePathPosition(%q) line = %d, want %d", tt.path, line, tt.wantLine)
+			}
+		})
+	}
+}
