@@ -25,6 +25,9 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
 | `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
 | `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
+| `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
+| `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
+| `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
 
 ## Rule details
 
@@ -411,6 +414,92 @@ spec:
 metadata:
   name: my_data
 ```
+
+### i18n-code-unused
+
+Locale lookup is an exact string match against the artefact's `spec.language`. An `Internationalization` document whose `spec.code` matches no artefact language is loaded into the browser store and then never read — most often because the code carries a region subtag.
+
+**Example problem:**
+
+```yaml
+kind: ReportArtefact
+metadata:
+  name: sales_report
+spec:
+  language: de # …the report renders in 'de'…
+---
+kind: Internationalization
+metadata:
+  name: labels_de
+spec:
+  code: de-DE # …but this bundle is filed under 'de-DE' and never consulted
+  content:
+    global.ac1: Ist
+```
+
+**Fix:** Use the plain language code, exactly as written on the artefact. There is no BCP 47 normalization.
+
+```yaml
+spec:
+  code: de
+```
+
+**See also:** [Internationalization](/reference/internationalization/)
+
+### i18n-namespace-unreferenced
+
+`spec.namespace` files a translation set under a named bundle instead of `_system`. A named bundle is only consulted by components whose `i18nNamespace` (or a page/card `titleNamespace`) points at it, so a namespace nothing references is dead weight.
+
+**Example problem:**
+
+```yaml
+kind: Internationalization
+metadata:
+  name: audited_labels_de
+spec:
+  code: de
+  namespace: audited # nothing in the bundle sets i18nNamespace: audited
+  content:
+    global.ac1: Ist (geprüft)
+```
+
+**Fix:** Point a component, card, page or the artefact at it — or drop `spec.namespace` so the content merges into `_system`, the bundle every component reads.
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: audited_page
+spec:
+  i18nNamespace: audited
+```
+
+**See also:** [Scoped overrides with `i18nNamespace`](/reference/internationalization/#scoped-overrides-with-i18nnamespace)
+
+### i18n-title-namespace-deprecated
+
+`titleNamespace` on `LayoutPage` / `LayoutCard` only ever applied to that page or card's own title; it never reached the children. `i18nNamespace` supersedes it, takes precedence when both are set, and inherits to every descendant.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: audited_page
+spec:
+  titleNamespace: audited # the title is translated, the table below is not
+  children:
+    - kind: Table
+      ref: sales_table
+```
+
+**Fix:** Rename it to `i18nNamespace`.
+
+```yaml
+spec:
+  i18nNamespace: audited # title and children both resolve against 'audited'
+```
+
+**See also:** [Scoped overrides with `i18nNamespace`](/reference/internationalization/#scoped-overrides-with-i18nnamespace)
 
 ## Adding custom rules
 

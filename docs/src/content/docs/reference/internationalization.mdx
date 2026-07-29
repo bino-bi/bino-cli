@@ -24,8 +24,10 @@ Three rules determine whether your translations are used:
    points at it (missing keys still fall back to `_system` per key).
 3. **Keys are fixed, dotted strings.** The built-in vocabulary below is what
    components actually request — a key like `global.ac1` is a literal string,
-   not a path. Free-form keys are only useful from a `Text` component's
-   `${t('…')}` templates.
+   not a path. Write the map flat; a nested `global:` block is rejected. Every
+   value must be a string, so quote anything YAML would otherwise read as a
+   number or a boolean (`report.year: "2024"`). Free-form keys are only useful
+   from a `Text` component's `${t('…')}` templates.
 
 ## Spec outline
 
@@ -46,7 +48,7 @@ Fields:
 
 - `spec.code` – language code, exactly `de` or `en` (must equal the artefact's `spec.language`).
 - `spec.namespace` – storage namespace, default `_system`. Only set this for [scoped overrides](#scoped-overrides-with-i18nnamespace).
-- `spec.content` – key/value map as YAML object or JSON string.
+- `spec.content` – flat map of dotted keys to label strings, or a JSON string holding the same map.
 
 Multiple manifests for the same namespace and code merge in document order (later wins per key).
 
@@ -82,13 +84,16 @@ The `{%}` token is replaced at render time with the comparison scenario's abbrev
 
 ### Table labels (`bn-table.` prefix)
 
-| Key | de | en |
-|-----|----|----|
-| `bn-table.there_of` | davon | there of |
-| `bn-table.part_of` | in % von | in % of |
-| `bn-table.SUM_TOTAL` | ❖ | ❖ |
-| `bn-table.REST` | REST | REST |
-| `bn-table.in` | in | — |
+| Key | de | en | What it labels |
+|-----|----|----|----------------|
+| `bn-table.there_of` | davon | there of | Row-header prefix for rows drilled out of their parent |
+| `bn-table.part_of` | in % von | in % of | Row-header prefix for rows shown as a share of their parent |
+| `bn-table.SUM_TOTAL` | ❖ | ❖ | The grand-total row, when `spec.sumTitle` is not set |
+| `bn-table.REST` | REST | REST | The row aggregating everything beyond `spec.limit` |
+| `bn-table.in` | in | in | Prefix before the measure scale and unit, as in `in k€` |
+| `bn-table.category` | `" "` | `" "` | Header above the category column (a single space by default) |
+| `bn-table.operation` | `" "` | `" "` | Header above the operation (+/−) column |
+| `bn-table.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
 
 ### Title connectors (`bn-title.` prefix)
 
@@ -100,9 +105,93 @@ The `{%}` token is replaced at render time with the comparison scenario's abbrev
 
 Note the key really is spelled `SEPERATOR_WS`.
 
-The scatter, bubble, and bullet charts have additional message keys under
-`bn-chart-scatter.`, `bn-chart-bubble.`, and `bn-chart-bullet.`; the
-`--defaults` scaffold includes all of them.
+### Time and structure charts (`bn-chart-time.`, `bn-chart-structure.` prefixes)
+
+| Key | de | en | What it labels |
+|-----|----|----|----------------|
+| `bn-chart-time.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
+| `bn-chart-structure.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
+| `bn-chart-structure.REST` | REST | REST | The bar aggregating everything beyond `spec.limit` |
+
+:::note
+These three keys need a template engine that reads them. On older engines the
+manifest still validates and the override is simply ignored, leaving the
+built-in `==No Data==` in place.
+:::
+
+### Chart labels (`bn-chart-scatter.`, `bn-chart-bubble.`, `bn-chart-bullet.` prefixes)
+
+| Key | de | en | Read by |
+|-----|----|----|---------|
+| `<chart>.no-data` | ==Keine Daten== | ==No Data== | scatter, bubble, bullet |
+| `<chart>.axis.in` | in | in | scatter, bubble, bullet |
+| `<chart>.legend.title` | — | — | scatter, bubble — empty by default, which hides the heading |
+| `bn-chart-bubble.legend.size` | Größe | Size | Heading for the bubble-size scale |
+| `bn-chart-bubble.legend.compare` | Szenarien | Scenarios | Heading for the `compareWith` series |
+| `bn-chart-bullet.target` | Ziel | Target | Legend label for the target marker |
+
+Replace `<chart>` with the component's own prefix — the scatter chart reads
+`bn-chart-scatter.no-data`, the bullet chart `bn-chart-bullet.no-data`, and so on.
+
+### Chart diagnostics
+
+Diagnostics are author-facing: they surface in `bino preview` as component
+warnings and never appear in the rendered PDF. Only the `en` default is listed
+below; run `bino add i18n german --code de --defaults` to get the German text.
+
+Two different placeholder syntaxes appear in this vocabulary. Diagnostics use
+`{{name}}`, substituted with a runtime value. The variance symbols above use
+`{%}`, substituted with the comparison scenario's abbreviation. They are not
+interchangeable.
+
+#### Shared XY diagnostics
+
+The scatter and bubble charts raise the same ten messages with identical text.
+Prefix each suffix with the chart you are overriding — for example
+`bn-chart-bubble.xy-point-budget`.
+
+| Suffix | en default | When it fires |
+|--------|-----------|---------------|
+| `xy-prop-json` | `{{prop}}: invalid JSON.` | An axis or label property did not parse |
+| `xy-measure-invalid` | `{{prop}}: '{{measure}}' is neither a scenario column nor a variance token.` | A measure name is not recognised |
+| `xy-family-mixed` | `All measures must share one scenario family (found: {{families}}).` | Measures span more than one scenario family |
+| `xy-level-order` | `Facet, series, and point levels must strictly descend in the hierarchy ({{detail}}).` | Levels do not descend the hierarchy |
+| `xy-duplicate-point` | `{{count}} duplicate point identitie(s) dropped (first row wins): {{names}}. Aggregate in the DataSet SQL.` | Two rows share a point identity |
+| `xy-point-clipped` | `{{count}} point(s) outside the explicit min/max excluded.` | Points fall outside an explicit axis range |
+| `xy-variance-nodata` | `{{count}} row(s) without variance data excluded.` | Rows lack the data a variance measure needs |
+| `xy-label-unknown` | `Unknown label name(s): {{names}}.` | A configured label names no known column |
+| `xy-series-overflow` | `More series than palette colors; colors repeat with a tint step.` | More series than the palette has colours |
+| `xy-point-budget` | `{{count}} points exceed the 5000-point budget; consider 'limit'.` | The point budget is exceeded |
+
+#### Scatter chart (`bn-chart-scatter.`)
+
+| Key | en default | When it fires |
+|-----|-----------|---------------|
+| `bn-chart-scatter.xy-iso-domain` | `Iso-lines need a strictly positive domain on both axes; skipped.` | Iso-lines are requested but an axis domain includes zero or less |
+
+#### Bubble chart (`bn-chart-bubble.`)
+
+| Key | en default | When it fires |
+|-----|-----------|---------------|
+| `bn-chart-bubble.xy-compare-variance` | `compareWith cannot be combined with variance measures on the axes.` | `compareWith` is set alongside variance measures |
+| `bn-chart-bubble.bubble-size-negative` | `{{count}} bubble(s) with a negative size value excluded.` | The size measure is negative |
+| `bn-chart-bubble.bubble-share-range` | `{{count}} share value(s) outside [0,1] were clamped.` | A share value falls outside 0–1 |
+| `bn-chart-bubble.bubble-scale-group-unknown` | `size.group '{{group}}' names no bn-scaling-group in scope.` | `size.group` names no [ScalingGroup](/reference/scaling-group/) |
+| `bn-chart-bubble.bubble-scale-overflow` | `{{count}} group-scaled bubble(s) exceed the panel; rendered true-size.` | Group scaling would push bubbles past the panel |
+
+#### Bullet chart (`bn-chart-bullet.`)
+
+| Key | en default | When it fires |
+|-----|-----------|---------------|
+| `bn-chart-bullet.bullet-prop-json` | `{{prop}}: invalid JSON.` | A property did not parse |
+| `bn-chart-bullet.bullet-measure-invalid` | `{{prop}}: '{{measure}}' is not a scenario column (ac1…pl4).` | A measure is not a scenario column |
+| `bn-chart-bullet.bullet-measure-same` | `actual and target must map different scenarios ('{{measure}}').` | `actual` and `target` name the same scenario |
+| `bn-chart-bullet.bullet-target-none` | `No target scenario found (pl1/pp1/fc1); rendering actual bars only.` | No target scenario is present |
+| `bn-chart-bullet.bullet-target-missing` | `{{count}} row(s) without a target value; variance and marker omitted.` | A row has no target value |
+| `bn-chart-bullet.bullet-target-invalid` | `{{count}} row(s) with target ≤ 0 cannot be normalized; bar omitted.` | A target is zero or negative |
+| `bn-chart-bullet.bullet-mixed-operation` | `{{count}} KPI group(s) mix '+' and '-' rows; sentiment defaults to '+'.` | A KPI group mixes `+` and `-` rows |
+| `bn-chart-bullet.bullet-ranges-ignored` | `ranges: ignored in normalized (IBCS) mode; set normalize="none".` | `ranges` is set while normalization is on |
+| `bn-chart-bullet.bullet-ranges-invalid` | `ranges: expected up to 2 ascending positive fractions of the target ({{detail}}).` | `ranges` is not up to two ascending positive fractions |
 
 ## Overriding labels globally
 
@@ -215,7 +304,7 @@ An unknown key renders as the key itself (it never breaks the component).
 |-----------|------|----------|---------|-------------|--------|
 | `spec.code` | string | yes | — | Language code; must exactly equal an artefact `spec.language` (`de` or `en`). | `code: de` |
 | `spec.namespace` | string | no | `_system` | Storage namespace. The default merges into the bundle every component reads; a named namespace is only consulted via `i18nNamespace`. | `namespace: audited` |
-| `spec.content` | object or string | yes | — | Key-value map of translations. Can be a YAML object or a JSON string. | see above |
+| `spec.content` | object or string | yes | — | Flat map of dotted keys to label strings, or a JSON string holding the same map. Nested blocks and non-string values are rejected. | see above |
 
 ## Lint rules
 
