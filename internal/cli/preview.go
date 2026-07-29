@@ -3,7 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +50,7 @@ const defaultPreviewPort = 45678
 func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
 	var (
 		port           int
+		addr           string
 		workdir        string
 		logSQL         bool
 		enableLint     bool
@@ -94,7 +97,11 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				logger.Warnf("No engine-version set in bino.toml - using latest local version. Pin a version for reproducible builds.")
 			}
 
-			addr := fmt.Sprintf("127.0.0.1:%d", port)
+			// Determine listen address
+			if addr == "" {
+				addr = fmt.Sprintf("127.0.0.1:%d", port)
+			}
+
 			logger.Infof("Starting preview server on %s", addr)
 			logger.Infof("Watching workdir %s", env.ProjectRoot)
 
@@ -216,8 +223,13 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			previewURL := server.URL()
 			logger.Successf("Serving preview at %s", previewURL)
-			if err := openBrowser(ctx, previewURL); err != nil {
-				logger.Warnf("Unable to open browser automatically: %v", err)
+			// Only auto-open for a loopback bind. With --addr 0.0.0.0:8080 the
+			// URL is the wildcard itself, which no browser can usefully load,
+			// and that bind is the container case where there is no browser.
+			if isLoopbackURL(previewURL) {
+				if err := openBrowser(ctx, previewURL); err != nil {
+					logger.Warnf("Unable to open browser automatically: %v", err)
+				}
 			}
 			logger.Infof("Preview running * press Ctrl+C to stop")
 
@@ -462,6 +474,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", defaultPreviewPort, "Port to run the preview server on")
+	cmd.Flags().StringVar(&addr, "addr", "",
+		"Full listen address (overrides --port, e.g. 0.0.0.0:8080). A non-loopback bind exposes the preview server, including the unauthenticated /__explorer/query SQL endpoint, to anything that can reach it")
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory to watch for changes")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().BoolVar(&enableLint, "lint", false, "Run lint rules on each refresh")
@@ -508,20 +522,35 @@ func pathWithinRoot(root, file string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func openBrowser(ctx context.Context, url string) error {
+// isLoopbackURL reports whether raw's host is a loopback address. Preview
+// auto-opens a browser only for loopback binds; see the call site.
+func isLoopbackURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func openBrowser(ctx context.Context, rawURL string) error {
 	// Validate URL to prevent command injection
-	if err := validateBrowserURL(url); err != nil {
+	if err := validateBrowserURL(rawURL); err != nil {
 		return err
 	}
 
 	var command *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		command = exec.CommandContext(ctx, "open", url)
+		command = exec.CommandContext(ctx, "open", rawURL)
 	case "windows":
-		command = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", url)
+		command = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", rawURL)
 	default:
-		command = exec.CommandContext(ctx, "xdg-open", url)
+		command = exec.CommandContext(ctx, "xdg-open", rawURL)
 	}
 
 	return command.Start()
@@ -529,13 +558,13 @@ func openBrowser(ctx context.Context, url string) error {
 
 // validateBrowserURL ensures the URL is safe to pass to system browser commands.
 // This prevents potential command injection attacks.
-func validateBrowserURL(url string) error {
-	if url == "" {
+func validateBrowserURL(rawURL string) error {
+	if rawURL == "" {
 		return fmt.Errorf("url cannot be empty")
 	}
 
 	// Only allow http and https schemes for browser opening
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
 		return fmt.Errorf("url must use http or https scheme")
 	}
 
@@ -543,7 +572,7 @@ func validateBrowserURL(url string) error {
 	// interpreted as shell metacharacters
 	dangerousChars := []string{";", "|", "&", "`", "$", "(", ")", "<", ">", "\n", "\r"}
 	for _, char := range dangerousChars {
-		if strings.Contains(url, char) {
+		if strings.Contains(rawURL, char) {
 			return fmt.Errorf("url contains invalid character: %q", char)
 		}
 	}
