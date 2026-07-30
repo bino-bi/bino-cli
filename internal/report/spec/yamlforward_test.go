@@ -590,6 +590,39 @@ spec:
 	}
 }
 
+// TestRuneColumns: ranges are rune columns end to end — the yaml.v3 unit.
+// A value after an umlaut key must span rune widths, and the @-repair must
+// convert its regex byte offsets.
+func TestRuneColumns(t *testing.T) {
+	// value with a non-ASCII prefix: "  title: Überschrift"
+	const doc = "kind: Table\nmetadata:\n  name: t\nspec:\n  dataset: sales\n  title: Überschrift\n"
+	ctx, ok := ResolvePositionPath(doc, 6, 12)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Prefix != "Überschrift" {
+		t.Fatalf("Prefix = %q", ctx.Prefix)
+	}
+	// "  title: " is 9 runes → value starts at rune col 10, 11 runes wide.
+	if ctx.ReplaceRange.StartCol != 10 || ctx.ReplaceRange.EndCol != 21 {
+		t.Fatalf("ReplaceRange = %+v, want rune cols 10..21", ctx.ReplaceRange)
+	}
+
+	// @-repair on a line with an umlaut before the token.
+	line := `  ref: @acme/kpi-übersicht`
+	_, token, raw, ok := RepairUnquotedAt("kind: Table\n"+line+"\n", 2)
+	if !ok {
+		t.Fatal("repair failed")
+	}
+	if token != "@acme/kpi-übersicht" {
+		t.Fatalf("token = %q", token)
+	}
+	// "  ref: " = 7 runes → token at rune col 8, 19 runes wide.
+	if raw.StartCol != 8 || raw.EndCol != 27 {
+		t.Fatalf("raw = %+v, want rune cols 8..27", raw)
+	}
+}
+
 func TestResolvePositionPath_OutOfBounds(t *testing.T) {
 	const doc = "kind: Table\nmetadata:\n  name: t\n"
 	// An empty buffer is a fresh document: a root key position, so completion

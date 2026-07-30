@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -247,7 +248,9 @@ func RepairUnquotedAt(content string, line int) (repaired, token string, raw Ran
 	start, end := m[2], m[3] // the @token submatch, 0-based byte offsets
 	token = src[start:end]
 	lines[line-1] = src[:start] + `"` + token + `"` + src[end:]
-	raw = Range{StartLine: line, StartCol: start + 1, EndLine: line, EndCol: end + 1}
+	// Ranges are rune columns (the yaml.v3 unit) — convert the byte offsets.
+	startCol := utf8.RuneCountInString(src[:start]) + 1
+	raw = Range{StartLine: line, StartCol: startCol, EndLine: line, EndCol: startCol + utf8.RuneCountInString(token)}
 	return strings.Join(lines, "\n"), token, raw, true
 }
 
@@ -594,7 +597,8 @@ func valueRange(n *yaml.Node, curLine, curCol int) Range {
 	if n.Style == yaml.SingleQuotedStyle || n.Style == yaml.DoubleQuotedStyle {
 		col++ // Column points at the opening quote; the range covers the content only
 	}
-	return Range{StartLine: n.Line, StartCol: col, EndLine: n.Line, EndCol: col + len(n.Value)}
+	// yaml.v3 columns count runes, so the span's width must too.
+	return Range{StartLine: n.Line, StartCol: col, EndLine: n.Line, EndCol: col + utf8.RuneCountInString(n.Value)}
 }
 
 func atCursor(line, col int) Range {

@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.lsp.dev/protocol"
 
@@ -26,7 +27,7 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 	if !ok {
 		return nil, nil
 	}
-	items, incomplete := s.assembleCompletion(ctx, pc, rawValue)
+	items, incomplete := s.assembleCompletion(ctx, doc, pc, rawValue)
 	padAfterColon(doc, params.Position, items)
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
@@ -42,13 +43,21 @@ func padAfterColon(doc *Document, pos protocol.Position, items []protocol.Comple
 	if pos.Character == 0 {
 		return
 	}
-	starts := doc.lineStarts()
-	line := int(pos.Line)
-	if line >= len(starts) {
+	text, ok := doc.lineText(int(pos.Line) + 1)
+	if !ok {
 		return
 	}
-	idx := starts[line] + int(pos.Character) - 1
-	if idx < 0 || idx >= len(doc.Text) || doc.Text[idx] != ':' {
+	// Byte offset of the UTF-16 cursor within the line (the position is UTF-16
+	// units; the buffer is UTF-8 bytes).
+	byteOff, u16 := 0, 0
+	for _, r := range text {
+		if u16 >= int(pos.Character) {
+			break
+		}
+		u16 += utf16Len(r)
+		byteOff += utf8.RuneLen(r)
+	}
+	if byteOff == 0 || byteOff > len(text) || text[byteOff-1] != ':' {
 		return
 	}
 	for i := range items {
@@ -93,7 +102,7 @@ func (s *Server) CompletionResolve(_ context.Context, item *protocol.CompletionI
 	return item, nil
 }
 
-func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionContext, rawValue bool) (items []protocol.CompletionItem, incomplete bool) {
+func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc reportspec.PositionContext, rawValue bool) (items []protocol.CompletionItem, incomplete bool) {
 	// A completion panic must never crash the server or break the editor session;
 	// log it and return no suggestions.
 	defer func() {
@@ -135,7 +144,7 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 			refs = append(refs, rulesetKeywordItems()...)
 		}
 		if pc.FieldName == "ref" {
-			applyRefTextEdits(refs, pc, rawValue)
+			applyRefTextEdits(refs, doc, pc, rawValue)
 		}
 		return refs, idx == nil
 	case reportspec.PosParamKey:
@@ -194,8 +203,8 @@ func pathSegments(dotted string) []string {
 // when the buffer carries no quotes yet — a plain scalar cannot start with `@`,
 // so a prefix already starting with `@` implies existing quotes, UNLESS the
 // resolve went through the unquoted-`@` repair (rawValue).
-func applyRefTextEdits(items []protocol.CompletionItem, pc reportspec.PositionContext, rawValue bool) {
-	rng := RangeToProtocol(pc.ReplaceRange)
+func applyRefTextEdits(items []protocol.CompletionItem, doc *Document, pc reportspec.PositionContext, rawValue bool) {
+	rng := doc.RangeToProtocol(pc.ReplaceRange)
 	for i := range items {
 		text := items[i].Label
 		if strings.HasPrefix(text, "@") && (rawValue || !strings.HasPrefix(pc.Prefix, "@")) {

@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"go.lsp.dev/protocol"
@@ -13,10 +14,10 @@ import (
 // Document is one open editor buffer. Full document sync is used, so Text is the
 // authoritative content after every didChange.
 //
-// Coordinate note: LSP positions are 0-based and UTF-16; yaml.v3 (and the
-// resolver) are 1-based. v1 treats a character offset as a rune/byte column —
-// correct for ASCII-dominant manifests. All conversion is isolated here so a
-// future UTF-16 fix is a one-file change.
+// Coordinate note: LSP positions are 0-based with UTF-16 character offsets;
+// yaml.v3 (and the resolver) are 1-based with RUNE columns. All conversion is
+// isolated in this file: incoming positions go through PositionToLineCol,
+// outgoing ranges through RangeToProtocol / rangeToProtocolIn / OffsetToPosition.
 type Document struct {
 	URI     uri.URI
 	Path    string
@@ -27,21 +28,52 @@ type Document struct {
 	lineOffsets []int // byte offset of each line start
 }
 
-// PositionToLineCol converts a 0-based LSP position to 1-based (line, col).
+// PositionToLineCol converts a 0-based UTF-16 LSP position to the resolver's
+// 1-based (line, rune column).
 func (d *Document) PositionToLineCol(p protocol.Position) (line, col int) {
-	return int(p.Line) + 1, int(p.Character) + 1
+	line = int(p.Line) + 1
+	text, ok := d.lineText(line)
+	if !ok {
+		return line, int(p.Character) + 1
+	}
+	return line, runeColIn(text, int(p.Character))
 }
 
-// RangeToProtocol converts a 1-based spec.Range to a 0-based protocol.Range.
-func RangeToProtocol(r reportspec.Range) protocol.Range {
+// RangeToProtocol converts a 1-based rune-column spec.Range to a 0-based
+// UTF-16 protocol.Range against this buffer's text.
+func (d *Document) RangeToProtocol(r reportspec.Range) protocol.Range {
 	return protocol.Range{
-		Start: protocol.Position{Line: clampU32(r.StartLine - 1), Character: clampU32(r.StartCol - 1)},
-		End:   protocol.Position{Line: clampU32(r.EndLine - 1), Character: clampU32(r.EndCol - 1)},
+		Start: d.positionFor(r.StartLine, r.StartCol),
+		End:   d.positionFor(r.EndLine, r.EndCol),
 	}
 }
 
-// OffsetToPosition maps a byte offset in Text to a 0-based LSP position. Used by
-// diagnostic backfill to anchor a ${VAR} occurrence found by byte scan.
+func (d *Document) positionFor(line, col int) protocol.Position {
+	text, ok := d.lineText(line)
+	if !ok {
+		return protocol.Position{Line: clampU32(line - 1), Character: clampU32(col - 1)}
+	}
+	return protocol.Position{Line: clampU32(line - 1), Character: clampU32(utf16CharIn(text, col))}
+}
+
+// rangeToProtocolIn converts a rune-column spec.Range against arbitrary source
+// text — for ranges targeting files that are not the current buffer (the name
+// index's cross-file definitions/references).
+func rangeToProtocolIn(text string, r reportspec.Range) protocol.Range {
+	lines := strings.Split(text, "\n")
+	pos := func(line, col int) protocol.Position {
+		if line >= 1 && line <= len(lines) {
+			lt := strings.TrimSuffix(lines[line-1], "\r")
+			return protocol.Position{Line: clampU32(line - 1), Character: clampU32(utf16CharIn(lt, col))}
+		}
+		return protocol.Position{Line: clampU32(line - 1), Character: clampU32(col - 1)}
+	}
+	return protocol.Range{Start: pos(r.StartLine, r.StartCol), End: pos(r.EndLine, r.EndCol)}
+}
+
+// OffsetToPosition maps a byte offset in Text to a 0-based UTF-16 LSP
+// position. Used by diagnostic backfill to anchor a ${VAR} occurrence found by
+// byte scan, and for end-of-buffer insertion points.
 func (d *Document) OffsetToPosition(offset int) protocol.Position {
 	starts := d.lineStarts()
 	// Find the last line start <= offset.
@@ -49,7 +81,66 @@ func (d *Document) OffsetToPosition(offset int) protocol.Position {
 	if i < 0 {
 		i = 0
 	}
-	return protocol.Position{Line: clampU32(i), Character: clampU32(offset - starts[i])}
+	if offset > len(d.Text) {
+		offset = len(d.Text)
+	}
+	u16 := 0
+	for _, r := range d.Text[starts[i]:offset] {
+		u16 += utf16Len(r)
+	}
+	return protocol.Position{Line: clampU32(i), Character: clampU32(u16)}
+}
+
+// lineText returns the 1-based line's text without its newline (and without a
+// trailing \r on CRLF files); ok=false when the line does not exist.
+func (d *Document) lineText(line int) (string, bool) {
+	starts := d.lineStarts()
+	if line < 1 || line > len(starts) {
+		return "", false
+	}
+	start := starts[line-1]
+	end := len(d.Text)
+	if line < len(starts) {
+		end = starts[line] - 1
+	}
+	return strings.TrimSuffix(d.Text[start:end], "\r"), true
+}
+
+// utf16Len is a rune's UTF-16 code-unit count (astral runes are a surrogate pair).
+func utf16Len(r rune) int {
+	if r >= 0x10000 {
+		return 2
+	}
+	return 1
+}
+
+// runeColIn converts a 0-based UTF-16 character offset within a line to a
+// 1-based rune column. Offsets past the line's end extend one column per unit,
+// so out-of-range positions stay monotonic.
+func runeColIn(text string, chr int) int {
+	u16, col := 0, 1
+	for _, r := range text {
+		if u16 >= chr {
+			return col
+		}
+		u16 += utf16Len(r)
+		col++
+	}
+	return col + (chr - u16)
+}
+
+// utf16CharIn converts a 1-based rune column within a line to a 0-based UTF-16
+// character offset; columns past the line's end extend one unit per column.
+func utf16CharIn(text string, col int) int {
+	u16, cur := 0, 1
+	for _, r := range text {
+		if cur >= col {
+			return u16
+		}
+		u16 += utf16Len(r)
+		cur++
+	}
+	return u16 + (col - cur)
 }
 
 func (d *Document) lineStarts() []int {
