@@ -117,25 +117,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize daemon client (if enabled)
     const binoConfig = vscode.workspace.getConfiguration('bino');
     const daemonEnabled = binoConfig.get<boolean>('daemon.enabled', true);
+    let daemonReady: Promise<unknown> = Promise.resolve();
 
     if (daemonEnabled) {
         daemonClient = new DaemonClient(outputChannel);
         context.subscriptions.push({ dispose: () => daemonClient?.dispose() });
 
-        // Pass daemon client to indexer, validator, and preview manager
+        // Pass daemon client to indexer and preview manager
         indexer.setDaemonClient(daemonClient);
-        validator.setDaemonClient(daemonClient);
         previewManager.setDaemonClient(daemonClient);
 
-        // Listen for SSE push events
+        // Listen for SSE push events. The `diagnostics` event is consumed by
+        // the language server (its HTTP backend subscribes to the same SSE
+        // stream and refreshes project diagnostics), not here.
         context.subscriptions.push(
             daemonClient.on('index-updated', async () => {
                 outputChannel.appendLine('[Daemon] Index updated via SSE push');
                 await indexer?.refreshIndex();
-            }),
-            daemonClient.on('diagnostics', async () => {
-                outputChannel.appendLine('[Daemon] Diagnostics updated via SSE push');
-                await validator?.validateWorkspace();
             }),
             daemonClient.on('preview-status', (data: any) => {
                 previewManager?.handlePreviewStatusEvent(data);
@@ -156,18 +154,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             daemonClient.onStatusChange(() => updateDaemonStatusBar())
         );
 
-        // Connect to daemon in background
+        // Connect to daemon in the background, but keep the promise: the LSP
+        // start below chains onto it so `bino lsp` finds the daemon's port
+        // file and proxies instead of standing up a second DuckDB + watcher
+        // (the server decides proxy-vs-standalone once, at startup).
         const projectRoot = indexer.getProjectRootForUri();
         if (projectRoot) {
-            daemonClient.connect(projectRoot).then(connected => {
-                if (connected) {
-                    outputChannel.appendLine('[Daemon] Connected successfully');
-                    // Re-index using daemon for faster initial load
-                    indexer?.refreshIndex();
-                } else {
-                    outputChannel.appendLine('[Daemon] Connection failed, using subprocess fallback');
-                }
-            });
+            daemonReady = Promise.race([
+                daemonClient.connect(projectRoot).then(connected => {
+                    if (connected) {
+                        outputChannel.appendLine('[Daemon] Connected successfully');
+                        // Re-index using daemon for faster initial load
+                        indexer?.refreshIndex();
+                    } else {
+                        outputChannel.appendLine('[Daemon] Connection failed, using subprocess fallback');
+                    }
+                }),
+                // A hung daemon spawn must not delay the LSP indefinitely.
+                new Promise<void>(resolve => setTimeout(resolve, 15_000)),
+            ]).catch(() => undefined);
         }
     }
 
@@ -183,9 +188,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { language: 'yaml', scheme: 'untitled' }
     ];
 
-    const lspProjectRoot = indexer.getProjectRootForUri();
+    // Root the LSP deterministically at the workspace's bino project — the
+    // active editor at activation instant is arbitrary in multi-folder windows
+    // (terminal commands keep the active-editor preference). Start it after
+    // the daemon connect settles, off the activation path: a language-server
+    // failure must not reject activate() and silently kill every command and
+    // tree view — features degrade with a visible warning instead.
+    const lspProjectRoot = indexer.getWorkspaceProjectRoot();
     if (lspProjectRoot) {
-        await startLanguageClient(context, outputChannel, lspProjectRoot);
+        void daemonReady
+            .then(() => startLanguageClient(context, outputChannel, lspProjectRoot))
+            .catch(err => {
+                outputChannel.appendLine(`[LSP] failed to start: ${err}`);
+                vscode.window.showWarningMessage(
+                    'bino language server failed to start — completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
+                );
+            });
     }
 
     // Register CodeLens provider for DataSource/DataSet previews
@@ -393,20 +411,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open document: ${err}`);
             }
-        })
-    );
-
-    // Validation commands
-    context.subscriptions.push(
-        vscode.commands.registerCommand('bino.validateWorkspace', async () => {
-            await validator?.validateWorkspace();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('bino.clearDiagnostics', () => {
-            validator?.clearDiagnostics();
-            vscode.window.showInformationMessage('Bino diagnostics cleared');
         })
     );
 
@@ -688,24 +692,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Validate on save (if enabled).
-    // Skip when daemon is connected — it pushes diagnostics via SSE on file change.
-    context.subscriptions.push(
-        vscode.workspace.onDidSaveTextDocument(async (document) => {
-            if (daemonClient?.isConnected) {
-                return; // Daemon handles validation via SSE push
-            }
-            const config = vscode.workspace.getConfiguration('bino');
-            const validateOnSave = config.get<boolean>('validateOnSave');
-
-            if (validateOnSave &&
-                (document.languageId === 'yaml') &&
-                document.getText().includes('apiVersion: bino.bi')) {
-                await validator?.validateWorkspace();
-            }
-        })
-    );
-
     // Watch for file changes to invalidate cache.
     // When the daemon is connected, its server-side watcher handles this
     // and pushes SSE events, so we skip local invalidation to avoid double work.
@@ -756,8 +742,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.StatusBarAlignment.Left,
         98
     );
-    validationStatusBarItem.command = 'bino.validateWorkspace';
-    validationStatusBarItem.tooltip = 'Bino Validation - click to validate';
+    validationStatusBarItem.command = 'workbench.actions.view.problems';
+    validationStatusBarItem.tooltip = 'Bino diagnostics - click to open the Problems panel';
     updateValidationStatusBar();
     validationStatusBarItem.show();
     context.subscriptions.push(validationStatusBarItem);

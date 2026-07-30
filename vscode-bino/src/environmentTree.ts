@@ -107,7 +107,7 @@ export class EnvironmentTreeProvider implements vscode.TreeDataProvider<EnvTreeI
         const summary = this.validator.getWorkspaceSummary();
         const errWarn = `${summary.errors} errors / ${summary.warnings} warnings`;
         const diagIcon = summary.errors > 0 ? 'error' : summary.warnings > 0 ? 'warning' : 'pass';
-        items.push(new InfoItem('Diagnostics', errWarn, diagIcon, 'bino.validateWorkspace'));
+        items.push(new InfoItem('Diagnostics', errWarn, diagIcon, 'workbench.actions.view.problems'));
 
         // Settings group
         items.push(new SettingsGroupItem());

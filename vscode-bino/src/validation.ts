@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { DaemonClient } from './daemonClient';
 
 /**
  * BinoValidator is a thin reader over VS Code's diagnostics. Diagnostics are now
@@ -32,11 +31,6 @@ export class BinoValidator {
     /** The LSP validates live, so there is never a discrete in-progress phase. */
     get isValidating(): boolean {
         return false;
-    }
-
-    /** Kept for API compatibility; the daemon is reached by the LSP, not here. */
-    setDaemonClient(_client: DaemonClient | undefined): void {
-        // no-op
     }
 
     /** Returns the bino diagnostics VS Code currently holds for a URI. */
@@ -72,20 +66,6 @@ export class BinoValidator {
             }
         }
         return { errors, warnings, info, hints };
-    }
-
-    /**
-     * The LSP validates buffers continuously; an explicit workspace validation is
-     * no longer needed. Retained so the `bino.validateWorkspace` command and the
-     * save handler remain wired without behavioural change.
-     */
-    async validateWorkspace(_options?: { executeQueries?: boolean }): Promise<void> {
-        // no-op — diagnostics are pushed by the language server
-    }
-
-    /** Diagnostics are owned by the LSP client; nothing to clear here. */
-    clearDiagnostics(): void {
-        // no-op
     }
 
     dispose(): void {

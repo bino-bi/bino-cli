@@ -115,7 +115,7 @@ export class PreviewTreeProvider implements vscode.TreeDataProvider<PreviewTreeI
 
     private getValidateItems(): ActionItem[] {
         return [
-            new ActionItem('Validate Workspace', 'bino.validateWorkspace', 'check', 'validate'),
+            new ActionItem('Open Problems', 'workbench.actions.view.problems', 'check', 'validate', 'Diagnostics are published live by the language server'),
             new ActionItem('Validate with Queries', 'bino.validateWithQueries', 'checklist', 'validate', 'Validate with --execute-queries'),
         ];
     }
