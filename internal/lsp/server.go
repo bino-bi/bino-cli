@@ -31,6 +31,11 @@ type Server struct {
 	phase2   bool
 	root     string // project root (for .env-targeting code actions)
 
+	// snippetSupport records the client's completionItem.snippetSupport
+	// capability (written once during Initialize, before any completion).
+	// Snippet-format items (scaffolds, the variance builder) are gated on it.
+	snippetSupport bool
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	client protocol.Client
@@ -353,9 +358,12 @@ func (s *Server) getIndex(ctx context.Context) []IndexDoc {
 
 // --- lifecycle ---
 
-func (s *Server) Initialize(_ context.Context, _ *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+func (s *Server) Initialize(_ context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	// Single-root scope: the backend already knows the project root from the CLI
 	// (--work-dir), so the client-supplied root is not needed in v1.
+	if params != nil {
+		s.snippetSupport = clientSnippetSupport(params.Capabilities)
+	}
 	resolve := true
 	caps := protocol.ServerCapabilities{
 		TextDocumentSync:   protocol.TextDocumentSyncKindFull,
@@ -386,6 +394,17 @@ func (s *Server) Initialized(_ context.Context, _ *protocol.InitializedParams) e
 	// synchronization.
 	go s.refreshProjectDiagnostics()
 	return nil
+}
+
+// clientSnippetSupport reads completionItem.snippetSupport from the client's
+// declared capabilities.
+func clientSnippetSupport(caps protocol.ClientCapabilities) bool {
+	td := caps.TextDocument
+	if td == nil || td.Completion == nil || td.Completion.CompletionItem == nil {
+		return false
+	}
+	sup := td.Completion.CompletionItem.SnippetSupport
+	return sup != nil && *sup
 }
 
 func (s *Server) Shutdown(_ context.Context) error {

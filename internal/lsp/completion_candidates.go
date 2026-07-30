@@ -3,6 +3,7 @@ package lsp
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -15,18 +16,180 @@ import (
 // items. They take explicit inputs (no Backend) so they are unit-testable; the
 // handler wires live data in.
 
-// completeKinds offers every manifest kind from the live merged schema.
+// completeKinds offers every manifest kind from the live merged schema, each
+// documented with the kind's spec prose and required fields.
 func completeKinds(m *schemaModel) []protocol.CompletionItem {
 	kinds := m.kinds()
 	sort.Strings(kinds)
 	items := make([]protocol.CompletionItem, 0, len(kinds))
 	for _, k := range kinds {
-		items = append(items, protocol.CompletionItem{
+		item := protocol.CompletionItem{
 			Label: k,
 			Kind:  protocol.CompletionItemKindClass,
-		})
+		}
+		if doc := kindDocMarkdown(m, k); doc != "" {
+			item.Documentation = protocol.String(doc)
+		}
+		items = append(items, item)
 	}
 	return items
+}
+
+// kindDocMarkdown renders a kind's description plus its required spec fields.
+func kindDocMarkdown(m *schemaModel, kind string) string {
+	desc, req := m.kindDoc(kind)
+	if desc == "" && len(req) == 0 {
+		return ""
+	}
+	out := desc
+	if len(req) > 0 {
+		if out != "" {
+			out += "\n\n"
+		}
+		out += "Required: `" + strings.Join(req, "`, `") + "`"
+	}
+	return out
+}
+
+// documentScaffolds offers one full-manifest snippet per kind for a fresh
+// document (empty buffer, or right after a `---`): apiVersion, kind,
+// metadata.name and the kind's required spec fields as tabstops, defaults and
+// enum choices pre-wired. Plain-text bodies are emitted for clients without
+// snippet support.
+func documentScaffolds(m *schemaModel, snippets bool) []protocol.CompletionItem {
+	kinds := m.kinds()
+	sort.Strings(kinds)
+	apiVersion := scaffoldAPIVersion(m)
+	items := make([]protocol.CompletionItem, 0, len(kinds))
+	for _, k := range kinds {
+		item := protocol.CompletionItem{
+			Label:      k + " manifest",
+			Kind:       protocol.CompletionItemKindSnippet,
+			FilterText: protocol.NewOptional(k),
+			SortText:   protocol.NewOptional("2_" + k), // after plain field keys
+			InsertText: protocol.NewOptional(scaffoldBody(m, k, apiVersion, snippets)),
+			Detail:     protocol.NewOptional("scaffold a full " + k + " document"),
+		}
+		if snippets {
+			item.InsertTextFormat = protocol.InsertTextFormatSnippet
+		} else {
+			item.InsertTextFormat = protocol.InsertTextFormatPlainText
+		}
+		if doc := kindDocMarkdown(m, k); doc != "" {
+			item.Documentation = protocol.String(doc)
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+// scaffoldAPIVersion reads the schema's apiVersion const/enum, with the
+// current version as fallback.
+func scaffoldAPIVersion(m *schemaModel) string {
+	node := m.resolveAt([]string{"apiVersion"}, nil)
+	if vals := node.enumValues(); len(vals) > 0 {
+		return vals[0]
+	}
+	return "bino.bi/v1alpha1"
+}
+
+// scaffoldBody renders a kind's full-document template. Tabstops cover
+// metadata.name and every required spec field; defaults are pre-filled and
+// enums become snippet choices.
+func scaffoldBody(m *schemaModel, kind, apiVersion string, snippets bool) string {
+	var b strings.Builder
+	b.WriteString("apiVersion: " + apiVersion + "\n")
+	b.WriteString("kind: " + kind + "\n")
+	b.WriteString("metadata:\n")
+	if snippets {
+		b.WriteString("  name: ${1:name}\n")
+	} else {
+		b.WriteString("  name: name\n")
+	}
+	b.WriteString("spec:")
+	var required []propInfo
+	for _, p := range m.resolveAt([]string{"spec"}, map[string]string{"": kind}).props() {
+		if p.Required {
+			required = append(required, p)
+		}
+	}
+	sort.Slice(required, func(i, j int) bool { return required[i].Name < required[j].Name })
+	if len(required) == 0 {
+		if snippets {
+			b.WriteString("\n  $2")
+		} else {
+			b.WriteString(" {}")
+		}
+		return b.String()
+	}
+	tab := 2
+	for _, p := range required {
+		b.WriteString("\n  " + p.Name + ": " + scaffoldValue(p, tab, snippets))
+		tab++
+	}
+	return b.String()
+}
+
+// scaffoldValue renders one required field's placeholder.
+func scaffoldValue(p propInfo, tab int, snippets bool) string {
+	if !snippets {
+		switch {
+		case p.Default != nil:
+			return renderDefault(p.Default)
+		case len(p.Enum) > 0:
+			return p.Enum[0]
+		default:
+			return ""
+		}
+	}
+	n := strconv.Itoa(tab)
+	switch {
+	case p.Default != nil:
+		return "${" + n + ":" + renderDefault(p.Default) + "}"
+	case len(p.Enum) > 0:
+		return "${" + n + "|" + strings.Join(p.Enum, ",") + "|}"
+	default:
+		return "${" + n + "}"
+	}
+}
+
+// childScaffolds offers layout-child templates for a bare `- ` slot: a
+// referenced component (kind + ref) and an inline one (kind + spec). The kind
+// enum comes from the slot's own schema, so plugin exclusions hold.
+func childScaffolds(node schemaNode, snippets bool) []protocol.CompletionItem {
+	kp, ok := node.prop("kind")
+	if !ok || len(kp.Enum) == 0 {
+		return nil
+	}
+	refBody := "kind: " + kp.Enum[0] + "\n  ref: component_name"
+	inlineBody := "kind: " + kp.Enum[0] + "\n  spec:\n    "
+	format := protocol.InsertTextFormatPlainText
+	if snippets {
+		choices := "${1|" + strings.Join(kp.Enum, ",") + "|}"
+		refBody = "kind: " + choices + "\n  ref: ${2:component_name}"
+		inlineBody = "kind: " + choices + "\n  spec:\n    $2"
+		format = protocol.InsertTextFormatSnippet
+	}
+	return []protocol.CompletionItem{
+		{
+			Label:            "kind + ref (referenced component)",
+			Kind:             protocol.CompletionItemKindSnippet,
+			FilterText:       protocol.NewOptional("kind ref"),
+			SortText:         protocol.NewOptional("2_ref"),
+			InsertText:       protocol.NewOptional(refBody),
+			InsertTextFormat: format,
+			Documentation:    protocol.String("Reference a named component defined elsewhere in the bundle (or installed from the registry)."),
+		},
+		{
+			Label:            "kind + spec (inline component)",
+			Kind:             protocol.CompletionItemKindSnippet,
+			FilterText:       protocol.NewOptional("kind spec"),
+			SortText:         protocol.NewOptional("2_spec"),
+			InsertText:       protocol.NewOptional(inlineBody),
+			InsertTextFormat: format,
+			Documentation:    protocol.String("Define the component inline, right inside the layout."),
+		},
+	}
 }
 
 // completeFields offers an object position's properties not already present,
@@ -136,16 +299,18 @@ func completeScenarios(available map[string]bool) (items []protocol.CompletionIt
 }
 
 // completeVariances offers a guided builder for the variance grammar
-// d{B}_{A}_{sentiment} plus concrete combinations of the bound scenarios.
-func completeVariances(scenarios []string) []protocol.CompletionItem {
-	items := []protocol.CompletionItem{
-		{
+// d{B}_{A}_{sentiment} plus concrete combinations of the bound scenarios. The
+// builder is a snippet, so it only appears for snippet-capable clients.
+func completeVariances(scenarios []string, snippets bool) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+	if snippets {
+		items = append(items, protocol.CompletionItem{
 			Label:            "d…_…_… (variance builder)",
 			Kind:             protocol.CompletionItemKindSnippet,
 			InsertText:       protocol.NewOptional("d${1:ac1}_${2:pp1}_${3|pos,neg,neu|}"),
 			InsertTextFormat: protocol.InsertTextFormatSnippet,
 			Documentation:    protocol.String("Absolute variance of {2} vs {1} with a sentiment suffix. Prefix with 'dr' for a relative (%) variance."),
-		},
+		})
 	}
 	// Concrete pos-sentiment variances for each ordered pair, capped for sanity.
 	const maxItems = 24
