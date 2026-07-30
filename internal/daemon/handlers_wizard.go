@@ -19,6 +19,7 @@ import (
 var daemonCapabilities = []string{
 	"introspect-draft", "typed-select", "preview-dataset", "dataset-schema",
 	"registry-packages", "registry-search", "registry-info", "registry-events",
+	"validate", "validate-draft",
 }
 
 // introspectDraftResponse mirrors datasource.ProbeResult plus the daemon version

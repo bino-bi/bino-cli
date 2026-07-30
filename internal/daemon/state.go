@@ -1,16 +1,20 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
@@ -142,7 +146,7 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	// the first one. ValidateDocuments runs inside the loader and its
 	// failures land in loadErrs as well.
 	var loadErrs []error
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs})
+	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs, SkipForeign: true})
 	if err != nil {
 		loadErrs = append(loadErrs, err)
 	}
@@ -255,6 +259,14 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 // would produce false positives against a single draft). This is the agent's
 // pre-write guardrail.
 func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnostic, error) {
+	// Foreign buffers (docker-compose etc. — the editor attaches to every YAML
+	// file) validate to nothing, and skip the per-keystroke strict load
+	// entirely. Empty buffers are foreign too: a brand-new file must not open
+	// with a wall of missing-property errors.
+	if !s.draftIsBino(yamlBytes) {
+		return []Diagnostic{}, nil
+	}
+
 	tmpDir, err := os.MkdirTemp("", "bino-draft-")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -288,6 +300,51 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 		}
 	}
 	return diagnostics, nil
+}
+
+// draftIsBino reports whether any document in a draft buffer identifies as a
+// bino manifest (apiVersion prefix, or a known kind while the header is still
+// being typed). On a syntax-broken buffer it falls back to a substring sniff,
+// so a broken bino manifest still gets its yaml-syntax diagnostic while a
+// broken docker-compose stays silent.
+func (s *State) draftIsBino(yamlBytes []byte) bool {
+	dec := yaml.NewDecoder(bytes.NewReader(yamlBytes))
+	for {
+		var head struct {
+			APIVersion string `yaml:"apiVersion"`
+			Kind       string `yaml:"kind"`
+		}
+		err := dec.Decode(&head)
+		if errors.Is(err, io.EOF) {
+			return false
+		}
+		if err != nil {
+			if bytes.Contains(yamlBytes, []byte("bino.bi/")) {
+				return true
+			}
+			return sniffKnownKind(yamlBytes, s.kindProvider)
+		}
+		if config.IsBinoHeader(head.APIVersion, head.Kind, s.kindProvider) {
+			return true
+		}
+	}
+}
+
+// sniffKnownKind scans a syntax-broken buffer line-wise for a `kind:` whose
+// value bino recognizes — a half-typed bino manifest must keep its yaml-syntax
+// diagnostic even before apiVersion exists.
+func sniffKnownKind(yamlBytes []byte, kp config.KindProvider) bool {
+	for line := range strings.SplitSeq(string(yamlBytes), "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "kind:")
+		if !ok {
+			continue
+		}
+		kind := strings.Trim(strings.TrimSpace(rest), `"'`)
+		if kind != "" && config.IsBinoHeader("", kind, kp) {
+			return true
+		}
+	}
+	return false
 }
 
 // IntrospectSource probes a not-yet-registered data source described by specJSON
@@ -537,6 +594,7 @@ func parseValidationError(err error) []Diagnostic {
 				Message:  se.Description,
 				Field:    se.Field,
 				Code:     "schema-validation",
+				Hint:     spec.Hint(se),
 			})
 		}
 		return diagnostics

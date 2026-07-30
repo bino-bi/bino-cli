@@ -34,10 +34,11 @@ type inflight struct {
 	cancel context.CancelFunc
 }
 
-// NewAnalyzer builds an analyzer; debounce defaults to 250ms when non-positive.
+// NewAnalyzer builds an analyzer; debounce defaults to 500ms when non-positive
+// (long enough that ordinary typing does not validate on every syllable).
 func NewAnalyzer(base context.Context, backend Backend, docs *DocumentStore, publish publishFunc, log logx.Logger, debounce time.Duration) *Analyzer {
 	if debounce <= 0 {
-		debounce = 250 * time.Millisecond
+		debounce = 500 * time.Millisecond
 	}
 	return &Analyzer{
 		base:     base,

@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/version"
 )
 
 // HTTPBackend satisfies lsp.Backend by proxying a running bino daemon over
@@ -28,7 +30,11 @@ type HTTPBackend struct {
 	stop     chan struct{}
 }
 
-// NewHTTPBackend builds a proxy backend and verifies the daemon answers /health.
+// NewHTTPBackend builds a proxy backend and verifies the daemon answers
+// /health AND actually serves the endpoints the LSP depends on. A stale daemon
+// (spawned from an older binary) previously passed the bare health check and
+// then 404'd /validate-draft — diagnostics silently vanished; erroring here
+// makes the caller fall back to a working standalone backend instead.
 func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBackend, error) {
 	b := &HTTPBackend{
 		base: strings.TrimRight(base, "/"),
@@ -43,7 +49,24 @@ func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBac
 	if err != nil {
 		return nil, fmt.Errorf("daemon health: %w", err)
 	}
-	_ = resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+	var health struct {
+		Version      string   `json:"version"`
+		Capabilities []string `json:"capabilities"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return nil, fmt.Errorf("daemon health: decode: %w", err)
+	}
+	if !slices.Contains(health.Capabilities, "validate-draft") {
+		v := health.Version
+		if v == "" {
+			v = "unknown"
+		}
+		return nil, fmt.Errorf("daemon (version %s) predates /validate-draft — restart it with the current binary", v)
+	}
+	if health.Version != "" && health.Version != version.Version {
+		log.Warnf("daemon version %s differs from bino %s; restart the daemon if behavior looks stale", health.Version, version.Version)
+	}
 	return b, nil
 }
 
@@ -165,6 +188,7 @@ type validateResponse struct {
 		Message  string `json:"message"`
 		Code     string `json:"code"`
 		Field    string `json:"field"`
+		Hint     string `json:"hint"`
 	} `json:"diagnostics"`
 }
 
@@ -174,6 +198,7 @@ func (r validateResponse) diags() []Diag {
 		out[i] = Diag{
 			File: d.File, Position: d.Position, Line: d.Line, Column: d.Column,
 			Severity: d.Severity, Message: d.Message, Code: d.Code, Field: d.Field,
+			Hint: d.Hint,
 		}
 	}
 	return out
