@@ -86,7 +86,7 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 # The chgrp/chmod share this layer on purpose: group 0 gets the owner's rights so
 # an arbitrary UID can still read the caches, and a separate RUN would duplicate
 # every cached file into a second layer (~200 MB).
-ARG ENGINE_VERSION=v1.0.0-next.20
+ARG ENGINE_VERSION=v1.0.0-next.22
 LABEL bi.bino.engine-version="${ENGINE_VERSION}"
 RUN bino setup --template-engine --quiet --engine-version "$ENGINE_VERSION" \
  && bino setup --duckdb-extensions --quiet \
