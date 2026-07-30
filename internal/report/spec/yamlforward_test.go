@@ -88,6 +88,133 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_NestedKindValue(t *testing.T) {
+	// The `kind:` of a layout child is a kind-value position at its own path —
+	// the schema (layoutChild.kind enum) decides candidates, not the root enum.
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: rev_table
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 13) // on "Table"
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKindValue {
+		t.Fatalf("Kind = %v, want PosKindValue", ctx.Kind)
+	}
+	if ctx.Path != "spec.children.0.kind" {
+		t.Errorf("Path = %q, want spec.children.0.kind", ctx.Path)
+	}
+	if ctx.KindsByPath[""] != "LayoutPage" {
+		t.Errorf("KindsByPath[root] = %q, want LayoutPage", ctx.KindsByPath[""])
+	}
+	if ctx.KindsByPath["spec.children.0"] != "Table" {
+		t.Errorf("KindsByPath[spec.children.0] = %q, want Table", ctx.KindsByPath["spec.children.0"])
+	}
+}
+
+func TestResolvePositionPath_EmptyNestedKindValue(t *testing.T) {
+	// `- kind: ` with nothing typed yet must still resolve as the child's
+	// kind-value position (this is the screenshot bug: "No suggestions.").
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind:
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 13)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKindValue {
+		t.Fatalf("Kind = %v, want PosKindValue", ctx.Kind)
+	}
+	if ctx.Path != "spec.children.0.kind" {
+		t.Errorf("Path = %q, want spec.children.0.kind", ctx.Path)
+	}
+}
+
+func TestResolvePositionPath_PresentKeysOnSpecKey(t *testing.T) {
+	// A new-key position inside spec must report the keys already present so
+	// completion stops re-offering them.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  title: Revenue
+
+`
+	ctx, ok := ResolvePositionPath(doc, 7, 3)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKey {
+		t.Fatalf("Kind = %v, want PosKey", ctx.Kind)
+	}
+	if ctx.Path != "spec" {
+		t.Errorf("Path = %q, want spec", ctx.Path)
+	}
+	want := map[string]bool{"dataset": true, "title": true}
+	if len(ctx.PresentKeys) != 2 || !want[ctx.PresentKeys[0]] || !want[ctx.PresentKeys[1]] {
+		t.Errorf("PresentKeys = %v, want dataset+title", ctx.PresentKeys)
+	}
+}
+
+func TestResolvePositionPath_FirstKeyUnderEmptySpec(t *testing.T) {
+	// A blank indented line under a still-empty `spec:` is the first spec key,
+	// not a new root key; an unindented one IS a new root key.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+
+`
+	ctx, ok := ResolvePositionPath(doc, 5, 3)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "spec" {
+		t.Errorf("indented: Kind=%v Path=%q, want PosKey at spec", ctx.Kind, ctx.Path)
+	}
+	ctx, ok = ResolvePositionPath(doc, 5, 1)
+	if !ok {
+		t.Fatal("ok=false at col 1")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "(root)" {
+		t.Errorf("unindented: Kind=%v Path=%q, want PosKey at (root)", ctx.Kind, ctx.Path)
+	}
+}
+
+func TestResolvePositionPath_NewSequenceItemPath(t *testing.T) {
+	// A fresh sequence slot's path is the ELEMENT path (parent + index), not a
+	// duplicated field segment — it is the schema resolver's lookup key.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  scenarios:
+    - ac1
+
+`
+	ctx, ok := ResolvePositionPath(doc, 8, 5)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosScenarioItem {
+		t.Fatalf("Kind = %v, want PosScenarioItem", ctx.Kind)
+	}
+	if ctx.Path != "spec.scenarios.1" {
+		t.Errorf("Path = %q, want spec.scenarios.1", ctx.Path)
+	}
+}
+
 func TestResolvePositionPath_NewScenarioItem(t *testing.T) {
 	// A fresh "- " slot below the last scenario should classify as a scenario item
 	// with an empty prefix (the most valuable completion case).

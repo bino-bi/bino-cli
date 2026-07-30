@@ -105,10 +105,17 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 	switch pc.Kind {
 	case reportspec.PosKindValue:
 		schema := s.getSchema(ctx)
-		return completeKinds(schema), schema.empty()
+		if pc.Path == "kind" {
+			// The document root `kind:` — the schema's full kind enum, which
+			// includes plugin kinds the nested layoutChild enum excludes.
+			return completeKinds(schema), schema.empty()
+		}
+		vals := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath).enumValues()
+		return completeEnum(vals), schema.empty()
 	case reportspec.PosKey:
 		schema := s.getSchema(ctx)
-		return completeFields(schema, pc.EnclosingKind, nil), schema.empty()
+		node := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		return completeFields(node.props(), keySet(pc.PresentKeys)), schema.empty()
 	case reportspec.PosScenarioItem:
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeScenarios(available)
@@ -145,13 +152,32 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		return completeColumns(cols), false
 	case reportspec.PosFreeValue:
 		schema := s.getSchema(ctx)
-		if enum := completeEnum(schema, pc.EnclosingKind, pc.FieldName); len(enum) > 0 {
-			return enum, false
+		node := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		if enum := node.enumValues(); len(enum) > 0 {
+			return completeEnum(enum), false
+		}
+		if node.isBool() {
+			return completeEnum([]string{"true", "false"}), false
+		}
+		if node.isObject() {
+			// An object-shaped position typed as a scalar so far — e.g. a bare
+			// `- ` slot under `children:`, or the first key being typed under a
+			// still-empty `spec:` — offer the object's keys.
+			return completeFields(node.props(), nil), schema.empty()
 		}
 		return nil, schema.empty()
 	default:
 		return nil, false
 	}
+}
+
+// pathSegments converts a resolver dotted path to schema-walk segments; the
+// "(root)" sentinel and the empty path resolve to the document root.
+func pathSegments(dotted string) []string {
+	if dotted == "" || dotted == "(root)" {
+		return nil
+	}
+	return strings.Split(dotted, ".")
 }
 
 // applyRefTextEdits pins each ref candidate to the resolved value range so
@@ -276,11 +302,54 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 			name = pc.Prefix
 		}
 		return paramDeclMarkdown(findParam(decls, name))
-	case reportspec.PosKey, reportspec.PosFreeValue:
-		return s.getSchema(ctx).fieldDoc(pc.EnclosingKind, pc.FieldName)
+	case reportspec.PosKindValue:
+		return s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath).doc()
+	case reportspec.PosKey:
+		// pc.Path is the enclosing MAPPING's path; the hovered key token is
+		// pc.Prefix (empty on a blank line — nothing to document).
+		node := s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		if p, ok := node.prop(pc.Prefix); ok {
+			return propHover(p)
+		}
+		return ""
+	case reportspec.PosFreeValue:
+		return valueHover(s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath))
 	default:
 		return ""
 	}
+}
+
+// propHover renders a field's schema metadata for a hovered key token.
+func propHover(p propInfo) string {
+	var parts []string
+	if d := propDetail(p); d != "" {
+		parts = append(parts, "`"+p.Name+"` — "+d)
+	}
+	if p.Description != "" {
+		parts = append(parts, p.Description)
+	}
+	if len(p.Enum) > 0 {
+		parts = append(parts, "One of: `"+strings.Join(p.Enum, "`, `")+"`")
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// valueHover renders a value position's schema doc: description, default, and
+// admissible values.
+func valueHover(n schemaNode) string {
+	var parts []string
+	if d := n.doc(); d != "" {
+		parts = append(parts, d)
+	}
+	if def := n.defaultValue(); def != nil {
+		if r := renderDefault(def); r != "" {
+			parts = append(parts, "Default: `"+r+"`")
+		}
+	}
+	if enum := n.enumValues(); len(enum) > 0 {
+		parts = append(parts, "One of: `"+strings.Join(enum, "`, `")+"`")
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // refTargetHover summarizes a component/page reference target: its kind,

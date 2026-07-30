@@ -54,15 +54,19 @@ const (
 type PositionContext struct {
 	Kind          PositionKind
 	Path          string   // dotted path (same vocabulary as ResolvePathPosition)
-	EnclosingKind string   // the document's `kind:` value
+	EnclosingKind string   // the deepest enclosing `kind:` value on the cursor's path
 	FieldName     string   // the immediate field name under the cursor
 	RefKind       string   // for PosDatasetRef / param positions: the valid target kind
 	RefName       string   // for `ref` values and param positions: the target ref/page name
-	PresentKeys   []string // for PosParamKey / `ref` values: params already present on the child
+	PresentKeys   []string // for PosKey / PosParamKey / `ref` values: keys already present on the mapping
 	Prefix        string   // already-typed value text (for filtering / replace)
 	ReplaceRange  Range    // where an accepted completion should be written
 	DocIndex      int      // 0-based document ordinal within a multi-doc file
 	BoundDatasets []string
+	// KindsByPath maps each mapping's dotted path on the cursor's descent to
+	// that mapping's `kind:` value ("" key = document root). Schema resolution
+	// needs these discriminators to pick the right if/then branch per level.
+	KindsByPath map[string]string
 }
 
 // refFieldKinds maps a simple reference field name to the kind it targets. The
@@ -93,13 +97,14 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 		return PositionContext{}, false
 	}
 
-	w := &walker{cursorLine: line, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx}
+	w := &walker{cursorLine: line, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx, kindsByPath: map[string]string{}}
 	ctx, ok := w.descend(root, nil, endLine)
 	if !ok {
 		return PositionContext{}, false
 	}
 	ctx.EnclosingKind = w.enclosingKind
 	ctx.DocIndex = docIdx
+	ctx.KindsByPath = w.kindsByPath
 	switch ctx.Kind {
 	case PosScenarioItem, PosVarianceItem, PosQueryScalar:
 		ctx.BoundDatasets = w.boundDatasets
@@ -177,6 +182,7 @@ type walker struct {
 	cursorCol     int
 	enclosingKind string
 	docIndex      int
+	kindsByPath   map[string]string
 	boundDatasets []string
 	refTarget     refTarget
 }
@@ -205,6 +211,7 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 	}
 	if k := mappingChildValue(node, "kind"); k != "" {
 		w.enclosingKind = k
+		w.kindsByPath[kindsKey(path)] = k
 	}
 	// A mapping with `kind`+`ref` (layout/grid/tree child) or `page`+`params`
 	// (layoutPages object form) is a component reference: remember it so a
@@ -270,6 +277,17 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 				ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
 			}, true
 		}
+		// The same shape generally: any empty value with the cursor indented
+		// beneath its key is the FIRST key inside that (still null) mapping —
+		// e.g. a blank line under `spec:` invites spec fields, not root keys.
+		if isEmptyScalar(val) && w.cursorCol > key.Column {
+			return PositionContext{
+				Kind:         PosKey,
+				Path:         joinPath(childPath),
+				FieldName:    key.Value,
+				ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
+			}, true
+		}
 		// A single-line scalar value with the cursor on a blank line beneath it:
 		// the author is starting a new sibling key under this mapping.
 		return w.keyContext(node, path), true
@@ -301,10 +319,10 @@ func (w *walker) descendSequence(node *yaml.Node, path []string, parentEnd int) 
 		if isContainer(elem) && w.cursorLine >= elem.Line {
 			return w.descend(elem, childPath, upper)
 		}
-		return w.newSequenceItem(field, path), true
+		return w.newSequenceItem(field, path, j+1), true
 	}
 	// Cursor below the last item (or empty sequence) → a new item slot.
-	return w.newSequenceItem(field, path), true
+	return w.newSequenceItem(field, path, len(node.Content)), true
 }
 
 // keyContext builds a PosKey result for the given mapping path, or a
@@ -325,6 +343,7 @@ func (w *walker) keyContext(node *yaml.Node, path []string) PositionContext {
 		Kind:         PosKey,
 		Path:         joinPath(path),
 		FieldName:    lastSegment(path),
+		PresentKeys:  mappingKeys(node),
 		ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
 	}
 }
@@ -340,7 +359,10 @@ func (w *walker) classifyValue(parent, val *yaml.Node, field string, valPath, pa
 		ReplaceRange: valueRange(val, w.cursorLine, w.cursorCol),
 	}
 
-	if field == "kind" && len(parentPath) == 0 {
+	if field == "kind" && lastSegment(parentPath) != "params" {
+		// At the document root this is the manifest kind; nested (e.g. a layout
+		// child's `kind:`) the schema position decides the candidate enum. A
+		// param literally named "kind" stays a param value.
 		ctx.Kind = PosKindValue
 		return ctx
 	}
@@ -394,10 +416,12 @@ func (w *walker) classifySequenceItem(field string, elem *yaml.Node, itemPath []
 	return ctx
 }
 
-// newSequenceItem classifies a fresh (not-yet-typed) sequence slot under `field`.
-func (w *walker) newSequenceItem(field string, parentPath []string) PositionContext {
+// newSequenceItem classifies a fresh (not-yet-typed) sequence slot under
+// `field`. path is the sequence node's path (already ending in field); idx is
+// the 0-based slot the new item would occupy.
+func (w *walker) newSequenceItem(field string, path []string, idx int) PositionContext {
 	ctx := PositionContext{
-		Path:         joinPath(parentPath) + "." + field,
+		Path:         joinPath(append(appendCopy(path), strconv.Itoa(idx))),
 		FieldName:    field,
 		ReplaceRange: atCursor(w.cursorLine, w.cursorCol),
 	}
@@ -456,6 +480,11 @@ func (w *walker) classifyScalar(node *yaml.Node, path []string) PositionContext 
 
 func isContainer(n *yaml.Node) bool {
 	return n != nil && (n.Kind == yaml.MappingNode || n.Kind == yaml.SequenceNode)
+}
+
+// isEmptyScalar reports a null / not-yet-typed value node.
+func isEmptyScalar(n *yaml.Node) bool {
+	return n == nil || (n.Kind == yaml.ScalarNode && n.Value == "")
 }
 
 func isMultilineScalar(n *yaml.Node) bool {
@@ -572,6 +601,12 @@ func joinPath(path []string) string {
 	if len(path) == 0 {
 		return "(root)"
 	}
+	return strings.Join(path, ".")
+}
+
+// kindsKey is the KindsByPath key for a mapping path: "" for the root, else
+// the dotted path (no "(root)" sentinel — resolvers index by plain paths).
+func kindsKey(path []string) string {
 	return strings.Join(path, ".")
 }
 
