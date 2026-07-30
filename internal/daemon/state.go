@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -166,19 +167,9 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 		})
 	}
 
-	// Run lint rules
-	lintDocs := make([]lint.Document, 0, len(docs))
-	for _, d := range docs {
-		lintDocs = append(lintDocs, lint.Document{
-			File:        d.File,
-			Position:    d.Position,
-			Kind:        d.Kind,
-			Name:        d.Name,
-			Labels:      d.Labels,
-			Constraints: d.Constraints,
-			Raw:         d.Raw,
-		})
-	}
+	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
+	// ref-params rule is inert without the declarations.
+	lintDocs := lint.DocumentsFromConfig(docs)
 	runner := lint.NewDefaultRunner()
 	findings := runner.Run(ctx, lintDocs)
 	if s.pluginLinters != nil {
@@ -186,12 +177,16 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 		findings = append(findings, pluginFindings...)
 	}
 	for _, f := range findings {
+		sev := f.Severity
+		if sev == "" {
+			sev = "warning"
+		}
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     f.File,
 			Position: f.DocIdx,
 			Line:     f.Line,
 			Column:   f.Column,
-			Severity: "warning",
+			Severity: sev,
 			Message:  f.Message,
 			Code:     f.RuleID,
 			Field:    f.Path,
@@ -285,6 +280,10 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 	for _, loadErr := range loadErrs {
 		for _, d := range parseValidationError(loadErr) {
 			d.File = "<draft>" // the temp path is meaningless to callers
+			// Defense in depth for error shapes the parsers miss: never leak the
+			// temp path into an editor-visible message.
+			d.Message = strings.ReplaceAll(d.Message, draftPath, "<draft>")
+			d.Message = strings.ReplaceAll(d.Message, tmpDir, "<draft>")
 			diagnostics = append(diagnostics, d)
 		}
 	}
@@ -543,6 +542,10 @@ func parseValidationError(err error) []Diagnostic {
 		return diagnostics
 	}
 
+	if d, ok := parseYAMLSyntaxError(errStr); ok {
+		return []Diagnostic{d}
+	}
+
 	file, position, message := parseFileError(errStr)
 	if file != "" {
 		diagnostics = append(diagnostics, Diagnostic{
@@ -560,6 +563,44 @@ func parseValidationError(err error) []Diagnostic {
 		})
 	}
 	return diagnostics
+}
+
+// parseYAMLSyntaxError destructures the loader's decode failure
+// ("decode <path>: yaml: line N: <msg>", or without a line) into a positioned
+// diagnostic. Splitting on ": yaml: " keeps Windows drive colons in the path
+// intact; a yaml.TypeError embeds several "line N:" fragments — the first one
+// anchors the diagnostic and the full message is kept.
+func parseYAMLSyntaxError(errStr string) (Diagnostic, bool) {
+	rest, ok := strings.CutPrefix(errStr, "decode ")
+	if !ok {
+		return Diagnostic{}, false
+	}
+	path, tail, found := strings.Cut(rest, ": yaml: ")
+	if !found {
+		return Diagnostic{}, false
+	}
+	msg := tail
+	line := 0
+	if idx := strings.Index(tail, "line "); idx >= 0 {
+		digits := tail[idx+len("line "):]
+		n := 0
+		for n < len(digits) && digits[n] >= '0' && digits[n] <= '9' {
+			n++
+		}
+		if n > 0 {
+			line, _ = strconv.Atoi(digits[:n])
+			if idx == 0 {
+				msg = strings.TrimPrefix(digits[n:], ": ")
+			}
+		}
+	}
+	return Diagnostic{
+		File:     path,
+		Line:     line,
+		Severity: "error",
+		Message:  "YAML syntax error: " + msg,
+		Code:     "yaml-syntax",
+	}, true
 }
 
 // parseFileError attempts to extract file path and position from error messages.

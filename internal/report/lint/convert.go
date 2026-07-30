@@ -6,13 +6,14 @@ import "bino.bi/bino/internal/report/config"
 // Returns the rule ID, message, file, doc index, path, line, and column for each finding.
 // This is a convenience function for the CLI layer.
 type FindingData struct {
-	RuleID  string
-	Message string
-	File    string
-	DocIdx  int
-	Path    string
-	Line    int
-	Column  int
+	RuleID   string
+	Message  string
+	File     string
+	DocIdx   int
+	Path     string
+	Line     int
+	Column   int
+	Severity string
 }
 
 // ToFindingData converts a Finding to FindingData for use by the buildlog package.

@@ -126,10 +126,17 @@ func (a *Analyzer) run(u uri.URI) {
 
 	diags, err := a.backend.ValidateDraft(ctx, []byte(doc.Text))
 	if ctx.Err() != nil {
-		return // superseded by a newer keystroke
+		return // superseded by a newer keystroke — that run owns the document
 	}
 	if err != nil {
-		a.log.Debugf("validate-draft failed for %s: %v", u, err)
+		a.log.Warnf("validate-draft failed for %s: %v", u, err)
+		// The previously published draft diagnostics describe text that has
+		// since changed; leaving them unpublished keeps stale squiggles on
+		// screen. Clear them for this version — when the backend recovers, the
+		// project-change path re-schedules and republishes real results.
+		if cur, ok := a.docs.Get(u); ok && cur.Version == version {
+			a.publish(u, version, nil)
+		}
 		return
 	}
 

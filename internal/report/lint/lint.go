@@ -48,13 +48,14 @@ type Document struct {
 
 // Finding represents a single lint warning.
 type Finding struct {
-	RuleID  string // ID of the rule that produced this finding.
-	Message string // Human-readable description of the issue.
-	File    string // Absolute path to the file (always set).
-	DocIdx  int    // 1-based document index within the file (0 if unknown).
-	Path    string // Optional JSON path within the document (e.g., "datasets[0].name").
-	Line    int    // 1-based line number (0 if unknown).
-	Column  int    // 1-based column number (0 if unknown).
+	RuleID   string // ID of the rule that produced this finding.
+	Message  string // Human-readable description of the issue.
+	File     string // Absolute path to the file (always set).
+	DocIdx   int    // 1-based document index within the file (0 if unknown).
+	Path     string // Optional JSON path within the document (e.g., "datasets[0].name").
+	Line     int    // 1-based line number (0 if unknown).
+	Column   int    // 1-based column number (0 if unknown).
+	Severity string // "error" | "warning" | "info"; empty means warning.
 }
 
 // Rule defines a single lint check.

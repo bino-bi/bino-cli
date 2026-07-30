@@ -36,11 +36,13 @@ func (s *Server) DidSave(_ context.Context, _ *protocol.DidSaveTextDocumentParam
 	return nil
 }
 
-// DidClose drops the buffer and cancels its analysis.
+// DidClose drops the buffer, cancels its analysis, and clears its draft
+// diagnostics so only on-disk (project) findings remain visible for the file.
 func (s *Server) DidClose(_ context.Context, params *protocol.DidCloseTextDocumentParams) error {
 	s.analyzer.Cancel(params.TextDocument.URI)
 	s.docs.Remove(params.TextDocument.URI)
 	s.invalidateNav()
+	s.clearDraft(params.TextDocument.URI)
 	return nil
 }
 

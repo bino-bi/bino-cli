@@ -275,6 +275,12 @@ func (c *capturingClient) last() *protocol.PublishDiagnosticsParams {
 	return c.calls[len(c.calls)-1]
 }
 
+func (c *capturingClient) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.calls)
+}
+
 // TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean guards the
 // live-diagnostics gap: ValidateProject (lint/env-var/engine-compat, whole
 // project on disk) must actually reach the editor, and must not be clobbered
@@ -453,6 +459,114 @@ func TestCompletion_NoPadAfterSpace(t *testing.T) {
 		return
 	}
 	t.Fatal("Table item not found")
+}
+
+// projectDiagServer builds a server whose backend reports one project-level
+// diagnostic (code `code`) for an on-disk copy of tableDoc, with a capturing
+// client wired in. It returns the server, client, and the file path.
+func projectDiagServer(t *testing.T, code string) (*Server, *capturingClient, string) {
+	t.Helper()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.yaml")
+	if err := os.WriteFile(file, []byte(tableDoc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	be := &fakeBackend{diags: []Diag{
+		{File: file, Line: 1, Column: 1, Severity: "warning", Message: "finding", Code: code},
+	}}
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(be, log, true, dir)
+	s.ctx = context.Background()
+	client := &capturingClient{}
+	s.client = client
+	return s, client, file
+}
+
+// TestPublishFile_DedupesDraftCoveredProjectDiags: while a draft entry exists
+// for an open file, project diagnostics of the classes ValidateDraft
+// reproduces (schema-validation etc.) must be dropped from the merge — an
+// open-and-saved invalid file otherwise shows every schema error twice.
+func TestPublishFile_DedupesDraftCoveredProjectDiags(t *testing.T) {
+	s, client, file := projectDiagServer(t, "schema-validation")
+	s.refreshProjectDiagnostics()
+	if got := len(client.last().Diagnostics); got != 1 {
+		t.Fatalf("expected the project diagnostic alone before any draft, got %d", got)
+	}
+
+	u := uri.File(file)
+	s.publishDraft(u, 1, []protocol.Diagnostic{{
+		Message: protocol.String("missing property 'spec'"),
+		Code:    protocol.String("schema-validation"),
+	}})
+	diags := client.last().Diagnostics
+	if len(diags) != 1 {
+		t.Fatalf("draft + same-class project diagnostic must dedupe to 1, got %d: %+v", len(diags), diags)
+	}
+	if msg := diags[0].Message; msg != protocol.String("missing property 'spec'") {
+		t.Fatalf("the draft diagnostic must win the merge, got %v", msg)
+	}
+
+	// Closing the buffer clears the draft entry; the project diagnostic returns.
+	s.clearDraft(u)
+	if got := len(client.last().Diagnostics); got != 1 {
+		t.Fatalf("after close the project diagnostic must be republished, got %d", got)
+	}
+	if msg := client.last().Diagnostics[0].Message; msg != protocol.String("finding") {
+		t.Fatalf("after close the project diagnostic must remain, got %v", msg)
+	}
+}
+
+// TestServer_DidCloseClearsDraftDiagnostics: closing a buffer must clear its
+// draft diagnostics and keep the on-disk project findings.
+func TestServer_DidCloseClearsDraftDiagnostics(t *testing.T) {
+	s, client, file := projectDiagServer(t, "lint-rule")
+	s.analyzer = NewAnalyzer(context.Background(), s.backend, s.docs, s.publishDraft, s.log, 0)
+	s.refreshProjectDiagnostics()
+
+	u := uri.File(file)
+	s.docs.Set(u, tableDoc, 1)
+	s.publishDraft(u, 1, []protocol.Diagnostic{{
+		Message: protocol.String("schema error"),
+		Code:    protocol.String("schema-validation"),
+	}})
+	if got := len(client.last().Diagnostics); got != 2 {
+		t.Fatalf("expected draft + lint project diagnostic before close, got %d", got)
+	}
+
+	err := s.DidClose(context.Background(), &protocol.DidCloseTextDocumentParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: u},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	diags := client.last().Diagnostics
+	if len(diags) != 1 {
+		t.Fatalf("close must clear draft diagnostics and keep project ones, got %d: %+v", len(diags), diags)
+	}
+	if msg := diags[0].Message; msg != protocol.String("finding") {
+		t.Fatalf("the surviving diagnostic must be the project finding, got %v", msg)
+	}
+}
+
+// TestInitialized_PublishesProjectDiagnosticsAtStartup: project-wide findings
+// must reach the editor after the handshake, not only after the first on-disk
+// change.
+func TestInitialized_PublishesProjectDiagnosticsAtStartup(t *testing.T) {
+	s, client, _ := projectDiagServer(t, "lint-rule")
+	if err := s.Initialized(context.Background(), &protocol.InitializedParams{}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if client.count() > 0 {
+			if got := len(client.last().Diagnostics); got != 1 {
+				t.Fatalf("expected the startup project diagnostic, got %d", got)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("Initialized never published the project diagnostics")
 }
 
 func completionParams(u uri.URI, line, char uint32) *protocol.CompletionParams {
