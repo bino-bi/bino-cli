@@ -327,6 +327,192 @@ func TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean(t *testing.
 	}
 }
 
+// newRealSchemaServer builds a server over the SHIPPED document schema, so the
+// end-to-end completion cases exercise the real composition shapes.
+func newRealSchemaServer(t *testing.T) *Server {
+	t.Helper()
+	raw, err := os.ReadFile("../schema/jsonschema/document.schema.json")
+	if err != nil {
+		t.Fatalf("read real schema: %v", err)
+	}
+	be := &fakeBackend{
+		schema: json.RawMessage(raw),
+		index:  []IndexDoc{{Kind: "Table", Name: "rev_table", File: "components.yaml", Position: 1}},
+	}
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	return NewServer(be, log, true, "/proj")
+}
+
+const pageDoc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: rev_table
+`
+
+// TestCompletion_NestedChildKind is the screenshot bug end to end: `kind:`
+// inside a layout's children must offer the child-kind enum, not nothing.
+func TestCompletion_NestedChildKind(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, pageDoc)
+	res, err := s.Completion(context.Background(), completionParams(u, 5, 12)) // on "Table"
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	for _, want := range []string{"Table", "Text", "ChartTime", "Tree"} {
+		if !contains(labels, want) {
+			t.Errorf("nested kind completion missing %q (got %v)", want, labels)
+		}
+	}
+}
+
+// TestCompletion_NestedChildKindEmpty: the same position with nothing typed
+// yet (`- kind: `) — the exact "No suggestions." state.
+func TestCompletion_NestedChildKindEmpty(t *testing.T) {
+	s := newRealSchemaServer(t)
+	doc := "kind: LayoutPage\nmetadata:\n  name: page\nspec:\n  children:\n    - kind: \n"
+	u := openDoc(t, s, doc)
+	res, err := s.Completion(context.Background(), completionParams(u, 5, 12))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	if !contains(labels, "Table") || !contains(labels, "Text") {
+		t.Fatalf("empty nested kind completion should offer the child enum (got %v)", labels)
+	}
+}
+
+// TestCompletion_ChildKeys: key completion inside a layout child offers the
+// child's own keys (ref/params/...), not the component's spec fields, and
+// filters keys already present.
+func TestCompletion_ChildKeys(t *testing.T) {
+	s := newRealSchemaServer(t)
+	doc := "kind: LayoutPage\nmetadata:\n  name: page\nspec:\n  children:\n    - kind: Table\n      \n"
+	u := openDoc(t, s, doc)
+	res, err := s.Completion(context.Background(), completionParams(u, 6, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	for _, want := range []string{"ref", "optional", "params", "spec"} {
+		if !contains(labels, want) {
+			t.Errorf("child key completion missing %q (got %v)", want, labels)
+		}
+	}
+	if contains(labels, "dataset") {
+		t.Errorf("component spec fields leaked into the child key position (got %v)", labels)
+	}
+	if contains(labels, "kind") {
+		t.Errorf("already-present key 'kind' re-offered (got %v)", labels)
+	}
+}
+
+// TestCompletion_RootAndMetadataKeys: key completion is depth-aware — the
+// document root offers apiVersion/metadata/spec, and metadata offers its own
+// fields, never the component's spec fields.
+func TestCompletion_RootAndMetadataKeys(t *testing.T) {
+	s := newRealSchemaServer(t)
+
+	u := openDoc(t, s, "kind: Table\n\n")
+	res, err := s.Completion(context.Background(), completionParams(u, 1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	for _, want := range []string{"apiVersion", "metadata", "spec"} {
+		if !contains(labels, want) {
+			t.Errorf("root key completion missing %q (got %v)", want, labels)
+		}
+	}
+	if contains(labels, "dataset") {
+		t.Errorf("spec fields leaked into the root key position (got %v)", labels)
+	}
+	if contains(labels, "kind") {
+		t.Errorf("already-present root key 'kind' re-offered (got %v)", labels)
+	}
+
+	u2 := openDoc(t, s, "kind: Table\nmetadata:\n  \nspec:\n  dataset: sales\n")
+	res2, err := s.Completion(context.Background(), completionParams(u2, 2, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels2 := completionLabels(t, res2)
+	if !contains(labels2, "name") {
+		t.Errorf("metadata key completion missing name (got %v)", labels2)
+	}
+	if contains(labels2, "dataset") {
+		t.Errorf("spec fields leaked into the metadata key position (got %v)", labels2)
+	}
+}
+
+// TestCompletion_RequiredFirstWithDetail: required fields sort first and carry
+// a type/required/default detail.
+func TestCompletion_RequiredFirstWithDetail(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, "kind: Table\nmetadata:\n  name: t\nspec:\n  \n")
+	res, err := s.Completion(context.Background(), completionParams(u, 4, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []protocol.CompletionItem
+	switch v := res.(type) {
+	case protocol.CompletionItemSlice:
+		items = v
+	case *protocol.CompletionList:
+		items = v.Items
+	}
+	var checked bool
+	for _, it := range items {
+		if it.Label != "dataset" {
+			continue
+		}
+		if st, ok := it.SortText.Get(); !ok || !strings.HasPrefix(st, "0_") {
+			t.Errorf("required field dataset must sort first, SortText=%q", st)
+		}
+		if d, ok := it.Detail.Get(); !ok || !strings.Contains(d, "required") {
+			t.Errorf("required field dataset must say so in its detail, Detail=%q", d)
+		}
+		checked = true
+	}
+	if !checked {
+		t.Fatalf("dataset item not found in spec key completion")
+	}
+}
+
+// TestHover_NestedChildKindAndKey: hover works at depth — a child `kind:`
+// value explains the component slot, a spec key shows its schema metadata.
+func TestHover_NestedChildKindAndKey(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, pageDoc)
+	h, err := s.Hover(context.Background(), hoverParams(u, 5, 12))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h == nil {
+		t.Fatal("expected hover for the child kind value")
+	}
+	mc, ok := h.Contents.(*protocol.MarkupContent)
+	if !ok || mc.Value == "" {
+		t.Fatalf("child kind hover should carry the schema description, got %+v", h.Contents)
+	}
+
+	u2 := openDoc(t, s, "kind: Table\nmetadata:\n  name: t\nspec:\n  grouped: true\n")
+	h2, err := s.Hover(context.Background(), hoverParams(u2, 4, 3)) // on the `grouped` key
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h2 == nil {
+		t.Fatal("expected hover for the grouped key")
+	}
+	mc2, ok := h2.Contents.(*protocol.MarkupContent)
+	if !ok || !strings.Contains(mc2.Value, "grouped") {
+		t.Fatalf("key hover should name the field, got %+v", h2.Contents)
+	}
+}
+
 // errSchemaBackend simulates a backend whose schema fetch fails (cold daemon).
 type errSchemaBackend struct{ fakeBackend }
 
