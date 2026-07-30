@@ -1,12 +1,12 @@
 ---
 title: ScalingGroup
-description: Define named scaling factors to synchronize bar and pin sizes across multiple charts and tables.
+description: Define named scaling values to synchronize bar and pin sizes across multiple charts and tables.
 ---
 
 `ScalingGroup` manifests define named scaling values that multiple chart and table
 components can reference. When several components share the same scaling group name,
-their bar widths (absolute variances) or pin lengths (relative variances) are
-guaranteed to use the same pixels-per-unit factor, making visual comparisons across
+their bar lengths (absolute variances) or pin lengths (relative variances) are
+guaranteed to use the same em-based scale, making visual comparisons across
 components meaningful.
 
 ## Spec outline
@@ -17,25 +17,34 @@ kind: ScalingGroup
 metadata:
   name: revenue_scale
 spec:
-  value: 0.001
+  value: 250000
 ```
 
 ## Fields
 
-- `value` – required. The scaling factor applied to every component that references
-  this group. The meaning depends on the consumer attribute:
-  - When referenced by `unitScaling` – pixels per data unit for absolute variance bars.
-  - When referenced by `percentageScaling` – pixels per percentage point for relative variance pins.
+- `value` – required. A positive number. The unit depends on the consumer
+  attribute — all of them are **map-scale semantics**: a larger value means more
+  data per em, i.e. smaller bars.
+  - When referenced by `unitScaling` – **data units per 1 em of bar length**
+    (`250000` → 1 em of bar represents 250 000 units).
+  - When referenced by `percentageScaling` – **percentage points per 1 em of pin
+    length** (`10` → a +10 % variance pin is 1 em long).
+  - When referenced by a bubble chart's `size.group` – **data units per 1 em² of
+    bubble area**.
 
 ## How it works
 
 1. Define one or more `ScalingGroup` manifests with a unique `metadata.name` and a
    numeric `value`.
-2. On consumer components (`Table`, `ChartTime`, `ChartStructure`), set
-   `unitScaling` and/or `percentageScaling` to the scaling group name instead of a
-   hard-coded number.
-3. Every consumer that references the same name resolves to the same numeric factor.
+2. On consumer components (`Table`, `ChartTime`, `ChartStructure`, and
+   `ChartBubble` via `size.group`), set `unitScaling` and/or `percentageScaling`
+   to the scaling group name instead of a hard-coded number.
+3. Every consumer that references the same name resolves to the same value.
    Changing the `ScalingGroup` value updates all consumers at once.
+
+Because the value is em-based, one group works uniformly for tables and charts:
+a revenue delta of 500 000 at `value: 250000` renders as a 2 em bar in every
+consumer, proportioned relative to each component's own font size.
 
 ## Example: Synchronized table and chart
 
@@ -48,14 +57,14 @@ kind: ScalingGroup
 metadata:
   name: revenue_abs
 spec:
-  value: 0.001
+  value: 250000
 ---
 apiVersion: bino.bi/v1alpha1
 kind: ScalingGroup
 metadata:
   name: revenue_pct
 spec:
-  value: 0.5
+  value: 10
 ---
 apiVersion: bino.bi/v1alpha1
 kind: Table
@@ -89,9 +98,9 @@ spec:
   percentageScaling: revenue_pct
 ```
 
-Both components render bars at exactly `0.001` pixels per unit and pins at `0.5`
-pixels per percentage point. A revenue delta of 5 000 always produces the same bar
-length regardless of which component it appears in.
+Both components render bars at exactly 250 000 units per em and pins at 10
+percentage points per em. A revenue delta of 500 000 always produces a 2 em bar
+regardless of which component it appears in.
 
 ## Example: Multiple pages with shared scaling
 
@@ -104,7 +113,7 @@ kind: ScalingGroup
 metadata:
   name: cost_scale
 spec:
-  value: 0.002
+  value: 50000
 ---
 apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
@@ -134,11 +143,26 @@ spec:
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| Numeric (`unitScaling: 0.001`) | Simple, self-contained | Must update every component individually when tuning the scale |
+| Numeric (`unitScaling: 250000`) | Simple, self-contained | Must update every component individually when tuning the scale |
 | Scaling group (`unitScaling: cost_scale`) | Single source of truth; all consumers stay in sync | Requires an extra manifest |
 
 Use scaling groups when two or more components should be visually comparable.
 Use a plain number when a component stands alone.
+
+Group members agree in **em-space**: bars match relative to each component's
+effective font size. If consumers use different `scale` factors (or auto-scale
+to different sizes), their bars match proportionally to their own typography,
+not in absolute pixels — give them the same fixed `scale` when pixel-identical
+bars are required.
+
+## Naming rules and diagnostics
+
+- The name `auto` is reserved and cannot be used.
+- Names that would parse as a number — including SI-suffixed forms like `1M` or
+  `250k` — are rejected; they would be ambiguous with a literal scaling value on
+  the consumer attribute.
+- Declaring two groups with the same name and different values emits a warning;
+  the last one wins.
 
 ## Attribute Reference
 
@@ -148,7 +172,7 @@ Use a plain number when a component stands alone.
 |-----------|------|----------|---------|-------------|
 | `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
 | `kind` | string | yes | — | Must be `ScalingGroup`. |
-| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling` or `percentageScaling`. The name `auto` is reserved and cannot be used. |
+| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling` or `percentageScaling`. The name `auto` and names that parse as numbers (e.g. `1M`) are reserved. |
 | `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
 | `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
 | `metadata.description` | string | no | — | Free-form description. |
@@ -158,4 +182,4 @@ Use a plain number when a component stands alone.
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.value` | number | yes | — | Scaling factor. Meaning depends on context: pixels per data unit (for `unitScaling`) or pixels per percentage point (for `percentageScaling`). | `value: 0.001` |
+| `spec.value` | number | yes | — | Positive scaling value. Meaning depends on context: data units per em of bar (for `unitScaling`), percentage points per em of pin (for `percentageScaling`), or data units per em² of bubble area (for `size.group`). Larger value = smaller bars. | `value: 250000` |

@@ -2011,7 +2011,7 @@
       "properties": {
         "value": {
           "type": "number",
-          "description": "Scaling factor (pixels per data unit or pixels per percentage point). Referenced by chart/table components via unit-scaling or percentage-scaling attributes.",
+          "description": "Positive scaling value referenced by chart/table components. Unit depends on the consumer: data units per em of bar (unitScaling), percentage points per em of pin (percentageScaling), or data units per em2 of bubble area (size.group). Larger value = smaller bars.",
           "exclusiveMinimum": 0
         }
       },
@@ -3365,14 +3365,14 @@
           "description": "Measure unit displayed in the chart."
         },
         "percentageScaling": {
-          "description": "Name of the scaling-group or a number representing the pixel per percentage.",
+          "description": "Name of a scaling-group, 'auto', or the number of percentage points per em of pin length (e.g. 10 renders a +10% pin 1 em long).",
           "oneOf": [
             { "type": "string" },
             { "type": "number" }
           ]
         },
         "unitScaling": {
-          "description": "Name of the scaling-group or a number representing the pixel per measure unit.",
+          "description": "Name of a scaling-group, 'auto', or the number of data units per em of bar (larger value = smaller bars). Unset or invalid values auto-fit with a warning.",
           "oneOf": [
             { "type": "string" },
             { "type": "number" }
@@ -3527,14 +3527,14 @@
           "description": "Max number of columns used to calculate axis date interval (if dateInterval is set to 'auto')."
         },
         "percentageScaling": {
-          "description": "Name of the scaling-group or a number representing the pixel per percentage.",
+          "description": "Name of a scaling-group, 'auto', or the number of percentage points per em of pin length (e.g. 10 renders a +10% pin 1 em long).",
           "oneOf": [
             { "type": "string" },
             { "type": "number" }
           ]
         },
         "unitScaling": {
-          "description": "Name of the scaling-group or a number representing the pixel per measure unit.",
+          "description": "Name of a scaling-group, 'auto', or the number of data units per em of bar (larger value = smaller bars). Unset or invalid values auto-fit with a warning.",
           "oneOf": [
             { "type": "string" },
             { "type": "number" }
@@ -4680,13 +4680,13 @@
         },
         "unitScaling": {
           "type": "number",
-          "default": 0.01,
-          "description": "Pixels per unit for absolute variance bars (d_ prefix columns). Controls the width of the bars."
+          "default": 100,
+          "description": "Data units per em of bar length for absolute variance bars (d_ prefix columns). Map-scale semantics: a larger value means smaller bars."
         },
         "percentageScaling": {
           "type": "number",
-          "default": 0.5,
-          "description": "Pixels per percentage point for relative variance pins (dr_ prefix columns). Controls the width of the pin charts."
+          "default": 2,
+          "description": "Percentage points per em of pin length for relative variance pins (dr_ prefix columns). A larger value means shorter pins."
         },
         "scale": {
           "oneOf": [

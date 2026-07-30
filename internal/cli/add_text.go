@@ -1068,7 +1068,7 @@ can reference via their unitScaling or percentageScaling attributes.
 
   # Non-interactive
   bino add scalinggroup revenue_scale \
-    --value 0.05 \
+    --value 250000 \
     --output scaling/revenue.yaml \
     --no-prompt
 `),
@@ -1151,7 +1151,7 @@ can reference via their unitScaling or percentageScaling attributes.
 			}
 
 			if data.Value <= 0 {
-				valStr, _ := addPromptString(reader, out, "Value (positive number, e.g. 0.05)", "")
+				valStr, _ := addPromptString(reader, out, "Value (data units per em of bar, e.g. 250000)", "")
 				var val float64
 				if _, err := fmt.Sscanf(valStr, "%f", &val); err != nil || val <= 0 {
 					return ConfigError(fmt.Errorf("value must be a positive number, got %q", valStr))
@@ -1192,7 +1192,7 @@ can reference via their unitScaling or percentageScaling attributes.
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().Float64Var(&flagValue, "value", 0, "Scaling value (pixels per unit)")
+	cmd.Flags().Float64Var(&flagValue, "value", 0, "Scaling value (data units per em of bar)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")

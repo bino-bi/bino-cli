@@ -79,10 +79,11 @@ Bubble-specific rules:
 By default bubble sizes are normalized per chart (the largest value gets
 the maximum radius). To make bubble areas comparable across charts, set
 `size.group` to the name of a [`ScalingGroup`](/reference/scaling-group/)
-manifest; its `value` is the bubble area in px² per data unit. Every chart
-referencing the same group renders an identical value-to-area mapping. An
-unknown group name is a blocking render error. For full comparability also
-pin identical axis `min`/`max` on the participating charts.
+manifest; its `value` is the number of **data units per em² of bubble
+area** (larger value = smaller bubbles). Every chart referencing the same
+group renders an identical value-to-area mapping. An unknown group name is
+a blocking render error. For full comparability also pin identical axis
+`min`/`max` on the participating charts.
 
 ## Fields
 
@@ -154,7 +155,7 @@ kind: ScalingGroup
 metadata:
   name: netsales_area
 spec:
-  value: 800
+  value: 0.25
 ---
 apiVersion: bino.bi/v1alpha1
 kind: ChartBubble
@@ -210,7 +211,7 @@ spec:
 | `spec.limit` | integer | no | `0` | Max bubbles per facet panel (largest by size kept). `0` means unlimited. | `limit: 20` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "rowGroup = 'Region A'"` |
 | `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Portfolio"` |
-| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (also scales ScalingGroup bubble areas, factor squared). | `scale: auto` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (ScalingGroup bubble areas follow the effective font size, so the factor applies squared to areas). | `scale: auto` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 

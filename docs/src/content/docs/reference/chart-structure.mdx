@@ -24,8 +24,8 @@ spec:
   orderDirection: desc
   measureScale: M              # SI prefix or GREATEST/LEAST
   measureUnit: "EUR"
-  percentageScaling: "default" # name or number
-  unitScaling: "default"        # name or number
+  percentageScaling: auto      # auto | percentage points per em | ScalingGroup name
+  unitScaling: auto             # auto | data units per em | ScalingGroup name
   showCategories: true
   showMeasureScale: true
   limit: 10
@@ -50,7 +50,9 @@ spec:
 - `order` / `orderDirection` – sort key and direction; if you use a scenario, it must appear in `scenarios`. Set `order` to `auto` to detect from the dataset silently. When left blank, it is detected with a warning.
 - `measureScale` – SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
 - `measureUnit` – unit string, for example `mEUR`.
-- `percentageScaling` / `unitScaling` – name of a scaling group or numeric scaling factor. When `unitScaling` is set to a numeric value and bars exceed the available container width, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section beyond it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a wider point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
+- `unitScaling` – data units displayed per 1 em of bar width (map-scale semantics: larger value = smaller bars), `auto` to fit the available width, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
+- `percentageScaling` – percentage points per 1 em of bar length for relative variances (`10` → a +10 % bar is 1 em long); same `auto`/group-name options.
+- When `unitScaling` is set to a numeric value and bars exceed the available container width, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section beyond it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a wider point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
 - `showCategories`, `showMeasureScale` – visibility flags.
 - `limit` – maximum bars per group; rows beyond the limit are cumulated as REST.
 - `pixelPerUnit` – explicit scaling override.
@@ -108,7 +110,7 @@ spec:
   level: category
   order: ac1
   orderDirection: desc
-  unitScaling: 0.003
+  unitScaling: 4400
   scenarios: ["ac1", "pp1"]
   stack:
     by: scenarios
@@ -151,7 +153,7 @@ spec:
   level: category
   order: category
   orderDirection: asc
-  unitScaling: 150
+  unitScaling: 0.09    # relative mode: each bar is normalized to 1.0, so ~11 em per full bar
   scenarios: ["ac1", "pp1", "fc1"]
   stack:
     by: scenarios
@@ -192,7 +194,7 @@ spec:
         variances: inherited-page
         order: inherited-page
         orderDirection: inherited-page
-        unitScaling: 0.001
+        unitScaling: 13300
     - kind: Table
       spec:
         dataset: revenue_by_region
@@ -244,8 +246,8 @@ children:
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
-| `spec.unitScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-unit factor. Numeric values enable overdrive bars on overflow. | `unitScaling: 0.003` |
-| `spec.percentageScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-percentage factor. | `percentageScaling: 50` |
+| `spec.unitScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or data units per em of bar width (larger value = smaller bars). Numeric values enable overdrive bars on overflow. | `unitScaling: 250000` |
+| `spec.percentageScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or percentage points per em of bar length. | `percentageScaling: 10` |
 | `spec.pixelPerUnit` | number | no | — | Explicit pixels-per-unit override (minimum 0). | `pixelPerUnit: 0.1` |
 | `spec.showCategories` | boolean | no | `true` | Show category labels on bars. | `showCategories: true` |
 | `spec.showMeasureScale` | boolean | no | `false` | Show measure unit in chart header. | `showMeasureScale: true` |
