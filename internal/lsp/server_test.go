@@ -3,12 +3,14 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
@@ -317,6 +319,140 @@ func TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean(t *testing.
 	if got := len(client.last().Diagnostics); got != 1 {
 		t.Fatalf("clean project revalidation should clear the stale lint diagnostic, got %d: %+v", got, client.last().Diagnostics)
 	}
+}
+
+// errSchemaBackend simulates a backend whose schema fetch fails (cold daemon).
+type errSchemaBackend struct{ fakeBackend }
+
+func (e *errSchemaBackend) MergedSchema(context.Context) (json.RawMessage, error) {
+	return nil, errors.New("schema not warm")
+}
+
+// slowSchemaBackend simulates a wedged backend that never answers until the
+// request context is cancelled.
+type slowSchemaBackend struct{ fakeBackend }
+
+func (b *slowSchemaBackend) MergedSchema(ctx context.Context) (json.RawMessage, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestCompletion_ColdSchemaIncomplete: a failed schema fetch must yield an
+// incomplete list — never a cacheable complete empty result — so the client
+// re-queries once the backend warms instead of showing "No suggestions." for
+// the rest of the typing session.
+func TestCompletion_ColdSchemaIncomplete(t *testing.T) {
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(&errSchemaBackend{}, log, true, "/proj")
+	u := openDoc(t, s, tableDoc)
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := res.(*protocol.CompletionList)
+	if !ok || !list.IsIncomplete {
+		t.Fatalf("cold-schema completion should be an incomplete list, got %T: %+v", res, res)
+	}
+}
+
+// TestCompletion_SlowBackendWithinBudget: a wedged backend must not block the
+// completion popup; the fetch budget bounds the wait and the result is marked
+// incomplete for a later retry.
+func TestCompletion_SlowBackendWithinBudget(t *testing.T) {
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(&slowSchemaBackend{}, log, true, "/proj")
+	u := openDoc(t, s, tableDoc)
+	start := time.Now()
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("completion blocked %v on a wedged backend; fetch budget not applied", elapsed)
+	}
+	list, ok := res.(*protocol.CompletionList)
+	if !ok || !list.IsIncomplete {
+		t.Fatalf("slow-backend completion should be an incomplete list, got %T: %+v", res, res)
+	}
+}
+
+// TestCompletion_ColdIndexIncomplete: reference completion with no index yet
+// must be marked incomplete so the client re-queries once the index warms.
+func TestCompletion_ColdIndexIncomplete(t *testing.T) {
+	be := &fakeBackend{schema: json.RawMessage(testSchema)} // index deliberately nil
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(be, log, true, "/proj")
+	u := openDoc(t, s, tableDoc)
+	res, err := s.Completion(context.Background(), completionParams(u, 4, 12)) // on the dataset value
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := res.(*protocol.CompletionList)
+	if !ok || !list.IsIncomplete {
+		t.Fatalf("cold-index ref completion should be an incomplete list, got %T: %+v", res, res)
+	}
+}
+
+// TestCompletion_PadsAfterColon: with ':' as a trigger character (and ' ' no
+// longer one), accepting a value completion fired directly on the colon must
+// insert a leading space so the result is `kind: Table`, not `kind:Table`.
+func TestCompletion_PadsAfterColon(t *testing.T) {
+	s := newTestServer()
+	u := openDoc(t, s, "kind:")
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	if !contains(labels, "Table") {
+		t.Fatalf("kind completion right after the colon should offer Table (got %v)", labels)
+	}
+	var items []protocol.CompletionItem
+	switch v := res.(type) {
+	case protocol.CompletionItemSlice:
+		items = v
+	case *protocol.CompletionList:
+		items = v.Items
+	}
+	for _, it := range items {
+		if it.Label != "Table" {
+			continue
+		}
+		got, ok := it.InsertText.Get()
+		if !ok || got != " Table" {
+			t.Fatalf("item after ':' should insert %q, got %q (present=%v)", " Table", got, ok)
+		}
+		return
+	}
+	t.Fatal("Table item not found")
+}
+
+// TestCompletion_NoPadAfterSpace: the same value completion with a space
+// already typed must insert the bare label.
+func TestCompletion_NoPadAfterSpace(t *testing.T) {
+	s := newTestServer()
+	u := openDoc(t, s, "kind: ")
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []protocol.CompletionItem
+	switch v := res.(type) {
+	case protocol.CompletionItemSlice:
+		items = v
+	case *protocol.CompletionList:
+		items = v.Items
+	}
+	for _, it := range items {
+		if it.Label != "Table" {
+			continue
+		}
+		if got, ok := it.InsertText.Get(); ok && strings.HasPrefix(got, " ") {
+			t.Fatalf("item after 'kind: ' must not be space-padded, got insert text %q", got)
+		}
+		return
+	}
+	t.Fatal("Table item not found")
 }
 
 func completionParams(u uri.URI, line, char uint32) *protocol.CompletionParams {

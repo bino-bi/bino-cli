@@ -21,6 +21,11 @@ func parseSchema(merged json.RawMessage) *schemaModel {
 	return &schemaModel{doc: doc}
 }
 
+// empty reports that no schema is loaded (cold start or backend failure).
+// Completion built from an empty model must be marked incomplete so the client
+// re-queries instead of caching the empty list for the whole typing session.
+func (m *schemaModel) empty() bool { return m.doc == nil }
+
 // kinds returns every manifest kind known to the schema, preferring the explicit
 // properties.kind.enum and falling back to the per-kind allOf consts.
 func (m *schemaModel) kinds() []string {
