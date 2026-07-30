@@ -207,7 +207,10 @@ type InternationalizationSpec struct {
 // can reference via their unitScaling or percentageScaling attributes,
 // allowing synchronized scaling across multiple components.
 type ScalingGroupSpec struct {
-	// Value is the scaling factor (pixels per data unit or pixels per percentage point).
+	// Value is the positive scaling value. The unit depends on the consumer:
+	// data units per em of bar (unitScaling), percentage points per em of pin
+	// (percentageScaling), or data units per em² of bubble area (size.group).
+	// Larger value = smaller bars.
 	Value float64 `yaml:"value" json:"value"`
 }
 

@@ -29,8 +29,8 @@ spec:
         level: category
         order: ac1
         orderDirection: desc
-        unitScaling: 0.001
-        percentageScaling: 25
+        unitScaling: 13300
+        percentageScaling: 0.53
         chartTitle: "Revenue by Region"
     - kind: ChartTime
       metadata:
@@ -44,7 +44,7 @@ spec:
         level: category
         order: category
         orderDirection: asc
-        unitScaling: 0.001
+        unitScaling: 13300
         chartTitle: "Monthly Revenue Trend"
     - kind: Table
       metadata:
@@ -97,8 +97,8 @@ spec:
         level: category
         order: ac1
         orderDirection: desc
-        unitScaling: 0.001
-        percentageScaling: 25
+        unitScaling: 13300
+        percentageScaling: 0.53
         chartTitle: "Revenue by Region"
         ruleset: corporate-rules
 ---
@@ -129,7 +129,7 @@ spec:
         level: category
         order: category
         orderDirection: asc
-        unitScaling: 0.001
+        unitScaling: 13300
         chartTitle: "Monthly Revenue Development"
 ---
 apiVersion: bino.bi/v1alpha1
@@ -230,7 +230,7 @@ spec:
               level: category
               order: ac1
               orderDirection: desc
-              unitScaling: 0.001
+              unitScaling: 13300
     - kind: LayoutCard
       metadata:
         name: trend_card
@@ -247,7 +247,7 @@ spec:
               level: category
               order: category
               orderDirection: asc
-              unitScaling: 0.001
+              unitScaling: 13300
     - kind: LayoutCard
       metadata:
         name: table_card
@@ -316,8 +316,8 @@ spec:
         variances: inherited-page       # resolves to [dac1_pp1_pos, drac1_pp1_pos]
         order: inherited-page           # resolves to ac1
         orderDirection: inherited-page  # resolves to desc
-        unitScaling: 0.001
-        percentageScaling: 25
+        unitScaling: 13300
+        percentageScaling: 0.53
         limit: 10
     - kind: Table
       metadata:

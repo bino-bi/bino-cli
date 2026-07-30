@@ -35,8 +35,8 @@ spec:
   showOverlayMedian: false
   limit: 0
   intervalSpanLimit: 50
-  percentageScaling: "default"
-  unitScaling: "default"
+  percentageScaling: auto      # auto | percentage points per em | ScalingGroup name
+  unitScaling: auto             # auto | data units per em | ScalingGroup name
   syncSpaceLeft: 0
   scenarios: ["ac1", "fc1"]   # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dfc1_ac1_pos"]
@@ -67,7 +67,9 @@ spec:
 - `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
 - `limit` – column stack limit; 0 means unlimited.
 - `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
-- `percentageScaling`, `unitScaling`, `syncSpaceLeft` – scaling and sync options. When `unitScaling` is set to a numeric value and bars exceed the available container height, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section above it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a higher point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
+- `unitScaling` – data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
+- `percentageScaling` – percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
+- `syncSpaceLeft` – sync option. When `unitScaling` is set to a numeric value and bars exceed the available container height, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section above it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a higher point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
 - `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `scale` – proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
@@ -197,7 +199,7 @@ spec:
   dataset: revenue_monthly
   chartTitle: "Revenue stacked by scenario"
   dateInterval: month
-  unitScaling: 0.05
+  unitScaling: 267
   scenarios: ["ac1", "pp1"]
   stack:
     by: scenarios
@@ -218,7 +220,7 @@ spec:
   dataset: revenue_monthly
   chartTitle: "Revenue share by scenario"
   dateInterval: month
-  unitScaling: 100
+  unitScaling: 0.13    # relative mode: each column is normalized to 1.0, so ~7.5 em per full column
   scenarios: ["ac1", "pp1", "fc1"]
   stack:
     by: scenarios
@@ -240,7 +242,7 @@ spec:
   chartTitle: "Revenue trend (stacked area)"
   chartMode: line
   dateInterval: month
-  unitScaling: 0.05
+  unitScaling: 267
   scenarios: ["ac1", "pp1", "fc1"]
   stack:
     by: scenarios
@@ -304,8 +306,8 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
-| `spec.unitScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-unit factor. Numeric values enable overdrive bars on overflow. | `unitScaling: 0.05` |
-| `spec.percentageScaling` | string or number | no | — | Name of a scaling group or numeric pixels-per-percentage factor. | `percentageScaling: 50` |
+| `spec.unitScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or data units per em of bar height (larger value = smaller bars). Numeric values enable overdrive bars on overflow. | `unitScaling: 250000` |
+| `spec.percentageScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or percentage points per em of pin length. | `percentageScaling: 10` |
 | `spec.syncSpaceLeft` | number | no | `-1` | Synchronize left axis space across charts (pixels). `-1` disables. | `syncSpaceLeft: 80` |
 | `spec.showCategories` | boolean | no | `true` | Show category labels. | `showCategories: false` |
 | `spec.showMeasureScale` | boolean | no | `false` | Show measure unit in chart header. | `showMeasureScale: true` |

@@ -36,8 +36,8 @@ spec:
   barColumns: []                     # columns to render as inline bar charts
   barColumnWidth: w10                # w5 | w10 | w15 | w20 | w25 | w30 | w40 | w60 | w80 | w100
   scale: auto                        # "" | none | auto | 0.5 | 1.2 | …
-  unitScaling: 0.01                  # pixels per unit for absolute variance bars
-  percentageScaling: 0.5             # pixels per percentage for relative variance pins
+  unitScaling: 100                   # data units per em of bar (absolute variance bars)
+  percentageScaling: 2               # percentage points per em of pin (relative variance pins)
   thereof: []
   partof: []
   columnthereof: null
@@ -65,8 +65,8 @@ spec:
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `barColumns` – list of column names to render as inline IBCS-compliant bar charts instead of numbers.
 - `barColumnWidth` – maximum width of inline bar/pin chart columns in em (`w5`..`w100`). Default: `w10`.
-- `unitScaling` – pixels per unit for absolute variance bars (d_ prefix columns). Default: 0.01.
-- `percentageScaling` – pixels per percentage point for relative variance pins (dr_ prefix columns). Default: 0.5.
+- `unitScaling` – data units displayed per 1 em of bar length for absolute variance bars (d_ prefix columns) — map-scale semantics: a larger value means smaller bars. Also accepts `auto` (fit the largest bar to the bar column) or a [ScalingGroup](/reference/scaling-group/) name. Default: 100.
+- `percentageScaling` – percentage points displayed per 1 em of pin length for relative variance pins (dr_ prefix columns); `2` means a +2 % pin is 1 em long. Also accepts `auto` or a scaling group name. Default: 2.
 - `scale` – proportional scaling of the entire table (font size, em-based spacing, SVG bar charts, pins, patterns). All visual dimensions scale together.
   - *not set* or `""` – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor.
   - `"none"` – no scaling; render at the base font size regardless of available space.
@@ -187,7 +187,7 @@ spec:
   scenarios: ["ac1", "pp1"]
   variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
   barColumns: ["dac1_pp1_pos", "drac1_pp1_pos"]
-  unitScaling: 0.02
+  unitScaling: 50
   percentageScaling: 1
 ```
 
@@ -369,8 +369,8 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dpy1_ac1_pos"]` |
 | `spec.barColumns` | string or array | no | — | Column names to render as inline IBCS-compliant bar/pin charts. | `barColumns: ["dac1_pp1_pos"]` |
 | `spec.barColumnWidth` | string | no | `w10` | Maximum width of inline bar chart columns. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w30`, `w40`, `w60`, `w80`, `w100`. | `barColumnWidth: w20` |
-| `spec.unitScaling` | number | no | `0.01` | Pixels per unit for absolute variance bars (`d_` prefix columns). | `unitScaling: 0.02` |
-| `spec.percentageScaling` | number | no | `0.5` | Pixels per percentage point for relative variance pins (`dr_` prefix columns). | `percentageScaling: 1` |
+| `spec.unitScaling` | number | no | `100` | Data units per em of bar length for absolute variance bars (`d_` prefix columns). Larger value = smaller bars. | `unitScaling: 50` |
+| `spec.percentageScaling` | number | no | `2` | Percentage points per em of pin length for relative variance pins (`dr_` prefix columns). | `percentageScaling: 1` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling of the entire table. `""` or omitted: auto-scale with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
 | `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
 | `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level). | see below |
