@@ -26,7 +26,7 @@ permissions:
 # it drifted below the supported floor for four releases before that test existed.
 env:
   DUCKDB_VERSION: "v1.4.4"
-  ENGINE_VERSION: "v1.0.0-next.20"
+  ENGINE_VERSION: "v1.0.0-next.22"
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
