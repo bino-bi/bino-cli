@@ -144,14 +144,50 @@ func (s *Server) publishDraft(u uri.URI, ver int32, diags []protocol.Diagnostic)
 // publishFile publishes the merge of cached draft + project diagnostics for a
 // file. PublishDiagnostics fully replaces a document's diagnostic set per
 // call, so callers must always go through this rather than publishing either
-// source directly.
+// source directly. While a draft entry exists for the file, project
+// diagnostics of the classes ValidateDraft reproduces are dropped — an
+// open-and-saved invalid file must not show every schema error twice.
 func (s *Server) publishFile(path string, ver int32) {
 	s.mu.RLock()
-	merged := make([]protocol.Diagnostic, 0, len(s.draftDiags[path])+len(s.projectDiags[path]))
-	merged = append(merged, s.draftDiags[path]...)
-	merged = append(merged, s.projectDiags[path]...)
+	draft, hasDraft := s.draftDiags[path]
+	project := s.projectDiags[path]
+	merged := make([]protocol.Diagnostic, 0, len(draft)+len(project))
+	merged = append(merged, draft...)
+	for _, d := range project {
+		if hasDraft && draftCoveredCode(d) {
+			continue
+		}
+		merged = append(merged, d)
+	}
 	s.mu.RUnlock()
 	s.publishDiagnostics(uri.File(path), ver, merged)
+}
+
+// draftCoveredCode reports whether a project diagnostic belongs to a class the
+// per-keystroke ValidateDraft also produces for open buffers.
+func draftCoveredCode(d protocol.Diagnostic) bool {
+	code, ok := d.Code.(protocol.String)
+	if !ok {
+		return false
+	}
+	switch string(code) {
+	case "schema-validation", "validation-error", "yaml-syntax":
+		return true
+	}
+	return false
+}
+
+// clearDraft drops the cached draft diagnostics for a closed buffer and
+// republishes so only on-disk project findings remain visible for the file.
+func (s *Server) clearDraft(u uri.URI) {
+	path := u.FsPath()
+	s.mu.Lock()
+	_, had := s.draftDiags[path]
+	delete(s.draftDiags, path)
+	s.mu.Unlock()
+	if had {
+		s.publishFile(path, 0)
+	}
 }
 
 // refreshProjectDiagnostics re-validates the whole project on disk (schema,
@@ -162,7 +198,10 @@ func (s *Server) publishFile(path string, ver int32) {
 func (s *Server) refreshProjectDiagnostics() {
 	_, diags, err := s.backend.ValidateProject(s.ctx, false)
 	if err != nil {
-		s.log.Debugf("validate-project failed: %v", err)
+		// Keep the previously published project diagnostics: disk state has not
+		// changed, so they are still accurate. (The draft path clears on error
+		// instead, because its buffer text has moved on.)
+		s.log.Warnf("validate-project failed: %v", err)
 		return
 	}
 	byFile := make(map[string][]Diag)
@@ -328,7 +367,16 @@ func (s *Server) Initialize(_ context.Context, _ *protocol.InitializeParams) (*p
 	}, nil
 }
 
-func (s *Server) Initialized(_ context.Context, _ *protocol.InitializedParams) error { return nil }
+func (s *Server) Initialized(_ context.Context, _ *protocol.InitializedParams) error {
+	// Surface project-wide findings (lint, missing ${VAR}, engine compat) at
+	// startup; previously they appeared only after the first on-disk change.
+	// s.client can lag this call by a moment (Serve wires it after the read loop
+	// starts), but ValidateProject takes long enough in practice and every
+	// DidOpen re-merges projectDiags per file, so this self-heals without extra
+	// synchronization.
+	go s.refreshProjectDiagnostics()
+	return nil
+}
 
 func (s *Server) Shutdown(_ context.Context) error {
 	if s.analyzer != nil {

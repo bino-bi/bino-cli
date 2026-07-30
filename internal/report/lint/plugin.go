@@ -106,18 +106,32 @@ func RunPluginLinters(ctx context.Context, docs []Document, registry PluginLinte
 				ruleID = pluginName + "/" + ruleID
 			}
 			allFindings = append(allFindings, Finding{
-				RuleID:  ruleID,
-				Message: f.Message,
-				File:    f.File,
-				DocIdx:  f.DocIdx,
-				Path:    f.Path,
-				Line:    f.Line,
-				Column:  f.Column,
+				RuleID:   ruleID,
+				Message:  f.Message,
+				File:     f.File,
+				DocIdx:   f.DocIdx,
+				Path:     f.Path,
+				Line:     f.Line,
+				Column:   f.Column,
+				Severity: pluginSeverityString(f.Severity),
 			})
 		}
 	}
 
 	return allFindings
+}
+
+// pluginSeverityString maps the plugin wire severity to Finding.Severity.
+// The default (0) maps to the empty string, i.e. the Finding warning default.
+func pluginSeverityString(s int) string {
+	switch s {
+	case 1:
+		return "error"
+	case 2:
+		return "info"
+	default:
+		return ""
+	}
 }
 
 // LintConfig holds lint filtering configuration from bino.toml.
