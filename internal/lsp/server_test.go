@@ -507,6 +507,39 @@ func TestHover_NestedChildKindAndKey(t *testing.T) {
 	}
 }
 
+// TestCompletion_EmptyBufferOffersRootKeys: a brand-new file must offer the
+// manifest skeleton instead of "No suggestions.".
+func TestCompletion_EmptyBufferOffersRootKeys(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, "")
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	for _, want := range []string{"apiVersion", "kind", "metadata", "spec"} {
+		if !contains(labels, want) {
+			t.Errorf("empty-buffer completion missing %q (got %v)", want, labels)
+		}
+	}
+}
+
+// TestCompletion_SurvivesBrokenSiblingDoc: a syntax error in document 1 must
+// not darken completion in document 2 of the same file.
+func TestCompletion_SurvivesBrokenSiblingDoc(t *testing.T) {
+	s := newTestServer()
+	doc := "kind: Table\nspec: [\n---\nkind: Table\nmetadata:\n  name: t\nspec:\n  dataset: sales\n"
+	u := openDoc(t, s, doc)
+	res, err := s.Completion(context.Background(), completionParams(u, 7, 11)) // on "sales"
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	if !contains(labels, "sales") {
+		t.Fatalf("completion in the healthy document must survive a broken sibling (got %v)", labels)
+	}
+}
+
 // errSchemaBackend simulates a backend whose schema fetch fails (cold daemon).
 type errSchemaBackend struct{ fakeBackend }
 
