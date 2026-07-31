@@ -470,6 +470,7 @@
       }
     },
     "assetSpec": {
+      "description": "A binary asset (logo, image) declared for the bundle: its media type and content source. Component image props must reference a declared Asset by name.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "mediaType", "source"],
@@ -1120,6 +1121,7 @@
       }
     },
     "dataSetSpec": {
+      "description": "An analytical query (SQL or PRQL, run by the embedded DuckDB engine) over one or more DataSources, or a direct source passthrough. Columns named after the IBCS slots (ac1, pp1, d_/dr_ variances) enable scenario-aware rendering in tables and charts.",
       "type": "object",
       "properties": {
         "query": {
@@ -1354,6 +1356,7 @@
       ]
     },
     "reportArtefactSpec": {
+      "description": "A PDF deliverable: filename, title, document metadata, optional signing, and the constraint-matched LayoutPages it renders.",
       "type": "object",
       "required": ["filename", "title"],
       "properties": {
@@ -1440,6 +1443,7 @@
       "additionalProperties": false
     },
     "liveReportArtefactSpec": {
+      "description": "An interactive deliverable served on demand: named routes exposing layout pages instead of a fixed PDF.",
       "type": "object",
       "required": ["title", "routes"],
       "properties": {
@@ -1667,6 +1671,7 @@
       "description": "Reference to a LayoutPage, either as a string (name or glob pattern) or an object with page name and params."
     },
     "screenshotArtefactSpec": {
+      "description": "An image deliverable capturing referenced layout pages as screenshots.",
       "type": "object",
       "required": ["filenamePrefix", "refs"],
       "properties": {
@@ -1769,6 +1774,7 @@
       "additionalProperties": false
     },
     "documentArtefactSpec": {
+      "description": "A text-document deliverable rendered from markdown sources, with optional table of contents, numbering, and styling.",
       "type": "object",
       "required": ["format", "sources"],
       "properties": {
@@ -1899,6 +1905,7 @@
       "description": "Deprecated: Use string paths directly in the sources array instead of objects with file property."
     },
     "signingProfileSpec": {
+      "description": "A PDF signing identity: certificate, private key, and signature parameters that ReportArtefacts reference via signingProfile.",
       "type": "object",
       "required": ["certificate", "privateKey", "signer"],
       "properties": {
@@ -1976,7 +1983,7 @@
         }
       ]
     },
-    "textSpec": { "allOf": [{ "$ref": "#/$defs/textSpecBase" }], "required": ["value"] },
+    "textSpec": { "description": "A narrative text block with ${...} interpolation from a bound dataset, so commentary stays consistent with the numbers it describes.", "allOf": [{ "$ref": "#/$defs/textSpecBase" }], "required": ["value"] },
     "textSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -2006,6 +2013,7 @@
       }
     },
     "scalingGroupSpec": {
+      "description": "A shared scaling context: components referencing the same group render with a common units-per-em scale so magnitudes stay comparable.",
       "type": "object",
       "required": ["value"],
       "properties": {
@@ -2018,6 +2026,7 @@
       "additionalProperties": false
     },
     "componentStyleSpec": {
+      "description": "A named, reusable style block; components opt in via their selectedStyle field.",
       "type": "object",
       "required": ["content"],
       "properties": {
@@ -2032,6 +2041,7 @@
       "additionalProperties": false
     },
     "ruleSetSpec": {
+      "description": "A named set of rendering rules; components opt in via their ruleset field or inherit one from the surrounding layout.",
       "type": "object",
       "required": ["content"],
       "properties": {
@@ -2470,6 +2480,7 @@
       "additionalProperties": true
     },
     "internationalizationSpec": {
+      "description": "A translation catalog for one language code; artefacts select it via spec.language and components scope lookups via i18nNamespace.",
       "type": "object",
       "required": ["code", "content"],
       "properties": {
@@ -2834,6 +2845,7 @@
       }
     },
     "layoutPageSpec": {
+      "description": "One page of a report: page format, a slot layout (or custom grid template), header/footer options, and the child components that fill the slots.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -3318,7 +3330,7 @@
         }
       }
     },
-    "chartStructureSpec": { "allOf": [{ "$ref": "#/$defs/chartStructureSpecBase" }], "required": ["dataset"] },
+    "chartStructureSpec": { "description": "An IBCS structure chart: horizontal bars comparing a measure across categories, with scenario columns (ac/pp/fc/pl) and variance overlays.", "allOf": [{ "$ref": "#/$defs/chartStructureSpecBase" }], "required": ["dataset"] },
     "chartStructureSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -3449,7 +3461,7 @@
         }
       }
     },
-    "chartTimeSpec": { "allOf": [{ "$ref": "#/$defs/chartTimeSpecBase" }], "required": ["dataset"] },
+    "chartTimeSpec": { "description": "An IBCS time-series chart: vertical bars or a line over periods, with scenario columns (ac/pp/fc/pl) and variance overlays.", "allOf": [{ "$ref": "#/$defs/chartTimeSpecBase" }], "required": ["dataset"] },
     "chartTimeSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -3751,7 +3763,7 @@
         }
       }
     },
-    "chartScatterSpec": { "allOf": [{ "$ref": "#/$defs/chartScatterSpecBase" }], "required": ["dataset", "x", "y"] },
+    "chartScatterSpec": { "description": "A scatter chart plotting two measures (x, y) per category.", "allOf": [{ "$ref": "#/$defs/chartScatterSpecBase" }], "required": ["dataset", "x", "y"] },
     "chartScatterSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -3834,7 +3846,7 @@
         }
       }
     },
-    "chartBubbleSpec": { "allOf": [{ "$ref": "#/$defs/chartBubbleSpecBase" }], "required": ["dataset", "x", "y", "size"] },
+    "chartBubbleSpec": { "description": "A bubble chart plotting two measures (x, y) with a third measure as the bubble size.", "allOf": [{ "$ref": "#/$defs/chartBubbleSpecBase" }], "required": ["dataset", "x", "y", "size"] },
     "chartBubbleSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -3985,7 +3997,7 @@
         }
       ]
     },
-    "chartBulletSpec": { "allOf": [{ "$ref": "#/$defs/chartBulletSpecBase" }], "required": ["dataset"] },
+    "chartBulletSpec": { "description": "An IBCS bullet graph comparing a primary measure against a target within qualitative ranges.", "allOf": [{ "$ref": "#/$defs/chartBulletSpecBase" }], "required": ["dataset"] },
     "chartBulletSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -4086,7 +4098,7 @@
         }
       }
     },
-    "treeSpec": { "allOf": [{ "$ref": "#/$defs/treeSpecBase" }], "required": ["edges"] },
+    "treeSpec": { "description": "A calculation tree: nodes connected by edges (optionally with operators) laid out hierarchically, e.g. a value driver tree.", "allOf": [{ "$ref": "#/$defs/treeSpecBase" }], "required": ["edges"] },
     "treeSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -4322,7 +4334,7 @@
         }
       }
     },
-    "gridSpec": { "allOf": [{ "$ref": "#/$defs/gridSpecBase" }], "required": ["rowHeaders", "columnHeaders", "children"] },
+    "gridSpec": { "description": "A grid layout arranging child components in labelled rows and columns (rowHeaders x columnHeaders).", "allOf": [{ "$ref": "#/$defs/gridSpecBase" }], "required": ["rowHeaders", "columnHeaders", "children"] },
     "gridSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -4551,7 +4563,7 @@
         }
       ]
     },
-    "tableSpec": { "allOf": [{ "$ref": "#/$defs/tableSpecBase" }], "required": ["dataset"] },
+    "tableSpec": { "description": "An IBCS report table: scenario columns (ac/pp/fc/pl), variance columns (d_/dr_ with sentiment), grouping, subtotal rows, and measure scaling, driven by the bound dataset's columns.", "allOf": [{ "$ref": "#/$defs/tableSpecBase" }], "required": ["dataset"] },
     "tableSpecBase": {
       "type": "object",
       "additionalProperties": false,

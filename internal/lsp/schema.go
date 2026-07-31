@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -58,6 +59,38 @@ type propInfo struct {
 	Type        string
 	Default     any
 	Required    bool
+}
+
+// kindDoc returns a kind's spec description (the per-kind prose carried by the
+// schema's spec $defs) and its required spec field names, sorted.
+func (m *schemaModel) kindDoc(kind string) (desc string, required []string) {
+	node := m.resolveAt([]string{"spec"}, map[string]string{"": kind})
+	for _, p := range node.props() {
+		if p.Required {
+			required = append(required, p.Name)
+		}
+	}
+	sort.Strings(required)
+	// The description must come from the kind's own spec def, not the generic
+	// root `spec` envelope the resolveAt variants list first — read the
+	// discriminated branch directly.
+	for _, block := range m.allOf() {
+		if kindConst(block) != kind {
+			continue
+		}
+		then, _ := block["then"].(map[string]any)
+		props, _ := then["properties"].(map[string]any)
+		for _, v := range m.normalize(props["spec"], "", 0, map[string]bool{}) {
+			if d, _ := v["description"].(string); d != "" {
+				desc = d
+				break
+			}
+		}
+		if desc != "" {
+			break
+		}
+	}
+	return desc, required
 }
 
 // schemaNode is the resolver's verdict for a path: the set of raw schema

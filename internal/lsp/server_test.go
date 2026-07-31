@@ -546,6 +546,158 @@ func TestCompletion_SurvivesBrokenSiblingDoc(t *testing.T) {
 	}
 }
 
+// snippetInitParams builds InitializeParams declaring snippet support.
+func snippetInitParams() *protocol.InitializeParams {
+	sup := true
+	p := &protocol.InitializeParams{}
+	p.Capabilities = protocol.ClientCapabilities{
+		TextDocument: &protocol.TextDocumentClientCapabilities{
+			Completion: &protocol.CompletionClientCapabilities{
+				CompletionItem: &protocol.ClientCompletionItemOptions{SnippetSupport: &sup},
+			},
+		},
+	}
+	return p
+}
+
+// TestCompletion_DocumentScaffolds: a fresh document offers full-manifest
+// snippets; the body shape follows the client's snippet capability.
+func TestCompletion_DocumentScaffolds(t *testing.T) {
+	findScaffold := func(t *testing.T, res protocol.CompletionResult, label string) protocol.CompletionItem {
+		t.Helper()
+		var items []protocol.CompletionItem
+		switch v := res.(type) {
+		case protocol.CompletionItemSlice:
+			items = v
+		case *protocol.CompletionList:
+			items = v.Items
+		}
+		for _, it := range items {
+			if it.Label == label {
+				return it
+			}
+		}
+		t.Fatalf("scaffold %q not offered", label)
+		return protocol.CompletionItem{}
+	}
+
+	t.Run("snippet client", func(t *testing.T) {
+		s := newRealSchemaServer(t)
+		if _, err := s.Initialize(context.Background(), snippetInitParams()); err != nil {
+			t.Fatal(err)
+		}
+		u := openDoc(t, s, "")
+		res, err := s.Completion(context.Background(), completionParams(u, 0, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		it := findScaffold(t, res, "Table manifest")
+		body, _ := it.InsertText.Get()
+		for _, want := range []string{"apiVersion: bino.bi/", "kind: Table", "${1:name}", "dataset: ${"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("snippet scaffold missing %q:\n%s", want, body)
+			}
+		}
+		if it.InsertTextFormat != protocol.InsertTextFormatSnippet {
+			t.Errorf("scaffold format = %v, want snippet", it.InsertTextFormat)
+		}
+	})
+
+	t.Run("plain-text client", func(t *testing.T) {
+		s := newRealSchemaServer(t) // no Initialize → no snippet support
+		u := openDoc(t, s, "")
+		res, err := s.Completion(context.Background(), completionParams(u, 0, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		it := findScaffold(t, res, "Table manifest")
+		body, _ := it.InsertText.Get()
+		if strings.Contains(body, "${") {
+			t.Errorf("plain-text scaffold must carry no tabstops:\n%s", body)
+		}
+		if it.InsertTextFormat != protocol.InsertTextFormatPlainText {
+			t.Errorf("scaffold format = %v, want plain text", it.InsertTextFormat)
+		}
+	})
+
+	t.Run("fresh doc after separator", func(t *testing.T) {
+		s := newRealSchemaServer(t)
+		u := openDoc(t, s, pageDoc+"---\n")
+		res, err := s.Completion(context.Background(), completionParams(u, 8, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		findScaffold(t, res, "DataSet manifest")
+	})
+}
+
+// TestCompletion_ChildScaffolds: a bare `- ` slot under children offers the
+// kind+ref and kind+spec child templates alongside the child keys.
+func TestCompletion_ChildScaffolds(t *testing.T) {
+	s := newRealSchemaServer(t)
+	doc := "kind: LayoutPage\nmetadata:\n  name: page\nspec:\n  children:\n    - \n"
+	u := openDoc(t, s, doc)
+	res, err := s.Completion(context.Background(), completionParams(u, 5, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := completionLabels(t, res)
+	if !contains(labels, "kind + ref (referenced component)") || !contains(labels, "kind + spec (inline component)") {
+		t.Fatalf("child scaffolds missing (got %v)", labels)
+	}
+	if !contains(labels, "kind") {
+		t.Fatalf("child keys should accompany the scaffolds (got %v)", labels)
+	}
+}
+
+// TestCompletion_KindItemsCarryDocs / TestHover_KindProse: the per-kind schema
+// prose reaches kind completion documentation and kind-value hover.
+func TestCompletion_KindItemsCarryDocs(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, "kind: ")
+	res, err := s.Completion(context.Background(), completionParams(u, 0, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []protocol.CompletionItem
+	switch v := res.(type) {
+	case protocol.CompletionItemSlice:
+		items = v
+	case *protocol.CompletionList:
+		items = v.Items
+	}
+	for _, it := range items {
+		if it.Label != "Table" {
+			continue
+		}
+		doc, ok := it.Documentation.(protocol.String)
+		if !ok || !strings.Contains(string(doc), "IBCS report table") {
+			t.Fatalf("Table kind item should carry the spec prose, got %v", it.Documentation)
+		}
+		if !strings.Contains(string(doc), "dataset") {
+			t.Fatalf("Table kind item should list required fields, got %q", string(doc))
+		}
+		return
+	}
+	t.Fatal("Table kind item not found")
+}
+
+func TestHover_KindProse(t *testing.T) {
+	s := newRealSchemaServer(t)
+	u := openDoc(t, s, tableDoc)
+	h, err := s.Hover(context.Background(), hoverParams(u, 0, 7)) // on "Table"
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h == nil {
+		t.Fatal("expected hover on the kind value")
+	}
+	mc, ok := h.Contents.(*protocol.MarkupContent)
+	if !ok || !strings.Contains(mc.Value, "IBCS report table") {
+		t.Fatalf("kind hover should carry the spec prose, got %+v", h.Contents)
+	}
+}
+
 // errSchemaBackend simulates a backend whose schema fetch fails (cold daemon).
 type errSchemaBackend struct{ fakeBackend }
 

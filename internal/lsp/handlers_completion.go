@@ -115,13 +115,19 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 	case reportspec.PosKey:
 		schema := s.getSchema(ctx)
 		node := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath)
-		return completeFields(node.props(), keySet(pc.PresentKeys)), schema.empty()
+		items := completeFields(node.props(), keySet(pc.PresentKeys))
+		if pc.Path == "(root)" && len(pc.PresentKeys) == 0 {
+			// A fresh document (empty buffer, or right after `---`): offer
+			// full-manifest scaffolds alongside the bare root keys.
+			items = append(items, documentScaffolds(schema, s.snippetSupport)...)
+		}
+		return items, schema.empty()
 	case reportspec.PosScenarioItem:
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeScenarios(available)
 	case reportspec.PosVarianceItem:
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
-		return completeVariances(scenarioSlots(available)), available == nil
+		return completeVariances(scenarioSlots(available), s.snippetSupport), available == nil
 	case reportspec.PosDatasetRef:
 		idx := s.getIndex(ctx)
 		refs := completeRefs(idx, pc.RefKind, s.packageOrigins())
@@ -162,8 +168,11 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		if node.isObject() {
 			// An object-shaped position typed as a scalar so far — e.g. a bare
 			// `- ` slot under `children:`, or the first key being typed under a
-			// still-empty `spec:` — offer the object's keys.
-			return completeFields(node.props(), nil), schema.empty()
+			// still-empty `spec:` — offer the object's keys, plus child
+			// scaffolds when the slot is a layout child.
+			items := completeFields(node.props(), nil)
+			items = append(items, childScaffolds(node, s.snippetSupport)...)
+			return items, schema.empty()
 		}
 		return nil, schema.empty()
 	default:
@@ -303,7 +312,13 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		}
 		return paramDeclMarkdown(findParam(decls, name))
 	case reportspec.PosKindValue:
-		return s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath).doc()
+		schema := s.getSchema(ctx)
+		// A hovered kind token gets the kind's own prose; fall back to the
+		// position's schema description (e.g. the layoutChild kind slot doc).
+		if md := kindHover(schema, pc.Prefix); md != "" {
+			return md
+		}
+		return schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath).doc()
 	case reportspec.PosKey:
 		// pc.Path is the enclosing MAPPING's path; the hovered key token is
 		// pc.Prefix (empty on a blank line — nothing to document).
@@ -317,6 +332,18 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 	default:
 		return ""
 	}
+}
+
+// kindHover renders a known kind's title, spec prose, and required fields.
+func kindHover(m *schemaModel, kind string) string {
+	if kind == "" {
+		return ""
+	}
+	doc := kindDocMarkdown(m, kind)
+	if doc == "" {
+		return ""
+	}
+	return "**" + kind + "**\n\n" + doc
 }
 
 // propHover renders a field's schema metadata for a hovered key token.
