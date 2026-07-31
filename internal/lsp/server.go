@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -263,6 +264,11 @@ func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 	return ni
 }
 
+// backendFetchBudget bounds cold-start schema/index fetches: a slow or wedged
+// backend must degrade to an incomplete (re-queried) completion list instead of
+// blocking the popup until the client gives up.
+const backendFetchBudget = 500 * time.Millisecond
+
 // getSchema returns the cached merged-schema model, loading it on first use.
 func (s *Server) getSchema(ctx context.Context) *schemaModel {
 	s.mu.RLock()
@@ -271,7 +277,9 @@ func (s *Server) getSchema(ctx context.Context) *schemaModel {
 	if m != nil {
 		return m
 	}
-	raw, err := s.backend.MergedSchema(ctx)
+	fctx, cancel := context.WithTimeout(ctx, backendFetchBudget)
+	defer cancel()
+	raw, err := s.backend.MergedSchema(fctx)
 	if err != nil {
 		s.log.Debugf("merged schema unavailable: %v", err)
 		return &schemaModel{}
@@ -291,7 +299,9 @@ func (s *Server) getIndex(ctx context.Context) []IndexDoc {
 	if idx != nil {
 		return idx
 	}
-	idx, err := s.backend.Index(ctx)
+	fctx, cancel := context.WithTimeout(ctx, backendFetchBudget)
+	defer cancel()
+	idx, err := s.backend.Index(fctx)
 	if err != nil {
 		s.log.Debugf("index unavailable: %v", err)
 		return nil
@@ -311,7 +321,7 @@ func (s *Server) Initialize(_ context.Context, _ *protocol.InitializeParams) (*p
 	caps := protocol.ServerCapabilities{
 		TextDocumentSync:   protocol.TextDocumentSyncKindFull,
 		HoverProvider:      protocol.Boolean(true),
-		CompletionProvider: &protocol.CompletionOptions{TriggerCharacters: []string{":", " ", "-", "$"}, ResolveProvider: &resolve},
+		CompletionProvider: &protocol.CompletionOptions{TriggerCharacters: []string{":", "$", "@"}, ResolveProvider: &resolve},
 	}
 	if s.phase2 {
 		caps.DefinitionProvider = protocol.Boolean(true)

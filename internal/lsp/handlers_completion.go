@@ -27,10 +27,40 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		return nil, nil
 	}
 	items, incomplete := s.assembleCompletion(ctx, pc, rawValue)
+	padAfterColon(doc, params.Position, items)
 	if incomplete {
 		return &protocol.CompletionList{IsIncomplete: true, Items: items}, nil
 	}
 	return protocol.CompletionItemSlice(items), nil
+}
+
+// padAfterColon prefixes the insert text with a space when the cursor sits
+// immediately after a ':' — with the colon as a trigger character, accepting a
+// value completion must produce `key: value`, not `key:value`. Items carrying
+// an explicit TextEdit manage their own replacement range and are left alone.
+func padAfterColon(doc *Document, pos protocol.Position, items []protocol.CompletionItem) {
+	if pos.Character == 0 {
+		return
+	}
+	starts := doc.lineStarts()
+	line := int(pos.Line)
+	if line >= len(starts) {
+		return
+	}
+	idx := starts[line] + int(pos.Character) - 1
+	if idx < 0 || idx >= len(doc.Text) || doc.Text[idx] != ':' {
+		return
+	}
+	for i := range items {
+		if items[i].TextEdit != nil {
+			continue
+		}
+		text := items[i].Label
+		if t, ok := items[i].InsertText.Get(); ok {
+			text = t
+		}
+		items[i].InsertText = protocol.NewOptional(" " + text)
+	}
 }
 
 // resolveForCompletion resolves the cursor, falling back to a quoted repair of
@@ -74,9 +104,11 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 	}()
 	switch pc.Kind {
 	case reportspec.PosKindValue:
-		return completeKinds(s.getSchema(ctx)), false
+		schema := s.getSchema(ctx)
+		return completeKinds(schema), schema.empty()
 	case reportspec.PosKey:
-		return completeFields(s.getSchema(ctx), pc.EnclosingKind, nil), false
+		schema := s.getSchema(ctx)
+		return completeFields(schema, pc.EnclosingKind, nil), schema.empty()
 	case reportspec.PosScenarioItem:
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeScenarios(available)
@@ -84,14 +116,15 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeVariances(scenarioSlots(available)), available == nil
 	case reportspec.PosDatasetRef:
-		refs := completeRefs(s.getIndex(ctx), pc.RefKind, s.packageOrigins())
+		idx := s.getIndex(ctx)
+		refs := completeRefs(idx, pc.RefKind, s.packageOrigins())
 		if pc.FieldName == "ruleset" {
 			refs = append(refs, rulesetKeywordItems()...)
 		}
 		if pc.FieldName == "ref" {
 			applyRefTextEdits(refs, pc, rawValue)
 		}
-		return refs, false
+		return refs, idx == nil
 	case reportspec.PosParamKey:
 		decls, ok := s.paramsForTarget(ctx, pc.RefKind, pc.RefName)
 		if !ok {
@@ -111,10 +144,11 @@ func (s *Server) assembleCompletion(ctx context.Context, pc reportspec.PositionC
 		}
 		return completeColumns(cols), false
 	case reportspec.PosFreeValue:
-		if enum := completeEnum(s.getSchema(ctx), pc.EnclosingKind, pc.FieldName); len(enum) > 0 {
+		schema := s.getSchema(ctx)
+		if enum := completeEnum(schema, pc.EnclosingKind, pc.FieldName); len(enum) > 0 {
 			return enum, false
 		}
-		return nil, false
+		return nil, schema.empty()
 	default:
 		return nil, false
 	}
