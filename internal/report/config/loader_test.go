@@ -403,6 +403,101 @@ func TestLoadDirAcceptsScopedNames(t *testing.T) {
 	}
 }
 
+// TestLoadDirSkipForeign: with SkipForeign, strict loading must silently skip
+// YAML that is not a bino manifest (docker-compose, k8s, CI files) instead of
+// collecting missing-apiVersion walls — while a bino document that merely
+// forgot its apiVersion (known kind) is still validated. Without the flag,
+// today's strict semantics stay intact.
+func TestLoadDirSkipForeign(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	writeManifest(t, filepath.Join(root, "main.yaml"), "main")
+	foreign := "services:\n  web:\n    image: nginx\n"
+	if err := os.WriteFile(filepath.Join(root, "docker-compose.yaml"), []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	k8s := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n"
+	if err := os.WriteFile(filepath.Join(root, "deploy.yaml"), []byte(k8s), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A bino doc missing apiVersion but with a known kind: NOT foreign.
+	noAPI := "kind: DataSet\nmetadata:\n  name: partial\nspec:\n  query: select 1\n"
+	if err := os.WriteFile(filepath.Join(root, "partial.yaml"), []byte(noAPI), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	overrideConfig(t, func(cfg runtimecfg.Config) runtimecfg.Config {
+		cfg.MaxManifestFiles = 10
+		cfg.MaxManifestDocs = 5
+		cfg.MaxManifestBytes = 1_000_000
+		return cfg
+	})
+
+	var collected []error
+	docs, err := LoadDirWithOptions(ctx, root, LoadOptions{SkipForeign: true, CollectErrors: &collected})
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Name != "main" {
+		t.Fatalf("expected only the valid bino document, got %d: %+v", len(docs), docs)
+	}
+	var sawForeignError bool
+	var sawPartialError bool
+	for _, e := range collected {
+		msg := e.Error()
+		if strings.Contains(msg, "docker-compose") || strings.Contains(msg, "deploy.yaml") {
+			sawForeignError = true
+		}
+		if strings.Contains(msg, "partial.yaml") {
+			sawPartialError = true
+		}
+	}
+	if sawForeignError {
+		t.Errorf("foreign YAML must not produce validation errors with SkipForeign, got %v", collected)
+	}
+	if !sawPartialError {
+		t.Errorf("a known-kind bino doc missing apiVersion must still be validated, got %v", collected)
+	}
+
+	// Control: without the flag, the foreign files DO fail strict validation.
+	var strictErrs []error
+	_, err = LoadDirWithOptions(ctx, root, LoadOptions{CollectErrors: &strictErrs})
+	if err != nil {
+		t.Fatalf("strict load dir: %v", err)
+	}
+	var strictForeign bool
+	for _, e := range strictErrs {
+		if strings.Contains(e.Error(), "docker-compose") {
+			strictForeign = true
+		}
+	}
+	if !strictForeign {
+		t.Errorf("without SkipForeign the foreign file should fail strict validation (opt-in lock), got %v", strictErrs)
+	}
+}
+
+func TestIsBinoHeader(t *testing.T) {
+	cases := []struct {
+		apiVersion, kind string
+		want             bool
+	}{
+		{"bino.bi/v1alpha1", "Table", true},
+		{"bino.bi/v1alpha1", "", true},
+		{"apps/v1", "Deployment", false},
+		{"apps/v1", "Table", false}, // explicit foreign apiVersion wins
+		{"", "Table", true},
+		{"", "DataSet", true},
+		{"", "Deployment", false},
+		{"", "", false},
+	}
+	for _, tc := range cases {
+		if got := IsBinoHeader(tc.apiVersion, tc.kind, nil); got != tc.want {
+			t.Errorf("IsBinoHeader(%q, %q) = %v, want %v", tc.apiVersion, tc.kind, got, tc.want)
+		}
+	}
+}
+
 func writeManifest(t *testing.T, path, name string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(minimalManifest(name)), 0o600); err != nil {

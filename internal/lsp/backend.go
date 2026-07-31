@@ -23,6 +23,7 @@ type Diag struct {
 	Message  string
 	Code     string
 	Field    string // dotted path, e.g. "spec.title"
+	Hint     string // actionable guidance, rendered as a trailing "hint:" line
 }
 
 // IndexDoc is one entry in the project index.

@@ -432,11 +432,12 @@ func countEffectiveChildren(
 				if !child.Optional {
 					// Required ref missing - this is an error
 					findings = append(findings, Finding{
-						RuleID:  "missing-required-reference",
-						Message: fmt.Sprintf("required reference %q not found (use optional: true to allow missing refs)", refName),
-						File:    parentDoc.File,
-						DocIdx:  parentDoc.Position,
-						Path:    childPath + ".ref",
+						RuleID:   "missing-required-reference",
+						Message:  fmt.Sprintf("required reference %q not found (use optional: true to allow missing refs)", refName),
+						File:     parentDoc.File,
+						DocIdx:   parentDoc.Position,
+						Path:     childPath + ".ref",
+						Severity: "error",
 					})
 				}
 				// Don't count - missing ref doesn't consume a slot

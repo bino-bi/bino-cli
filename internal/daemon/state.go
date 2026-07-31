@@ -1,15 +1,20 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
@@ -141,7 +146,7 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	// the first one. ValidateDocuments runs inside the loader and its
 	// failures land in loadErrs as well.
 	var loadErrs []error
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs})
+	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs, SkipForeign: true})
 	if err != nil {
 		loadErrs = append(loadErrs, err)
 	}
@@ -166,19 +171,9 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 		})
 	}
 
-	// Run lint rules
-	lintDocs := make([]lint.Document, 0, len(docs))
-	for _, d := range docs {
-		lintDocs = append(lintDocs, lint.Document{
-			File:        d.File,
-			Position:    d.Position,
-			Kind:        d.Kind,
-			Name:        d.Name,
-			Labels:      d.Labels,
-			Constraints: d.Constraints,
-			Raw:         d.Raw,
-		})
-	}
+	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
+	// ref-params rule is inert without the declarations.
+	lintDocs := lint.DocumentsFromConfig(docs)
 	runner := lint.NewDefaultRunner()
 	findings := runner.Run(ctx, lintDocs)
 	if s.pluginLinters != nil {
@@ -186,12 +181,16 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 		findings = append(findings, pluginFindings...)
 	}
 	for _, f := range findings {
+		sev := f.Severity
+		if sev == "" {
+			sev = "warning"
+		}
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     f.File,
 			Position: f.DocIdx,
 			Line:     f.Line,
 			Column:   f.Column,
-			Severity: "warning",
+			Severity: sev,
 			Message:  f.Message,
 			Code:     f.RuleID,
 			Field:    f.Path,
@@ -260,6 +259,14 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 // would produce false positives against a single draft). This is the agent's
 // pre-write guardrail.
 func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnostic, error) {
+	// Foreign buffers (docker-compose etc. — the editor attaches to every YAML
+	// file) validate to nothing, and skip the per-keystroke strict load
+	// entirely. Empty buffers are foreign too: a brand-new file must not open
+	// with a wall of missing-property errors.
+	if !s.draftIsBino(yamlBytes) {
+		return []Diagnostic{}, nil
+	}
+
 	tmpDir, err := os.MkdirTemp("", "bino-draft-")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -285,10 +292,59 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 	for _, loadErr := range loadErrs {
 		for _, d := range parseValidationError(loadErr) {
 			d.File = "<draft>" // the temp path is meaningless to callers
+			// Defense in depth for error shapes the parsers miss: never leak the
+			// temp path into an editor-visible message.
+			d.Message = strings.ReplaceAll(d.Message, draftPath, "<draft>")
+			d.Message = strings.ReplaceAll(d.Message, tmpDir, "<draft>")
 			diagnostics = append(diagnostics, d)
 		}
 	}
 	return diagnostics, nil
+}
+
+// draftIsBino reports whether any document in a draft buffer identifies as a
+// bino manifest (apiVersion prefix, or a known kind while the header is still
+// being typed). On a syntax-broken buffer it falls back to a substring sniff,
+// so a broken bino manifest still gets its yaml-syntax diagnostic while a
+// broken docker-compose stays silent.
+func (s *State) draftIsBino(yamlBytes []byte) bool {
+	dec := yaml.NewDecoder(bytes.NewReader(yamlBytes))
+	for {
+		var head struct {
+			APIVersion string `yaml:"apiVersion"`
+			Kind       string `yaml:"kind"`
+		}
+		err := dec.Decode(&head)
+		if errors.Is(err, io.EOF) {
+			return false
+		}
+		if err != nil {
+			if bytes.Contains(yamlBytes, []byte("bino.bi/")) {
+				return true
+			}
+			return sniffKnownKind(yamlBytes, s.kindProvider)
+		}
+		if config.IsBinoHeader(head.APIVersion, head.Kind, s.kindProvider) {
+			return true
+		}
+	}
+}
+
+// sniffKnownKind scans a syntax-broken buffer line-wise for a `kind:` whose
+// value bino recognizes — a half-typed bino manifest must keep its yaml-syntax
+// diagnostic even before apiVersion exists.
+func sniffKnownKind(yamlBytes []byte, kp config.KindProvider) bool {
+	for line := range strings.SplitSeq(string(yamlBytes), "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "kind:")
+		if !ok {
+			continue
+		}
+		kind := strings.Trim(strings.TrimSpace(rest), `"'`)
+		if kind != "" && config.IsBinoHeader("", kind, kp) {
+			return true
+		}
+	}
+	return false
 }
 
 // IntrospectSource probes a not-yet-registered data source described by specJSON
@@ -538,9 +594,14 @@ func parseValidationError(err error) []Diagnostic {
 				Message:  se.Description,
 				Field:    se.Field,
 				Code:     "schema-validation",
+				Hint:     spec.Hint(se),
 			})
 		}
 		return diagnostics
+	}
+
+	if d, ok := parseYAMLSyntaxError(errStr); ok {
+		return []Diagnostic{d}
 	}
 
 	file, position, message := parseFileError(errStr)
@@ -560,6 +621,44 @@ func parseValidationError(err error) []Diagnostic {
 		})
 	}
 	return diagnostics
+}
+
+// parseYAMLSyntaxError destructures the loader's decode failure
+// ("decode <path>: yaml: line N: <msg>", or without a line) into a positioned
+// diagnostic. Splitting on ": yaml: " keeps Windows drive colons in the path
+// intact; a yaml.TypeError embeds several "line N:" fragments — the first one
+// anchors the diagnostic and the full message is kept.
+func parseYAMLSyntaxError(errStr string) (Diagnostic, bool) {
+	rest, ok := strings.CutPrefix(errStr, "decode ")
+	if !ok {
+		return Diagnostic{}, false
+	}
+	path, tail, found := strings.Cut(rest, ": yaml: ")
+	if !found {
+		return Diagnostic{}, false
+	}
+	msg := tail
+	line := 0
+	if idx := strings.Index(tail, "line "); idx >= 0 {
+		digits := tail[idx+len("line "):]
+		n := 0
+		for n < len(digits) && digits[n] >= '0' && digits[n] <= '9' {
+			n++
+		}
+		if n > 0 {
+			line, _ = strconv.Atoi(digits[:n])
+			if idx == 0 {
+				msg = strings.TrimPrefix(digits[n:], ": ")
+			}
+		}
+	}
+	return Diagnostic{
+		File:     path,
+		Line:     line,
+		Severity: "error",
+		Message:  "YAML syntax error: " + msg,
+		Code:     "yaml-syntax",
+	}, true
 }
 
 // parseFileError attempts to extract file path and position from error messages.

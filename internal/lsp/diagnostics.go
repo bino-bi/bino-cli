@@ -25,13 +25,23 @@ func backfillDiagnostics(doc *Document, diags []Diag) []protocol.Diagnostic {
 		out = append(out, protocol.Diagnostic{
 			Range:    diagRange(doc, nodes, d),
 			Severity: severity(d.Severity),
-			Message:  protocol.String(d.Message),
+			Message:  protocol.String(messageWithHint(d)),
 			Source:   protocol.NewOptional("bino"),
 			Code:     codeToken(d.Code),
 			Data:     missingFieldData(d),
 		})
 	}
 	return out
+}
+
+// messageWithHint appends the actionable hint as a second message line.
+// Data/quick-fix extraction (missingFieldData) reads the ORIGINAL d.Message,
+// so the suffix never confuses the message parsers.
+func messageWithHint(d Diag) string {
+	if d.Hint == "" {
+		return d.Message
+	}
+	return d.Message + "\nhint: " + d.Hint
 }
 
 // missingFieldData carries the parent path + missing property of a

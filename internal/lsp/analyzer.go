@@ -34,10 +34,11 @@ type inflight struct {
 	cancel context.CancelFunc
 }
 
-// NewAnalyzer builds an analyzer; debounce defaults to 250ms when non-positive.
+// NewAnalyzer builds an analyzer; debounce defaults to 500ms when non-positive
+// (long enough that ordinary typing does not validate on every syllable).
 func NewAnalyzer(base context.Context, backend Backend, docs *DocumentStore, publish publishFunc, log logx.Logger, debounce time.Duration) *Analyzer {
 	if debounce <= 0 {
-		debounce = 250 * time.Millisecond
+		debounce = 500 * time.Millisecond
 	}
 	return &Analyzer{
 		base:     base,
@@ -126,10 +127,17 @@ func (a *Analyzer) run(u uri.URI) {
 
 	diags, err := a.backend.ValidateDraft(ctx, []byte(doc.Text))
 	if ctx.Err() != nil {
-		return // superseded by a newer keystroke
+		return // superseded by a newer keystroke — that run owns the document
 	}
 	if err != nil {
-		a.log.Debugf("validate-draft failed for %s: %v", u, err)
+		a.log.Warnf("validate-draft failed for %s: %v", u, err)
+		// The previously published draft diagnostics describe text that has
+		// since changed; leaving them unpublished keeps stale squiggles on
+		// screen. Clear them for this version — when the backend recovers, the
+		// project-change path re-schedules and republishes real results.
+		if cur, ok := a.docs.Get(u); ok && cur.Version == version {
+			a.publish(u, version, nil)
+		}
 		return
 	}
 
