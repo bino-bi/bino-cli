@@ -157,7 +157,7 @@ export class WorkspaceIndexer {
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
-        this.outputChannel = vscode.window.createOutputChannel('Bino Reports');
+        this.outputChannel = vscode.window.createOutputChannel('Bino Indexer');
         context.subscriptions.push(this.outputChannel);
         context.subscriptions.push(this._onDidUpdateIndex);
         context.subscriptions.push(this._onDidStartIndex);
@@ -208,6 +208,25 @@ export class WorkspaceIndexer {
      * For multi-root workspaces, finds the appropriate project root
      * based on the file's location.
      */
+    /**
+     * The workspace's bino project root, independent of which editor happens
+     * to be active — the deterministic root for long-lived services (the
+     * language server). Terminal commands keep the active-editor preference
+     * of getProjectRootForUri.
+     */
+    getWorkspaceProjectRoot(): string | undefined {
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders) {
+            for (const folder of folders) {
+                const projectRoot = this.findProjectRoot(folder.uri.fsPath);
+                if (projectRoot) {
+                    return projectRoot;
+                }
+            }
+        }
+        return undefined;
+    }
+
     getProjectRootForUri(uri?: vscode.Uri): string | undefined {
         // If a specific URI is provided, find the project root for that file
         if (uri) {

@@ -181,17 +181,6 @@
         "category": "Bino"
       },
       {
-        "command": "bino.validateWorkspace",
-        "title": "Validate Workspace",
-        "category": "Bino",
-        "icon": "$(check)"
-      },
-      {
-        "command": "bino.clearDiagnostics",
-        "title": "Clear Diagnostics",
-        "category": "Bino"
-      },
-      {
         "command": "bino.startPreview",
         "title": "Start Preview",
         "category": "Bino",
@@ -463,11 +452,6 @@
           "command": "bino.refreshIndex",
           "when": "view == binoDocuments",
           "group": "navigation@1"
-        },
-        {
-          "command": "bino.validateWorkspace",
-          "when": "view == binoDocuments",
-          "group": "navigation@2"
         },
         {
           "command": "bino.registrySearch",
@@ -768,11 +752,6 @@
           "type": "number",
           "default": 60000,
           "description": "Time in milliseconds to cache column introspection results (default: 60 seconds)."
-        },
-        "bino.validateOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Validate workspace on save and publish lint diagnostics to the Problems panel."
         },
         "bino.previewPort": {
           "type": "number",

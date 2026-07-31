@@ -258,12 +258,12 @@ export function registerPrqlCompletion(context: vscode.ExtensionContext): void {
 
     const provider = new PrqlCompletionProvider();
 
-    // Register with trigger characters that commonly start PRQL constructs
+    // No trigger characters: a space trigger force-opened the completion
+    // widget in every YAML file. The provider content-gates to prql blocks,
+    // where word typing and Ctrl+Space still invoke it.
     const disposable = vscode.languages.registerCompletionItemProvider(
         selector,
         provider,
-        ' ', // space after pipeline step
-        '\n', // new line
     );
 
     context.subscriptions.push(disposable);
