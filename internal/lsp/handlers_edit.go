@@ -25,8 +25,12 @@ func (s *Server) PrepareRename(_ context.Context, params *protocol.PrepareRename
 	if name == "" {
 		return nil, nil
 	}
+	doc, ok := s.docs.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, nil
+	}
 	return &protocol.PrepareRenamePlaceholder{
-		Range:       RangeToProtocol(pc.ReplaceRange),
+		Range:       doc.RangeToProtocol(pc.ReplaceRange),
 		Placeholder: name,
 	}, nil
 }
@@ -47,7 +51,7 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 
 	if def, found := ni.Definition(kind, name); found {
 		u := uri.File(def.File)
-		changes[u] = append(changes[u], protocol.TextEdit{Range: RangeToProtocol(def.NameRange), NewText: params.NewName})
+		changes[u] = append(changes[u], protocol.TextEdit{Range: s.rangeToProtocolFor(def.File, def.NameRange), NewText: params.NewName})
 	}
 	for _, r := range ni.References(kind, name) {
 		u := uri.File(r.File)
@@ -55,7 +59,7 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 		if r.Dollar {
 			newText = "$" + newText
 		}
-		changes[u] = append(changes[u], protocol.TextEdit{Range: RangeToProtocol(r.Range), NewText: newText})
+		changes[u] = append(changes[u], protocol.TextEdit{Range: s.rangeToProtocolFor(r.File, r.Range), NewText: newText})
 	}
 	if len(changes) == 0 {
 		return nil, nil
@@ -112,7 +116,7 @@ func (s *Server) quoteAtValueAction(u uri.URI, rng protocol.Range) *protocol.Cod
 		Title: "Quote '" + token + "' (YAML reserves '@')",
 		Kind:  &quickFix,
 		Edit: &protocol.WorkspaceEdit{
-			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: RangeToProtocol(raw), NewText: "\"" + token + "\""}}},
+			Changes: map[uri.URI][]protocol.TextEdit{u: {{Range: doc.RangeToProtocol(raw), NewText: "\"" + token + "\""}}},
 		},
 	}
 }

@@ -23,7 +23,7 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 	if !found {
 		return nil, nil
 	}
-	return protocol.LocationSlice{locationOf(def.File, def.NameRange)}, nil
+	return protocol.LocationSlice{s.locationOf(def.File, def.NameRange)}, nil
 }
 
 // Implementation resolves one hop to the implementing manifest. bino references
@@ -49,11 +49,11 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 	var locs []protocol.Location
 	if params.Context.IncludeDeclaration {
 		if def, found := ni.Definition(kind, name); found {
-			locs = append(locs, locationOf(def.File, def.NameRange))
+			locs = append(locs, s.locationOf(def.File, def.NameRange))
 		}
 	}
 	for _, r := range ni.References(kind, name) {
-		locs = append(locs, locationOf(r.File, r.Range))
+		locs = append(locs, s.locationOf(r.File, r.Range))
 	}
 	return locs, nil
 }
@@ -68,14 +68,13 @@ func (s *Server) DocumentSymbol(ctx context.Context, params *protocol.DocumentSy
 	sort.Slice(defs, func(i, j int) bool { return defs[i].DocIndex < defs[j].DocIndex })
 	syms := make(protocol.DocumentSymbolSlice, 0, len(defs))
 	for _, d := range defs {
-		rng := RangeToProtocol(d.DocRange)
 		detail := d.Kind
 		syms = append(syms, protocol.DocumentSymbol{
 			Name:           d.Name,
 			Detail:         &detail,
 			Kind:           symbolKind(d.Kind),
-			Range:          rng,
-			SelectionRange: RangeToProtocol(d.NameRange),
+			Range:          doc.RangeToProtocol(d.DocRange),
+			SelectionRange: doc.RangeToProtocol(d.NameRange),
 		})
 	}
 	return syms, nil
@@ -94,7 +93,7 @@ func (s *Server) Symbols(ctx context.Context, params *protocol.WorkspaceSymbolPa
 				Name: d.Name,
 				Kind: symbolKind(d.Kind),
 			},
-			Location: locationOf(d.File, d.NameRange),
+			Location: s.locationOf(d.File, d.NameRange),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -114,8 +113,20 @@ func (s *Server) symbolUnderCursor(pc reportspec.PositionContext) (kind, name st
 	}
 }
 
-func locationOf(file string, r reportspec.Range) protocol.Location {
-	return protocol.Location{URI: uri.File(file), Range: RangeToProtocol(r)}
+func (s *Server) locationOf(file string, r reportspec.Range) protocol.Location {
+	return protocol.Location{URI: uri.File(file), Range: s.rangeToProtocolFor(file, r)}
+}
+
+// rangeToProtocolFor converts a rune-column range in the named file (open
+// buffer preferred, else disk) to a UTF-16 protocol range.
+func (s *Server) rangeToProtocolFor(file string, r reportspec.Range) protocol.Range {
+	if content, ok := s.fileContent(file); ok {
+		return rangeToProtocolIn(content, r)
+	}
+	return protocol.Range{
+		Start: protocol.Position{Line: clampU32(r.StartLine - 1), Character: clampU32(r.StartCol - 1)},
+		End:   protocol.Position{Line: clampU32(r.EndLine - 1), Character: clampU32(r.EndCol - 1)},
+	}
 }
 
 // symbolKind maps a bino kind to an LSP SymbolKind for outline icons.

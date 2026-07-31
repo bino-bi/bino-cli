@@ -3,6 +3,7 @@ package lsp
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"go.lsp.dev/protocol"
 	"gopkg.in/yaml.v3"
@@ -142,19 +143,23 @@ func envVarDiagnostics(doc *Document, d Diag) []protocol.Diagnostic {
 	return out
 }
 
-// lineSpan returns a range from a 1-based (line, col) to the end of that line.
+// lineSpan returns a range from a 1-based (line, rune col) to the end of that
+// line, converted to UTF-16 characters against the buffer.
 func lineSpan(doc *Document, line, col int) protocol.Range {
-	lines := strings.Split(doc.Text, "\n")
-	endCol := col
-	if line-1 >= 0 && line-1 < len(lines) {
-		endCol = len(lines[line-1]) + 1
+	text, ok := doc.lineText(line)
+	if !ok {
+		return protocol.Range{
+			Start: protocol.Position{Line: clampU32(line - 1), Character: clampU32(col - 1)},
+			End:   protocol.Position{Line: clampU32(line - 1), Character: clampU32(col - 1)},
+		}
 	}
+	endCol := utf8.RuneCountInString(text) + 1
 	if endCol < col {
 		endCol = col
 	}
 	return protocol.Range{
-		Start: protocol.Position{Line: clampU32(line - 1), Character: clampU32(col - 1)},
-		End:   protocol.Position{Line: clampU32(line - 1), Character: clampU32(endCol - 1)},
+		Start: protocol.Position{Line: clampU32(line - 1), Character: clampU32(utf16CharIn(text, col))},
+		End:   protocol.Position{Line: clampU32(line - 1), Character: clampU32(utf16CharIn(text, endCol))},
 	}
 }
 
