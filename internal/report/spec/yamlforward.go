@@ -84,21 +84,54 @@ var refFieldKinds = map[string]string{
 
 // ResolvePositionPath maps a 1-based cursor (line, col) within raw multi-document
 // YAML to a PositionContext. It parses the RAW buffer — never env-expanded text —
-// so positions stay honest (see loader's ${VAR} expansion). It returns ok=false
-// when the cursor is outside any document body.
+// so positions stay honest (see loader's ${VAR} expansion).
+//
+// Typing resilience: documents are isolated per `---` slice, so a syntax error
+// in one document never darkens resolution in the others; a slice the
+// whole-buffer parse did not reach is parsed alone and its positions shifted
+// back. Empty buffers, fresh slices after a trailing `---`, and a bare scalar
+// being typed at the root all resolve as root key positions instead of
+// failing. ok=false only when the cursor's own document is unparseable.
 func ResolvePositionPath(content string, line, col int) (PositionContext, bool) {
-	nodes, err := ParseYAMLNodes(content)
-	if err != nil || len(nodes) == 0 {
-		return PositionContext{}, false
+	slices := splitDocSlices(content)
+	idx := sliceIndexFor(slices, line)
+	sl := slices[idx]
+
+	// The whole-buffer parse is authoritative where it succeeds: its nodes
+	// carry absolute lines and define the DocIndex ordinals (which skip empty
+	// sections — the edit pipeline counts documents the same way). A parse
+	// error keeps the prefix nodes.
+	nodes, _ := ParseYAMLNodes(content)
+	var root *yaml.Node
+	docIdx := len(nodes)
+	lineOffset := 0
+	for i, n := range nodes {
+		if n != nil && n.Line >= sl.startLine && n.Line <= sl.endLine {
+			root = n
+			docIdx = i
+			break
+		}
+	}
+	if root == nil {
+		if strings.TrimSpace(sl.text) == "" {
+			return rootlessContext(nil, line, col, docIdx, 0)
+		}
+		subNodes, subErr := ParseYAMLNodes(sl.text)
+		if len(subNodes) == 0 {
+			if subErr != nil {
+				return PositionContext{}, false // the cursor's own document is unparseable
+			}
+			return rootlessContext(nil, line, col, docIdx, 0)
+		}
+		root = subNodes[0]
+		lineOffset = sl.startLine - 1
+	}
+	if root.Kind != yaml.MappingNode {
+		return rootlessContext(root, line, col, docIdx, lineOffset)
 	}
 
-	docIdx, root, endLine := selectDocument(nodes, line)
-	if root == nil || root.Kind != yaml.MappingNode {
-		return PositionContext{}, false
-	}
-
-	w := &walker{cursorLine: line, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx, kindsByPath: map[string]string{}}
-	ctx, ok := w.descend(root, nil, endLine)
+	w := &walker{cursorLine: line - lineOffset, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx, kindsByPath: map[string]string{}}
+	ctx, ok := w.descend(root, nil, sl.endLine+1-lineOffset)
 	if !ok {
 		return PositionContext{}, false
 	}
@@ -110,7 +143,89 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 		ctx.BoundDatasets = w.boundDatasets
 	default:
 	}
+	ctx.ReplaceRange.StartLine += lineOffset
+	ctx.ReplaceRange.EndLine += lineOffset
 	return ctx, true
+}
+
+// rootlessContext resolves a cursor in a document with no mapping root yet: an
+// empty buffer, a fresh slice after `---`, or a bare scalar being typed at the
+// root ("kin"). All are root key positions, so completion can offer the
+// document skeleton.
+func rootlessContext(root *yaml.Node, line, col, docIdx, lineOffset int) (PositionContext, bool) {
+	ctx := PositionContext{
+		Kind:         PosKey,
+		Path:         "(root)",
+		DocIndex:     docIdx,
+		ReplaceRange: atCursor(line, col),
+		KindsByPath:  map[string]string{},
+	}
+	if root != nil && root.Kind == yaml.ScalarNode && root.Value != "" {
+		ctx.Prefix = root.Value
+		r := valueRange(root, line, col)
+		r.StartLine += lineOffset
+		r.EndLine += lineOffset
+		ctx.ReplaceRange = r
+	}
+	return ctx, true
+}
+
+// docSlice is one document's region of a multi-doc buffer, split on `---`
+// separator lines. startLine/endLine are 1-based inclusive (endLine may be
+// startLine-1 for an empty slice); text carries the slice's own lines with no
+// separators, so a slice-local parse can be shifted back by startLine-1.
+type docSlice struct {
+	startLine, endLine int
+	text               string
+}
+
+// splitDocSlices cuts a buffer into per-document slices on `---` separator
+// lines. Separator lines belong to no slice. The result always has at least
+// one slice (possibly empty), covering line 1.
+func splitDocSlices(content string) []docSlice {
+	lines := strings.Split(content, "\n")
+	var out []docSlice
+	start := 1
+	for i, ln := range lines {
+		if isDocSeparator(ln) {
+			out = append(out, makeSlice(lines, start, i)) // lines start..i (1-based, i = separator-1+1)
+			start = i + 2
+		}
+	}
+	out = append(out, makeSlice(lines, start, len(lines)))
+	return out
+}
+
+// makeSlice builds the slice covering 1-based lines start..end inclusive.
+func makeSlice(lines []string, start, end int) docSlice {
+	if end < start {
+		return docSlice{startLine: start, endLine: end}
+	}
+	return docSlice{startLine: start, endLine: end, text: strings.Join(lines[start-1:end], "\n")}
+}
+
+// isDocSeparator matches a YAML document separator line (`---`, optionally
+// with trailing whitespace).
+func isDocSeparator(line string) bool {
+	rest, ok := strings.CutPrefix(line, "---")
+	return ok && strings.TrimSpace(rest) == ""
+}
+
+// sliceIndexFor picks the slice owning the cursor line; a cursor on a
+// separator line belongs to the preceding slice, one past EOF to the last.
+func sliceIndexFor(slices []docSlice, line int) int {
+	for i, sl := range slices {
+		if line < sl.startLine {
+			if i > 0 {
+				return i - 1
+			}
+			return 0
+		}
+		if line <= sl.endLine {
+			return i
+		}
+	}
+	return len(slices) - 1
 }
 
 // RepairUnquotedAt scans the cursor line for an unquoted `@...` scalar value
@@ -139,34 +254,6 @@ func RepairUnquotedAt(content string, line int) (repaired, token string, raw Ran
 // unquotedAtValueRe matches a mapping value starting with the YAML-reserved
 // `@` (optionally inside a sequence item), e.g. `ref: @acme/kpi`.
 var unquotedAtValueRe = regexp.MustCompile(`^\s*(?:-\s+)?[A-Za-z][A-Za-z0-9_-]*:\s+(@\S*)\s*$`)
-
-// selectDocument picks the document whose content owns the cursor line and
-// returns its 0-based index, root mapping node, and the exclusive upper line
-// bound (the next document's start, or a sentinel past EOF).
-func selectDocument(nodes []*yaml.Node, line int) (idx int, root *yaml.Node, endLine int) {
-	const eof = 1 << 30
-	chosen := -1
-	for i, n := range nodes {
-		if n == nil {
-			continue
-		}
-		if n.Line <= line {
-			chosen = i
-		}
-	}
-	if chosen < 0 {
-		chosen = 0 // cursor sits above the first document's content
-	}
-	root = nodes[chosen]
-	endLine = eof
-	for i := chosen + 1; i < len(nodes); i++ {
-		if nodes[i] != nil {
-			endLine = nodes[i].Line
-			break
-		}
-	}
-	return chosen, root, endLine
-}
 
 // refTarget identifies the component reference (sibling kind + ref/page name)
 // a `params:` mapping belongs to.
