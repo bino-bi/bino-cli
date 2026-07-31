@@ -119,6 +119,73 @@ func TestValidateDraft_SyntaxErrorSanitized(t *testing.T) {
 	}
 }
 
+// TestValidateDraft_ForeignAndBinoGate: non-bino YAML buffers (the editor
+// attaches to every yaml file) must validate to nothing; bino manifests —
+// including half-typed ones without apiVersion — keep their diagnostics.
+func TestValidateDraft_ForeignAndBinoGate(t *testing.T) {
+	st, err := NewState(t.TempDir(), nil, logx.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+
+	foreign := []struct{ name, body string }{
+		{"docker-compose", "services:\n  web:\n    image: nginx\n"},
+		{"kubernetes", "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n"},
+		{"github actions", "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"},
+		{"empty buffer", ""},
+		{"broken foreign", "services:\n  web: [\n"},
+	}
+	for _, tc := range foreign {
+		t.Run("foreign/"+tc.name, func(t *testing.T) {
+			diags, err := st.ValidateDraft(ctx, []byte(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diags) != 0 {
+				t.Fatalf("foreign YAML must produce no bino diagnostics, got %+v", diags)
+			}
+		})
+	}
+
+	t.Run("bino kind without apiVersion is validated", func(t *testing.T) {
+		diags, err := st.ValidateDraft(ctx, []byte("kind: DataSet\nmetadata:\n  name: x\nspec:\n  query: select 1\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sawMissingAPIVersion bool
+		for _, d := range diags {
+			if strings.Contains(d.Message, "apiVersion") {
+				sawMissingAPIVersion = true
+			}
+		}
+		if !sawMissingAPIVersion {
+			t.Fatalf("a half-typed bino manifest must keep its missing-apiVersion diagnostic, got %+v", diags)
+		}
+	})
+
+	t.Run("null value gets friendly message and hint", func(t *testing.T) {
+		diags, err := st.ValidateDraft(ctx, []byte("apiVersion: bino.bi/v1alpha1\nkind:\nmetadata:\n  name: x\nspec: {}\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, d := range diags {
+			if !strings.Contains(d.Message, "no value provided (expected string)") {
+				continue
+			}
+			found = true
+			if d.Hint == "" {
+				t.Errorf("null-value diagnostic must carry a hint, got %+v", d)
+			}
+		}
+		if !found {
+			t.Fatalf("expected the friendly null-value message, got %+v", diags)
+		}
+	})
+}
+
 const refParamsFixture = `apiVersion: bino.bi/v1alpha1
 kind: ReportArtefact
 metadata:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -77,6 +78,36 @@ func TestAnalyzer_BackendErrorClearsDiagnostics(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("no publish after a backend error — stale diagnostics would linger")
+	}
+}
+
+// TestBackfillDiagnostics_HintSuffix: a diagnostic's hint renders as a second
+// message line, and the quick-fix Data (parsed from the ORIGINAL message) is
+// still extracted for missing-property diagnostics.
+func TestBackfillDiagnostics_HintSuffix(t *testing.T) {
+	doc := &Document{Text: "kind: Table\n"}
+	diags := backfillDiagnostics(doc, []Diag{
+		{
+			Line: 1, Column: 1, Severity: "error",
+			Message: "missing property 'spec'",
+			Hint:    "This field is required by the schema",
+			Field:   "(root)",
+			Code:    "schema-validation",
+		},
+	})
+	if len(diags) != 1 {
+		t.Fatalf("expected 1 diagnostic, got %d", len(diags))
+	}
+	raw, ok := diags[0].Message.(protocol.String)
+	if !ok {
+		t.Fatalf("unexpected message type %T", diags[0].Message)
+	}
+	msg := string(raw)
+	if !strings.Contains(msg, "missing property 'spec'") || !strings.Contains(msg, "hint: This field is required") {
+		t.Fatalf("message must carry the original text plus the hint line, got %q", msg)
+	}
+	if diags[0].Data == nil {
+		t.Fatal("missing-property Data must survive the hint suffix (quick-fix pipeline)")
 	}
 }
 

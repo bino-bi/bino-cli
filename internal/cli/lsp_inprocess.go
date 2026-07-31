@@ -118,6 +118,7 @@ func mapDaemonDiags(in []daemon.Diagnostic) []lsp.Diag {
 			Message:  d.Message,
 			Code:     d.Code,
 			Field:    d.Field,
+			Hint:     d.Hint,
 		}
 	}
 	return out

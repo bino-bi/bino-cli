@@ -33,6 +33,7 @@ type Diagnostic struct {
 	Message  string `json:"message"`
 	Code     string `json:"code,omitempty"`
 	Field    string `json:"field,omitempty"`
+	Hint     string `json:"hint,omitempty"` // actionable guidance (spec.Hint)
 }
 
 // Server is the daemon HTTP server.

@@ -93,10 +93,30 @@ func formatSchemaError(err SchemaError) string {
 	return b.String()
 }
 
+// Hint returns the guidance line for a schema error. It is the same text the
+// CLI formatter appends as "hint:" — exported so the structured diagnostic
+// path (daemon → LSP/MCP) can carry it as a field.
+func Hint(err SchemaError) string { return getSuggestion(err) }
+
 // getSuggestion returns a helpful hint for common schema errors.
 func getSuggestion(err SchemaError) string {
 	desc := strings.ToLower(err.Description)
 	field := strings.ToLower(err.Field)
+
+	// A key typed with no value yet ("kind: " → null; see friendlyDescription).
+	if strings.Contains(desc, "no value provided") {
+		switch {
+		case strings.Contains(desc, "expected string"):
+			return "Add a value after the colon (quote it to force a string)"
+		case strings.Contains(desc, "expected array"):
+			return "Add a YAML list under this key: one '- item' per line"
+		case strings.Contains(desc, "expected object"):
+			return "Add an indented block of 'key: value' pairs under this key"
+		case strings.Contains(desc, "expected number"), strings.Contains(desc, "expected integer"):
+			return "Add a numeric value after the colon"
+		}
+		return "Add a value after the colon"
+	}
 
 	// Missing required field
 	if strings.Contains(desc, "missing propert") {
@@ -109,6 +129,7 @@ func getSuggestion(err SchemaError) string {
 		if strings.Contains(field, "name") {
 			return "Add 'name: <unique-identifier>' under metadata"
 		}
+		return "This field is required by the schema"
 	}
 
 	// Invalid enum value
@@ -142,6 +163,18 @@ func getSuggestion(err SchemaError) string {
 	return ""
 }
 
+// friendlyDescription rewrites the one raw jsonschema message that reads as
+// gibberish while typing: a key with no value yet unmarshals to null, and
+// "got null, want string" says nothing about the fix. Every other message
+// passes through verbatim — "missing property 'x'" in particular is parsed
+// downstream by the editor's quick-fix pipeline.
+func friendlyDescription(msg string) string {
+	if rest, ok := strings.CutPrefix(msg, "got null, want "); ok {
+		return "no value provided (expected " + rest + ")"
+	}
+	return msg
+}
+
 // ValidateDocument verifies that the provided JSON manifest matches the report
 // bundle schema. Delegates to schema.ValidateJSON for actual validation.
 func ValidateDocument(doc []byte) error {
@@ -162,7 +195,7 @@ func ValidateDocument(doc []byte) error {
 	for _, issue := range issues {
 		errors = append(errors, SchemaError{
 			Field:       issue.Path,
-			Description: issue.Message,
+			Description: friendlyDescription(issue.Message),
 			Value:       issue.Value,
 			Context:     issue.Path,
 		})

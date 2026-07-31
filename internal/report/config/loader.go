@@ -14,9 +14,36 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 	"gopkg.in/yaml.v3"
 
+	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 )
+
+// IsBinoHeader reports whether an apiVersion/kind pair identifies a bino
+// manifest: the bino.bi/ apiVersion prefix, or — while the header is still
+// being typed (apiVersion absent) — a kind bino recognizes, built-in or
+// plugin-provided. Everything else (docker-compose, k8s, CI YAML) is foreign.
+func IsBinoHeader(apiVersion, kind string, kindProvider KindProvider) bool {
+	if strings.HasPrefix(apiVersion, "bino.bi/") {
+		return true
+	}
+	if apiVersion != "" || kind == "" {
+		return false
+	}
+	if _, ok := embedkinds.BuiltinCategory(kind); ok {
+		return true
+	}
+	return kindProvider != nil && IsPluginKind(kind, kindProvider)
+}
+
+// isBinoDocument applies IsBinoHeader to a raw manifest document.
+func isBinoDocument(rawJSON []byte, kindProvider KindProvider) bool {
+	var head documentHeader
+	if json.Unmarshal(rawJSON, &head) != nil {
+		return false
+	}
+	return IsBinoHeader(head.APIVersion, head.Kind, kindProvider)
+}
 
 const bnignoreFile = ".bnignore"
 
@@ -77,6 +104,13 @@ type LoadOptions struct {
 	// selected files without writing them. Keys are normalized to absolute
 	// clean paths on lookup, so callers should do the same on set.
 	Overlay map[string]string
+
+	// SkipForeign silently skips strict validation of documents that are not
+	// bino manifests (see IsBinoHeader). Editor/daemon validation sets this so
+	// non-bino YAML in the workspace (docker-compose, CI files) is not scolded
+	// with "missing property 'apiVersion'" walls. CLI build/lint keep the
+	// default (false): everything in a bundle is expected to validate there.
+	SkipForeign bool
 }
 
 // LoadDir walks the provided directory, finds YAML manifests, validates them
@@ -148,7 +182,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, lookup, opts.KindProvider, opts.CollectErrors, opts.Overlay)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, opts.SkipForeign, lookup, opts.KindProvider, opts.CollectErrors, opts.Overlay)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
@@ -209,7 +243,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, skipForeign bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var content []byte
 	if ov, ok := overlayContent(overlay, path); ok {
 		content = []byte(ov)
@@ -336,6 +370,12 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient b
 				Raw:            rawJSON,
 				MissingEnvVars: filteredMissingVars,
 			})
+			continue
+		}
+
+		// Foreign-document gate: skip strict validation of YAML that is not a
+		// bino manifest at all (opt-in; see LoadOptions.SkipForeign).
+		if skipForeign && !isBinoDocument(rawJSON, kindProvider) {
 			continue
 		}
 
