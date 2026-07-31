@@ -88,6 +88,133 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_NestedKindValue(t *testing.T) {
+	// The `kind:` of a layout child is a kind-value position at its own path —
+	// the schema (layoutChild.kind enum) decides candidates, not the root enum.
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Table
+      ref: rev_table
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 13) // on "Table"
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKindValue {
+		t.Fatalf("Kind = %v, want PosKindValue", ctx.Kind)
+	}
+	if ctx.Path != "spec.children.0.kind" {
+		t.Errorf("Path = %q, want spec.children.0.kind", ctx.Path)
+	}
+	if ctx.KindsByPath[""] != "LayoutPage" {
+		t.Errorf("KindsByPath[root] = %q, want LayoutPage", ctx.KindsByPath[""])
+	}
+	if ctx.KindsByPath["spec.children.0"] != "Table" {
+		t.Errorf("KindsByPath[spec.children.0] = %q, want Table", ctx.KindsByPath["spec.children.0"])
+	}
+}
+
+func TestResolvePositionPath_EmptyNestedKindValue(t *testing.T) {
+	// `- kind: ` with nothing typed yet must still resolve as the child's
+	// kind-value position (this is the screenshot bug: "No suggestions.").
+	const doc = `kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind:
+`
+	ctx, ok := ResolvePositionPath(doc, 6, 13)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKindValue {
+		t.Fatalf("Kind = %v, want PosKindValue", ctx.Kind)
+	}
+	if ctx.Path != "spec.children.0.kind" {
+		t.Errorf("Path = %q, want spec.children.0.kind", ctx.Path)
+	}
+}
+
+func TestResolvePositionPath_PresentKeysOnSpecKey(t *testing.T) {
+	// A new-key position inside spec must report the keys already present so
+	// completion stops re-offering them.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  title: Revenue
+
+`
+	ctx, ok := ResolvePositionPath(doc, 7, 3)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKey {
+		t.Fatalf("Kind = %v, want PosKey", ctx.Kind)
+	}
+	if ctx.Path != "spec" {
+		t.Errorf("Path = %q, want spec", ctx.Path)
+	}
+	want := map[string]bool{"dataset": true, "title": true}
+	if len(ctx.PresentKeys) != 2 || !want[ctx.PresentKeys[0]] || !want[ctx.PresentKeys[1]] {
+		t.Errorf("PresentKeys = %v, want dataset+title", ctx.PresentKeys)
+	}
+}
+
+func TestResolvePositionPath_FirstKeyUnderEmptySpec(t *testing.T) {
+	// A blank indented line under a still-empty `spec:` is the first spec key,
+	// not a new root key; an unindented one IS a new root key.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+
+`
+	ctx, ok := ResolvePositionPath(doc, 5, 3)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "spec" {
+		t.Errorf("indented: Kind=%v Path=%q, want PosKey at spec", ctx.Kind, ctx.Path)
+	}
+	ctx, ok = ResolvePositionPath(doc, 5, 1)
+	if !ok {
+		t.Fatal("ok=false at col 1")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "(root)" {
+		t.Errorf("unindented: Kind=%v Path=%q, want PosKey at (root)", ctx.Kind, ctx.Path)
+	}
+}
+
+func TestResolvePositionPath_NewSequenceItemPath(t *testing.T) {
+	// A fresh sequence slot's path is the ELEMENT path (parent + index), not a
+	// duplicated field segment — it is the schema resolver's lookup key.
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  scenarios:
+    - ac1
+
+`
+	ctx, ok := ResolvePositionPath(doc, 8, 5)
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	if ctx.Kind != PosScenarioItem {
+		t.Fatalf("Kind = %v, want PosScenarioItem", ctx.Kind)
+	}
+	if ctx.Path != "spec.scenarios.1" {
+		t.Errorf("Path = %q, want spec.scenarios.1", ctx.Path)
+	}
+}
+
 func TestResolvePositionPath_NewScenarioItem(t *testing.T) {
 	// A fresh "- " slot below the last scenario should classify as a scenario item
 	// with an empty prefix (the most valuable completion case).
@@ -465,14 +592,103 @@ spec:
 
 func TestResolvePositionPath_OutOfBounds(t *testing.T) {
 	const doc = "kind: Table\nmetadata:\n  name: t\n"
-	if _, ok := ResolvePositionPath("", 1, 1); ok {
-		t.Error("empty content should yield ok=false")
+	// An empty buffer is a fresh document: a root key position, so completion
+	// can offer the manifest skeleton instead of going dark.
+	if ctx, ok := ResolvePositionPath("", 1, 1); !ok || ctx.Kind != PosKey || ctx.Path != "(root)" {
+		t.Errorf("empty content should resolve as a root key position, got ok=%v ctx=%+v", ok, ctx)
 	}
 	if _, ok := ResolvePositionPath("\t bad: : :\n", 1, 1); ok {
-		// malformed YAML → no nodes → ok=false
+		// malformed YAML in the cursor's own document → ok=false
 		t.Error("unparseable content should yield ok=false")
 	}
 	// A cursor far past EOF still resolves into the single document (clamped),
 	// which is acceptable; assert it does not panic.
 	_, _ = ResolvePositionPath(doc, 99, 1)
+}
+
+// TestResolvePositionPath_BrokenSiblingDocIsolated: a syntax error in one
+// document must not kill resolution in the others — previously ANY broken doc
+// darkened completion for the whole file.
+func TestResolvePositionPath_BrokenSiblingDocIsolated(t *testing.T) {
+	const doc = `kind: Table
+metadata:
+  name: broken
+spec: [
+---
+kind: Table
+metadata:
+  name: fine
+spec:
+  dataset: sales
+`
+	// Cursor on `sales` in the healthy second document.
+	ctx, ok := ResolvePositionPath(doc, 10, 12)
+	if !ok {
+		t.Fatal("a broken sibling document must not kill resolution in a healthy one")
+	}
+	if ctx.Kind != PosDatasetRef || ctx.Prefix != "sales" {
+		t.Fatalf("Kind=%v Prefix=%q, want PosDatasetRef on sales", ctx.Kind, ctx.Prefix)
+	}
+	// The cursor inside the broken document itself still bails.
+	if _, ok := ResolvePositionPath(doc, 4, 8); ok {
+		t.Error("the broken document's own positions should still yield ok=false")
+	}
+}
+
+// TestResolvePositionPath_HealthyPrefixDocStaysResolvable: when a LATER doc is
+// broken, the parsed prefix documents keep working with absolute positions.
+func TestResolvePositionPath_HealthyPrefixDocStaysResolvable(t *testing.T) {
+	const doc = `kind: Table
+metadata:
+  name: fine
+spec:
+  dataset: sales
+---
+kind: Table
+spec: [
+`
+	ctx, ok := ResolvePositionPath(doc, 5, 12)
+	if !ok {
+		t.Fatal("a broken later document must not affect the healthy first one")
+	}
+	if ctx.Kind != PosDatasetRef || ctx.Prefix != "sales" || ctx.DocIndex != 0 {
+		t.Fatalf("Kind=%v Prefix=%q DocIndex=%d, want PosDatasetRef sales in doc 0", ctx.Kind, ctx.Prefix, ctx.DocIndex)
+	}
+}
+
+// TestResolvePositionPath_BareScalarRoot: typing the first word of a fresh
+// manifest ("kin") resolves as a root key position carrying the prefix.
+func TestResolvePositionPath_BareScalarRoot(t *testing.T) {
+	ctx, ok := ResolvePositionPath("kin", 1, 4)
+	if !ok {
+		t.Fatal("a bare scalar root should resolve")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "(root)" || ctx.Prefix != "kin" {
+		t.Fatalf("got %+v, want a (root) PosKey with prefix kin", ctx)
+	}
+	if ctx.ReplaceRange.StartCol != 1 || ctx.ReplaceRange.EndCol != 4 {
+		t.Errorf("ReplaceRange = %+v, want the typed span 1..4", ctx.ReplaceRange)
+	}
+}
+
+// TestResolvePositionPath_FreshDocAfterSeparator: a cursor below a trailing
+// `---` is a NEW document's root key position with the next DocIndex.
+func TestResolvePositionPath_FreshDocAfterSeparator(t *testing.T) {
+	const doc = `kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+---
+`
+	ctx, ok := ResolvePositionPath(doc, 7, 1)
+	if !ok {
+		t.Fatal("a fresh slice after --- should resolve")
+	}
+	if ctx.Kind != PosKey || ctx.Path != "(root)" {
+		t.Fatalf("got Kind=%v Path=%q, want a (root) PosKey", ctx.Kind, ctx.Path)
+	}
+	if ctx.DocIndex != 1 {
+		t.Errorf("DocIndex = %d, want 1 (the new document)", ctx.DocIndex)
+	}
 }

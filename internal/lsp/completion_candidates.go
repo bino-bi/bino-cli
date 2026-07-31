@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -28,9 +29,10 @@ func completeKinds(m *schemaModel) []protocol.CompletionItem {
 	return items
 }
 
-// completeFields offers the spec fields of a kind not already present.
-func completeFields(m *schemaModel, kind string, present map[string]bool) []protocol.CompletionItem {
-	props := m.specProps(kind)
+// completeFields offers an object position's properties not already present,
+// required fields first, annotated with type/required/default and the schema
+// description.
+func completeFields(props []propInfo, present map[string]bool) []protocol.CompletionItem {
 	sort.Slice(props, func(i, j int) bool { return props[i].Name < props[j].Name })
 	items := make([]protocol.CompletionItem, 0, len(props))
 	for _, p := range props {
@@ -42,6 +44,10 @@ func completeFields(m *schemaModel, kind string, present map[string]bool) []prot
 			Kind:             protocol.CompletionItemKindField,
 			InsertText:       protocol.NewOptional(p.Name + ": "),
 			InsertTextFormat: protocol.InsertTextFormatPlainText,
+			SortText:         protocol.NewOptional(fieldSortKey(p)),
+		}
+		if d := propDetail(p); d != "" {
+			item.Detail = protocol.NewOptional(d)
 		}
 		if p.Description != "" {
 			item.Documentation = protocol.String(p.Description)
@@ -51,9 +57,45 @@ func completeFields(m *schemaModel, kind string, present map[string]bool) []prot
 	return items
 }
 
-// completeEnum offers the enum values of spec.<field> for a kind.
-func completeEnum(m *schemaModel, kind, field string) []protocol.CompletionItem {
-	vals := m.fieldEnum(kind, field)
+// fieldSortKey ranks required fields before optional ones; names break ties.
+func fieldSortKey(p propInfo) string {
+	if p.Required {
+		return "0_" + p.Name
+	}
+	return "1_" + p.Name
+}
+
+// propDetail renders the type/required/default summary shown beside a field.
+func propDetail(p propInfo) string {
+	var parts []string
+	if p.Type != "" {
+		parts = append(parts, p.Type)
+	}
+	if p.Required {
+		parts = append(parts, "required")
+	}
+	if p.Default != nil {
+		if r := renderDefault(p.Default); r != "" {
+			parts = append(parts, "default: "+r)
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// renderDefault renders a schema default for display (strings unquoted).
+func renderDefault(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// completeEnum offers a value position's admissible tokens.
+func completeEnum(vals []string) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(vals))
 	for _, v := range vals {
 		items = append(items, protocol.CompletionItem{
