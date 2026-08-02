@@ -6,6 +6,8 @@ class BinoControlPanel extends LitElement {
     queryParams: { type: Array },
     missingParams: { type: Array },
     currentPath: { type: String, attribute: 'current-path' },
+    mode: { type: String, reflect: true },
+    open: { type: Boolean, reflect: true },
     _loading: { state: true },
   };
 
@@ -16,14 +18,44 @@ class BinoControlPanel extends LitElement {
       background: var(--bino-surface);
       border-right: 1px solid var(--bino-border);
       padding: var(--bino-space-md);
+      /* clear the shell's floating sidebar toggle */
+      padding-top: calc(44px + var(--bino-space-md) + env(safe-area-inset-top, 0px));
+      padding-left: calc(var(--bino-space-md) + env(safe-area-inset-left, 0px));
+      padding-bottom: calc(var(--bino-space-md) + env(safe-area-inset-bottom, 0px));
       display: flex;
       flex-direction: column;
       gap: var(--bino-space-md);
       overflow-y: auto;
-      max-height: 100vh;
-      position: sticky;
-      top: 0;
+      overscroll-behavior: contain;
+      height: 100%;
       font-family: var(--bino-font-sans);
+      transition: width var(--bino-transition-normal),
+        min-width var(--bino-transition-normal),
+        transform var(--bino-transition-normal);
+    }
+    :host([mode="pinned"]:not([open])) {
+      width: 0;
+      min-width: 0;
+      padding-left: 0;
+      padding-right: 0;
+      border-right: none;
+      overflow: hidden;
+    }
+    :host([mode="drawer"]) {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      box-sizing: border-box;
+      width: min(320px, 85vw);
+      min-width: 0;
+      height: auto;
+      z-index: var(--bino-z-dropdown);
+      transform: translateX(-100%);
+    }
+    :host([mode="drawer"][open]) {
+      transform: translateX(0);
+      box-shadow: var(--bino-shadow-page);
     }
     :host([hidden]) {
       display: none;
@@ -50,13 +82,16 @@ class BinoControlPanel extends LitElement {
       gap: var(--bino-space-xs);
     }
     .route-list li a {
-      display: block;
+      display: flex;
+      align-items: center;
+      min-height: 44px;
       padding: var(--bino-space-sm) 0.75rem;
       border-radius: var(--bino-radius);
       text-decoration: none;
       color: var(--bino-text-muted);
       font-size: var(--bino-font-size-md);
       transition: background var(--bino-transition-fast);
+      -webkit-tap-highlight-color: transparent;
     }
     .route-list li a:hover {
       background: var(--bino-surface-hover);
@@ -229,6 +264,26 @@ class BinoControlPanel extends LitElement {
       border-color: var(--bino-gray-400);
       cursor: not-allowed;
     }
+    @media (pointer: coarse) {
+      .param-input,
+      .param-select {
+        /* 16px prevents the iOS focus auto-zoom */
+        font-size: 16px;
+        min-height: 44px;
+      }
+      .apply-btn {
+        min-height: 44px;
+      }
+      .range-slider::-webkit-slider-thumb {
+        width: 24px;
+        height: 24px;
+        margin-top: -9px;
+      }
+      .range-slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+      }
+    }
     @media print {
       :host {
         display: none !important;
@@ -242,7 +297,14 @@ class BinoControlPanel extends LitElement {
     this.queryParams = [];
     this.missingParams = [];
     this.currentPath = '/';
+    this.mode = 'pinned';
+    this.open = true;
     this._loading = false;
+  }
+
+  focusFirst() {
+    var el = this.renderRoot.querySelector('.route-list a, .param-input, .apply-btn');
+    if (el) el.focus();
   }
 
   // Public methods for JS updates (used by serve-app.js)

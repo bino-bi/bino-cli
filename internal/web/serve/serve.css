@@ -8,14 +8,17 @@
 }
 html {
   display: block !important;
-  overflow-x: auto;
+  height: 100%;
+  overflow: hidden;
 }
 body {
   display: flex !important;
   justify-content: flex-start !important;
   margin: 0;
   padding: 0 !important;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh; /* tracks the collapsing iOS Safari URL bar; vh above is the fallback */
+  overflow: hidden;
   background: var(--bino-bg);
   font-family: inherit;
   color: var(--bino-text);
@@ -23,7 +26,8 @@ body {
 bino-serve-shell {
   display: flex;
   flex: 1;
-  min-height: 100vh;
+  min-width: 0;
+  height: 100%;
 }
 bn-context {
   display: flex;
@@ -35,11 +39,29 @@ bn-context {
   padding: var(--bino-space-lg);
   transition: opacity var(--bino-transition-fast);
 }
+/* Fit-to-width: serve-app.js sets --bino-fit-* inline per page. transform
+   doesn't shrink the layout box, so negative margins reclaim the excess. */
 bn-layout-page {
   box-sizing: border-box;
   background: var(--bino-surface);
   box-shadow: var(--bino-shadow-page);
   flex-shrink: 0;
+  transform: scale(var(--bino-fit-scale, 1));
+  transform-origin: top center;
+  margin-bottom: calc((var(--bino-fit-scale, 1) - 1) * var(--bino-fit-h, 0px));
+  margin-left: calc((var(--bino-fit-scale, 1) - 1) * var(--bino-fit-w, 0px) / 2);
+  margin-right: calc((var(--bino-fit-scale, 1) - 1) * var(--bino-fit-w, 0px) / 2);
+}
+@media (max-width: 1023px) {
+  bn-context {
+    padding: var(--bino-space-md);
+    /* clear the floating sidebar toggle */
+    padding-top: calc(44px + var(--bino-space-md) + env(safe-area-inset-top, 0px));
+  }
+  .bino-missing-params-banner {
+    margin: var(--bino-space-md);
+    margin-top: calc(44px + var(--bino-space-md) + env(safe-area-inset-top, 0px));
+  }
 }
 /* Missing params banner (light DOM, shown in content area) */
 .bino-missing-params-banner {
@@ -75,6 +97,9 @@ bn-layout-page {
 /* Print media optimizations */
 @media print {
   html {
+    height: auto;
+    overflow: visible;
+
     *, *::before, *::after {
       box-sizing: border-box;
       print-color-adjust: exact;
@@ -87,9 +112,15 @@ bn-layout-page {
   body {
     margin: 0;
     display: block !important;
+    height: auto;
+    overflow: visible;
     background: var(--bino-surface) !important;
   }
-  bino-serve-shell,
+  /* display:contents keeps the slotted bn-context printable
+     (display:none on the shell would hide the report entirely) */
+  bino-serve-shell {
+    display: contents !important;
+  }
   bino-control-panel {
     display: none !important;
   }
@@ -99,6 +130,8 @@ bn-layout-page {
   }
   bn-layout-page {
     box-shadow: none !important;
+    transform: none !important;
+    margin: 0 !important;
     break-after: page;
     page-break-after: always;
     page-break-inside: avoid;
