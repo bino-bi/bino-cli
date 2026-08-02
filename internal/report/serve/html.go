@@ -53,7 +53,7 @@ func buildMissingParamsFrameHTML() string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Parameters Required</title>
 <script type="module" src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
 <script nomodule src="/cdn/bn-template-engine/SNAPSHOT/bn-template-engine.esm.js"></script>
