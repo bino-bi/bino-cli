@@ -140,6 +140,31 @@ command line.
 See [Recipe: Deploy a live dashboard](/recipes/live-dashboard-deployment/) for Compose and Kubernetes
 manifests, and [Running bino in Docker](/guides/docker/) for the image itself.
 
+## Progressive Web App
+
+When the served `LiveReportArtefact` defines [`spec.pwa`](/reference/live-report-artefact/#specpwa), `bino serve` makes the application installable as a Progressive Web App:
+
+- `GET /manifest.webmanifest` – the web app manifest, generated from `spec.pwa` (names, colors, display mode, icons). Titled non-root routes additionally become manifest `shortcuts` — the jump list shown when long-pressing or right-clicking the installed app's icon.
+- `GET /sw.js` – the service worker.
+- Icon files come from the referenced `Asset` manifests and are served at `assets/files/<name>`.
+- Every page gets the manifest link and the service-worker registration injected into its `<head>` — plus a theme-color meta tag when `themeColor` is set, and an apple-touch-icon link when at least one icon has purpose `any`.
+
+The two paths are reserved: a route at `/manifest.webmanifest` or `/sw.js` fails validation, even when `spec.pwa` is not set. Without `spec.pwa`, serving is unchanged — no extra tags or routes.
+
+The injected tags use relative URLs. When accessing `bino serve` directly, install from a single-segment route such as `/` or `/sales`: on a nested route like `/reports/q1` the browser resolves the relative links into the route's subdirectory, where they are not found. Behind a reverse proxy that injects a `<base>` tag (as bino cloud does) the links resolve on every route.
+
+### Install requirements
+
+Browsers only offer installation on a secure context: **HTTPS or `localhost`**. `http://localhost:8080` is enough to try it out during development; a deployed dashboard must sit behind TLS — see [Recipe: Deploy a live dashboard](/recipes/live-dashboard-deployment/#installing-the-dashboard-as-an-app). All generated URLs are relative, so the app is installable whether it is served at the domain root or behind a path prefix.
+
+### Offline behavior
+
+The service worker caches the static engine assets (scripts, styles, fonts) so an installed app starts quickly. Report data is never cached: rendering a route always requires connectivity to the serve process. When the network is unreachable, the app shows an offline fallback page instead of stale data.
+
+### Service worker updates
+
+The browser re-fetches `sw.js` in the background when the app is opened. A changed worker installs, activates immediately, and takes control of the running app — no relaunch needed — dropping caches from older engine versions, so updated engine assets roll out without user action.
+
 ## Health check
 
 `GET /healthz` returns `200` with the body `ok` and requires no authentication. It reports that the

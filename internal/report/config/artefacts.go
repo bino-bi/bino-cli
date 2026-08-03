@@ -113,6 +113,25 @@ type LiveReportArtefactSpec struct {
 	Title       string                   `json:"title"`
 	Description string                   `json:"description,omitempty"`
 	Routes      map[string]LiveRouteSpec `json:"routes"`
+	PWA         *PWASpec                 `json:"pwa,omitempty"`
+}
+
+// PWASpec configures Progressive Web App serving for a LiveReportArtefact.
+type PWASpec struct {
+	Name            string    `json:"name,omitempty"`            // full app name (default: spec.title)
+	ShortName       string    `json:"shortName,omitempty"`       // home screen name (default: name)
+	Description     string    `json:"description,omitempty"`     // install prompt description (default: spec.description)
+	ThemeColor      string    `json:"themeColor,omitempty"`      // browser UI theme color
+	BackgroundColor string    `json:"backgroundColor,omitempty"` // splash screen background color
+	Display         string    `json:"display,omitempty"`         // standalone, fullscreen, minimal-ui, browser (default: standalone)
+	Icons           []PWAIcon `json:"icons"`
+}
+
+// PWAIcon references an Asset document used as an installable app icon.
+type PWAIcon struct {
+	Asset   string `json:"asset"`             // name of an Asset document with spec.type "image" and a source.localPath
+	Sizes   string `json:"sizes"`             // WIDTHxHEIGHT, e.g. "512x512"
+	Purpose string `json:"purpose,omitempty"` // any or maskable (default: any)
 }
 
 // LiveRouteSpec defines a route mapping to a ReportArtefact or LayoutPages.
@@ -304,11 +323,38 @@ func CollectLiveArtefacts(docs []Document) ([]LiveArtefact, error) {
 			return nil, fmt.Errorf("multiple LiveReportArtefact documents share metadata.name %q", doc.Name)
 		}
 		seen[doc.Name] = struct{}{}
+		applyLiveArtefactDefaults(&payload.Spec)
 		var warnings []string
 		artifacts = append(artifacts, LiveArtefact{Document: doc, Spec: payload.Spec, Warnings: warnings})
 	}
 	sort.Sort(LiveArtefactByName(artifacts))
 	return artifacts, nil
+}
+
+const DefaultPWADisplay = "standalone"
+
+func applyLiveArtefactDefaults(spec *LiveReportArtefactSpec) {
+	if spec == nil || spec.PWA == nil {
+		return
+	}
+	pwa := spec.PWA
+	if strings.TrimSpace(pwa.Name) == "" {
+		pwa.Name = spec.Title
+	}
+	if strings.TrimSpace(pwa.ShortName) == "" {
+		pwa.ShortName = pwa.Name
+	}
+	if strings.TrimSpace(pwa.Description) == "" {
+		pwa.Description = spec.Description
+	}
+	if strings.TrimSpace(pwa.Display) == "" {
+		pwa.Display = DefaultPWADisplay
+	}
+	for i := range pwa.Icons {
+		if strings.TrimSpace(pwa.Icons[i].Purpose) == "" {
+			pwa.Icons[i].Purpose = "any"
+		}
+	}
 }
 
 // FindLiveArtefact finds a LiveReportArtefact by name.

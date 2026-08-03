@@ -151,13 +151,33 @@ func ValidateArtefactNames(artefactName string, docs []Document, provider KindPr
 	return nil
 }
 
+// ReservedLiveRoutePaths are serving paths claimed by PWA support. Hosting
+// infrastructure serves them uncredentialed, so a tenant data route at one of
+// these paths would leak; they are rejected even when spec.pwa is unset.
+var ReservedLiveRoutePaths = map[string]struct{}{
+	"/manifest.webmanifest": {},
+	"/sw.js":                {},
+}
+
+// AssetInfo describes an Asset document for LiveReportArtefact validation.
+type AssetInfo struct {
+	// Type is the Asset's spec.type.
+	Type string
+	// HasLocalPath reports whether the Asset's spec.source.localPath is set.
+	HasLocalPath bool
+}
+
 // ValidateLiveArtefact validates a LiveReportArtefact spec.
 // It checks:
 //   - Root route "/" is present
-//   - All route paths are unique and valid
+//   - All route paths are unique, valid, and not reserved for PWA serving
 //   - Each route has either artifact or layoutPages (not both, not neither)
 //   - All referenced artifacts and layoutPages exist
-func ValidateLiveArtefact(live LiveArtefact, artifacts []Artifact, layoutPageNames map[string]struct{}) error {
+//   - PWA icons reference existing Asset documents of spec.type "image"
+//     backed by a source.localPath
+//
+// assets maps Asset document names to their validation-relevant fields.
+func ValidateLiveArtefact(live LiveArtefact, artifacts []Artifact, layoutPageNames map[string]struct{}, assets map[string]AssetInfo) error {
 	spec := live.Spec
 
 	// Check for mandatory root route
@@ -179,6 +199,9 @@ func ValidateLiveArtefact(live LiveArtefact, artifacts []Artifact, layoutPageNam
 		}
 		if path[0] != '/' {
 			return fmt.Errorf("LiveReportArtefact %q: route path %q must start with \"/\"", live.Document.Name, path)
+		}
+		if _, reserved := ReservedLiveRoutePaths[path]; reserved {
+			return fmt.Errorf("LiveReportArtefact %q: route path %q is reserved for PWA serving", live.Document.Name, path)
 		}
 
 		// Check that exactly one of artefact or layoutPages is set
@@ -225,6 +248,23 @@ func ValidateLiveArtefact(live LiveArtefact, artifacts []Artifact, layoutPageNam
 				return fmt.Errorf("LiveReportArtefact %q: route %q has duplicate query param name %q", live.Document.Name, path, p.Name)
 			}
 			paramNames[p.Name] = struct{}{}
+		}
+	}
+
+	// Validate PWA icon assets. Icons are served at the relative path
+	// assets/files/<name>, so they must be image assets backed by a local file.
+	if spec.PWA != nil {
+		for i, icon := range spec.PWA.Icons {
+			info, ok := assets[icon.Asset]
+			if !ok {
+				return fmt.Errorf("LiveReportArtefact %q: pwa icon[%d] references unknown Asset %q", live.Document.Name, i, icon.Asset)
+			}
+			if info.Type != "image" {
+				return fmt.Errorf("LiveReportArtefact %q: pwa icon[%d] Asset %q has spec.type %q; must be \"image\"", live.Document.Name, i, icon.Asset, info.Type)
+			}
+			if !info.HasLocalPath {
+				return fmt.Errorf("LiveReportArtefact %q: pwa icon[%d] Asset %q must use a source.localPath (PWA icons are served as local files)", live.Document.Name, i, icon.Asset)
+			}
 		}
 	}
 

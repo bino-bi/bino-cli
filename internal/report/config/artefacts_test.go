@@ -214,6 +214,116 @@ func TestCollectLiveArtefacts(t *testing.T) {
 	if len(live.Spec.Routes["/"].QueryParams) != 2 {
 		t.Fatalf("expected 2 query params on root route, got %d", len(live.Spec.Routes["/"].QueryParams))
 	}
+	if live.Spec.PWA != nil {
+		t.Fatalf("expected nil PWA when spec.pwa is unset, got %+v", live.Spec.PWA)
+	}
+}
+
+func TestCollectLiveArtefactsPWADefaults(t *testing.T) {
+	payload := map[string]any{
+		"spec": map[string]any{
+			"title":       "Sales Dashboard",
+			"description": "Daily sales figures",
+			"routes": map[string]any{
+				"/": map[string]any{"artefact": "main-report"},
+			},
+			"pwa": map[string]any{
+				"icons": []any{
+					map[string]any{"asset": "app-icon", "sizes": "512x512"},
+					map[string]any{"asset": "app-icon-maskable", "sizes": "192x192", "purpose": "maskable"},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	doc := Document{
+		File:     "live.yaml",
+		Position: 1,
+		Kind:     "LiveReportArtefact",
+		Name:     "dashboard",
+		Raw:      raw,
+	}
+
+	liveArtefacts, err := CollectLiveArtefacts([]Document{doc})
+	if err != nil {
+		t.Fatalf("CollectLiveArtefacts returned error: %v", err)
+	}
+	if len(liveArtefacts) != 1 {
+		t.Fatalf("expected 1 live artefact, got %d", len(liveArtefacts))
+	}
+	pwa := liveArtefacts[0].Spec.PWA
+	if pwa == nil {
+		t.Fatal("expected PWA to be set")
+	}
+	if pwa.Name != "Sales Dashboard" {
+		t.Errorf("expected name defaulted to spec.title, got %q", pwa.Name)
+	}
+	if pwa.ShortName != "Sales Dashboard" {
+		t.Errorf("expected shortName defaulted to name, got %q", pwa.ShortName)
+	}
+	if pwa.Description != "Daily sales figures" {
+		t.Errorf("expected description defaulted to spec.description, got %q", pwa.Description)
+	}
+	if pwa.Display != "standalone" {
+		t.Errorf("expected display defaulted to standalone, got %q", pwa.Display)
+	}
+	if len(pwa.Icons) != 2 {
+		t.Fatalf("expected 2 icons, got %d", len(pwa.Icons))
+	}
+	if pwa.Icons[0].Purpose != "any" {
+		t.Errorf("expected icon[0] purpose defaulted to any, got %q", pwa.Icons[0].Purpose)
+	}
+	if pwa.Icons[1].Purpose != "maskable" {
+		t.Errorf("expected icon[1] purpose preserved as maskable, got %q", pwa.Icons[1].Purpose)
+	}
+}
+
+func TestCollectLiveArtefactsPWAExplicitFieldsPreserved(t *testing.T) {
+	payload := map[string]any{
+		"spec": map[string]any{
+			"title": "Sales Dashboard",
+			"routes": map[string]any{
+				"/": map[string]any{"artefact": "main-report"},
+			},
+			"pwa": map[string]any{
+				"name":      "Custom Name",
+				"shortName": "Custom",
+				"display":   "fullscreen",
+				"icons": []any{
+					map[string]any{"asset": "app-icon", "sizes": "512x512"},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	doc := Document{
+		File:     "live.yaml",
+		Position: 1,
+		Kind:     "LiveReportArtefact",
+		Name:     "dashboard",
+		Raw:      raw,
+	}
+
+	liveArtefacts, err := CollectLiveArtefacts([]Document{doc})
+	if err != nil {
+		t.Fatalf("CollectLiveArtefacts returned error: %v", err)
+	}
+	pwa := liveArtefacts[0].Spec.PWA
+	if pwa.Name != "Custom Name" {
+		t.Errorf("expected explicit name preserved, got %q", pwa.Name)
+	}
+	if pwa.ShortName != "Custom" {
+		t.Errorf("expected explicit shortName preserved, got %q", pwa.ShortName)
+	}
+	if pwa.Display != "fullscreen" {
+		t.Errorf("expected explicit display preserved, got %q", pwa.Display)
+	}
 }
 
 func TestLiveRouteSpec_GetQueryParamDefaults(t *testing.T) {

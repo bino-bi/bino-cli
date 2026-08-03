@@ -15,6 +15,13 @@ metadata:
 spec:
   title: "Sales Dashboard"
   description: "Interactive sales reporting application"
+  pwa:
+    # Optional: serve the application as an installable Progressive Web App
+    shortName: Sales
+    themeColor: "#0B5FFF"
+    icons:
+      - asset: app-icon
+        sizes: 512x512
   routes:
     "/":
       artefact: overview-report
@@ -47,6 +54,85 @@ Human-readable title of the live report application.
 ### spec.description
 
 Optional description of the application.
+
+### spec.pwa
+
+Optional. When present, `bino serve` serves the application as an installable [Progressive Web App](/cli/serve/#progressive-web-app): it generates a web app manifest and a service worker, and injects the manifest link, the service-worker registration, and — when configured — a theme-color meta tag and an apple-touch-icon link into every page. Titled non-root routes are additionally exposed as app shortcuts (the jump list on the installed app's icon). When `spec.pwa` is absent, serving behavior is completely unchanged — no extra tags, routes, or defaults.
+
+- `name` – full application name shown during installation and on splash screens. Defaults to `spec.title`.
+- `shortName` – short name shown under the home screen icon. Defaults to `name`.
+- `description` – description shown in install prompts. Defaults to `spec.description`.
+- `themeColor` – theme color applied to the browser UI around the installed app, e.g. `"#0B5FFF"`.
+- `backgroundColor` – background color of the splash screen shown while the installed app loads, e.g. `"#FFFFFF"`.
+- `display` – display mode of the installed app. One of `standalone` (default), `fullscreen`, `minimal-ui`, `browser`.
+- `icons` (required) – installable app icons, see below.
+
+### spec.pwa.icons
+
+Icons offered to the operating system for the installed app. At least one icon is required; include a `512x512` icon for best results.
+
+Each icon references an [Asset](/reference/asset/) manifest:
+
+- `asset` (required) – `metadata.name` of an `Asset` with `spec.type: image` and a `source.localPath`. Icons are served from the local file; remote or inline asset sources are rejected.
+- `sizes` (required) – pixel dimensions as `WIDTHxHEIGHT`, e.g. `512x512`.
+- `purpose` – `any` (default) for a regular icon, or `maskable` for an icon designed with a safe zone so the OS may apply an adaptive mask.
+
+**Example:**
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: app-icon-192
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./assets/icon-192.png
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: app-icon-512
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./assets/icon-512.png
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: app-icon-maskable
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./assets/icon-maskable.png
+---
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  title: "Sales Dashboard"
+  pwa:
+    shortName: Sales
+    themeColor: "#0B5FFF"
+    backgroundColor: "#FFFFFF"
+    icons:
+      - asset: app-icon-192
+        sizes: 192x192
+      - asset: app-icon-512
+        sizes: 512x512
+      - asset: app-icon-maskable
+        sizes: 512x512
+        purpose: maskable
+  routes:
+    "/":
+      artefact: overview-report
+```
 
 ### spec.routes (required)
 
@@ -582,8 +668,10 @@ The CLI validates LiveReportArtefact manifests at load time:
 
 - Root route `/` must be present.
 - All route paths must start with `/`.
+- The paths `/manifest.webmanifest` and `/sw.js` are **reserved for PWA serving** and are rejected as route paths — even when `spec.pwa` is not set.
 - All referenced `artefact` names must correspond to existing `ReportArtefact` manifests.
 - All referenced LayoutPages in `layoutPages` must exist.
 - Query parameter names must be unique within each route.
+- Every `spec.pwa.icons[].asset` must name an existing `Asset` manifest with `spec.type: image` and a `source.localPath`.
 
 Validation errors are reported before the server starts.

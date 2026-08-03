@@ -56,6 +56,48 @@ type LiveReportArtefactSpec struct {
 	// Routes maps URL paths to report configurations.
 	// A root route "/" is required.
 	Routes map[string]LiveRouteSpec `yaml:"routes" json:"routes"`
+
+	// PWA enables Progressive Web App serving (manifest, icons, service worker)
+	// when set.
+	PWA *PWASpec `yaml:"pwa,omitempty" json:"pwa,omitempty"`
+}
+
+// PWASpec configures Progressive Web App serving for a LiveReportArtefact.
+type PWASpec struct {
+	// Name is the full application name. Defaults to spec.title.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+
+	// ShortName is shown under the home screen icon. Defaults to Name.
+	ShortName string `yaml:"shortName,omitempty" json:"shortName,omitempty"`
+
+	// Description describes the installed application. Defaults to spec.description.
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+
+	// ThemeColor is the browser UI theme color (e.g., "#0B5FFF").
+	ThemeColor string `yaml:"themeColor,omitempty" json:"themeColor,omitempty"`
+
+	// BackgroundColor is the splash screen background color (e.g., "#FFFFFF").
+	BackgroundColor string `yaml:"backgroundColor,omitempty" json:"backgroundColor,omitempty"`
+
+	// Display is the display mode: standalone, fullscreen, minimal-ui, or browser.
+	// Defaults to "standalone".
+	Display string `yaml:"display,omitempty" json:"display,omitempty"`
+
+	// Icons lists the installable app icons (at least one required).
+	Icons []PWAIcon `yaml:"icons" json:"icons"`
+}
+
+// PWAIcon references an Asset document used as an installable app icon.
+type PWAIcon struct {
+	// Asset is the name of an Asset document with spec.type "image" and a
+	// source.localPath.
+	Asset string `yaml:"asset" json:"asset"`
+
+	// Sizes is the icon dimensions as WIDTHxHEIGHT (e.g., "512x512").
+	Sizes string `yaml:"sizes" json:"sizes"`
+
+	// Purpose is "any" or "maskable". Defaults to "any".
+	Purpose string `yaml:"purpose,omitempty" json:"purpose,omitempty"`
 }
 
 // LiveRouteSpec defines a route mapping in a LiveReportArtefact.

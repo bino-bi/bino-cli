@@ -339,6 +339,31 @@ func ResolveAssetURLs(docs []config.Document) (map[string]string, []LocalAsset, 
 	return urls, locals, nil
 }
 
+// ResolveNamedAsset resolves a single non-font Asset document by metadata.name.
+// It returns the asset's serving value (URL path, remote URL, or data URI),
+// its declared media type, and the local file that must be exposed through the
+// HTTP server (nil for remote and inline sources). Local files are stat'ed
+// during resolution, so a missing file surfaces here rather than at request time.
+func ResolveNamedAsset(docs []config.Document, name string) (value, mediaType string, local *LocalAsset, err error) {
+	for _, doc := range docs {
+		if doc.Kind != "Asset" || doc.Name != name {
+			continue
+		}
+		var payload struct {
+			Spec assetSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return "", "", nil, fmt.Errorf("render: parse asset %s: %w", doc.Name, err)
+		}
+		value, local, err := resolveAssetValue(doc, payload.Spec, assetURLPath)
+		if err != nil {
+			return "", "", nil, err
+		}
+		return value, payload.Spec.MediaType, local, nil
+	}
+	return "", "", nil, fmt.Errorf("render: asset %q not found", name)
+}
+
 // fontURLPath generates a URL path for font assets.
 func fontURLPath(name string) string {
 	return "/assets/fonts/" + url.PathEscape(name)

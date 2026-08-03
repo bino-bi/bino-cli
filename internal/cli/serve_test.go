@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/serve"
 )
 
 func TestBuildCacheKey(t *testing.T) {
@@ -149,4 +151,68 @@ func TestServeRenderCache_LRUBound(t *testing.T) {
 	if !ok || string(entry.frameHTML) != "updated" {
 		t.Fatalf("key-new not updated in place: ok=%v entry=%v", ok, entry)
 	}
+}
+
+func TestSetupServeRoutesPWA(t *testing.T) {
+	live := config.LiveArtefact{
+		Spec: config.LiveReportArtefactSpec{
+			Routes: map[string]config.LiveRouteSpec{},
+		},
+	}
+
+	t.Run("registers manifest and sw routes when PWA set", func(t *testing.T) {
+		setup, err := setupServeRoutes(serveRouteConfig{
+			LiveArtefact: live,
+			PWA: &serve.PWAContent{
+				Manifest:      []byte(`{"name":"x"}`),
+				ServiceWorker: []byte("// sw"),
+			},
+		})
+		if err != nil {
+			t.Fatalf("setupServeRoutes: %v", err)
+		}
+
+		manifestFn, ok := setup.RouteMap["/manifest.webmanifest"]
+		if !ok {
+			t.Fatal("/manifest.webmanifest not registered")
+		}
+		body, contentType, err := manifestFn(context.Background())
+		if err != nil {
+			t.Fatalf("manifest content func: %v", err)
+		}
+		if contentType != "application/manifest+json" {
+			t.Errorf("manifest content type = %q, want application/manifest+json", contentType)
+		}
+		if string(body) != `{"name":"x"}` {
+			t.Errorf("manifest body = %q", body)
+		}
+
+		swFn, ok := setup.RouteMap["/sw.js"]
+		if !ok {
+			t.Fatal("/sw.js not registered")
+		}
+		body, contentType, err = swFn(context.Background())
+		if err != nil {
+			t.Fatalf("sw content func: %v", err)
+		}
+		if contentType != "text/javascript; charset=utf-8" {
+			t.Errorf("sw content type = %q, want text/javascript; charset=utf-8", contentType)
+		}
+		if string(body) != "// sw" {
+			t.Errorf("sw body = %q", body)
+		}
+	})
+
+	t.Run("no PWA routes when nil", func(t *testing.T) {
+		setup, err := setupServeRoutes(serveRouteConfig{LiveArtefact: live})
+		if err != nil {
+			t.Fatalf("setupServeRoutes: %v", err)
+		}
+		if _, ok := setup.RouteMap["/manifest.webmanifest"]; ok {
+			t.Error("/manifest.webmanifest registered despite nil PWA")
+		}
+		if _, ok := setup.RouteMap["/sw.js"]; ok {
+			t.Error("/sw.js registered despite nil PWA")
+		}
+	})
 }

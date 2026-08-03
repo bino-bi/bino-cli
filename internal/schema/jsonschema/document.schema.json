@@ -1463,6 +1463,10 @@
             "$ref": "#/$defs/liveRouteSpec"
           },
           "description": "Map of URL paths to route configurations. The root route '/' is mandatory and serves as the index page. Other routes map to ReportArtefact documents by name."
+        },
+        "pwa": {
+          "$ref": "#/$defs/pwaSpec",
+          "description": "Optional Progressive Web App configuration. When present, the served live report exposes a web app manifest, home screen icons, and a service worker so it can be installed on a device."
         }
       },
       "additionalProperties": false
@@ -1601,6 +1605,72 @@
         "label": {
           "type": "string",
           "description": "Human-readable label for this option. If omitted, value is used."
+        }
+      },
+      "additionalProperties": false
+    },
+    "pwaSpec": {
+      "description": "Progressive Web App configuration for a live report: web app manifest metadata, colors, display mode, and the installable icons.",
+      "type": "object",
+      "required": ["icons"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full application name shown during installation and on splash screens. If omitted, spec.title is used."
+        },
+        "shortName": {
+          "type": "string",
+          "description": "Short application name shown under the home screen icon. If omitted, name is used."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the installed application shown in install prompts. If omitted, spec.description is used."
+        },
+        "themeColor": {
+          "type": "string",
+          "description": "Theme color applied to the browser UI around the installed app (for example '#0B5FFF')."
+        },
+        "backgroundColor": {
+          "type": "string",
+          "description": "Background color of the splash screen shown while the installed app loads (for example '#FFFFFF')."
+        },
+        "display": {
+          "type": "string",
+          "enum": ["standalone", "fullscreen", "minimal-ui", "browser"],
+          "default": "standalone",
+          "description": "Display mode of the installed app. Default is 'standalone'."
+        },
+        "icons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pwaIcon"
+          },
+          "minItems": 1,
+          "description": "Icons offered to the operating system for the installed app. At least one icon is required; a 512x512 icon is recommended for best results."
+        }
+      },
+      "additionalProperties": false
+    },
+    "pwaIcon": {
+      "description": "A single installable app icon backed by a declared Asset document.",
+      "type": "object",
+      "required": ["asset", "sizes"],
+      "properties": {
+        "asset": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of an Asset document (metadata.name) with spec.type 'image' and a source.localPath that provides the icon file."
+        },
+        "sizes": {
+          "type": "string",
+          "pattern": "^\\d+x\\d+$",
+          "description": "Pixel dimensions of the icon as WIDTHxHEIGHT (for example '512x512')."
+        },
+        "purpose": {
+          "type": "string",
+          "enum": ["any", "maskable"],
+          "default": "any",
+          "description": "Icon purpose: 'any' for a regular icon, 'maskable' for an icon designed with a safe zone so the OS may apply an adaptive mask. Default is 'any'."
         }
       },
       "additionalProperties": false

@@ -3,6 +3,7 @@ package cli
 import (
 	"container/list"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -171,8 +172,14 @@ Environment knobs:
 				}
 			}
 
+			// Collect Asset info for PWA icon validation
+			assetInfos, err := collectAssetInfos(docs)
+			if err != nil {
+				return ConfigError(err)
+			}
+
 			// Validate the live artifact
-			if err := config.ValidateLiveArtefact(*liveArtefact, artifacts, layoutPageNames); err != nil {
+			if err := config.ValidateLiveArtefact(*liveArtefact, artifacts, layoutPageNames, assetInfos); err != nil {
 				return ConfigError(err)
 			}
 
@@ -180,6 +187,14 @@ Environment knobs:
 			artefactMap := make(map[string]config.Artifact, len(artifacts))
 			for _, a := range artifacts {
 				artefactMap[a.Document.Name] = a
+			}
+
+			// Generate PWA payloads (manifest, service worker, icon assets)
+			// when the artefact opts in via spec.pwa. Icon files are resolved
+			// here so a missing file fails at startup, not at request time.
+			pwaContent, err := serve.BuildPWAContent(*liveArtefact, docs, env.EngineVersion)
+			if err != nil {
+				return ConfigError(err)
 			}
 
 			// Create the server
@@ -254,6 +269,7 @@ Environment knobs:
 				PostDatasetHook:    servePostDatasetHook,
 				HostService:        serveHostSvcRef,
 				Server:             server,
+				PWA:                pwaContent,
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -262,7 +278,13 @@ Environment knobs:
 			if routeSetup.RootContent != nil {
 				server.SetContentFunc(routeSetup.RootContent)
 			}
-			server.SetLocalAssets(collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion, sharedSession, servePluginOpts, servePostRenderHook, servePostDatasetHook))
+			serveAssets := collectServeAssets(ctx, logger, *liveArtefact, artefactMap, env.ProjectRoot, docs, env.EngineVersion, sharedSession, servePluginOpts, servePostRenderHook, servePostDatasetHook)
+			if pwaContent != nil {
+				// Icons referenced only by the pwa block are not harvested by
+				// the pre-render pass above, so register them explicitly.
+				serveAssets = append(serveAssets, pipeline.ConvertLocalAssets(pwaContent.LocalAssets)...)
+			}
+			server.SetLocalAssets(serveAssets)
 
 			url := server.URL()
 			logger.Successf("Serving at %s", url)
@@ -363,6 +385,9 @@ type serveRouteConfig struct {
 	// Server is used to register dataset/datasource payloads when the
 	// renderer runs in url mode. May be nil in inline mode.
 	Server *httpserver.Server
+	// PWA holds the generated manifest and service worker; nil when the
+	// artefact has no spec.pwa block.
+	PWA *serve.PWAContent
 }
 
 // serveRouteSetup holds the results of route setup.
@@ -423,6 +448,15 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 		}
 	}
 
+	// PWA serving paths. These are reserved route paths
+	// (config.ReservedLiveRoutePaths), so they can never collide with a
+	// tenant route. They must live in the route map: once the map is
+	// non-empty, lookupContentFunc hard-404s any path not present.
+	if cfg.PWA != nil {
+		routeMap["/manifest.webmanifest"] = httpserver.StaticContent(cfg.PWA.Manifest, "application/manifest+json")
+		routeMap["/sw.js"] = httpserver.StaticContent(cfg.PWA.ServiceWorker, "text/javascript; charset=utf-8")
+	}
+
 	setup := &serveRouteSetup{RouteMap: routeMap}
 
 	// Set default content function for root if "/" is in routes
@@ -480,6 +514,34 @@ func applyServeDataMode(opts *render.PluginOptions, resolvedDataMode string) *re
 	}
 	opts.DataMode = render.DataModeURL
 	return opts
+}
+
+// collectAssetInfos summarizes the project's Asset documents for
+// ValidateLiveArtefact's PWA icon checks (spec.type and whether the source is
+// a local file).
+func collectAssetInfos(docs []config.Document) (map[string]config.AssetInfo, error) {
+	assetInfos := make(map[string]config.AssetInfo)
+	for _, doc := range docs {
+		if doc.Kind != "Asset" {
+			continue
+		}
+		var payload struct {
+			Spec struct {
+				Type   string `json:"type"`
+				Source struct {
+					LocalPath string `json:"localPath"`
+				} `json:"source"`
+			} `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return nil, fmt.Errorf("parse Asset %s: %w", doc.Name, err)
+		}
+		assetInfos[doc.Name] = config.AssetInfo{
+			Type:         payload.Spec.Type,
+			HasLocalPath: payload.Spec.Source.LocalPath != "",
+		}
+	}
+	return assetInfos, nil
 }
 
 // collectServeAssets pre-renders routes to collect all local assets needed for serving.

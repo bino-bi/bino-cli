@@ -405,6 +405,15 @@ pre-serve = ["./scripts/warmup.sh"]
 
 Hooks run with `BINO_MODE=serve`, `BINO_LISTEN_ADDR`, and `BINO_LIVE_ARTEFACT` set — see [Hooks](/concepts/hooks/).
 
+## Installing the dashboard as an app
+
+If the `LiveReportArtefact` defines [`spec.pwa`](/reference/live-report-artefact/#specpwa), the deployed dashboard is installable as a Progressive Web App straight from the browser. Installation requires HTTPS, which the reverse proxy above already provides — see [bino serve: Progressive Web App](/cli/serve/#progressive-web-app) for what is served and how offline behavior works.
+
+Two deployment properties matter:
+
+- **Every PWA URL is relative.** The manifest, the service worker, the icon references, and the tags injected into the HTML all use relative URLs, resolved against the page URL. The same bundle is therefore installable at the domain root (`https://reports.example.com/`) or under a path prefix, with no configuration difference. bino cloud relies on this: it hosts live artefacts under `/l/<slug>/` behind a reverse proxy and injects a `<base href="/l/<slug>/">` into the HTML, which makes the artefact installable from its `/l/<slug>/` URL unchanged. Installed apps stay signed in via device sessions managed by the cloud.
+- **Proxies must preserve the path prefix.** If your own proxy serves the dashboard under a prefix (say `/dashboard/`), it must forward every path under that prefix to the same serve process and must not redirect between prefixed and unprefixed URLs. The installed app's scope is the prefix it was installed from; a proxy that drops or rewrites the browser-visible prefix breaks manifest and service-worker resolution.
+
 ## Troubleshooting
 
 | Symptom                                       | Cause                                                   | Fix                                                              |
