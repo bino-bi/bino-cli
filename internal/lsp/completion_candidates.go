@@ -299,32 +299,36 @@ func completeScenarios(available map[string]bool) (items []protocol.CompletionIt
 }
 
 // completeVariances offers a guided builder for the variance grammar
-// d{B}_{A}_{sentiment} plus concrete combinations of the bound scenarios. The
-// builder is a snippet, so it only appears for snippet-capable clients.
+// d{B}_{A}_{sentiment} / dr{B}_{A}_{sentiment} plus concrete combinations of
+// the bound scenarios. The builder is a snippet, so it only appears for
+// snippet-capable clients.
 func completeVariances(scenarios []string, snippets bool) []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 	if snippets {
 		items = append(items, protocol.CompletionItem{
-			Label:            "d…_…_… (variance builder)",
+			Label:            "d…/dr…_…_… (variance builder)",
 			Kind:             protocol.CompletionItemKindSnippet,
-			InsertText:       protocol.NewOptional("d${1:ac1}_${2:pp1}_${3|pos,neg,neu|}"),
+			InsertText:       protocol.NewOptional("${1|d,dr|}${2:ac1}_${3:pp1}_${4|pos,neg,neu|}"),
 			InsertTextFormat: protocol.InsertTextFormatSnippet,
-			Documentation:    protocol.String("Absolute variance of {2} vs {1} with a sentiment suffix. Prefix with 'dr' for a relative (%) variance."),
+			Documentation:    protocol.String("Variance of {3} vs {2} with a sentiment suffix; 'd' is absolute, 'dr' is relative (%)."),
 		})
 	}
-	// Concrete pos-sentiment variances for each ordered pair, capped for sanity.
-	const maxItems = 24
-	for i := 0; i < len(scenarios) && len(items) < maxItems; i++ {
-		for j := 0; j < len(scenarios) && len(items) < maxItems; j++ {
+	// Concrete pos-sentiment variances for each ordered pair, absolute and
+	// relative interleaved so both prefixes survive the cap.
+	const maxItems = 48
+	for i := 0; i < len(scenarios) && len(items)+2 <= maxItems; i++ {
+		for j := 0; j < len(scenarios) && len(items)+2 <= maxItems; j++ {
 			if i == j {
 				continue
 			}
-			token := "d" + scenarios[i] + "_" + scenarios[j] + "_pos"
-			items = append(items, protocol.CompletionItem{
-				Label:         token,
-				Kind:          protocol.CompletionItemKindValue,
-				Documentation: protocol.String(varianceMeaning(token)),
-			})
+			for _, prefix := range []string{"d", "dr"} {
+				token := prefix + scenarios[i] + "_" + scenarios[j] + "_pos"
+				items = append(items, protocol.CompletionItem{
+					Label:         token,
+					Kind:          protocol.CompletionItemKindValue,
+					Documentation: protocol.String(varianceMeaning(token)),
+				})
+			}
 		}
 	}
 	return items
