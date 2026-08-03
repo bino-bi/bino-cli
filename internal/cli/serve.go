@@ -234,21 +234,7 @@ Environment knobs:
 					return err
 				}
 			}
-			if resolvedDataMode == render.DataModeURL {
-				if servePluginOpts == nil {
-					servePluginOpts = &render.PluginOptions{}
-				}
-				servePluginOpts.DataMode = render.DataModeURL
-				// Emit absolute URLs so older template-engine builds (which
-				// only fetch http:// or https:// bodies) still resolve them.
-				// NOTE: this has the same same-origin consideration as the
-				// preview path — an absolute base pins the data fetch to one
-				// host (e.g. 127.0.0.1), so a client loading the page from a
-				// different host name would hit a cross-origin fetch (the data
-				// route sends no CORS headers). Left as-is here on purpose;
-				// revisit if serve grows an embed/iframe consumer.
-				servePluginOpts.DataBaseURL = server.URL()
-			}
+			servePluginOpts = applyServeDataMode(servePluginOpts, resolvedDataMode)
 
 			// Set up routes and assets
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
@@ -474,6 +460,26 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	}
 
 	return setup, nil
+}
+
+// applyServeDataMode configures url-mode data emission on the serve plugin
+// options; any other mode returns opts unchanged. DataBaseURL is deliberately
+// left empty so the renderer emits relative, same-origin data URLs
+// (/__bino/data/...): serve binds one host (e.g. 127.0.0.1) but clients may
+// load the page via another (localhost, a reverse-proxy hostname), and the
+// data route sends no CORS headers, so an absolute base pinned to the bind
+// address makes every data fetch fail cross-origin ("No Data"). Relative
+// bodies are fetched by every supported engine (the >=1.0.0-alpha.19 floor
+// postdates same-origin path support, added in alpha.14).
+func applyServeDataMode(opts *render.PluginOptions, resolvedDataMode string) *render.PluginOptions {
+	if resolvedDataMode != render.DataModeURL {
+		return opts
+	}
+	if opts == nil {
+		opts = &render.PluginOptions{}
+	}
+	opts.DataMode = render.DataModeURL
+	return opts
 }
 
 // collectServeAssets pre-renders routes to collect all local assets needed for serving.
