@@ -76,6 +76,9 @@ func injectScript(htmlBytes []byte, liveArtefact config.LiveArtefact, currentPat
 
 	var b strings.Builder
 	b.WriteString(htmlStr[:headClose])
+	if liveArtefact.Spec.PWA != nil {
+		b.WriteString(buildPWAHeadTags(liveArtefact.Spec.PWA))
+	}
 	b.WriteString(script)
 	b.WriteString(htmlStr[headClose:])
 	return []byte(b.String())

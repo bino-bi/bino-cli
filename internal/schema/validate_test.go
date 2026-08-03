@@ -1125,3 +1125,98 @@ spec:
 		})
 	}
 }
+
+func TestValidate_LiveReportArtefactPWA(t *testing.T) {
+	liveDoc := func(pwa string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: live_dashboard
+spec:
+  title: Dashboard
+  routes:
+    "/":
+      artefact: home
+  pwa:` + pwa + `
+`
+	}
+
+	tests := []struct {
+		name    string
+		pwa     string
+		wantErr bool
+	}{
+		{
+			name: "full pwa block with any and maskable icons",
+			pwa: `
+    name: Sales Dashboard
+    shortName: Sales
+    description: Quarterly sales
+    themeColor: "#0B5FFF"
+    backgroundColor: "#FFFFFF"
+    display: standalone
+    icons:
+      - asset: app_icon
+        sizes: 512x512
+        purpose: any
+      - asset: app_icon_maskable
+        sizes: 512x512
+        purpose: maskable`,
+			wantErr: false,
+		},
+		{
+			name: "empty icons array",
+			pwa: `
+    icons: []`,
+			wantErr: true,
+		},
+		{
+			name: "sizes not WIDTHxHEIGHT",
+			pwa: `
+    icons:
+      - asset: app_icon
+        sizes: "512"`,
+			wantErr: true,
+		},
+		{
+			name: "invalid display mode",
+			pwa: `
+    display: kiosk
+    icons:
+      - asset: app_icon
+        sizes: 512x512`,
+			wantErr: true,
+		},
+		{
+			name: "invalid icon purpose",
+			pwa: `
+    icons:
+      - asset: app_icon
+        sizes: 512x512
+        purpose: monochrome`,
+			wantErr: true,
+		},
+		{
+			name: "unknown field inside pwa",
+			pwa: `
+    orientation: landscape
+    icons:
+      - asset: app_icon
+        sizes: 512x512`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(liveDoc(tt.pwa)))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected document to validate, got: %v", err)
+			}
+		})
+	}
+}

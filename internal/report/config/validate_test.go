@@ -222,7 +222,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateLiveArtefact(live, artifacts, layoutPageNames); err != nil {
+		if err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
@@ -237,7 +237,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
 		if err == nil {
 			t.Fatal("expected error for missing root route")
 		}
@@ -257,7 +257,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
 		if err == nil {
 			t.Fatal("expected error for route without leading slash")
 		}
@@ -276,7 +276,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
 		if err == nil {
 			t.Fatal("expected error for unknown artefact")
 		}
@@ -301,7 +301,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
 		if err == nil {
 			t.Fatal("expected error for duplicate query param names")
 		}
@@ -324,7 +324,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateLiveArtefact(live, artifacts, lpNames); err != nil {
+		if err := ValidateLiveArtefact(live, artifacts, lpNames, nil); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
@@ -342,7 +342,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, lpNames)
+		err := ValidateLiveArtefact(live, artifacts, lpNames, nil)
 		if err == nil {
 			t.Fatal("expected error for unknown layoutPage")
 		}
@@ -364,7 +364,7 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, lpNames)
+		err := ValidateLiveArtefact(live, artifacts, lpNames, nil)
 		if err == nil {
 			t.Fatal("expected error for route with both artefact and layoutPages")
 		}
@@ -383,12 +383,148 @@ func TestValidateLiveArtefact(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateLiveArtefact(live, artifacts, layoutPageNames)
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
 		if err == nil {
 			t.Fatal("expected error for route with neither artefact nor layoutPages")
 		}
 		if !strings.Contains(err.Error(), "must have either artefact or layoutPages") {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("reserved route path without pwa", func(t *testing.T) {
+		for _, reserved := range []string{"/manifest.webmanifest", "/sw.js"} {
+			live := LiveArtefact{
+				Document: Document{Name: "dashboard"},
+				Spec: LiveReportArtefactSpec{
+					Title: "Dashboard",
+					Routes: map[string]LiveRouteSpec{
+						"/":      {Artifact: "main-report"},
+						reserved: {Artifact: "sales-report"},
+					},
+				},
+			}
+			err := ValidateLiveArtefact(live, artifacts, layoutPageNames, nil)
+			if err == nil {
+				t.Fatalf("expected error for reserved route path %q", reserved)
+			}
+			if !strings.Contains(err.Error(), "reserved for PWA serving") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+	})
+
+	t.Run("reserved route path with pwa", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/":      {Artifact: "main-report"},
+					"/sw.js": {Artifact: "sales-report"},
+				},
+				PWA: &PWASpec{
+					Icons: []PWAIcon{{Asset: "app-icon", Sizes: "512x512"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, map[string]AssetInfo{"app-icon": {Type: "image", HasLocalPath: true}})
+		if err == nil {
+			t.Fatal("expected error for reserved route path")
+		}
+		if !strings.Contains(err.Error(), "reserved for PWA serving") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("pwa icon references unknown asset", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artifact: "main-report"},
+				},
+				PWA: &PWASpec{
+					Icons: []PWAIcon{{Asset: "missing-icon", Sizes: "512x512"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, map[string]AssetInfo{"app-icon": {Type: "image", HasLocalPath: true}})
+		if err == nil {
+			t.Fatal("expected error for unknown icon asset")
+		}
+		if !strings.Contains(err.Error(), "unknown Asset") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("pwa icon references non-image asset", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artifact: "main-report"},
+				},
+				PWA: &PWASpec{
+					Icons: []PWAIcon{{Asset: "brand-font", Sizes: "512x512"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, map[string]AssetInfo{"brand-font": {Type: "font", HasLocalPath: true}})
+		if err == nil {
+			t.Fatal("expected error for non-image icon asset")
+		}
+		if !strings.Contains(err.Error(), "must be \"image\"") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("pwa icon asset without localPath source", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artifact: "main-report"},
+				},
+				PWA: &PWASpec{
+					Icons: []PWAIcon{{Asset: "remote-icon", Sizes: "512x512"}},
+				},
+			},
+		}
+		err := ValidateLiveArtefact(live, artifacts, layoutPageNames, map[string]AssetInfo{"remote-icon": {Type: "image", HasLocalPath: false}})
+		if err == nil {
+			t.Fatal("expected error for icon asset without localPath source")
+		}
+		if !strings.Contains(err.Error(), "source.localPath") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("valid pwa", func(t *testing.T) {
+		live := LiveArtefact{
+			Document: Document{Name: "dashboard"},
+			Spec: LiveReportArtefactSpec{
+				Title: "Dashboard",
+				Routes: map[string]LiveRouteSpec{
+					"/": {Artifact: "main-report"},
+				},
+				PWA: &PWASpec{
+					Icons: []PWAIcon{
+						{Asset: "app-icon", Sizes: "512x512", Purpose: "any"},
+						{Asset: "app-icon-maskable", Sizes: "192x192", Purpose: "maskable"},
+					},
+				},
+			},
+		}
+		assets := map[string]AssetInfo{
+			"app-icon":          {Type: "image", HasLocalPath: true},
+			"app-icon-maskable": {Type: "image", HasLocalPath: true},
+		}
+		if err := ValidateLiveArtefact(live, artifacts, layoutPageNames, assets); err != nil {
+			t.Fatalf("expected no error, got %v", err)
 		}
 	})
 }

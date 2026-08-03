@@ -377,6 +377,34 @@ func TestDocumentRoundTrip(t *testing.T) {
 			},
 		},
 		{
+			name: "LiveReportArtefact with PWA",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindLiveReportArtefact,
+				Metadata: Metadata{
+					Name: "installable_dashboard",
+				},
+				Spec: &LiveReportArtefactSpec{
+					Title: "Dashboard",
+					Routes: map[string]LiveRouteSpec{
+						"/": {
+							LayoutPages: []string{"$dashboard_page"},
+						},
+					},
+					PWA: &PWASpec{
+						Name:            "Sales Dashboard",
+						ShortName:       "Sales",
+						ThemeColor:      "#0B5FFF",
+						BackgroundColor: "#FFFFFF",
+						Display:         "standalone",
+						Icons: []PWAIcon{
+							{Asset: "app-icon", Sizes: "512x512", Purpose: "maskable"},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "SigningProfile",
 			doc: &Document{
 				APIVersion: APIVersion,
