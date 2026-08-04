@@ -1,0 +1,90 @@
+---
+title: Layout State
+description: Inspect what a report actually rendered — in preview, in a build, and from an agent.
+---
+
+Validation tells you a manifest is well-formed. It cannot tell you the chart came
+out empty, that the engine quietly shrank a font to 26 % to make text fit, or that
+two charts of the same measure ended up on different scales.
+
+Layout state closes that gap. The rendering engine can report a machine-readable
+snapshot of what actually reached the screen — box geometry, resolved scaling,
+render metadata and diagnostics — and bino turns that into findings you can act on.
+
+:::note
+Requires template engine **v1.0.0-next.24** or newer. Pin it in `bino.toml`:
+
+```toml
+engine-version = "v1.0.0-next.24"
+```
+
+With an older engine the inspector button is disabled and `--layout-state` writes
+nothing; builds are unaffected.
+:::
+
+## In preview
+
+`bino preview` has an **Inspect** button in the toolbar. It opens a drawer listing
+every rendered component with:
+
+- the manifest document it came from (`Table salesByRegion`), not just the tag
+- its box in CSS pixels
+- render counts — bars, points, rows, nodes
+- the **resolved** unit scaling, including values the engine auto-fitted silently
+- the component's own diagnostics
+
+Selecting a component pulls per-element detail for that one component: every bar,
+label, axis, or table cell with its column key. Clicking a row scrolls to the
+component and outlines it; ⌘/Ctrl-click reveals the YAML in VS Code.
+
+Findings also appear in the terminal, so you see them without opening the drawer.
+
+## In a build
+
+```bash
+bino build --layout-state
+```
+
+Writes `dist/<artefact>.layout.json` next to each PDF and reports the same findings
+as build warnings — which also land in the [JSON build log](/cli/build-logs/), so
+CI can fail on them.
+
+The file has no timestamp, so two builds of an unchanged bundle produce identical
+bytes and a snapshot can be committed as a golden file.
+
+## From an agent
+
+The [MCP server](/cli/mcp/) exposes `get_layout_state`. It builds the report with a
+capture and returns the findings plus a compact per-component table — the raw
+snapshot stays on disk, since a full-detail capture of a large table runs to
+megabytes. Pass `component` to drill into one component.
+
+This is the only tool that reports the rendered result; `validate_project` only
+sees the manifests.
+
+## The checks
+
+| Rule | What it catches |
+| --- | --- |
+| `layout-empty-component` | A component that rendered with no data — 0 bars, 0 rows, 0 points. Usually a wrong dataset reference or a query returning nothing. |
+| `layout-scale-mismatch` | Components showing the same measure that ended on different units-per-em. The engine auto-fits each component independently, so this happens silently; IBCS requires one scale so bars stay comparable. The finding names the value to pin. |
+| `layout-overflow` | Content that does not fit its component, with the engine's measured magnitude. |
+| `layout-font-shrunk` | A font auto-fitted down to make content fit. The report still renders, so nothing else surfaces it — but type size then differs between pages. |
+
+`layout-scale-mismatch` needs to know which components show the same measure, and
+groups by `measureUnit`. Components that declare no unit are skipped rather than
+compared, so set `measureUnit` on charts and tables you want checked.
+
+## Caveats
+
+- **Snapshot semantics.** Every capture measures the live DOM at that moment.
+  bino waits for the engine's render signal and then for the geometry to stop
+  moving, but a capture that never settles is marked provisional in the inspector
+  and its findings are withheld — an unfinished chart reports zero bars and would
+  otherwise be called empty.
+- **Text auto-fit is timing-sensitive in headless Chrome.** `bn-text` measures
+  itself against its parent during render, and in a headless build that
+  measurement sometimes happens before the parent has its final height — so
+  `layout-font-shrunk` and `layout-overflow` on text components can vary between
+  otherwise identical builds. Treat their absence in a build as inconclusive;
+  preview is reliable.

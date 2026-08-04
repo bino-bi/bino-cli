@@ -58,6 +58,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerResources(srv)
 	h.registerReadTools(srv)
 	h.registerBuildTool(srv)
+	h.registerLayoutTool(srv)
 	h.registerAuthoringTools(srv)
 	return srv
 }

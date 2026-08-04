@@ -94,6 +94,9 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 		// Downgrade dataset query errors to warnings (legacy behavior).
 		warnOnQueryErrors bool
 
+		// Capture the rendered layout alongside each PDF.
+		layoutState bool
+
 		// Stateless single-shot mode (see build_stateless.go).
 		stateless       bool
 		statelessFormat string
@@ -356,15 +359,16 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			}
 
 			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
-				Builder:    builder,
-				Logger:     logger,
-				OutputDir:  outputDir,
-				ChromePath: chromePath,
-				Debug:      logx.DebugEnabled(ctx),
-				NoColor:    logx.NoColorEnabled(ctx),
-				Stdout:     cmd.OutOrStdout(),
-				HookRunner: env.HookRunner,
-				HookEnv:    buildHookEnv,
+				CaptureLayoutState: layoutState,
+				Builder:            builder,
+				Logger:             logger,
+				OutputDir:          outputDir,
+				ChromePath:         chromePath,
+				Debug:              logx.DebugEnabled(ctx),
+				NoColor:            logx.NoColorEnabled(ctx),
+				Stdout:             cmd.OutOrStdout(),
+				HookRunner:         env.HookRunner,
+				HookEnv:            buildHookEnv,
 			})
 			if err != nil {
 				return err
@@ -372,6 +376,10 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			results := buildResults.Reports
 			screenshotResults := buildResults.Screenshots
 			documentResults := buildResults.Documents
+
+			for _, r := range results {
+				buildWarnings = append(buildWarnings, r.LayoutWarnings...)
+			}
 
 			// Run post-build hooks
 			if err := env.HookRunner.Run(ctx, "post-build", buildHookEnv); err != nil {
@@ -422,6 +430,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 	cmd.Flags().BoolVar(&noGraph, "no-graph", false, "Skip writing .bngraph dependency summaries next to PDFs")
 	cmd.Flags().BoolVar(&noLint, "no-lint", false, "Skip running lint rules")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal and build log")
+	cmd.Flags().BoolVar(&layoutState, "layout-state", false,
+		"Write <artefact>.layout.json describing the rendered report, and report render issues (empty components, overflow, diverging scales) as build warnings")
 
 	// CSV embedding flags - WARNING: enabling may include sensitive data in build logs
 	cmd.Flags().BoolVar(&embedDataCSV, "embed-data-csv", false,
@@ -480,23 +490,31 @@ type artefactResult struct {
 	Name      string
 	PDFPath   string
 	GraphPath string
+	// LayoutStatePath is the captured layout snapshot, empty unless
+	// --layout-state was passed and the engine supports the API.
+	LayoutStatePath string
+	// LayoutWarnings are the render-time findings derived from that snapshot.
+	LayoutWarnings []string
 }
 
 type buildArtefactConfig struct {
-	Builder         *pipeline.Builder
-	Logger          logx.Logger
-	Docs            []config.Document
-	Artifact        config.Artifact
-	SigningProfiles map[string]config.SigningProfile
-	OutputDir       string
-	ChromePath      string
-	Debug           bool
-	Graph           *reportgraph.Graph
-	GraphRoot       *reportgraph.Node
-	GraphBase       string
-	Spinner         *Spinner
-	HookRunner      *hooks.Runner
-	HookEnv         hooks.HookEnv
+	// CaptureLayoutState requests a layout snapshot next to the PDF and the
+	// render checks derived from it.
+	CaptureLayoutState bool
+	Builder            *pipeline.Builder
+	Logger             logx.Logger
+	Docs               []config.Document
+	Artifact           config.Artifact
+	SigningProfiles    map[string]config.SigningProfile
+	OutputDir          string
+	ChromePath         string
+	Debug              bool
+	Graph              *reportgraph.Graph
+	GraphRoot          *reportgraph.Node
+	GraphBase          string
+	Spinner            *Spinner
+	HookRunner         *hooks.Runner
+	HookEnv            hooks.HookEnv
 }
 
 // buildArtefact renders a single report artifact to PDF.
@@ -580,6 +598,14 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
+	// Capture the rendered layout alongside the PDF when asked to.
+	var capture *layoutStateCapture
+	var onLayoutState func([]byte)
+	if cfg.CaptureLayoutState {
+		capture = &layoutStateCapture{SnapshotPath: layoutStatePath(pdfPath), Logger: logger}
+		onLayoutState = capture.Handle
+	}
+
 	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
 	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
 		PDFPath:               pdfPath,
@@ -589,6 +615,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		Debug:                 cfg.Debug,
 		WaitForComponentReady: true,
 		ReadyConsolePrefix:    componentReadyConsolePrefix,
+		OnLayoutState:         onLayoutState,
 	}); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
@@ -648,7 +675,15 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	if spinner != nil {
 		spinner.Stop()
 	}
-	return artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath}, nil
+	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath}
+	if capture != nil {
+		result.LayoutStatePath = capture.SnapshotPath
+		result.LayoutWarnings = capture.Warnings(artefactName)
+		for _, f := range capture.Findings {
+			logger.Warnf("%s", f)
+		}
+	}
+	return result, nil
 }
 
 func writeGraphReport(g *reportgraph.Graph, root *reportgraph.Node, pdfPath, base string) (string, error) {
@@ -989,15 +1024,16 @@ func buildScreenshotArtefact(ctx context.Context, cfg buildScreenshotArtefactCon
 
 // buildExecutionConfig holds configuration for building all artifact types.
 type buildExecutionConfig struct {
-	Builder    *pipeline.Builder
-	Logger     logx.Logger
-	OutputDir  string
-	ChromePath string
-	Debug      bool
-	NoColor    bool
-	Stdout     io.Writer
-	HookRunner *hooks.Runner
-	HookEnv    hooks.HookEnv
+	CaptureLayoutState bool
+	Builder            *pipeline.Builder
+	Logger             logx.Logger
+	OutputDir          string
+	ChromePath         string
+	Debug              bool
+	NoColor            bool
+	Stdout             io.Writer
+	HookRunner         *hooks.Runner
+	HookEnv            hooks.HookEnv
 }
 
 type buildAllResults struct {
@@ -1032,20 +1068,21 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 		artefactHookEnv.ArtefactKind = "report"
 
 		entry, err := buildArtefact(ctx, buildArtefactConfig{
-			Builder:         cfg.Builder,
-			Logger:          cfg.Logger.Channel(artifact.Document.Name),
-			Docs:            manifests.Documents,
-			Artifact:        artifact,
-			SigningProfiles: manifests.SigningProfiles,
-			OutputDir:       cfg.OutputDir,
-			ChromePath:      cfg.ChromePath,
-			Debug:           cfg.Debug,
-			Graph:           manifests.Graph,
-			GraphRoot:       root,
-			GraphBase:       cfg.Builder.Workdir,
-			Spinner:         NewSpinner(spinnerCfg),
-			HookRunner:      cfg.HookRunner,
-			HookEnv:         artefactHookEnv,
+			CaptureLayoutState: cfg.CaptureLayoutState,
+			Builder:            cfg.Builder,
+			Logger:             cfg.Logger.Channel(artifact.Document.Name),
+			Docs:               manifests.Documents,
+			Artifact:           artifact,
+			SigningProfiles:    manifests.SigningProfiles,
+			OutputDir:          cfg.OutputDir,
+			ChromePath:         cfg.ChromePath,
+			Debug:              cfg.Debug,
+			Graph:              manifests.Graph,
+			GraphRoot:          root,
+			GraphBase:          cfg.Builder.Workdir,
+			Spinner:            NewSpinner(spinnerCfg),
+			HookRunner:         cfg.HookRunner,
+			HookEnv:            artefactHookEnv,
 		})
 		if err != nil {
 			policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
