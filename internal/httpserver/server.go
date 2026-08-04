@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/layoutstate"
 	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/internal/web"
 )
@@ -165,6 +166,12 @@ type Server struct {
 	embeddingFn       EmbeddingFunc
 	embeddingOverride EmbeddingOverrideFunc
 
+	// layoutMu guards the fingerprint of the last layout-state findings logged
+	// to the terminal. The inspector re-posts a snapshot after every hot
+	// reload, so without it an unchanged report would log on every keystroke.
+	layoutMu          sync.Mutex
+	layoutFindingsKey string
+
 	// contextCache stores the latest context HTML per path for initial client fetch.
 	// This enables two-phase rendering where clients request context after SSE connects.
 	// Uses LRU eviction when maxContextCacheEntries is exceeded.
@@ -223,6 +230,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
 	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(srv.handleEmbedding))
 	mux.HandleFunc("POST /__bino/embedding/override", srv.handleEmbeddingOverride)
+	mux.HandleFunc("POST /__bino/layout-state", compressionHandlerFunc(srv.handleLayoutState))
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
@@ -464,6 +472,70 @@ func (s *Server) handleEmbeddingOverride(w http.ResponseWriter, r *http.Request)
 // single manifest buffer is small; 10 MiB is a generous ceiling that guards
 // against a runaway client.
 const maxOverrideBytes = 10 << 20
+
+// maxLayoutStateBytes bounds a layout-state capture. The inspector posts a
+// summary snapshot — tens of components at a few hundred bytes each — so this
+// leaves room for a very large report without accepting a full-detail dump.
+const maxLayoutStateBytes = 8 << 20
+
+// handleLayoutState derives render-time findings from a layout-state capture
+// posted by the preview inspector.
+//
+// The analysis lives here rather than in the browser so the inspector, the
+// build warnings and the MCP tooling all report the same thing, and so it can
+// be unit-tested. It is pure computation: no filesystem, no SQL, no state
+// beyond the log-dedup fingerprint.
+func (s *Server) handleLayoutState(w http.ResponseWriter, r *http.Request) {
+	var snap layoutstate.Snapshot
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLayoutStateBytes)).Decode(&snap); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if !layoutstate.SupportedVersion(snap.State.Version) {
+		http.Error(w, "unsupported layout-state version", http.StatusUnprocessableEntity)
+		return
+	}
+
+	findings := layoutstate.Analyze(snap)
+	s.logLayoutFindings(findings)
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	if err := json.NewEncoder(w).Encode(struct {
+		Findings []layoutstate.Finding `json:"findings"`
+	}{Findings: findings}); err != nil {
+		s.cfg.Logger.Debugf("layout-state response write failed: %v", err)
+	}
+}
+
+// logLayoutFindings reports the findings to the terminal once per distinct
+// result, so a `bino preview` user sees them without opening the inspector.
+func (s *Server) logLayoutFindings(findings []layoutstate.Finding) {
+	if s.cfg.Logger == nil {
+		return
+	}
+
+	var key strings.Builder
+	for _, f := range findings {
+		key.WriteString(f.Rule)
+		key.WriteByte('\x00')
+		key.WriteString(f.ComponentID)
+		key.WriteByte('\n')
+	}
+
+	s.layoutMu.Lock()
+	changed := key.String() != s.layoutFindingsKey
+	s.layoutFindingsKey = key.String()
+	s.layoutMu.Unlock()
+
+	if !changed || len(findings) == 0 {
+		return
+	}
+	s.cfg.Logger.Warnf("layout inspector found %d render issue(s):", len(findings))
+	for _, f := range findings {
+		s.cfg.Logger.Warnf("  %s", f)
+	}
+}
 
 // handleHealthz reports liveness for production deployments of `bino serve`
 // (load balancers, container orchestrators, uptime probes).
