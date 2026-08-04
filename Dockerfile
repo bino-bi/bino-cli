@@ -29,39 +29,39 @@ ARG DATE=unknown
 # is committed, so there is no Node or `go generate` step.
 # ldflags mirror .github/workflows/release.yml.
 RUN CGO_ENABLED=1 go build \
-      -ldflags "-s -w \
-        -X 'bino.bi/bino/internal/version.Version=${VERSION}' \
-        -X 'bino.bi/bino/internal/version.Commit=${COMMIT}' \
-        -X 'bino.bi/bino/internal/version.Date=${DATE}'" \
-      -o /out/bino ./cmd/bino
+  -ldflags "-s -w \
+  -X 'bino.bi/bino/internal/version.Version=${VERSION}' \
+  -X 'bino.bi/bino/internal/version.Commit=${COMMIT}' \
+  -X 'bino.bi/bino/internal/version.Date=${DATE}'" \
+  -o /out/bino ./cmd/bino
 
 # --- slim --------------------------------------------------------------------
 FROM debian:bookworm-slim AS slim
 
 LABEL org.opencontainers.image.title="bino" \
-      org.opencontainers.image.description="Pixel-perfect PDF reports from YAML manifests and SQL" \
-      org.opencontainers.image.source="https://github.com/bino-bi/bino-cli" \
-      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.vendor="bino.bi"
+  org.opencontainers.image.description="Pixel-perfect PDF reports from YAML manifests and SQL" \
+  org.opencontainers.image.source="https://github.com/bino-bi/bino-cli" \
+  org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+  org.opencontainers.image.vendor="bino.bi"
 
 # tini reaps the Chromium process tree under a long-running `bino serve`.
 # curl is only used by HEALTHCHECK.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      ca-certificates \
-      curl \
-      tini \
- && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  curl \
+  tini \
+  && rm -rf /var/lib/apt/lists/*
 
 # Every bino cache lives under $HOME/.bino via os.UserHomeDir(), which on Unix
 # reads $HOME and never consults /etc/passwd — so an explicit HOME makes the
 # baked caches resolve for any runtime UID, including the arbitrary UIDs that
 # OpenShift and hardened Kubernetes assign.
 ENV HOME=/opt/bino \
-    BINO_DISABLE_UPDATE_CHECK=1
+  BINO_DISABLE_UPDATE_CHECK=1
 
 RUN useradd --uid 1000 --gid 0 --home-dir "$HOME" --create-home \
-            --shell /usr/sbin/nologin bino
+  --shell /usr/sbin/nologin bino
 
 COPY --from=builder /out/bino /usr/local/bin/bino
 
@@ -86,13 +86,13 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 # The chgrp/chmod share this layer on purpose: group 0 gets the owner's rights so
 # an arbitrary UID can still read the caches, and a separate RUN would duplicate
 # every cached file into a second layer (~200 MB).
-ARG ENGINE_VERSION=v1.0.0-next.22
+ARG ENGINE_VERSION=v1.0.0-next.23
 LABEL bi.bino.engine-version="${ENGINE_VERSION}"
 RUN bino setup --template-engine --quiet --engine-version "$ENGINE_VERSION" \
- && bino setup --duckdb-extensions --quiet \
- && mkdir -p /work \
- && chgrp -R 0 "$HOME" /work \
- && chmod -R g=u "$HOME" /work
+  && bino setup --duckdb-extensions --quiet \
+  && mkdir -p /work \
+  && chgrp -R 0 "$HOME" /work \
+  && chmod -R g=u "$HOME" /work
 
 USER 1000
 WORKDIR /work
@@ -116,12 +116,12 @@ USER root
 # is the only option that works on both architectures. Noto and Liberation cover
 # the font families the built-in styles ask for.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      chromium \
-      fonts-dejavu-core \
-      fonts-liberation \
-      fonts-noto-core \
- && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends \
+  chromium \
+  fonts-dejavu-core \
+  fonts-liberation \
+  fonts-noto-core \
+  && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_PATH=/usr/bin/chromium
 
