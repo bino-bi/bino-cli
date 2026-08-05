@@ -113,6 +113,16 @@ bn-context:has(.bn-document-content) {
   justify-content: center;
   z-index: var(--bino-z-toolbar);
 }
+/* Inspector outlines (light DOM boxes positioned inline by bino-inspector) */
+.bn-inspect-outline {
+  outline: 1px solid var(--bino-primary);
+  background: rgba(0, 150, 160, 0.06);
+  z-index: var(--bino-z-toolbar);
+}
+.bn-inspect-outline.selected {
+  outline: 2px solid var(--bino-accent-strong);
+  background: rgba(0, 150, 160, 0.12);
+}
 /* Error highlight animation (applied to light DOM elements by error panel) */
 .bn-error-highlight {
   animation: bn-error-pulse 0.6s ease-out;

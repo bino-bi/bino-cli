@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { appBase } from '../../shared/dom-utils.js';
+import { supportsLayoutState } from '../../shared/layout-capture.js';
 
 class BinoToolbar extends LitElement {
   static properties = {
@@ -11,6 +12,7 @@ class BinoToolbar extends LitElement {
     _badgeVisible: { state: true },
     _refreshing: { state: true },
     _refreshError: { state: true },
+    _inspectorAvailable: { state: true },
   };
 
   static styles = css`
@@ -83,7 +85,7 @@ class BinoToolbar extends LitElement {
     .warning-icon {
       font-size: var(--bino-font-size-md);
     }
-    .assets-btn, .graph-btn, .explorer-btn {
+    .assets-btn, .graph-btn, .explorer-btn, .inspect-btn {
       display: inline-flex;
       align-items: center;
       gap: var(--bino-space-xs);
@@ -98,11 +100,11 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover {
+    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover, .inspect-btn:hover:not(:disabled) {
       background: var(--bino-surface-hover);
       border-color: var(--bino-border-hover);
     }
-    .graph-btn:disabled, .present-btn:disabled {
+    .graph-btn:disabled, .present-btn:disabled, .inspect-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
@@ -111,7 +113,7 @@ class BinoToolbar extends LitElement {
       border-color: var(--bino-border-light);
       color: var(--bino-text-secondary);
     }
-    .assets-icon, .graph-icon, .explorer-icon {
+    .assets-icon, .graph-icon, .explorer-icon, .inspect-icon {
       font-size: var(--bino-font-size-md);
     }
     .present-btn {
@@ -212,6 +214,8 @@ class BinoToolbar extends LitElement {
     this._refreshing = false;
     this._refreshError = '';
     this._panelDismissed = false;
+    this._inspectorAvailable = false;
+    this._boundOnContentUpdated = this._refreshInspectorAvailability.bind(this);
     this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
     this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
     this._boundOnRefreshing = this._onRefreshing.bind(this);
@@ -228,6 +232,10 @@ class BinoToolbar extends LitElement {
     document.addEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
     document.addEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
     document.addEventListener('bn-preview:no-payload', this._boundOnNoPayload);
+    // The engine is not upgraded yet when the toolbar first renders, so the
+    // Inspect button's availability is settled once content has swapped in.
+    document.addEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
+    this._refreshInspectorAvailability();
   }
 
   disconnectedCallback() {
@@ -238,6 +246,7 @@ class BinoToolbar extends LitElement {
     document.removeEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
     document.removeEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
     document.removeEventListener('bn-preview:no-payload', this._boundOnNoPayload);
+    document.removeEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
   }
 
   render() {
@@ -305,6 +314,14 @@ class BinoToolbar extends LitElement {
         <span class="explorer-icon">\u2636</span>
         <span>Explorer</span>
       </button>
+      <button class="inspect-btn" ?disabled=${!this._inspectorAvailable}
+        title=${this._inspectorAvailable
+          ? 'Inspect the rendered report'
+          : 'Requires template engine v1.0.0-next.24 or newer'}
+        @click=${this._onInspectClick}>
+        <span class="inspect-icon">\u25a3</span>
+        <span>Inspect</span>
+      </button>
       <button class="present-btn" ?disabled=${!presURL}
         title=${presURL ? 'Open presentation' : 'Presentation is only available for a report artefact'}
         @click=${function() { if (presURL) window.open(presURL, '_blank'); }}>
@@ -345,6 +362,14 @@ class BinoToolbar extends LitElement {
 
   _onExplorerClick() {
     document.dispatchEvent(new CustomEvent('bino-open-explorer'));
+  }
+
+  _onInspectClick() {
+    document.dispatchEvent(new CustomEvent('bino-open-inspector'));
+  }
+
+  _refreshInspectorAvailability() {
+    this._inspectorAvailable = supportsLayoutState();
   }
 
   _onSelectChange(e) {

@@ -35,6 +35,11 @@ type PDFOptions struct {
 	FooterTemplate      string
 	MarginTop           string
 	MarginBottom        string
+	// OnLayoutState, when set, receives a getLayoutState() capture taken after
+	// the page settles and before printing. It is not called when the engine
+	// predates the API or the capture fails — a missing snapshot never fails a
+	// build.
+	OnLayoutState func(snapshot []byte)
 }
 
 // RenderPDF loads the provided URL in a headless Chrome and exports it to PDF.
@@ -90,6 +95,16 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	if readyCh != nil {
 		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
 			return err
+		}
+	}
+
+	// Capture the rendered layout before printing, while the page is still the
+	// one that produced the PDF.
+	if opts.OnLayoutState != nil {
+		if snapshot, err := captureLayoutState(taskCtx, logger); err != nil {
+			logger.Warnf("layout-state capture skipped: %v", err)
+		} else if len(snapshot) > 0 {
+			opts.OnLayoutState(snapshot)
 		}
 	}
 

@@ -1,0 +1,161 @@
+{
+  "state": {
+    "version": 1,
+    "generatedAt": "2026-08-04T09:12:44.512Z",
+    "detail": "full",
+    "context": {
+      "viewport": { "x": 0, "y": 48, "width": 794, "height": 1123 },
+      "locale": "de-DE"
+    },
+    "components": [
+      {
+        "version": 1,
+        "tag": "bn-layout-page",
+        "id": "bn-layout-page[0]",
+        "rect": {
+          "context": { "x": 0, "y": 0, "width": 794, "height": 1123 },
+          "component": { "x": 0, "y": 0, "width": 794, "height": 1123 }
+        },
+        "em": { "fontSizePx": 13.33, "appliedScaleFactor": 1 },
+        "regions": [],
+        "metadata": {},
+        "diagnostics": []
+      },
+      {
+        "version": 1,
+        "tag": "bn-table",
+        "id": "bn-table[0]",
+        "slot": "slot-0",
+        "rect": {
+          "context": { "x": 77, "y": 120, "width": 640, "height": 210 },
+          "component": { "x": 0, "y": 0, "width": 640, "height": 210 }
+        },
+        "em": { "fontSizePx": 13.33, "appliedScaleFactor": 1 },
+        "regions": [
+          {
+            "id": "header",
+            "rect": {
+              "context": { "x": 77, "y": 120, "width": 640, "height": 42 },
+              "component": { "x": 0, "y": 0, "width": 640, "height": 42 }
+            }
+          },
+          {
+            "id": "body",
+            "rect": {
+              "context": { "x": 77, "y": 162, "width": 640, "height": 0 },
+              "component": { "x": 0, "y": 42, "width": 640, "height": 0 }
+            }
+          }
+        ],
+        "metadata": {
+          "scenarios": ["ac", "pp"],
+          "variances": ["dpp"],
+          "headerRowCount": 2,
+          "rowCount": 0,
+          "columnCount": 6,
+          "cellCount": 0,
+          "hasNoData": false
+        },
+        "diagnostics": [],
+        "scaling": {
+          "unitMode": "fixed",
+          "unitsPerEm": 40,
+          "unitPxPerUnit": 0.333
+        },
+        "table": {
+          "rows": [],
+          "columns": [
+            { "index": 0, "key": "region", "type": "category" },
+            { "index": 1, "key": "ac", "group": "2026", "bucket": "Q1" }
+          ]
+        }
+      },
+      {
+        "version": 1,
+        "tag": "bn-chart-time",
+        "id": "bn-chart-time[0]",
+        "slot": "slot-1",
+        "rect": {
+          "context": { "x": 77, "y": 360, "width": 640, "height": 240 },
+          "component": { "x": 0, "y": 0, "width": 640, "height": 240 }
+        },
+        "em": { "fontSizePx": 13.33, "appliedScaleFactor": 1 },
+        "regions": [
+          {
+            "id": "canvas:base",
+            "rect": {
+              "context": { "x": 77, "y": 360, "width": 662, "height": 240 },
+              "component": { "x": 0, "y": 0, "width": 662, "height": 240 }
+            }
+          }
+        ],
+        "metadata": {
+          "title": "Revenue by month",
+          "scenarios": ["ac", "fc"],
+          "variances": [],
+          "barCount": 12,
+          "chartMode": "bar",
+          "hasNoData": false
+        },
+        "diagnostics": [
+          {
+            "id": "WARN_overflow",
+            "type": "warning",
+            "message": "Chart overflows its container.",
+            "description": "The rendered chart is wider than the available space."
+          }
+        ],
+        "scaling": {
+          "unitMode": "auto",
+          "unitsPerEm": 12.5,
+          "unitPxPerUnit": 1.0667
+        },
+        "elements": [
+          {
+            "kind": "bar",
+            "id": "3_RECT",
+            "segment": "base",
+            "scenario": "scenario1",
+            "index": 0,
+            "rect": {
+              "context": { "x": 90, "y": 420, "width": 18, "height": 120 },
+              "component": { "x": 13, "y": 60, "width": 18, "height": 120 }
+            }
+          }
+        ]
+      },
+      {
+        "version": 1,
+        "tag": "bn-text",
+        "id": "commentary",
+        "slot": "slot-2",
+        "rect": {
+          "context": { "x": 77, "y": 620, "width": 640, "height": 80 },
+          "component": { "x": 0, "y": 0, "width": 640, "height": 80 }
+        },
+        "em": { "fontSizePx": 13.33, "appliedScaleFactor": 1 },
+        "regions": [],
+        "metadata": {},
+        "diagnostics": []
+      }
+    ]
+  },
+  "sources": {
+    "bn-table[0]": {
+      "kind": "Table",
+      "name": "salesByRegion",
+      "measureUnit": "EUR",
+      "measureScale": "greatest"
+    },
+    "bn-chart-time[0]": {
+      "kind": "ChartTime",
+      "name": "revenueTrend",
+      "measureUnit": "EUR",
+      "measureScale": "greatest"
+    },
+    "commentary": {
+      "kind": "Text",
+      "name": "commentary"
+    }
+  }
+}

@@ -217,6 +217,9 @@ type PDFRenderOptions struct {
 	FooterTemplate      string
 	MarginTop           string
 	MarginBottom        string
+	// OnLayoutState, when set, receives a getLayoutState() capture of the page
+	// that produced the PDF. Nil disables the capture.
+	OnLayoutState func(snapshot []byte)
 }
 
 // RenderPDF starts an ephemeral HTTP server with the given HTML and assets,
@@ -250,6 +253,7 @@ func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []r
 		FooterTemplate:        opts.FooterTemplate,
 		MarginTop:             opts.MarginTop,
 		MarginBottom:          opts.MarginBottom,
+		OnLayoutState:         opts.OnLayoutState,
 	}
 	pdfErr := chrome.RenderPDF(ctx, pdfOpts)
 	closeErr := srv.Close()

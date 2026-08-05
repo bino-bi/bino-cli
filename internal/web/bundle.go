@@ -48,6 +48,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The layout capture is also injected into headless Chrome by `bino build`,
+	// which evaluates a plain expression and cannot import a module. Building
+	// the same source a second time as an IIFE keeps the preview inspector and
+	// the build capture on one implementation — the selector list and the id
+	// rule must match the engine exactly, and two hand-kept copies would drift.
+	iife := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: []api.EntryPoint{
+			{InputPath: "shared/layout-capture.js", OutputPath: "layout-capture"},
+		},
+		Outdir:            "static",
+		Bundle:            true,
+		Format:            api.FormatIIFE,
+		GlobalName:        "binoLayoutCapture",
+		Target:            api.ES2022,
+		Platform:          api.PlatformBrowser,
+		MinifyWhitespace:  true,
+		MinifyIdentifiers: true,
+		MinifySyntax:      true,
+		Write:             true,
+		LogLevel:          api.LogLevelWarning,
+	})
+	if len(iife.Errors) > 0 {
+		os.Exit(1)
+	}
+
 	copyFonts(wd)
 }
 
