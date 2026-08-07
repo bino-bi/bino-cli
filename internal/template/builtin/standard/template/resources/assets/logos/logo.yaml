@@ -1,0 +1,10 @@
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: logo
+  description: bino_bi logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: image.png

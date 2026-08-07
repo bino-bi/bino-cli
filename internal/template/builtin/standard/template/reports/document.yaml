@@ -1,0 +1,17 @@
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: documentation
+spec:
+  format: a4
+  orientation: portrait
+  locale: {{ .Language }}
+  filename: documentation.pdf
+  title: {{ printf "%s — Documentation" .ReportTitle | yaml }}
+  tableOfContents: true
+  displayHeaderFooter: true
+  marginTop: "20mm"
+  marginBottom: "15mm"
+  sources:
+    - ../docs/*.md
+  pageBreakBetweenSources: true

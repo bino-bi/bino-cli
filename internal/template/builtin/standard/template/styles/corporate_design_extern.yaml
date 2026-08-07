@@ -1,0 +1,80 @@
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: corporateTheme
+spec:
+  content:
+    global:
+      fontSizePx: 14
+      fontFamily: "'Inter', sans-serif"
+      fontColor: "#1a1a1a"
+      fontBackgroundColor: "#ffffff"
+    bn-chart-time:
+      scaleFactors:
+        columnWidth: 2.5
+        categoryWidth: 3.5
+      axisStyles:
+        ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
+        fc:
+          {
+            stroke: "#000000",
+            fill: "#ffffff",
+            width: 0.1,
+            dasharray: "10 5 5 5",
+          }
+        pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
+        pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
+      barStyles:
+        ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
+        fc:
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
+        pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
+      varianceStyles:
+        pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
+        neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
+        neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+      stackColors: ["#000000", "#c0c0c0", "#808080"]
+      padding:
+        top: 15
+        left: 15
+        right: 15
+        bottom: 15
+    bn-chart-structure:
+      scaleFactors:
+        barWidth: 1.5
+        categoryWidth: 2.0
+      axisStyles:
+        ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
+        fc:
+          {
+            stroke: "#000000",
+            fill: "#ffffff",
+            width: 0.1,
+            dasharray: "10 5 5 5",
+          }
+        pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
+        pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
+      barStyles:
+        ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
+        fc:
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
+        pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
+      varianceStyles:
+        pos: { stroke: "#008f96", fill: "#008f96", width: 0.1 }
+        neg: { stroke: "#ff0000", fill: "#ff0000", width: 0.1 }
+        neu: { stroke: "#808080", fill: "#808080", width: 0.1 }
+      stackColors: ["#000000", "#c0c0c0", "#808080"]
+    bn-tree:
+      edgeColor: "#505050"
+      edgeWidth: 1.5
+      operatorCircleRadius: 12
+      operatorFontSizeScale: 0.85
+      operatorColor: "#404040"
+    bn-grid:
+      headerBackground: "#f5f5f5"
+      borderColor: "#cccccc"
+      borderWidth: 1
+      cellPadding: 8

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -277,6 +278,35 @@ func TestInitBundleBareIsBuiltinMinimal(t *testing.T) {
 	}
 	if res.ResolvedSHA != "" {
 		t.Errorf("built-in should have no resolved SHA, got %q", res.ResolvedSHA)
+	}
+}
+
+// TestInitBundleStandardSeedsReferenceBundle pins the agent-facing path to the
+// standard template: init_bundle must reach the same reference bundle `bino init
+// standard` renders, folders and all.
+func TestInitBundleStandardSeedsReferenceBundle(t *testing.T) {
+	root := t.TempDir()
+	a := newCLIAuthoring(root)
+	dir := filepath.Join(root, "bundle")
+	res, err := a.InitBundle(context.Background(), mcp.InitBundleInput{Directory: dir, Source: "standard"})
+	if err != nil {
+		t.Fatalf("InitBundle: %v", err)
+	}
+	if res.Template != "builtin:standard" {
+		t.Errorf("Template = %q, want builtin:standard", res.Template)
+	}
+	for _, folder := range []string{"components", "datasets", "datasources", "i18n", "pages", "reports", "resources", "styles"} {
+		if !slices.Contains(res.Folders, folder) {
+			t.Errorf("Folders missing %q; got %v", folder, res.Folders)
+		}
+	}
+	// The CSV is the bundle's only real data; a truncated copy renders a blank table.
+	csv, err := os.Stat(filepath.Join(dir, "resources", "data", "new_cities.csv"))
+	if err != nil {
+		t.Fatalf("demo CSV missing: %v", err)
+	}
+	if csv.Size() < 500_000 {
+		t.Errorf("demo CSV is %d bytes, want the full copy", csv.Size())
 	}
 }
 

@@ -2,6 +2,7 @@ apiVersion: bino.bi/v1alpha1
 kind: DataSource
 metadata:
   name: {{ .DataSourceName }}
+  description: Inline rows — the smallest possible DataSource, handy for smoke tests.
 spec:
   type: inline
   content:

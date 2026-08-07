@@ -1,0 +1,10 @@
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: live
+  description: Serves the report on demand via 'bino serve'.
+spec:
+  title: {{ .ReportTitle | yaml }}
+  routes:
+    /:
+      artefact: {{ .ReportName }}

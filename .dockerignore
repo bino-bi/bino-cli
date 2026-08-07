@@ -7,7 +7,7 @@
 .gitignore
 .golangci.yml
 .goreleaser.yaml
-.DS_Store
+**/.DS_Store
 
 # AI/dev tooling and internal notes
 .agents

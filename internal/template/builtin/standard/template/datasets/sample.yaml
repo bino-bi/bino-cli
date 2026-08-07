@@ -1,0 +1,11 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: {{ .DataSetName }}
+  description: Passthrough over the inline DataSource, used by the welcome page.
+spec:
+  query: |-
+    SELECT *
+    FROM {{ .DataSourceName }}
+  dependencies:
+    - {{ .DataSourceName }}

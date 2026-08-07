@@ -13,9 +13,11 @@ bino init [SOURCE] [flags]
 ```
 
 `SOURCE` is optional. With no source it renders the built-in `minimal` scaffold;
-`standard` renders the same report in the canonical folder layout. A source may also be a
-remote template — see [Project Templates](/concepts/templates/) for the full grammar,
-manifest format, and security model.
+`standard` renders the full reference bundle — a CSV datasource, a dataset, an IBCS table,
+a chart, a component style, en/de translations and asset declarations, laid out in the
+canonical folders. A source may also be a remote template — see
+[Project Templates](/concepts/templates/) for the full grammar, manifest format, and
+security model.
 
 Common flags:
 
@@ -41,7 +43,7 @@ Create a bundle in the current directory interactively:
 bino init
 ```
 
-Scaffold the foldered `standard` layout:
+Scaffold the full `standard` reference bundle:
 
 ```bash
 bino init standard -d monthly-report

@@ -4,7 +4,7 @@ metadata:
   name: {{ .ReportName }}
 spec:
   format: xga
-  orientation: portrait
+  orientation: landscape
   language: {{ .Language }}
   filename: {{ .Filename }}
   title: {{ .ReportTitle | yaml }}
@@ -15,4 +15,4 @@ spec:
     - bino
     - report
   layoutPages:
-    - {{ .LayoutName }}
+    - page: {{ .LayoutName }}

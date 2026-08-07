@@ -1,0 +1,65 @@
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_au
+  description: Flagge von Australien
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/au.svg
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_cn
+  description: Flagge von China
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/cn.svg
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_de
+  description: Flagge von Deutschland
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/de.svg
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_fr
+  description: Flagge von Frankreich
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/fr.svg
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_jp
+  description: Flagge von Japan
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/jp.svg
+---
+apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: flag_us
+  description: Flagge von den Vereinigten Staaten
+spec:
+  type: image
+  mediaType: image/svg+xml
+  source:
+    localPath: 1x1/us.svg

@@ -7,6 +7,18 @@ spec:
     - { name: ReportName, prompt: "Report name", default: rainbow-report }
     - { name: ReportTitle, prompt: "Report title", default: Rainbow Sample Report }
     - { name: Language, prompt: "Language (en/de)", default: en }
+  # Copied byte-for-byte: prose and SQL that must survive a stray '{{' unharmed.
   verbatim:
     - .bnignore
     - .gitignore
+    - LICENSE
+    - INFO
+    - "*.sql"
+    - "*.sh"
+    - docs/**
+  # Never read as text: payloads and assets.
+  binary:
+    - "*.csv"
+    - "*.png"
+    - "*.svg"
+    - "*.pem"

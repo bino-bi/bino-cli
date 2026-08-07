@@ -1,0 +1,18 @@
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: example_chart
+spec:
+  dataset: revenue_by_city
+  scenarios:
+    - ac1
+    - pp1
+  level: category
+  order: ac1
+  orderDirection: desc
+  percentageScaling: 25
+  unitScaling: 1
+  pixelPerUnit: 1
+  scale: 1
+  chartTitle: Revenue by City
+  selectedStyle: corporateTheme
