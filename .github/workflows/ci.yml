@@ -76,6 +76,65 @@ jobs:
           path: coverage.out
           retention-days: 7
 
+  integration:
+    name: Integration (PDF pipeline)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # chrome-headless-shell has no pin in the repo: `bino setup` installs the
+      # latest stable from Chrome for Testing, so the cache key is derived from
+      # what setup would install today. The engine pin is the Dockerfile ARG —
+      # TestDockerEngineVersionPin keeps it in step with release.yml and with
+      # engine.SupportedEngineRanges.
+      - name: Resolve dependency versions
+        id: deps
+        run: |
+          chrome=$(curl -fsSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -er '.channels.Stable.version')
+          engine=$(sed -n 's/^ARG ENGINE_VERSION=//p' Dockerfile)
+          test -n "$engine"
+          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
+          echo "engine=$engine" >> "$GITHUB_OUTPUT"
+
+      - name: Cache chrome-headless-shell and template engine
+        id: bino-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.bino/chrome-headless-shell
+            ~/.bino/cdn/bn-template-engine
+          key: bino-integration-${{ runner.os }}-chrome-${{ steps.deps.outputs.chrome }}-engine-${{ steps.deps.outputs.engine }}
+
+      # Install through the product's own path so CI exercises the same
+      # download/extract code users run. Both sources are public — Chrome for
+      # Testing and the bn-template-engine-releases GitHub releases — so no
+      # credentials are needed. GitHub Actions sets CI=true, which already
+      # disables the update check.
+      - name: Install chrome-headless-shell and template engine (bino setup)
+        if: steps.bino-cache.outputs.cache-hit != 'true'
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          go run ./cmd/bino setup --quiet
+          go run ./cmd/bino setup --template-engine --quiet --engine-version "${{ steps.deps.outputs.engine }}"
+
+      - name: Run integration tests
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -tags=integration ./internal/report/pipeline/ ./internal/cli/
+
   vscode:
     name: VS Code Extension
     runs-on: ubuntu-24.04
