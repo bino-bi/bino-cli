@@ -32,6 +32,7 @@ type AddConfig struct {
 	ComponentStyle       *KindConfig `json:"componentstyle,omitempty"`
 	RuleSet              *KindConfig `json:"ruleset,omitempty"`
 	Internationalization *KindConfig `json:"internationalization,omitempty"`
+	ScalingGroup         *KindConfig `json:"scalinggroup,omitempty"`
 	ReportArtefact       *KindConfig `json:"reportartefact,omitempty"`
 	LiveReportArtefact   *KindConfig `json:"livereportartefact,omitempty"`
 	SigningProfile       *KindConfig `json:"signingprofile,omitempty"`
@@ -120,6 +121,8 @@ func (c *AddConfig) GetKindConfig(kind string) *KindConfig {
 		return c.RuleSet
 	case "Internationalization":
 		return c.Internationalization
+	case "ScalingGroup":
+		return c.ScalingGroup
 	case "ReportArtefact":
 		return c.ReportArtefact
 	case "LiveReportArtefact":
@@ -169,6 +172,8 @@ func (c *AddConfig) SetKindConfig(kind string, kc *KindConfig) {
 		c.RuleSet = kc
 	case "Internationalization":
 		c.Internationalization = kc
+	case "ScalingGroup":
+		c.ScalingGroup = kc
 	case "ReportArtefact":
 		c.ReportArtefact = kc
 	case "LiveReportArtefact":

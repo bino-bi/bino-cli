@@ -45,6 +45,7 @@ const (
 	KindInternationalization = "Internationalization"
 	KindReportArtefact       = "ReportArtefact"
 	KindLiveReportArtefact   = "LiveReportArtefact"
+	KindScreenshotArtefact   = "ScreenshotArtefact"
 	KindDocumentArtefact     = "DocumentArtefact"
 	KindSigningProfile       = "SigningProfile"
 	KindScalingGroup         = "ScalingGroup"

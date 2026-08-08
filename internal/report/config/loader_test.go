@@ -488,6 +488,7 @@ func TestIsBinoHeader(t *testing.T) {
 		{"apps/v1", "Table", false}, // explicit foreign apiVersion wins
 		{"", "Table", true},
 		{"", "DataSet", true},
+		{"", "ScreenshotArtefact", true},
 		{"", "Deployment", false},
 		{"", "", false},
 	}

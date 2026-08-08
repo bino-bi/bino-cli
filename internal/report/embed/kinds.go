@@ -69,6 +69,7 @@ var builtinCategory = map[string]string{
 	"Asset":                "embeddable",
 	"ReportArtefact":       "artefact",
 	"LiveReportArtefact":   "artefact",
+	"ScreenshotArtefact":   "artefact",
 	"DocumentArtefact":     "artefact",
 	"ComponentStyle":       "config",
 	"RuleSet":              "config",
@@ -84,4 +85,15 @@ var builtinCategory = map[string]string{
 func BuiltinCategory(kind string) (string, bool) {
 	c, ok := builtinCategory[kind]
 	return c, ok
+}
+
+// AllBuiltinKinds returns every built-in manifest kind (the keys of the
+// category registry) in no particular order. Callers that need a stable order
+// must sort the result.
+func AllBuiltinKinds() []string {
+	out := make([]string, 0, len(builtinCategory))
+	for k := range builtinCategory {
+		out = append(out, k)
+	}
+	return out
 }

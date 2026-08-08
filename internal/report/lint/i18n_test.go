@@ -49,6 +49,31 @@ func runRule(t *testing.T, rule Rule, docs []Document) []Finding {
 	return findings
 }
 
+// liveArtefactDoc builds a LiveReportArtefact document. Its spec has no
+// language property (the schema forbids one), so it must not count as a
+// language-carrying artefact for i18n-code-unused.
+func liveArtefactDoc() Document {
+	spec := map[string]any{"title": "Live"}
+	return Document{
+		File:     "/project/live.yaml",
+		Position: 1,
+		Kind:     "LiveReportArtefact",
+		Name:     "live",
+		Raw:      rawDoc("LiveReportArtefact", "live", spec),
+	}
+}
+
+func TestI18nCodeUnusedIgnoresLiveReportArtefact(t *testing.T) {
+	// A bundle with only a LiveReportArtefact has no artefact language to
+	// compare against, so the rule must stay silent instead of matching the
+	// i18n code against a phantom default locale.
+	docs := []Document{liveArtefactDoc(), i18nDoc("fr", "fr", "")}
+	findings := runRule(t, i18nCodeUnused, docs)
+	if len(findings) != 0 {
+		t.Errorf("expected no findings for LiveReportArtefact-only bundle, got %d: %v", len(findings), findings)
+	}
+}
+
 func TestI18nCodeUnused(t *testing.T) {
 	tests := []struct {
 		name     string
