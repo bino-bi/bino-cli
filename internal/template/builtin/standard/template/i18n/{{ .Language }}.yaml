@@ -1,0 +1,47 @@
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: default-{{ .Language }}
+  description: Labels for the '{{ .Language }}' locale, in the 'global' namespace.
+spec:
+  # The engine looks translations up under the exact artefact language, so this
+  # code must equal spec.language of the artefact that should use them. Add one
+  # document per locale you render.
+  code: {{ .Language }}
+  namespace: global
+  content:
+    report.date: {{ if eq .Language "de" }}Datum{{ else }}Date{{ end }}
+    report.title: {{ if eq .Language "de" }}Berichtstitel{{ else }}Report Title{{ end }}
+    global.ac1: AC
+    global.pp1: PY
+    global.fc1: FC
+    global.pl1: PL
+    global.ac2: AC2
+    global.pp2: PY2
+    global.fc2: FC2
+    global.pl2: PL2
+    global.ac3: AC3
+    global.pp3: PY3
+    global.fc3: FC3
+    global.pl3: PL3
+    global.ac4: AC4
+    global.pp4: PY4
+    global.fc4: FC4
+    global.pl4: PL4
+    global.ORDER_asc: ↑
+    global.ORDER_desc: ↓
+    global.ibcssymbol_delta_ac: Δ{%}
+    global.ibcssymbol_delta_generic: Δ({%})
+    global.ibcssymbol_delta_ac_relative: Δ{%}%
+    global.ibcssymbol_delta_generic_relative: Δ({%})%
+
+    bn-title.SEPERATOR_WS: ", "
+    bn-title.CONNECTOR_WS: {{ if eq .Language "de" }}" und "{{ else }}" and "{{ end }}
+    bn-title.in: in
+    bn-table.in: in
+    bn-table.category: " "
+    bn-table.operation: " "
+    bn-table.there_of: {{ if eq .Language "de" }}davon{{ else }}there of{{ end }}
+    bn-table.part_of: {{ if eq .Language "de" }}in % von{{ else }}in % of{{ end }}
+    bn-table.SUM_TOTAL: ❖
+    bn-table.REST: REST

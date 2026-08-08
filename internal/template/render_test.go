@@ -2,7 +2,9 @@ package template
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -21,6 +23,7 @@ func minimalGoldenData() map[string]any {
 		"Filename":       "rainbow-sample-report.pdf",
 		"LayoutName":     "rainbow-sample-report-page",
 		"DataSourceName": "rainbow_sample_report_data",
+		"DataSetName":    "rainbow_sample_report_dataset",
 		"ReportID":       "00000000-0000-0000-0000-000000000000",
 		"EngineVersion":  "v1.0.0-alpha.15",
 		"Date":           "2026-01-01T00:00:00Z",
@@ -101,9 +104,51 @@ func TestRenderMinimalNoEngineVersion(t *testing.T) {
 	}
 }
 
-// TestRenderStandardFoldered verifies the standard template scaffolds into
-// canonical folders and renders without error.
-func TestRenderStandardFoldered(t *testing.T) {
+// standardFiles is the exact file set the standard template scaffolds, in the
+// sorted order RenderTree returns. The scaffold is a user-visible contract, so a
+// change here should be a deliberate edit, not a silent drift.
+var standardFiles = []string{
+	".bnignore",
+	".gitignore",
+	"LICENSE",
+	"README.md",
+	"bino.toml",
+	"components/example_chart.yaml",
+	"datasets/revenue_by_city.yaml",
+	"datasets/sample.yaml",
+	"datasources/data.yaml",
+	"datasources/new_cities.yaml",
+	"docs/01_example.md",
+	// Path-templated: i18n/{{ .Language }}.yaml. The fixture renders "en", so
+	// this entry is also the proof that renderPath fired.
+	"i18n/en.yaml",
+	"pages/pages.yaml",
+	"reports/document.yaml",
+	"reports/live.yaml",
+	"reports/report.yaml",
+	"resources/assets/logos/image.png",
+	"resources/assets/logos/logo.yaml",
+	"resources/assets/pictograms/flags/1x1/au.svg",
+	"resources/assets/pictograms/flags/1x1/cn.svg",
+	"resources/assets/pictograms/flags/1x1/de.svg",
+	"resources/assets/pictograms/flags/1x1/fr.svg",
+	"resources/assets/pictograms/flags/1x1/jp.svg",
+	"resources/assets/pictograms/flags/1x1/us.svg",
+	"resources/assets/pictograms/flags/INFO",
+	"resources/assets/pictograms/flags/LICENSE",
+	"resources/assets/pictograms/flags/flags.yaml",
+	"resources/data/new_cities.csv",
+	"resources/signing/example_cert.pem",
+	"resources/signing/example_key.pem",
+	"resources/sql/example.sql",
+	"scripts/log_hook.sh",
+	"styles/corporate_design_extern.yaml",
+}
+
+// renderStandard renders the built-in standard template into a temp dir with the
+// pinned fixture values, returning the created paths and the destination.
+func renderStandard(t *testing.T) ([]string, string) {
+	t.Helper()
 	root, err := BuiltinRoot("standard")
 	if err != nil {
 		t.Fatal(err)
@@ -112,23 +157,69 @@ func TestRenderStandardFoldered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	dest := t.TempDir()
 	created, err := RenderTree(root, manifest, dest, minimalGoldenData(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return created, dest
+}
 
-	want := []string{
-		".bnignore",
-		".gitignore",
-		"bino.toml",
-		filepath.Join("datasources", "data.yaml"),
-		filepath.Join("pages", "home.yaml"),
-		filepath.Join("reports", "report.yaml"),
+// TestRenderStandardFoldered verifies the standard template scaffolds the full
+// reference bundle into canonical folders and renders without error.
+func TestRenderStandardFoldered(t *testing.T) {
+	created, _ := renderStandard(t)
+	if !reflect.DeepEqual(created, standardFiles) {
+		t.Fatalf("created files = %v, want %v", created, standardFiles)
 	}
-	if !reflect.DeepEqual(created, want) {
-		t.Fatalf("created files = %v, want %v", created, want)
+}
+
+// TestRenderStandardLeavesNoActions guards the substitution itself: a rendered
+// bundle must contain no unresolved template action and no "<no value>" from a
+// variable that silently went missing.
+func TestRenderStandardLeavesNoActions(t *testing.T) {
+	created, dest := renderStandard(t)
+	binary := map[string]bool{".png": true, ".svg": true, ".csv": true}
+	for _, rel := range created {
+		if binary[filepath.Ext(rel)] {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for _, marker := range []string{"{{", "<no value>"} {
+			if bytes.Contains(body, []byte(marker)) {
+				t.Errorf("%s contains unrendered %q", rel, marker)
+			}
+		}
+	}
+}
+
+// TestBuiltinEmbedHasNoJunk fails if editor or OS droppings ever reach the
+// embedded tree. `//go:embed all:builtin` takes dotfiles, and .DS_Store is
+// gitignored rather than impossible — a local build would otherwise ship one
+// into every scaffolded project.
+func TestBuiltinEmbedHasNoJunk(t *testing.T) {
+	junk := map[string]bool{".DS_Store": true, "Thumbs.db": true, ".gitkeep": true}
+	err := fs.WalkDir(builtinFS, "builtin", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if junk[path.Base(p)] {
+			t.Errorf("embedded junk file %s", p)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Size() == 0 {
+			t.Errorf("embedded zero-byte file %s", p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

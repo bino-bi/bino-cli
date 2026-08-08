@@ -1,0 +1,8 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: new_cities
+spec:
+  type: csv
+  path: ../resources/data/new_cities.csv
+  delimiter: ";"

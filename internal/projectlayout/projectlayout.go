@@ -51,8 +51,9 @@ func DirForKind(kind string) string {
 }
 
 // CanonicalFolders returns the sorted, de-duplicated set of canonical folders
-// (excluding the FallbackDir). The built-in `standard` template's tree draws
-// from this set.
+// (excluding the FallbackDir). Every folder the built-in `standard` template
+// seeds a manifest into comes from this set; it also seeds non-manifest folders
+// (docs/, scripts/) that this map has nothing to say about.
 func CanonicalFolders() []string {
 	seen := make(map[string]struct{}, len(dirForKind))
 	folders := make([]string, 0, len(dirForKind))

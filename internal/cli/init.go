@@ -42,8 +42,9 @@ func newInitCommand() *cobra.Command {
 		Long: strings.TrimSpace(`bino init bootstraps a report bundle so you can run bino build or
 bino preview immediately.
 
-With no SOURCE it renders the built-in 'minimal' scaffold; 'standard' renders the
-same report in the canonical folder layout. A SOURCE may also be a remote template:
+With no SOURCE it renders the built-in 'minimal' scaffold; 'standard' renders a full
+reference bundle — CSV data source, dataset, IBCS table, chart, style, translations and
+assets — in the canonical folder layout. A SOURCE may also be a remote template:
 owner/repo[/subdir]#ref, a full archive URL, or a local ./path. Remote templates are
 fetched from GitHub, cached by commit SHA, and never execute code.`),
 		Args: cobra.MaximumNArgs(1),
@@ -302,7 +303,7 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) (st
 func promptTemplateChoice(reader *bufio.Reader, out io.Writer, def string) (string, error) {
 	fmt.Fprintln(out, "Templates:")
 	fmt.Fprintln(out, "  minimal  - a flat starter bundle")
-	fmt.Fprintln(out, "  standard - the same report in the canonical folder layout")
+	fmt.Fprintln(out, "  standard - a full reference bundle in the canonical folder layout")
 	for {
 		value, err := promptString(reader, out, "Template (minimal/standard)", def)
 		if err != nil {
@@ -389,6 +390,7 @@ type initTemplateData struct {
 	Filename       string
 	LayoutName     string
 	DataSourceName string
+	DataSetName    string
 }
 
 func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
@@ -411,6 +413,7 @@ func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
 	}
 	layoutName := sanitizeManifestName(reportName+"-page", reportName+"-page")
 	dsName := sanitizeSQLIdentifier(reportName + "_data")
+	dsetName := sanitizeSQLIdentifier(reportName + "_dataset")
 	data := initTemplateData{
 		Directory:      absDir,
 		ReportName:     reportName,
@@ -419,6 +422,7 @@ func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
 		Filename:       reportName + ".pdf",
 		LayoutName:     layoutName,
 		DataSourceName: dsName,
+		DataSetName:    dsetName,
 	}
 	return data, nil
 }
@@ -527,6 +531,7 @@ func (d initTemplateData) renderVars() map[string]any {
 	vars["Filename"] = d.Filename
 	vars["LayoutName"] = d.LayoutName
 	vars["DataSourceName"] = d.DataSourceName
+	vars["DataSetName"] = d.DataSetName
 	return vars
 }
 

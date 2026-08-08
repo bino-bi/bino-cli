@@ -65,8 +65,10 @@ func TestBuildInitTemplateData(t *testing.T) {
 }
 
 // TestStandardTemplateUsesCanonicalFolders keeps the built-in standard scaffold
-// aligned with projectlayout: every folder it seeds must be a canonical one, so
-// `bino add` co-locates new manifests with the scaffold instead of splitting.
+// aligned with projectlayout: every folder it seeds a *manifest* into must be a
+// canonical one, so `bino add` co-locates new manifests with the scaffold instead
+// of splitting. Non-manifest payloads (docs/*.md, scripts/*.sh) are exempt —
+// projectlayout only maps manifest kinds to folders.
 func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 	tmp := t.TempDir()
 	data := initTemplateData{
@@ -77,6 +79,7 @@ func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 		Filename:       "sample-report.pdf",
 		LayoutName:     "sample-report-page",
 		DataSourceName: "sample_report_data",
+		DataSetName:    "sample_report_dataset",
 	}
 	created, _, err := renderBuiltinBundle("standard", data, false)
 	if err != nil {
@@ -84,7 +87,10 @@ func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 	}
 	canonical := projectlayout.CanonicalFolders()
 	for _, rel := range created {
-		dir, _, nested := strings.Cut(rel, string(filepath.Separator))
+		if filepath.Ext(rel) != ".yaml" {
+			continue // not a manifest — projectlayout has nothing to say about it
+		}
+		dir, _, nested := strings.Cut(rel, "/")
 		if !nested {
 			continue // top-level file (bino.toml, dotfiles) — not a folder
 		}
@@ -104,6 +110,7 @@ func TestRenderBuiltinMinimalCreatesFiles(t *testing.T) {
 		Filename:       "sample-report.pdf",
 		LayoutName:     "sample-report-page",
 		DataSourceName: "sample_report_data",
+		DataSetName:    "sample_report_dataset",
 	}
 	created, _, err := renderBuiltinBundle("minimal", data, false)
 	if err != nil {

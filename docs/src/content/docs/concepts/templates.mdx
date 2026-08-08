@@ -13,13 +13,20 @@ Two templates are compiled into the binary and always work with **zero network**
 
 - **`minimal`** — a flat starter bundle (`bino.toml`, `report.yaml`, `data.yaml`,
   `pages.yaml`, ignore files). This is the default and the non-interactive (`-y`) choice.
-- **`standard`** — the same report organized into the **canonical folder layout**.
+- **`standard`** — a complete reference bundle in the **canonical folder layout**: a CSV
+  `DataSource` and the `DataSet` that aggregates it, an IBCS `Table` with scenarios and
+  variances, a `ChartStructure`, a `ComponentStyle`, translations for the chosen locale,
+  `Asset` declarations, and three deliverables (a PDF `ReportArtefact`, a
+  `LiveReportArtefact` for `bino serve`, and a Markdown-driven `DocumentArtefact`).
+  It builds and lints clean out of the box.
 
 ```bash
 bino init              # minimal (interactive wizard offers standard)
-bino init standard     # the foldered standard scaffold
+bino init standard     # the full reference bundle
 bino init -y           # minimal, non-interactive
 ```
+
+The demo data ships inside the binary, so `standard` needs no network either.
 
 ## The canonical folder layout
 

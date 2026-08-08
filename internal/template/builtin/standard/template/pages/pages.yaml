@@ -1,0 +1,37 @@
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: welcome-page
+  description: Narrative page bound to the inline DataSet. Not part of the report artefact — open it with 'bino preview'.
+spec:
+  children:
+    - kind: Text
+      spec:
+        value: >-
+          Welcome to {{ .ReportTitle }}!
+          \${this.data['{{ .DataSetName }}'][0].name} just shipped the latest KPI export.
+        dataset: {{ .DataSetName }}
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: {{ .LayoutName }}
+  description: The page rendered by the report artefact — an IBCS table over the CSV data.
+spec:
+  i18nNamespace: global
+  children:
+    - kind: Table
+      metadata:
+        name: revenue_table
+      spec:
+        dataset: revenue_by_city
+        selectedStyle: corporateTheme
+        scenarios:
+          - ac1
+          - pp1
+        variances:
+          - dac1_pp1_pos
+          - drac1_pp1_pos
+        order: ac1
+        orderDirection: desc
+        percentageScaling: 25
