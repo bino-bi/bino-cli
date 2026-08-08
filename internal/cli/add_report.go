@@ -823,37 +823,7 @@ func writeReportArtefactManifest(cmd *cobra.Command, workdir string, data Report
 }
 
 func writeReportArtefactManifestWithParams(cmd *cobra.Command, workdir string, data ReportArtefactManifestData, outputPath string, appendMode bool) error {
-	doc := buildReportArtefactDocumentWithParams(data)
-
-	// Marshal to YAML
-	manifestBytes, err := yaml.Marshal(doc)
-	if err != nil {
-		return RuntimeError(fmt.Errorf("render manifest: %w", err))
-	}
-
-	manifest := string(manifestBytes)
-
-	// Resolve absolute path
-	absPath := outputPath
-	if !filepath.IsAbs(outputPath) {
-		absPath = filepath.Join(workdir, outputPath)
-	}
-
-	// Write to file
-	out := cmd.OutOrStdout()
-	if appendMode {
-		if err := AppendToManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Appended to %s\n", outputPath)
-	} else {
-		if err := WriteManifest(absPath, manifest); err != nil {
-			return RuntimeError(err)
-		}
-		fmt.Fprintf(out, "Created %s\n", outputPath)
-	}
-
-	return nil
+	return WriteRawDocument(buildReportArtefactDocumentWithParams(data), workdir, outputPath, appendMode, cmd.OutOrStdout())
 }
 
 func writeLiveReportArtefactManifest(cmd *cobra.Command, workdir string, data LiveReportArtefactManifestData, outputPath string, appendMode bool) error {
