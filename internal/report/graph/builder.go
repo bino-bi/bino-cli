@@ -418,7 +418,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 		// Ref not found.
 		if child.Optional {
 			// Optional ref: skip gracefully.
-			log.Infof("layout child in %q: optional ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
+			log.Debugf("layout child in %q: optional ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
 			return nil, "", nil
 		}
 
