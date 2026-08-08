@@ -220,17 +220,17 @@ func New(cfg Config) (*Server, error) {
 		data:        newDataStore(defaultDataKeep),
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", compressionHandlerFunc(srv.handleRoot))
-	mux.Handle("/assets/", compressionHandlerFunc(srv.handleAsset))
-	mux.Handle("/cdn/", compressionHandlerFunc(srv.handleCDN))
+	mux.HandleFunc("/", compressionHandlerFunc(cfg.Logger, srv.handleRoot))
+	mux.Handle("/assets/", compressionHandlerFunc(cfg.Logger, srv.handleAsset))
+	mux.Handle("/cdn/", compressionHandlerFunc(cfg.Logger, srv.handleCDN))
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
-	mux.HandleFunc("/__preview/context", compressionHandlerFunc(srv.handleContext))
-	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(srv.handleBootStatus))
-	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(srv.handleData(DataKindDatasource)))
-	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(srv.handleData(DataKindDataset)))
-	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(srv.handleEmbedding))
+	mux.HandleFunc("/__preview/context", compressionHandlerFunc(cfg.Logger, srv.handleContext))
+	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(cfg.Logger, srv.handleBootStatus))
+	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(cfg.Logger, srv.handleData(DataKindDatasource)))
+	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(cfg.Logger, srv.handleData(DataKindDataset)))
+	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(cfg.Logger, srv.handleEmbedding))
 	mux.HandleFunc("POST /__bino/embedding/override", srv.handleEmbeddingOverride)
-	mux.HandleFunc("POST /__bino/layout-state", compressionHandlerFunc(srv.handleLayoutState))
+	mux.HandleFunc("POST /__bino/layout-state", compressionHandlerFunc(cfg.Logger, srv.handleLayoutState))
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {

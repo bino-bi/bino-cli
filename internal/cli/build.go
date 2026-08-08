@@ -847,7 +847,6 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 	if err != nil {
 		return fmt.Errorf("create build log: %w", err)
 	}
-	defer file.Close()
 
 	fmt.Fprintf(file, "BINO BUILD LOG\n")
 	fmt.Fprintf(file, "==============\n\n")
@@ -905,6 +904,9 @@ func writeBuildLog(path, runID, reportID, engineVersion string, startTime time.T
 		}
 	}
 
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close build log %s: %w", path, err)
+	}
 	return nil
 }
 

@@ -223,6 +223,40 @@ func writeTestZip(t *testing.T, path string, entries map[string]string) {
 	}
 }
 
+func TestDownload_ExtractsBinary(t *testing.T) {
+	binName := "chrome-headless-shell"
+	if runtime.GOOS == "windows" {
+		binName = "chrome-headless-shell.exe"
+	}
+
+	tmp := t.TempDir()
+	zipPath := filepath.Join(tmp, "chrome.zip")
+	writeTestZip(t, zipPath, map[string]string{
+		"chrome-headless-shell-test/" + binName: "#!/bin/sh\n",
+	})
+	archive, err := os.ReadFile(zipPath)
+	if err != nil {
+		t.Fatalf("read test zip: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(archive)
+	}))
+	defer srv.Close()
+
+	mgr := NewManagerWithClient(t.TempDir(), srv.Client())
+	info, err := mgr.Download(context.Background(), "133.0.0.1", srv.URL+"/chrome.zip")
+	if err != nil {
+		t.Fatalf("Download() error = %v", err)
+	}
+	if info.Version != "133.0.0.1" {
+		t.Errorf("Download().Version = %q, want %q", info.Version, "133.0.0.1")
+	}
+	if _, err := os.Stat(info.ExecPath); err != nil {
+		t.Errorf("extracted binary missing: %v", err)
+	}
+}
+
 func TestExtractZipStrippingTopDir_ValidArchive(t *testing.T) {
 	tmp := t.TempDir()
 	zipPath := filepath.Join(tmp, "ok.zip")

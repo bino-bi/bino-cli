@@ -66,19 +66,17 @@ func NewManager() (*Manager, error) {
 		return nil, fmt.Errorf("resolve cache directory: %w", err)
 	}
 	return &Manager{
-		cacheDir: cacheDir,
-		httpClient: &http.Client{
-			Timeout: downloadTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				// Don't follow redirects automatically for version resolution
-				return http.ErrUseLastResponse
-			},
-		},
+		cacheDir:   cacheDir,
+		httpClient: &http.Client{Timeout: downloadTimeout},
 	}, nil
 }
 
 // NewManagerWithClient creates a Manager with a custom HTTP client (useful for testing).
+// A nil client falls back to the same default client NewManager builds.
 func NewManagerWithClient(cacheDir string, client *http.Client) *Manager {
+	if client == nil {
+		client = &http.Client{Timeout: downloadTimeout}
+	}
 	return &Manager{
 		cacheDir:   cacheDir,
 		httpClient: client,
@@ -221,36 +219,37 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Download the zip file
+	// Download the zip file. The shared client follows redirects, which
+	// GitHub release downloads rely on.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
 	if err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("create request: %w", err)
 	}
 
-	// Use a client that follows redirects for downloads
-	downloadClient := &http.Client{Timeout: downloadTimeout}
-	resp, err := downloadClient.Do(req)
+	resp, err := m.httpClient.Do(req)
 	if err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("download template engine %s: %w", version, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("template engine version %s not found on GitHub", version)
 	}
 	if resp.StatusCode != http.StatusOK {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("download template engine %s: HTTP %d", version, resp.StatusCode)
 	}
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return VersionInfo{}, fmt.Errorf("write download: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return VersionInfo{}, fmt.Errorf("close temp file %s: %w", tmpPath, err)
+	}
 
 	// Extract the zip file
 	versionPath := filepath.Join(m.cacheDir, version)
@@ -291,7 +290,15 @@ func (m *Manager) FetchLatestRemoteVersion(ctx context.Context) (string, error) 
 		return "", fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := m.httpClient.Do(req)
+	// GitHub answers with a redirect to the release tag; the version is read
+	// from the Location header, so use a per-request copy of the client that
+	// does not follow the redirect.
+	client := *m.httpClient
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetch latest version: %w", err)
 	}

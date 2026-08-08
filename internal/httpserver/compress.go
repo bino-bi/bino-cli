@@ -11,6 +11,8 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
+
+	"bino.bi/bino/internal/logx"
 )
 
 // compressionLevel defines the default compression level.
@@ -238,7 +240,7 @@ func (c *compressedResponseWriter) Push(target string, opts *http.PushOptions) e
 }
 
 // compressionHandlerFunc wraps an http.HandlerFunc with compression support.
-func compressionHandlerFunc(fn http.HandlerFunc) http.HandlerFunc {
+func compressionHandlerFunc(log logx.Logger, fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Determine compression type from Accept-Encoding header
 		compType := selectCompression(r.Header.Get("Accept-Encoding"))
@@ -253,7 +255,13 @@ func compressionHandlerFunc(fn http.HandlerFunc) http.HandlerFunc {
 			compType:       compType,
 			writer:         w, // Default to original writer until header is written
 		}
-		defer cw.Close()
+		// Close finalizes the compressed body; the response is already in
+		// flight, so a failure can only be logged, not returned.
+		defer func() {
+			if err := cw.Close(); err != nil {
+				log.Debugf("compressed response finalize failed for %s: %v", r.URL.Path, err)
+			}
+		}()
 
 		fn(cw, r)
 	}

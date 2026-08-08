@@ -253,10 +253,12 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 
 	hasher := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(archiveFile, hasher), resp.Body); err != nil {
-		archiveFile.Close()
+		_ = archiveFile.Close()
 		return fmt.Errorf("downloading archive: %w", err)
 	}
-	archiveFile.Close()
+	if err := archiveFile.Close(); err != nil {
+		return fmt.Errorf("close archive file %s: %w", archivePath, err)
+	}
 
 	// Verify checksum
 	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
@@ -285,7 +287,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 	if runtime.GOOS == "windows" {
 		// Windows uses zip archives
 		if err := extractBinaryFromZip(archivePath, tmpFile); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("extracting binary: %w", err)
 		}
 	} else {
@@ -297,11 +299,13 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		defer archiveFile.Close()
 
 		if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("extracting binary: %w", err)
 		}
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file %s: %w", tmpPath, err)
+	}
 
 	// Make the new binary executable
 	if err := os.Chmod(tmpPath, 0o755); err != nil {

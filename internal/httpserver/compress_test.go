@@ -2,14 +2,19 @@ package httpserver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
+
+	"bino.bi/bino/internal/logx"
 )
 
 func TestSelectCompression(t *testing.T) {
@@ -116,7 +121,7 @@ func TestIsCompressibleContentType(t *testing.T) {
 func TestCompressionMiddleware_Brotli(t *testing.T) {
 	testBody := "<html><body><h1>Hello World</h1></body></html>"
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(testBody))
@@ -154,7 +159,7 @@ func TestCompressionMiddleware_Brotli(t *testing.T) {
 func TestCompressionMiddleware_Gzip(t *testing.T) {
 	testBody := "<html><body><h1>Hello World</h1></body></html>"
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(testBody))
@@ -190,10 +195,56 @@ func TestCompressionMiddleware_Gzip(t *testing.T) {
 	}
 }
 
+// recordingLogger captures Debugf messages for assertions.
+type recordingLogger struct {
+	logx.Logger
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *recordingLogger) Debugf(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.msgs = append(l.msgs, fmt.Sprintf(format, args...))
+}
+
+// failingResponseWriter fails every write, so finalizing the compression
+// writer cannot flush its buffered output.
+type failingResponseWriter struct {
+	header http.Header
+}
+
+func (w *failingResponseWriter) Header() http.Header       { return w.header }
+func (w *failingResponseWriter) Write([]byte) (int, error) { return 0, errors.New("sink write failed") }
+func (w *failingResponseWriter) WriteHeader(int)           {}
+
+func TestCompressionMiddleware_LogsCloseError(t *testing.T) {
+	log := &recordingLogger{Logger: logx.Nop()}
+	handler := compressionHandlerFunc(log, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("<html>truncated</html>"))
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	handler.ServeHTTP(&failingResponseWriter{header: http.Header{}}, req)
+
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if len(log.msgs) == 0 {
+		t.Fatal("Close error on the compression writer was not logged")
+	}
+	if !strings.Contains(log.msgs[0], "sink write failed") {
+		t.Errorf("logged message = %q, want it to contain the close error", log.msgs[0])
+	}
+}
+
 func TestCompressionMiddleware_NoCompression(t *testing.T) {
 	testBody := "<html><body><h1>Hello World</h1></body></html>"
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(testBody))
@@ -221,7 +272,7 @@ func TestCompressionMiddleware_NoCompression(t *testing.T) {
 func TestCompressionMiddleware_NonCompressibleContentType(t *testing.T) {
 	testBody := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header bytes
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)
 		w.Write(testBody)
@@ -305,7 +356,7 @@ func TestCompressionMiddleware_LargeBody(t *testing.T) {
 	// Create a large body that will benefit from compression
 	testBody := strings.Repeat("<div>This is repeated content for testing compression.</div>", 1000)
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(testBody))
@@ -335,7 +386,7 @@ func TestCompressionMiddleware_LargeBody(t *testing.T) {
 func TestCompressionMiddleware_JSON(t *testing.T) {
 	testBody := `{"name":"test","data":[1,2,3,4,5],"nested":{"key":"value"}}`
 
-	handler := compressionHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := compressionHandlerFunc(logx.Nop(), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(testBody))
