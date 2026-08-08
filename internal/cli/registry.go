@@ -67,11 +67,14 @@ func registryProjectSetup() (registryProject, error) {
 	}
 	root, err := pathutil.FindProjectRoot(workdir)
 	if err != nil {
-		return registryProject{}, ConfigErrorf("no bino project found (missing bino.toml)")
+		if errors.Is(err, pathutil.ErrProjectRootNotFound) {
+			return registryProject{}, ConfigError(err)
+		}
+		return registryProject{}, ConfigErrorf("resolve project root: %w", err)
 	}
 	cfg, err := pathutil.LoadProjectConfig(root)
 	if err != nil {
-		return registryProject{}, ConfigErrorf("loading bino.toml: %v", err)
+		return registryProject{}, ConfigErrorf("loading bino.toml: %w", err)
 	}
 	return registryProject{Root: root, Cfg: cfg, Out: NewOutput(OutputConfig{})}, nil
 }
@@ -89,7 +92,7 @@ func dependencyRoots(cfg *pathutil.ProjectConfig) ([]registry.Root, error) {
 	roots := make([]registry.Root, 0, len(cfg.Dependencies))
 	for name, ref := range cfg.Dependencies {
 		if _, _, err := registry.ParseName(name); err != nil {
-			return nil, ConfigErrorf("bino.toml [dependencies]: %v", err)
+			return nil, ConfigErrorf("bino.toml [dependencies]: %w", err)
 		}
 		roots = append(roots, registry.Root{Name: name, Ref: ref})
 	}

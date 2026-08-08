@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -25,9 +26,14 @@ func newSchemaCommand() *cobra.Command {
 			ctx := cmd.Context()
 			logger := logx.Nop()
 
-			// Try to load project config for plugins.
-			workdir, _ := os.Getwd()                            //nolint:errcheck // outside a project the builtin schema is still served
-			projectRoot, _ := pathutil.FindProjectRoot(workdir) //nolint:errcheck // outside a project the builtin schema is still served
+			// Try to load project config for plugins. Outside a project the
+			// builtin schema is served; a real filesystem failure must not be
+			// misread as "no project".
+			workdir, _ := os.Getwd() //nolint:errcheck // outside a project the builtin schema is still served
+			projectRoot, err := pathutil.FindProjectRoot(workdir)
+			if err != nil && !errors.Is(err, pathutil.ErrProjectRootNotFound) {
+				return ConfigErrorf("resolve project root: %w", err)
+			}
 
 			var registry *plugin.PluginRegistry
 

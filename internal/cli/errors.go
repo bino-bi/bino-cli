@@ -101,6 +101,28 @@ func ExternalErrorWithHint(err error, hint string) error {
 	return wrapErrorWithHint(ErrorKindExternal, err, hint)
 }
 
+// ExitCodeError carries a subprocess exit code to the top of the CLI without
+// printing an additional error message — the subprocess already streamed its
+// own output. Returning it (instead of calling os.Exit inside a RunE) lets
+// deferred cleanup such as plugin shutdown run before the process exits.
+type ExitCodeError struct {
+	Code int
+}
+
+func (e *ExitCodeError) Error() string {
+	return fmt.Sprintf("exit code %d", e.Code)
+}
+
+// ExitCodeFromError reports the exit code carried by an ExitCodeError in the
+// chain, if any. main() checks it before printing a formatted error.
+func ExitCodeFromError(err error) (int, bool) {
+	var ee *ExitCodeError
+	if errors.As(err, &ee) {
+		return ee.Code, true
+	}
+	return 0, false
+}
+
 // errorKind extracts the ErrorKind from an error chain.
 func errorKind(err error) ErrorKind {
 	var ee *exitError
@@ -311,34 +333,43 @@ func formatSchemaValidationError(schemaErr *spec.SchemaValidationError) string {
 	return b.String()
 }
 
-// extractCoreMessage extracts the most relevant part of an error message.
+// extractCoreMessage returns the full error message for display. It used to
+// keep only the last two ": "-separated fragments, which dropped the outer
+// frames naming the artefact/dataset the user asked for and mis-split
+// messages that legitimately contain ": ".
 func extractCoreMessage(err error) string {
 	if err == nil {
 		return "no additional details"
 	}
-
-	msg := err.Error()
-
-	// Try to extract the innermost meaningful message
-	// Skip generic prefixes like "artefact X: " or "build: "
-	parts := strings.Split(msg, ": ")
-	if len(parts) > 2 {
-		// Return the last two parts for context
-		return strings.Join(parts[len(parts)-2:], ": ")
-	}
-
-	return strings.TrimSpace(msg)
+	return strings.TrimSpace(err.Error())
 }
 
 func buildErrorChain(err error) string {
 	var chain []string
-	current := errors.Unwrap(err)
-	for current != nil {
-		msg := strings.TrimSpace(current.Error())
+	var visit func(error)
+	visit = func(e error) {
+		if e == nil {
+			return
+		}
+		if multi, ok := e.(interface{ Unwrap() []error }); ok {
+			// A joined error's own message is just its branches concatenated
+			// with newlines — render each branch as its own entry instead.
+			for _, child := range multi.Unwrap() {
+				visit(child)
+			}
+			return
+		}
+		msg := strings.TrimSpace(e.Error())
 		if msg != "" && !containsAny(chain, msg) {
 			chain = append(chain, msg)
 		}
-		current = errors.Unwrap(current)
+		visit(errors.Unwrap(e))
+	}
+	// Skip the top-level message itself — it is already displayed.
+	if _, ok := err.(interface{ Unwrap() []error }); ok {
+		visit(err)
+	} else {
+		visit(errors.Unwrap(err))
 	}
 	if len(chain) == 0 {
 		return ""
