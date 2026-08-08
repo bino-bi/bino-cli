@@ -250,7 +250,7 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 	} else {
 		c, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+			return nil, &DocumentError{Op: "read", File: path, Err: err}
 		}
 		content = c
 	}
@@ -309,13 +309,13 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 				break
 			}
 			if collect != nil {
-				*collect = append(*collect, fmt.Errorf("decode %s: %w", path, decodeErr))
+				*collect = append(*collect, &DocumentError{Op: "decode", File: path, Err: decodeErr})
 				if canContinue {
 					continue
 				}
 				break
 			}
-			return nil, fmt.Errorf("decode %s: %w", path, decodeErr)
+			return nil, &DocumentError{Op: "decode", File: path, Err: decodeErr}
 		}
 
 		if len(manifest) == 0 {
@@ -340,10 +340,10 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 				continue
 			}
 			if collect != nil {
-				*collect = append(*collect, fmt.Errorf("marshal %s: %w", path, err))
+				*collect = append(*collect, &DocumentError{Op: "marshal", File: path, Err: err})
 				continue
 			}
-			return nil, fmt.Errorf("marshal %s: %w", path, err)
+			return nil, &DocumentError{Op: "marshal", File: path, Err: err}
 		}
 
 		// In lenient mode, check for bino apiVersion before validation
@@ -389,10 +389,10 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 				var header documentHeader
 				if err := json.Unmarshal(rawJSON, &header); err != nil {
 					if collect != nil {
-						*collect = append(*collect, fmt.Errorf("header %s document %d: %w", path, index, err))
+						*collect = append(*collect, &DocumentError{Op: "header", File: path, Position: index, Err: err})
 						continue
 					}
-					return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
+					return nil, &DocumentError{Op: "header", File: path, Position: index, Err: err}
 				}
 				constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
 				if err != nil {
@@ -452,10 +452,10 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 		var header documentHeader
 		if err := json.Unmarshal(rawJSON, &header); err != nil {
 			if collect != nil {
-				*collect = append(*collect, fmt.Errorf("header %s document %d: %w", path, index, err))
+				*collect = append(*collect, &DocumentError{Op: "header", File: path, Position: index, Err: err})
 				continue
 			}
-			return nil, fmt.Errorf("header %s document %d: %w", path, index, err)
+			return nil, &DocumentError{Op: "header", File: path, Position: index, Err: err}
 		}
 
 		constraints, err := spec.ParseMixedConstraints(header.Metadata.Constraints)
