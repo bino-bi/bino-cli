@@ -4,9 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -237,39 +234,8 @@ A Table component displays data from a DataSet in a formatted table.
 				}
 			}
 
-			// Preview
-			doc := buildTableDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeTableManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildTableDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -473,39 +439,8 @@ ChartStructure displays data from a DataSet as a structural chart:
 				}
 			}
 
-			// Preview
-			doc := buildChartStructureDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartStructureManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartStructureDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -678,39 +613,8 @@ ChartTime displays time-series data from a DataSet.
 				}
 			}
 
-			// Preview
-			doc := buildChartTimeDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartTimeManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartTimeDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -913,39 +817,8 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 				}
 			}
 
-			// Preview
-			doc := buildChartScatterDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartScatterManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartScatterDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1164,39 +1037,8 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 				}
 			}
 
-			// Preview
-			doc := buildChartBubbleDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartBubbleManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartBubbleDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1401,39 +1243,8 @@ pl1 > pp1 > fc1).
 				}
 			}
 
-			// Preview
-			doc := buildChartBulletDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartBulletManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartBulletDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -3,13 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -305,49 +301,19 @@ including the filename, format, orientation, and which LayoutPages to include.
 				}
 			}
 
-			// Preview
-			var manifestBytes []byte
+			// Preview, confirm, write. Parameterized page refs need the
+			// map-based document (raw write path); plain refs use the
+			// typed one.
+			var doc any
+			var notes []string
 			if len(data.LayoutPageRefs) > 0 {
-				doc := buildReportArtefactDocumentWithParams(data)
-				manifestBytes, err = yaml.Marshal(doc)
+				doc = buildReportArtefactDocumentWithParams(data)
+				notes = append(notes, fmt.Sprintf("\nNote: This artefact includes %d parameterized page instance(s).", len(data.LayoutPageRefs)))
 			} else {
-				doc := buildReportArtefactDocument(data)
-				manifestBytes, err = RenderSchemaDocument(doc)
+				doc = buildReportArtefactDocument(data)
 			}
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			if len(data.LayoutPageRefs) > 0 {
-				fmt.Fprintf(out, "\nNote: This artefact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
-			}
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeReportArtefactManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, doc, workdir, outputPath, appendMode, flagOpenEditor, notes, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -561,25 +527,9 @@ IMPORTANT: A root route "/" is required.
 				}
 			}
 
-			// Preview
-			doc := buildLiveReportArtefactDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-			fmt.Fprintln(out, "\nNote: Add additional routes by editing the manifest file.")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeLiveReportArtefactManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildLiveReportArtefactDocument(data), workdir, outputPath, appendMode, false,
+				[]string{"\nNote: Add additional routes by editing the manifest file."}, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -745,23 +695,8 @@ digitally sign PDF reports.
 			}
 
 			// Preview
-			doc := buildSigningProfileDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeSigningProfileManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildSigningProfileDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

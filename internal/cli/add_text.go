@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -233,39 +230,8 @@ Text components can display:
 				}
 			}
 
-			// Preview
-			doc := buildTextDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeTextManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildTextDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -416,23 +382,8 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				}
 			}
 
-			doc := buildComponentStyleDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeComponentStyleManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildComponentStyleDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -589,23 +540,8 @@ other name is selected per component via the ruleset attribute.
 				}
 			}
 
-			doc := buildRuleSetDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeRuleSetManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildRuleSetDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -759,23 +695,8 @@ Internationalization manifests define translations for a specific locale.
 				}
 			}
 
-			doc := buildInternationalizationDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeInternationalizationManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildInternationalizationDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1146,23 +1067,8 @@ can reference via their unitScaling or percentageScaling attributes.
 				}
 			}
 
-			doc := buildScalingGroupDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeScalingGroupManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildScalingGroupDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

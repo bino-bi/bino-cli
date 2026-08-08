@@ -4,13 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -238,59 +234,35 @@ populate with component references later.
 				}
 			}
 
-			// Preview
-			var manifestBytes []byte
+			// Preview, confirm, write. Params need the map-based document
+			// (raw write path); plain pages use the typed one.
+			var doc any
 			if len(data.Params) > 0 {
-				doc := buildLayoutPageDocumentWithParams(data)
-				manifestBytes, err = yaml.Marshal(doc)
+				doc = buildLayoutPageDocumentWithParams(data)
 			} else {
-				doc := buildLayoutPageDocument(data)
-				manifestBytes, err = RenderSchemaDocument(doc)
+				doc = buildLayoutPageDocument(data)
 			}
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
+			var notes []string
 			if len(data.Children) == 0 {
-				fmt.Fprintln(out, "\nNote: The children array is empty. Add components to the page after creation.")
+				notes = append(notes, "\nNote: The children array is empty. Add components to the page after creation.")
 			}
 			if len(data.Params) > 0 {
-				fmt.Fprintf(out, "\nNote: This page defines %d parameter(s). Use the object form in layoutPages to pass values.\n", len(data.Params))
+				notes = append(notes, fmt.Sprintf("\nNote: This page defines %d parameter(s). Use the object form in layoutPages to pass values.", len(data.Params)))
 			}
 
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
+			// Offer to link the new page to existing artefacts after the
+			// write; link failures are warnings, not errors.
+			afterWrite := func() error {
+				if err := promptAddToArtefacts(workdir, data.Name, manifests, data.Params); err != nil {
+					if !errors.Is(err, errAddCanceled) {
+						fmt.Fprintf(out, "Warning: %v\n", err)
+					}
+				}
 				return nil
 			}
 
-			if err := writeLayoutPageManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			// Offer to link to existing artifacts
-			if err := promptAddToArtefacts(workdir, data.Name, manifests, data.Params); err != nil {
-				if !errors.Is(err, errAddCanceled) {
-					fmt.Fprintf(out, "Warning: %v\n", err)
-				}
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, doc, workdir, outputPath, appendMode, flagOpenEditor, notes, afterWrite)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -476,43 +448,12 @@ related content.
 				}
 			}
 
-			// Preview
-			doc := buildLayoutCardDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
+			var notes []string
 			if len(data.Children) == 0 {
-				fmt.Fprintln(out, "\nNote: The children array is empty. Add components to the card after creation.")
+				notes = append(notes, "\nNote: The children array is empty. Add components to the card after creation.")
 			}
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeLayoutCardManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildLayoutCardDocument(data), workdir, outputPath, appendMode, flagOpenEditor, notes, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -301,49 +300,13 @@ Common asset types:
 				}
 			}
 
-			// Step 7: Preview & Confirmation
-			doc := buildAssetDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
+			// Step 7: Preview, confirm, write.
+			note := fmt.Sprintf("Will create: %s", outputPath)
 			if appendMode {
-				fmt.Fprintf(out, "Will append to: %s\n", outputPath)
-			} else {
-				fmt.Fprintf(out, "Will create: %s\n", outputPath)
+				note = fmt.Sprintf("Will append to: %s", outputPath)
 			}
-
-			confirmed, err := addPromptConfirm("Proceed?", true)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil //nolint:nilerr // best effort: non-fatal for suggestions
-			}
-
-			if err := writeAssetManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				editor := getEditor()
-				if editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildAssetDocument(data), workdir, outputPath, appendMode, flagOpenEditor, []string{note}, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
