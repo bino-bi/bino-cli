@@ -61,7 +61,7 @@ func NewSpinner(cfg SpinnerConfig) *Spinner {
 		// Create spinner with dots pattern for modern look
 		sp := spinner.New(spinner.CharSets[14], 80*time.Millisecond, spinner.WithWriter(stdout))
 		if !style.NoColor {
-			_ = sp.Color("cyan")
+			_ = sp.Color("cyan") //nolint:errcheck // constant color name the spinner library accepts
 		}
 		s.spinner = sp
 	}

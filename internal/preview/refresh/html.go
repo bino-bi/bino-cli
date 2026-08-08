@@ -120,7 +120,7 @@ func buildPageMetadata(docs []config.Document, artifacts []config.Artifact) []pr
 			if pageName == "*" || strings.ContainsAny(pageName, "*?[") {
 				// Glob pattern: match against all page names
 				for _, p := range pages {
-					matched, _ := path.Match(pageName, p.name)
+					matched, _ := path.Match(pageName, p.name) //nolint:errcheck // an invalid pattern counts as no match
 					if matched {
 						pageArtefacts[p.name] = appendUnique(pageArtefacts[p.name], art.Document.Name)
 					}
@@ -167,8 +167,8 @@ func appendUnique(slice []string, val string) []string {
 
 // buildPreviewHeader generates the HTML for the sticky preview toolbar and error panel Web Components.
 func buildPreviewHeader(artifacts []previewArtefactInfo, documents []previewDocumentInfo, currentPath string, graphData *previewGraphData) string {
-	artefactsJSON, _ := json.Marshal(artifacts)
-	documentsJSON, _ := json.Marshal(documents)
+	artefactsJSON, _ := json.Marshal(artifacts) //nolint:errcheck // slices of plain string structs cannot fail to marshal
+	documentsJSON, _ := json.Marshal(documents) //nolint:errcheck // slices of plain string structs cannot fail to marshal
 
 	var b strings.Builder
 	b.WriteString(`<bino-toolbar artifacts='`)
@@ -178,7 +178,7 @@ func buildPreviewHeader(artifacts []previewArtefactInfo, documents []previewDocu
 	b.WriteString(`' current-path='`)
 	b.WriteString(html.EscapeString(currentPath))
 	if graphData != nil {
-		graphJSON, _ := json.Marshal(graphData)
+		graphJSON, _ := json.Marshal(graphData) //nolint:errcheck // plain string/slice struct cannot fail to marshal
 		b.WriteString(`' graph='`)
 		b.WriteString(html.EscapeString(string(graphJSON)))
 	}

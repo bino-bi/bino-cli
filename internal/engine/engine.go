@@ -223,28 +223,28 @@ func (m *Manager) Download(ctx context.Context, version string) (VersionInfo, er
 	// GitHub release downloads rely on.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
 	if err != nil {
-		_ = tmpFile.Close()
+		_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return VersionInfo{}, fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
-		_ = tmpFile.Close()
+		_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return VersionInfo{}, fmt.Errorf("download template engine %s: %w", version, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		_ = tmpFile.Close()
+		_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return VersionInfo{}, fmt.Errorf("template engine version %s not found on GitHub", version)
 	}
 	if resp.StatusCode != http.StatusOK {
-		_ = tmpFile.Close()
+		_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return VersionInfo{}, fmt.Errorf("download template engine %s: HTTP %d", version, resp.StatusCode)
 	}
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		_ = tmpFile.Close()
+		_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return VersionInfo{}, fmt.Errorf("write download: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {

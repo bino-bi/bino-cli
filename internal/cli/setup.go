@@ -31,7 +31,7 @@ func prefetchDuckDBExtensions(ctx context.Context, opts duckdb.Options) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = session.Close() }()
+	defer func() { _ = session.Close() }() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	if err := session.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
 		return err

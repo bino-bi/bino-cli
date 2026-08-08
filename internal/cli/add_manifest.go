@@ -241,7 +241,7 @@ func atomicWriteFile(path string, data []byte) error {
 	defer os.Remove(tmpName) // no-op once the rename succeeds
 
 	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
+		_ = tmp.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return fmt.Errorf("write temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {

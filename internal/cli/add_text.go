@@ -865,8 +865,8 @@ func applyI18nDefaultTokens(data *InternationalizationManifestData) error {
 
 func completeDatasets(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	ctx := cmd.Context()
-	workdir, _ := pathutil.ResolveWorkdir(".")
-	manifests, _ := ScanManifests(ctx, workdir)
+	workdir, _ := pathutil.ResolveWorkdir(".")  //nolint:errcheck // shell completion; errors mean no suggestions
+	manifests, _ := ScanManifests(ctx, workdir) //nolint:errcheck // shell completion; errors mean no suggestions
 	datasets := FilterByKind(manifests, "DataSet")
 	names := make([]string, len(datasets))
 	for i, m := range datasets {

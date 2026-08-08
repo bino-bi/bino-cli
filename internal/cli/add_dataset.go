@@ -460,7 +460,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 // promptQueryFile prompts for an SQL or PRQL file path.
 func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetName string) (string, error) {
 	// Search for existing files
-	files, _ := SearchQueryFiles(workdir, ext)
+	files, _ := SearchQueryFiles(workdir, ext) //nolint:errcheck // an unreadable tree just offers no existing files
 
 	options := []SelectOption{
 		{Label: "Select existing file", Description: fmt.Sprintf("Choose from %d found %s files", len(files), ext)},
@@ -606,7 +606,7 @@ func promptDependencies(reader *bufio.Reader, out io.Writer, manifests []Manifes
 // promptOutputLocation prompts for output file location.
 func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, manifests []ManifestInfo, kind, name string) (outputPath string, isNew bool, err error) {
 	// Load user preferences
-	cfg, _ := LoadAddConfig(workdir)
+	cfg, _ := LoadAddConfig(workdir) //nolint:errcheck // missing or broken preferences fall back to defaults
 	kindCfg := cfg.GetKindConfig(kind)
 
 	// Detect file pattern

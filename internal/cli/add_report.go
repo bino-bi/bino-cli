@@ -801,8 +801,8 @@ func completeOrientations(_ *cobra.Command, _ []string, _ string) ([]string, cob
 
 func completeLayoutPages(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	ctx := cmd.Context()
-	workdir, _ := pathutil.ResolveWorkdir(".")
-	manifests, _ := ScanManifests(ctx, workdir)
+	workdir, _ := pathutil.ResolveWorkdir(".")  //nolint:errcheck // shell completion; errors mean no suggestions
+	manifests, _ := ScanManifests(ctx, workdir) //nolint:errcheck // shell completion; errors mean no suggestions
 	pages := FilterByKind(manifests, "LayoutPage")
 	names := make([]string, len(pages))
 	for i, m := range pages {
