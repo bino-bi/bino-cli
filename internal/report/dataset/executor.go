@@ -26,6 +26,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/filehash"
+	reportspec "bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -77,75 +78,10 @@ type ExecuteOptions struct {
 
 // dataSetSpec mirrors the new minimal DataSet spec structure.
 type dataSetSpec struct {
-	Query        queryField `json:"query"`
-	Prql         queryField `json:"prql"`
-	Source       string     `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
-	Dependencies []string   `json:"dependencies"`
-}
-
-// queryField represents a query that can be either an inline string or a file reference.
-// It supports both formats:
-//   - Inline: "SELECT * FROM table"
-//   - File reference: { "$file": "./queries/sales.sql" }
-type queryField struct {
-	Inline string // Inline query string
-	File   string // Path to external file (from $file)
-}
-
-// UnmarshalJSON implements custom unmarshaling for queryField.
-// It handles both string values and object values with $file key.
-func (q *queryField) UnmarshalJSON(data []byte) error {
-	// Try to unmarshal as a string first
-	var str string
-	if err := json.Unmarshal(data, &str); err == nil {
-		q.Inline = str
-		return nil
-	}
-
-	// Try to unmarshal as an object with $file
-	var obj struct {
-		File string `json:"$file"`
-	}
-	if err := json.Unmarshal(data, &obj); err == nil {
-		q.File = obj.File
-		return nil
-	}
-
-	return fmt.Errorf("query must be a string or an object with $file key")
-}
-
-// IsEmpty returns true if the query field has no value.
-func (q queryField) IsEmpty() bool {
-	return q.Inline == "" && q.File == ""
-}
-
-// HasFile returns true if the query references an external file.
-func (q queryField) HasFile() bool {
-	return q.File != ""
-}
-
-// ResolveQuery resolves the query content, loading from file if necessary.
-// The baseDir parameter is used to resolve relative file paths.
-func (q queryField) ResolveQuery(baseDir string) (string, error) {
-	if q.Inline != "" {
-		return q.Inline, nil
-	}
-	if q.File == "" {
-		return "", nil
-	}
-
-	// Resolve the file path relative to the manifest
-	filePath := q.File
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(baseDir, filePath)
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("read query file %s: %w", q.File, err)
-	}
-
-	return string(content), nil
+	Query        reportspec.QueryField `json:"query"`
+	Prql         reportspec.QueryField `json:"prql"`
+	Source       string                `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
+	Dependencies []string              `json:"dependencies"`
 }
 
 // Execute evaluates all DataSet documents, using cached results when available.
