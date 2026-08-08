@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -98,14 +99,14 @@ func (s *State) Refresh(ctx context.Context) error {
 func (s *State) Documents() []config.Document {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.documents
+	return slices.Clone(s.documents)
 }
 
 // Diagnostics returns a copy of the cached diagnostics.
 func (s *State) Diagnostics() []Diagnostic {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.diagnostics
+	return slices.Clone(s.diagnostics)
 }
 
 // LastIndexAt returns when the last refresh completed.

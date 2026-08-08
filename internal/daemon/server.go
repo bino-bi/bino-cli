@@ -182,10 +182,37 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) writeJSON(w http.ResponseWriter, v any) {
+	s.writeJSONStatus(w, http.StatusOK, v)
+}
+
+func (s *Server) writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	_ = encoder.Encode(v) //nolint:errcheck // writing the response body to a client that may be gone
+}
+
+// writeJSONError emits the daemon's error envelope ({"error": ..., "code": ...})
+// with the given status. Every handler error goes through here so the
+// extension can rely on response.json() instead of handling text/plain
+// bodies per endpoint.
+func (s *Server) writeJSONError(w http.ResponseWriter, status int, err error, code string) {
+	payload := map[string]string{"error": err.Error()}
+	if code != "" {
+		payload["code"] = code
+	}
+	s.writeJSONStatus(w, status, payload)
+}
+
+// decodeBody strictly decodes an optional JSON request body into v: an empty
+// body leaves v at its zero value (callers treat that as "defaults"), a
+// malformed body is an error instead of being silently ignored.
+func decodeBody(r *http.Request, v any) error {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("invalid request body: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -211,7 +238,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	aggregator := plugin.NewSchemaAggregator(registry)
 	if err := aggregator.Build(r.Context()); err != nil {
-		http.Error(w, fmt.Sprintf("building schema: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("building schema: %w", err), "")
 		return
 	}
 
@@ -220,7 +247,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	if kindFilter != "" {
 		kindSchema, ok := aggregator.SchemaForKind(kindFilter)
 		if !ok {
-			http.Error(w, fmt.Sprintf("unknown kind: %s", kindFilter), http.StatusNotFound)
+			s.writeJSONError(w, http.StatusNotFound, fmt.Errorf("unknown kind: %s", kindFilter), "")
 			return
 		}
 		schemaBytes = kindSchema
@@ -244,7 +271,7 @@ func (s *Server) handleKinds(w http.ResponseWriter, r *http.Request) {
 	}
 	aggregator := plugin.NewSchemaAggregator(registry)
 	if err := aggregator.Build(r.Context()); err != nil {
-		http.Error(w, fmt.Sprintf("building schema: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("building schema: %w", err), "")
 		return
 	}
 	s.writeJSON(w, map[string]any{"kinds": kindInfos(aggregator.KindNames(), registry)})
@@ -279,8 +306,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 	s.writeJSON(w, s.state.Index())
 }
 
-func (s *Server) handleValidateGet(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSON(w, s.state.Validate(context.Background(), false))
+func (s *Server) handleValidateGet(w http.ResponseWriter, r *http.Request) {
+	s.writeJSON(w, s.state.Validate(r.Context(), false))
 }
 
 func (s *Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +320,7 @@ func (s *Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleValidateDraft(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
-		http.Error(w, `{"error":"read body"}`, http.StatusBadRequest)
+		s.writeJSONError(w, http.StatusBadRequest, fmt.Errorf("read body: %w", err), "")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
@@ -311,7 +338,7 @@ func (s *Server) handleValidateDraft(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleColumns(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		http.Error(w, `{"error":"missing name parameter"}`, http.StatusBadRequest)
+		s.writeJSONError(w, http.StatusBadRequest, errors.New("missing name parameter"), "")
 		return
 	}
 	s.writeJSON(w, s.state.Columns(r.Context(), name))
@@ -320,7 +347,7 @@ func (s *Server) handleColumns(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		http.Error(w, `{"error":"missing name parameter"}`, http.StatusBadRequest)
+		s.writeJSONError(w, http.StatusBadRequest, errors.New("missing name parameter"), "")
 		return
 	}
 
@@ -355,7 +382,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "stream unsupported", http.StatusInternalServerError)
+		s.writeJSONError(w, http.StatusInternalServerError, errors.New("stream unsupported"), "")
 		return
 	}
 
@@ -412,7 +439,10 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Port int `json:"port"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // empty/malformed body falls back to zero-value defaults; strict decoding lands with #174
+	if err := decodeBody(r, &req); err != nil {
+		s.writeJSONError(w, http.StatusBadRequest, err, "")
+		return
+	}
 
 	s.previewMu.Lock()
 	defer s.previewMu.Unlock()
@@ -562,7 +592,10 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Artefact string `json:"artefact"` //nolint:misspell // UK spelling is intentional
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // empty/malformed body falls back to zero-value defaults; strict decoding lands with #174
+	if err := decodeBody(r, &req); err != nil {
+		s.writeJSONError(w, http.StatusBadRequest, err, "")
+		return
+	}
 
 	exe, err := os.Executable()
 	if err != nil {
