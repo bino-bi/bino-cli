@@ -10,6 +10,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/spec"
 )
 
@@ -352,10 +353,14 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Image":
-			// These kinds are normally only rendered when referenced via ref in a
-			// LayoutPage. When rootComponent names one of them, render it directly
-			// into the context so it can be embedded without a wrapping LayoutPage.
+		default:
+			// Root-renderable kinds are normally only rendered when referenced
+			// via ref in a LayoutPage. When rootComponent names one of them,
+			// render it directly into the context so it can be embedded
+			// without a wrapping LayoutPage.
+			if !embedkinds.IsRootRenderable(doc.Kind) {
+				continue
+			}
 			if rootComponent == "" || doc.Name != rootComponent {
 				continue
 			}
@@ -501,9 +506,10 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 				continue
 			}
 			segments = append(segments, htmlContent)
-		case "LayoutCard", "Text", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Image":
-			// These kinds can be referenced as layout children but cannot be rendered as root.
-			// Skip them silently - they will be rendered when referenced via ref in a LayoutPage.
+		default:
+			// Root-renderable kinds are skipped silently here — they render
+			// when referenced via ref in a LayoutPage. (embed.IsRootRenderable
+			// is the shared authority with the build-side switch above.)
 			continue
 		}
 	}

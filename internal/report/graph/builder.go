@@ -14,6 +14,20 @@ import (
 	"bino.bi/bino/internal/report/config"
 )
 
+// componentKinds are the manifest kinds the builder registers as
+// NodeComponent nodes (standalone components). NodeByManifest derives its
+// lookup set from this list, so the two never drift.
+var componentKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid"}
+
+// componentKindSet is the membership view of componentKinds.
+var componentKindSet = func() map[string]struct{} {
+	s := make(map[string]struct{}, len(componentKinds))
+	for _, k := range componentKinds {
+		s[k] = struct{}{}
+	}
+	return s
+}()
+
 type builder struct {
 	ctx  context.Context
 	docs []config.Document
@@ -122,8 +136,7 @@ func (b *builder) Build() (*Graph, error) {
 func (b *builder) categorize() {
 	for _, doc := range b.docs {
 		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
-		switch doc.Kind {
-		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid":
+		if _, isComponent := componentKindSet[doc.Kind]; isComponent || doc.Kind == "LayoutPage" || doc.Kind == "LayoutCard" {
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
 		}
@@ -137,14 +150,17 @@ func (b *builder) categorize() {
 			b.layoutPageDocs = append(b.layoutPageDocs, doc)
 		case "LayoutCard":
 			b.layoutCardDocs = append(b.layoutCardDocs, doc)
-		case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid":
-			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
 		case "DocumentArtefact":
 			b.documentArtefactDocs = append(b.documentArtefactDocs, doc)
-		case "ScalingGroup", "ComponentStyle", "RuleSet", "Internationalization", "ConnectionSecret", "SigningProfile":
-			// Config/resource kinds — no graph node needed, collected during rendering.
+		default:
+			if _, isComponent := componentKindSet[doc.Kind]; isComponent {
+				b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
+			}
+			// Config/resource kinds (ScalingGroup, ComponentStyle, RuleSet,
+			// Internationalization, ConnectionSecret, SigningProfile) get no
+			// graph node — they are collected during rendering.
 		}
 	}
 }
@@ -222,8 +238,7 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid"}
-	for _, kind := range kinds {
+	for _, kind := range componentKinds {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {
 			if err := b.ctx.Err(); err != nil {

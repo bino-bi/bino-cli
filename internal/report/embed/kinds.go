@@ -97,3 +97,41 @@ func AllBuiltinKinds() []string {
 	}
 	return out
 }
+
+// rootRenderableKinds are the kinds render/html.go accepts as the root
+// component of a standalone render (a rootComponent target rendered without a
+// wrapping LayoutPage). This set deliberately differs from componentKinds:
+// LayoutCard and Image render at root but are not standalone-embeddable
+// manifest kinds, while Tree and Grid are embeddable via the preview's
+// synthetic single-child page but have no direct root render path
+// (render.ComponentFromSpec does not handle them). Both root-component
+// switches in html.go read this set, so a new kind cannot end up rendering in
+// build but not in preview or vice versa.
+var rootRenderableKinds = map[string]struct{}{
+	"LayoutCard":     {},
+	"Text":           {},
+	"Table":          {},
+	"ChartStructure": {},
+	"ChartTime":      {},
+	"ChartScatter":   {},
+	"ChartBubble":    {},
+	"ChartBullet":    {},
+	"Image":          {},
+}
+
+// IsRootRenderable reports whether a kind renders as the root component of a
+// standalone render.
+func IsRootRenderable(kind string) bool {
+	_, ok := rootRenderableKinds[kind]
+	return ok
+}
+
+// RootRenderableKinds returns the root-renderable kinds in no particular
+// order.
+func RootRenderableKinds() []string {
+	out := make([]string, 0, len(rootRenderableKinds))
+	for k := range rootRenderableKinds {
+		out = append(out, k)
+	}
+	return out
+}
