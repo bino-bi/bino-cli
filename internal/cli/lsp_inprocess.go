@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/daemon"
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/lsp"
 	"bino.bi/bino/internal/plugin"
 )
@@ -32,8 +33,10 @@ func newLSPInProcessBackend(managed *daemon.ManagedState, reg *plugin.PluginRegi
 
 func (b *lspInProcessBackend) Start(ctx context.Context) error {
 	if err := b.managed.State.Refresh(ctx); err != nil {
-		// Surface but don't fail — an invalid project should still get diagnostics.
-		_ = err
+		// Don't fail — an invalid project should still get diagnostics — but
+		// leave a trail: this path otherwise serves completions from empty
+		// state with nothing in the logs (stderr-bound here, safe to log).
+		logx.FromContext(ctx).Warnf("initial project refresh failed, serving from empty state: %v", err)
 	}
 	return b.managed.Watch(ctx, func(_ *daemon.State, _ []string) {
 		if fn := b.onChange.Load(); fn != nil {

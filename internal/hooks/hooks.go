@@ -84,10 +84,16 @@ func (r *Runner) execCommand(ctx context.Context, cmdStr string, extraEnv []stri
 	cmd.Env = append(os.Environ(), extraEnv...)
 
 	// Capture output for logging
-	cmd.Stdout = &logWriter{logger: r.logger, level: "info"}
-	cmd.Stderr = &logWriter{logger: r.logger, level: "warn"}
+	stdout := &logWriter{logger: r.logger, level: "info"}
+	stderr := &logWriter{logger: r.logger, level: "warn"}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
+	// A final line without a trailing newline is still buffered — often the
+	// one explaining why the hook failed.
+	stdout.Flush()
+	stderr.Flush()
 	if err == nil {
 		return nil
 	}
@@ -185,4 +191,19 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// Flush logs any buffered final line that arrived without a trailing newline.
+func (w *logWriter) Flush() {
+	line := strings.TrimRight(string(w.buf), "\n")
+	w.buf = w.buf[:0]
+	if line == "" {
+		return
+	}
+	switch w.level {
+	case "warn":
+		w.logger.Warnf("[hook] %s", line)
+	default:
+		w.logger.Infof("[hook] %s", line)
+	}
 }

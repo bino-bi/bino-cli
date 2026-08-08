@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"bino.bi/bino/internal/logx"
 )
 
 // AssetCache stores plugin assets indexed by URL path for fast HTTP serving.
@@ -14,10 +16,14 @@ type AssetCache struct {
 
 // BuildAssetCache collects assets from all plugins that provide them.
 func BuildAssetCache(ctx context.Context, registry *PluginRegistry, renderMode string) *AssetCache {
+	log := logx.FromContext(ctx)
 	cache := &AssetCache{assets: make(map[string]AssetFile)}
 	for _, p := range registry.PluginsWithAssets() {
 		scripts, styles, err := p.GetAssets(ctx, renderMode)
 		if err != nil {
+			// Skipping silently shows up as a visual defect (missing plugin
+			// CSS/JS) with no diagnostic anywhere.
+			log.Warnf("plugin %s: get assets failed, its assets are missing from the render: %v", p.Manifest().Name, err)
 			continue
 		}
 		for _, a := range scripts {

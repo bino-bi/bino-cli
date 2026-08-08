@@ -241,6 +241,9 @@ func (s *Server) unionColumns(ctx context.Context, datasets []string) []string {
 	for _, ds := range datasets {
 		cols, err := s.backend.Columns(cctx, strings.TrimPrefix(ds, "$"))
 		if err != nil {
+			// Debug, not Warn: this fires per keystroke under the 100ms
+			// budget and would spam the editor log when the backend is slow.
+			s.log.Debugf("column completion: columns for %q unavailable: %v", ds, err)
 			continue
 		}
 		got = true

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/schema"
 )
 
@@ -25,10 +26,14 @@ func NewSchemaAggregator(registry *PluginRegistry) *SchemaAggregator {
 
 // Build fetches schemas from all plugins and merges with the built-in schema.
 func (a *SchemaAggregator) Build(ctx context.Context) error {
+	log := logx.FromContext(ctx)
 	// Collect schemas from all plugins that provide kinds.
 	for _, p := range a.registry.AllPlugins() {
 		schemas, err := p.GetSchemas(ctx)
 		if err != nil {
+			// Skipping silently would make the user's manifests fail
+			// validation pointing at their YAML instead of the plugin.
+			log.Warnf("plugin %s: get schemas failed, its kinds are unavailable: %v", p.Manifest().Name, err)
 			continue
 		}
 		for kindName, schemaBytes := range schemas {
