@@ -80,7 +80,7 @@ func newBuildCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathere
 		embedDataRedact   bool
 
 		// Build log format
-		logFormat string
+		buildLogFormat string
 
 		// Detailed execution plan
 		detailedExecutionPlan bool
@@ -170,7 +170,18 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			outDir = env.Resolver.ResolveString("out-dir", "out-dir", outDir)
 			chromePath = resolveChromePath(env.Resolver.ResolveString("chrome-path", "chrome-path", chromePath))
-			logFormat = env.Resolver.ResolveString("log-format", "log-format", logFormat)
+			buildLogFormat = env.Resolver.ResolveString("build-log-format", "build-log-format", buildLogFormat)
+			// Deprecated bino.toml alias: the build-log file format used to be
+			// configured as "log-format", which now names the root logging
+			// flag/key. An explicit "text" under the new key cannot be told
+			// apart from the default, so the legacy key only applies when the
+			// new one resolves to the default.
+			if f := cmd.Flags().Lookup("build-log-format"); (f == nil || !f.Changed) && buildLogFormat == "text" {
+				if legacy := env.Resolver.ResolveString("build-log-format", "log-format", "text"); legacy != "text" {
+					logger.Warnf("bino.toml: \"log-format\" is deprecated for the build log; rename the key to \"build-log-format\"")
+					buildLogFormat = legacy
+				}
+			}
 			noGraph = env.Resolver.ResolveBool("no-graph", "no-graph", noGraph)
 			noLint = env.Resolver.ResolveBool("no-lint", "no-lint", noLint)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
@@ -270,7 +281,6 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			// Mark variables as used (will be wired into build log in later steps)
 			_ = planOpts
 			_ = queryExecMetas
-			_ = logFormat
 
 			// Resolve data validation mode
 			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
@@ -394,7 +404,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Write JSON build log if requested or if CSV embedding is enabled
 			var jsonLogPath string
-			if logFormat == "json" || embedDataCSV {
+			if buildLogFormat == "json" || embedDataCSV {
 				jsonLogPath = filepath.Join(outputDir, fmt.Sprintf("bino-build-%s.json", shortRunID))
 				jsonLog := assembleJSONBuildLog(runID, env.ProjectCfg.ReportID, env.EngineVersion, startTime, env.ProjectRoot, documents, results, queryExecMetas, embedOpts, execPlan, lintFindings, buildWarnings)
 				if err := buildlog.WriteJSONBuildLog(jsonLogPath, jsonLog); err != nil {
@@ -446,8 +456,8 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 		"Redact values in columns matching sensitive patterns (password, token, key, etc.)")
 
 	// Build log format
-	cmd.Flags().StringVar(&logFormat, "log-format", "text",
-		"Build log format: 'text' for human-readable or 'json' for machine-parseable")
+	cmd.Flags().StringVar(&buildLogFormat, "build-log-format", "text",
+		"Build log file format: 'text' for human-readable or 'json' for machine-parseable (dist/bino-build-*.json)")
 
 	// Detailed execution plan
 	cmd.Flags().BoolVar(&detailedExecutionPlan, "detailed-execution-plan", false,

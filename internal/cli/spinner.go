@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"golang.org/x/term"
+	"github.com/mattn/go-isatty"
 )
 
 // Spinner provides progress indication for long-running operations.
@@ -16,6 +16,7 @@ import (
 type Spinner struct {
 	spinner   *spinner.Spinner
 	stdout    io.Writer
+	stderr    io.Writer
 	style     *Style
 	isTTY     bool
 	message   string
@@ -27,6 +28,7 @@ type Spinner struct {
 // SpinnerConfig holds configuration for creating a Spinner.
 type SpinnerConfig struct {
 	Stdout  io.Writer
+	Stderr  io.Writer
 	NoColor bool
 }
 
@@ -36,11 +38,15 @@ func NewSpinner(cfg SpinnerConfig) *Spinner {
 	if stdout == nil {
 		stdout = os.Stdout
 	}
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
 
 	// Determine TTY status
 	isTTY := false
 	if f, ok := stdout.(*os.File); ok {
-		isTTY = term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: fd value fits in int on all supported platforms
+		isTTY = isatty.IsTerminal(f.Fd())
 	}
 
 	// Check CI environment - disable spinner in CI
@@ -53,6 +59,7 @@ func NewSpinner(cfg SpinnerConfig) *Spinner {
 
 	s := &Spinner{
 		stdout: stdout,
+		stderr: stderr,
 		style:  style,
 		isTTY:  isTTY,
 	}
@@ -144,14 +151,11 @@ func (s *Spinner) StopWithError(errMsg string) {
 
 	if s.isTTY && s.spinner != nil {
 		s.spinner.Stop()
-		// Print error line
-		s.style.Red.Fprintf(s.stdout, "%s ", SymbolError)
-		fmt.Fprintln(s.stdout, errMsg)
-	} else {
-		// Non-TTY: print error
-		s.style.Red.Fprintf(s.stdout, "%s ", SymbolError)
-		fmt.Fprintln(s.stdout, errMsg)
 	}
+	// Errors belong on stderr — `bino build > file` must not hide render
+	// failures, and stdout may carry machine-consumed data.
+	s.style.Red.Fprintf(s.stderr, "%s ", SymbolError)
+	fmt.Fprintln(s.stderr, errMsg)
 }
 
 // StopWithWarning stops the spinner and shows a warning.
@@ -168,14 +172,12 @@ func (s *Spinner) StopWithWarning(warnMsg string) {
 
 	if s.isTTY && s.spinner != nil {
 		s.spinner.Stop()
-		// Print warning line
-		s.style.Yellow.Fprintf(s.stdout, "%s ", SymbolWarning)
-		fmt.Fprint(s.stdout, warnMsg)
-		s.style.Dim.Fprintf(s.stdout, " (%s)\n", formatDuration(elapsed))
+		s.style.Yellow.Fprintf(s.stderr, "%s ", SymbolWarning)
+		fmt.Fprint(s.stderr, warnMsg)
+		s.style.Dim.Fprintf(s.stderr, " (%s)\n", formatDuration(elapsed))
 	} else {
-		// Non-TTY: print warning
-		s.style.Yellow.Fprintf(s.stdout, "%s ", SymbolWarning)
-		fmt.Fprintln(s.stdout, warnMsg)
+		s.style.Yellow.Fprintf(s.stderr, "%s ", SymbolWarning)
+		fmt.Fprintln(s.stderr, warnMsg)
 	}
 }
 

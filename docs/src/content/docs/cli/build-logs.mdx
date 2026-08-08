@@ -14,7 +14,7 @@ Every build produces at least a human-readable text log. When JSON features are 
 | File                        | Format | When Generated                                         |
 | --------------------------- | ------ | ------------------------------------------------------ |
 | `dist/bino-build-<id>.log`  | Text   | Always                                                 |
-| `dist/bino-build-<id>.json` | JSON   | When `--log-format=json` or `--embed-data-csv` is used |
+| `dist/bino-build-<id>.json` | JSON   | When `--build-log-format=json` or `--embed-data-csv` is used |
 
 The `<id>` is a unique identifier (hash) for each build run.
 
@@ -50,7 +50,7 @@ The JSON log (`*.json`) provides structured, machine-readable build data suitabl
 
 The JSON log is written when you use:
 
-- `--log-format=json` — Explicitly request JSON output
+- `--build-log-format=json` — Explicitly request JSON output
 - `--embed-data-csv` — CSV embedding requires JSON format
 
 ### JSON Schema Overview
@@ -234,7 +234,7 @@ This adds an `execution_plan` array to the JSON log.
 
 | Flag                        | Type   | Default  | Description                             |
 | --------------------------- | ------ | -------- | --------------------------------------- |
-| `--log-format`              | string | `"text"` | Build log format: `"text"` or `"json"`  |
+| `--build-log-format`              | string | `"text"` | Build log format: `"text"` or `"json"`  |
 | `--detailed-execution-plan` | bool   | `false`  | Include step-by-step timing in JSON log |
 
 ### CSV Embedding Flags
@@ -254,7 +254,7 @@ This adds an `execution_plan` array to the JSON log.
 Generate a machine-readable JSON log alongside the text log:
 
 ```bash
-bino build --log-format=json
+bino build --build-log-format=json
 ```
 
 ### Full Debugging Output
@@ -262,7 +262,7 @@ bino build --log-format=json
 Capture everything—JSON format, embedded data previews, and execution timing:
 
 ```bash
-bino build --log-format=json --embed-data-csv --detailed-execution-plan
+bino build --build-log-format=json --embed-data-csv --detailed-execution-plan
 ```
 
 ### Custom CSV Limits
@@ -290,7 +290,7 @@ bino build --embed-data-csv --embed-data-redact=false
 
 ```yaml
 - name: Build Reports
-  run: bino build --log-format=json --detailed-execution-plan
+  run: bino build --build-log-format=json --detailed-execution-plan
 
 - name: Upload Build Artifacts
   uses: actions/upload-artifact@v4
@@ -307,7 +307,7 @@ bino build --embed-data-csv --embed-data-redact=false
 ```yaml
 build:
   script:
-    - bino build --log-format=json --detailed-execution-plan
+    - bino build --build-log-format=json --detailed-execution-plan
   artifacts:
     paths:
       - dist/*.pdf
