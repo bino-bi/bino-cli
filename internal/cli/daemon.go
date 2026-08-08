@@ -66,8 +66,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 
 			// Create the shared session + state (also used by `bino mcp` standalone).
 			managedCfg := daemon.ManagedStateConfig{
-				ProjectRoot: env.ProjectRoot,
-				Logger:      logger,
+				ProjectRoot:  env.ProjectRoot,
+				Logger:       logger,
+				EngineCompat: engineCompatDiagnostic,
 			}
 			if env.PluginRegistry != nil {
 				managedCfg.KindProvider = env.PluginRegistry

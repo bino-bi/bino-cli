@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,11 +17,10 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
-	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
-	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -39,6 +37,7 @@ type State struct {
 	tempDir       string
 	kindProvider  config.KindProvider
 	pluginLinters lint.PluginLinterRegistry
+	engineCompat  func(dir string) (Diagnostic, bool)
 }
 
 // NewState creates a new daemon state.
@@ -86,10 +85,10 @@ func (s *State) Refresh(ctx context.Context) error {
 	}
 
 	// Validate
-	diagnostics := s.validateDocs(ctx)
+	diags := s.validateDocs(ctx)
 
 	s.documents = docs
-	s.diagnostics = diagnostics
+	s.diagnostics = diags
 	s.lastIndexAt = time.Now()
 
 	return nil
@@ -136,71 +135,22 @@ func (s *State) SetPluginLinters(linters lint.PluginLinterRegistry) {
 	s.pluginLinters = linters
 }
 
+// SetEngineCompat sets the engine-version compatibility check consulted during
+// validation. The check lives in the CLI layer (it knows the engine cache), so
+// it is injected here like the kind provider.
+func (s *State) SetEngineCompat(check func(dir string) (Diagnostic, bool)) {
+	s.engineCompat = check
+}
+
 // validateDocs runs full validation and returns diagnostics.
 // Must be called with s.mu held.
 func (s *State) validateDocs(ctx context.Context) []Diagnostic {
-	dir := s.projectRoot
-
-	// Load documents in strict mode to catch schema errors. Errors are
-	// collected per document so every schema issue is reported, not just
-	// the first one. ValidateDocuments runs inside the loader and its
-	// failures land in loadErrs as well.
-	var loadErrs []error
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, KindProvider: s.kindProvider, CollectErrors: &loadErrs, SkipForeign: true})
-	if err != nil {
-		loadErrs = append(loadErrs, err)
-	}
-	diagnostics := make([]Diagnostic, 0, len(loadErrs))
-	for _, loadErr := range loadErrs {
-		diagnostics = append(diagnostics, parseValidationError(loadErr)...)
-	}
-	if len(loadErrs) > 0 {
-		// Use lenient docs so downstream checks still see schema-invalid documents
-		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider}) //nolint:errcheck // lenient fallback pass; the strict errors were already collected
-	}
-
-	// Check for missing environment variables
-	paramNames := config.CollectLayoutPageParamNames(docs)
-	missingVars := config.CollectMissingEnvVarsExcluding(docs, paramNames)
-	for _, mv := range missingVars {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     mv.File,
-			Severity: "warning",
-			Message:  fmt.Sprintf("Unresolved environment variable: %s", mv.VarName),
-			Code:     "missing-env-var",
-		})
-	}
-
-	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
-	// ref-params rule is inert without the declarations.
-	lintDocs := lint.DocumentsFromConfig(docs)
-	runner := lint.NewDefaultRunner()
-	findings := runner.Run(ctx, lintDocs)
-	if s.pluginLinters != nil {
-		pluginFindings := lint.RunPluginLinters(ctx, lintDocs, s.pluginLinters)
-		findings = append(findings, pluginFindings...)
-	}
-	for _, f := range findings {
-		sev := f.Severity
-		if sev == "" {
-			sev = "warning"
-		}
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     f.File,
-			Position: f.DocIdx,
-			Line:     f.Line,
-			Column:   f.Column,
-			Severity: sev,
-			Message:  f.Message,
-			Code:     f.RuleID,
-			Field:    f.Path,
-		})
-	}
-
-	if diagnostics == nil {
-		diagnostics = []Diagnostic{}
-	}
-	return diagnostics
+	return diagnostics.Collect(ctx, s.projectRoot, diagnostics.Options{
+		KindProvider:  s.kindProvider,
+		SkipForeign:   true,
+		PluginLinters: s.pluginLinters,
+		EngineCompat:  s.engineCompat,
+	})
 }
 
 // ValidateWithQueries runs validation including query execution and returns diagnostics.
@@ -210,46 +160,13 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 	dir := s.projectRoot
 	s.mu.RUnlock()
 
-	diagnostics := s.Diagnostics()
+	diags := s.Diagnostics()
 
 	if len(docs) == 0 {
-		return diagnostics
+		return diags
 	}
 
-	execOpts := &dataset.ExecuteOptions{
-		DataValidation:           dataset.DataValidationWarn,
-		DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
-		ContinueOnQueryError:     true,
-	}
-	_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
-	if err != nil {
-		diagnostics = append(diagnostics, Diagnostic{
-			Severity: "warning",
-			Message:  fmt.Sprintf("Query execution failed: %v", err),
-			Code:     "data-validation-error",
-		})
-	}
-	for _, w := range warnings {
-		var file string
-		var position int
-		for _, doc := range docs {
-			if doc.Kind == "DataSet" && doc.Name == w.DataSet {
-				file = doc.File
-				position = doc.Position
-				break
-			}
-		}
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     file,
-			Position: position,
-			Severity: "warning",
-			Message:  w.Message,
-			Code:     "data-validation",
-			Field:    w.DataSet,
-		})
-	}
-
-	return diagnostics
+	return append(diags, diagnostics.RunQueryValidation(ctx, dir, docs)...)
 }
 
 // ValidateDraft validates in-memory manifest YAML (one or more documents)
@@ -288,18 +205,18 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 		CollectErrors: &loadErrs,
 	})
 
-	diagnostics := make([]Diagnostic, 0, len(loadErrs))
+	diags := make([]Diagnostic, 0, len(loadErrs))
 	for _, loadErr := range loadErrs {
-		for _, d := range parseValidationError(loadErr) {
+		for _, d := range diagnostics.FromLoadError(loadErr) {
 			d.File = "<draft>" // the temp path is meaningless to callers
 			// Defense in depth for error shapes the parsers miss: never leak the
 			// temp path into an editor-visible message.
 			d.Message = strings.ReplaceAll(d.Message, draftPath, "<draft>")
 			d.Message = strings.ReplaceAll(d.Message, tmpDir, "<draft>")
-			diagnostics = append(diagnostics, d)
+			diags = append(diags, d)
 		}
 	}
-	return diagnostics, nil
+	return diags, nil
 }
 
 // draftIsBino reports whether any document in a draft buffer identifies as a
@@ -575,137 +492,4 @@ func normalizeValue(v any) any {
 	default:
 		return val
 	}
-}
-
-// parseValidationError converts a validation error into Diagnostic entries.
-func parseValidationError(err error) []Diagnostic {
-	var diagnostics []Diagnostic
-	errStr := err.Error()
-
-	var schemaErr *spec.SchemaValidationError
-	if errors.As(err, &schemaErr) {
-		for _, se := range schemaErr.Errors {
-			diagnostics = append(diagnostics, Diagnostic{
-				File:     schemaErr.File,
-				Position: schemaErr.DocPosition,
-				Line:     se.Line,
-				Column:   se.Column,
-				Severity: "error",
-				Message:  se.Description,
-				Field:    se.Field,
-				Code:     "schema-validation",
-				Hint:     spec.Hint(se),
-			})
-		}
-		return diagnostics
-	}
-
-	if d, ok := parseYAMLSyntaxError(errStr); ok {
-		return []Diagnostic{d}
-	}
-
-	file, position, message := parseFileError(errStr)
-	if file != "" {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     file,
-			Position: position,
-			Severity: "error",
-			Message:  message,
-			Code:     "validation-error",
-		})
-	} else {
-		diagnostics = append(diagnostics, Diagnostic{
-			Severity: "error",
-			Message:  errStr,
-			Code:     "validation-error",
-		})
-	}
-	return diagnostics
-}
-
-// parseYAMLSyntaxError destructures the loader's decode failure
-// ("decode <path>: yaml: line N: <msg>", or without a line) into a positioned
-// diagnostic. Splitting on ": yaml: " keeps Windows drive colons in the path
-// intact; a yaml.TypeError embeds several "line N:" fragments — the first one
-// anchors the diagnostic and the full message is kept.
-func parseYAMLSyntaxError(errStr string) (Diagnostic, bool) {
-	rest, ok := strings.CutPrefix(errStr, "decode ")
-	if !ok {
-		return Diagnostic{}, false
-	}
-	path, tail, found := strings.Cut(rest, ": yaml: ")
-	if !found {
-		return Diagnostic{}, false
-	}
-	msg := tail
-	line := 0
-	if idx := strings.Index(tail, "line "); idx >= 0 {
-		digits := tail[idx+len("line "):]
-		n := 0
-		for n < len(digits) && digits[n] >= '0' && digits[n] <= '9' {
-			n++
-		}
-		if n > 0 {
-			line, _ = strconv.Atoi(digits[:n]) //nolint:errcheck // digits-only slice by construction
-			if idx == 0 {
-				msg = strings.TrimPrefix(digits[n:], ": ")
-			}
-		}
-	}
-	return Diagnostic{
-		File:     path,
-		Line:     line,
-		Severity: "error",
-		Message:  "YAML syntax error: " + msg,
-		Code:     "yaml-syntax",
-	}, true
-}
-
-// parseFileError attempts to extract file path and position from error messages.
-func parseFileError(errStr string) (file string, position int, message string) {
-	parts := strings.SplitN(errStr, " document ", 2)
-	if len(parts) == 2 {
-		file = strings.TrimSpace(parts[0])
-		for _, prefix := range []string{"decode ", "read ", "validate ", "marshal ", "header "} {
-			file = strings.TrimPrefix(file, prefix)
-		}
-		rest := parts[1]
-		var posStr string
-		for i, c := range rest {
-			if c >= '0' && c <= '9' {
-				posStr += string(c)
-			} else {
-				message = strings.TrimPrefix(rest[i:], ": ")
-				break
-			}
-		}
-		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
-		}
-		return file, position, message
-	}
-
-	parts = strings.SplitN(errStr, " #", 2)
-	if len(parts) == 2 {
-		file = strings.TrimSpace(parts[0])
-		rest := parts[1]
-		var posStr string
-		for i, c := range rest {
-			if c >= '0' && c <= '9' {
-				posStr += string(c)
-			} else {
-				message = strings.TrimSpace(rest[i:])
-				if idx := strings.Index(message, ")"); idx > 0 {
-					message = strings.TrimSpace(message[idx+1:])
-				}
-				break
-			}
-		}
-		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
-		}
-		return file, position, message
-	}
-
-	return "", 0, errStr
 }
