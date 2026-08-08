@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -158,7 +157,6 @@ populate with component references later.
 				return writeLayoutPageManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new LayoutPage manifest.")
@@ -167,7 +165,7 @@ populate with component references later.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "LayoutPage")
+				data.Name, err = promptGenericName(manifests, "LayoutPage")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -182,17 +180,17 @@ populate with component references later.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Children selection
 			if len(data.Children) == 0 {
-				addChildren, err := addPromptConfirm(reader, out, "Add child components now?", false)
+				addChildren, err := addPromptConfirm("Add child components now?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addChildren {
-					data.Children, err = promptLayoutChildren(reader, out, manifests)
+					data.Children, err = promptLayoutChildren(out, manifests)
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -201,7 +199,7 @@ populate with component references later.
 
 			// Parameters
 			if len(data.Params) == 0 {
-				addParams, err := addPromptConfirm(reader, out, "Define parameters for this page?", false)
+				addParams, err := addPromptConfirm("Define parameters for this page?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -219,18 +217,18 @@ populate with component references later.
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LayoutPage", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "LayoutPage", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -247,7 +245,7 @@ populate with component references later.
 				manifestBytes, err = yaml.Marshal(doc)
 			} else {
 				doc := buildLayoutPageDocument(data)
-				manifestBytes, err = renderLayoutPageManifest(doc)
+				manifestBytes, err = RenderSchemaDocument(doc)
 			}
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
@@ -264,7 +262,7 @@ populate with component references later.
 				fmt.Fprintf(out, "\nNote: This page defines %d parameter(s). Use the object form in layoutPages to pass values.\n", len(data.Params))
 			}
 
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			confirmed, _ := addPromptConfirm("Proceed?", true)
 			if !confirmed {
 				fmt.Fprintln(out, "\nCanceled.")
 				return nil
@@ -410,7 +408,6 @@ related content.
 				return writeLayoutCardManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new LayoutCard manifest.")
@@ -419,7 +416,7 @@ related content.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "LayoutCard")
+				data.Name, err = promptGenericName(manifests, "LayoutCard")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -434,22 +431,22 @@ related content.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Card title (optional)", "")
+				data.Title, _ = addPromptString("Card title (optional)", "")
 			}
 
 			// Children selection
 			if len(data.Children) == 0 {
-				addChildren, err := addPromptConfirm(reader, out, "Add child components now?", false)
+				addChildren, err := addPromptConfirm("Add child components now?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addChildren {
-					data.Children, err = promptLayoutChildren(reader, out, manifests)
+					data.Children, err = promptLayoutChildren(out, manifests)
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -458,18 +455,18 @@ related content.
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LayoutCard", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "LayoutCard", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -481,7 +478,7 @@ related content.
 
 			// Preview
 			doc := buildLayoutCardDocument(data)
-			manifestBytes, err := renderLayoutCardManifest(doc)
+			manifestBytes, err := RenderSchemaDocument(doc)
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
 			}
@@ -494,7 +491,7 @@ related content.
 				fmt.Fprintln(out, "\nNote: The children array is empty. Add components to the card after creation.")
 			}
 
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			confirmed, _ := addPromptConfirm("Proceed?", true)
 			if !confirmed {
 				fmt.Fprintln(out, "\nCanceled.")
 				return nil
@@ -536,7 +533,7 @@ related content.
 }
 
 // promptLayoutChildren prompts for child component selection.
-func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) ([]schema.LayoutChild, error) {
+func promptLayoutChildren(out io.Writer, manifests []ManifestInfo) ([]schema.LayoutChild, error) {
 	// Filter to component kinds that can be children
 	components := FilterByKind(manifests, layoutChildKinds...)
 
@@ -546,7 +543,7 @@ func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []Manif
 	}
 
 	items := ManifestsToFuzzyItems(components)
-	selected, err := addPromptMultiFuzzySearch(reader, out, "Select child components", items)
+	selected, err := addPromptMultiFuzzySearch("Select child components", items)
 	if err != nil {
 		return nil, err
 	}
@@ -697,10 +694,6 @@ func buildLayoutPageDocumentWithParams(data LayoutPageManifestData) map[string]a
 	return doc
 }
 
-func renderLayoutPageManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildLayoutCardDocument(data LayoutCardManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindLayoutCard, data.Name)
 	doc.Metadata.Description = data.Description
@@ -718,8 +711,4 @@ func buildLayoutCardDocument(data LayoutCardManifestData) *schema.Document {
 
 	doc.Spec = spec
 	return doc
-}
-
-func renderLayoutCardManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }

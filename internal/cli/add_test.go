@@ -255,7 +255,7 @@ func TestBuildDataSetDocument(t *testing.T) {
 			Query: "SELECT * FROM table",
 		}
 		doc := buildDataSetDocument(data)
-		got, err := renderDataSetManifest(doc)
+		got, err := RenderSchemaDocument(doc)
 		if err != nil {
 			t.Fatalf("render error: %v", err)
 		}
@@ -280,7 +280,7 @@ func TestBuildDataSetDocument(t *testing.T) {
 			Query:        "SELECT *",
 		}
 		doc := buildDataSetDocument(data)
-		got, err := renderDataSetManifest(doc)
+		got, err := RenderSchemaDocument(doc)
 		if err != nil {
 			t.Fatalf("render error: %v", err)
 		}
@@ -300,7 +300,7 @@ func TestBuildDataSetDocument(t *testing.T) {
 			QueryFile: "queries/test.sql",
 		}
 		doc := buildDataSetDocument(data)
-		got, err := renderDataSetManifest(doc)
+		got, err := RenderSchemaDocument(doc)
 		if err != nil {
 			t.Fatalf("render error: %v", err)
 		}
@@ -318,7 +318,7 @@ func TestBuildDataSetDocument(t *testing.T) {
 			Source: "my_source",
 		}
 		doc := buildDataSetDocument(data)
-		got, err := renderDataSetManifest(doc)
+		got, err := RenderSchemaDocument(doc)
 		if err != nil {
 			t.Fatalf("render error: %v", err)
 		}
@@ -341,9 +341,9 @@ func TestBuildDataSourceDocument(t *testing.T) {
 			Path: "data/test.csv",
 		}
 		doc := buildDataSourceDocument(data)
-		gotBytes, err := renderDataSourceManifest(doc)
+		gotBytes, err := RenderSchemaDocument(doc)
 		if err != nil {
-			t.Fatalf("renderDataSourceManifest failed: %v", err)
+			t.Fatalf("render failed: %v", err)
 		}
 		got := string(gotBytes)
 
@@ -370,9 +370,9 @@ func TestBuildDataSourceDocument(t *testing.T) {
 			DBQuery:    "SELECT * FROM sales",
 		}
 		doc := buildDataSourceDocument(data)
-		gotBytes, err := renderDataSourceManifest(doc)
+		gotBytes, err := RenderSchemaDocument(doc)
 		if err != nil {
-			t.Fatalf("renderDataSourceManifest failed: %v", err)
+			t.Fatalf("render failed: %v", err)
 		}
 		got := string(gotBytes)
 
@@ -413,9 +413,9 @@ func TestBuildDataSourceDocument(t *testing.T) {
 			CSVSkipRows:  2,
 		}
 		doc := buildDataSourceDocument(data)
-		gotBytes, err := renderDataSourceManifest(doc)
+		gotBytes, err := RenderSchemaDocument(doc)
 		if err != nil {
-			t.Fatalf("renderDataSourceManifest failed: %v", err)
+			t.Fatalf("render failed: %v", err)
 		}
 		got := string(gotBytes)
 

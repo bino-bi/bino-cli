@@ -11,7 +11,7 @@ import (
 // validateDoc renders a document and asserts it passes the embedded JSON schema.
 func validateDoc(t *testing.T, doc *schema.Document) string {
 	t.Helper()
-	b, err := renderDataSourceManifest(doc)
+	b, err := RenderSchemaDocument(doc)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestTypedSelectDataSetValidates(t *testing.T) {
 		Query:        query,
 		Dependencies: []string{"sales_csv"},
 	})
-	b, err := renderDataSourceManifest(doc)
+	b, err := RenderSchemaDocument(doc)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -156,7 +155,6 @@ including the filename, format, orientation, and which LayoutPages to include.
 				return writeReportArtefactManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ReportArtefact manifest.")
@@ -165,7 +163,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ReportArtefact")
+				data.Name, err = promptGenericName(manifests, "ReportArtefact")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -176,18 +174,18 @@ including the filename, format, orientation, and which LayoutPages to include.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Filename
 			if data.Filename == "" {
 				defaultFilename := fmt.Sprintf("%s.pdf", data.Name)
-				data.Filename, _ = addPromptString(reader, out, "Output filename", defaultFilename)
+				data.Filename, _ = addPromptString("Output filename", defaultFilename)
 			}
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Report title (optional)", "")
+				data.Title, _ = addPromptString("Report title (optional)", "")
 			}
 
 			// Format
@@ -196,7 +194,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 					{Label: "pdf", Description: "PDF document"},
 					{Label: "xga", Description: "XGA format (screen)"},
 				}
-				idx, err := addPromptSelect(reader, out, "Output format", options)
+				idx, err := addPromptSelect("Output format", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -210,7 +208,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 					{Label: "portrait", Description: "Vertical orientation"},
 					{Label: "landscape", Description: "Horizontal orientation"},
 				}
-				idx, err := addPromptSelect(reader, out, "Page orientation", options)
+				idx, err := addPromptSelect("Page orientation", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -220,14 +218,14 @@ including the filename, format, orientation, and which LayoutPages to include.
 
 			// Language
 			if data.Language == "" {
-				data.Language, _ = addPromptString(reader, out, "Language code (optional, e.g., en, de)", "")
+				data.Language, _ = addPromptString("Language code (optional, e.g., en, de)", "")
 			}
 
 			// LayoutPages
 			if len(data.LayoutPages) == 0 && len(data.LayoutPageRefs) == 0 {
 				pages := FilterByKind(manifests, "LayoutPage")
 				if len(pages) > 0 {
-					addPages, err := addPromptConfirm(reader, out, "Select LayoutPages to include?", true)
+					addPages, err := addPromptConfirm("Select LayoutPages to include?", true)
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -236,7 +234,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 						pageParams := getPageParamsInfo(manifests)
 
 						items := ManifestsToFuzzyItems(pages)
-						selected, err := addPromptMultiFuzzySearch(reader, out, "Select LayoutPages", items)
+						selected, err := addPromptMultiFuzzySearch("Select LayoutPages", items)
 						if err != nil {
 							return RuntimeError(err)
 						}
@@ -246,7 +244,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 							if hasParams && len(params) > 0 {
 								// This page has params - ask if user wants to configure them
 								fmt.Fprintf(out, "\n%s has %d parameter(s).\n", item.Name, len(params))
-								configureParams, err := addPromptConfirm(reader, out, fmt.Sprintf("Configure parameters for %s?", item.Name), true)
+								configureParams, err := addPromptConfirm(fmt.Sprintf("Configure parameters for %s?", item.Name), true)
 								if err != nil {
 									return RuntimeError(err)
 								}
@@ -266,7 +264,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 											Params: values,
 										})
 
-										addAnother, err := addPromptConfirm(reader, out, fmt.Sprintf("Add another instance of %s with different params?", item.Name), false)
+										addAnother, err := addPromptConfirm(fmt.Sprintf("Add another instance of %s with different params?", item.Name), false)
 										if err != nil || !addAnother {
 											break
 										}
@@ -286,18 +284,18 @@ including the filename, format, orientation, and which LayoutPages to include.
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ReportArtefact", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ReportArtefact", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -314,7 +312,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 				manifestBytes, err = yaml.Marshal(doc)
 			} else {
 				doc := buildReportArtefactDocument(data)
-				manifestBytes, err = renderReportArtefactManifest(doc)
+				manifestBytes, err = RenderSchemaDocument(doc)
 			}
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
@@ -328,7 +326,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 				fmt.Fprintf(out, "\nNote: This artefact includes %d parameterized page instance(s).\n", len(data.LayoutPageRefs))
 			}
 
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			confirmed, _ := addPromptConfirm("Proceed?", true)
 			if !confirmed {
 				fmt.Fprintln(out, "\nCanceled.")
 				return nil
@@ -463,7 +461,6 @@ IMPORTANT: A root route "/" is required.
 				return writeLiveReportArtefactManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new LiveReportArtefact manifest.")
@@ -472,7 +469,7 @@ IMPORTANT: A root route "/" is required.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "LiveReportArtefact")
+				data.Name, err = promptGenericName(manifests, "LiveReportArtefact")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -483,12 +480,12 @@ IMPORTANT: A root route "/" is required.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Application title (optional)", "")
+				data.Title, _ = addPromptString("Application title (optional)", "")
 			}
 
 			// Root route
@@ -504,14 +501,14 @@ IMPORTANT: A root route "/" is required.
 					{Label: "Use ReportArtefact", Description: "Reference an existing ReportArtefact"},
 					{Label: "Use LayoutPages", Description: "Specify LayoutPages directly"},
 				}
-				idx, err := addPromptSelect(reader, out, "Root route content", options)
+				idx, err := addPromptSelect("Root route content", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
 
 				if idx == 0 {
 					items := ManifestsToFuzzyItems(artifacts)
-					item, err := addPromptFuzzySearch(reader, out, "Select ReportArtefact", items)
+					item, err := addPromptFuzzySearch("Select ReportArtefact", items)
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -520,7 +517,7 @@ IMPORTANT: A root route "/" is required.
 					}
 				} else if len(pages) > 0 {
 					items := ManifestsToFuzzyItems(pages)
-					selected, err := addPromptMultiFuzzySearch(reader, out, "Select LayoutPages", items)
+					selected, err := addPromptMultiFuzzySearch("Select LayoutPages", items)
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -530,7 +527,7 @@ IMPORTANT: A root route "/" is required.
 				}
 			} else if len(pages) > 0 {
 				items := ManifestsToFuzzyItems(pages)
-				selected, err := addPromptMultiFuzzySearch(reader, out, "Select LayoutPages for root route", items)
+				selected, err := addPromptMultiFuzzySearch("Select LayoutPages for root route", items)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -543,18 +540,18 @@ IMPORTANT: A root route "/" is required.
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "LiveReportArtefact", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "LiveReportArtefact", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -566,7 +563,7 @@ IMPORTANT: A root route "/" is required.
 
 			// Preview
 			doc := buildLiveReportArtefactDocument(data)
-			manifestBytes, err := renderLiveReportArtefactManifest(doc)
+			manifestBytes, err := RenderSchemaDocument(doc)
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
 			}
@@ -576,7 +573,7 @@ IMPORTANT: A root route "/" is required.
 			fmt.Fprintln(out, "===============")
 			fmt.Fprintln(out, "\nNote: Add additional routes by editing the manifest file.")
 
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			confirmed, _ := addPromptConfirm("Proceed?", true)
 			if !confirmed {
 				fmt.Fprintln(out, "\nCanceled.")
 				return nil
@@ -687,7 +684,6 @@ digitally sign PDF reports.
 				return writeSigningProfileManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new SigningProfile manifest.")
@@ -696,7 +692,7 @@ digitally sign PDF reports.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "SigningProfile")
+				data.Name, err = promptGenericName(manifests, "SigningProfile")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -707,38 +703,38 @@ digitally sign PDF reports.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Certificate
 			if data.CertificatePath == "" {
-				data.CertificatePath, _ = addPromptString(reader, out, "Certificate file path", "")
+				data.CertificatePath, _ = addPromptString("Certificate file path", "")
 			}
 
 			// Private key
 			if data.PrivateKeyPath == "" {
-				data.PrivateKeyPath, _ = addPromptString(reader, out, "Private key file path", "")
+				data.PrivateKeyPath, _ = addPromptString("Private key file path", "")
 			}
 
 			// Signer name
 			if data.SignerName == "" {
-				data.SignerName, _ = addPromptString(reader, out, "Signer name (optional)", "")
+				data.SignerName, _ = addPromptString("Signer name (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "SigningProfile", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "SigningProfile", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -750,7 +746,7 @@ digitally sign PDF reports.
 
 			// Preview
 			doc := buildSigningProfileDocument(data)
-			manifestBytes, err := renderSigningProfileManifest(doc)
+			manifestBytes, err := RenderSchemaDocument(doc)
 			if err != nil {
 				return RuntimeError(fmt.Errorf("render preview: %w", err))
 			}
@@ -759,7 +755,7 @@ digitally sign PDF reports.
 			fmt.Fprintln(out, string(manifestBytes))
 			fmt.Fprintln(out, "===============")
 
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
+			confirmed, _ := addPromptConfirm("Proceed?", true)
 			if !confirmed {
 				fmt.Fprintln(out, "\nCanceled.")
 				return nil
@@ -932,11 +928,6 @@ func buildReportArtefactDocumentWithParams(data ReportArtefactManifestData) map[
 	return doc
 }
 
-// renderReportArtefactManifest renders a schema.Document to YAML bytes.
-func renderReportArtefactManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 // buildLiveReportArtefactDocument creates a schema.Document from LiveReportArtefactManifestData.
 func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindLiveReportArtefact, data.Name)
@@ -966,11 +957,6 @@ func buildLiveReportArtefactDocument(data LiveReportArtefactManifestData) *schem
 	return doc
 }
 
-// renderLiveReportArtefactManifest renders a schema.Document to YAML bytes.
-func renderLiveReportArtefactManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 // buildSigningProfileDocument creates a schema.Document from SigningProfileManifestData.
 func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindSigningProfile, data.Name)
@@ -990,9 +976,4 @@ func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Docume
 
 	doc.Spec = spec
 	return doc
-}
-
-// renderSigningProfileManifest renders a schema.Document to YAML bytes.
-func renderSigningProfileManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }

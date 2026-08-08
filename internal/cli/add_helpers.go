@@ -94,7 +94,7 @@ func promptParamDefinition() (*LayoutPageParamData, error) {
 	param.Description = desc
 
 	// Required?
-	required, err := huhConfirm("Is this parameter required?")
+	required, err := huhConfirm("Is this parameter required?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func promptSelectOptions() ([]schema.LayoutPageParamOptionItem, error) {
 		})
 
 		if len(items) >= 2 {
-			addMore, err := huhConfirm("Add another option?")
+			addMore, err := huhConfirm("Add another option?", false)
 			if err != nil {
 				return nil, err
 			}
@@ -175,7 +175,7 @@ func promptSelectOptions() ([]schema.LayoutPageParamOptionItem, error) {
 
 // promptNumberOptions prompts for number type min/max options.
 func promptNumberOptions() (*schema.LayoutPageParamOptions, error) {
-	addConstraints, err := huhConfirm("Add min/max constraints?")
+	addConstraints, err := huhConfirm("Add min/max constraints?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func promptParamDefinitions() ([]LayoutPageParamData, error) {
 			fmt.Printf("  Added parameter: %s (%s)\n", param.Name, param.Type)
 		}
 
-		addMore, err := huhConfirm("Add another parameter?")
+		addMore, err := huhConfirm("Add another parameter?", false)
 		if err != nil {
 			return params, err
 		}
@@ -522,7 +522,7 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 		return nil
 	}
 
-	addToArtefact, err := huhConfirm("Add this page to an existing ReportArtefact?")
+	addToArtefact, err := huhConfirm("Add this page to an existing ReportArtefact?", false)
 	if err != nil || !addToArtefact {
 		return err
 	}
@@ -539,7 +539,7 @@ func promptAddToArtefacts(workdir string, pageName string, manifests []ManifestI
 
 		// If page has params, prompt for values
 		if len(pageParams) > 0 {
-			withParams, err := huhConfirm(fmt.Sprintf("Add %s to %s with parameters?", pageName, item.Name))
+			withParams, err := huhConfirm(fmt.Sprintf("Add %s to %s with parameters?", pageName, item.Name), false)
 			if err != nil {
 				return err
 			}
