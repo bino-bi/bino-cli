@@ -433,7 +433,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				go watcher.Run(ctx)
 
 				go func() {
-					defer watcher.Close()
+					defer watcher.Close() //nolint:errcheck // fsnotify teardown when the refresh loop exits
 					debounce := time.NewTimer(0)
 					if !debounce.Stop() {
 						<-debounce.C

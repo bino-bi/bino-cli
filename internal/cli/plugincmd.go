@@ -85,10 +85,10 @@ func newPluginExecCommand() *cobra.Command {
 			exitCode, err := p.ExecCommand(ctx, cmdName, positionalArgs, parsedFlags, workdir,
 				func(stdout, stderr []byte) {
 					if len(stdout) > 0 {
-						os.Stdout.Write(stdout)
+						os.Stdout.Write(stdout) //nolint:errcheck // streaming plugin output to the terminal; a failed write is unrecoverable
 					}
 					if len(stderr) > 0 {
-						os.Stderr.Write(stderr)
+						os.Stderr.Write(stderr) //nolint:errcheck // streaming plugin output to the terminal; a failed write is unrecoverable
 					}
 				},
 			)

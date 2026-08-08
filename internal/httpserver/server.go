@@ -973,7 +973,7 @@ func (s *Server) serveLocalAsset(w http.ResponseWriter, r *http.Request, asset L
 		}
 		return fmt.Errorf("preview: open asset %s: %w", asset.FilePath, err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // read-only handle
 	info, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("preview: stat asset %s: %w", asset.FilePath, err)

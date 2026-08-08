@@ -68,24 +68,24 @@ func NewWatcher(cfg Config) (*Watcher, error) {
 
 	absRoot, err := filepath.Abs(filepath.Clean(cfg.Root))
 	if err != nil {
-		fw.Close()
+		fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, fmt.Errorf("watcher: resolve root: %w", err)
 	}
 	cfg.Root = absRoot
 	yw := &Watcher{watcher: fw, cfg: cfg}
 	if err := yw.refreshIgnorePatterns(); err != nil {
-		fw.Close()
+		fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
 	}
 	if len(cfg.Dirs) > 0 {
 		// Use pre-collected directories instead of walking the tree again.
 		if err := yw.registerDirs(cfg.Dirs); err != nil {
-			fw.Close()
+			fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 			return nil, err
 		}
 	} else {
 		if err := yw.addTree(cfg.Root); err != nil {
-			fw.Close()
+			fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 			return nil, err
 		}
 	}

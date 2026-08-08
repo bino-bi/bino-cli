@@ -122,18 +122,18 @@ func OpenSession(ctx context.Context, opts Options) (*Session, error) {
 	}
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, fmt.Errorf("ping duckdb: %w", err)
 	}
 
 	s := &Session{db: db, cacheDir: opts.CacheDir, queryLogger: opts.QueryLogger, queryExecLogger: opts.QueryExecLogger, loadedExts: make(map[string]struct{}), attachedDBs: make(map[string]struct{})}
 	if err := s.configureExtensionDirectory(ctx); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
 	}
 
 	if err := s.registerBuiltinUDFs(ctx); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
 	}
 

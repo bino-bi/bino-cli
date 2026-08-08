@@ -40,11 +40,32 @@ linters:
     errcheck:
       check-type-assertions: true
       check-blank: false
+      # The former std-error-handling preset (EXC0001) suppressed errcheck on
+      # every .*Close/.*Flush/os.Remove*/print* call, which hid dropped Close
+      # errors on writable files. These entries add back only the provably
+      # non-lossy pieces; everything else needs a check or a per-line nolint.
       exclude-functions:
+        # Terminal/log output: write errors carry no recoverable signal.
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
         - io.WriteString
+        - (*github.com/fatih/color.Color).Fprint
+        - (*github.com/fatih/color.Color).Fprintf
+        - (*github.com/fatih/color.Color).Fprintln
+        # Only used for tables on stdout/stderr; Flush surfaces the writer's error.
+        - (*text/tabwriter.Writer).Flush
+        # Read-only cursor: iteration errors surface via rows.Err instead.
+        - (*database/sql.Rows).Close
+        # Closing a pure reader (http response bodies, zip entries) cannot
+        # lose buffered writes. Writable handles are never these types.
+        - (io.ReadCloser).Close
+        - (*archive/zip.ReadCloser).Close
+        - (*compress/gzip.Reader).Close
+        # Uniformly best-effort cleanup of process-created temp state in this
+        # repo; a load-bearing removal fails loudly at the following step.
+        - os.Remove
+        - os.RemoveAll
     exhaustive:
       default-signifies-exhaustive: true
     gocritic:
@@ -105,7 +126,6 @@ linters:
       - comments
       - common-false-positives
       - legacy
-      - std-error-handling
     rules:
       - linters:
           - gocritic

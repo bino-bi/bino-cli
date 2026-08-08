@@ -91,7 +91,7 @@ func runLSPIntrospectDraft(ctx context.Context, dir, baseDir string, specJSON []
 		result.Error = err.Error()
 		return outputJSON(out, result)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: specJSON,
@@ -221,7 +221,7 @@ func runLSPPreviewDataSet(ctx context.Context, dir string, payloadJSON []byte, o
 		result.Error = err.Error()
 		return outputJSON(out, result)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.PreviewDataSet(ctx, session, datasource.PreviewRequest{
 		SpecJSON:   req.Spec,

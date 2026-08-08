@@ -375,7 +375,7 @@ func (s *State) IntrospectSource(ctx context.Context, specJSON json.RawMessage, 
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	return datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: specJSON,

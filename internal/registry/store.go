@@ -150,7 +150,7 @@ func writeFileAtomicMode(target string, data []byte, mode os.FileMode) error {
 	}
 	defer func() {
 		if tmp != nil {
-			tmp.Close()
+			tmp.Close() //nolint:errcheck // best-effort cleanup; the success path checks Close before the rename
 			os.Remove(tmp.Name())
 		}
 	}()

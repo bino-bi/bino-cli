@@ -49,13 +49,13 @@ func NewManagedState(ctx context.Context, cfg ManagedStateConfig) (*ManagedState
 		return nil, fmt.Errorf("open duckdb session: %w", err)
 	}
 	if err := session.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
-		session.Close()
+		session.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, fmt.Errorf("load duckdb extensions: %w", err)
 	}
 
 	state, err := NewState(cfg.ProjectRoot, session, cfg.Logger)
 	if err != nil {
-		session.Close()
+		session.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
 	}
 	if cfg.KindProvider != nil {
@@ -97,7 +97,7 @@ func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, r
 	go watcher.Run(ctx)
 
 	go func() {
-		defer watcher.Close()
+		defer watcher.Close() //nolint:errcheck // fsnotify teardown when the daemon watch loop exits
 		debounce := time.NewTimer(0)
 		if !debounce.Stop() {
 			<-debounce.C
@@ -138,7 +138,7 @@ func (m *ManagedState) Close() {
 		m.State.Close()
 	}
 	if m.session != nil {
-		m.session.Close()
+		m.session.Close() //nolint:errcheck // in-memory session teardown at daemon shutdown
 	}
 }
 

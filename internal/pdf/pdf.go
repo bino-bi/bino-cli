@@ -262,7 +262,7 @@ func HeadingPageMapFromAnnotations(filePath string, headingIDs []string) (map[st
 	if err != nil {
 		return nil, fmt.Errorf("open pdf for annotation reading: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle
 
 	annots, err := api.Annotations(f, []string{"1-"}, nil)
 	if err != nil {

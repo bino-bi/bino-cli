@@ -83,7 +83,7 @@ func (s *Server) handleIntrospectDraft(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, resp)
 		return
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: req.Spec,
@@ -187,7 +187,7 @@ func (s *Server) handlePreviewDataSet(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, resp)
 		return
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.PreviewDataSet(ctx, session, datasource.PreviewRequest{
 		SpecJSON:   req.Spec,

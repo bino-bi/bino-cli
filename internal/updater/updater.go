@@ -296,7 +296,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		if err != nil {
 			return fmt.Errorf("reopening archive: %w", err)
 		}
-		defer archiveFile.Close()
+		defer archiveFile.Close() //nolint:errcheck // reopened read-only for extraction
 
 		if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
 			_ = tmpFile.Close()
@@ -503,10 +503,13 @@ func extractDLLFromZip(archivePath, targetDir string) error {
 		}
 
 		_, copyErr := io.Copy(out, rc) //nolint:gosec // G110: decompressing trusted signed release archives
-		out.Close()
+		closeErr := out.Close()
 		rc.Close()
 		if copyErr != nil {
 			return fmt.Errorf("extracting duckdb.dll: %w", copyErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("closing duckdb.dll: %w", closeErr)
 		}
 		return nil
 	}

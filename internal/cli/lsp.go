@@ -580,7 +580,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("duckdb open: %w", err)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	// Create temp directory for inline datasource CSV files
 	tempDir, err := os.MkdirTemp("", "bino-rows-preview-")

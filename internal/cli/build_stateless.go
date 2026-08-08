@@ -248,7 +248,7 @@ func streamStatelessFile(cmd *cobra.Command, path string) *statelessError {
 	if err != nil {
 		return newStatelessError(statelessErrRenderFailed, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle
 	if _, err := io.Copy(cmd.OutOrStdout(), f); err != nil {
 		return newStatelessError(statelessErrRenderFailed, fmt.Errorf("write artifact to stdout: %w", err))
 	}

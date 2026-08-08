@@ -36,7 +36,7 @@ func HashFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
