@@ -55,6 +55,40 @@ func (g *Graph) NodeByID(id string) (*Node, bool) {
 	return node, ok
 }
 
+// NodeByManifest resolves the graph node for a manifest kind + name.
+// Component kinds are stored as NodeComponent with the manifest kind in the
+// node attributes (the set is derived from the builder's own componentKinds
+// list, so it cannot drift); ReportArtefact uses its dedicated index; other
+// kinds map directly onto a NodeKind. Returns nil when no node matches.
+func (g *Graph) NodeByManifest(kind, name string) *Node {
+	if g == nil {
+		return nil
+	}
+	if kind == "ReportArtefact" {
+		if node, ok := g.ReportArtefactByName(name); ok {
+			return node
+		}
+		return nil
+	}
+	if _, isComponent := componentKindSet[kind]; isComponent {
+		for _, node := range g.Nodes {
+			if node.Kind == NodeComponent &&
+				node.Attributes["componentKind"] == kind &&
+				node.Name == name {
+				return node
+			}
+		}
+		return nil
+	}
+	targetKind := NodeKind(kind)
+	for _, node := range g.Nodes {
+		if node.Kind == targetKind && node.Name == name {
+			return node
+		}
+	}
+	return nil
+}
+
 // ReportArtefactByName resolves a ReportArtefact node by metadata.name.
 func (g *Graph) ReportArtefactByName(name string) (*Node, bool) {
 	if g == nil {

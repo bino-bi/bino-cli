@@ -777,7 +777,7 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 	}
 
 	// Resolve the root node
-	rootNode := findGraphNode(g, kind, name)
+	rootNode := g.NodeByManifest(kind, name)
 	if rootNode == nil {
 		result.Error = fmt.Sprintf("node not found: %s:%s", kind, name)
 		return outputJSON(out, result)
@@ -825,44 +825,6 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 	result.Edges = edges
 
 	return outputJSON(out, result)
-}
-
-// findGraphNode locates a node in the graph by kind and name.
-func findGraphNode(g *graph.Graph, kind, name string) *graph.Node {
-	// Special handling for ReportArtefact - use the dedicated index
-	if kind == "ReportArtefact" {
-		if node, ok := g.ReportArtefactByName(name); ok {
-			return node
-		}
-		return nil
-	}
-
-	// Check if this is a component kind (Text, Asset, ChartTime, etc.)
-	// Components are stored with Kind=NodeComponent and componentKind in attributes
-	componentKinds := map[string]bool{
-		"Text": true, "Table": true, "ChartStructure": true,
-		"ChartTime": true, "ChartScatter": true, "ChartBubble": true, "ChartBullet": true, "Tree": true, "Grid": true, "Image": true, "Asset": true,
-	}
-	if componentKinds[kind] {
-		for _, node := range g.Nodes {
-			if node.Kind == graph.NodeComponent &&
-				node.Attributes["componentKind"] == kind &&
-				node.Name == name {
-				return node
-			}
-		}
-		return nil
-	}
-
-	// For other kinds, scan all nodes
-	targetKind := graph.NodeKind(kind)
-	for _, node := range g.Nodes {
-		if node.Kind == targetKind && node.Name == name {
-			return node
-		}
-	}
-
-	return nil
 }
 
 // traverseGraph performs BFS traversal in the specified direction.
