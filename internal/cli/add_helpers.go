@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -441,13 +442,20 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 		return fmt.Errorf("read artefact file: %w", err)
 	}
 
-	// Parse multi-document YAML
+	// Parse multi-document YAML. Any decode failure aborts the update: this
+	// function rewrites the user's file from the parsed documents, so a
+	// document that fails to decode would be silently dropped by the
+	// re-encode. Only io.EOF is the clean end — after any other error the
+	// yaml.v3 parser is not reliably positioned at the next document.
 	var documents []map[string]any
 	decoder := yaml.NewDecoder(strings.NewReader(string(content)))
 	for {
 		var doc map[string]any
 		if err := decoder.Decode(&doc); err != nil {
-			break
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return fmt.Errorf("parse %s: %w", artefactPath, err)
 		}
 		documents = append(documents, doc)
 	}
