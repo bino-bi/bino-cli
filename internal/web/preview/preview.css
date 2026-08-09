@@ -87,10 +87,13 @@ bn-layout-page {
   font-size: 10px;
   margin-left: 4px;
 }
-/* Document artefact preview - page-like container */
+/* Document artefact preview - page-like container pinned to the paper width
+   (matches the built PDF; --bn-doc-page-width is set by the preview server
+   from the artefact's format/orientation) */
 bn-context:has(.bn-document-content) {
   display: block;
-  max-width: var(--bn-doc-page-width, 210mm);
+  width: var(--bn-doc-page-width, 210mm);
+  min-width: 0; /* defeat the generic bn-context min-width: 100% above */
   margin: 0 auto;
   background: var(--bino-surface);
   box-shadow: var(--bino-shadow-page);

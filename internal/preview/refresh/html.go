@@ -292,23 +292,23 @@ func withPreviewStyles(doc []byte) []byte {
 
 // withDocumentPageWidth injects a CSS custom property with the page width
 // derived from the document's format and orientation so the preview can
-// size the page container accordingly.
+// size the page container accordingly. The property is set as an inline
+// style on the <bn-context> element (not in <head>) so it survives — and
+// updates through — the attribute sync performed by swapContext on SSE
+// content morphs.
 func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
 	width := documentPageWidth(format, orientation)
-	tag := []byte(fmt.Sprintf(`<style>:root{--bn-doc-page-width:%s}</style>`, width))
-	headClose := []byte("</head>")
-	idx := bytes.Index(doc, headClose)
+	attr := fmt.Appendf(nil, ` style="--bn-doc-page-width:%s"`, width)
+	openTag := []byte("<bn-context")
+	idx := bytes.Index(doc, openTag)
 	if idx == -1 {
 		return doc
 	}
-	extra := len(tag)
-	if len(doc) > math.MaxInt-extra {
-		return doc
-	}
-	out := make([]byte, 0, len(doc)+extra)
-	out = append(out, doc[:idx]...)
-	out = append(out, tag...)
-	out = append(out, doc[idx:]...)
+	insertAt := idx + len(openTag)
+	out := make([]byte, 0, len(doc)+len(attr))
+	out = append(out, doc[:insertAt]...)
+	out = append(out, attr...)
+	out = append(out, doc[insertAt:]...)
 	return out
 }
 

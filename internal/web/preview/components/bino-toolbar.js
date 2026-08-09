@@ -221,7 +221,6 @@ class BinoToolbar extends LitElement {
     this._boundOnRefreshing = this._onRefreshing.bind(this);
     this._boundOnRefreshDone = this._onRefreshDone.bind(this);
     this._boundOnRefreshError = this._onRefreshError.bind(this);
-    this._boundOnNoPayload = this._onNoPayload.bind(this);
   }
 
   connectedCallback() {
@@ -231,7 +230,6 @@ class BinoToolbar extends LitElement {
     document.addEventListener('bn-preview:refreshing', this._boundOnRefreshing);
     document.addEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
     document.addEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
-    document.addEventListener('bn-preview:no-payload', this._boundOnNoPayload);
     // The engine is not upgraded yet when the toolbar first renders, so the
     // Inspect button's availability is settled once content has swapped in.
     document.addEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
@@ -245,7 +243,6 @@ class BinoToolbar extends LitElement {
     document.removeEventListener('bn-preview:refreshing', this._boundOnRefreshing);
     document.removeEventListener('bn-preview:refresh-done', this._boundOnRefreshDone);
     document.removeEventListener('bn-preview:refresh-error', this._boundOnRefreshError);
-    document.removeEventListener('bn-preview:no-payload', this._boundOnNoPayload);
     document.removeEventListener('bn-preview:content-updated', this._boundOnContentUpdated);
   }
 
@@ -420,19 +417,6 @@ class BinoToolbar extends LitElement {
     this._refreshing = false;
   }
 
-  _onNoPayload(e) {
-    // Server completed a refresh but did NOT broadcast content for this
-    // view. Most common cause: the artefact at this path failed to render
-    // (see CLI log for "Render blocked"/"Render failed" messages) or the
-    // route no longer exists. If a per-path refresh-error already arrived,
-    // keep that message; otherwise show a generic hint.
-    if (this._refreshError) return;
-    var path = (e && e.detail && e.detail.path) || '';
-    this._refreshError =
-      'No content was broadcast for ' + path +
-      '. Check the bino terminal for "Render blocked" or "Render failed" messages.';
-    this._refreshing = false;
-  }
 }
 
 customElements.define('bino-toolbar', BinoToolbar);
