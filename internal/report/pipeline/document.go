@@ -71,14 +71,14 @@ func tocFooterTemplate() string {
 //  2. Parse content.pdf → extract heading ID → page number mapping
 //  3. Render TOC-only HTML with correct page numbers → Chrome PrintToPDF → toc.pdf
 //  4. Merge toc.pdf + content.pdf → final.pdf, stamp Roman numerals on TOC pages
-func (b *Builder) BuildDocumentPDFWithTOC(ctx context.Context, artifact config.DocumentArtefact, opts DocumentTOCPDFOptions) error {
+func (b *Builder) BuildDocumentPDFWithTOC(ctx context.Context, docs []config.Document, artifact config.DocumentArtefact, opts DocumentTOCPDFOptions) error {
 	logger := b.logger()
 	artefactName := artifact.Document.Name
 
 	// ── Phase 1: Render content-only PDF ──
 	opts.progress(fmt.Sprintf("Rendering content for %s", artefactName))
 
-	contentResult, err := b.RenderDocumentHTML(ctx, artifact, DocumentArtefactRenderOptions{
+	contentResult, err := b.RenderDocumentHTML(ctx, docs, artifact, DocumentArtefactRenderOptions{
 		ExcludeTOC: true,
 	})
 	if err != nil {
@@ -121,7 +121,7 @@ func (b *Builder) BuildDocumentPDFWithTOC(ctx context.Context, artifact config.D
 	// ── Phase 3: Render TOC-only PDF with page numbers ──
 	opts.progress(fmt.Sprintf("Rendering table of contents for %s", artefactName))
 
-	tocResult, err := b.RenderDocumentHTML(ctx, artifact, DocumentArtefactRenderOptions{
+	tocResult, err := b.RenderDocumentHTML(ctx, docs, artifact, DocumentArtefactRenderOptions{
 		TOCOnly:        true,
 		TOCPageNumbers: tocPageNumbers,
 	})

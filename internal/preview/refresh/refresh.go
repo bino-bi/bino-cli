@@ -526,12 +526,11 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 			}
 		}
 		report.Progress(rendered, totalRender, docArt.Document.Name)
-		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
+		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docs, docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion:        cfg.EngineVersion,
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
-			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})
