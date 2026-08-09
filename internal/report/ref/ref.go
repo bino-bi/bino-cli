@@ -156,7 +156,7 @@ func MergeSpec(base, override json.RawMessage) (json.RawMessage, error) {
 		return nil, fmt.Errorf("override is not a JSON object: %w", err)
 	}
 
-	result := make(map[string]json.RawMessage, len(baseMap)+len(overrideMap))
+	result := make(map[string]json.RawMessage, len(baseMap))
 	for k, v := range baseMap {
 		result[k] = v
 	}
