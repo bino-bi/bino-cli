@@ -300,15 +300,44 @@ func WriteSchemaDocument(doc *schema.Document, workdir, outputPath string, appen
 		return ConfigError(fmt.Errorf("generated manifest is invalid: %w", err))
 	}
 
+	return writeManifestBytes(manifestBytes, workdir, outputPath, appendMode, out)
+}
+
+// WriteRawDocument validates and writes a map-based manifest document. It is
+// the sibling of WriteSchemaDocument for builders that need YAML shapes a
+// *schema.Document cannot express (parameterized page refs); both go through
+// the same validate-then-write gate.
+func WriteRawDocument(doc map[string]any, workdir, outputPath string, appendMode bool, out io.Writer) error {
+	name := ""
+	if meta, ok := doc["metadata"].(map[string]any); ok {
+		name, _ = meta["name"].(string)
+	}
+	if err := ValidateName(name); err != nil {
+		return ConfigError(err)
+	}
+
+	manifestBytes, err := yaml.Marshal(doc)
+	if err != nil {
+		return RuntimeError(fmt.Errorf("render manifest: %w", err))
+	}
+
+	if err := schema.Validate(manifestBytes); err != nil {
+		return ConfigError(fmt.Errorf("generated manifest is invalid: %w", err))
+	}
+
+	return writeManifestBytes(manifestBytes, workdir, outputPath, appendMode, out)
+}
+
+// writeManifestBytes resolves the output path and writes (or appends) the
+// already-validated manifest bytes.
+func writeManifestBytes(manifestBytes []byte, workdir, outputPath string, appendMode bool, out io.Writer) error {
 	manifest := string(manifestBytes)
 
-	// Resolve absolute path
 	absPath := outputPath
 	if !filepath.IsAbs(outputPath) {
 		absPath = filepath.Join(workdir, outputPath)
 	}
 
-	// Write to file
 	if appendMode {
 		if err := AppendToManifest(absPath, manifest); err != nil {
 			return RuntimeError(err)

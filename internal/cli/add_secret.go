@@ -1,16 +1,12 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -225,7 +221,6 @@ to avoid hardcoding sensitive values in manifest files.
 				return writeConnectionSecretManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ConnectionSecret manifest.")
@@ -234,7 +229,7 @@ to avoid hardcoding sensitive values in manifest files.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ConnectionSecret")
+				data.Name, err = promptGenericName(manifests, "ConnectionSecret")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -249,7 +244,7 @@ to avoid hardcoding sensitive values in manifest files.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Type selection
@@ -264,7 +259,7 @@ to avoid hardcoding sensitive values in manifest files.
 					{Label: "Azure Blob Storage", Description: "Azure storage credentials"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "What type of credentials?", options)
+				idx, err := addPromptSelect("What type of credentials?", options)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -286,7 +281,7 @@ to avoid hardcoding sensitive values in manifest files.
 			}
 
 			// Type-specific prompts
-			if err := promptConnectionSecretDetails(reader, out, &data); err != nil {
+			if err := promptConnectionSecretDetails(out, &data); err != nil {
 				if errors.Is(err, errAddCanceled) {
 					fmt.Fprintln(out, "\nCanceled.")
 					return nil
@@ -296,18 +291,22 @@ to avoid hardcoding sensitive values in manifest files.
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					constraints, err := addPromptConstraintBuilder()
+					if err != nil {
+						return RuntimeError(err)
+					}
+					data.Constraints = constraints
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ConnectionSecret", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ConnectionSecret", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -317,39 +316,8 @@ to avoid hardcoding sensitive values in manifest files.
 				}
 			}
 
-			// Preview
-			doc := buildConnectionSecretDocument(data)
-			manifestBytes, err := renderConnectionSecretManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeConnectionSecretManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildConnectionSecretDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -383,19 +351,16 @@ func completeConnectionSecretTypes(_ *cobra.Command, _ []string, _ string) ([]st
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
-func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *ConnectionSecretManifestData) error {
-	w, _ := out.(interface {
-		Write(p []byte) (n int, err error)
-	})
-	fmt.Fprintln(w, "\nCredential Configuration")
-	fmt.Fprintln(w, "For security, use environment variable references for sensitive values.")
-	fmt.Fprintln(w)
+func promptConnectionSecretDetails(out io.Writer, data *ConnectionSecretManifestData) error {
+	fmt.Fprintln(out, "\nCredential Configuration")
+	fmt.Fprintln(out, "For security, use environment variable references for sensitive values.")
+	fmt.Fprintln(out)
 
 	switch data.Type {
 	case ConnectionSecretTypePostgres, ConnectionSecretTypeMySQL:
 		if data.PasswordFromEnv == "" {
 			var err error
-			data.PasswordFromEnv, err = addPromptString(reader, out, "Password environment variable name", "DB_PASSWORD")
+			data.PasswordFromEnv, err = addPromptString("Password environment variable name", "DB_PASSWORD")
 			if err != nil {
 				return err
 			}
@@ -404,7 +369,7 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 	case ConnectionSecretTypeS3, ConnectionSecretTypeGCS, ConnectionSecretTypeR2:
 		if data.KeyID == "" {
 			var err error
-			data.KeyID, err = addPromptString(reader, out, "Access Key ID", "")
+			data.KeyID, err = addPromptString("Access Key ID", "")
 			if err != nil {
 				return err
 			}
@@ -420,7 +385,7 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 				// S3 uses the initial defaultEnv value
 			}
 			var err error
-			data.SecretEnv, err = addPromptString(reader, out, "Secret key environment variable name", defaultEnv)
+			data.SecretEnv, err = addPromptString("Secret key environment variable name", defaultEnv)
 			if err != nil {
 				return err
 			}
@@ -431,22 +396,22 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 			{Label: "Basic Auth", Description: "Username and password"},
 			{Label: "Bearer Token", Description: "Authorization header token"},
 		}
-		idx, err := addPromptSelect(reader, out, "Authentication type", options)
+		idx, err := addPromptSelect("Authentication type", options)
 		if err != nil {
 			return err
 		}
 
 		if idx == 0 {
-			data.Username, err = addPromptString(reader, out, "Username", "")
+			data.Username, err = addPromptString("Username", "")
 			if err != nil {
 				return err
 			}
-			data.Password, err = addPromptString(reader, out, "Password environment variable name", "HTTP_PASSWORD")
+			data.Password, err = addPromptString("Password environment variable name", "HTTP_PASSWORD")
 			if err != nil {
 				return err
 			}
 		} else {
-			data.BearerToken, err = addPromptString(reader, out, "Bearer token environment variable name", "HTTP_BEARER_TOKEN")
+			data.BearerToken, err = addPromptString("Bearer token environment variable name", "HTTP_BEARER_TOKEN")
 			if err != nil {
 				return err
 			}
@@ -457,18 +422,18 @@ func promptConnectionSecretDetails(reader *bufio.Reader, out interface{}, data *
 			{Label: "Connection String", Description: "Full connection string from Azure portal"},
 			{Label: "Account Key", Description: "Storage account access key"},
 		}
-		idx, err := addPromptSelect(reader, out, "Authentication method", options)
+		idx, err := addPromptSelect("Authentication method", options)
 		if err != nil {
 			return err
 		}
 
 		if idx == 0 {
-			data.ConnectionString, err = addPromptString(reader, out, "Connection string environment variable name", "AZURE_STORAGE_CONNECTION_STRING")
+			data.ConnectionString, err = addPromptString("Connection string environment variable name", "AZURE_STORAGE_CONNECTION_STRING")
 			if err != nil {
 				return err
 			}
 		} else {
-			data.AccountKey, err = addPromptString(reader, out, "Account key environment variable name", "AZURE_STORAGE_KEY")
+			data.AccountKey, err = addPromptString("Account key environment variable name", "AZURE_STORAGE_KEY")
 			if err != nil {
 				return err
 			}
@@ -551,9 +516,4 @@ func convertConnectionSecretType(t ConnectionSecretType) schema.ConnectionSecret
 	default:
 		return ""
 	}
-}
-
-// renderConnectionSecretManifest renders a schema.Document to YAML bytes.
-func renderConnectionSecretManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }

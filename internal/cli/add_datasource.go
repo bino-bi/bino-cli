@@ -1,18 +1,15 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -182,7 +179,6 @@ Modes:
 			}
 
 			// Run interactive wizard
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new DataSource manifest.")
@@ -192,7 +188,7 @@ Modes:
 			// Step 1: Name & Description
 			if data.Name == "" {
 				var err error
-				data.Name, err = promptDataSourceName(reader, out, manifests)
+				data.Name, err = promptDataSourceName(manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -212,7 +208,7 @@ Modes:
 			}
 
 			if data.Description == "" {
-				desc, err := addPromptString(reader, out, "Description (optional)", "")
+				desc, err := addPromptString("Description (optional)", "")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -221,7 +217,7 @@ Modes:
 
 			// Step 2: Type Selection
 			if data.Type == DataSourceTypeNone {
-				dsType, err := promptDataSourceType(reader, out)
+				dsType, err := promptDataSourceType()
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -235,7 +231,7 @@ Modes:
 			// Step 3: Connection/File Config
 			needsConfig := data.Path == "" && data.DBHost == ""
 			if needsConfig {
-				if err := promptConnectionConfig(reader, out, workdir, &data); err != nil {
+				if err := promptConnectionConfig(out, workdir, &data); err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
 						return nil
@@ -246,12 +242,12 @@ Modes:
 
 			// Step 4: Constraints (Optional)
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints to conditionally include this DataSource?", false)
+				addConstraints, err := addPromptConfirm("Add constraints to conditionally include this DataSource?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					constraints, err := addPromptConstraintBuilder(reader, out)
+					constraints, err := addPromptConstraintBuilder()
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -262,7 +258,7 @@ Modes:
 			// Step 5: File Location
 			if outputPath == "" {
 				var err error
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "DataSource", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "DataSource", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -272,52 +268,18 @@ Modes:
 				}
 			}
 
-			// Step 6: Preview & Confirmation
-			doc := buildDataSourceDocument(data)
-			manifestBytes, err := renderDataSourceManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-			fmt.Fprintln(out)
-
+			// Step 6-7: Preview, confirm, write.
+			note := fmt.Sprintf("\nWill create: %s", outputPath)
 			if appendMode {
-				fmt.Fprintf(out, "Will append to: %s\n", outputPath)
-			} else {
-				fmt.Fprintf(out, "Will create: %s\n", outputPath)
+				note = fmt.Sprintf("\nWill append to: %s", outputPath)
 			}
-
-			confirmed, err := addPromptConfirm(reader, out, "Proceed?", true)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			// Step 7: Write Manifest
-			if err := writeDataSourceManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
+			wrote, err := finishWizard(cmd, buildDataSourceDocument(data), workdir, outputPath, appendMode, flagOpenEditor, []string{note}, nil)
+			if err != nil || !wrote {
 				return err
 			}
 
 			// Step 8: Post-Creation Actions
-			if flagOpenEditor {
-				editor := getEditor()
-				if editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return promptDataSourcePostActions(reader, out)
+			return promptDataSourcePostActions(out)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -384,8 +346,8 @@ func completeConnectionSecrets(cmd *cobra.Command, _ []string, _ string) ([]stri
 }
 
 // promptDataSourceName prompts for a valid, unique DataSource name.
-func promptDataSourceName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this DataSource", func(name string) error {
+func promptDataSourceName(manifests []ManifestInfo) (string, error) {
+	return addPromptAddString("Name for this DataSource", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -398,7 +360,7 @@ func promptDataSourceName(reader *bufio.Reader, out io.Writer, manifests []Manif
 }
 
 // promptDataSourceType prompts for data source type selection.
-func promptDataSourceType(reader *bufio.Reader, out io.Writer) (DataSourceType, error) {
+func promptDataSourceType() (DataSourceType, error) {
 	options := []SelectOption{
 		{Label: "CSV file", Description: "Comma-separated values file"},
 		{Label: "Parquet file", Description: "Apache Parquet columnar format"},
@@ -408,7 +370,7 @@ func promptDataSourceType(reader *bufio.Reader, out io.Writer) (DataSourceType, 
 		{Label: "MySQL", Description: "MySQL database query"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What type of data source?", options)
+	idx, err := addPromptSelect("What type of data source?", options)
 	if err != nil {
 		return DataSourceTypeNone, err
 	}
@@ -426,28 +388,28 @@ func promptDataSourceType(reader *bufio.Reader, out io.Writer) (DataSourceType, 
 }
 
 // promptConnectionConfig prompts for connection or file configuration.
-func promptConnectionConfig(reader *bufio.Reader, out io.Writer, workdir string, data *DataSourceManifestData) error {
+func promptConnectionConfig(out io.Writer, workdir string, data *DataSourceManifestData) error {
 	switch data.Type {
 	case DataSourceTypePostgres, DataSourceTypeMySQL:
-		return promptDatabaseConnection(reader, out, data)
+		return promptDatabaseConnection(out, data)
 	case DataSourceTypeCSV:
-		if err := promptFileSource(reader, out, workdir, data, ".csv"); err != nil {
+		if err := promptFileSource(workdir, data, ".csv"); err != nil {
 			return err
 		}
-		return promptCSVOptions(reader, out, data)
+		return promptCSVOptions(data)
 	case DataSourceTypeParquet:
-		return promptFileSource(reader, out, workdir, data, ".parquet")
+		return promptFileSource(workdir, data, ".parquet")
 	case DataSourceTypeExcel:
-		return promptFileSource(reader, out, workdir, data, ".xlsx")
+		return promptFileSource(workdir, data, ".xlsx")
 	case DataSourceTypeJSON:
-		return promptFileSource(reader, out, workdir, data, ".json")
+		return promptFileSource(workdir, data, ".json")
 	default:
 		return fmt.Errorf("unsupported data source type: %s", data.Type)
 	}
 }
 
 // promptDatabaseConnection prompts for database connection details.
-func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSourceManifestData) error {
+func promptDatabaseConnection(out io.Writer, data *DataSourceManifestData) error {
 	fmt.Fprintln(out, "\nDatabase Connection Configuration")
 	fmt.Fprintln(out, "For security, credentials should be stored in a ConnectionSecret.")
 	fmt.Fprintln(out)
@@ -459,14 +421,14 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 	}
 
 	// Host
-	host, err := addPromptString(reader, out, "Host", "localhost")
+	host, err := addPromptString("Host", "localhost")
 	if err != nil {
 		return err
 	}
 	data.DBHost = host
 
 	// Port
-	portStr, err := addPromptString(reader, out, "Port", defaultPort)
+	portStr, err := addPromptString("Port", defaultPort)
 	if err != nil {
 		return err
 	}
@@ -475,7 +437,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 	}
 
 	// Database
-	database, err := addPromptString(reader, out, "Database name", "")
+	database, err := addPromptString("Database name", "")
 	if err != nil {
 		return err
 	}
@@ -483,7 +445,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 
 	// Schema (optional, mainly for PostgreSQL)
 	if data.Type == DataSourceTypePostgres {
-		schemaName, err := addPromptString(reader, out, "Schema (optional, default: public)", "")
+		schemaName, err := addPromptString("Schema (optional, default: public)", "")
 		if err != nil {
 			return err
 		}
@@ -493,7 +455,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 	}
 
 	// User
-	user, err := addPromptString(reader, out, "Username", "")
+	user, err := addPromptString("Username", "")
 	if err != nil {
 		return err
 	}
@@ -505,7 +467,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 	fmt.Fprintln(out, "Create one with: bino add connectionsecret (coming soon)")
 	fmt.Fprintln(out)
 
-	secret, err := addPromptString(reader, out, "ConnectionSecret name (leave empty to configure later)", "")
+	secret, err := addPromptString("ConnectionSecret name (leave empty to configure later)", "")
 	if err != nil {
 		return err
 	}
@@ -515,7 +477,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Enter the SQL query to execute against this database.")
 
-	query, err := addPromptString(reader, out, "SQL query (or press Enter to open editor)", "")
+	query, err := addPromptString("SQL query (or press Enter to open editor)", "")
 	if err != nil {
 		return err
 	}
@@ -526,7 +488,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 		editedQuery, err := promptWithEditor("query", ".sql", template)
 		if err != nil {
 			// Fall back to simple prompt
-			query, err = addPromptString(reader, out, "SQL query", "SELECT * FROM your_table")
+			query, err = addPromptString("SQL query", "SELECT * FROM your_table")
 			if err != nil {
 				return err
 			}
@@ -540,7 +502,7 @@ func promptDatabaseConnection(reader *bufio.Reader, out io.Writer, data *DataSou
 }
 
 // promptFileSource prompts for file path selection.
-func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data *DataSourceManifestData, ext string) error {
+func promptFileSource(workdir string, data *DataSourceManifestData, ext string) error {
 	// Search for existing files
 	files := searchDataFiles(workdir, ext)
 
@@ -553,7 +515,7 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 		options = options[1:] // Remove "Select existing" if no files
 	}
 
-	idx, err := addPromptSelect(reader, out, "File source", options)
+	idx, err := addPromptSelect("File source", options)
 	if err != nil {
 		return err
 	}
@@ -566,7 +528,7 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 	switch idx {
 	case 0: // Select existing
 		items := FilesToFuzzyItems(files, ext+" file")
-		item, err := addPromptFuzzySearch(reader, out, "Select file", items)
+		item, err := addPromptFuzzySearch("Select file", items)
 		if err != nil {
 			return err
 		}
@@ -576,7 +538,7 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 		data.Path = item.Name
 
 	case 1: // Enter path manually
-		path, err := addPromptString(reader, out, "File path", "")
+		path, err := addPromptString("File path", "")
 		if err != nil {
 			return err
 		}
@@ -587,15 +549,15 @@ func promptFileSource(reader *bufio.Reader, out io.Writer, workdir string, data 
 }
 
 // promptCSVOptions prompts for CSV-specific options.
-func promptCSVOptions(reader *bufio.Reader, out io.Writer, data *DataSourceManifestData) error {
+func promptCSVOptions(data *DataSourceManifestData) error {
 	// Auto-detect delimiter?
-	autoDetect, err := addPromptConfirm(reader, out, "Auto-detect CSV delimiter?", true)
+	autoDetect, err := addPromptConfirm("Auto-detect CSV delimiter?", true)
 	if err != nil {
 		return err
 	}
 
 	if !autoDetect {
-		delimiter, err := addPromptString(reader, out, "Delimiter character", ",")
+		delimiter, err := addPromptString("Delimiter character", ",")
 		if err != nil {
 			return err
 		}
@@ -603,14 +565,14 @@ func promptCSVOptions(reader *bufio.Reader, out io.Writer, data *DataSourceManif
 	}
 
 	// Header row?
-	hasHeader, err := addPromptConfirm(reader, out, "CSV has header row?", true)
+	hasHeader, err := addPromptConfirm("CSV has header row?", true)
 	if err != nil {
 		return err
 	}
 	data.CSVHeader = &hasHeader
 
 	// Skip rows?
-	skipRowsStr, err := addPromptString(reader, out, "Rows to skip at beginning", "0")
+	skipRowsStr, err := addPromptString("Rows to skip at beginning", "0")
 	if err != nil {
 		return err
 	}
@@ -676,7 +638,7 @@ func writeDataSourceManifest(cmd *cobra.Command, workdir string, data DataSource
 }
 
 // promptDataSourcePostActions shows post-creation action menu.
-func promptDataSourcePostActions(reader *bufio.Reader, out io.Writer) error {
+func promptDataSourcePostActions(out io.Writer) error {
 	options := []SelectOption{
 		{Label: "Done", Description: "Exit the wizard"},
 		{Label: "Add a DataSet using this DataSource", Description: "Create a query on this data"},
@@ -684,7 +646,7 @@ func promptDataSourcePostActions(reader *bufio.Reader, out io.Writer) error {
 		{Label: "Run lint", Description: "Validate manifests with bino lint"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What next?", options)
+	idx, err := addPromptSelect("What next?", options)
 	if err != nil {
 		return nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}
@@ -797,9 +759,4 @@ func convertDataSourceType(t DataSourceType) schema.DataSourceType {
 	default:
 		return ""
 	}
-}
-
-// renderDataSourceManifest renders a schema.Document to YAML bytes.
-func renderDataSourceManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }

@@ -413,9 +413,9 @@ func TestDocumentRoundTrip(t *testing.T) {
 					Name: "pdf_signer",
 				},
 				Spec: &SigningProfileSpec{
-					Certificate: &FileRef{LocalPath: "certs/signing.pem"},
-					PrivateKey:  &FileRef{LocalPath: "certs/signing.key"},
-					SignerName:  "Report Signer",
+					Certificate: &PEMSource{Path: "certs/signing.pem"},
+					PrivateKey:  &PEMSource{Path: "certs/signing.key"},
+					Signer:      &SigningProfileSigner{Name: "Report Signer"},
 				},
 			},
 		},
