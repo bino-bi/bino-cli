@@ -1,18 +1,12 @@
 package cli
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -145,7 +139,6 @@ Text components can display:
 				return writeTextManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new Text manifest.")
@@ -154,7 +147,7 @@ Text components can display:
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "Text")
+				data.Name, err = promptGenericName(manifests, "Text")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -169,7 +162,7 @@ Text components can display:
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Value or Dataset
@@ -179,7 +172,7 @@ Text components can display:
 					{Label: "From DataSet", Description: "Dynamic text from a DataSet value"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "Text source", options)
+				idx, err := addPromptSelect("Text source", options)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -189,7 +182,7 @@ Text components can display:
 				}
 
 				if idx == 0 {
-					data.Value, err = addPromptString(reader, out, "Text value", "")
+					data.Value, err = addPromptString("Text value", "")
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -197,13 +190,13 @@ Text components can display:
 					datasets := FilterByKind(manifests, "DataSet")
 					if len(datasets) == 0 {
 						fmt.Fprintln(out, "No DataSets found. Enter a name manually.")
-						data.Dataset, err = addPromptString(reader, out, "DataSet name", "")
+						data.Dataset, err = addPromptString("DataSet name", "")
 						if err != nil {
 							return RuntimeError(err)
 						}
 					} else {
 						items := ManifestsToFuzzyItems(datasets)
-						item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items)
+						item, err := addPromptFuzzySearch("Select DataSet", items)
 						if err != nil {
 							return RuntimeError(err)
 						}
@@ -216,18 +209,18 @@ Text components can display:
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Text", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "Text", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -237,39 +230,8 @@ Text components can display:
 				}
 			}
 
-			// Preview
-			doc := buildTextDocument(data)
-			manifestBytes, err := renderTextManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeTextManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildTextDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -372,14 +334,13 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				return writeComponentStyleManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ComponentStyle manifest.")
 			fmt.Fprintln(out)
 
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ComponentStyle")
+				data.Name, err = promptGenericName(manifests, "ComponentStyle")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -390,13 +351,13 @@ ComponentStyle defines CSS properties that can be applied to report components.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Content
 			if data.Content == "" {
 				fmt.Fprintln(out, "\nEnter CSS properties as JSON or press Enter to open editor:")
-				data.Content, _ = addPromptString(reader, out, "Content (JSON)", "")
+				data.Content, _ = addPromptString("Content (JSON)", "")
 				if data.Content == "" {
 					template := `{
   "fontFamily": "Arial, sans-serif",
@@ -411,7 +372,7 @@ ComponentStyle defines CSS properties that can be applied to report components.
 			}
 
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ComponentStyle", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ComponentStyle", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -421,23 +382,8 @@ ComponentStyle defines CSS properties that can be applied to report components.
 				}
 			}
 
-			doc := buildComponentStyleDocument(data)
-			manifestBytes, err := renderComponentStyleManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeComponentStyleManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildComponentStyleDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -545,14 +491,13 @@ other name is selected per component via the ruleset attribute.
 				return writeRuleSetManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new RuleSet manifest.")
 			fmt.Fprintln(out)
 
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "RuleSet")
+				data.Name, err = promptGenericName(manifests, "RuleSet")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -563,13 +508,13 @@ other name is selected per component via the ruleset attribute.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Content
 			if data.Content == "" {
 				fmt.Fprintln(out, "\nEnter the rule-set configuration as JSON or press Enter to open editor:")
-				data.Content, _ = addPromptString(reader, out, "Content (JSON)", "")
+				data.Content, _ = addPromptString("Content (JSON)", "")
 				if data.Content == "" {
 					template := `{
   "scenarios": {
@@ -585,7 +530,7 @@ other name is selected per component via the ruleset attribute.
 			}
 
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "RuleSet", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "RuleSet", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -595,23 +540,8 @@ other name is selected per component via the ruleset attribute.
 				}
 			}
 
-			doc := buildRuleSetDocument(data)
-			manifestBytes, err := renderRuleSetManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeRuleSetManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildRuleSetDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -716,14 +646,13 @@ Internationalization manifests define translations for a specific locale.
 				return writeInternationalizationManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new Internationalization manifest.")
 			fmt.Fprintln(out)
 
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "Internationalization")
+				data.Name, err = promptGenericName(manifests, "Internationalization")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -734,11 +663,11 @@ Internationalization manifests define translations for a specific locale.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			if data.Code == "" {
-				data.Code, err = promptI18nLocaleCode(reader, out)
+				data.Code, err = promptI18nLocaleCode()
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -756,7 +685,7 @@ Internationalization manifests define translations for a specific locale.
 			}
 
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Internationalization", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "Internationalization", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -766,23 +695,8 @@ Internationalization manifests define translations for a specific locale.
 				}
 			}
 
-			doc := buildInternationalizationDocument(data)
-			manifestBytes, err := renderInternationalizationManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeInternationalizationManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildInternationalizationDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -823,7 +737,7 @@ func validateI18nNonInteractiveFlags(name, code, output, appendTo string) error 
 
 // promptI18nLocaleCode asks for the locale code, offering common codes plus a
 // free-form entry.
-func promptI18nLocaleCode(reader *bufio.Reader, out io.Writer) (string, error) {
+func promptI18nLocaleCode() (string, error) {
 	options := []SelectOption{
 		{Label: "en", Description: "English"},
 		{Label: "de", Description: "German"},
@@ -832,13 +746,13 @@ func promptI18nLocaleCode(reader *bufio.Reader, out io.Writer) (string, error) {
 		{Label: "Other", Description: "Enter custom code"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "Locale code", options)
+	idx, err := addPromptSelect("Locale code", options)
 	if err != nil {
 		return "", err
 	}
 
 	if idx == 4 {
-		code, _ := addPromptString(reader, out, "Locale code", "")
+		code, _ := addPromptString("Locale code", "")
 		return code, nil
 	}
 	codes := []string{"en", "de", "fr", "es"}
@@ -891,8 +805,8 @@ func completeLocaleCodes(_ *cobra.Command, _ []string, _ string) ([]string, cobr
 
 // Helper functions
 
-func promptGenericName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo, kind string) (string, error) {
-	return addPromptAddString(reader, out, fmt.Sprintf("Name for this %s", kind), func(name string) error {
+func promptGenericName(manifests []ManifestInfo, kind string) (string, error) {
+	return addPromptAddString(fmt.Sprintf("Name for this %s", kind), func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -945,10 +859,6 @@ func buildTextDocument(data TextManifestData) *schema.Document {
 	return doc
 }
 
-func renderTextManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindComponentStyle, data.Name)
 	doc.Metadata.Description = data.Description
@@ -986,10 +896,6 @@ func buildComponentStyleDocument(data ComponentStyleManifestData) *schema.Docume
 	return doc
 }
 
-func renderComponentStyleManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildRuleSetDocument(data RuleSetManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindRuleSet, data.Name)
 	doc.Metadata.Description = data.Description
@@ -1011,10 +917,6 @@ func buildRuleSetDocument(data RuleSetManifestData) *schema.Document {
 	return doc
 }
 
-func renderRuleSetManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildInternationalizationDocument(data InternationalizationManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindInternationalization, data.Name)
 	doc.Metadata.Description = data.Description
@@ -1028,10 +930,6 @@ func buildInternationalizationDocument(data InternationalizationManifestData) *s
 
 	doc.Spec = spec
 	return doc
-}
-
-func renderInternationalizationManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }
 
 // ScalingGroupManifestData holds data for rendering a ScalingGroup manifest.
@@ -1129,14 +1027,13 @@ can reference via their unitScaling or percentageScaling attributes.
 				return writeScalingGroupManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ScalingGroup manifest.")
 			fmt.Fprintln(out)
 
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ScalingGroup")
+				data.Name, err = promptGenericName(manifests, "ScalingGroup")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1147,11 +1044,11 @@ can reference via their unitScaling or percentageScaling attributes.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			if data.Value <= 0 {
-				valStr, _ := addPromptString(reader, out, "Value (data units per em of bar, e.g. 250000)", "")
+				valStr, _ := addPromptString("Value (data units per em of bar, e.g. 250000)", "")
 				var val float64
 				if _, err := fmt.Sscanf(valStr, "%f", &val); err != nil || val <= 0 {
 					return ConfigError(fmt.Errorf("value must be a positive number, got %q", valStr))
@@ -1160,7 +1057,7 @@ can reference via their unitScaling or percentageScaling attributes.
 			}
 
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ScalingGroup", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ScalingGroup", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1170,23 +1067,8 @@ can reference via their unitScaling or percentageScaling attributes.
 				}
 			}
 
-			doc := buildScalingGroupDocument(data)
-			manifestBytes, err := yaml.Marshal(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			return writeScalingGroupManifest(cmd, workdir, data, outputPath, appendMode)
+			_, err = finishWizard(cmd, buildScalingGroupDocument(data), workdir, outputPath, appendMode, false, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

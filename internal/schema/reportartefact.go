@@ -176,19 +176,40 @@ type LiveQueryParamOptionItem struct {
 
 // SigningProfileSpec represents the spec section of a SigningProfile manifest.
 // It defines the certificate and private key used for digital signatures.
+// The shape mirrors signingProfileSpec in document.schema.json (and
+// config.SigningProfileSpec on the loader side).
 type SigningProfileSpec struct {
-	// Certificate is a reference to the certificate file.
-	Certificate *FileRef `yaml:"certificate,omitempty" json:"certificate,omitempty"`
+	// Certificate is the PEM certificate source.
+	Certificate *PEMSource `yaml:"certificate,omitempty" json:"certificate,omitempty"`
 
-	// PrivateKey is a reference to the private key file.
-	PrivateKey *FileRef `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
+	// PrivateKey is the PEM private key source.
+	PrivateKey *PEMSource `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
 
-	// SignerName is the name of the signer shown in PDF signature properties.
-	SignerName string `yaml:"signerName,omitempty" json:"signerName,omitempty"`
+	// Signer is the signer identity shown in PDF signature properties.
+	Signer *SigningProfileSigner `yaml:"signer,omitempty" json:"signer,omitempty"`
 }
 
-// FileRef represents a reference to a local file.
-type FileRef struct {
-	// LocalPath is the path to the file relative to the manifest directory.
-	LocalPath string `yaml:"localPath" json:"localPath"`
+// PEMSource references PEM data either by filesystem path or inline content.
+// Exactly one of Path or Inline must be set.
+type PEMSource struct {
+	// Path is the path to a PEM file relative to the manifest directory.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+
+	// Inline is literal PEM content embedded in the manifest.
+	Inline string `yaml:"inline,omitempty" json:"inline,omitempty"`
+}
+
+// SigningProfileSigner holds the signer identity metadata.
+type SigningProfileSigner struct {
+	// Name is the signer name (required).
+	Name string `yaml:"name" json:"name"`
+
+	// Location is the signing location.
+	Location string `yaml:"location,omitempty" json:"location,omitempty"`
+
+	// Reason is the signing reason.
+	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
+
+	// Contact is the signer contact information.
+	Contact string `yaml:"contact,omitempty" json:"contact,omitempty"`
 }

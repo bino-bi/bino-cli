@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -185,7 +184,7 @@ Modes:
 			// Step 1: Name & Description
 			if data.Name == "" {
 				var err error
-				data.Name, err = promptDataSetName(reader, out, manifests)
+				data.Name, err = promptDataSetName(manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -205,7 +204,7 @@ Modes:
 			}
 
 			if data.Description == "" {
-				desc, err := addPromptString(reader, out, "Description (optional)", "")
+				desc, err := addPromptString("Description (optional)", "")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -225,7 +224,7 @@ Modes:
 
 			// Step 3: Dependencies Selection
 			if len(data.Dependencies) == 0 && data.Source == "" {
-				deps, err := promptDependencies(reader, out, manifests)
+				deps, err := promptDependencies(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -238,12 +237,12 @@ Modes:
 
 			// Step 4: Constraints (Optional)
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints to conditionally include this DataSet?", false)
+				addConstraints, err := addPromptConfirm("Add constraints to conditionally include this DataSet?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					constraints, err := addPromptConstraintBuilder(reader, out)
+					constraints, err := addPromptConstraintBuilder()
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -254,7 +253,7 @@ Modes:
 			// Step 5: File Location
 			if outputPath == "" {
 				var err error
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "DataSet", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "DataSet", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -264,53 +263,18 @@ Modes:
 				}
 			}
 
-			// Step 6: Preview & Confirmation
-			doc := buildDataSetDocument(data)
-			manifestBytes, err := renderDataSetManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render manifest: %w", err))
-			}
-			manifest := string(manifestBytes)
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, manifest)
-			fmt.Fprintln(out, "===============")
-			fmt.Fprintln(out)
-
+			// Step 6-7: Preview, confirm, write.
+			note := fmt.Sprintf("\nWill create: %s", outputPath)
 			if appendMode {
-				fmt.Fprintf(out, "Will append to: %s\n", outputPath)
-			} else {
-				fmt.Fprintf(out, "Will create: %s\n", outputPath)
+				note = fmt.Sprintf("\nWill append to: %s", outputPath)
 			}
-
-			confirmed, err := addPromptConfirm(reader, out, "Proceed?", true)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			// Step 7: Write Manifest
-			if err := writeDataSetManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
+			wrote, err := finishWizard(cmd, buildDataSetDocument(data), workdir, outputPath, appendMode, flagOpenEditor, []string{note}, nil)
+			if err != nil || !wrote {
 				return err
 			}
 
 			// Step 8: Post-Creation Actions
-			if flagOpenEditor {
-				editor := getEditor()
-				if editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return promptPostActions(reader, out)
+			return promptPostActions(out)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -379,8 +343,8 @@ func completeDatasetsAndDatasources(cmd *cobra.Command, _ []string, _ string) ([
 }
 
 // promptDataSetName prompts for a valid, unique DataSet name.
-func promptDataSetName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this DataSet", func(name string) error {
+func promptDataSetName(manifests []ManifestInfo) (string, error) {
+	return addPromptAddString("Name for this DataSet", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -402,7 +366,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		{Label: "Pass-through", Description: "Use a DataSource directly without transformation"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "How do you want to define your data?", options)
+	idx, err := addPromptSelect("How do you want to define your data?", options)
 	if err != nil {
 		return err
 	}
@@ -421,7 +385,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		fmt.Fprintln(out, previewLines(data.Query, 5))
 
 	case 1: // SQL file
-		path, err := promptQueryFile(reader, out, workdir, ".sql", data.Name)
+		path, err := promptQueryFile(out, workdir, ".sql", data.Name)
 		if err != nil {
 			return err
 		}
@@ -440,14 +404,14 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 		fmt.Fprintln(out, previewLines(data.PRQL, 5))
 
 	case 3: // PRQL file
-		path, err := promptQueryFile(reader, out, workdir, ".prql", data.Name)
+		path, err := promptQueryFile(out, workdir, ".prql", data.Name)
 		if err != nil {
 			return err
 		}
 		data.PRQLFile = path
 
 	case 4: // Pass-through
-		source, err := promptDataSource(reader, out, manifests)
+		source, err := promptDataSource(out, manifests)
 		if err != nil {
 			return err
 		}
@@ -458,7 +422,7 @@ func promptQueryType(reader *bufio.Reader, out io.Writer, workdir string, manife
 }
 
 // promptQueryFile prompts for an SQL or PRQL file path.
-func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetName string) (string, error) {
+func promptQueryFile(out io.Writer, workdir, ext, datasetName string) (string, error) {
 	// Search for existing files
 	files, _ := SearchQueryFiles(workdir, ext)
 
@@ -472,7 +436,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 		options = options[1:] // Remove "Select existing" if no files
 	}
 
-	idx, err := addPromptSelect(reader, out, "File source", options)
+	idx, err := addPromptSelect("File source", options)
 	if err != nil {
 		return "", err
 	}
@@ -485,7 +449,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 	switch idx {
 	case 0: // Select existing
 		items := FilesToFuzzyItems(files, ext+" file")
-		item, err := addPromptFuzzySearch(reader, out, "Select file", items)
+		item, err := addPromptFuzzySearch("Select file", items)
 		if err != nil {
 			return "", err
 		}
@@ -498,7 +462,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 
 	case 1: // Create new
 		suggestedPath := filepath.Join("queries", datasetName+ext)
-		path, err := addPromptString(reader, out, "File path", suggestedPath)
+		path, err := addPromptString("File path", suggestedPath)
 		if err != nil {
 			return "", err
 		}
@@ -523,7 +487,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 		fmt.Fprintf(out, "Created %s\n", path)
 
 		// Offer to edit
-		edit, err := addPromptConfirm(reader, out, "Open in editor now?", true)
+		edit, err := addPromptConfirm("Open in editor now?", true)
 		if err != nil {
 			return "", err
 		}
@@ -542,7 +506,7 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 		return path, nil
 
 	case 2: // Custom path
-		path, err := addPromptString(reader, out, "File path", "")
+		path, err := addPromptString("File path", "")
 		if err != nil {
 			return "", err
 		}
@@ -553,15 +517,15 @@ func promptQueryFile(reader *bufio.Reader, out io.Writer, workdir, ext, datasetN
 }
 
 // promptDataSource prompts for a DataSource selection.
-func promptDataSource(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
+func promptDataSource(out io.Writer, manifests []ManifestInfo) (string, error) {
 	sources := FilterByKind(manifests, "DataSource")
 	if len(sources) == 0 {
 		fmt.Fprintln(out, "No DataSources found. Enter a name manually.")
-		return addPromptString(reader, out, "DataSource name", "")
+		return addPromptString("DataSource name", "")
 	}
 
 	items := ManifestsToFuzzyItems(sources)
-	item, err := addPromptFuzzySearch(reader, out, "Select DataSource", items)
+	item, err := addPromptFuzzySearch("Select DataSource", items)
 	if err != nil {
 		return "", err
 	}
@@ -573,8 +537,8 @@ func promptDataSource(reader *bufio.Reader, out io.Writer, manifests []ManifestI
 }
 
 // promptDependencies prompts for dependency selection.
-func promptDependencies(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) ([]string, error) {
-	addDeps, err := addPromptConfirm(reader, out, "Does this query depend on other DataSets or DataSources?", false)
+func promptDependencies(out io.Writer, manifests []ManifestInfo) ([]string, error) {
+	addDeps, err := addPromptConfirm("Does this query depend on other DataSets or DataSources?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -590,7 +554,7 @@ func promptDependencies(reader *bufio.Reader, out io.Writer, manifests []Manifes
 	}
 
 	items := ManifestsToFuzzyItems(available)
-	selected, err := addPromptMultiFuzzySearch(reader, out, "Select dependencies", items)
+	selected, err := addPromptMultiFuzzySearch("Select dependencies", items)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +568,7 @@ func promptDependencies(reader *bufio.Reader, out io.Writer, manifests []Manifes
 }
 
 // promptOutputLocation prompts for output file location.
-func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, manifests []ManifestInfo, kind, name string) (outputPath string, isNew bool, err error) {
+func promptOutputLocation(workdir string, manifests []ManifestInfo, kind, name string) (outputPath string, isNew bool, err error) {
 	// Load user preferences
 	cfg, _ := LoadAddConfig(workdir)
 	kindCfg := cfg.GetKindConfig(kind)
@@ -648,7 +612,7 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 		Description: "Enter a custom file path",
 	})
 
-	idx, err := addPromptSelect(reader, out, "Where to save the manifest?", options)
+	idx, err := addPromptSelect("Where to save the manifest?", options)
 	if err != nil {
 		return "", false, err
 	}
@@ -667,7 +631,7 @@ func promptOutputLocation(reader *bufio.Reader, out io.Writer, workdir string, m
 
 	default:
 		// Custom path
-		path, err := addPromptString(reader, out, "File path", suggestedPath)
+		path, err := addPromptString("File path", suggestedPath)
 		if err != nil {
 			return "", false, err
 		}
@@ -706,11 +670,6 @@ func buildDataSetDocument(data DataSetManifestData) *schema.Document {
 	return doc
 }
 
-// renderDataSetManifest marshals a schema.Document to YAML bytes.
-func renderDataSetManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 // writeDataSetManifest writes the DataSet manifest to the specified path.
 func writeDataSetManifest(cmd *cobra.Command, workdir string, data DataSetManifestData, outputPath string, appendMode bool) error {
 	doc := buildDataSetDocument(data)
@@ -718,7 +677,7 @@ func writeDataSetManifest(cmd *cobra.Command, workdir string, data DataSetManife
 }
 
 // promptPostActions shows post-creation action menu.
-func promptPostActions(reader *bufio.Reader, out io.Writer) error {
+func promptPostActions(out io.Writer) error {
 	options := []SelectOption{
 		{Label: "Done", Description: "Exit the wizard"},
 		{Label: "Add another DataSet", Description: "Run the wizard again"},
@@ -726,7 +685,7 @@ func promptPostActions(reader *bufio.Reader, out io.Writer) error {
 		{Label: "Run preview", Description: "Start development preview server"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What next?", options)
+	idx, err := addPromptSelect("What next?", options)
 	if err != nil {
 		return nil //nolint:nilerr // best effort: non-fatal for suggestions
 	}

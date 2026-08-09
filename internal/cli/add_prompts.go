@@ -161,9 +161,10 @@ func huhPassword(title string) (string, error) {
 	return value, nil
 }
 
-// huhConfirm displays an interactive yes/no confirmation.
-func huhConfirm(title string) (bool, error) {
-	var confirmed bool
+// huhConfirm displays an interactive yes/no confirmation. The cursor starts
+// on defaultYes, so pressing Enter accepts that default.
+func huhConfirm(title string, defaultYes bool) (bool, error) {
+	confirmed := defaultYes
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -451,41 +452,40 @@ func huhCustomConstraint() (string, error) {
 	return fmt.Sprintf("%s %s %s", field, op, value), nil
 }
 
-// Legacy function wrappers for backward compatibility with add commands
-// These ignore the reader/out parameters and use huh instead
+// Thin wrappers over the huh prompts, shared by the add wizards.
 
-// addPromptSelect wraps huhSelect for backward compatibility.
-func addPromptSelect(_ interface{}, _ interface{}, label string, options []SelectOption) (int, error) {
+// addPromptSelect wraps huhSelect.
+func addPromptSelect(label string, options []SelectOption) (int, error) {
 	return huhSelect(label, options, 0)
 }
 
-// addPromptString wraps huhInput for backward compatibility.
-func addPromptString(_ interface{}, _ interface{}, label, def string) (string, error) {
+// addPromptString wraps huhInput.
+func addPromptString(label, def string) (string, error) {
 	return huhInput(label, "", def, nil)
 }
 
-// addPromptConfirm wraps huhConfirm for backward compatibility.
-func addPromptConfirm(_ interface{}, _ interface{}, label string, _ bool) (bool, error) {
-	return huhConfirm(label)
+// addPromptConfirm wraps huhConfirm; defaultYes pre-selects the answer.
+func addPromptConfirm(label string, defaultYes bool) (bool, error) {
+	return huhConfirm(label, defaultYes)
 }
 
-// addPromptAddString wraps huhInput with validation for backward compatibility.
-func addPromptAddString(_ interface{}, _ interface{}, label string, validate func(string) error) (string, error) {
+// addPromptAddString wraps huhInput with validation.
+func addPromptAddString(label string, validate func(string) error) (string, error) {
 	return huhInput(label, "", "", validate)
 }
 
-// addPromptFuzzySearch wraps huhFuzzySelect for backward compatibility.
-func addPromptFuzzySearch(_ interface{}, _ interface{}, label string, items []FuzzyItem) (*FuzzyItem, error) {
+// addPromptFuzzySearch wraps huhFuzzySelect.
+func addPromptFuzzySearch(label string, items []FuzzyItem) (*FuzzyItem, error) {
 	return huhFuzzySelect(label, items, false)
 }
 
-// addPromptMultiFuzzySearch wraps huhMultiFuzzySelect for backward compatibility.
-func addPromptMultiFuzzySearch(_ interface{}, _ interface{}, label string, items []FuzzyItem) ([]FuzzyItem, error) {
+// addPromptMultiFuzzySearch wraps huhMultiFuzzySelect.
+func addPromptMultiFuzzySearch(label string, items []FuzzyItem) ([]FuzzyItem, error) {
 	return huhMultiFuzzySelect(label, items)
 }
 
-// addPromptConstraintBuilder wraps huhConstraintBuilder for backward compatibility.
-func addPromptConstraintBuilder(_ interface{}, _ interface{}) ([]string, error) {
+// addPromptConstraintBuilder wraps huhConstraintBuilder.
+func addPromptConstraintBuilder() ([]string, error) {
 	return huhConstraintBuilder()
 }
 

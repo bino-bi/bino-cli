@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -172,7 +167,6 @@ A Table component displays data from a DataSet in a formatted table.
 				return writeTableManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new Table manifest.")
@@ -181,7 +175,7 @@ A Table component displays data from a DataSet in a formatted table.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "Table")
+				data.Name, err = promptGenericName(manifests, "Table")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -192,12 +186,12 @@ A Table component displays data from a DataSet in a formatted table.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -209,28 +203,28 @@ A Table component displays data from a DataSet in a formatted table.
 
 			// Table type
 			if data.Type == "" {
-				data.Type, _ = addPromptString(reader, out, "Table type (list, sum, opt, sumnototal, optnototal)", "list")
+				data.Type, _ = addPromptString("Table type (list, sum, opt, sumnototal, optnototal)", "list")
 			}
 
 			// Sum row label — only the sum and opt types render a total row to label.
 			if data.SumTitle == "" && (data.Type == "sum" || data.Type == "opt") {
-				data.SumTitle, _ = addPromptString(reader, out, "Label for the grand-total row (optional)", "")
+				data.SumTitle, _ = addPromptString("Label for the grand-total row (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Table", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "Table", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -240,39 +234,8 @@ A Table component displays data from a DataSet in a formatted table.
 				}
 			}
 
-			// Preview
-			doc := buildTableDocument(data)
-			manifestBytes, err := renderTableManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeTableManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildTableDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -396,7 +359,6 @@ ChartStructure displays data from a DataSet as a structural chart:
 				return writeChartStructureManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ChartStructure manifest.")
@@ -405,7 +367,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ChartStructure")
+				data.Name, err = promptGenericName(manifests, "ChartStructure")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -416,12 +378,12 @@ ChartStructure displays data from a DataSet as a structural chart:
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -440,7 +402,7 @@ ChartStructure displays data from a DataSet as a structural chart:
 					{Label: "radar", Description: "Radar/spider chart"},
 				}
 
-				idx, err := addPromptSelect(reader, out, "Chart type", options)
+				idx, err := addPromptSelect("Chart type", options)
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -451,23 +413,23 @@ ChartStructure displays data from a DataSet as a structural chart:
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+				data.Title, _ = addPromptString("Chart title (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartStructure", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ChartStructure", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -477,39 +439,8 @@ ChartStructure displays data from a DataSet as a structural chart:
 				}
 			}
 
-			// Preview
-			doc := buildChartStructureDocument(data)
-			manifestBytes, err := renderChartStructureManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartStructureManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartStructureDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -620,7 +551,6 @@ ChartTime displays time-series data from a DataSet.
 				return writeChartTimeManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ChartTime manifest.")
@@ -629,7 +559,7 @@ ChartTime displays time-series data from a DataSet.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ChartTime")
+				data.Name, err = promptGenericName(manifests, "ChartTime")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -640,12 +570,12 @@ ChartTime displays time-series data from a DataSet.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -657,23 +587,23 @@ ChartTime displays time-series data from a DataSet.
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+				data.Title, _ = addPromptString("Chart title (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartTime", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ChartTime", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -683,39 +613,8 @@ ChartTime displays time-series data from a DataSet.
 				}
 			}
 
-			// Preview
-			doc := buildChartTimeDocument(data)
-			manifestBytes, err := renderChartTimeManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartTimeManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartTimeDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -842,7 +741,6 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 				return writeChartScatterManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ChartScatter manifest.")
@@ -851,7 +749,7 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ChartScatter")
+				data.Name, err = promptGenericName(manifests, "ChartScatter")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -862,12 +760,12 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -879,13 +777,13 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 
 			// Axis measures
 			if data.X == "" {
-				data.X, err = promptMeasureToken(reader, out, "X-axis measure (e.g. ac1 or dac1_pp1)")
+				data.X, err = promptMeasureToken(out, "X-axis measure (e.g. ac1 or dac1_pp1)")
 				if err != nil {
 					return RuntimeError(err)
 				}
 			}
 			if data.Y == "" {
-				data.Y, err = promptMeasureToken(reader, out, "Y-axis measure (e.g. ac2)")
+				data.Y, err = promptMeasureToken(out, "Y-axis measure (e.g. ac2)")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -893,23 +791,23 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+				data.Title, _ = addPromptString("Chart title (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartScatter", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ChartScatter", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -919,39 +817,8 @@ pl1-pl4) or variance tokens (e.g. dac1_pp1, drac1_pl1).
 				}
 			}
 
-			// Preview
-			doc := buildChartScatterDocument(data)
-			manifestBytes, err := renderChartScatterManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartScatterManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartScatterDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1088,7 +955,6 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 				return writeChartBubbleManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ChartBubble manifest.")
@@ -1097,7 +963,7 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ChartBubble")
+				data.Name, err = promptGenericName(manifests, "ChartBubble")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1108,12 +974,12 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1125,19 +991,19 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 
 			// Axis and size measures
 			if data.X == "" {
-				data.X, err = promptMeasureToken(reader, out, "X-axis measure (e.g. ac1 or dac1_pp1)")
+				data.X, err = promptMeasureToken(out, "X-axis measure (e.g. ac1 or dac1_pp1)")
 				if err != nil {
 					return RuntimeError(err)
 				}
 			}
 			if data.Y == "" {
-				data.Y, err = promptMeasureToken(reader, out, "Y-axis measure (e.g. ac2)")
+				data.Y, err = promptMeasureToken(out, "Y-axis measure (e.g. ac2)")
 				if err != nil {
 					return RuntimeError(err)
 				}
 			}
 			if data.Size == "" {
-				data.Size, err = promptMeasureToken(reader, out, "Size measure (e.g. ac3)")
+				data.Size, err = promptMeasureToken(out, "Size measure (e.g. ac3)")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -1145,23 +1011,23 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+				data.Title, _ = addPromptString("Chart title (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartBubble", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ChartBubble", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1171,39 +1037,8 @@ variance tokens (e.g. dac1_pp1); size values must be >= 0.
 				}
 			}
 
-			// Preview
-			doc := buildChartBubbleDocument(data)
-			manifestBytes, err := renderChartBubbleManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartBubbleManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartBubbleDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1332,7 +1167,6 @@ pl1 > pp1 > fc1).
 				return writeChartBulletManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new ChartBullet manifest.")
@@ -1341,7 +1175,7 @@ pl1 > pp1 > fc1).
 
 			// Name
 			if data.Name == "" {
-				data.Name, err = promptGenericName(reader, out, manifests, "ChartBullet")
+				data.Name, err = promptGenericName(manifests, "ChartBullet")
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1352,12 +1186,12 @@ pl1 > pp1 > fc1).
 			}
 
 			if data.Description == "" {
-				data.Description, _ = addPromptString(reader, out, "Description (optional)", "")
+				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
 			// Dataset selection
 			if data.Dataset == "" {
-				data.Dataset, err = promptDatasetSelection(reader, out, manifests)
+				data.Dataset, err = promptDatasetSelection(out, manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1369,13 +1203,13 @@ pl1 > pp1 > fc1).
 
 			// Measures (optional — empty keeps auto-detection)
 			if data.Actual == "" {
-				data.Actual, err = promptOptionalMeasureToken(reader, out, "Actual measure (e.g. ac1, empty = auto)")
+				data.Actual, err = promptOptionalMeasureToken(out, "Actual measure (e.g. ac1, empty = auto)")
 				if err != nil {
 					return RuntimeError(err)
 				}
 			}
 			if data.Target == "" {
-				data.Target, err = promptOptionalMeasureToken(reader, out, "Target measure (e.g. pl1, empty = auto)")
+				data.Target, err = promptOptionalMeasureToken(out, "Target measure (e.g. pl1, empty = auto)")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -1383,23 +1217,23 @@ pl1 > pp1 > fc1).
 
 			// Title
 			if data.Title == "" {
-				data.Title, _ = addPromptString(reader, out, "Chart title (optional)", "")
+				data.Title, _ = addPromptString("Chart title (optional)", "")
 			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints?", false)
+				addConstraints, err := addPromptConfirm("Add constraints?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder(reader, out)
+					data.Constraints, _ = addPromptConstraintBuilder()
 				}
 			}
 
 			// Output
 			if outputPath == "" {
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "ChartBullet", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "ChartBullet", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -1409,39 +1243,8 @@ pl1 > pp1 > fc1).
 				}
 			}
 
-			// Preview
-			doc := buildChartBulletDocument(data)
-			manifestBytes, err := renderChartBulletManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm(reader, out, "Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeChartBulletManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildChartBulletDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1467,16 +1270,16 @@ pl1 > pp1 > fc1).
 
 // Helper functions
 
-func promptDatasetSelection(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
+func promptDatasetSelection(out io.Writer, manifests []ManifestInfo) (string, error) {
 	datasets := FilterByKind(manifests, "DataSet")
 
 	if len(datasets) == 0 {
 		fmt.Fprintln(out, "No DataSets found. Enter a name manually.")
-		return addPromptString(reader, out, "DataSet name", "")
+		return addPromptString("DataSet name", "")
 	}
 
 	items := ManifestsToFuzzyItems(datasets)
-	item, err := addPromptFuzzySearch(reader, out, "Select DataSet", items)
+	item, err := addPromptFuzzySearch("Select DataSet", items)
 	if err != nil {
 		return "", err
 	}
@@ -1494,9 +1297,9 @@ var measureTokenRegex = regexp.MustCompile(`^((ac|pp|fc|pl)[1-4]|(dr|d)(ac|pp|fc
 
 // promptMeasureToken prompts for a required XY chart measure token until the
 // input is valid.
-func promptMeasureToken(reader *bufio.Reader, out io.Writer, label string) (string, error) {
+func promptMeasureToken(out io.Writer, label string) (string, error) {
 	for {
-		value, err := addPromptString(reader, out, label, "")
+		value, err := addPromptString(label, "")
 		if err != nil {
 			return "", err
 		}
@@ -1514,9 +1317,9 @@ var scenarioSlotRegex = regexp.MustCompile(`^(ac|pp|fc|pl)[1-4]$`)
 
 // promptOptionalMeasureToken prompts for a plain scenario slot; empty input
 // keeps the auto-detection.
-func promptOptionalMeasureToken(reader *bufio.Reader, out io.Writer, label string) (string, error) {
+func promptOptionalMeasureToken(out io.Writer, label string) (string, error) {
 	for {
-		value, err := addPromptString(reader, out, label, "")
+		value, err := addPromptString(label, "")
 		if err != nil || value == "" {
 			return value, err
 		}
@@ -1597,10 +1400,6 @@ func buildTableDocument(data TableManifestData) *schema.Document {
 	return doc
 }
 
-func renderTableManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildChartStructureDocument(data ChartStructureManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindChartStructure, data.Name)
 	doc.Metadata.Description = data.Description
@@ -1614,10 +1413,6 @@ func buildChartStructureDocument(data ChartStructureManifestData) *schema.Docume
 
 	doc.Spec = spec
 	return doc
-}
-
-func renderChartStructureManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }
 
 func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
@@ -1634,10 +1429,6 @@ func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
 	return doc
 }
 
-func renderChartTimeManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildChartScatterDocument(data ChartScatterManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindChartScatter, data.Name)
 	doc.Metadata.Description = data.Description
@@ -1652,10 +1443,6 @@ func buildChartScatterDocument(data ChartScatterManifestData) *schema.Document {
 
 	doc.Spec = spec
 	return doc
-}
-
-func renderChartScatterManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }
 
 func buildChartBubbleDocument(data ChartBubbleManifestData) *schema.Document {
@@ -1675,10 +1462,6 @@ func buildChartBubbleDocument(data ChartBubbleManifestData) *schema.Document {
 	return doc
 }
 
-func renderChartBubbleManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
-}
-
 func buildChartBulletDocument(data ChartBulletManifestData) *schema.Document {
 	doc := schema.NewDocument(schema.KindChartBullet, data.Name)
 	doc.Metadata.Description = data.Description
@@ -1693,8 +1476,4 @@ func buildChartBulletDocument(data ChartBulletManifestData) *schema.Document {
 
 	doc.Spec = spec
 	return doc
-}
-
-func renderChartBulletManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }

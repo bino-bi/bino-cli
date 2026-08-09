@@ -1,17 +1,13 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/schema"
@@ -205,7 +201,6 @@ Common asset types:
 			}
 
 			// Interactive wizard
-			reader := bufio.NewReader(cmd.InOrStdin())
 			out := cmd.OutOrStdout()
 
 			fmt.Fprintln(out, "Create a new Asset manifest.")
@@ -215,7 +210,7 @@ Common asset types:
 			// Step 1: Name
 			if data.Name == "" {
 				var err error
-				data.Name, err = promptAssetName(reader, out, manifests)
+				data.Name, err = promptAssetName(manifests)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -234,7 +229,7 @@ Common asset types:
 			}
 
 			if data.Description == "" {
-				desc, err := addPromptString(reader, out, "Description (optional)", "")
+				desc, err := addPromptString("Description (optional)", "")
 				if err != nil {
 					return RuntimeError(err)
 				}
@@ -243,7 +238,7 @@ Common asset types:
 
 			// Step 2: Type
 			if data.Type == AssetTypeNone {
-				assetType, err := promptAssetType(reader, out)
+				assetType, err := promptAssetType()
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -256,7 +251,7 @@ Common asset types:
 
 			// Step 3: Source
 			if data.LocalPath == "" && data.RemoteURL == "" {
-				if err := promptAssetSource(reader, out, workdir, &data); err != nil {
+				if err := promptAssetSource(workdir, &data); err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
 						return nil
@@ -269,7 +264,7 @@ Common asset types:
 			if data.MediaType == "" {
 				data.MediaType = detectMediaType(data)
 				if data.MediaType == "" {
-					mediaType, err := addPromptString(reader, out, "Media type (e.g., image/png)", "")
+					mediaType, err := addPromptString("Media type (e.g., image/png)", "")
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -279,12 +274,12 @@ Common asset types:
 
 			// Step 5: Constraints
 			if len(data.Constraints) == 0 {
-				addConstraints, err := addPromptConfirm(reader, out, "Add constraints to conditionally include this Asset?", false)
+				addConstraints, err := addPromptConfirm("Add constraints to conditionally include this Asset?", false)
 				if err != nil {
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					constraints, err := addPromptConstraintBuilder(reader, out)
+					constraints, err := addPromptConstraintBuilder()
 					if err != nil {
 						return RuntimeError(err)
 					}
@@ -295,7 +290,7 @@ Common asset types:
 			// Step 6: Output location
 			if outputPath == "" {
 				var err error
-				outputPath, appendMode, err = promptOutputLocation(reader, out, workdir, manifests, "Asset", data.Name)
+				outputPath, appendMode, err = promptOutputLocation(workdir, manifests, "Asset", data.Name)
 				if err != nil {
 					if errors.Is(err, errAddCanceled) {
 						fmt.Fprintln(out, "\nCanceled.")
@@ -305,49 +300,13 @@ Common asset types:
 				}
 			}
 
-			// Step 7: Preview & Confirmation
-			doc := buildAssetDocument(data)
-			manifestBytes, err := renderAssetManifest(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
+			// Step 7: Preview, confirm, write.
+			note := fmt.Sprintf("Will create: %s", outputPath)
 			if appendMode {
-				fmt.Fprintf(out, "Will append to: %s\n", outputPath)
-			} else {
-				fmt.Fprintf(out, "Will create: %s\n", outputPath)
+				note = fmt.Sprintf("Will append to: %s", outputPath)
 			}
-
-			confirmed, err := addPromptConfirm(reader, out, "Proceed?", true)
-			if err != nil {
-				return RuntimeError(err)
-			}
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil //nolint:nilerr // best effort: non-fatal for suggestions
-			}
-
-			if err := writeAssetManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				editor := getEditor()
-				if editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildAssetDocument(data), workdir, outputPath, appendMode, flagOpenEditor, []string{note}, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -378,8 +337,8 @@ func completeAssetTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
-func promptAssetName(reader *bufio.Reader, out io.Writer, manifests []ManifestInfo) (string, error) {
-	return addPromptAddString(reader, out, "Name for this Asset", func(name string) error {
+func promptAssetName(manifests []ManifestInfo) (string, error) {
+	return addPromptAddString("Name for this Asset", func(name string) error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
@@ -391,14 +350,14 @@ func promptAssetName(reader *bufio.Reader, out io.Writer, manifests []ManifestIn
 	})
 }
 
-func promptAssetType(reader *bufio.Reader, out io.Writer) (AssetType, error) {
+func promptAssetType() (AssetType, error) {
 	options := []SelectOption{
 		{Label: "Image", Description: "PNG, JPEG, SVG image file"},
 		{Label: "Font", Description: "TTF, OTF, WOFF font file"},
 		{Label: "File", Description: "Generic file (PDF, etc.)"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "What type of asset?", options)
+	idx, err := addPromptSelect("What type of asset?", options)
 	if err != nil {
 		return AssetTypeNone, err
 	}
@@ -407,13 +366,13 @@ func promptAssetType(reader *bufio.Reader, out io.Writer) (AssetType, error) {
 	return types[idx], nil
 }
 
-func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data *AssetManifestData) error {
+func promptAssetSource(workdir string, data *AssetManifestData) error {
 	options := []SelectOption{
 		{Label: "Local file", Description: "Reference a file in the project"},
 		{Label: "Remote URL", Description: "Reference a file from a URL"},
 	}
 
-	idx, err := addPromptSelect(reader, out, "Asset source", options)
+	idx, err := addPromptSelect("Asset source", options)
 	if err != nil {
 		return err
 	}
@@ -429,14 +388,14 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 				{Label: "Enter path manually", Description: "Type a file path"},
 			}
 
-			subIdx, err := addPromptSelect(reader, out, "File source", subOptions)
+			subIdx, err := addPromptSelect("File source", subOptions)
 			if err != nil {
 				return err
 			}
 
 			if subIdx == 0 {
 				items := FilesToFuzzyItems(files, data.Type.String())
-				item, err := addPromptFuzzySearch(reader, out, "Select file", items)
+				item, err := addPromptFuzzySearch("Select file", items)
 				if err != nil {
 					return err
 				}
@@ -448,14 +407,14 @@ func promptAssetSource(reader *bufio.Reader, out io.Writer, workdir string, data
 			}
 		}
 
-		path, err := addPromptString(reader, out, "File path", "")
+		path, err := addPromptString("File path", "")
 		if err != nil {
 			return err
 		}
 		data.LocalPath = path
 
 	case 1: // Remote URL
-		url, err := addPromptString(reader, out, "Remote URL", "")
+		url, err := addPromptString("Remote URL", "")
 		if err != nil {
 			return err
 		}
@@ -598,9 +557,4 @@ func convertAssetType(t AssetType) schema.AssetType {
 	default:
 		return ""
 	}
-}
-
-// renderAssetManifest renders a schema.Document to YAML bytes.
-func renderAssetManifest(doc *schema.Document) ([]byte, error) {
-	return yaml.Marshal(doc)
 }
