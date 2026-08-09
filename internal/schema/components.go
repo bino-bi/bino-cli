@@ -291,9 +291,6 @@ type ChartStructureSpec struct {
 	// ChartTitle is the chart title.
 	ChartTitle string `yaml:"chartTitle,omitempty" json:"chartTitle,omitempty"`
 
-	// Type is the chart type (bar, pie, donut, etc.).
-	Type string `yaml:"type,omitempty" json:"type,omitempty"`
-
 	// Stack configures stacked bar rendering.
 	Stack *StackConfig `yaml:"stack,omitempty" json:"stack,omitempty"`
 

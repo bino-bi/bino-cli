@@ -474,6 +474,17 @@ func addPromptAddString(label string, validate func(string) error) (string, erro
 	return huhInput(label, "", "", validate)
 }
 
+// addPromptRequiredString wraps huhInput with a non-empty check; the form
+// re-prompts until the user provides a value.
+func addPromptRequiredString(label string) (string, error) {
+	return huhInput(label, "", "", func(s string) error {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("a value is required")
+		}
+		return nil
+	})
+}
+
 // addPromptFuzzySearch wraps huhFuzzySelect.
 func addPromptFuzzySearch(label string, items []FuzzyItem) (*FuzzyItem, error) {
 	return huhFuzzySelect(label, items, false)

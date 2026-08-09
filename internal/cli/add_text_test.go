@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"strings"
 	"testing"
 )
@@ -34,11 +35,10 @@ func TestBuildTextDocument(t *testing.T) {
 		assertContainsAll(t, got, []string{"dataset: $sales_summary"})
 	})
 
-	// Canary: the schema requires spec.value, but the wizard accepts a
-	// dataset-only Text (--dataset without --value, and the interactive
-	// "From DataSet" branch) — that document is rejected by the validating
-	// write path instead of landing on disk. If this starts failing, either
-	// the schema or the wizard flow changed.
+	// The wizard now always collects a value (bn-text renders only the value
+	// template — a dataset alone produces an empty block), and the write gate
+	// backstops that: a dataset-only Text must never land on disk. If this
+	// starts failing, textSpec no longer requires value.
 	t.Run("dataset-only text is rejected at write time", func(t *testing.T) {
 		data := TextManifestData{Name: "no_value_text", Dataset: "sales_summary"}
 		err := WriteSchemaDocument(buildTextDocument(data), t.TempDir(), "no_value.yaml", false, discardCmd().OutOrStdout())
@@ -46,6 +46,24 @@ func TestBuildTextDocument(t *testing.T) {
 			t.Fatal("expected a schema validation error for the missing value")
 		}
 	})
+}
+
+// TestAddTextNoPromptRequiresValue pins the non-interactive contract:
+// --dataset alone is not enough, the flags must also carry the value
+// template the schema requires.
+func TestAddTextNoPromptRequiresValue(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cmd := newAddTextCommand()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"total_sales", "--dataset", "sales_summary", "--output", "text.yaml", "--no-prompt"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected a missing-flags error")
+	}
+	if !strings.Contains(err.Error(), "--value") {
+		t.Errorf("error %q does not mention --value", err)
+	}
 }
 
 func TestBuildComponentStyleDocument(t *testing.T) {

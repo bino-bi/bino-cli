@@ -188,12 +188,11 @@ func TestDocumentRoundTrip(t *testing.T) {
 				APIVersion: APIVersion,
 				Kind:       KindChartStructure,
 				Metadata: Metadata{
-					Name: "pie_chart",
+					Name: "category_chart",
 				},
 				Spec: &ChartStructureSpec{
 					Dataset:    "$category_breakdown",
 					ChartTitle: "Category Distribution",
-					Type:       "pie",
 				},
 			},
 		},

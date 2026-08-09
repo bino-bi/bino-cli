@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -341,12 +342,14 @@ including the filename, format, orientation, and which LayoutPages to include.
 
 func newAddLiveReportArtefactCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
-		flagTitle      string
-		flagConstraint []string
-		flagOutput     string
-		flagAppendTo   string
-		flagDesc       string
-		flagNoPrompt   bool
+		flagTitle       string
+		flagArtefact    string
+		flagLayoutPages []string
+		flagConstraint  []string
+		flagOutput      string
+		flagAppendTo    string
+		flagDesc        string
+		flagNoPrompt    bool
 	)
 
 	cmd := &cobra.Command{
@@ -358,15 +361,24 @@ Create a new LiveReportArtefact manifest for web-based live reports.
 LiveReportArtefact defines routes for serving reports via the bino serve command.
 Each route maps a URL path to either a ReportArtefact or LayoutPages.
 
-IMPORTANT: A root route "/" is required.
+IMPORTANT: A root route "/" is required and must reference a ReportArtefact
+or at least one LayoutPage.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
   bino add livereportartefact
 
-  # Basic live report
+  # Root route serving a ReportArtefact
   bino add livereportartefact main_app \
     --title "Report Dashboard" \
+    --artefact monthly_report \
+    --output reports/live.yaml \
+    --no-prompt
+
+  # Root route serving LayoutPages directly
+  bino add livereportartefact pages_app \
+    --title "Pages App" \
+    --layout-pages summary_page,detail_page \
     --output reports/live.yaml \
     --no-prompt
 `),
@@ -391,6 +403,12 @@ IMPORTANT: A root route "/" is required.
 				if name == "" {
 					missing = append(missing, "name (as argument)")
 				}
+				if flagTitle == "" {
+					missing = append(missing, "--title")
+				}
+				if flagArtefact == "" && len(flagLayoutPages) == 0 {
+					missing = append(missing, "--artefact or --layout-pages (root route content)")
+				}
 				if flagOutput == "" && flagAppendTo == "" {
 					missing = append(missing, "--output or --append-to")
 				}
@@ -412,6 +430,14 @@ IMPORTANT: A root route "/" is required.
 				Routes:      make(map[string]LiveRoute),
 			}
 
+			// Root route from flags (both modes) — the schema rejects a
+			// route that references neither an artefact nor layout pages.
+			if flagArtefact != "" {
+				data.Routes["/"] = LiveRoute{Artifact: flagArtefact}
+			} else if len(flagLayoutPages) > 0 {
+				data.Routes["/"] = LiveRoute{LayoutPages: flagLayoutPages}
+			}
+
 			var outputPath string
 			var appendMode bool
 			if flagAppendTo != "" {
@@ -422,8 +448,6 @@ IMPORTANT: A root route "/" is required.
 			}
 
 			if nonInteractive {
-				// Add default root route
-				data.Routes["/"] = LiveRoute{}
 				return writeLiveReportArtefactManifest(cmd, workdir, data, outputPath, appendMode)
 			}
 
@@ -449,60 +473,32 @@ IMPORTANT: A root route "/" is required.
 				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
-			// Title
+			// Title — required by the schema.
 			if data.Title == "" {
-				data.Title, _ = addPromptString("Application title (optional)", "")
-			}
-
-			// Root route
-			fmt.Fprintln(out, "\nConfiguring the root route \"/\" (required):")
-
-			artifacts := FilterByKind(manifests, "ReportArtefact")
-			pages := FilterByKind(manifests, "LayoutPage")
-
-			rootRoute := LiveRoute{}
-
-			if len(artifacts) > 0 {
-				options := []SelectOption{
-					{Label: "Use ReportArtefact", Description: "Reference an existing ReportArtefact"},
-					{Label: "Use LayoutPages", Description: "Specify LayoutPages directly"},
-				}
-				idx, err := addPromptSelect("Root route content", options)
+				data.Title, err = addPromptRequiredString("Application title")
 				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
 					return RuntimeError(err)
-				}
-
-				if idx == 0 {
-					items := ManifestsToFuzzyItems(artifacts)
-					item, err := addPromptFuzzySearch("Select ReportArtefact", items)
-					if err != nil {
-						return RuntimeError(err)
-					}
-					if item != nil {
-						rootRoute.Artifact = item.Name
-					}
-				} else if len(pages) > 0 {
-					items := ManifestsToFuzzyItems(pages)
-					selected, err := addPromptMultiFuzzySearch("Select LayoutPages", items)
-					if err != nil {
-						return RuntimeError(err)
-					}
-					for _, item := range selected {
-						rootRoute.LayoutPages = append(rootRoute.LayoutPages, item.Name)
-					}
-				}
-			} else if len(pages) > 0 {
-				items := ManifestsToFuzzyItems(pages)
-				selected, err := addPromptMultiFuzzySearch("Select LayoutPages for root route", items)
-				if err != nil {
-					return RuntimeError(err)
-				}
-				for _, item := range selected {
-					rootRoute.LayoutPages = append(rootRoute.LayoutPages, item.Name)
 				}
 			}
 
-			data.Routes["/"] = rootRoute
+			// Root route, unless the flags already configured it.
+			if _, ok := data.Routes["/"]; !ok {
+				fmt.Fprintln(out, "\nConfiguring the root route \"/\" (required):")
+
+				rootRoute, err := promptLiveRootRoute(out, manifests)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
+				data.Routes["/"] = rootRoute
+			}
 
 			// Constraints
 			if len(data.Constraints) == 0 {
@@ -535,14 +531,79 @@ IMPORTANT: A root route "/" is required.
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().StringVar(&flagTitle, "title", "", "Application title")
+	cmd.Flags().StringVar(&flagTitle, "title", "", "Application title (required)")
+	cmd.Flags().StringVar(&flagArtefact, "artefact", "", "ReportArtefact the root route serves")
+	cmd.Flags().StringSliceVar(&flagLayoutPages, "layout-pages", nil, "LayoutPage names for the root route (comma-separated)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
 	cmd.Flags().StringVar(&flagDesc, "description", "", "Description text")
 	cmd.Flags().BoolVar(&flagNoPrompt, "no-prompt", false, "Non-interactive mode")
 
+	cmd.MarkFlagsMutuallyExclusive("artefact", "layout-pages")
+
+	_ = cmd.RegisterFlagCompletionFunc("artefact", completeReportArtefacts)
+	_ = cmd.RegisterFlagCompletionFunc("layout-pages", completeLayoutPages)
+
 	return cmd
+}
+
+// promptLiveRootRoute collects the mandatory "/" route content: a
+// ReportArtefact reference or a list of LayoutPages. The schema rejects a
+// route without either, so the prompt loops until one target is chosen.
+func promptLiveRootRoute(out io.Writer, manifests []ManifestInfo) (LiveRoute, error) {
+	artifacts := FilterByKind(manifests, "ReportArtefact")
+	pages := FilterByKind(manifests, "LayoutPage")
+
+	if len(artifacts) == 0 && len(pages) == 0 {
+		fmt.Fprintln(out, "No ReportArtefacts or LayoutPages found. Enter the name of the ReportArtefact to serve (you can create it later).")
+		name, err := addPromptRequiredString("ReportArtefact name")
+		if err != nil {
+			return LiveRoute{}, err
+		}
+		return LiveRoute{Artifact: name}, nil
+	}
+
+	for {
+		useArtefact := len(artifacts) > 0
+		if len(artifacts) > 0 && len(pages) > 0 {
+			options := []SelectOption{
+				{Label: "Use ReportArtefact", Description: "Reference an existing ReportArtefact"},
+				{Label: "Use LayoutPages", Description: "Specify LayoutPages directly"},
+			}
+			idx, err := addPromptSelect("Root route content", options)
+			if err != nil {
+				return LiveRoute{}, err
+			}
+			useArtefact = idx == 0
+		}
+
+		if useArtefact {
+			items := ManifestsToFuzzyItems(artifacts)
+			item, err := addPromptFuzzySearch("Select ReportArtefact", items)
+			if err != nil {
+				return LiveRoute{}, err
+			}
+			if item != nil {
+				return LiveRoute{Artifact: item.Name}, nil
+			}
+		} else {
+			items := ManifestsToFuzzyItems(pages)
+			selected, err := addPromptMultiFuzzySearch("Select LayoutPages", items)
+			if err != nil {
+				return LiveRoute{}, err
+			}
+			if len(selected) > 0 {
+				route := LiveRoute{}
+				for _, item := range selected {
+					route.LayoutPages = append(route.LayoutPages, item.Name)
+				}
+				return route, nil
+			}
+		}
+
+		fmt.Fprintln(out, "The root route needs a ReportArtefact or at least one LayoutPage.")
+	}
 }
 
 func newAddSigningProfileCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
@@ -598,6 +659,15 @@ digitally sign PDF reports.
 				var missing []string
 				if name == "" {
 					missing = append(missing, "name (as argument)")
+				}
+				if flagCertificate == "" {
+					missing = append(missing, "--certificate")
+				}
+				if flagPrivateKey == "" {
+					missing = append(missing, "--private-key")
+				}
+				if flagSignerName == "" {
+					missing = append(missing, "--signer-name")
 				}
 				if flagOutput == "" && flagAppendTo == "" {
 					missing = append(missing, "--output or --append-to")
@@ -656,19 +726,38 @@ digitally sign PDF reports.
 				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
-			// Certificate
+			// Certificate, key, and signer — all required by the schema.
 			if data.CertificatePath == "" {
-				data.CertificatePath, _ = addPromptString("Certificate file path", "")
+				data.CertificatePath, err = addPromptRequiredString("Certificate file path")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
 			}
 
-			// Private key
 			if data.PrivateKeyPath == "" {
-				data.PrivateKeyPath, _ = addPromptString("Private key file path", "")
+				data.PrivateKeyPath, err = addPromptRequiredString("Private key file path")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
 			}
 
-			// Signer name
 			if data.SignerName == "" {
-				data.SignerName, _ = addPromptString("Signer name (optional)", "")
+				data.SignerName, err = addPromptRequiredString("Signer name")
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
+				}
 			}
 
 			// Constraints
@@ -702,9 +791,9 @@ digitally sign PDF reports.
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().StringVar(&flagCertificate, "certificate", "", "Certificate file path")
-	cmd.Flags().StringVar(&flagPrivateKey, "private-key", "", "Private key file path")
-	cmd.Flags().StringVar(&flagSignerName, "signer-name", "", "Signer name")
+	cmd.Flags().StringVar(&flagCertificate, "certificate", "", "Certificate file path (required)")
+	cmd.Flags().StringVar(&flagPrivateKey, "private-key", "", "Private key file path (required)")
+	cmd.Flags().StringVar(&flagSignerName, "signer-name", "", "Signer name (required)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -737,6 +826,18 @@ func completeLayoutPages(cmd *cobra.Command, _ []string, _ string) ([]string, co
 	pages := FilterByKind(manifests, "LayoutPage")
 	names := make([]string, len(pages))
 	for i, m := range pages {
+		names[i] = m.Name
+	}
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeReportArtefacts(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	ctx := cmd.Context()
+	workdir, _ := pathutil.ResolveWorkdir(".")  //nolint:errcheck // shell completion; errors mean no suggestions
+	manifests, _ := ScanManifests(ctx, workdir) //nolint:errcheck // shell completion; errors mean no suggestions
+	artifacts := FilterByKind(manifests, "ReportArtefact")
+	names := make([]string, len(artifacts))
+	for i, m := range artifacts {
 		names[i] = m.Name
 	}
 	return names, cobra.ShellCompDirectiveNoFileComp
