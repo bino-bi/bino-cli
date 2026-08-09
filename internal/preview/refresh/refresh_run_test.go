@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/config"
 )
 
 const documentArtefactManifest = `apiVersion: bino.bi/v1alpha1
@@ -158,30 +159,81 @@ func TestRunSelectiveMarkdownEdit(t *testing.T) {
 	}
 }
 
-// TestWithDocumentPageWidth covers the format/orientation width mapping and
-// the bn-context style-attribute injection.
-func TestWithDocumentPageWidth(t *testing.T) {
+// TestWithDocumentPreviewMeta covers the format/orientation width mapping,
+// the header/footer marker with validated margins, and the bn-context
+// style-attribute injection (attributes morph-sync, head styles would not).
+func TestWithDocumentPreviewMeta(t *testing.T) {
 	t.Parallel()
 
 	const page = `<html><head></head><body><bn-context locale='de'>x</bn-context></body></html>`
 	tests := []struct {
 		name        string
 		doc         string
-		format      string
-		orientation string
-		want        string
+		spec        config.DocumentArtefactSpec
+		want        []string
+		notContains []string
 	}{
-		{"a4 portrait", page, "a4", "portrait", `<bn-context style="--bn-doc-page-width:210mm" locale='de'>`},
-		{"a4 landscape", page, "a4", "landscape", `<bn-context style="--bn-doc-page-width:297mm" locale='de'>`},
-		{"letter portrait", page, "letter", "portrait", `<bn-context style="--bn-doc-page-width:215.9mm" locale='de'>`},
-		{"unknown format falls back to a4", page, "tabloid", "", `<bn-context style="--bn-doc-page-width:210mm" locale='de'>`},
+		{
+			name: "a4 portrait",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "a4", Orientation: "portrait"},
+			want: []string{`<bn-context style="--bn-doc-page-width:210mm" locale='de'>`},
+			notContains: []string{
+				"data-bino-doc-hf",
+				"--bn-doc-margin-top",
+			},
+		},
+		{
+			name: "a4 landscape",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "a4", Orientation: "landscape"},
+			want: []string{`<bn-context style="--bn-doc-page-width:297mm" locale='de'>`},
+		},
+		{
+			name: "letter portrait",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "letter"},
+			want: []string{`--bn-doc-page-width:215.9mm`},
+		},
+		{
+			name: "unknown format falls back to a4",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "tabloid"},
+			want: []string{`--bn-doc-page-width:210mm`},
+		},
+		{
+			name: "header footer marks the context and mirrors margins",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "a4", DisplayHeaderFooter: true, MarginTop: "30mm"},
+			want: []string{
+				`data-bino-doc-hf='true'`,
+				`--bn-doc-margin-top:30mm`,
+				`--bn-doc-margin-bottom:15mm`, // Chrome default when unset
+			},
+		},
+		{
+			name: "invalid margin falls back to the Chrome default",
+			doc:  page,
+			spec: config.DocumentArtefactSpec{Format: "a4", DisplayHeaderFooter: true, MarginTop: "30mm; }injection"},
+			want: []string{`--bn-doc-margin-top:20mm`},
+			notContains: []string{
+				"injection",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := string(withDocumentPageWidth([]byte(tt.doc), tt.format, tt.orientation))
-			if !strings.Contains(got, tt.want) {
-				t.Errorf("withDocumentPageWidth(%q, %q) = %q, want substring %q", tt.format, tt.orientation, got, tt.want)
+			got := string(withDocumentPreviewMeta([]byte(tt.doc), tt.spec))
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("output = %q, want substring %q", got, want)
+				}
+			}
+			for _, ban := range tt.notContains {
+				if strings.Contains(got, ban) {
+					t.Errorf("output must not contain %q:\n%s", ban, got)
+				}
 			}
 		})
 	}
@@ -189,7 +241,7 @@ func TestWithDocumentPageWidth(t *testing.T) {
 	t.Run("no bn-context returns input unchanged", func(t *testing.T) {
 		t.Parallel()
 		in := `<html><head></head><body>plain</body></html>`
-		if got := string(withDocumentPageWidth([]byte(in), "a4", "portrait")); got != in {
+		if got := string(withDocumentPreviewMeta([]byte(in), config.DocumentArtefactSpec{Format: "a4"})); got != in {
 			t.Errorf("expected unchanged output, got %q", got)
 		}
 	})

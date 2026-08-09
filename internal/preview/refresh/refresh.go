@@ -325,12 +325,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		})
 	}
 	for _, docArt := range documentArtefacts {
-		artefactInfos = append(artefactInfos, previewArtefactInfo{
-			Name:   docArt.Document.Name,
-			Title:  docArt.Spec.Title,
-			Format: docArt.Spec.Format,
-			IsDoc:  true,
-		})
+		artefactInfos = append(artefactInfos, docArtefactInfo(docArt))
 	}
 
 	documentInfos := make([]previewDocumentInfo, 0, len(docs))
@@ -547,7 +542,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 				docGraph = buildPreviewGraphData(g, rootNode)
 			}
 		}
-		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
+		styledHTML := withPreviewStyles(withDocumentPreviewMeta(renderResult.HTML, docArt.Spec))
 		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = httpserver.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
 		// Broadcast like the report loop does: swapContext extracts the

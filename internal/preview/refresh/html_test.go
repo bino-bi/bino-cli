@@ -1,6 +1,7 @@
 package refresh
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,50 @@ func TestDocSourceCount(t *testing.T) {
 	}
 	if got := docSourceCount(docArtefactFixture("H", dir, "missing/*.md")); got != 0 {
 		t.Errorf("docSourceCount(unresolvable) = %d, want 0", got)
+	}
+}
+
+// TestDocArtefactInfo asserts the doc meta fields reach the toolbar JSON
+// payload — and that report artefacts (zero values) omit them entirely.
+func TestDocArtefactInfo(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# H\n"), 0o600); err != nil {
+		t.Fatalf("write markdown: %v", err)
+	}
+	docArt := docArtefactFixture("The Handbook", dir, "notes.md")
+	docArt.Spec.Orientation = "portrait"
+	docArt.Spec.Locale = "en"
+	docArt.Spec.TableOfContents = true
+	docArt.Spec.DisplayHeaderFooter = true
+
+	payload, err := json.Marshal(docArtefactInfo(docArt))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(payload)
+	for _, want := range []string{
+		`"isDoc":true`,
+		`"orientation":"portrait"`,
+		`"locale":"en"`,
+		`"chapters":1`,
+		`"toc":true`,
+		`"headerFooter":true`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("payload missing %s: %s", want, got)
+		}
+	}
+
+	report, err := json.Marshal(previewArtefactInfo{Name: "r", Title: "R", Format: "a4"})
+	if err != nil {
+		t.Fatalf("marshal report info: %v", err)
+	}
+	for _, ban := range []string{"orientation", "locale", "chapters", "toc", "headerFooter"} {
+		if strings.Contains(string(report), ban) {
+			t.Errorf("report artefact payload must omit %s: %s", ban, report)
+		}
 	}
 }
 
