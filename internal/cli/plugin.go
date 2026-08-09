@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"text/tabwriter"
@@ -38,7 +39,10 @@ func newPluginListCommand() *cobra.Command {
 			workdir, _ := os.Getwd() //nolint:errcheck // an empty workdir just disables project plugin discovery
 			projectRoot, err := pathutil.FindProjectRoot(workdir)
 			if err != nil {
-				return fmt.Errorf("no bino project found (missing bino.toml)")
+				if errors.Is(err, pathutil.ErrProjectRootNotFound) {
+					return ConfigError(err)
+				}
+				return ConfigErrorf("resolve project root: %w", err)
 			}
 
 			projectCfg, err := pathutil.LoadProjectConfig(projectRoot)

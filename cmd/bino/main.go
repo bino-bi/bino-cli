@@ -26,6 +26,11 @@ func run() int {
 	app := cli.New()
 
 	if err := app.Execute(ctx); err != nil {
+		// A subprocess exit code (plugin command, stateless build) propagates
+		// silently — its output was already streamed.
+		if code, ok := cli.ExitCodeFromError(err); ok {
+			return code
+		}
 		handleCtx := app.Context()
 		if handleCtx == nil {
 			handleCtx = ctx

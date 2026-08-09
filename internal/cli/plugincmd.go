@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -38,7 +39,10 @@ func newPluginExecCommand() *cobra.Command {
 			workdir, _ := os.Getwd() //nolint:errcheck // an empty workdir just disables project plugin discovery
 			projectRoot, err := pathutil.FindProjectRoot(workdir)
 			if err != nil {
-				return fmt.Errorf("no bino project found (missing bino.toml)")
+				if errors.Is(err, pathutil.ErrProjectRootNotFound) {
+					return ConfigError(err)
+				}
+				return ConfigErrorf("resolve project root: %w", err)
 			}
 			projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
 			if err != nil {
@@ -96,7 +100,9 @@ func newPluginExecCommand() *cobra.Command {
 				return fmt.Errorf("plugin command %s:%s: %w", pluginName, cmdName, err)
 			}
 			if exitCode != 0 {
-				os.Exit(exitCode)
+				// Return instead of os.Exit so the deferred KillAll runs
+				// and the plugin subprocess is not orphaned.
+				return &ExitCodeError{Code: exitCode}
 			}
 			return nil
 		},

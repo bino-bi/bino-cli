@@ -135,7 +135,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				}
 				if serr := runStatelessBuild(cmd, statelessFormat, inputArg); serr != nil {
 					emitStatelessError(cmd, serr)
-					os.Exit(serr.exitCode())
+					// Return instead of os.Exit so main's deferred cancel
+					// and cleanup run before the process exits.
+					return &ExitCodeError{Code: serr.exitCode()}
 				}
 				return nil
 			}

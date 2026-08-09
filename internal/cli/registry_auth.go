@@ -25,7 +25,13 @@ func authRegistryURL(flagURL string) (string, error) {
 		return strings.TrimRight(u, "/"), nil
 	}
 	if workdir, err := os.Getwd(); err == nil {
-		if root, err := pathutil.FindProjectRoot(workdir); err == nil {
+		root, err := pathutil.FindProjectRoot(workdir)
+		if err != nil && !errors.Is(err, pathutil.ErrProjectRootNotFound) {
+			// A real filesystem failure must not silently fall back to the
+			// public registry.
+			return "", fmt.Errorf("resolve project root: %w", err)
+		}
+		if err == nil {
 			if cfg, err := pathutil.LoadProjectConfig(root); err == nil && cfg.Registry.URL != "" {
 				return strings.TrimRight(strings.TrimSpace(cfg.Registry.URL), "/"), nil
 			}
