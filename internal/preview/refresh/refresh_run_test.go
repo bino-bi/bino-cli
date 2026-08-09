@@ -120,6 +120,44 @@ func TestRunBroadcastsDocumentArtefactContent(t *testing.T) {
 	})
 }
 
+// TestRunSelectiveMarkdownEdit proves a markdown edit triggers a selective
+// refresh scoped to its document: only /doc/<name> is re-rendered and
+// broadcast. Before the graph stored resolved file paths, every markdown
+// edit demoted to a full rebuild (All Pages plus every artefact).
+func TestRunSelectiveMarkdownEdit(t *testing.T) {
+	t.Parallel()
+
+	dir := writeDocBundle(t)
+	mdPath := filepath.Join(dir, "notes.md")
+	srv := startTestServer(t)
+	cfg := &Config{Logger: logx.Nop(), Workdir: dir}
+	state := NewState()
+
+	if _, err := Run(context.Background(), "initial", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("initial Run: %v", err)
+	}
+
+	if err := os.WriteFile(mdPath, []byte("# Chapter One\n\nHello.\n\n## Section Two\n"), 0o600); err != nil {
+		t.Fatalf("edit markdown: %v", err)
+	}
+
+	paths, err := Run(context.Background(), "md edit", []string{mdPath}, srv, nil, cfg, state)
+	if err != nil {
+		t.Fatalf("selective Run: %v", err)
+	}
+	if !slices.Equal(paths, []string{"/doc/handbook"}) {
+		t.Fatalf("broadcast paths = %v, want exactly [/doc/handbook] (selective doc-only refresh)", paths)
+	}
+
+	status, body := fetchContext(t, srv, "/doc/handbook")
+	if status != http.StatusOK {
+		t.Fatalf("context fetch status = %d, want 200", status)
+	}
+	if !strings.Contains(body, "Section Two") {
+		t.Errorf("context body missing the edited section")
+	}
+}
+
 // TestWithDocumentPageWidth covers the format/orientation width mapping and
 // the bn-context style-attribute injection.
 func TestWithDocumentPageWidth(t *testing.T) {

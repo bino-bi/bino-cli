@@ -18,6 +18,7 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/markdown"
+	"bino.bi/bino/internal/report/mdscan"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
@@ -1349,7 +1350,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	logger.Debugf("Rendering DocumentArtefact %s with %d source pattern(s)", artifact.Document.Name, len(s.Sources))
 
 	// Resolve source files (expand globs, filter .md files, sort)
-	files, err := markdown.ResolveSourceFiles(manifestDir, s.Sources)
+	files, err := mdscan.ResolveSourceFiles(manifestDir, s.Sources)
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
