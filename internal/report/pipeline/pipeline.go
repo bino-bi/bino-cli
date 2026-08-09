@@ -741,7 +741,7 @@ func resolveScreenshotRefs(docs []config.Document, refs []config.ScreenshotRef, 
 
 		// Synthesize a minimal LayoutPage that wraps this component via ref
 		pageName := "_screenshot_" + strings.ToLower(r.Kind) + "_" + r.Name
-		raw, _ := json.Marshal(map[string]any{
+		raw, _ := json.Marshal(map[string]any{ //nolint:errcheck // literal map of strings cannot fail to marshal
 			"apiVersion": "bino.bi/v1alpha1",
 			"kind":       "LayoutPage",
 			"metadata":   map[string]any{"name": pageName},
@@ -927,7 +927,7 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 				if seenGlob[name] {
 					continue
 				}
-				matched, _ := path.Match(pageName, name)
+				matched, _ := path.Match(pageName, name) //nolint:errcheck // an invalid pattern counts as no match
 				if matched {
 					matches = append(matches, doc)
 				}

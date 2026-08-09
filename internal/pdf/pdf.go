@@ -122,7 +122,7 @@ func collectFromDestsDict(ctx *model.Context, dests types.Dict, wanted map[strin
 // A destination is typically an array: [pageRef /XYZ left top zoom].
 func resolveDestPageNr(ctx *model.Context, val types.Object) int {
 	// Dereference if indirect.
-	val, _ = ctx.Dereference(val)
+	val, _ = ctx.Dereference(val) //nolint:errcheck // nil on a broken reference falls through to "no page"
 	if val == nil {
 		return 0
 	}
@@ -130,7 +130,7 @@ func resolveDestPageNr(ctx *model.Context, val types.Object) int {
 	// May be a dict with a /D key.
 	if d, ok := val.(types.Dict); ok {
 		if dArr, found := d.Find("D"); found {
-			val, _ = ctx.Dereference(dArr)
+			val, _ = ctx.Dereference(dArr) //nolint:errcheck // nil on a broken reference falls through to "no page"
 		}
 	}
 

@@ -94,7 +94,7 @@ func buildRoutesJSON(liveArtefact config.LiveArtefact) []byte {
 		}
 		routes[path] = title
 	}
-	routesJSON, _ := json.Marshal(routes)
+	routesJSON, _ := json.Marshal(routes) //nolint:errcheck // map of strings cannot fail to marshal
 	return routesJSON
 }
 
@@ -104,8 +104,8 @@ func buildMissingParamsJSON(missingParams map[string]struct{}) []byte {
 	for name := range missingParams {
 		missingList = append(missingList, name)
 	}
-	sort.Strings(missingList) // for consistent output
-	missingParamsJSON, _ := json.Marshal(missingList)
+	sort.Strings(missingList)                         // for consistent output
+	missingParamsJSON, _ := json.Marshal(missingList) //nolint:errcheck // slice of strings cannot fail to marshal
 	return missingParamsJSON
 }
 
@@ -155,7 +155,7 @@ func buildQueryParamsJSON(routeSpec config.LiveRouteSpec, datasetOptions map[str
 
 		queryParams = append(queryParams, info)
 	}
-	queryParamsJSON, _ := json.Marshal(queryParams)
+	queryParamsJSON, _ := json.Marshal(queryParams) //nolint:errcheck // slice of plain string structs cannot fail to marshal
 	return queryParamsJSON
 }
 
@@ -189,7 +189,7 @@ func buildScript(liveArtefact config.LiveArtefact, currentPath string, routeSpec
 		CurrentPath:   currentPath,
 		CurrentURL:    currentURL,
 	}
-	cfgJSON, _ := json.Marshal(cfg)
+	cfgJSON, _ := json.Marshal(cfg) //nolint:errcheck // plain string struct cannot fail to marshal
 
 	// Strip the closing "}" so we can append the contextBase64 field manually.
 	// This avoids JSON-encoding the (potentially huge) base64 string twice.

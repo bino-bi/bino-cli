@@ -44,7 +44,7 @@ func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBac
 	}
 	hctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(hctx, http.MethodGet, b.base+"/health", http.NoBody)
+	req, _ := http.NewRequestWithContext(hctx, http.MethodGet, b.base+"/health", http.NoBody) //nolint:errcheck // constant method and URL; construction cannot fail
 	resp, err := b.hc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("daemon health: %w", err)

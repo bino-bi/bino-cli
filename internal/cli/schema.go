@@ -26,8 +26,8 @@ func newSchemaCommand() *cobra.Command {
 			logger := logx.Nop()
 
 			// Try to load project config for plugins.
-			workdir, _ := os.Getwd()
-			projectRoot, _ := pathutil.FindProjectRoot(workdir)
+			workdir, _ := os.Getwd()                            //nolint:errcheck // outside a project the builtin schema is still served
+			projectRoot, _ := pathutil.FindProjectRoot(workdir) //nolint:errcheck // outside a project the builtin schema is still served
 
 			var registry *plugin.PluginRegistry
 

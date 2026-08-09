@@ -126,7 +126,7 @@ func (s *Server) publishDiagnostics(u uri.URI, ver int32, diags []protocol.Diagn
 	if client == nil {
 		return
 	}
-	_ = client.PublishDiagnostics(s.ctx, &protocol.PublishDiagnosticsParams{
+	_ = client.PublishDiagnostics(s.ctx, &protocol.PublishDiagnosticsParams{ //nolint:errcheck // diagnostics push; the editor may have disconnected
 		URI:         u,
 		Version:     protocol.NewOptional(ver),
 		Diagnostics: diags,
@@ -301,7 +301,7 @@ func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 			files[doc.Path] = doc.Text
 		}
 	}
-	ni, _ = reportspec.BuildNameIndex(files)
+	ni, _ = reportspec.BuildNameIndex(files) //nolint:errcheck // BuildNameIndex never returns a non-nil error
 	s.mu.Lock()
 	s.nameIdx = ni
 	s.mu.Unlock()

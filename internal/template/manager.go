@@ -168,7 +168,7 @@ func (m *Manager) resolveGitHub(ctx context.Context, owner, repo, subdir, ref st
 	if !locked {
 		return nil, fmt.Errorf("could not acquire template cache lock for %s/%s", owner, repo)
 	}
-	defer func() { _ = lock.Unlock() }()
+	defer func() { _ = lock.Unlock() }() //nolint:errcheck // flock release; process exit frees it regardless
 
 	if !dirExists(shaDir) {
 		if err := m.downloadAndExtract(ctx, owner, repo, sha, shaDir); err != nil {

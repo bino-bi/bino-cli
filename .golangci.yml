@@ -39,7 +39,7 @@ linters:
       min-complexity: 60
     errcheck:
       check-type-assertions: true
-      check-blank: false
+      check-blank: true
       # The former std-error-handling preset (EXC0001) suppressed errcheck on
       # every .*Close/.*Flush/os.Remove*/print* call, which hid dropped Close
       # errors on writable files. These entries add back only the provably
@@ -62,6 +62,16 @@ linters:
         - (io.ReadCloser).Close
         - (*archive/zip.ReadCloser).Close
         - (*compress/gzip.Reader).Close
+        # Writes to an HTTP response go to a client that may already be gone;
+        # there is no recovery path inside a handler.
+        - (net/http.ResponseWriter).Write
+        # goldmark render funcs write into goldmark's buffered writer; write
+        # errors surface once at the renderer's flush, not per call.
+        - (github.com/yuin/goldmark/util.BufWriter).WriteString
+        - (github.com/yuin/goldmark/util.BufWriter).WriteRune
+        # Static flag wiring at command construction; fails only on a
+        # missing or duplicate flag name, which the cobra tests would catch.
+        - (*github.com/spf13/cobra.Command).RegisterFlagCompletionFunc
         # Uniformly best-effort cleanup of process-created temp state in this
         # repo; a load-bearing removal fails loudly at the following step.
         - os.Remove
@@ -139,7 +149,22 @@ linters:
       - linters:
           - errcheck
         path: _test\.go
-        text: Error return value of .* is not checked
+        text: Error return value( of .*)? is not checked
+      # "x, _ := v.(T)" is the intended zero-value-on-type-miss idiom of the
+      # schema/YAML map-walking code; with check-blank errcheck would flag
+      # every comma-ok assertion with a blanked ok. Blank-discarded CALLS stay
+      # flagged: the pattern requires a type assertion (".(") after the "=".
+      - linters:
+          - errcheck
+        source: ',\s*_\s*:?=\s*[^(]*\.\('
+      # Wizard prompts: cancel falls back to the prompt default and every
+      # write is still gated by the preview + confirm tail. The per-prompt
+      # error checks arrive with the finishWizard consolidation (#187); a
+      # scoped rule avoids annotating 60+ lines that refactor replaces.
+      - linters:
+          - errcheck
+        path: internal/cli/add_.*\.go
+        source: '(addPrompt(String|Confirm|ConstraintBuilder)|execCmd\.Run)\('
       - linters:
           - revive
         path: _test\.go

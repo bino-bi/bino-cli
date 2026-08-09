@@ -122,7 +122,7 @@ func (s *Server) handleRegistryInfo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck // writing the error body to a client that may be gone
 		return
 	}
 	cfg, err := s.registryClientConfig()
@@ -173,7 +173,7 @@ func (s *Server) writeRegistryError(w http.ResponseWriter, err error) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error(), "code": code})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error(), "code": code}) //nolint:errcheck // writing the error body to a client that may be gone
 }
 
 // packageParamsByPath maps each loaded document's absolute file path to its

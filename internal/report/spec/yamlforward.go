@@ -102,7 +102,7 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 	// carry absolute lines and define the DocIndex ordinals (which skip empty
 	// sections — the edit pipeline counts documents the same way). A parse
 	// error keeps the prefix nodes.
-	nodes, _ := ParseYAMLNodes(content)
+	nodes, _ := ParseYAMLNodes(content) //nolint:errcheck // lenient parse; the comment above documents the fallback
 	var root *yaml.Node
 	docIdx := len(nodes)
 	lineOffset := 0

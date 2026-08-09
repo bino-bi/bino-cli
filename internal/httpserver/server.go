@@ -665,7 +665,7 @@ func (s *Server) BroadcastRefreshing(reason string) {
 	if s == nil || s.sse == nil {
 		return
 	}
-	payload, _ := json.Marshal(struct {
+	payload, _ := json.Marshal(struct { //nolint:errcheck // a struct of strings cannot fail to marshal
 		Reason string `json:"reason"`
 	}{Reason: reason})
 	s.sse.Broadcast(FormatSSE("refreshing", payload))
@@ -853,7 +853,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		cleanup = cw.Close
 		defer func() {
 			if cleanup != nil {
-				_ = cleanup()
+				_ = cleanup() //nolint:errcheck // finalizing the SSE compressor; the stream is ending anyway
 			}
 		}()
 	}
