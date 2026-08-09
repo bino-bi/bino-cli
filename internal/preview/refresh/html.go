@@ -7,11 +7,13 @@ import (
 	"html"
 	"math"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/report/config"
 	reportgraph "bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/report/mdscan"
 	"bino.bi/bino/internal/report/spec"
 )
 
@@ -337,6 +339,84 @@ func documentPageWidth(format, orientation string) string {
 // additional injection is needed here.
 func withPreviewContextStyles(ctx []byte) []byte {
 	return ctx
+}
+
+// docSourceCount resolves a DocumentArtefact's markdown sources and returns
+// the file count — the chapter count shown in preview chrome. Returns 0 when
+// resolution fails (missing files, bad globs) so callers can omit it.
+func docSourceCount(docArt config.DocumentArtefact) int {
+	files, err := mdscan.ResolveSourceFiles(filepath.Dir(docArt.Document.File), docArt.Spec.Sources)
+	if err != nil {
+		return 0
+	}
+	return len(files)
+}
+
+// emptyStateMarker is the opening tag of the renderer's no-pages placeholder
+// (see render.GenerateFrameAndContext). Matched as a marker rather than by
+// message text so renderer wording can drift without breaking the swap.
+var emptyStateMarker = []byte("<section class='empty-state'>")
+
+// withAllPagesDocuments injects a Documents section into the All Pages
+// context HTML so DocumentArtefacts are reachable from the default view.
+// When no report pages rendered (the renderer's empty-state section is
+// present) that section is replaced with a docs-aware message plus the list;
+// otherwise the list is appended before </bn-context>. The hrefs are
+// relative ("doc/<name>") so they survive reverse-proxy <base> prefixes.
+// No-op when docArts is empty — bundles without documents are untouched.
+func withAllPagesDocuments(ctx []byte, docArts []config.DocumentArtefact) []byte {
+	if len(docArts) == 0 {
+		return ctx
+	}
+
+	var strip strings.Builder
+	strip.WriteString("<section class='bn-docs-strip'><span class='bn-docs-strip-title'>Documents</span>")
+	for _, docArt := range docArts {
+		title := docArt.Spec.Title
+		if title == "" {
+			title = docArt.Document.Name
+		}
+		meta := docArt.Spec.Format
+		if n := docSourceCount(docArt); n == 1 {
+			meta += " · 1 chapter"
+		} else if n > 1 {
+			meta += fmt.Sprintf(" · %d chapters", n)
+		}
+		strip.WriteString("<span class='bn-docs-strip-row'><a class='bn-doc-link' href='doc/")
+		strip.WriteString(html.EscapeString(docArt.Document.Name))
+		strip.WriteString("'>")
+		strip.WriteString(html.EscapeString(title))
+		strip.WriteString("</a><span class='bn-doc-link-meta'>")
+		strip.WriteString(html.EscapeString(meta))
+		strip.WriteString("</span></span>")
+	}
+	strip.WriteString("</section>")
+	stripHTML := []byte(strip.String())
+
+	// Docs-only bundle: replace the misleading "define a LayoutPage" empty
+	// state with a docs-aware message and the document list.
+	if start := bytes.Index(ctx, emptyStateMarker); start != -1 {
+		if rel := bytes.Index(ctx[start:], []byte("</section>")); rel != -1 {
+			end := start + rel + len("</section>")
+			replacement := append([]byte("<section class='empty-state'>No report pages are defined in this bundle.</section>"), stripHTML...)
+			out := make([]byte, 0, len(ctx)-(end-start)+len(replacement))
+			out = append(out, ctx[:start]...)
+			out = append(out, replacement...)
+			out = append(out, ctx[end:]...)
+			return out
+		}
+	}
+
+	closeTag := []byte("</bn-context>")
+	idx := bytes.LastIndex(ctx, closeTag)
+	if idx == -1 {
+		return ctx
+	}
+	out := make([]byte, 0, len(ctx)+len(stripHTML))
+	out = append(out, ctx[:idx]...)
+	out = append(out, stripHTML...)
+	out = append(out, ctx[idx:]...)
+	return out
 }
 
 // withPreviewPageMetadata injects page metadata (constraints and artifact usage) into

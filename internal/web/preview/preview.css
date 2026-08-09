@@ -99,6 +99,45 @@ bn-context:has(.bn-document-content) {
   box-shadow: var(--bino-shadow-page);
   padding: 2cm;
 }
+/* Documents strip on the All Pages view (injected by withAllPagesDocuments) */
+.bn-docs-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bino-space-xs);
+  width: min(100%, 640px);
+  padding: var(--bino-space-md) var(--bino-space-lg);
+  background: var(--bino-surface);
+  border: 1px solid var(--bino-border);
+  border-radius: var(--bino-radius);
+  font-family: var(--bino-font-sans);
+  font-size: var(--bino-font-size-base);
+}
+.bn-docs-strip-title {
+  font-size: var(--bino-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bino-text-muted);
+}
+.bn-docs-strip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bino-space-md);
+}
+.bn-doc-link {
+  color: var(--bino-accent-strong);
+  text-decoration: none;
+  font-weight: 500;
+}
+.bn-doc-link:hover {
+  text-decoration: underline;
+}
+.bn-doc-link-meta {
+  color: var(--bino-text-secondary);
+  font-size: var(--bino-font-size-sm);
+  white-space: nowrap;
+}
 /* Error indicator badges on components with has-error/has-errors attributes */
 [has-error]::before, [has-errors]::before {
   content: "\26A0";

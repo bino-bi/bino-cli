@@ -1433,6 +1433,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		},
 		Locale:        s.Locale,
 		RenderContext: renderCtx,
+		Math:          mathEnabled,
 	})
 
 	// Dispatch post-render-html hook.

@@ -440,7 +440,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		pipeline.RegisterEmittedData(server, allPagesResult.EmittedData)
 		allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
 		pageMeta := buildPageMetadata(docs, artifacts)
-		allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
+		allPagesContextHTML := withPreviewPageMetadata(withAllPagesDocuments(withPreviewContextStyles(allPagesResult.ContextHTML), documentArtefacts), pageMeta)
 		state.allPagesFrameHTML = allPagesFrameHTML
 		state.allPagesContextHTML = allPagesContextHTML
 		state.allPagesAssets = pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)
@@ -596,20 +596,21 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	return broadcastPaths, nil
 }
 
-// needsAllPagesRerender returns true when any seed node is a LayoutPage or a
-// ReportArtefact — both affect what the "All Pages" view shows. Other kinds
-// (DataSource, DataSet, Component, MarkdownFile, LayoutCard, DocumentArtefact)
-// only change what renders inside an artefact, so the All-Pages frame stays
-// valid.
+// needsAllPagesRerender returns true when any seed node is a LayoutPage, a
+// ReportArtefact, or a DocumentArtefact — the first two affect what the
+// "All Pages" view shows, and DocumentArtefact manifests feed its Documents
+// strip (title/format/sources). Other kinds (DataSource, DataSet, Component,
+// MarkdownFile, LayoutCard) only change content within artefacts, so the
+// All-Pages frame stays valid.
 func needsAllPagesRerender(seeds []*reportgraph.Node) bool {
 	for _, n := range seeds {
 		if n == nil {
 			continue
 		}
 		switch n.Kind {
-		case reportgraph.NodeLayoutPage, reportgraph.NodeReportArtefact:
+		case reportgraph.NodeLayoutPage, reportgraph.NodeReportArtefact, reportgraph.NodeDocumentArtefact:
 			return true
-		case reportgraph.NodeDocumentArtefact, reportgraph.NodeLayoutCard, reportgraph.NodeComponent,
+		case reportgraph.NodeLayoutCard, reportgraph.NodeComponent,
 			reportgraph.NodeDataSet, reportgraph.NodeDataSource, reportgraph.NodeMarkdownFile:
 			// These kinds only change content within artefacts, not the
 			// All-Pages frame itself.

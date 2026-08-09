@@ -473,6 +473,9 @@ type FullDocumentOptions struct {
 	Locale string
 	// RenderContext provides document and dataset context.
 	RenderContext *RenderContext
+	// Math emits the embedded KaTeX stylesheet link. Without it the
+	// server-rendered math shows both the KaTeX HTML and its MathML fallback.
+	Math bool
 }
 
 // WrapDocumentWithContext wraps rendered HTML content in a full bino HTML document.
@@ -630,6 +633,7 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 		Locale:        locale,
 		EngineVersion: engineVersion,
 		Title:         opts.Title,
+		IncludeKatex:  opts.Math,
 		PageCSS:       htmltemplate.CSS(pageCSS),               //nolint:gosec // G203: generated from trusted format/orientation values
 		CustomCSS:     htmltemplate.CSS(customCSS),             //nolint:gosec // G203: stylesheet is from trusted manifest config
 		ContextBody:   htmltemplate.HTML(contextBody.String()), //nolint:gosec // G203: content is rendered from trusted template engine output
@@ -716,6 +720,7 @@ type fullTemplateData struct {
 	Locale        string
 	EngineVersion string
 	Title         string
+	IncludeKatex  bool
 	PageCSS       htmltemplate.CSS
 	CustomCSS     htmltemplate.CSS
 	ContextBody   htmltemplate.HTML
@@ -731,6 +736,7 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
   <title>{{.Title}}</title>
   <script type='module' src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
   <script nomodule src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
+  {{if .IncludeKatex}}<link rel='stylesheet' href='/__bino/static/katex/katex.min.css'>{{end}}
   <style>
     /* Page format */
     {{.PageCSS}}
