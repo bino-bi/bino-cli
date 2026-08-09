@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/term"
+	"github.com/mattn/go-isatty"
 )
 
 // Output provides structured, Vite-style terminal output with colors and formatting.
@@ -42,7 +42,7 @@ func NewOutput(cfg OutputConfig) *Output {
 	// Determine TTY status
 	isTTY := false
 	if f, ok := stdout.(*os.File); ok {
-		isTTY = term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: fd value fits in int on all supported platforms
+		isTTY = isatty.IsTerminal(f.Fd())
 	}
 
 	// Check CI environment

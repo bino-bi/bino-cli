@@ -16,7 +16,7 @@ Common flags:
 
 - `--work-dir` – report bundle directory (default: `.`).
 - `--out-dir` – output directory for lint logs (default: `dist`).
-- `--log-format` – log format: `text` (default) or `json`.
+- `--lint-log-format` – lint log file format: `text` (default) or `json`.
 - `--execute-queries` – execute dataset queries and validate data (slower but catches data issues).
 - `--fail-on-warnings` – exit with non-zero code if any warnings are found (useful for CI).
 
@@ -37,7 +37,7 @@ bino lint --work-dir ./reports
 Output JSON log for CI integration:
 
 ```bash
-bino lint --log-format json
+bino lint --lint-log-format json
 ```
 
 Execute queries and validate data:

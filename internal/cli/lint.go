@@ -29,7 +29,7 @@ func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered comple
 	var (
 		workdir        string
 		outDir         string
-		logFormat      string
+		lintLogFormat  string
 		executeQueries bool
 		failOnWarnings bool
 	)
@@ -219,7 +219,7 @@ there is a fatal error loading manifests.`),
 			}
 
 			// Write JSON lint log if requested
-			if logFormat == "json" {
+			if lintLogFormat == "json" {
 				jsonLogPath := filepath.Join(outputDir, fmt.Sprintf("bino-lint-%s.json", shortRunID))
 				if err := writeLintJSONLog(jsonLogPath, runID, startTime, projectRoot, documents, logFindings); err != nil {
 					logger.Warnf("failed to write JSON lint log: %v", err)
@@ -255,7 +255,7 @@ there is a fatal error loading manifests.`),
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing report manifests")
 	cmd.Flags().StringVar(&outDir, "out-dir", "dist", "Directory (relative to --work-dir) for lint logs")
-	cmd.Flags().StringVar(&logFormat, "log-format", "text", "Lint log format: 'text' for human-readable or 'json' for machine-parseable")
+	cmd.Flags().StringVar(&lintLogFormat, "lint-log-format", "text", "Lint log file format: 'text' for human-readable or 'json' for machine-parseable")
 	cmd.Flags().BoolVar(&executeQueries, "execute-queries", false,
 		"Execute dataset queries and validate data (slower but catches data issues)")
 	cmd.Flags().BoolVar(&failOnWarnings, "fail-on-warnings", false,
