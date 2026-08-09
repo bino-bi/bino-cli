@@ -47,7 +47,7 @@ var kindCategories = []KindCategory{
 		Kinds: []KindInfo{
 			{Name: "text", Description: "Text content with optional data binding"},
 			{Name: "table", Description: "Data table from a DataSet"},
-			{Name: "chartstructure", Description: "Structural chart (bar, pie, etc.)"},
+			{Name: "chartstructure", Description: "Structure chart (categorical bars)"},
 			{Name: "charttime", Description: "Time-series chart"},
 			{Name: "chartscatter", Description: "XY scatter chart"},
 			{Name: "chartbubble", Description: "Bubble portfolio chart"},

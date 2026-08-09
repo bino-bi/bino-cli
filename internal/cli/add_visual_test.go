@@ -72,36 +72,20 @@ func TestBuildTableDocument(t *testing.T) {
 }
 
 func TestBuildChartStructureDocument(t *testing.T) {
-	t.Run("dataset and title survive", func(t *testing.T) {
-		data := ChartStructureManifestData{
-			Name:    "sales_by_region",
-			Dataset: "region_sales",
-			Title:   "Sales by Region",
-		}
-		got := wizardRoundTrip(t, buildChartStructureDocument(data), "chart.yaml")
-		assertContainsAll(t, got, []string{
-			"kind: ChartStructure",
-			"name: sales_by_region",
-			"dataset: $region_sales",
-			"chartTitle: Sales by Region",
-		})
-	})
-
-	// Canary: chartStructureSpecBase is closed and has no `type` property,
-	// yet the wizard offers --type bar/pie/donut/radar — a document carrying
-	// it is rejected by the validating write path instead of landing on
-	// disk. If this starts failing, the schema gained the property and the
-	// wizard prompt should be revisited.
-	t.Run("the wizard's chart type is rejected at write time", func(t *testing.T) {
-		data := ChartStructureManifestData{
-			Name:      "typed_chart",
-			Dataset:   "region_sales",
-			ChartType: "bar",
-		}
-		err := WriteSchemaDocument(buildChartStructureDocument(data), t.TempDir(), "typed_chart.yaml", false, discardCmd().OutOrStdout())
-		if err == nil {
-			t.Fatal("expected a schema validation error for the unsupported type property")
-		}
+	// The wizard once offered --type bar/pie/donut/radar, a property neither
+	// the schema nor bn-chart-structure ever had; the flag and prompt are
+	// gone, so the builder emits only real properties.
+	data := ChartStructureManifestData{
+		Name:    "sales_by_region",
+		Dataset: "region_sales",
+		Title:   "Sales by Region",
+	}
+	got := wizardRoundTrip(t, buildChartStructureDocument(data), "chart.yaml")
+	assertContainsAll(t, got, []string{
+		"kind: ChartStructure",
+		"name: sales_by_region",
+		"dataset: $region_sales",
+		"chartTitle: Sales by Region",
 	})
 }
 

@@ -30,7 +30,6 @@ type ChartStructureManifestData struct {
 	Constraints []string
 	Dataset     string
 	Title       string
-	ChartType   string // bar, pie, donut, etc.
 }
 
 // ChartTimeManifestData holds data for rendering a ChartTime manifest.
@@ -260,7 +259,6 @@ func newAddChartStructureCommand() *cobra.Command { //nolint:gocognit // grandfa
 	var (
 		flagDataset    string
 		flagTitle      string
-		flagType       string
 		flagConstraint []string
 		flagOutput     string
 		flagAppendTo   string
@@ -273,30 +271,20 @@ func newAddChartStructureCommand() *cobra.Command { //nolint:gocognit // grandfa
 		Use:   "chartstructure [name]",
 		Short: "Create a ChartStructure manifest",
 		Long: strings.TrimSpace(`
-Create a new ChartStructure manifest for structural charts.
+Create a new ChartStructure manifest for structure comparisons.
 
-ChartStructure displays data from a DataSet as a structural chart:
-  - bar: Horizontal or vertical bar chart
-  - pie: Pie chart
-  - donut: Donut chart
-  - radar: Radar/spider chart
+ChartStructure renders an IBCS structure chart: horizontal bars comparing
+a measure across categories, with scenario columns (ac/pp/fc/pl) and
+variance overlays.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
   bino add chartstructure
 
-  # Bar chart
+  # Structure chart
   bino add chartstructure sales_by_region \
     --dataset region_sales \
-    --type bar \
     --title "Sales by Region" \
-    --output components/charts.yaml \
-    --no-prompt
-
-  # Pie chart
-  bino add chartstructure category_breakdown \
-    --dataset category_data \
-    --type pie \
     --output components/charts.yaml \
     --no-prompt
 `),
@@ -343,7 +331,6 @@ ChartStructure displays data from a DataSet as a structural chart:
 				Constraints: flagConstraint,
 				Dataset:     flagDataset,
 				Title:       flagTitle,
-				ChartType:   flagType,
 			}
 
 			var outputPath string
@@ -393,24 +380,6 @@ ChartStructure displays data from a DataSet as a structural chart:
 				}
 			}
 
-			// Chart type
-			if data.ChartType == "" {
-				options := []SelectOption{
-					{Label: "bar", Description: "Bar chart (horizontal or vertical)"},
-					{Label: "pie", Description: "Pie chart"},
-					{Label: "donut", Description: "Donut chart"},
-					{Label: "radar", Description: "Radar/spider chart"},
-				}
-
-				idx, err := addPromptSelect("Chart type", options)
-				if err != nil {
-					return RuntimeError(err)
-				}
-
-				types := []string{"bar", "pie", "donut", "radar"}
-				data.ChartType = types[idx]
-			}
-
 			// Title
 			if data.Title == "" {
 				data.Title, _ = addPromptString("Chart title (optional)", "")
@@ -448,7 +417,6 @@ ChartStructure displays data from a DataSet as a structural chart:
 
 	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name (required)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Chart title")
-	cmd.Flags().StringVar(&flagType, "type", "", "Chart type (bar, pie, donut, radar)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
 	cmd.Flags().StringVar(&flagAppendTo, "append-to", "", "Append to existing file")
@@ -457,7 +425,6 @@ ChartStructure displays data from a DataSet as a structural chart:
 	cmd.Flags().BoolVar(&flagOpenEditor, "open-editor", false, "Open in $EDITOR after creation")
 
 	_ = cmd.RegisterFlagCompletionFunc("dataset", completeDatasets)
-	_ = cmd.RegisterFlagCompletionFunc("type", completeChartStructureTypes)
 
 	return cmd
 }
@@ -1332,15 +1299,6 @@ func promptOptionalMeasureToken(out io.Writer, label string) (string, error) {
 
 // Completion functions
 
-func completeChartStructureTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	return []string{
-		"bar\tBar chart",
-		"pie\tPie chart",
-		"donut\tDonut chart",
-		"radar\tRadar chart",
-	}, cobra.ShellCompDirectiveNoFileComp
-}
-
 func completeMeasureTokens(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	var tokens []string
 	for _, family := range []string{"ac", "pp", "fc", "pl"} {
@@ -1408,7 +1366,6 @@ func buildChartStructureDocument(data ChartStructureManifestData) *schema.Docume
 	spec := &schema.ChartStructureSpec{
 		Dataset:    "$" + data.Dataset,
 		ChartTitle: data.Title,
-		Type:       data.ChartType,
 	}
 
 	doc.Spec = spec

@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"bino.bi/bino/internal/schema"
 )
 
 func TestBuildReportArtefactDocument(t *testing.T) {
@@ -89,19 +92,81 @@ func TestBuildLiveReportArtefactDocument(t *testing.T) {
 		})
 	})
 
-	// Canary: the schema requires spec.title, but the wizard treats the
-	// title as optional — a titleless LiveReportArtefact is rejected by the
-	// validating write path instead of landing on disk. If this starts
-	// failing, either the schema or the wizard prompt changed.
+	// The wizard now requires a title and a root route target; the write
+	// gate backstops both. If these start failing, liveReportArtefactSpec
+	// stopped requiring title, or liveRouteSpec its artefact/layoutPages.
 	t.Run("titleless artefact is rejected at write time", func(t *testing.T) {
 		data := LiveReportArtefactManifestData{
 			Name:   "untitled_app",
-			Routes: map[string]LiveRoute{"/": {}},
+			Routes: map[string]LiveRoute{"/": {Artifact: "monthly_report"}},
 		}
 		err := WriteSchemaDocument(buildLiveReportArtefactDocument(data), t.TempDir(), "untitled.yaml", false, discardCmd().OutOrStdout())
 		if err == nil {
 			t.Fatal("expected a schema validation error for the missing title")
 		}
+	})
+
+	t.Run("empty root route is rejected at write time", func(t *testing.T) {
+		data := LiveReportArtefactManifestData{
+			Name:   "empty_route_app",
+			Title:  "Empty Route App",
+			Routes: map[string]LiveRoute{"/": {}},
+		}
+		err := WriteSchemaDocument(buildLiveReportArtefactDocument(data), t.TempDir(), "empty_route.yaml", false, discardCmd().OutOrStdout())
+		if err == nil {
+			t.Fatal("expected a schema validation error for the route without artefact or layoutPages")
+		}
+	})
+}
+
+// TestAddLiveReportArtefactNoPrompt pins the non-interactive contract: the
+// flags must collect everything the schema requires, and what they collect
+// must validate on disk.
+func TestAddLiveReportArtefactNoPrompt(t *testing.T) {
+	t.Run("missing title and route content are reported up front", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		cmd := newAddLiveReportArtefactCommand()
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"main_app", "--output", "live.yaml", "--no-prompt"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected a missing-flags error")
+		}
+		for _, want := range []string{"--title", "--artefact or --layout-pages"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %s", err, want)
+			}
+		}
+	})
+
+	t.Run("artefact route round-trips through the write gate", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		cmd := newAddLiveReportArtefactCommand()
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{
+			"main_app",
+			"--title", "Report Dashboard",
+			"--artefact", "monthly_report",
+			"--output", "live.yaml",
+			"--no-prompt",
+		})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute: %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dir, "live.yaml"))
+		if err != nil {
+			t.Fatalf("read written manifest: %v", err)
+		}
+		if err := schema.Validate(content); err != nil {
+			t.Fatalf("written manifest failed schema.Validate:\n%s\nerror: %v", content, err)
+		}
+		assertContainsAll(t, string(content), []string{
+			"title: Report Dashboard",
+			"artefact: $monthly_report",
+		})
 	})
 }
 
@@ -134,5 +199,25 @@ func TestBuildSigningProfileDocument(t *testing.T) {
 	})
 	if strings.Contains(got, "inline") || strings.Contains(got, "PRIVATE KEY") || strings.Contains(got, "MIIEvQIBADAN") {
 		t.Errorf("key material was inlined into the manifest:\n%s", got)
+	}
+}
+
+// TestAddSigningProfileNoPromptRequiresAllInputs pins the non-interactive
+// contract: certificate, private key, and signer are required by the schema,
+// so the flags must be too.
+func TestAddSigningProfileNoPromptRequiresAllInputs(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cmd := newAddSigningProfileCommand()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"company_signing", "--output", "signing.yaml", "--no-prompt"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected a missing-flags error")
+	}
+	for _, want := range []string{"--certificate", "--private-key", "--signer-name"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %s", err, want)
+		}
 	}
 }

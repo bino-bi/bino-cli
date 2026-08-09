@@ -61,7 +61,9 @@ Create a new Text manifest for text content in reports.
 
 Text components can display:
   - Static text content
-  - Dynamic text bound to a DataSet value
+  - Dynamic text interpolating a bound DataSet via ` + "`${data...}`" + ` templates
+
+The value is always required — a bound DataSet only feeds the template.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
@@ -76,6 +78,7 @@ Text components can display:
   # Dynamic text from DataSet
   bino add text total_sales \
     --dataset sales_summary \
+    --value 'Total: ${data.sales_summary[0].ac1}' \
     --output components/text.yaml \
     --no-prompt
 `),
@@ -100,8 +103,8 @@ Text components can display:
 				if name == "" {
 					missing = append(missing, "name (as argument)")
 				}
-				if flagValue == "" && flagDataset == "" {
-					missing = append(missing, "--value or --dataset")
+				if flagValue == "" {
+					missing = append(missing, `--value (with --dataset, a template like 'Total: ${data.sales[0].ac1}')`)
 				}
 				if flagOutput == "" && flagAppendTo == "" {
 					missing = append(missing, "--output or --append-to")
@@ -165,11 +168,11 @@ Text components can display:
 				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
-			// Value or Dataset
+			// Text source: static or bound to a DataSet
 			if data.Value == "" && data.Dataset == "" {
 				options := []SelectOption{
 					{Label: "Static text", Description: "Fixed text content"},
-					{Label: "From DataSet", Description: "Dynamic text from a DataSet value"},
+					{Label: "From DataSet", Description: "Template interpolating a DataSet value"},
 				}
 
 				idx, err := addPromptSelect("Text source", options)
@@ -181,12 +184,7 @@ Text components can display:
 					return RuntimeError(err)
 				}
 
-				if idx == 0 {
-					data.Value, err = addPromptString("Text value", "")
-					if err != nil {
-						return RuntimeError(err)
-					}
-				} else {
+				if idx == 1 {
 					datasets := FilterByKind(manifests, "DataSet")
 					if len(datasets) == 0 {
 						fmt.Fprintln(out, "No DataSets found. Enter a name manually.")
@@ -204,6 +202,23 @@ Text components can display:
 							data.Dataset = item.Name
 						}
 					}
+				}
+			}
+
+			// Value — always required: the component renders only the value
+			// template; a bound dataset alone produces an empty text block.
+			if data.Value == "" {
+				label := "Text value"
+				if data.Dataset != "" {
+					label = fmt.Sprintf("Value template (e.g. Total: ${data.%s[0].ac1})", data.Dataset)
+				}
+				data.Value, err = addPromptRequiredString(label)
+				if err != nil {
+					if errors.Is(err, errAddCanceled) {
+						fmt.Fprintln(out, "\nCanceled.")
+						return nil
+					}
+					return RuntimeError(err)
 				}
 			}
 
@@ -237,8 +252,8 @@ Text components can display:
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().StringVar(&flagValue, "value", "", "Static text value")
-	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name for dynamic text")
+	cmd.Flags().StringVar(&flagValue, "value", "", "Text value (required; supports ${data...} templates)")
+	cmd.Flags().StringVar(&flagDataset, "dataset", "", "DataSet name the value template interpolates")
 	cmd.Flags().StringVar(&flagScale, "scale", "", `Scaling mode: "none", "auto", or a positive number`)
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Output file path")
