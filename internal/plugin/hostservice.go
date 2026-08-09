@@ -68,6 +68,14 @@ func (h *BinoHostServer) SetDefaultDuckDBOpener() {
 }
 
 // QueryDuckDB executes a SQL query against the host's DuckDB engine.
+//
+// Error contract (deliberate, load-bearing): a failing query does NOT return
+// a Go error. It returns a *QueryResponse whose Diagnostics carry a single
+// ERROR entry (source "host", stage "query") with err == nil, so the failure
+// crosses the plugin boundary as data the plugin can inspect and report.
+// A non-nil error is reserved for host-side faults: no DuckDB opener
+// configured, a session that fails to open, or result serialization failure.
+// Callers must therefore check Diagnostics, not just err.
 func (h *BinoHostServer) QueryDuckDB(ctx context.Context, req *pluginv1.QueryRequest) (*pluginv1.QueryResponse, error) {
 	h.mu.RLock()
 	opener := h.duckDBOpener
