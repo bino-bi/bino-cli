@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"bino.bi/bino/internal/report/config"
+	reportspec "bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
 )
 
@@ -733,7 +734,7 @@ func TestQueryField_UnmarshalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var q queryField
+			var q reportspec.QueryField
 			err := json.Unmarshal([]byte(tt.input), &q)
 			if tt.wantErr {
 				if err == nil {
@@ -768,38 +769,38 @@ func TestQueryField_ResolveQuery(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		field   queryField
+		field   reportspec.QueryField
 		baseDir string
 		want    string
 		wantErr bool
 	}{
 		{
 			name:    "inline query",
-			field:   queryField{Inline: "SELECT 1"},
+			field:   reportspec.QueryField{Inline: "SELECT 1"},
 			baseDir: workdir,
 			want:    "SELECT 1",
 		},
 		{
 			name:    "file reference",
-			field:   queryField{File: "test.sql"},
+			field:   reportspec.QueryField{File: "test.sql"},
 			baseDir: workdir,
 			want:    sqlContent,
 		},
 		{
 			name:    "relative path with ./",
-			field:   queryField{File: "./test.sql"},
+			field:   reportspec.QueryField{File: "./test.sql"},
 			baseDir: workdir,
 			want:    sqlContent,
 		},
 		{
 			name:    "empty field",
-			field:   queryField{},
+			field:   reportspec.QueryField{},
 			baseDir: workdir,
 			want:    "",
 		},
 		{
 			name:    "missing file",
-			field:   queryField{File: "nonexistent.sql"},
+			field:   reportspec.QueryField{File: "nonexistent.sql"},
 			baseDir: workdir,
 			wantErr: true,
 		},
