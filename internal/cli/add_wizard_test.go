@@ -101,3 +101,60 @@ func TestTypedSelectDataSetValidates(t *testing.T) {
 		t.Errorf("expected generated SQL in DataSet manifest:\n%s", b)
 	}
 }
+
+// TestApplyColumnTyping covers the branch logic directly: an explicit
+// column-type map and a bare column-name list are mutually exclusive in the
+// schema, and the typed map wins.
+func TestApplyColumnTyping(t *testing.T) {
+	tests := []struct {
+		name            string
+		data            DataSourceManifestData
+		wantColumns     map[string]string
+		wantColumnNames []string
+	}{
+		{
+			name:        "columns map only",
+			data:        DataSourceManifestData{Columns: map[string]string{"id": "BIGINT"}},
+			wantColumns: map[string]string{"id": "BIGINT"},
+		},
+		{
+			name:            "column names only",
+			data:            DataSourceManifestData{CSVColumnNames: []string{"a", "b"}},
+			wantColumnNames: []string{"a", "b"},
+		},
+		{
+			name: "columns map wins over column names",
+			data: DataSourceManifestData{
+				Columns:        map[string]string{"a": "VARCHAR"},
+				CSVColumnNames: []string{"x", "y"},
+			},
+			wantColumns: map[string]string{"a": "VARCHAR"},
+		},
+		{
+			name: "neither leaves both empty",
+			data: DataSourceManifestData{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &schema.DataSourceSpec{}
+			applyColumnTyping(spec, tt.data)
+			if len(spec.Columns) != len(tt.wantColumns) {
+				t.Errorf("Columns = %v, want %v", spec.Columns, tt.wantColumns)
+			}
+			for k, v := range tt.wantColumns {
+				if spec.Columns[k] != v {
+					t.Errorf("Columns[%q] = %q, want %q", k, spec.Columns[k], v)
+				}
+			}
+			if len(spec.ColumnNames) != len(tt.wantColumnNames) {
+				t.Errorf("ColumnNames = %v, want %v", spec.ColumnNames, tt.wantColumnNames)
+			}
+			for i, v := range tt.wantColumnNames {
+				if spec.ColumnNames[i] != v {
+					t.Errorf("ColumnNames[%d] = %q, want %q", i, spec.ColumnNames[i], v)
+				}
+			}
+		})
+	}
+}

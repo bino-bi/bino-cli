@@ -898,15 +898,18 @@ func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Docume
 	doc.Metadata.Description = data.Description
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
-	spec := &schema.SigningProfileSpec{
-		SignerName: data.SignerName,
-	}
+	spec := &schema.SigningProfileSpec{}
 
+	// Certificate and key are referenced by path — key material is never
+	// inlined into the manifest.
 	if data.CertificatePath != "" {
-		spec.Certificate = &schema.FileRef{LocalPath: data.CertificatePath}
+		spec.Certificate = &schema.PEMSource{Path: data.CertificatePath}
 	}
 	if data.PrivateKeyPath != "" {
-		spec.PrivateKey = &schema.FileRef{LocalPath: data.PrivateKeyPath}
+		spec.PrivateKey = &schema.PEMSource{Path: data.PrivateKeyPath}
+	}
+	if data.SignerName != "" {
+		spec.Signer = &schema.SigningProfileSigner{Name: data.SignerName}
 	}
 
 	doc.Spec = spec
