@@ -325,7 +325,9 @@ func (s *Server) getSchema(ctx context.Context) *schemaModel {
 	defer cancel()
 	raw, err := s.backend.MergedSchema(fctx)
 	if err != nil {
-		s.log.Debugf("merged schema unavailable: %v", err)
+		// Warn, not Debug: this is the mechanism behind "no suggestions", and
+		// an editor-spawned server never runs with --verbose.
+		s.log.Warnf("merged schema unavailable, serving without schema: %v", err)
 		return &schemaModel{}
 	}
 	m = parseSchema(raw)
@@ -347,7 +349,7 @@ func (s *Server) getIndex(ctx context.Context) []IndexDoc {
 	defer cancel()
 	idx, err := s.backend.Index(fctx)
 	if err != nil {
-		s.log.Debugf("index unavailable: %v", err)
+		s.log.Warnf("index unavailable, serving without project index: %v", err)
 		return nil
 	}
 	s.mu.Lock()

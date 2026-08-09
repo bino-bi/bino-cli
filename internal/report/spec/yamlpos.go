@@ -1,7 +1,9 @@
 package spec
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -27,7 +29,7 @@ func EditYAMLDocument(content string, position int, patch map[string]any) (full 
 		var n yaml.Node
 		decErr := decoder.Decode(&n)
 		if decErr != nil {
-			if decErr.Error() == "EOF" {
+			if errors.Is(decErr, io.EOF) {
 				break
 			}
 			return "", "", fmt.Errorf("parse yaml: %w", decErr)
@@ -292,7 +294,7 @@ func decodeDocuments(content string) ([]*yaml.Node, error) {
 		var n yaml.Node
 		decErr := decoder.Decode(&n)
 		if decErr != nil {
-			if decErr.Error() == "EOF" {
+			if errors.Is(decErr, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("parse yaml: %w", decErr)
@@ -662,7 +664,7 @@ func ParseYAMLNodes(content string) ([]*yaml.Node, error) {
 		var doc yaml.Node
 		err := decoder.Decode(&doc)
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nodes, err
