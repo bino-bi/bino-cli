@@ -29,6 +29,9 @@ type ManagedStateConfig struct {
 	Logger        logx.Logger
 	KindProvider  config.KindProvider
 	PluginLinters lint.PluginLinterRegistry
+	// EngineCompat is the engine-version compatibility check to run during
+	// validation (see State.SetEngineCompat). May be nil.
+	EngineCompat func(dir string) (Diagnostic, bool)
 }
 
 // NewManagedState opens a shared DuckDB session, loads the standard extensions,
@@ -63,6 +66,9 @@ func NewManagedState(ctx context.Context, cfg ManagedStateConfig) (*ManagedState
 	}
 	if cfg.PluginLinters != nil {
 		state.SetPluginLinters(cfg.PluginLinters)
+	}
+	if cfg.EngineCompat != nil {
+		state.SetEngineCompat(cfg.EngineCompat)
 	}
 
 	return &ManagedState{State: state, session: session, root: cfg.ProjectRoot, logger: cfg.Logger}, nil

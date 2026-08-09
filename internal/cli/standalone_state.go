@@ -34,7 +34,7 @@ func loadStandaloneState(ctx context.Context, logger logx.Logger, projectRoot st
 		}
 	}
 
-	managedCfg := daemon.ManagedStateConfig{ProjectRoot: projectRoot, Logger: logger}
+	managedCfg := daemon.ManagedStateConfig{ProjectRoot: projectRoot, Logger: logger, EngineCompat: engineCompatDiagnostic}
 	if reg != nil {
 		managedCfg.KindProvider = reg
 		managedCfg.PluginLinters = plugin.NewLinterRegistry(reg)

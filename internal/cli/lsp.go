@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,13 +11,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
-	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/graph"
-	"bino.bi/bino/internal/report/lint"
-	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/version"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -44,16 +44,9 @@ type LSPColumnsResult struct {
 }
 
 // LSPDiagnostic represents a single diagnostic message for a file/document.
-type LSPDiagnostic struct {
-	File     string `json:"file"`
-	Position int    `json:"position"` // 1-based document index within multi-doc YAML
-	Line     int    `json:"line"`     // 1-based line number (0 if unknown)
-	Column   int    `json:"column"`   // 1-based column number (0 if unknown)
-	Severity string `json:"severity"` // "error", "warning", "info", "hint"
-	Message  string `json:"message"`
-	Code     string `json:"code,omitempty"` // optional error code
-	Field    string `json:"field,omitempty"`
-}
+// It is the shared pipeline's type, so lsp-helper and the daemon cannot
+// drift; the alias keeps the established name in this package.
+type LSPDiagnostic = diagnostics.Diagnostic
 
 // LSPValidateResult is the JSON output for the validate command.
 type LSPValidateResult struct {
@@ -270,219 +263,46 @@ func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io
 	}
 
 	// First pass: use lenient mode to gather documents but track validation errors
-	diagnostics := validateDirectory(ctx, absDir, executeQueries)
+	diags := validateDirectory(ctx, absDir, executeQueries)
 
-	result.Diagnostics = diagnostics
-	result.Valid = len(diagnostics) == 0
+	result.Diagnostics = diags
+	result.Valid = len(diags) == 0
 
 	return outputJSON(out, result)
 }
 
 // validateDirectory performs validation on all bino documents in a directory
-// and returns structured diagnostics for any issues found.
-// If executeQueries is true, datasets are executed and data is validated.
+// and returns structured diagnostics for any issues found. It runs the same
+// diagnostics.Collect pipeline as the daemon: plugins are loaded best-effort
+// (like `bino lint`), foreign YAML is skipped, and the engine-compat check is
+// included. If executeQueries is true, datasets are executed and data is
+// validated. The result is never nil, so the JSON output is [] rather than
+// null when the bundle is clean.
 func validateDirectory(ctx context.Context, dir string, executeQueries bool) []LSPDiagnostic {
-	var diagnostics []LSPDiagnostic
-
-	// Load documents in strict mode first to catch schema errors. Errors are
-	// collected per document so every schema issue is reported, not just the
-	// first one. ValidateDocuments runs inside the loader and its failures
-	// land in loadErrs as well.
-	var loadErrs []error
-	docs, err := config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: false, CollectErrors: &loadErrs})
-	if err != nil {
-		loadErrs = append(loadErrs, err)
-	}
-	for _, loadErr := range loadErrs {
-		diagnostics = append(diagnostics, parseValidationError(loadErr)...)
-	}
-	if len(loadErrs) > 0 {
-		// If strict loading had errors, also try lenient to get the document
-		// list for additional checks
-		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient fallback pass; the strict errors were already collected
+	opts := diagnostics.Options{
+		SkipForeign:    true,
+		EngineCompat:   engineCompatDiagnostic,
+		ExecuteQueries: executeQueries,
 	}
 
-	// Check for missing environment variables
-	// Exclude param names defined in LayoutPages (they're resolved at render time)
-	paramNames := config.CollectLayoutPageParamNames(docs)
-	missingVars := config.CollectMissingEnvVarsExcluding(docs, paramNames)
-	for _, mv := range missingVars {
-		diagnostics = append(diagnostics, LSPDiagnostic{
-			File:     mv.File,
-			Severity: "warning",
-			Message:  fmt.Sprintf("Unresolved environment variable: %s", mv.VarName),
-			Code:     "missing-env-var",
-		})
-	}
-
-	// Engine version compatibility check — emits an error-severity diagnostic
-	// on bino.toml when the resolved engine version is outside the supported ranges.
-	if diag, ok := engineCompatDiagnostic(dir); ok {
-		diagnostics = append(diagnostics, diag)
-	}
-
-	// Run lint rules and add findings as warnings
-	lintDocs := lint.DocumentsFromConfig(docs)
-	runner := lint.NewDefaultRunner()
-	findings := runner.Run(ctx, lintDocs)
-	for _, f := range findings {
-		diagnostics = append(diagnostics, LSPDiagnostic{
-			File:     f.File,
-			Position: f.DocIdx,
-			Line:     f.Line,
-			Column:   f.Column,
-			Severity: "warning",
-			Message:  f.Message,
-			Code:     f.RuleID,
-			Field:    f.Path,
-		})
-	}
-
-	// Execute queries and validate data if requested
-	if executeQueries && len(docs) > 0 {
-		execOpts := &dataset.ExecuteOptions{
-			DataValidation:           dataset.DataValidationWarn,
-			DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
-			ContinueOnQueryError:     true,
-		}
-		_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
-		if err != nil {
-			diagnostics = append(diagnostics, LSPDiagnostic{
-				Severity: "warning",
-				Message:  fmt.Sprintf("Query execution failed: %v", err),
-				Code:     "data-validation-error",
-			})
-		}
-		// Add data validation warnings as diagnostics
-		for _, w := range warnings {
-			// Find the dataset document to get file location
-			var file string
-			var position int
-			for _, doc := range docs {
-				if doc.Kind == "DataSet" && doc.Name == w.DataSet {
-					file = doc.File
-					position = doc.Position
-					break
-				}
-			}
-			diagnostics = append(diagnostics, LSPDiagnostic{
-				File:     file,
-				Position: position,
-				Severity: "warning",
-				Message:  w.Message,
-				Code:     "data-validation",
-				Field:    w.DataSet,
-			})
+	// Load plugins if declared, best-effort. lsp-helper emits pure JSON on
+	// stdout, so the plugin manager gets a stderr-only logger — its Infof
+	// lines must not corrupt the stream.
+	projectCfg, cfgErr := pathutil.LoadProjectConfig(dir)
+	if cfgErr == nil && len(projectCfg.Plugins) > 0 {
+		logger := logx.NewTerminal(io.Discard, os.Stderr, false)
+		mgr := plugin.NewManager(logger.Channel("plugin"))
+		mgr.SetVerbose(logx.DebugEnabled(ctx))
+		if err := mgr.LoadAll(ctx, projectCfg, dir, version.Version); err != nil {
+			logger.Warnf("Failed to load plugins: %v", err)
+		} else {
+			defer mgr.ShutdownAll(ctx)
+			opts.KindProvider = mgr.Registry()
+			opts.PluginLinters = plugin.NewLinterRegistry(mgr.Registry())
 		}
 	}
 
-	return diagnostics
-}
-
-// parseValidationError converts a validation error into LSPDiagnostic entries.
-func parseValidationError(err error) []LSPDiagnostic {
-	var diagnostics []LSPDiagnostic
-
-	errStr := err.Error()
-
-	// Check for schema validation errors
-	var schemaErr *spec.SchemaValidationError
-	if errors.As(err, &schemaErr) {
-		for _, se := range schemaErr.Errors {
-			diag := LSPDiagnostic{
-				File:     schemaErr.File,
-				Position: schemaErr.DocPosition,
-				Line:     se.Line,
-				Column:   se.Column,
-				Severity: "error",
-				Message:  se.Description,
-				Field:    se.Field,
-				Code:     "schema-validation",
-			}
-			diagnostics = append(diagnostics, diag)
-		}
-		return diagnostics
-	}
-
-	// Parse file path from error message patterns like "path/file.yaml document N: ..."
-	// or "path/file.yaml #N (Kind) ..."
-	file, position, message := parseFileError(errStr)
-	if file != "" {
-		diagnostics = append(diagnostics, LSPDiagnostic{
-			File:     file,
-			Position: position,
-			Severity: "error",
-			Message:  message,
-			Code:     "validation-error",
-		})
-	} else {
-		// Generic error
-		diagnostics = append(diagnostics, LSPDiagnostic{
-			Severity: "error",
-			Message:  errStr,
-			Code:     "validation-error",
-		})
-	}
-
-	return diagnostics
-}
-
-// parseFileError attempts to extract file path and position from error messages.
-func parseFileError(errStr string) (file string, position int, message string) {
-	// Pattern: "file.yaml document N: message" or "file.yaml #N (Kind) message"
-	// Try to find patterns like "/path/to/file.yaml document 2:"
-	parts := strings.SplitN(errStr, " document ", 2)
-	if len(parts) == 2 {
-		file = strings.TrimSpace(parts[0])
-		// Remove any prefix like "decode " or "validate "
-		for _, prefix := range []string{"decode ", "read ", "validate ", "marshal ", "header "} {
-			file = strings.TrimPrefix(file, prefix)
-		}
-
-		rest := parts[1]
-		// Extract position number
-		var posStr string
-		for i, c := range rest {
-			if c >= '0' && c <= '9' {
-				posStr += string(c)
-			} else {
-				message = strings.TrimPrefix(rest[i:], ": ")
-				break
-			}
-		}
-		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
-		}
-		return file, position, message
-	}
-
-	// Pattern: "file.yaml #N (Kind) message"
-	parts = strings.SplitN(errStr, " #", 2)
-	if len(parts) == 2 {
-		file = strings.TrimSpace(parts[0])
-		rest := parts[1]
-
-		// Extract position number
-		var posStr string
-		for i, c := range rest {
-			if c >= '0' && c <= '9' {
-				posStr += string(c)
-			} else {
-				message = strings.TrimSpace(rest[i:])
-				// Remove leading " (Kind)" pattern
-				if idx := strings.Index(message, ")"); idx > 0 {
-					message = strings.TrimSpace(message[idx+1:])
-				}
-				break
-			}
-		}
-		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
-		}
-		return file, position, message
-	}
-
-	return "", 0, errStr
+	return diagnostics.Collect(ctx, dir, opts)
 }
 
 func newLSPRowsCommand() *cobra.Command {

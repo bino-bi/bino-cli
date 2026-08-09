@@ -19,22 +19,15 @@ import (
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
+	"bino.bi/bino/internal/report/diagnostics"
 	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/version"
 )
 
-// Diagnostic represents a single diagnostic message for a file/document.
-type Diagnostic struct {
-	File     string `json:"file"`
-	Position int    `json:"position"`
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Code     string `json:"code,omitempty"`
-	Field    string `json:"field,omitempty"`
-	Hint     string `json:"hint,omitempty"` // actionable guidance (spec.Hint)
-}
+// Diagnostic represents a single diagnostic message for a file/document. It
+// is the shared pipeline's type; the alias keeps the daemon's exported name
+// (and its HTTP/SSE JSON contract) stable.
+type Diagnostic = diagnostics.Diagnostic
 
 // Server is the daemon HTTP server.
 type Server struct {
