@@ -29,7 +29,13 @@ jobs:
         with:
           fail-on-severity: high
           allow-licenses: BlueOak-1.0.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0, 0BSD
+          # golang.org/x/* carry a Google PATENTS grant next to their
+          # BSD-3-Clause license, which the scanner reports as a LicenseRef and
+          # then rejects. modelcontextprotocol/go-sdk has a single LICENSE file
+          # covering Apache-2.0 code, MIT legacy code and CC-BY-4.0 docs; we
+          # only link the code.
           allow-dependencies-licenses: >-
+            pkg:golang/github.com/modelcontextprotocol/go-sdk,
             pkg:golang/golang.org/x/crypto,
             pkg:golang/golang.org/x/mod,
             pkg:golang/golang.org/x/net,
@@ -38,5 +44,6 @@ jobs:
             pkg:golang/golang.org/x/telemetry,
             pkg:golang/golang.org/x/term,
             pkg:golang/golang.org/x/text,
+            pkg:golang/golang.org/x/time,
             pkg:golang/golang.org/x/tools
           comment-summary-in-pr: on-failure
