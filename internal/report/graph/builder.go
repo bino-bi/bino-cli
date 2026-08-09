@@ -12,7 +12,22 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	componentref "bino.bi/bino/internal/report/ref"
 )
+
+// componentKinds are the manifest kinds the builder registers as
+// NodeComponent nodes (standalone components). NodeByManifest derives its
+// lookup set from this list, so the two never drift.
+var componentKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid"}
+
+// componentKindSet is the membership view of componentKinds.
+var componentKindSet = func() map[string]struct{} {
+	s := make(map[string]struct{}, len(componentKinds))
+	for _, k := range componentKinds {
+		s[k] = struct{}{}
+	}
+	return s
+}()
 
 type builder struct {
 	ctx  context.Context
@@ -122,8 +137,7 @@ func (b *builder) Build() (*Graph, error) {
 func (b *builder) categorize() {
 	for _, doc := range b.docs {
 		// Build docIndex for ref resolution (all kinds except DataSource/DataSet/ReportArtefact).
-		switch doc.Kind {
-		case "LayoutPage", "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid":
+		if _, isComponent := componentKindSet[doc.Kind]; isComponent || doc.Kind == "LayoutPage" || doc.Kind == "LayoutCard" {
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
 		}
@@ -137,14 +151,17 @@ func (b *builder) categorize() {
 			b.layoutPageDocs = append(b.layoutPageDocs, doc)
 		case "LayoutCard":
 			b.layoutCardDocs = append(b.layoutCardDocs, doc)
-		case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid":
-			b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 		case "ReportArtefact":
 			b.artefactDocs = append(b.artefactDocs, doc)
 		case "DocumentArtefact":
 			b.documentArtefactDocs = append(b.documentArtefactDocs, doc)
-		case "ScalingGroup", "ComponentStyle", "RuleSet", "Internationalization", "ConnectionSecret", "SigningProfile":
-			// Config/resource kinds — no graph node needed, collected during rendering.
+		default:
+			if _, isComponent := componentKindSet[doc.Kind]; isComponent {
+				b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
+			}
+			// Config/resource kinds (ScalingGroup, ComponentStyle, RuleSet,
+			// Internationalization, ConnectionSecret, SigningProfile) get no
+			// graph node — they are collected during rendering.
 		}
 	}
 }
@@ -222,8 +239,7 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	kinds := []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid"}
-	for _, kind := range kinds {
+	for _, kind := range componentKinds {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {
 			if err := b.ctx.Err(); err != nil {
@@ -398,106 +414,32 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 // Returns (nil, "", nil) if optional=true and ref is missing (skip gracefully).
 // Returns an error if a required ref is missing or points to LayoutPage (disallowed).
 func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.RawMessage, string, error) {
-	// Inline child: no ref, just return spec directly.
 	if child.Ref == "" {
 		return child.Spec, "", nil
 	}
-
-	log := logx.FromContext(b.ctx).Channel("graph")
-
-	// Ref child: look up the referenced document.
-	key := child.Kind + ":" + child.Ref
-	refDoc, found := b.docIndex[key]
-	if !found {
-		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
-		if lpDoc, lpFound := b.docIndex["LayoutPage:"+child.Ref]; lpFound {
-			return nil, "", fmt.Errorf("layout child in %q: ref %q points to LayoutPage %q which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, LayoutCard, and Image can be referenced",
-				parentName, child.Ref, lpDoc.Name)
-		}
-
-		// Ref not found.
-		if child.Optional {
-			// Optional ref: skip gracefully.
-			log.Debugf("layout child in %q: optional ref %q of kind %q not found, skipping child", parentName, child.Ref, child.Kind)
-			return nil, "", nil
-		}
-
-		// Required ref is missing - error.
-		return nil, "", fmt.Errorf("layout child in %q: required reference %q of kind %q not found (use optional: true to allow missing refs)", parentName, child.Ref, child.Kind)
+	res, err := componentref.Resolve(componentref.Ref{
+		Kind:     child.Kind,
+		Name:     child.Ref,
+		Spec:     child.Spec,
+		Optional: child.Optional,
+		Params:   child.Params,
+	}, componentref.Options{
+		Index: b.docIndex,
+		// The builder receives the unfiltered document set, so the global
+		// index equals the primary one and constraint-filtered skips can
+		// never fire here — matching the renderer's semantics.
+		GlobalIndex: b.docIndex,
+		IsPage: func(name string) bool {
+			_, ok := b.docIndex["LayoutPage:"+name]
+			return ok
+		},
+		Log:   logx.FromContext(b.ctx).Channel("graph"),
+		Where: fmt.Sprintf("layout child in %q", parentName),
+	})
+	if err != nil || res.Skipped {
+		return nil, "", err
 	}
-
-	// Expand params into the referenced document before extracting its spec.
-	refRaw := refDoc.Raw
-	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
-		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
-	}
-
-	// Extract the spec from the referenced document.
-	var refPayload struct {
-		Spec json.RawMessage `json:"spec"`
-	}
-	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
-		return nil, "", fmt.Errorf("layout child in %q: failed to parse ref %q spec: %w", parentName, child.Ref, err)
-	}
-
-	// If no overrides, return the referenced spec directly.
-	if len(child.Spec) == 0 || string(child.Spec) == "null" {
-		return refPayload.Spec, refDoc.File, nil
-	}
-
-	// Merge: referenced spec as base, child.Spec as overrides.
-	mergedSpec, err := mergeJSONObjects(refPayload.Spec, child.Spec)
-	if err != nil {
-		return nil, "", fmt.Errorf("layout child in %q: failed to merge ref %q with overrides: %w", parentName, child.Ref, err)
-	}
-	return mergedSpec, refDoc.File, nil
-}
-
-// mergeJSONObjects performs a deep merge of two JSON objects.
-// Values from override replace values in base. Objects are merged recursively.
-// Arrays are replaced entirely (not merged element-by-element).
-func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
-	var baseMap map[string]json.RawMessage
-	var overrideMap map[string]json.RawMessage
-
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		return nil, fmt.Errorf("base is not a JSON object: %w", err)
-	}
-	if err := json.Unmarshal(override, &overrideMap); err != nil {
-		return nil, fmt.Errorf("override is not a JSON object: %w", err)
-	}
-
-	result := make(map[string]json.RawMessage, len(baseMap)+len(overrideMap))
-	for k, v := range baseMap {
-		result[k] = v
-	}
-
-	for k, overrideVal := range overrideMap {
-		baseVal, hasBase := result[k]
-		if !hasBase {
-			result[k] = overrideVal
-			continue
-		}
-
-		// Check if both are objects for recursive merge.
-		var baseObj map[string]json.RawMessage
-		var overrideObj map[string]json.RawMessage
-		baseIsObj := json.Unmarshal(baseVal, &baseObj) == nil && baseObj != nil
-		overrideIsObj := json.Unmarshal(overrideVal, &overrideObj) == nil && overrideObj != nil
-
-		if baseIsObj && overrideIsObj {
-			merged, err := mergeJSONObjects(baseVal, overrideVal)
-			if err != nil {
-				return nil, err
-			}
-			result[k] = merged
-		} else {
-			// Override replaces base (including arrays).
-			result[k] = overrideVal
-		}
-	}
-
-	return json.Marshal(result)
+	return res.Spec, res.Doc.File, nil
 }
 
 func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, label, name string) (*Node, error) {

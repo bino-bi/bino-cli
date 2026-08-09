@@ -55,6 +55,40 @@ func (g *Graph) NodeByID(id string) (*Node, bool) {
 	return node, ok
 }
 
+// NodeByManifest resolves the graph node for a manifest kind + name.
+// Component kinds are stored as NodeComponent with the manifest kind in the
+// node attributes (the set is derived from the builder's own componentKinds
+// list, so it cannot drift); ReportArtefact uses its dedicated index; other
+// kinds map directly onto a NodeKind. Returns nil when no node matches.
+func (g *Graph) NodeByManifest(kind, name string) *Node {
+	if g == nil {
+		return nil
+	}
+	if kind == "ReportArtefact" {
+		if node, ok := g.ReportArtefactByName(name); ok {
+			return node
+		}
+		return nil
+	}
+	if _, isComponent := componentKindSet[kind]; isComponent {
+		for _, node := range g.Nodes {
+			if node.Kind == NodeComponent &&
+				node.Attributes["componentKind"] == kind &&
+				node.Name == name {
+				return node
+			}
+		}
+		return nil
+	}
+	targetKind := NodeKind(kind)
+	for _, node := range g.Nodes {
+		if node.Kind == targetKind && node.Name == name {
+			return node
+		}
+	}
+	return nil
+}
+
 // ReportArtefactByName resolves a ReportArtefact node by metadata.name.
 func (g *Graph) ReportArtefactByName(name string) (*Node, bool) {
 	if g == nil {
@@ -185,73 +219,6 @@ func Build(ctx context.Context, docs []config.Document) (*Graph, error) {
 func BuildWithOptions(ctx context.Context, docs []config.Document, opts BuildOptions) (*Graph, error) {
 	b := newBuilder(ctx, docs, opts)
 	return b.Build()
-}
-
-// FilterDocumentsByConstraints filters documents based on their metadata.constraints
-// against the given constraint context (artifact labels, spec, and mode).
-// ReportArtefact documents are never filtered.
-// Returns the filtered documents and an error if any constraint evaluation fails.
-func FilterDocumentsByConstraints(docs []config.Document, ctx *spec.ConstraintContext) ([]config.Document, error) {
-	if ctx == nil {
-		return docs, nil
-	}
-
-	result := make([]config.Document, 0, len(docs))
-	for _, doc := range docs {
-		// Artefact kinds are never filtered by constraints
-		if doc.Kind == "ReportArtefact" {
-			result = append(result, doc)
-			continue
-		}
-
-		// No constraints means always included
-		if len(doc.Constraints) == 0 {
-			result = append(result, doc)
-			continue
-		}
-
-		// Evaluate constraints
-		match, err := spec.EvaluateParsedConstraintsWithContext(doc.Constraints, ctx, doc.Kind, doc.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		if match {
-			result = append(result, doc)
-		}
-	}
-
-	return result, nil
-}
-
-// BuildForArtefact constructs a Graph for a specific artifact, applying constraint filtering.
-// Only documents whose constraints match the artefact's context are included.
-func BuildForArtefact(ctx context.Context, docs []config.Document, artifact config.Artifact, mode spec.Mode) (*Graph, error) {
-	// Build constraint context from artifact
-	specMap, err := spec.ToMap(artifact.Document.Raw)
-	if err != nil {
-		return nil, err
-	}
-
-	constraintCtx := &spec.ConstraintContext{
-		Labels: artifact.Labels,
-		Spec:   specMap,
-		Mode:   mode,
-	}
-
-	// Filter documents by constraints
-	filtered, err := FilterDocumentsByConstraints(docs, constraintCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate name uniqueness for this artifact after filtering
-	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
-		return nil, err
-	}
-
-	// Build the graph with filtered documents
-	return BuildWithOptions(ctx, filtered, BuildOptions{Mode: mode})
 }
 
 // CollectReachable returns every node reachable from the given roots by

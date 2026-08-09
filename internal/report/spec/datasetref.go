@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // DatasetRef represents a dataset binding that can be either:
@@ -282,6 +284,29 @@ func (q QueryField) MarshalJSON() ([]byte, error) {
 		return json.Marshal(q.Inline)
 	}
 	return []byte("null"), nil
+}
+
+// ResolveQuery resolves the query content, reading the referenced file when
+// the $file form is used. Relative paths resolve against baseDir (the
+// manifest's directory).
+func (q QueryField) ResolveQuery(baseDir string) (string, error) {
+	if q.Inline != "" {
+		return q.Inline, nil
+	}
+	if q.File == "" {
+		return "", nil
+	}
+
+	filePath := q.File
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(baseDir, filePath)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read query file %s: %w", q.File, err)
+	}
+	return string(content), nil
 }
 
 // InlineCount returns the number of inline DataSource dependencies.

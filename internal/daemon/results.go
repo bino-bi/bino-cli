@@ -155,7 +155,7 @@ func (s *State) GraphDeps(ctx context.Context, kind, name, direction string, max
 		return res
 	}
 
-	rootNode := findGraphNode(g, kind, name)
+	rootNode := g.NodeByManifest(kind, name)
 	if rootNode == nil {
 		res.Error = fmt.Sprintf("node not found: %s:%s", kind, name)
 		return res
@@ -193,39 +193,6 @@ func (s *State) GraphDeps(ctx context.Context, kind, name, direction string, max
 	}
 	res.Edges = edges
 	return res
-}
-
-// findGraphNode resolves a graph node by manifest kind + name.
-func findGraphNode(g *graph.Graph, kind, name string) *graph.Node {
-	if kind == "ReportArtefact" {
-		if node, ok := g.ReportArtefactByName(name); ok {
-			return node
-		}
-		return nil
-	}
-
-	componentKinds := map[string]bool{
-		"Text": true, "Table": true, "ChartStructure": true,
-		"ChartTime": true, "ChartScatter": true, "ChartBubble": true, "ChartBullet": true, "Tree": true, "Grid": true, "Image": true, "Asset": true,
-	}
-	if componentKinds[kind] {
-		for _, node := range g.Nodes {
-			if node.Kind == graph.NodeComponent &&
-				node.Attributes["componentKind"] == kind &&
-				node.Name == name {
-				return node
-			}
-		}
-		return nil
-	}
-
-	targetKind := graph.NodeKind(kind)
-	for _, node := range g.Nodes {
-		if node.Kind == targetKind && node.Name == name {
-			return node
-		}
-	}
-	return nil
 }
 
 // traverseGraph performs a BFS in the requested direction, recording edges and
