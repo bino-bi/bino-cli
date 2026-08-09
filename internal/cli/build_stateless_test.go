@@ -1,3 +1,5 @@
+//go:build integration
+
 package cli
 
 import (
@@ -98,23 +100,26 @@ spec:
       name: revenue_chart
 `
 
-// requireRenderStack skips the test when Chrome or the template engine are not
-// available (e.g. CI without `bino setup`). Stateless rendering needs both.
+// requireRenderStack fails the test when Chrome or the template engine are not
+// available. Stateless rendering needs both. This file is gated behind the
+// `integration` build tag, so a missing dependency is a hard failure — the
+// integration CI job installs both via `bino setup`, and anyone running
+// `go test -tags=integration` locally is expected to have done the same.
 func requireRenderStack(t *testing.T) {
 	t.Helper()
 	mgr, err := chrome.NewManager()
 	if err != nil {
-		t.Skipf("chrome manager unavailable: %v", err)
+		t.Fatalf("chrome manager unavailable: %v", err)
 	}
 	if _, err := mgr.ResolveExecPath(); err != nil {
-		t.Skipf("chrome-headless-shell not installed: %v", err)
+		t.Fatalf("chrome-headless-shell not installed (run 'bino setup' or set CHROME_PATH): %v", err)
 	}
 	em, err := engine.NewManager()
 	if err != nil {
-		t.Skipf("engine manager unavailable: %v", err)
+		t.Fatalf("engine manager unavailable: %v", err)
 	}
 	if _, err := em.EnsureVersion(context.Background(), ""); err != nil {
-		t.Skipf("template engine unavailable: %v", err)
+		t.Fatalf("template engine not installed (run 'bino setup --template-engine'): %v", err)
 	}
 }
 
