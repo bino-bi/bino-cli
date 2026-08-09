@@ -2,51 +2,67 @@ package graph
 
 import (
 	"context"
-	"path/filepath"
+	"encoding/json"
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
 )
 
-func TestBuildGraphFromExampleBundle(t *testing.T) {
-	// TODO: re-enable this test when example manifests are stable
-	t.Skip("Skipping graph build test; re-enable when example manifests are stable")
+// End-to-end graph construction over an inline bundle: artefact → page →
+// component → dataset → datasource. This replaces a permanently skipped test
+// that depended on an examples/ directory absent from the repo.
+func TestBuildGraphFromBundle(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	workdir, err := filepath.Abs(filepath.Join("..", "..", "..", "examples", "minimal"))
-	if err != nil {
-		t.Fatalf("resolve workdir: %v", err)
+	docs := []config.Document{
+		makeDoc("DataSource", "ppl", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "DataSource",
+			"metadata": {"name": "ppl"},
+			"spec": {"type": "inline", "content": [{"region": "EMEA", "amount": 12}]}
+		}`)),
+		makeDoc("DataSet", "ppl_ds", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "DataSet",
+			"metadata": {"name": "ppl_ds"},
+			"spec": {"query": "SELECT region, amount FROM ppl", "dependencies": ["ppl"]}
+		}`)),
+		makeDoc("Table", "ppl_table", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "Table",
+			"metadata": {"name": "ppl_table"},
+			"spec": {"dataset": "ppl_ds"}
+		}`)),
+		makeDoc("LayoutPage", "main_page", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "LayoutPage",
+			"metadata": {"name": "main_page"},
+			"spec": {"children": [{"kind": "Table", "ref": "ppl_table"}]}
+		}`)),
+		makeDoc("ReportArtefact", "minimal_report", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "ReportArtefact",
+			"metadata": {"name": "minimal_report"},
+			"spec": {"filename": "out.pdf", "title": "Minimal", "layoutPages": ["main_page"]}
+		}`)),
 	}
-	docs, err := config.LoadDir(ctx, workdir)
-	if err != nil {
-		t.Fatalf("LoadDir failed: %v", err)
-	}
+
 	g, err := Build(ctx, docs)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
 
-	// Check that the minimalReport artifact exists
-	if _, ok := g.ReportArtefactByName("minimalReport"); !ok {
-		t.Fatalf("expected artifact minimalReport to exist")
+	if _, ok := g.ReportArtefactByName("minimal_report"); !ok {
+		t.Fatalf("expected artefact minimal_report to exist")
 	}
 
-	// Check dataset ppl_ds with dependency on ppl datasource
-	datasetID := makeNodeID(NodeDataSet, "ppl_ds")
-	datasetNode, ok := g.NodeByID(datasetID)
+	// Dataset depends on the datasource its query references.
+	datasetNode, ok := g.NodeByID(makeNodeID(NodeDataSet, "ppl_ds"))
 	if !ok {
-		t.Fatalf("dataset node %s not found", datasetID)
+		t.Fatalf("dataset node not found")
 	}
-	if deps := datasetNode.Attributes["dependencies"]; deps != "ppl" {
-		t.Fatalf("dataset dependencies not preserved: got %q, want %q", deps, "ppl")
-	}
-
-	// ppl datasource exists, so dataset should depend on it
 	dsID := makeNodeID(NodeDataSource, "ppl")
-	if len(datasetNode.DependsOn) == 0 {
-		t.Fatalf("dataset with existing dependencies should have DependsOn")
-	}
 	foundDep := false
 	for _, dep := range datasetNode.DependsOn {
 		if dep == dsID {
@@ -58,27 +74,24 @@ func TestBuildGraphFromExampleBundle(t *testing.T) {
 		t.Fatalf("dataset should depend on datasource %s, got %v", dsID, datasetNode.DependsOn)
 	}
 
-	// Check that ppl datasource exists and has csv type
+	// The datasource node carries its spec type as an attribute.
 	dsNode, ok := g.NodeByID(dsID)
 	if !ok {
 		t.Fatalf("datasource %s not found", dsID)
 	}
-	if dsNode.Attributes["type"] != "csv" {
-		t.Fatalf("expected datasource type csv, got %q", dsNode.Attributes["type"])
+	if dsNode.Attributes["type"] != "inline" {
+		t.Fatalf("expected datasource type inline, got %q", dsNode.Attributes["type"])
 	}
 
-	// Check that components exist and reference datasets
-	var foundComponent bool
+	// At least one component references a dataset.
+	foundComponent := false
 	for _, node := range g.Nodes {
-		if node.Kind != NodeComponent {
-			continue
-		}
-		if dataset := node.Attributes["dataset"]; dataset != "" {
+		if node.Kind == NodeComponent && node.Attributes["dataset"] != "" {
 			foundComponent = true
 			break
 		}
 	}
 	if !foundComponent {
-		t.Fatalf("expected at least one component with dataset attribute")
+		t.Fatalf("expected at least one component with a dataset attribute")
 	}
 }
