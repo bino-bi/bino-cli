@@ -4,9 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -299,7 +296,11 @@ to avoid hardcoding sensitive values in manifest files.
 					return RuntimeError(err)
 				}
 				if addConstraints {
-					data.Constraints, _ = addPromptConstraintBuilder()
+					constraints, err := addPromptConstraintBuilder()
+					if err != nil {
+						return RuntimeError(err)
+					}
+					data.Constraints = constraints
 				}
 			}
 
@@ -315,39 +316,8 @@ to avoid hardcoding sensitive values in manifest files.
 				}
 			}
 
-			// Preview
-			doc := buildConnectionSecretDocument(data)
-			manifestBytes, err := RenderSchemaDocument(doc)
-			if err != nil {
-				return RuntimeError(fmt.Errorf("render preview: %w", err))
-			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "=== Preview ===")
-			fmt.Fprintln(out, string(manifestBytes))
-			fmt.Fprintln(out, "===============")
-
-			confirmed, _ := addPromptConfirm("Proceed?", true)
-			if !confirmed {
-				fmt.Fprintln(out, "\nCanceled.")
-				return nil
-			}
-
-			if err := writeConnectionSecretManifest(cmd, workdir, data, outputPath, appendMode); err != nil {
-				return err
-			}
-
-			if flagOpenEditor {
-				if editor := getEditor(); editor != "" {
-					args := buildEditorArgs(editor, filepath.Join(workdir, outputPath))
-					execCmd := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: intentionally launching user's editor; interactive editor, no cancellation needed
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					_ = execCmd.Run()
-				}
-			}
-
-			return nil
+			_, err = finishWizard(cmd, buildConnectionSecretDocument(data), workdir, outputPath, appendMode, flagOpenEditor, nil, nil)
+			return err
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
