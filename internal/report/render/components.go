@@ -21,6 +21,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/ref"
 	"bino.bi/bino/internal/report/spec"
 )
 
@@ -132,7 +133,7 @@ func applyInheritedStyle(specRaw json.RawMessage, inherited string) (json.RawMes
 	if len(specRaw) == 0 || string(specRaw) == "null" {
 		return base, nil
 	}
-	return mergeJSONObjects(base, specRaw)
+	return ref.MergeSpec(base, specRaw)
 }
 
 // collectReferencedDatasources scans component documents for $-prefixed dataset
@@ -865,123 +866,48 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 	return indentBlock(component, 4), false, nil
 }
 
-// resolveChildSpec resolves a layout child's effective spec.
-// For inline children (no ref), it returns child.Spec directly.
-// For ref children, it looks up the referenced document and merges any spec overrides.
-// Returns nil without error if the ref is filtered by constraints (skip gracefully).
-// Returns nil without error if optional=true and ref is missing (skip gracefully).
-// Returns an error if a required ref is genuinely missing (not in unfiltered set).
-// Returns an error if the ref points to LayoutPage (disallowed) or has a kind mismatch.
+// resolveChildSpec resolves a layout child's effective spec via the shared
+// ref package. Skips (constraint-filtered or optional-and-missing) return
+// (nil, nil).
 func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error) {
-	// Inline child: no ref, just return spec directly.
 	if child.Ref == "" {
 		return child.Spec, nil
 	}
-
-	log := logx.FromContext(rc.ctx).Channel("render")
-
-	// Ref child: look up the referenced document in the filtered set.
-	key := child.Kind + ":" + child.Ref
-	refDoc, found := rc.docIndex[key]
-	if !found {
-		// Check if they're trying to reference a LayoutPage (explicitly disallowed).
-		for _, doc := range rc.docs {
-			if doc.Kind == "LayoutPage" && doc.Name == child.Ref {
-				return nil, fmt.Errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, LayoutCard, and Image can be referenced", child.Ref)
-			}
-		}
-
-		// Check if the ref exists in the global (unfiltered) set.
-		_, existsGlobally := rc.globalIndex[key]
-		if existsGlobally {
-			// Ref exists but was filtered by constraints - skip gracefully.
-			log.Debugf("ref %q of kind %q filtered by constraints, skipping child", child.Ref, child.Kind)
-			return nil, nil
-		}
-
-		// Ref doesn't exist at all.
-		if child.Optional {
-			// Optional ref: skip gracefully.
-			log.Debugf("optional ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
-			return nil, nil
-		}
-
-		// Required ref is genuinely missing - error.
-		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
+	if rc == nil {
+		return nil, fmt.Errorf("ref %q cannot be resolved without render context", child.Ref)
 	}
-
-	// Expand params into the referenced document before extracting its spec.
-	refRaw := refDoc.Raw
-	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
-		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
+	res, err := ref.Resolve(ref.Ref{
+		Kind:     child.Kind,
+		Name:     child.Ref,
+		Spec:     child.Spec,
+		Optional: child.Optional,
+		Params:   child.Params,
+	}, rc.refOptions())
+	if err != nil || res.Skipped {
+		return nil, err
 	}
-
-	// Extract the spec from the referenced document.
-	var refPayload struct {
-		Spec json.RawMessage `json:"spec"`
-	}
-	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
-		return nil, fmt.Errorf("failed to parse ref %q spec: %w", child.Ref, err)
-	}
-
-	// If no overrides, return the referenced spec directly.
-	if len(child.Spec) == 0 || string(child.Spec) == "null" {
-		return refPayload.Spec, nil
-	}
-
-	// Merge: referenced spec as base, child.Spec as overrides.
-	mergedSpec, err := mergeJSONObjects(refPayload.Spec, child.Spec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to merge ref %q with overrides: %w", child.Ref, err)
-	}
-	return mergedSpec, nil
+	return res.Spec, nil
 }
 
-// mergeJSONObjects performs a deep merge of two JSON objects.
-// Values from override replace values in base. Objects are merged recursively.
-// Arrays are replaced entirely (not merged element-by-element).
-func mergeJSONObjects(base, override json.RawMessage) (json.RawMessage, error) {
-	var baseMap map[string]json.RawMessage
-	var overrideMap map[string]json.RawMessage
-
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		return nil, fmt.Errorf("base is not a JSON object: %w", err)
+// refOptions builds the shared resolution context for this render.
+func (rc *renderCtx) refOptions() ref.Options {
+	return ref.Options{
+		Index:       rc.docIndex,
+		GlobalIndex: rc.globalIndex,
+		IsPage:      rc.isLayoutPage,
+		Log:         logx.FromContext(rc.ctx).Channel("render"),
 	}
-	if err := json.Unmarshal(override, &overrideMap); err != nil {
-		return nil, fmt.Errorf("override is not a JSON object: %w", err)
-	}
+}
 
-	result := make(map[string]json.RawMessage, len(baseMap))
-	for k, v := range baseMap {
-		result[k] = v
-	}
-
-	for k, overrideVal := range overrideMap {
-		baseVal, hasBase := result[k]
-		if !hasBase {
-			result[k] = overrideVal
-			continue
-		}
-
-		// Check if both are objects for recursive merge.
-		var baseObj map[string]json.RawMessage
-		var overrideObj map[string]json.RawMessage
-		baseIsObj := json.Unmarshal(baseVal, &baseObj) == nil && baseObj != nil
-		overrideIsObj := json.Unmarshal(overrideVal, &overrideObj) == nil && overrideObj != nil
-
-		if baseIsObj && overrideIsObj {
-			merged, err := mergeJSONObjects(baseVal, overrideVal)
-			if err != nil {
-				return nil, err
-			}
-			result[k] = merged
-		} else {
-			// Override replaces base (including arrays).
-			result[k] = overrideVal
+// isLayoutPage reports whether name identifies a LayoutPage document —
+// referencing one as a child is explicitly disallowed.
+func (rc *renderCtx) isLayoutPage(name string) bool {
+	for _, doc := range rc.docs {
+		if doc.Kind == "LayoutPage" && doc.Name == name {
+			return true
 		}
 	}
-
-	return json.Marshal(result)
+	return false
 }
 
 // renderTextComponent renders a Text component as HTML.
@@ -1235,61 +1161,30 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	}
 }
 
-// resolveTreeNodeSpec resolves the effective spec for a tree node.
-// For inline nodes (no ref), returns node.Spec directly.
-// For ref nodes, looks up the referenced document and merges any spec overrides.
+// resolveTreeNodeSpec resolves the effective spec for a tree node via the
+// shared ref package. Label nodes are inline-only and pass through.
 func resolveTreeNodeSpec(node treeNode, rc *renderCtx) (json.RawMessage, error) {
 	// Label kind doesn't support refs (inline only)
 	if node.Kind == "Label" {
 		return node.Spec, nil
 	}
-
-	// Inline node: no ref, just return spec directly
 	if node.Ref == "" {
 		return node.Spec, nil
 	}
-
-	// Ref node: look up the referenced document
 	if rc == nil {
 		return nil, fmt.Errorf("ref %q cannot be resolved without render context", node.Ref)
 	}
-
-	key := node.Kind + ":" + node.Ref
-	refDoc, found := rc.docIndex[key]
-	if !found {
-		// Check if ref exists in global set (filtered by constraints)
-		_, existsGlobally := rc.globalIndex[key]
-		if existsGlobally {
-			return nil, nil // Filtered by constraints, skip
-		}
-		if node.Optional {
-			logx.FromContext(rc.ctx).Channel("render").Infof("optional ref %q of kind %q not found, skipping tree node", node.Ref, node.Kind)
-			return nil, nil // Optional ref: skip gracefully
-		}
-		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", node.Ref, node.Kind)
+	res, err := ref.Resolve(ref.Ref{
+		Kind:     node.Kind,
+		Name:     node.Ref,
+		Spec:     node.Spec,
+		Optional: node.Optional,
+		Params:   node.Params,
+	}, rc.refOptions())
+	if err != nil || res.Skipped {
+		return nil, err
 	}
-
-	// Expand params into the referenced document before extracting its spec
-	refRaw := refDoc.Raw
-	if len(node.Params) > 0 || len(refDoc.Params) > 0 {
-		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, node.Params)
-	}
-
-	// Extract spec from referenced document
-	var refPayload struct {
-		Spec json.RawMessage `json:"spec"`
-	}
-	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
-		return nil, fmt.Errorf("parse ref %q spec: %w", node.Ref, err)
-	}
-
-	// If no overrides, return referenced spec directly
-	if len(node.Spec) == 0 || string(node.Spec) == "null" {
-		return refPayload.Spec, nil
-	}
-
-	// Merge: referenced spec as base, node.Spec as overrides
-	return mergeJSONObjects(refPayload.Spec, node.Spec)
+	return res.Spec, nil
 }
 
 // renderTreeLabelComponent renders a Label component for tree nodes.
@@ -1440,58 +1335,23 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 // For inline children (no ref), returns child.Spec directly.
 // For ref children, looks up the referenced document and merges any spec overrides.
 func resolveGridChildSpec(child gridChild, rc *renderCtx) (json.RawMessage, error) {
-	// Inline child: no ref, just return spec directly
 	if child.Ref == "" {
 		return child.Spec, nil
 	}
-
-	// Ref child: look up the referenced document
 	if rc == nil {
 		return nil, fmt.Errorf("ref %q cannot be resolved without render context", child.Ref)
 	}
-
-	log := logx.FromContext(rc.ctx).Channel("render")
-
-	key := child.Kind + ":" + child.Ref
-	refDoc, found := rc.docIndex[key]
-	if !found {
-		// Check if ref exists in global set (filtered by constraints)
-		_, existsGlobally := rc.globalIndex[key]
-		if existsGlobally {
-			log.Debugf("ref %q of kind %q filtered by constraints, skipping grid child", child.Ref, child.Kind)
-			return nil, nil // Filtered by constraints, skip
-		}
-
-		// Ref doesn't exist at all
-		if child.Optional {
-			log.Debugf("optional ref %q of kind %q not found, skipping grid child", child.Ref, child.Kind)
-			return nil, nil // Optional ref: skip gracefully
-		}
-
-		return nil, fmt.Errorf("required reference %q of kind %q not found (use optional: true to allow missing refs)", child.Ref, child.Kind)
+	res, err := ref.Resolve(ref.Ref{
+		Kind:     child.Kind,
+		Name:     child.Ref,
+		Spec:     child.Spec,
+		Optional: child.Optional,
+		Params:   child.Params,
+	}, rc.refOptions())
+	if err != nil || res.Skipped {
+		return nil, err
 	}
-
-	// Expand params into the referenced document before extracting its spec
-	refRaw := refDoc.Raw
-	if len(child.Params) > 0 || len(refDoc.Params) > 0 {
-		refRaw, _ = config.ExpandDocParams(refDoc.Raw, refDoc.Params, child.Params)
-	}
-
-	// Extract spec from referenced document
-	var refPayload struct {
-		Spec json.RawMessage `json:"spec"`
-	}
-	if err := json.Unmarshal(refRaw, &refPayload); err != nil {
-		return nil, fmt.Errorf("parse ref %q spec: %w", child.Ref, err)
-	}
-
-	// If no overrides, return referenced spec directly
-	if len(child.Spec) == 0 || string(child.Spec) == "null" {
-		return refPayload.Spec, nil
-	}
-
-	// Merge: referenced spec as base, child.Spec as overrides
-	return mergeJSONObjects(refPayload.Spec, child.Spec)
+	return res.Spec, nil
 }
 
 // writeAttr writes an HTML attribute if the value is non-empty.
