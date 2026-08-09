@@ -74,7 +74,7 @@ func (s *Session) registerBuiltinUDFs(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("acquire connection for UDF registration: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // releases the pooled connection; nothing to surface
 
 	udfs := []struct {
 		name string

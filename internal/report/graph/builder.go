@@ -596,7 +596,7 @@ func (b *builder) buildReportArtefacts() error {
 				// Check for glob patterns - if glob, add all matching
 				if strings.ContainsAny(ref.Page, "*?[") {
 					for name, nodeID := range layoutPageIndex {
-						matched, _ := matchGlob(ref.Page, name)
+						matched, _ := matchGlob(ref.Page, name) //nolint:errcheck // an invalid pattern counts as no match
 						if matched {
 							deps = append(deps, nodeID)
 						}

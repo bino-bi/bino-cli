@@ -68,24 +68,24 @@ func NewWatcher(cfg Config) (*Watcher, error) {
 
 	absRoot, err := filepath.Abs(filepath.Clean(cfg.Root))
 	if err != nil {
-		fw.Close()
+		fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, fmt.Errorf("watcher: resolve root: %w", err)
 	}
 	cfg.Root = absRoot
 	yw := &Watcher{watcher: fw, cfg: cfg}
 	if err := yw.refreshIgnorePatterns(); err != nil {
-		fw.Close()
+		fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
 	}
 	if len(cfg.Dirs) > 0 {
 		// Use pre-collected directories instead of walking the tree again.
 		if err := yw.registerDirs(cfg.Dirs); err != nil {
-			fw.Close()
+			fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 			return nil, err
 		}
 	} else {
 		if err := yw.addTree(cfg.Root); err != nil {
-			fw.Close()
+			fw.Close() //nolint:errcheck // best-effort teardown on the init error path
 			return nil, err
 		}
 	}
@@ -94,7 +94,7 @@ func NewWatcher(cfg Config) (*Watcher, error) {
 	// though the rest of .bino is ignored.
 	binoDir := filepath.Join(cfg.Root, ".bino")
 	if info, err := os.Stat(binoDir); err == nil && info.IsDir() {
-		_ = yw.watcher.Add(binoDir)
+		_ = yw.watcher.Add(binoDir) //nolint:errcheck // best-effort; .bino may not exist yet
 	}
 
 	cfg.Logger.Infof("Watching %s for changes", cfg.Root)
@@ -170,7 +170,7 @@ func (y *Watcher) process(event fsnotify.Event) {
 			if y.shouldIgnorePath(event.Name, true) {
 				return
 			}
-			_ = y.addTree(event.Name)
+			_ = y.addTree(event.Name) //nolint:errcheck // a failed subtree add loses its events, not the watcher
 			return
 		}
 	}

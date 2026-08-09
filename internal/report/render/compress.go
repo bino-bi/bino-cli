@@ -30,7 +30,7 @@ func CompressContent(data []byte) (string, error) {
 		return "", err
 	}
 	if _, err := w.Write(data); err != nil {
-		w.Close()
+		w.Close() //nolint:errcheck // best-effort close on the error path; the write error is returned
 		return "", err
 	}
 	if err := w.Close(); err != nil {

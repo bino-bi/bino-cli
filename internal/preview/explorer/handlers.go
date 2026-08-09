@@ -442,7 +442,7 @@ func isWriteOperation(stmt string) bool {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v) //nolint:errcheck // writing the response body to a client that may be gone
 }
 
 // normalizeValue converts sql.DB scan results into JSON-friendly values.

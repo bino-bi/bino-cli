@@ -35,7 +35,7 @@ func newPluginExecCommand() *cobra.Command {
 			cmdArgs := args[1:]
 
 			// Load the specific plugin.
-			workdir, _ := os.Getwd()
+			workdir, _ := os.Getwd() //nolint:errcheck // an empty workdir just disables project plugin discovery
 			projectRoot, err := pathutil.FindProjectRoot(workdir)
 			if err != nil {
 				return fmt.Errorf("no bino project found (missing bino.toml)")
@@ -85,10 +85,10 @@ func newPluginExecCommand() *cobra.Command {
 			exitCode, err := p.ExecCommand(ctx, cmdName, positionalArgs, parsedFlags, workdir,
 				func(stdout, stderr []byte) {
 					if len(stdout) > 0 {
-						os.Stdout.Write(stdout)
+						os.Stdout.Write(stdout) //nolint:errcheck // streaming plugin output to the terminal; a failed write is unrecoverable
 					}
 					if len(stderr) > 0 {
-						os.Stderr.Write(stderr)
+						os.Stderr.Write(stderr) //nolint:errcheck // streaming plugin output to the terminal; a failed write is unrecoverable
 					}
 				},
 			)

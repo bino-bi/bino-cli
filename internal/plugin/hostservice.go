@@ -81,7 +81,7 @@ func (h *BinoHostServer) QueryDuckDB(ctx context.Context, req *pluginv1.QueryReq
 	if err != nil {
 		return nil, fmt.Errorf("open DuckDB session: %w", err)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	db := session.DB()
 	rows, err := db.QueryContext(ctx, req.GetSql())

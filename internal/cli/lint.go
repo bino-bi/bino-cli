@@ -327,7 +327,6 @@ func writeLintLog(path, runID string, startTime time.Time, workdir string, docs 
 	if err != nil {
 		return fmt.Errorf("create lint log: %w", err)
 	}
-	defer file.Close()
 
 	fmt.Fprintf(file, "BINO LINT LOG\n")
 	fmt.Fprintf(file, "=============\n\n")
@@ -363,6 +362,9 @@ func writeLintLog(path, runID string, startTime time.Time, workdir string, docs 
 		}
 	}
 
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close lint log %s: %w", path, err)
+	}
 	return nil
 }
 
@@ -411,14 +413,17 @@ func writeJSON(path string, v any) error {
 	if err != nil {
 		return fmt.Errorf("create JSON file: %w", err)
 	}
-	defer file.Close()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
-		return fmt.Errorf("encode JSON: %w", err)
+	encErr := enc.Encode(v)
+	closeErr := file.Close()
+	if encErr != nil {
+		return fmt.Errorf("encode JSON: %w", encErr)
 	}
-
+	if closeErr != nil {
+		return fmt.Errorf("close JSON file %s: %w", path, closeErr)
+	}
 	return nil
 }
 

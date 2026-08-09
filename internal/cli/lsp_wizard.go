@@ -79,7 +79,7 @@ func runLSPIntrospectDraft(ctx context.Context, dir, baseDir string, specJSON []
 	}
 
 	// Sibling documents let database sources resolve their ConnectionSecret.
-	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
+	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient load; the wizard works with whatever parses
 
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
@@ -91,7 +91,7 @@ func runLSPIntrospectDraft(ctx context.Context, dir, baseDir string, specJSON []
 		result.Error = err.Error()
 		return outputJSON(out, result)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: specJSON,
@@ -209,7 +209,7 @@ func runLSPPreviewDataSet(ctx context.Context, dir string, payloadJSON []byte, o
 	}
 
 	// Sibling documents let database sources resolve their ConnectionSecret.
-	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
+	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient load; the wizard works with whatever parses
 
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
@@ -221,7 +221,7 @@ func runLSPPreviewDataSet(ctx context.Context, dir string, payloadJSON []byte, o
 		result.Error = err.Error()
 		return outputJSON(out, result)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	res, err := datasource.PreviewDataSet(ctx, session, datasource.PreviewRequest{
 		SpecJSON:   req.Spec,
@@ -475,7 +475,7 @@ func scaffoldManifests(ctx context.Context, absDir string, payload scaffoldPaylo
 		return result
 	}
 
-	manifests, _ := ScanManifests(ctx, absDir)
+	manifests, _ := ScanManifests(ctx, absDir) //nolint:errcheck // best-effort listing; an unreadable tree yields no matches
 
 	// --- DataSource ---
 	dsPattern := DetectFilePattern(manifests, schema.KindDataSource)

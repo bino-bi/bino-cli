@@ -92,7 +92,7 @@ func (e *statelessError) exitCode() int {
 
 // emitStatelessError writes the structured error as one JSON line to stderr.
 func emitStatelessError(cmd *cobra.Command, serr *statelessError) {
-	_ = json.NewEncoder(cmd.ErrOrStderr()).Encode(serr)
+	_ = json.NewEncoder(cmd.ErrOrStderr()).Encode(serr) //nolint:errcheck // best-effort error report on stderr; the exit code carries the failure
 }
 
 // runStatelessBuild reads a self-contained report YAML (from inputArg or stdin),
@@ -248,7 +248,7 @@ func streamStatelessFile(cmd *cobra.Command, path string) *statelessError {
 	if err != nil {
 		return newStatelessError(statelessErrRenderFailed, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle
 	if _, err := io.Copy(cmd.OutOrStdout(), f); err != nil {
 		return newStatelessError(statelessErrRenderFailed, fmt.Errorf("write artifact to stdout: %w", err))
 	}

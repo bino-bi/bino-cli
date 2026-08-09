@@ -11,6 +11,8 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
+
+	"bino.bi/bino/internal/logx"
 )
 
 // compressionLevel defines the default compression level.
@@ -42,7 +44,7 @@ var (
 	}
 	gzipWriterPool = sync.Pool{
 		New: func() any {
-			w, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression)
+			w, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression) //nolint:errcheck // constant valid level cannot fail
 			return w
 		},
 	}
@@ -153,13 +155,13 @@ func (c *compressedResponseWriter) writeHeader(statusCode int) {
 	case compressionBrotli:
 		c.ResponseWriter.Header().Set("Content-Encoding", "br")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer) //nolint:errcheck // the pool only ever holds this type
 		bw.Reset(c.ResponseWriter)
 		c.writer = bw
 	case compressionGzip:
 		c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer) //nolint:errcheck // the pool only ever holds this type
 		gw.Reset(c.ResponseWriter)
 		c.writer = gw
 	default:
@@ -206,11 +208,11 @@ func (c *compressedResponseWriter) Flush() {
 	switch c.compType {
 	case compressionBrotli:
 		if bw, ok := c.writer.(*brotli.Writer); ok {
-			_ = bw.Flush()
+			_ = bw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	case compressionGzip:
 		if gw, ok := c.writer.(*gzip.Writer); ok {
-			_ = gw.Flush()
+			_ = gw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	default:
 	}
@@ -238,7 +240,7 @@ func (c *compressedResponseWriter) Push(target string, opts *http.PushOptions) e
 }
 
 // compressionHandlerFunc wraps an http.HandlerFunc with compression support.
-func compressionHandlerFunc(fn http.HandlerFunc) http.HandlerFunc {
+func compressionHandlerFunc(log logx.Logger, fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Determine compression type from Accept-Encoding header
 		compType := selectCompression(r.Header.Get("Accept-Encoding"))
@@ -253,7 +255,13 @@ func compressionHandlerFunc(fn http.HandlerFunc) http.HandlerFunc {
 			compType:       compType,
 			writer:         w, // Default to original writer until header is written
 		}
-		defer cw.Close()
+		// Close finalizes the compressed body; the response is already in
+		// flight, so a failure can only be logged, not returned.
+		defer func() {
+			if err := cw.Close(); err != nil {
+				log.Debugf("compressed response finalize failed for %s: %v", r.URL.Path, err)
+			}
+		}()
 
 		fn(cw, r)
 	}
@@ -284,13 +292,13 @@ func newSSECompressedWriter(w http.ResponseWriter, compType compressionType) *ss
 	case compressionBrotli:
 		w.Header().Set("Content-Encoding", "br")
 		w.Header().Add("Vary", "Accept-Encoding")
-		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer) //nolint:errcheck // the pool only ever holds this type
 		bw.Reset(w)
 		sw.writer = bw
 	case compressionGzip:
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Add("Vary", "Accept-Encoding")
-		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer) //nolint:errcheck // the pool only ever holds this type
 		gw.Reset(w)
 		sw.writer = gw
 	default:
@@ -311,11 +319,11 @@ func (s *sseCompressedWriter) Flush() {
 	switch s.compType {
 	case compressionBrotli:
 		if bw, ok := s.writer.(*brotli.Writer); ok {
-			_ = bw.Flush()
+			_ = bw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	case compressionGzip:
 		if gw, ok := s.writer.(*gzip.Writer); ok {
-			_ = gw.Flush()
+			_ = gw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	default:
 	}

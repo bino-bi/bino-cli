@@ -197,23 +197,28 @@ func extractFile(f *zip.File, destPath string, opts Options) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer dst.Close()
 
+	var n int64
+	var copyErr error
 	if !opts.Untrusted {
-		n, copyErr := io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
+		n, copyErr = io.Copy(dst, src) //nolint:gosec // G110: decompressing trusted signed release archives
+	} else {
+		var reader io.Reader = src
+		if opts.Limits.MaxFileBytes > 0 {
+			reader = io.LimitReader(src, opts.Limits.MaxFileBytes+1)
+		}
+		n, copyErr = io.Copy(dst, reader)
+		if copyErr == nil && opts.Limits.MaxFileBytes > 0 && n > opts.Limits.MaxFileBytes {
+			copyErr = fmt.Errorf("%w (max %d bytes): %s", ErrFileTooBig, opts.Limits.MaxFileBytes, f.Name)
+		}
+	}
+
+	closeErr := dst.Close()
+	if copyErr != nil {
 		return n, copyErr
 	}
-
-	var reader io.Reader = src
-	if opts.Limits.MaxFileBytes > 0 {
-		reader = io.LimitReader(src, opts.Limits.MaxFileBytes+1)
-	}
-	n, err := io.Copy(dst, reader)
-	if err != nil {
-		return n, err
-	}
-	if opts.Limits.MaxFileBytes > 0 && n > opts.Limits.MaxFileBytes {
-		return n, fmt.Errorf("%w (max %d bytes): %s", ErrFileTooBig, opts.Limits.MaxFileBytes, f.Name)
+	if closeErr != nil {
+		return n, fmt.Errorf("close %s: %w", destPath, closeErr)
 	}
 	return n, nil
 }

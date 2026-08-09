@@ -454,7 +454,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		if err != nil {
 			return nil, nil, fmt.Errorf("duckdb open: %w", err)
 		}
-		defer s.Close()
+		defer s.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 		session = s
 	}
 

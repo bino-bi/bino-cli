@@ -292,7 +292,7 @@ func (b *Builder) RenderPDFToTempFileWithData(ctx context.Context, html []byte, 
 		return "", fmt.Errorf("create temp pdf file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
+	tmpFile.Close() //nolint:errcheck // reserves a temp name; the file is still empty and the PDF renderer rewrites it
 
 	renderOpts := opts
 	renderOpts.PDFPath = tmpPath

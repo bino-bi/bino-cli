@@ -192,7 +192,7 @@ func (s *Server) writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(v)
+	_ = encoder.Encode(v) //nolint:errcheck // writing the response body to a client that may be gone
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -419,7 +419,7 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Port int `json:"port"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	_ = json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // empty/malformed body falls back to zero-value defaults; strict decoding lands with #174
 
 	s.previewMu.Lock()
 	defer s.previewMu.Unlock()
@@ -486,7 +486,7 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Process exited
-		_ = cmd.Wait()
+		_ = cmd.Wait() //nolint:errcheck // reaping the exited preview process; its status is not consumed
 		s.previewMu.Lock()
 		s.previewCmd = nil
 		s.previewStatus = "stopped"
@@ -534,12 +534,12 @@ func (s *Server) StopPreview() {
 		return
 	}
 
-	_ = s.previewCmd.Process.Signal(os.Interrupt)
+	_ = s.previewCmd.Process.Signal(os.Interrupt) //nolint:errcheck // best-effort interrupt; the kill fallback below follows
 	// Force kill after 3 seconds
 	go func(cmd *exec.Cmd) {
 		time.Sleep(3 * time.Second)
 		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
+			_ = cmd.Process.Kill() //nolint:errcheck // last-resort kill; the process may already be gone
 		}
 	}(s.previewCmd)
 
@@ -569,7 +569,7 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Artefact string `json:"artefact"` //nolint:misspell // UK spelling is intentional
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	_ = json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // empty/malformed body falls back to zero-value defaults; strict decoding lands with #174
 
 	exe, err := os.Executable()
 	if err != nil {

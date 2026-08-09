@@ -503,7 +503,7 @@ func promptWithEditor(tempPrefix, ext, template string) (string, error) {
 
 	// Write template
 	if _, err := tmpFile.WriteString(template); err != nil {
-		tmpFile.Close()
+		tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the write error is returned
 		return "", fmt.Errorf("write template: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {

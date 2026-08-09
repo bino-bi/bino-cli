@@ -156,7 +156,7 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	}
 	if len(loadErrs) > 0 {
 		// Use lenient docs so downstream checks still see schema-invalid documents
-		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider})
+		docs, _ = config.LoadDirWithOptions(ctx, dir, config.LoadOptions{Lenient: true, KindProvider: s.kindProvider}) //nolint:errcheck // lenient fallback pass; the strict errors were already collected
 	}
 
 	// Check for missing environment variables
@@ -282,7 +282,7 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 	// dir is outside the project, so this neither touches project files nor
 	// triggers the watcher.
 	var loadErrs []error
-	_, _ = config.LoadDirWithOptions(ctx, tmpDir, config.LoadOptions{
+	_, _ = config.LoadDirWithOptions(ctx, tmpDir, config.LoadOptions{ //nolint:errcheck // issues arrive via CollectErrors; the return would duplicate them
 		Lenient:       false,
 		KindProvider:  s.kindProvider,
 		CollectErrors: &loadErrs,
@@ -375,7 +375,7 @@ func (s *State) IntrospectSource(ctx context.Context, specJSON json.RawMessage, 
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	return datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: specJSON,
@@ -646,7 +646,7 @@ func parseYAMLSyntaxError(errStr string) (Diagnostic, bool) {
 			n++
 		}
 		if n > 0 {
-			line, _ = strconv.Atoi(digits[:n])
+			line, _ = strconv.Atoi(digits[:n]) //nolint:errcheck // digits-only slice by construction
 			if idx == 0 {
 				msg = strings.TrimPrefix(digits[n:], ": ")
 			}
@@ -680,7 +680,7 @@ func parseFileError(errStr string) (file string, position int, message string) {
 			}
 		}
 		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position)
+			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
 		}
 		return file, position, message
 	}
@@ -702,7 +702,7 @@ func parseFileError(errStr string) (file string, position int, message string) {
 			}
 		}
 		if posStr != "" {
-			_, _ = fmt.Sscanf(posStr, "%d", &position)
+			_, _ = fmt.Sscanf(posStr, "%d", &position) //nolint:errcheck // zero position on parse failure is the intended fallback
 		}
 		return file, position, message
 	}

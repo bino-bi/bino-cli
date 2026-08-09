@@ -583,20 +583,20 @@ func parseMargin(s string) float64 {
 	var value float64
 	switch {
 	case strings.HasSuffix(s, "in"):
-		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "in"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "in"), "%f", &value) //nolint:errcheck // zero on parse failure is the documented fallback
 		return value
 	case strings.HasSuffix(s, "mm"):
-		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "mm"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "mm"), "%f", &value) //nolint:errcheck // zero on parse failure is the documented fallback
 		return mmToInches(value)
 	case strings.HasSuffix(s, "cm"):
-		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "cm"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "cm"), "%f", &value) //nolint:errcheck // zero on parse failure is the documented fallback
 		return cmToInches(value)
 	case strings.HasSuffix(s, "px"):
-		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "px"), "%f", &value)
+		_, _ = fmt.Sscanf(strings.TrimSuffix(s, "px"), "%f", &value) //nolint:errcheck // zero on parse failure is the documented fallback
 		return value / 96.0
 	default:
 		// Default: treat as millimeters
-		_, _ = fmt.Sscanf(s, "%f", &value)
+		_, _ = fmt.Sscanf(s, "%f", &value) //nolint:errcheck // zero on parse failure is the documented fallback
 		return mmToInches(value)
 	}
 }

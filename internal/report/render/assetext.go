@@ -24,7 +24,7 @@ func (t *assetTransformer) Transform(node *ast.Document, reader text.Reader, pc 
 	if len(t.assetURLs) == 0 {
 		return
 	}
-	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) { //nolint:errcheck // the walker callback never returns an error
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -59,7 +59,7 @@ func CollectAssetRefs(source string) []string {
 
 	var names []string
 	seen := make(map[string]bool)
-	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) { //nolint:errcheck // the walker callback never returns an error
 		if !entering {
 			return ast.WalkContinue, nil
 		}

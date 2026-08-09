@@ -137,7 +137,7 @@ func CheckForUpdate(ctx context.Context) (*CheckResult, error) {
 		state = &State{}
 	}
 	state.LastUpdateCheck = time.Now()
-	_ = SaveState(state)
+	_ = SaveState(state) //nolint:errcheck // check bookkeeping; a failed save just re-checks next run
 
 	vStr := strings.TrimPrefix(version.Version, "v")
 	currentVersion, err := semver.Parse(vStr)
@@ -253,10 +253,12 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 
 	hasher := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(archiveFile, hasher), resp.Body); err != nil {
-		archiveFile.Close()
+		_ = archiveFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 		return fmt.Errorf("downloading archive: %w", err)
 	}
-	archiveFile.Close()
+	if err := archiveFile.Close(); err != nil {
+		return fmt.Errorf("close archive file %s: %w", archivePath, err)
+	}
 
 	// Verify checksum
 	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
@@ -285,7 +287,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 	if runtime.GOOS == "windows" {
 		// Windows uses zip archives
 		if err := extractBinaryFromZip(archivePath, tmpFile); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 			return fmt.Errorf("extracting binary: %w", err)
 		}
 	} else {
@@ -294,14 +296,16 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		if err != nil {
 			return fmt.Errorf("reopening archive: %w", err)
 		}
-		defer archiveFile.Close()
+		defer archiveFile.Close() //nolint:errcheck // reopened read-only for extraction
 
 		if err := extractBinaryFromTarGz(archiveFile, tmpFile); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close() //nolint:errcheck // best-effort close on the error path; the primary error is returned
 			return fmt.Errorf("extracting binary: %w", err)
 		}
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file %s: %w", tmpPath, err)
+	}
 
 	// Make the new binary executable
 	if err := os.Chmod(tmpPath, 0o755); err != nil {
@@ -319,7 +323,7 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 	// Move the new binary to the executable path
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		// Try to restore the backup
-		_ = os.Rename(backupPath, execPath)
+		_ = os.Rename(backupPath, execPath) //nolint:errcheck // best-effort rollback; the replace error is what the user needs
 		return fmt.Errorf("replacing binary: %w", err)
 	}
 
@@ -499,10 +503,13 @@ func extractDLLFromZip(archivePath, targetDir string) error {
 		}
 
 		_, copyErr := io.Copy(out, rc) //nolint:gosec // G110: decompressing trusted signed release archives
-		out.Close()
+		closeErr := out.Close()
 		rc.Close()
 		if copyErr != nil {
 			return fmt.Errorf("extracting duckdb.dll: %w", copyErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("closing duckdb.dll: %w", closeErr)
 		}
 		return nil
 	}

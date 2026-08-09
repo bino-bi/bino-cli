@@ -445,7 +445,7 @@ func encodeDocuments(docs []*yaml.Node) (string, error) {
 	enc.SetIndent(2)
 	for _, d := range docs {
 		if err := enc.Encode(d); err != nil {
-			_ = enc.Close()
+			_ = enc.Close() //nolint:errcheck // best-effort close on the error path; the encode error is returned
 			return "", fmt.Errorf("encode yaml: %w", err)
 		}
 	}

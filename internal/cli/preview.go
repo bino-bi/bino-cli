@@ -250,10 +250,10 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				sessionMu.Lock()
 				defer sessionMu.Unlock()
 				if sharedSession != nil {
-					_ = sharedSession.Close()
+					_ = sharedSession.Close() //nolint:errcheck // in-memory session teardown at shutdown
 				}
 				if es := explorerSlot.Load(); es != nil {
-					_ = es.Close()
+					_ = es.Close() //nolint:errcheck // explorer session teardown at shutdown
 				}
 			}()
 
@@ -433,7 +433,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				go watcher.Run(ctx)
 
 				go func() {
-					defer watcher.Close()
+					defer watcher.Close() //nolint:errcheck // fsnotify teardown when the refresh loop exits
 					debounce := time.NewTimer(0)
 					if !debounce.Stop() {
 						<-debounce.C
@@ -455,7 +455,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 							pending = pending[:0]
 							// refresh.Run logs its own failures with reason
 							// context; logging here would duplicate the output.
-							_ = doRefresh(coalesced, files)
+							_ = doRefresh(coalesced, files) //nolint:errcheck // refresh.Run logs its own failures; re-logging would duplicate them
 						}
 					}
 				}()
