@@ -17,7 +17,6 @@ const i18nDefaultNamespace = "_system"
 // locale the engine looks translations up under.
 var artefactKindsWithLanguage = map[string]bool{
 	"ReportArtefact":     true,
-	"LiveReportArtefact": true,
 	"ScreenshotArtefact": true,
 }
 

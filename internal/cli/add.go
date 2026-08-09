@@ -61,6 +61,7 @@ var kindCategories = []KindCategory{
 			{Name: "componentstyle", Description: "CSS styling for components"},
 			{Name: "ruleset", Description: "IBCS scenario rule-set overrides"},
 			{Name: "internationalization", Description: "Translations for a locale"},
+			{Name: "scalinggroup", Description: "Synchronized scaling across charts"},
 		},
 	},
 	{
@@ -123,6 +124,7 @@ Subcommands (Resources):
   componentstyle    Create a ComponentStyle manifest (CSS styling)
   ruleset           Create a RuleSet manifest (IBCS scenario rules)
   internationalization  Create an Internationalization manifest (translations)
+  scalinggroup      Create a ScalingGroup manifest (synchronized scaling)
 
 Subcommands (Reports):
   reportartefact       Create a ReportArtefact manifest (PDF report)

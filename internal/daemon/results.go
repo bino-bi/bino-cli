@@ -206,7 +206,7 @@ func findGraphNode(g *graph.Graph, kind, name string) *graph.Node {
 
 	componentKinds := map[string]bool{
 		"Text": true, "Table": true, "ChartStructure": true,
-		"ChartTime": true, "ChartScatter": true, "ChartBubble": true, "ChartBullet": true, "Image": true, "Asset": true,
+		"ChartTime": true, "ChartScatter": true, "ChartBubble": true, "ChartBullet": true, "Tree": true, "Grid": true, "Image": true, "Asset": true,
 	}
 	if componentKinds[kind] {
 		for _, node := range g.Nodes {
