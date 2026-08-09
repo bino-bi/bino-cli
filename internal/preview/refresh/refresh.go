@@ -551,6 +551,10 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
 		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = httpserver.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		// Broadcast like the report loop does: swapContext extracts the
+		// <bn-context> from the full page, so no frame/context split needed.
+		server.BroadcastContent(docPath, styledHTML)
+		broadcastPaths = append(broadcastPaths, docPath)
 		rendered++
 		report.Progress(rendered, totalRender, docArt.Document.Name)
 	}
