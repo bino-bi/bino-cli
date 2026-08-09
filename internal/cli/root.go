@@ -67,6 +67,11 @@ import (
 // newRootCommand creates the root cobra command for the bino CLI.
 // The command's context is set via ExecuteContext from the main package
 // and carries cancellation signals for graceful shutdown.
+// annotationStdoutIsData marks a command (or command group) whose stdout is
+// machine-consumed data. The root PersistentPreRunE routes all logging to
+// stderr for such commands so log lines cannot corrupt the output stream.
+const annotationStdoutIsData = "stdout-is-data"
+
 func newRootCommand() *cobra.Command {
 	var (
 		verbose   bool
@@ -124,13 +129,22 @@ func newRootCommand() *cobra.Command {
 			ctx = logx.WithNoColor(ctx, effectiveNoColor)
 
 			// Create the logger: colored terminal output by default, JSON
-			// lines for production deployments (log aggregation).
+			// lines for production deployments (log aggregation). Commands
+			// whose stdout is machine-consumed data (annotationStdoutIsData,
+			// inherited from any ancestor) get all logging on stderr instead.
+			infoOut := cmd.OutOrStdout()
+			for c := cmd; c != nil; c = c.Parent() {
+				if c.Annotations[annotationStdoutIsData] == "true" {
+					infoOut = cmd.ErrOrStderr()
+					break
+				}
+			}
 			var logger logx.Logger
 			switch logFormat {
 			case "", "text":
-				logger = logx.NewTerminalWithColor(cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose, effectiveNoColor)
+				logger = logx.NewTerminalWithColor(infoOut, cmd.ErrOrStderr(), verbose, effectiveNoColor)
 			case "json":
-				logger = logx.NewJSON(cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose)
+				logger = logx.NewJSON(infoOut, cmd.ErrOrStderr(), verbose)
 			default:
 				return ConfigErrorf("invalid --log-format %q: expected \"text\" or \"json\"", logFormat)
 			}

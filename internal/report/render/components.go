@@ -895,14 +895,14 @@ func resolveChildSpec(child layoutChild, rc *renderCtx) (json.RawMessage, error)
 		_, existsGlobally := rc.globalIndex[key]
 		if existsGlobally {
 			// Ref exists but was filtered by constraints - skip gracefully.
-			log.Infof("ref %q of kind %q filtered by constraints, skipping child", child.Ref, child.Kind)
+			log.Debugf("ref %q of kind %q filtered by constraints, skipping child", child.Ref, child.Kind)
 			return nil, nil
 		}
 
 		// Ref doesn't exist at all.
 		if child.Optional {
 			// Optional ref: skip gracefully.
-			log.Infof("optional ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
+			log.Debugf("optional ref %q of kind %q not found, skipping child", child.Ref, child.Kind)
 			return nil, nil
 		}
 
@@ -1458,13 +1458,13 @@ func resolveGridChildSpec(child gridChild, rc *renderCtx) (json.RawMessage, erro
 		// Check if ref exists in global set (filtered by constraints)
 		_, existsGlobally := rc.globalIndex[key]
 		if existsGlobally {
-			log.Infof("ref %q of kind %q filtered by constraints, skipping grid child", child.Ref, child.Kind)
+			log.Debugf("ref %q of kind %q filtered by constraints, skipping grid child", child.Ref, child.Kind)
 			return nil, nil // Filtered by constraints, skip
 		}
 
 		// Ref doesn't exist at all
 		if child.Optional {
-			log.Infof("optional ref %q of kind %q not found, skipping grid child", child.Ref, child.Kind)
+			log.Debugf("optional ref %q of kind %q not found, skipping grid child", child.Ref, child.Kind)
 			return nil, nil // Optional ref: skip gracefully
 		}
 

@@ -104,6 +104,11 @@ func newLSPCommand() *cobra.Command {
 		Short:  "Helper commands for LSP/IDE integration",
 		Long:   "Provides workspace indexing and schema introspection for IDE autocompletion features.",
 		Hidden: true,
+		// Every subcommand prints machine-consumed JSON on stdout. The root
+		// PersistentPreRunE routes all logging to stderr for commands carrying
+		// this annotation, mirroring `bino lsp` and `bino mcp` — a stray Info
+		// line on stdout breaks the extension's JSON.parse.
+		Annotations: map[string]string{annotationStdoutIsData: "true"},
 	}
 
 	cmd.AddCommand(newLSPIndexCommand())
