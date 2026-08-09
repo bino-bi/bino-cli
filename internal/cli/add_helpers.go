@@ -505,7 +505,9 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 			return fmt.Errorf("encode document: %w", err)
 		}
 	}
-	encoder.Close()
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("finalize yaml encoding: %w", err)
+	}
 
 	if err := os.WriteFile(artefactPath, []byte(buf.String()), 0o644); err != nil { //nolint:gosec // G306: manifest files need standard read perms
 		return fmt.Errorf("write artefact file: %w", err)

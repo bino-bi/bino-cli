@@ -50,7 +50,7 @@ With no daemon running, it serves standalone from its own project state.`,
 
 			var backend lsp.Backend
 			if !noProxy {
-				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil {
+				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil { //nolint:errcheck // a missing or unreadable port file means no daemon to attach to
 					base := fmt.Sprintf("http://127.0.0.1:%d", pf.Port)
 					if hb, herr := lsp.NewHTTPBackend(ctx, base, logger); herr == nil {
 						logger.Infof("Proxying to daemon at %s", base)
@@ -72,7 +72,7 @@ With no daemon running, it serves standalone from its own project state.`,
 			if err := backend.Start(ctx); err != nil {
 				logger.Warnf("backend start: %v", err)
 			}
-			defer func() { _ = backend.Close() }()
+			defer func() { _ = backend.Close() }() //nolint:errcheck // backend teardown at server shutdown
 
 			stream := lsp.StdioStream()
 			if socket > 0 {

@@ -562,8 +562,8 @@ func promptLayoutChildren(reader *bufio.Reader, out io.Writer, manifests []Manif
 // completeLayoutComponents provides shell completion for layout child components.
 func completeLayoutComponents(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	ctx := cmd.Context()
-	workdir, _ := pathutil.ResolveWorkdir(".")
-	manifests, _ := ScanManifests(ctx, workdir)
+	workdir, _ := pathutil.ResolveWorkdir(".")  //nolint:errcheck // shell completion; errors mean no suggestions
+	manifests, _ := ScanManifests(ctx, workdir) //nolint:errcheck // shell completion; errors mean no suggestions
 	components := FilterByKind(manifests, layoutChildKinds...)
 	names := make([]string, len(components))
 	for i, m := range components {

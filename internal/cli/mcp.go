@@ -52,7 +52,7 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 			// Proxy to a running daemon when one exists, so the agent reuses the
 			// daemon's loaded State rather than spinning up a second DuckDB session.
 			if !noProxy {
-				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil {
+				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil { //nolint:errcheck // a missing or unreadable port file means no daemon to proxy to
 					endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", pf.Port)
 					logger.Infof("Proxying to daemon MCP at %s", endpoint)
 					if err := runMCPProxy(ctx, endpoint); err != nil {
@@ -132,7 +132,7 @@ func runMCPProxy(ctx context.Context, endpoint string) error {
 		// correlates it with the original request.
 		ProgressNotificationHandler: func(ctx context.Context, req *mcpsdk.ProgressNotificationClientRequest) {
 			if ls := localSession.Load(); ls != nil {
-				_ = ls.NotifyProgress(ctx, req.Params)
+				_ = ls.NotifyProgress(ctx, req.Params) //nolint:errcheck // progress relay; a gone client must not fail the proxy
 			}
 		},
 	})
@@ -141,7 +141,7 @@ func runMCPProxy(ctx context.Context, endpoint string) error {
 	if err != nil {
 		return fmt.Errorf("connect daemon: %w", err)
 	}
-	defer func() { _ = upstream.Close() }()
+	defer func() { _ = upstream.Close() }() //nolint:errcheck // session teardown at proxy shutdown
 
 	local := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "bino", Title: "bino — Report-as-Code", Version: version.Version}, nil)
 	if err := mirrorUpstream(ctx, local, upstream); err != nil {

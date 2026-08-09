@@ -70,7 +70,7 @@ when prompted. Non-interactive: pipe the token on stdin with --with-token.`,
 				return RuntimeError(err)
 			}
 
-			credPath, _ := registry.CredentialsPath()
+			credPath, _ := registry.CredentialsPath() //nolint:errcheck // display-only path in the success message
 			out.Success(fmt.Sprintf("Logged in to %s", url))
 			out.Info(fmt.Sprintf("Access token stored in %s", credPath))
 			return nil

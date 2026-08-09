@@ -44,7 +44,7 @@ var (
 	}
 	gzipWriterPool = sync.Pool{
 		New: func() any {
-			w, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression)
+			w, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression) //nolint:errcheck // constant valid level cannot fail
 			return w
 		},
 	}
@@ -155,13 +155,13 @@ func (c *compressedResponseWriter) writeHeader(statusCode int) {
 	case compressionBrotli:
 		c.ResponseWriter.Header().Set("Content-Encoding", "br")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer) //nolint:errcheck // the pool only ever holds this type
 		bw.Reset(c.ResponseWriter)
 		c.writer = bw
 	case compressionGzip:
 		c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
 		c.ResponseWriter.Header().Add("Vary", "Accept-Encoding")
-		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer) //nolint:errcheck // the pool only ever holds this type
 		gw.Reset(c.ResponseWriter)
 		c.writer = gw
 	default:
@@ -208,11 +208,11 @@ func (c *compressedResponseWriter) Flush() {
 	switch c.compType {
 	case compressionBrotli:
 		if bw, ok := c.writer.(*brotli.Writer); ok {
-			_ = bw.Flush()
+			_ = bw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	case compressionGzip:
 		if gw, ok := c.writer.(*gzip.Writer); ok {
-			_ = gw.Flush()
+			_ = gw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	default:
 	}
@@ -292,13 +292,13 @@ func newSSECompressedWriter(w http.ResponseWriter, compType compressionType) *ss
 	case compressionBrotli:
 		w.Header().Set("Content-Encoding", "br")
 		w.Header().Add("Vary", "Accept-Encoding")
-		bw, _ := brotliWriterPool.Get().(*brotli.Writer)
+		bw, _ := brotliWriterPool.Get().(*brotli.Writer) //nolint:errcheck // the pool only ever holds this type
 		bw.Reset(w)
 		sw.writer = bw
 	case compressionGzip:
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Add("Vary", "Accept-Encoding")
-		gw, _ := gzipWriterPool.Get().(*gzip.Writer)
+		gw, _ := gzipWriterPool.Get().(*gzip.Writer) //nolint:errcheck // the pool only ever holds this type
 		gw.Reset(w)
 		sw.writer = gw
 	default:
@@ -319,11 +319,11 @@ func (s *sseCompressedWriter) Flush() {
 	switch s.compType {
 	case compressionBrotli:
 		if bw, ok := s.writer.(*brotli.Writer); ok {
-			_ = bw.Flush()
+			_ = bw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	case compressionGzip:
 		if gw, ok := s.writer.(*gzip.Writer); ok {
-			_ = gw.Flush()
+			_ = gw.Flush() //nolint:errcheck // streaming flush; a dead client ends the stream itself
 		}
 	default:
 	}

@@ -161,7 +161,7 @@ func readLayoutSnapshot(outDir, artefact string) (string, layoutstate.Snapshot, 
 	candidate := filepath.Join(outDir, artefact+".layout.json")
 	data, err := os.ReadFile(candidate) //nolint:gosec // G304: path built from our own out-dir
 	if err != nil {
-		matches, _ := filepath.Glob(filepath.Join(outDir, "*.layout.json"))
+		matches, _ := filepath.Glob(filepath.Join(outDir, "*.layout.json")) //nolint:errcheck // constant pattern; Glob errors only on malformed patterns
 		if len(matches) != 1 {
 			return "", layoutstate.Snapshot{}, fmt.Errorf(
 				"no layout capture for %q — the template engine must be v1.0.0-next.24 or newer", artefact)

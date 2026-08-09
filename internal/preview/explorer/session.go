@@ -77,7 +77,7 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 	}
 
 	// Clean temp dir for inline sources
-	entries, _ := os.ReadDir(s.tempDir)
+	entries, _ := os.ReadDir(s.tempDir) //nolint:errcheck // best-effort temp cleanup; an unreadable dir leaves nothing to remove
 	for _, e := range entries {
 		os.Remove(fmt.Sprintf("%s/%s", s.tempDir, e.Name()))
 	}

@@ -137,7 +137,7 @@ func computeSpecHash(specJSON []byte) string {
 		return hex.EncodeToString(sum[:])
 	}
 
-	canonical, _ := json.Marshal(normalized)
+	canonical, _ := json.Marshal(normalized) //nolint:errcheck // YAML-decoded values are JSON-marshalable by construction
 	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:])
 }
@@ -179,7 +179,7 @@ func createSyntheticDataSourceDocument(name string, specJSON []byte, loc spec.In
 		docMap["spec"] = specMap
 	}
 
-	raw, _ := json.Marshal(docMap)
+	raw, _ := json.Marshal(docMap) //nolint:errcheck // YAML-decoded maps are JSON-marshalable by construction
 
 	return Document{
 		File:     loc.File,
@@ -221,7 +221,7 @@ func createSyntheticDataSetDocument(name string, specJSON []byte, loc spec.Inlin
 		docMap["spec"] = specMap
 	}
 
-	raw, _ := json.Marshal(docMap)
+	raw, _ := json.Marshal(docMap) //nolint:errcheck // YAML-decoded maps are JSON-marshalable by construction
 
 	return Document{
 		File:     loc.File,

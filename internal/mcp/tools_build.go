@@ -85,11 +85,11 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	preexisting := buildLogSet(logDir)
 
 	if err := cmd.Start(); err != nil {
-		_ = pw.Close()
-		_ = pr.Close()
+		_ = pw.Close() //nolint:errcheck // best-effort pipe cleanup; the start error is returned
+		_ = pr.Close() //nolint:errcheck // best-effort pipe cleanup; the start error is returned
 		return nil, buildOutput{}, fmt.Errorf("start build: %w", err)
 	}
-	_ = pw.Close() // parent drops its write end; the child keeps its copy
+	_ = pw.Close() //nolint:errcheck // parent drops its write end; the child keeps its copy
 
 	var captured strings.Builder
 	progressToken := req.Params.GetProgressToken()
@@ -102,15 +102,15 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 		captured.WriteByte('\n')
 		if progressToken != nil && req.Session != nil {
 			step++
-			_ = req.Session.NotifyProgress(ctx, &mcpsdk.ProgressNotificationParams{
+			_ = req.Session.NotifyProgress(ctx, &mcpsdk.ProgressNotificationParams{ //nolint:errcheck // progress relay; a gone client must not fail the build
 				ProgressToken: progressToken,
 				Progress:      step,
 				Message:       progressMessage(line),
 			})
 		}
 	}
-	_ = scanner.Err()
-	_ = pr.Close()
+	_ = scanner.Err() //nolint:errcheck // best-effort log capture; the exit code decides the outcome
+	_ = pr.Close()    //nolint:errcheck // read end drained; the wait below reaps the child
 
 	exitCode := 0
 	if waitErr := cmd.Wait(); waitErr != nil {
@@ -159,7 +159,7 @@ func progressMessage(line string) string {
 // buildLogSet returns the set of bino-build-*.json paths currently in dir.
 func buildLogSet(dir string) map[string]struct{} {
 	set := map[string]struct{}{}
-	matches, _ := filepath.Glob(filepath.Join(dir, "bino-build-*.json"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "bino-build-*.json")) //nolint:errcheck // constant pattern; Glob errors only on malformed patterns
 	for _, m := range matches {
 		set[m] = struct{}{}
 	}

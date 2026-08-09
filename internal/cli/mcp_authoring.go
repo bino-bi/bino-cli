@@ -37,7 +37,7 @@ func (a *cliAuthoring) CreateManifest(ctx context.Context, in mcp.CreateManifest
 		return mcp.WriteResult{}, fmt.Errorf("name is required")
 	}
 
-	manifests, _ := ScanManifests(ctx, a.root)
+	manifests, _ := ScanManifests(ctx, a.root) //nolint:errcheck // best-effort listing; an unreadable tree yields no matches
 	if !IsNameUnique(manifests, in.Kind, in.Name) {
 		return mcp.WriteResult{}, fmt.Errorf("a %s named %q already exists", in.Kind, in.Name)
 	}

@@ -59,7 +59,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			logger.Infof("Starting daemon for %s", env.ProjectRoot)
 
 			// Check for existing daemon
-			existing, _ := daemon.ReadPortFile(env.ProjectRoot)
+			existing, _ := daemon.ReadPortFile(env.ProjectRoot) //nolint:errcheck // a missing or unreadable port file means no daemon is running
 			if existing != nil {
 				return ConfigErrorf("daemon already running on port %d (pid %d)", existing.Port, existing.PID)
 			}

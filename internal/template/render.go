@@ -118,10 +118,10 @@ func matchGlob(glob, p string) bool {
 	if prefix, ok := strings.CutSuffix(glob, "/**"); ok {
 		return p == prefix || strings.HasPrefix(p, prefix+"/")
 	}
-	if ok, _ := path.Match(glob, p); ok {
+	if ok, _ := path.Match(glob, p); ok { //nolint:errcheck // an invalid pattern counts as no match
 		return true
 	}
-	if ok, _ := path.Match(glob, path.Base(p)); ok {
+	if ok, _ := path.Match(glob, path.Base(p)); ok { //nolint:errcheck // an invalid pattern counts as no match
 		return true
 	}
 	return false

@@ -105,7 +105,7 @@ Environment knobs:
 			if err != nil {
 				return RuntimeError(err)
 			}
-			defer sharedSession.Close()
+			defer sharedSession.Close() //nolint:errcheck // in-memory session teardown at shutdown
 
 			if err := sharedSession.InstallAndLoadExtensions(ctx, duckdb.DefaultExtensions()); err != nil {
 				return RuntimeError(err)

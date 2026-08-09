@@ -168,7 +168,7 @@ func Collect(ctx context.Context, docs []config.Document, opts *CollectOptions) 
 	if err != nil {
 		return results, diags, fmt.Errorf("duckdb open: %w", err)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	// Register external DataSources as views
 	// Note: inline sources are handled directly above and don't need views here

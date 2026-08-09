@@ -215,7 +215,7 @@ func (e CommandEnv) Apply(logOverride func(key, tomlVal, envVal string)) {
 			// Environment variable takes precedence, don't override
 			continue
 		}
-		os.Setenv(key, tomlVal)
+		os.Setenv(key, tomlVal) //nolint:errcheck // best-effort env projection; Setenv fails only on malformed keys
 	}
 }
 
@@ -275,7 +275,7 @@ func FindEngineVersionLine(configPath string) (line, col int) {
 	if err != nil {
 		return 1, 1
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)

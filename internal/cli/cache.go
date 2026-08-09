@@ -88,7 +88,7 @@ Use --global to also remove the global cache directory (~/.bino/).`,
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory containing .bino/cache")
 	cmd.Flags().BoolVar(&global, "global", false, "Also remove global cache (~/.bino/)")
 	cmd.Flags().BoolVar(&global, "all", false, "Alias for --global")
-	_ = cmd.Flags().MarkHidden("all") // Keep --all working but prefer --global in docs
+	_ = cmd.Flags().MarkHidden("all") //nolint:errcheck // static flag name; keep --all working but prefer --global in docs
 
 	return cmd
 }

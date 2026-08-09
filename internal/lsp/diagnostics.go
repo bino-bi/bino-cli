@@ -16,7 +16,7 @@ import (
 // dotted Field (resolved via ResolvePathPosition); env-var diagnostics carry no
 // position and are anchored by locating the ${VAR} occurrence.
 func backfillDiagnostics(doc *Document, diags []Diag) []protocol.Diagnostic {
-	nodes, _ := reportspec.ParseYAMLNodes(doc.Text)
+	nodes, _ := reportspec.ParseYAMLNodes(doc.Text) //nolint:errcheck // lenient parse; unparsable docs contribute no positions
 	out := make([]protocol.Diagnostic, 0, len(diags))
 	for _, d := range diags {
 		if d.Code == "missing-env-var" {

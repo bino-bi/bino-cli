@@ -63,7 +63,7 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	if err != nil {
 		return nil, fmt.Errorf("duckdb open: %w", err)
 	}
-	defer session.Close()
+	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
 	// Create temp directory for inline datasource CSV files
 	tempDir, err := os.MkdirTemp("", "bino-introspect-")

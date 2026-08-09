@@ -35,7 +35,7 @@ func newPluginListCommand() *cobra.Command {
 			ctx := cmd.Context()
 			logger := logx.Nop()
 
-			workdir, _ := os.Getwd()
+			workdir, _ := os.Getwd() //nolint:errcheck // an empty workdir just disables project plugin discovery
 			projectRoot, err := pathutil.FindProjectRoot(workdir)
 			if err != nil {
 				return fmt.Errorf("no bino project found (missing bino.toml)")
