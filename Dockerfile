@@ -11,7 +11,7 @@
 # The builder and the runtime must share a Debian release. duckdb-go-bindings
 # ships prebuilt static C++ archives that link -lstdc++ -lm -ldl dynamically, so
 # a newer-glibc builder produces a binary bookworm-slim cannot start.
-FROM golang:1.26-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 
 WORKDIR /src
 
