@@ -5,6 +5,6 @@ metadata:
   description: The kit's logo. localPath is relative to this manifest, as a published package requires.
 spec:
   type: image
-  mediaType: image/svg+xml
+  mediaType: image/png
   source:
-    localPath: logo.svg
+    localPath: logo.png

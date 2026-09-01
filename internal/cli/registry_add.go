@@ -61,7 +61,7 @@ tag; "@1.2.3" pins that exact version.`,
 			if err != nil {
 				return registryCommandError(err)
 			}
-			bodies, err := registrySync(ctx, p, client, plan)
+			plans, err := registrySync(ctx, p, client, plan)
 			if err != nil {
 				return err
 			}
@@ -86,7 +86,7 @@ tag; "@1.2.3" pins that exact version.`,
 					p.Out.List(fmt.Sprintf("%s %s (dependency)", r.Name, r.Version))
 				}
 			}
-			registryCompatWarnings(p, bodies, plan)
+			registryCompatWarnings(p, planEntries(plans))
 			registryGitignoreHint(p)
 			return nil
 		},

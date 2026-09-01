@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -46,46 +47,21 @@ anything, so CI and fresh checkouts reproduce the exact locked versions.`,
 
 			entries := append([]registry.Entry(nil), lock.Packages...)
 			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-			bodies := make(map[string][]byte, len(entries))
+			plans := make([]packagePlan, 0, len(entries))
 			for _, e := range entries {
-				body, err := downloadVerified(ctx, client, e.Name, e.Version, e.Digest)
+				pp, err := fetchLockedPackage(ctx, p, client, e)
 				if err != nil {
-					var apiErr *registry.APIError
-					if errors.As(err, &apiErr) && apiErr.Status == http.StatusGone {
-						return ExternalErrorWithHint(
-							fmt.Errorf("%s@%s is pinned in %s but has been yanked from the registry", e.Name, e.Version, registry.LockfileName),
-							"run 'bino registry update' to re-resolve to an available version")
-					}
-					return ExternalError(err)
+					return err
 				}
-				bodies[e.Name] = body
+				plans = append(plans, pp)
 			}
-			for _, e := range entries {
-				if _, err := registry.WritePackage(p.Root, e.Name, bodies[e.Name]); err != nil {
-					return RuntimeError(err)
-				}
-				for _, r := range e.Resources {
-					body, err := downloadVerifiedResource(ctx, client, e.Name, e.Version, r.Name, r.ContentHash)
-					if err != nil {
-						var apiErr *registry.APIError
-						if errors.Is(err, errResourceMismatch) || (errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound) {
-							return ExternalErrorWithHint(
-								fmt.Errorf("resource %q of %s@%s is pinned in %s but no longer matches what the registry serves", r.Name, e.Name, e.Version, registry.LockfileName),
-								"run 'bino registry update' to re-resolve to the resource's current state")
-						}
-						return ExternalError(err)
-					}
-					if err := registry.WriteResource(p.Root, e.Name, r.Name, body); err != nil {
-						return RuntimeError(err)
-					}
-				}
+			// The lock is authoritative here — it is not rewritten, so a v1
+			// lock stays a v1 lock on disk and re-installing produces no diff.
+			if err := materialize(p, plans, false); err != nil {
+				return err
 			}
 
-			plan := make([]registry.Resolved, 0, len(entries))
-			for _, e := range entries {
-				plan = append(plan, registry.Resolved{Name: e.Name, Version: e.Version, Tag: e.Tag, Kind: e.Kind, Digest: e.Digest})
-			}
-			registryCompatWarnings(p, bodies, plan)
+			registryCompatWarnings(p, entries)
 			registryGitignoreHint(p)
 			p.Out.Success(fmt.Sprintf("Installed %d package(s) from %s", len(entries), registry.LockfileName))
 			return nil
@@ -103,6 +79,12 @@ func checkLockDrift(p registryProject, lock *registry.Lockfile) error {
 	for _, e := range lock.Packages {
 		if e.Direct {
 			direct[e.Name] = true
+		}
+		// LoadLockfile fills the format of every entry of a version-1 lock,
+		// so an empty one here means the file claims version 2 while an older
+		// bino rewrote it and dropped the fields this CLI needs.
+		if e.Format == "" {
+			return ConfigErrorf("%s records %s without a package format — it was probably rewritten by an older bino; run 'bino registry update'", registry.LockfileName, e.Name)
 		}
 	}
 	for name, ref := range p.Cfg.Dependencies {
@@ -126,4 +108,73 @@ func checkLockDrift(p registryProject, lock *registry.Lockfile) error {
 		return drift("%s is locked as a direct dependency but not declared", name)
 	}
 	return nil
+}
+
+// fetchLockedPackage downloads and verifies one package exactly as bino.lock
+// pins it, mapping the two failures a stale lock produces onto an actionable
+// hint. It re-uses any file already materialized with a matching digest, so a
+// warm store costs no bandwidth.
+func fetchLockedPackage(ctx context.Context, p registryProject, client *registry.Client, e registry.Entry) (packagePlan, error) {
+	plan := packagePlan{entry: e, bodies: map[string][]byte{}}
+	for _, f := range e.TreeFiles() {
+		if reuseOnDisk(p.Root, e.Name, f) {
+			continue
+		}
+		body, err := fetchLockedFile(ctx, client, e, f)
+		if err != nil {
+			return packagePlan{}, err
+		}
+		plan.bodies[f.Path] = body
+	}
+	return plan, nil
+}
+
+// fetchLockedFile downloads one file of a locked package over the routes its
+// format lives on: a file-tree package through the v2 file route, a
+// single-document package through the v1 document and resource routes, whose
+// bundled resources are not part of the one-file tree a v2 registry renders
+// for it.
+func fetchLockedFile(ctx context.Context, client *registry.Client, e registry.Entry, f registry.FileEntry) ([]byte, error) {
+	if e.IsTree() {
+		body, err := downloadVerifiedTreeFile(ctx, client, e.Name, e.Version, f)
+		if err != nil {
+			return nil, lockedFetchError(e, f, err)
+		}
+		return body, nil
+	}
+	if f.Type == registry.FileResource {
+		body, err := downloadVerifiedResource(ctx, client, e.Name, e.Version, f.Path, f.Digest)
+		if err != nil {
+			return nil, lockedFetchError(e, f, err)
+		}
+		return body, nil
+	}
+	body, err := downloadVerified(ctx, client, e.Name, e.Version, f.Digest)
+	if err != nil {
+		return nil, lockedFetchError(e, f, err)
+	}
+	return body, nil
+}
+
+// lockedFetchError turns a download failure during install into the one thing
+// the user can do about it. Install never re-resolves, so anything the
+// registry no longer serves as pinned means the lock has to be refreshed.
+func lockedFetchError(e registry.Entry, f registry.FileEntry, err error) error {
+	var apiErr *registry.APIError
+	isAPI := errors.As(err, &apiErr)
+	switch {
+	case isAPI && apiErr.Status == http.StatusGone:
+		return ExternalErrorWithHint(
+			fmt.Errorf("%s@%s is pinned in %s but has been yanked from the registry", e.Name, e.Version, registry.LockfileName),
+			"run 'bino registry update' to re-resolve to an available version")
+	case isAPI && apiErr.Code == "requires_newer_client":
+		return ExternalErrorWithHint(
+			fmt.Errorf("%s@%s is a multi-file package that this project's %s records as a single document", e.Name, e.Version, registry.LockfileName),
+			"run 'bino registry update' to re-resolve it in the current format")
+	case errors.Is(err, errResourceMismatch) || (isAPI && apiErr.Status == http.StatusNotFound):
+		return ExternalErrorWithHint(
+			fmt.Errorf("%s of %s@%s is pinned in %s but no longer matches what the registry serves", f.Path, e.Name, e.Version, registry.LockfileName),
+			"run 'bino registry update' to re-resolve to the package's current state")
+	}
+	return ExternalError(err)
 }
