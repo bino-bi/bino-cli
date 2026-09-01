@@ -196,6 +196,73 @@ func TestRenderStandardLeavesNoActions(t *testing.T) {
 	}
 }
 
+// predefFiles is the exact file set the predef template scaffolds, in the
+// sorted order RenderTree returns. Like standardFiles this is a user-visible
+// contract; mocks/ is deliberately part of it and deliberately not a canonical
+// manifest folder.
+var predefFiles = []string{
+	".bnignore",
+	".gitignore",
+	"README.md",
+	"bino.toml",
+	"components/revenue_table.yaml",
+	"mocks/mock_data.yaml",
+	"mocks/preview.yaml",
+	"resources/assets/logo.svg",
+	"resources/assets/logo.yaml",
+	"styles/corporate_theme.yaml",
+}
+
+// renderPredef renders the built-in predef template into a temp dir with the
+// pinned fixture values, returning the created paths and the destination.
+func renderPredef(t *testing.T) ([]string, string) {
+	t.Helper()
+	root, err := BuiltinRoot("predef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := BuiltinManifest("predef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	created, err := RenderTree(root, manifest, dest, minimalGoldenData(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return created, dest
+}
+
+// TestRenderPredefFoldered verifies the predef template scaffolds the package
+// tree plus its mocks/ preview harness and renders without error.
+func TestRenderPredefFoldered(t *testing.T) {
+	created, _ := renderPredef(t)
+	if !reflect.DeepEqual(created, predefFiles) {
+		t.Fatalf("created files = %v, want %v", created, predefFiles)
+	}
+}
+
+// TestRenderPredefLeavesNoActions guards the substitution: the scaffold must
+// contain no unresolved template action and no "<no value>" from a variable
+// that silently went missing.
+func TestRenderPredefLeavesNoActions(t *testing.T) {
+	created, dest := renderPredef(t)
+	for _, rel := range created {
+		if filepath.Ext(rel) == ".svg" {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for _, marker := range []string{"{{", "<no value>"} {
+			if bytes.Contains(body, []byte(marker)) {
+				t.Errorf("%s contains unrendered %q", rel, marker)
+			}
+		}
+	}
+}
+
 // TestBuiltinEmbedHasNoJunk fails if editor or OS droppings ever reach the
 // embedded tree. `//go:embed all:builtin` takes dotfiles, and .DS_Store is
 // gitignored rather than impossible — a local build would otherwise ship one

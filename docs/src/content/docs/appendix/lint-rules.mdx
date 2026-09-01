@@ -8,6 +8,8 @@ Lint rules check the **content** of your documents (semantic/business rules), wh
 
 Most lint findings are treated as **warnings** and do not block builds. However, some rules produce **errors** that will cause the build to fail (marked with severity below).
 
+The last five rules only run on a **predef project** — a project whose `bino.toml` carries a `[package]` table (see [Predef packages](/concepts/project-configuration/#predef-packages)). A project without that table never sees them.
+
 ## Rules
 
 | ID                             | Name                         | Severity | Description                                                                                    |
@@ -28,6 +30,11 @@ Most lint findings are treated as **warnings** and do not block builds. However,
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
 | `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
+| `package-config-invalid`       | Package Config Invalid       | Error    | The `[package]` table in `bino.toml` must satisfy the constraints a registry publish enforces.  |
+| `predef-name-namespace`        | Predef Name Namespace        | Error    | Documents inside the package include set must be named after the package.                      |
+| `predef-forbidden-kind`        | Predef Forbidden Kind        | Error    | Artefact kinds and credential kinds must not be inside the package include set.                |
+| `predef-asset-absolute-path`   | Predef Asset Absolute Path   | Error    | A packaged Asset's `spec.source.localPath` must be relative to its manifest.                    |
+| `predef-external-ref`          | Predef External Reference    | Error    | Structural and presentational references must resolve inside the package or a declared dependency. |
 
 ## Rule details
 
@@ -501,6 +508,119 @@ spec:
 
 **See also:** [Scoped overrides with `i18nNamespace`](/reference/internationalization/#scoped-overrides-with-i18nnamespace)
 
+### package-config-invalid
+
+The `[package]` table is not checked when `bino.toml` is loaded — an unrelated command must not fail over a field only `bino publish` reads. `bino lint` checks it instead and reports the first problem it finds as one finding on `bino.toml`.
+
+**Example problem:**
+
+```toml
+[package]
+name = "acme/starter-kit" # no scope
+visibility = "secret" # not "public" or "private"
+compat-engine = "not-a-range"
+```
+
+**Fix:** Use a scoped name, one of the two visibilities, and a valid semver range.
+
+```toml
+[package]
+name = "@acme/starter-kit"
+visibility = "private"
+compat-engine = ">=1.0.0"
+```
+
+When this rule fires, the four content rules below do not run: the include set and the name prefix both derive from the table, so their findings would be meaningless.
+
+### predef-name-namespace
+
+Every document a package publishes carries the package name, so a consumer who installs two kits never gets a name collision. One document — the package's main definition — may be named exactly like the package; every other one needs a `<package>/<definition>` name.
+
+**Example problem:**
+
+```yaml
+# components/revenue_table.yaml, inside the include set of @acme/starter-kit
+kind: Table
+metadata:
+  name: revenue_table # not namespaced
+```
+
+**Fix:** Prefix it with the package name, or move the manifest out of the include set.
+
+```yaml
+metadata:
+  name: "@acme/starter-kit/revenue_table"
+```
+
+A `DataSource` is the exception: its name becomes a DuckDB view name and is limited to two segments (`@scope/name`), so it cannot carry a package segment at all. Either name it exactly like the package (as the main definition) or keep it out of the include set — `mocks/` is the conventional place.
+
+### predef-forbidden-kind
+
+Two groups of kinds must never be published.
+
+- **Artefacts** (`ReportArtefact`, `LiveReportArtefact`, `ScreenshotArtefact`, `DocumentArtefact`) render *a* report. They are the harness that previews your package, not package content. Keep them in `reports/` or `mocks/`, both of which are excluded from every package.
+- **Credentials** (`ConnectionSecret`, `SigningProfile`) must never leave your machine. `secrets/` and `signing/` *are* part of the default include set, on purpose: if they were excluded the rule could never fire on the one layout where credentials actually live.
+
+**Fix:** Move the manifest out of the include set, or write an explicit `include` list in `[package]` that leaves its folder out.
+
+### predef-asset-absolute-path
+
+A published package is unpacked on someone else's machine, so an `Asset` inside it must find its file relative to its own manifest. An absolute path — `/home/you/logo.svg`, or a `C:\` drive path — resolves to nothing there.
+
+**Example problem:**
+
+```yaml
+kind: Asset
+metadata:
+  name: "@acme/starter-kit/logo"
+spec:
+  source:
+    localPath: /home/you/assets/logo.svg
+```
+
+**Fix:** Put the file next to the manifest and reference it relatively.
+
+```yaml
+spec:
+  source:
+    localPath: logo.svg
+```
+
+Values containing `${` are skipped (`missing-env-var` owns those), as are empty ones (`inlineBase64` / `remoteURL` forms).
+
+### predef-external-ref
+
+A packaged document may only point at documents that travel with it: something else inside the include set, or a package listed under `[dependencies]` in `bino.toml`. Anything else breaks the moment a consumer installs the package.
+
+The rule inspects **structural and presentational** references only:
+
+- `{kind, ref}` children anywhere in the document
+- `spec.selectedStyle` (a `ComponentStyle`)
+- `spec.ruleset` (a `RuleSet`)
+
+**Data bindings are deliberately exempt.** `spec.dataset` is the seam a predef exists for: a packaged `Table` binds to a dataset the *consumer* supplies, so it points outside the package by construction. Flagging it would make the primary use case unlintable. The same reasoning covers a `DataSet`'s `spec.dependencies` and `spec.source`, and `spec.i18nNamespace` names a namespace rather than a document. Raw SQL in `spec.query` is never parsed.
+
+**Example problem:**
+
+```yaml
+# components/revenue_table.yaml, inside @acme/starter-kit
+kind: Table
+metadata:
+  name: "@acme/starter-kit/revenue_table"
+spec:
+  dataset: ${DATASET} # fine — the consumer binds this
+  selectedStyle: mock_theme # not fine — mock_theme lives in mocks/
+```
+
+**Fix:** Move the style into the package and namespace it, or — when it belongs to someone else's package — declare that package as a dependency.
+
+```toml
+[dependencies]
+"@other/kit" = "^1.0.0"
+```
+
+References containing `${` (a parameter or environment placeholder), glob characters, or the reserved `_inline_` prefix are skipped. A name that matches no document at all is left to `missing-required-reference`, which words it better.
+
 ## Adding custom rules
 
 The bino linter is designed for easy rule addition. Each rule has:
@@ -520,3 +640,4 @@ Currently, lint warnings cannot be suppressed. Future versions may add per-rule 
 
 - [bino lint](/cli/lint/) – CLI command for running lint.
 - [bino build](/cli/build/) – build command (runs lint by default).
+- [Predef packages](/concepts/project-configuration/#predef-packages) – the `[package]` table the last five rules switch on.

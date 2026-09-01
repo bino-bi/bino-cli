@@ -1,0 +1,31 @@
+# Sample data that makes the kit previewable. mocks/ is never part of the
+# published package, so these documents keep plain, unnamespaced names.
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: mock_revenue_source
+  description: Inline sample rows. A DataSource name becomes a DuckDB view name, so it cannot carry a package segment.
+spec:
+  type: inline
+  content:
+    - category: North
+      ac1: 1200
+      pp1: 1050
+    - category: South
+      ac1: 890
+      pp1: 940
+    - category: East
+      ac1: 1475
+      pp1: 1310
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: mock_revenue
+  description: The DataSet the preview page binds to the kit's table.
+spec:
+  query: |-
+    SELECT *
+    FROM mock_revenue_source
+  dependencies:
+    - mock_revenue_source

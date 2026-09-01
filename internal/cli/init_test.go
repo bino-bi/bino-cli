@@ -1,13 +1,18 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/projectlayout"
+	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/lint"
 )
 
 func TestSanitizeManifestName(t *testing.T) {
@@ -145,5 +150,132 @@ func TestRenderBuiltinMinimalCreatesFiles(t *testing.T) {
 	}
 	if _, _, err := renderBuiltinBundle("minimal", data, true); err != nil {
 		t.Fatalf("force write failed: %v", err)
+	}
+}
+
+// predefInitData is the render input the three predef scaffold tests share.
+func predefInitData(dir string) initTemplateData {
+	return initTemplateData{
+		Directory:      dir,
+		ReportName:     "sample-kit",
+		ReportTitle:    "Sample Kit",
+		Language:       "en",
+		Filename:       "sample-kit.pdf",
+		LayoutName:     "sample-kit-page",
+		DataSourceName: "sample_kit_data",
+		DataSetName:    "sample_kit_dataset",
+	}
+}
+
+// TestPredefScaffoldLintsClean is the headline acceptance check for the predef
+// built-in: the scaffold ships an active [package] table, so it must satisfy the
+// rules that table switches on.
+func TestPredefScaffoldLintsClean(t *testing.T) {
+	tmp := t.TempDir()
+	if _, _, err := renderBuiltinBundle("predef", predefInitData(tmp), false); err != nil {
+		t.Fatalf("renderBuiltinBundle(predef): %v", err)
+	}
+
+	ctx := context.Background()
+	docs, err := config.LoadDirWithOptions(ctx, tmp, config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDirWithOptions: %v", err)
+	}
+	findings := lint.NewProjectRunner(tmp).Run(ctx, lint.DocumentsFromConfig(docs))
+
+	var offenders []lint.Finding
+	for _, f := range findings {
+		if strings.HasPrefix(f.RuleID, "predef-") || f.RuleID == "package-config-invalid" {
+			offenders = append(offenders, f)
+		}
+	}
+	if len(offenders) > 0 {
+		for _, f := range offenders {
+			t.Errorf("predef finding: %s: %s (%s %s)", f.RuleID, f.Message, pathutil.RelPath(tmp, f.File), f.Path)
+		}
+		t.Fatalf("predef scaffold produced %d predef finding(s); all %d finding(s): %v", len(offenders), len(findings), findings)
+	}
+}
+
+// TestPredefTemplateFolders mirrors TestStandardTemplateUsesCanonicalFolders but
+// exempts mocks/: the predef scaffold deliberately seeds a non-canonical mocks/
+// folder for the preview harness, because those documents must stay outside the
+// package include set.
+func TestPredefTemplateFolders(t *testing.T) {
+	tmp := t.TempDir()
+	created, _, err := renderBuiltinBundle("predef", predefInitData(tmp), false)
+	if err != nil {
+		t.Fatalf("renderBuiltinBundle(predef): %v", err)
+	}
+	canonical := projectlayout.CanonicalFolders()
+	mockYAML := 0
+	for _, rel := range created {
+		if filepath.Ext(rel) != ".yaml" {
+			continue // not a manifest — projectlayout has nothing to say about it
+		}
+		dir, _, nested := strings.Cut(rel, "/")
+		if !nested {
+			continue // top-level file (bino.toml, dotfiles) — not a folder
+		}
+		if dir == "mocks" {
+			mockYAML++
+			continue // the deliberate exemption
+		}
+		if !slices.Contains(canonical, dir) {
+			t.Errorf("predef template seeds non-canonical folder %q (file %q); canonical=%v", dir, rel, canonical)
+		}
+	}
+	if mockYAML == 0 {
+		t.Fatalf("predef template seeds no YAML under mocks/; created=%v", created)
+	}
+}
+
+// TestPredefTemplateIsPreviewReady is the default-suite stand-in for `bino
+// preview`, which needs Chrome: the scaffold must carry an artefact whose pages
+// all resolve.
+func TestPredefTemplateIsPreviewReady(t *testing.T) {
+	tmp := t.TempDir()
+	if _, _, err := renderBuiltinBundle("predef", predefInitData(tmp), false); err != nil {
+		t.Fatalf("renderBuiltinBundle(predef): %v", err)
+	}
+	docs, err := config.LoadDirWithOptions(context.Background(), tmp, config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDirWithOptions: %v", err)
+	}
+
+	pages := map[string]bool{}
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" {
+			pages[doc.Name] = true
+		}
+	}
+
+	artefacts := 0
+	for _, doc := range docs {
+		if doc.Kind != "ReportArtefact" {
+			continue
+		}
+		artefacts++
+		var payload struct {
+			Spec struct {
+				LayoutPages []struct {
+					Page string `json:"page"`
+				} `json:"layoutPages"`
+			} `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			t.Fatalf("decode %s: %v", doc.File, err)
+		}
+		if len(payload.Spec.LayoutPages) == 0 {
+			t.Fatalf("ReportArtefact %q declares no layoutPages", doc.Name)
+		}
+		for _, p := range payload.Spec.LayoutPages {
+			if !pages[p.Page] {
+				t.Errorf("ReportArtefact %q references LayoutPage %q, which does not exist", doc.Name, p.Page)
+			}
+		}
+	}
+	if artefacts == 0 {
+		t.Fatalf("predef scaffold has no ReportArtefact; `bino preview` would render nothing")
 	}
 }

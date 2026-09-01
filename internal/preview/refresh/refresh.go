@@ -266,7 +266,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 
 	if cfg.EnableLint {
 		lintDocs := lint.DocumentsFromConfig(docs)
-		runner := lint.NewDefaultRunner()
+		runner := lint.NewProjectRunner(watchDir)
 		findings := runner.Run(ctx, lintDocs)
 		if cfg.PluginLinters != nil {
 			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, cfg.PluginLinters)

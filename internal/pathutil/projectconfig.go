@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 	"github.com/pelletier/go-toml/v2"
 )
@@ -69,6 +72,9 @@ type ProjectConfig struct {
 	// version ("1.2.3" = pinned) or a tag name ("latest", "stable", ...).
 	Dependencies map[string]string `toml:"dependencies,omitempty"`
 
+	// Package, when non-nil, marks this project as a predef project.
+	Package *PackageConfig `toml:"package,omitempty"`
+
 	// Lint configures linting behavior.
 	Lint LintConfig `toml:"lint,omitempty"`
 
@@ -94,6 +100,100 @@ type RegistryConfig struct {
 	// single "${VAR}" environment reference. Falls back to the
 	// BINO_REGISTRY_TOKEN environment variable; empty means anonymous.
 	Token string `toml:"token,omitempty"`
+}
+
+// PackageConfig is the [package] table in bino.toml. Its presence marks the
+// project as a predef project: one that authors a reusable registry package.
+// There is deliberately no type= key and no separate predef.toml — the table
+// itself is the marker. A project may carry both report-id and [package].
+type PackageConfig struct {
+	Name         string   `toml:"name"`
+	Description  string   `toml:"description,omitempty"`
+	Tags         []string `toml:"tags,omitempty"`
+	Category     string   `toml:"category,omitempty"`
+	Visibility   string   `toml:"visibility,omitempty"`    // "public" | "private", default "private"
+	CompatEngine string   `toml:"compat-engine,omitempty"` // semver range
+	CompatCLI    string   `toml:"compat-cli,omitempty"`    // semver range
+	Include      []string `toml:"include,omitempty"`       // project-relative dirs/files
+	Preview      string   `toml:"preview,omitempty"`       // "path#definition-name"
+}
+
+// packageNameRe is the registry package name grammar. internal/registry/ref.go
+// encodes the same grammar, but that package is out of scope here.
+var packageNameRe = regexp.MustCompile(`^@[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*$`)
+
+// Validate checks the [package] table for the constraints a registry publish
+// will enforce. It is deliberately not called by LoadProjectConfig: an
+// unrelated command must not fail because a package field carries a bad value.
+// (A [package] key of the wrong TOML *type* still fails at unmarshal time, as
+// every other table does; that is unreachable without a [package] table.)
+// `bino lint` surfaces the result as a finding. It returns the first error and
+// does no disk I/O.
+func (p *PackageConfig) Validate() error {
+	if p == nil {
+		return nil
+	}
+	if p.Name == "" {
+		return fmt.Errorf("[package] name is required")
+	}
+	if !packageNameRe.MatchString(p.Name) {
+		return fmt.Errorf("invalid [package] name %q: expected @scope/name with lowercase a-z0-9_- segments", p.Name)
+	}
+	switch strings.ToLower(p.Visibility) {
+	case "", "public", "private":
+	default:
+		return fmt.Errorf("invalid [package] visibility %q: expected \"public\" or \"private\"", p.Visibility)
+	}
+	if p.CompatEngine != "" {
+		if _, err := semver.NewConstraint(p.CompatEngine); err != nil {
+			return fmt.Errorf("parse [package] compat-engine %q: %w", p.CompatEngine, err)
+		}
+	}
+	if p.CompatCLI != "" {
+		if _, err := semver.NewConstraint(p.CompatCLI); err != nil {
+			return fmt.Errorf("parse [package] compat-cli %q: %w", p.CompatCLI, err)
+		}
+	}
+	for _, entry := range p.Include {
+		if _, ok := cleanProjectRelative(entry); !ok {
+			return fmt.Errorf("invalid [package] include entry %q: must be a project-relative path inside the project", entry)
+		}
+	}
+	if p.Preview != "" {
+		previewPath, def, ok := strings.Cut(p.Preview, "#")
+		if !ok || previewPath == "" || def == "" || strings.Contains(def, "#") {
+			return fmt.Errorf("invalid [package] preview %q: expected \"path#definition-name\"", p.Preview)
+		}
+		if _, ok := cleanProjectRelative(previewPath); !ok {
+			return fmt.Errorf("invalid [package] preview %q: path must be project-relative", p.Preview)
+		}
+	}
+	return nil
+}
+
+// EffectiveVisibility returns the declared visibility, defaulting to "private".
+// Safe on a nil receiver.
+func (p *PackageConfig) EffectiveVisibility() string {
+	if p == nil || p.Visibility == "" {
+		return "private"
+	}
+	return strings.ToLower(p.Visibility)
+}
+
+// cleanProjectRelative normalizes a project-relative entry to slash form and
+// reports whether it stays inside the project.
+func cleanProjectRelative(entry string) (string, bool) {
+	if entry == "" || filepath.IsAbs(entry) || strings.HasPrefix(entry, "/") {
+		return "", false
+	}
+	if len(entry) >= 2 && entry[1] == ':' {
+		return "", false
+	}
+	cleaned := path.Clean(filepath.ToSlash(entry))
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", false
+	}
+	return cleaned, true
 }
 
 // PluginDeclaration describes a single plugin entry in bino.toml.

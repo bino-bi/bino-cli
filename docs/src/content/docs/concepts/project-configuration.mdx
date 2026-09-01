@@ -103,6 +103,81 @@ The `[dependencies]` table is normally maintained by `bino registry add` and
 `bino.toml`. See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
 and the [bino registry](/cli/registry/) command reference.
 
+## Predef packages
+
+A `[package]` table turns an ordinary project into a **predef project**: a project
+that not only renders reports, but also authors a reusable package other projects
+can install. The table itself is the marker — there is no `type` key and no second
+config file. `report-id` and `[package]` coexist, so a project can keep rendering
+its own reports while it publishes a kit.
+
+```toml
+report-id = "550e8400-e29b-41d4-a716-446655440000"
+
+[package]
+name = "@acme/starter-kit"
+description = "A reusable kit: an IBCS table, the style it wears and a logo asset."
+tags = ["starter", "ibcs"]
+category = "components"
+visibility = "private"
+compat-engine = ">=1.0.0"
+include = ["components", "styles", "resources"]
+preview = "mocks/preview.yaml#starter-kit-preview"
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `name` | string | Required. The package name, `@scope/name`, with lowercase `a-z0-9_-` segments. |
+| `description` | string | Optional. One-line summary shown in the registry. |
+| `tags` | array | Optional. Free-form keywords for registry search. |
+| `category` | string | Optional. Registry category. |
+| `visibility` | string | Optional. `public` or `private`; defaults to `private`. |
+| `compat-engine` | string | Optional. Semver range of template engine versions this package works with. |
+| `compat-cli` | string | Optional. Semver range of bino CLI versions this package works with. |
+| `include` | array | Optional. Project-relative files and directories that make up the package. Defaults to every canonical manifest folder. |
+| `preview` | string | Optional. `path#definition-name` — the artefact or page that demonstrates the package. |
+
+### The include set
+
+Without an explicit `include` list a package publishes every canonical manifest
+folder:
+
+```
+components  datasets  datasources  i18n  manifests
+pages       resources scaling      secrets  signing  styles
+```
+
+An entry matches a file of exactly that name or anything below a directory of
+that name, so `include = ["components", "styles/corporate.yaml"]` publishes the
+whole `components/` tree plus one style manifest.
+
+Three directories are **never** part of a package, whatever `include` says:
+
+- `mocks/` — the sample data and the preview harness that make the package
+  demonstrable locally. This is where the artefact and the mock `DataSource`
+  belong.
+- `reports/` — the artefacts that render *your* reports.
+- `.bino/` — machine-managed state, including the packages you installed
+  yourself.
+
+### Naming inside a package
+
+Documents in the include set carry the package name: exactly `@acme/starter-kit`
+for the single main definition, or `@acme/starter-kit/<definition>` for every
+other one. A `DataSource` is the exception — its name becomes a DuckDB view name
+and is limited to two segments — so mock data sources belong in `mocks/`.
+
+<Aside>
+The `[package]` table is **not** validated when `bino.toml` is loaded. An
+unrelated command such as `bino plugin list` must not fail over a field only a
+publish reads. `bino lint` checks it instead and reports problems as
+[`package-config-invalid`](/appendix/lint-rules/#package-config-invalid), together
+with the four `predef-*` content rules that only run on a predef project.
+</Aside>
+
+Run `bino init predef` to scaffold a project that already carries a `[package]`
+table, a namespaced component, a style, an asset and a working `mocks/` preview.
+
 ## Creating a project
 
 When you run `bino init`, a `bino.toml` file is automatically created in the target directory with a freshly generated UUID for the `report-id`:

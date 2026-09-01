@@ -104,7 +104,7 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
 	// ref-params rule is inert without the declarations.
 	lintDocs := lint.DocumentsFromConfig(docs)
-	runner := lint.NewDefaultRunner()
+	runner := lint.NewProjectRunner(dir)
 	findings := runner.Run(ctx, lintDocs)
 	if opts.PluginLinters != nil {
 		pluginFindings := lint.RunPluginLinters(ctx, lintDocs, opts.PluginLinters)

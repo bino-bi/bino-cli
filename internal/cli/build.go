@@ -1211,7 +1211,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 	var lintFindings []lint.Finding
 	if !noLint {
 		lintDocs := lint.DocumentsFromConfig(documents)
-		runner := lint.NewDefaultRunner()
+		runner := lint.NewProjectRunner(projectRoot)
 		lintFindings = runner.Run(ctx, lintDocs)
 
 		// Run plugin linters.

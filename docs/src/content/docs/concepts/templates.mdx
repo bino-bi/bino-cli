@@ -9,10 +9,15 @@ experience is identical online and offline.
 
 ## Built-in templates
 
-Two templates are compiled into the binary and always work with **zero network**:
+Three templates are compiled into the binary and always work with **zero network**:
 
 - **`minimal`** — a flat starter bundle (`bino.toml`, `report.yaml`, `data.yaml`,
   `pages.yaml`, ignore files). This is the default and the non-interactive (`-y`) choice.
+- **`predef`** — a publishable **predef package**: a `bino.toml` carrying a `[package]`
+  table, a parameterized `Table` under `components/`, a `ComponentStyle`, an `Asset`, and a
+  `mocks/` folder with sample data and a report page so `bino preview` works out of the box.
+  `mocks/` is never published. See [Project configuration](/concepts/project-configuration/)
+  for the `[package]` table.
 - **`standard`** — a complete reference bundle in the **canonical folder layout**: a CSV
   `DataSource` and the `DataSet` that aggregates it, an IBCS `Table` with scenarios and
   variances, a `ChartStructure`, a `ComponentStyle`, translations for the chosen locale,
@@ -21,8 +26,9 @@ Two templates are compiled into the binary and always work with **zero network**
   It builds and lints clean out of the box.
 
 ```bash
-bino init              # minimal (interactive wizard offers standard)
+bino init              # minimal (interactive wizard offers the others)
 bino init standard     # the full reference bundle
+bino init predef       # a publishable predef package
 bino init -y           # minimal, non-interactive
 ```
 

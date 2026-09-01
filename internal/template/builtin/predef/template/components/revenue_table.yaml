@@ -1,0 +1,22 @@
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: "@acme/{{ .ReportName }}/revenue_table"
+  description: The kit's IBCS table. Consumers bind it to their own DataSet through the DATASET param.
+  params:
+    - name: DATASET
+      type: string
+      required: true
+      description: Name of the DataSet this table renders.
+spec:
+  dataset: "${DATASET}"
+  selectedStyle: "@acme/{{ .ReportName }}/corporate_theme"
+  scenarios:
+    - ac1
+    - pp1
+  variances:
+    - dac1_pp1_pos
+    - drac1_pp1_pos
+  order: ac1
+  orderDirection: desc
+  percentageScaling: 25
