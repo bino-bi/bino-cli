@@ -186,24 +186,23 @@ func packageFileState(root string, e registry.Entry) (files []string, installed 
 	if len(entryFiles) == 0 {
 		return nil, false
 	}
-	// A single-document package is addressed by the path the lock recorded; a
-	// tree's files are relative to the package directory.
-	dirRel := ""
-	if e.IsTree() {
-		var err error
-		if _, dirRel, err = registry.PackageDir(root, e.Name); err != nil {
-			return nil, false
-		}
+	_, dirRel, err := registry.PackageDir(root, e.Name)
+	if err != nil {
+		return nil, false
 	}
 	files = make([]string, 0, len(entryFiles))
 	installed = true
 	for _, f := range entryFiles {
-		rel := e.Path
-		if e.IsTree() {
-			rel = path.Join(dirRel, f.Path)
+		rel := path.Join(dirRel, f.Path)
+		if !e.IsTree() && f.Type == registry.FileDocument && e.Path != "" {
+			// A single-document package's document is addressed by the path
+			// the lock recorded, which also keeps locks written before the
+			// store gained a per-package directory reporting correctly. Its
+			// bundled resources sit beside it, in the package directory.
+			rel = e.Path
 		}
 		files = append(files, rel)
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); statErr != nil {
 			installed = false
 		}
 	}
