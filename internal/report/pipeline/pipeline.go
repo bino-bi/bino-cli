@@ -17,7 +17,9 @@ import (
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
+	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/markdown"
+	"bino.bi/bino/internal/report/mdscan"
 	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
@@ -1289,8 +1291,6 @@ type DocumentArtefactRenderOptions struct {
 	ContinueOnQueryError bool
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
-	// KindProvider enables plugin kind validation. May be nil.
-	KindProvider config.KindProvider
 	// PostRenderHTMLHook is called after HTML generation. May be nil.
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	// PostDatasetHook is called after dataset execution. May be nil.
@@ -1300,22 +1300,28 @@ type DocumentArtefactRenderOptions struct {
 // RenderDocumentArtefactHTML generates HTML from markdown files for a DocumentArtefact.
 // It reads the specified source markdown files, converts them to HTML using goldmark,
 // and wraps them in a full bino HTML document with template engine, bn-context, datasources, etc.
-func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
+// docs is the bundle's full manifest set; only the datasets reachable from the
+// artefact in the dependency graph are executed, and only reachable
+// datasources are embedded.
+func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
 	logger := logx.FromContext(ctx).Channel("document")
 	s := artifact.Spec
 
-	// Load all documents from the workdir
-	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{KindProvider: opts.KindProvider})
-	if err != nil {
-		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: load manifests: %w", artifact.Document.Name, err)
-	}
+	scope, scoped := documentDataScope(ctx, logger, docs, artifact.Document.Name)
 
-	// Execute datasets and collect datasources
+	// Execute datasets scoped to the artefact's closure. All DataSource docs
+	// stay in for execution: a dataset query may reference a source it never
+	// declared in spec.dependencies, and dropping the doc would unregister
+	// the view the query reads from.
+	execDocs := docs
+	if scoped {
+		execDocs = filterDataDocs(docs, scope.dataSets, nil)
+	}
 	execOpts := &dataset.ExecuteOptions{
 		Session:              opts.Session,
 		ContinueOnQueryError: opts.ContinueOnQueryError,
 	}
-	datasetResults, _, err := dataset.Execute(ctx, workdir, docs, execOpts)
+	datasetResults, _, err := dataset.Execute(ctx, workdir, execDocs, execOpts)
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: execute datasets: %w", artifact.Document.Name, err)
 	}
@@ -1335,7 +1341,13 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	if opts.PluginOptions != nil {
 		collectOpts = opts.PluginOptions.CollectOptions
 	}
-	datasourceResults, _, err := datasource.Collect(ctx, docs, collectOpts)
+	// Collecting only feeds the embedded <bn-datasource> payloads, so unlike
+	// execution it can scope datasources too.
+	collectDocs := docs
+	if scoped {
+		collectDocs = filterDataDocs(docs, scope.dataSets, scope.dataSources)
+	}
+	datasourceResults, _, err := datasource.Collect(ctx, collectDocs, collectOpts)
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: collect datasources: %w", artifact.Document.Name, err)
 	}
@@ -1349,7 +1361,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	logger.Debugf("Rendering DocumentArtefact %s with %d source pattern(s)", artifact.Document.Name, len(s.Sources))
 
 	// Resolve source files (expand globs, filter .md files, sort)
-	files, err := markdown.ResolveSourceFiles(manifestDir, s.Sources)
+	files, err := mdscan.ResolveSourceFiles(manifestDir, s.Sources)
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
@@ -1403,6 +1415,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		ExcludeTOC:     opts.ExcludeTOC,
 		TOCOnly:        opts.TOCOnly,
 		TOCNumbering:   s.TOCNumberingEnabled(),
+		ProjectRoot:    workdir,
 	})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
@@ -1421,6 +1434,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 		},
 		Locale:        s.Locale,
 		RenderContext: renderCtx,
+		Math:          mathEnabled,
 	})
 
 	// Dispatch post-render-html hook.
@@ -1434,6 +1448,70 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, artifact co
 	}
 
 	return DocumentArtefactResult{HTML: html, LocalAssets: assetLocals, HeadingIDs: mdResult.HeadingIDs, EmittedData: emitted}, nil
+}
+
+// docDataScope holds the DataSet/DataSource names reachable from one
+// DocumentArtefact's graph node.
+type docDataScope struct {
+	dataSets    map[string]struct{}
+	dataSources map[string]struct{}
+}
+
+// documentDataScope computes the data closure of the named DocumentArtefact:
+// the datasets and datasources reachable through its markdown :ref component
+// embeds. ok=false means the scope could not be computed (graph build failed
+// or the artefact has no node) and the caller must fall back to the full
+// document set — rendering must never fail because scoping failed.
+func documentDataScope(ctx context.Context, logger logx.Logger, docs []config.Document, name string) (docDataScope, bool) {
+	g, err := reportgraph.Build(ctx, docs)
+	if err != nil {
+		logger.Warnf("document artefact %s: data scoping skipped (graph: %v)", name, err)
+		return docDataScope{}, false
+	}
+	root, ok := g.DocumentArtefactByName(name)
+	if !ok {
+		logger.Warnf("document artefact %s: data scoping skipped (no graph node)", name)
+		return docDataScope{}, false
+	}
+	scope := docDataScope{
+		dataSets:    make(map[string]struct{}),
+		dataSources: make(map[string]struct{}),
+	}
+	for _, node := range g.CollectReachable([]*reportgraph.Node{root}) {
+		switch node.Kind {
+		case reportgraph.NodeDataSet:
+			scope.dataSets[node.Name] = struct{}{}
+		case reportgraph.NodeDataSource:
+			scope.dataSources[node.Name] = struct{}{}
+		default:
+			// Markdown files, components, layouts: structural nodes on the
+			// way down — only the data leaves matter for scoping.
+		}
+	}
+	return scope, true
+}
+
+// filterDataDocs drops DataSet documents not in sets and — when sources is
+// non-nil — DataSource documents not in sources. Every other kind passes
+// through unchanged.
+func filterDataDocs(docs []config.Document, sets, sources map[string]struct{}) []config.Document {
+	filtered := make([]config.Document, 0, len(docs))
+	for _, doc := range docs {
+		switch doc.Kind {
+		case "DataSet":
+			if _, ok := sets[doc.Name]; !ok {
+				continue
+			}
+		case "DataSource":
+			if sources != nil {
+				if _, ok := sources[doc.Name]; !ok {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, doc)
+	}
+	return filtered
 }
 
 // LogDocumentArtefactWarnings logs any warnings collected during document artifact validation.

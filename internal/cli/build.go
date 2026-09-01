@@ -367,7 +367,6 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				PluginOptions:            pluginOpts,
 				PostRenderHTMLHook:       postRenderHTMLHook,
 				PostDatasetHook:          postDatasetHook,
-				KindProvider:             env.PluginRegistry,
 			}
 
 			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
@@ -722,6 +721,7 @@ type documentArtefactResult struct {
 type buildDocumentArtefactConfig struct {
 	Builder         *pipeline.Builder
 	Logger          logx.Logger
+	Docs            []config.Document
 	Artifact        config.DocumentArtefact
 	SigningProfiles map[string]config.SigningProfile
 	OutputDir       string
@@ -785,7 +785,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		if spinner != nil {
 			tocOpts.Progress = spinner.Update
 		}
-		if err := cfg.Builder.BuildDocumentPDFWithTOC(ctx, artifact, tocOpts); err != nil {
+		if err := cfg.Builder.BuildDocumentPDFWithTOC(ctx, cfg.Docs, artifact, tocOpts); err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 			}
@@ -793,7 +793,7 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		}
 	} else {
 		// ── Single-pass: no TOC ──
-		renderResult, err := cfg.Builder.RenderDocumentHTML(ctx, artifact, pipeline.DocumentArtefactRenderOptions{})
+		renderResult, err := cfg.Builder.RenderDocumentHTML(ctx, cfg.Docs, artifact, pipeline.DocumentArtefactRenderOptions{})
 		if err != nil {
 			if spinner != nil {
 				spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
@@ -1144,6 +1144,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 			docResult, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
 				Builder:         cfg.Builder,
 				Logger:          cfg.Logger.Channel(docArtefact.Document.Name),
+				Docs:            manifests.Documents,
 				Artifact:        docArtefact,
 				SigningProfiles: manifests.SigningProfiles,
 				OutputDir:       cfg.OutputDir,

@@ -7,11 +7,14 @@ import (
 	"html"
 	"math"
 	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/report/config"
 	reportgraph "bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/report/mdscan"
 	"bino.bi/bino/internal/report/spec"
 )
 
@@ -21,6 +24,27 @@ type previewArtefactInfo struct {
 	Title  string `json:"title"`
 	Format string `json:"format"`
 	IsDoc  bool   `json:"isDoc"` // true for DocumentArtefact
+	// Document-only fields feeding the toolbar's doc meta strip.
+	Orientation  string `json:"orientation,omitempty"`
+	Locale       string `json:"locale,omitempty"`
+	Chapters     int    `json:"chapters,omitempty"`
+	TOC          bool   `json:"toc,omitempty"`
+	HeaderFooter bool   `json:"headerFooter,omitempty"`
+}
+
+// docArtefactInfo maps a DocumentArtefact to its dropdown/meta-strip payload.
+func docArtefactInfo(docArt config.DocumentArtefact) previewArtefactInfo {
+	return previewArtefactInfo{
+		Name:         docArt.Document.Name,
+		Title:        docArt.Spec.Title,
+		Format:       docArt.Spec.Format,
+		IsDoc:        true,
+		Orientation:  docArt.Spec.Orientation,
+		Locale:       docArt.Spec.Locale,
+		Chapters:     docSourceCount(docArt),
+		TOC:          docArt.Spec.TableOfContents,
+		HeaderFooter: docArt.Spec.DisplayHeaderFooter,
+	}
 }
 
 // previewDocumentInfo holds metadata about a manifest document for the assets modal.
@@ -290,15 +314,38 @@ func withPreviewStyles(doc []byte) []byte {
 	return updated
 }
 
-// withDocumentPageWidth injects a CSS custom property with the page width
-// derived from the document's format and orientation so the preview can
-// size the page container accordingly. The property is set as an inline
-// style on the <bn-context> element (not in <head>) so it survives — and
-// updates through — the attribute sync performed by swapContext on SSE
-// content morphs.
-func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
-	width := documentPageWidth(format, orientation)
-	attr := fmt.Appendf(nil, ` style="--bn-doc-page-width:%s"`, width)
+// cssLengthPattern accepts the margin lengths the preview mirrors into CSS
+// custom properties. Anything else falls back to the Chrome print defaults —
+// an unvalidated value would poison the whole var() declaration.
+var cssLengthPattern = regexp.MustCompile(`^\d+(\.\d+)?(mm|cm|in|px)$`)
+
+// withDocumentPreviewMeta injects page-geometry CSS custom properties derived
+// from the DocumentArtefact spec as an inline style on the <bn-context>
+// element (not in <head>) so they survive — and update through — the
+// attribute sync performed by swapContext on SSE content morphs. When the
+// built PDF will render a header/footer, the element is also marked with
+// data-bino-doc-hf so preview.css can show placeholder bands sized by the
+// margin properties. Margin defaults mirror internal/chrome/render.go
+// (20mm top / 15mm bottom).
+func withDocumentPreviewMeta(doc []byte, docSpec config.DocumentArtefactSpec) []byte {
+	width := documentPageWidth(docSpec.Format, docSpec.Orientation)
+
+	var attr []byte
+	if docSpec.DisplayHeaderFooter {
+		marginTop := "20mm"
+		if cssLengthPattern.MatchString(docSpec.MarginTop) {
+			marginTop = docSpec.MarginTop
+		}
+		marginBottom := "15mm"
+		if cssLengthPattern.MatchString(docSpec.MarginBottom) {
+			marginBottom = docSpec.MarginBottom
+		}
+		attr = fmt.Appendf(nil, ` style="--bn-doc-page-width:%s;--bn-doc-margin-top:%s;--bn-doc-margin-bottom:%s" data-bino-doc-hf='true'`,
+			width, marginTop, marginBottom)
+	} else {
+		attr = fmt.Appendf(nil, ` style="--bn-doc-page-width:%s"`, width)
+	}
+
 	openTag := []byte("<bn-context")
 	idx := bytes.Index(doc, openTag)
 	if idx == -1 {
@@ -337,6 +384,84 @@ func documentPageWidth(format, orientation string) string {
 // additional injection is needed here.
 func withPreviewContextStyles(ctx []byte) []byte {
 	return ctx
+}
+
+// docSourceCount resolves a DocumentArtefact's markdown sources and returns
+// the file count — the chapter count shown in preview chrome. Returns 0 when
+// resolution fails (missing files, bad globs) so callers can omit it.
+func docSourceCount(docArt config.DocumentArtefact) int {
+	files, err := mdscan.ResolveSourceFiles(filepath.Dir(docArt.Document.File), docArt.Spec.Sources)
+	if err != nil {
+		return 0
+	}
+	return len(files)
+}
+
+// emptyStateMarker is the opening tag of the renderer's no-pages placeholder
+// (see render.GenerateFrameAndContext). Matched as a marker rather than by
+// message text so renderer wording can drift without breaking the swap.
+var emptyStateMarker = []byte("<section class='empty-state'>")
+
+// withAllPagesDocuments injects a Documents section into the All Pages
+// context HTML so DocumentArtefacts are reachable from the default view.
+// When no report pages rendered (the renderer's empty-state section is
+// present) that section is replaced with a docs-aware message plus the list;
+// otherwise the list is appended before </bn-context>. The hrefs are
+// relative ("doc/<name>") so they survive reverse-proxy <base> prefixes.
+// No-op when docArts is empty — bundles without documents are untouched.
+func withAllPagesDocuments(ctx []byte, docArts []config.DocumentArtefact) []byte {
+	if len(docArts) == 0 {
+		return ctx
+	}
+
+	var strip strings.Builder
+	strip.WriteString("<section class='bn-docs-strip'><span class='bn-docs-strip-title'>Documents</span>")
+	for _, docArt := range docArts {
+		title := docArt.Spec.Title
+		if title == "" {
+			title = docArt.Document.Name
+		}
+		meta := docArt.Spec.Format
+		if n := docSourceCount(docArt); n == 1 {
+			meta += " · 1 chapter"
+		} else if n > 1 {
+			meta += fmt.Sprintf(" · %d chapters", n)
+		}
+		strip.WriteString("<span class='bn-docs-strip-row'><a class='bn-doc-link' href='doc/")
+		strip.WriteString(html.EscapeString(docArt.Document.Name))
+		strip.WriteString("'>")
+		strip.WriteString(html.EscapeString(title))
+		strip.WriteString("</a><span class='bn-doc-link-meta'>")
+		strip.WriteString(html.EscapeString(meta))
+		strip.WriteString("</span></span>")
+	}
+	strip.WriteString("</section>")
+	stripHTML := []byte(strip.String())
+
+	// Docs-only bundle: replace the misleading "define a LayoutPage" empty
+	// state with a docs-aware message and the document list.
+	if start := bytes.Index(ctx, emptyStateMarker); start != -1 {
+		if rel := bytes.Index(ctx[start:], []byte("</section>")); rel != -1 {
+			end := start + rel + len("</section>")
+			replacement := append([]byte("<section class='empty-state'>No report pages are defined in this bundle.</section>"), stripHTML...)
+			out := make([]byte, 0, len(ctx)-(end-start)+len(replacement))
+			out = append(out, ctx[:start]...)
+			out = append(out, replacement...)
+			out = append(out, ctx[end:]...)
+			return out
+		}
+	}
+
+	closeTag := []byte("</bn-context>")
+	idx := bytes.LastIndex(ctx, closeTag)
+	if idx == -1 {
+		return ctx
+	}
+	out := make([]byte, 0, len(ctx)+len(stripHTML))
+	out = append(out, ctx[:idx]...)
+	out = append(out, stripHTML...)
+	out = append(out, ctx[idx:]...)
+	return out
 }
 
 // withPreviewPageMetadata injects page metadata (constraints and artifact usage) into
