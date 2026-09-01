@@ -28,6 +28,11 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # @types/vscode must track engines.vscode (^1.85.0). Bumping it above the
+      # engines floor makes `vsce package` fail at release time. Pin until we
+      # intentionally raise the minimum supported VS Code version.
+      - dependency-name: "@types/vscode"
 
   - package-ecosystem: github-actions
     directory: /
