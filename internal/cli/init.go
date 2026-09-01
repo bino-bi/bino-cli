@@ -44,9 +44,11 @@ bino preview immediately.
 
 With no SOURCE it renders the built-in 'minimal' scaffold; 'standard' renders a full
 reference bundle — CSV data source, dataset, IBCS table, chart, style, translations and
-assets — in the canonical folder layout. A SOURCE may also be a remote template:
-owner/repo[/subdir]#ref, a full archive URL, or a local ./path. Remote templates are
-fetched from GitHub, cached by commit SHA, and never execute code.`),
+assets — in the canonical folder layout; 'predef' renders a predef project, a reusable
+registry package with an active [package] table and mock data to preview it against.
+A SOURCE may also be a remote template: owner/repo[/subdir]#ref, a full archive URL,
+or a local ./path. Remote templates are fetched from GitHub, cached by commit SHA,
+and never execute code.`),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rawSource := ""
@@ -303,16 +305,17 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) (st
 func promptTemplateChoice(reader *bufio.Reader, out io.Writer, def string) (string, error) {
 	fmt.Fprintln(out, "Templates:")
 	fmt.Fprintln(out, "  minimal  - a flat starter bundle")
+	fmt.Fprintln(out, "  predef   - a reusable registry package with mock data to preview it")
 	fmt.Fprintln(out, "  standard - a full reference bundle in the canonical folder layout")
 	for {
-		value, err := promptString(reader, out, "Template (minimal/standard)", def)
+		value, err := promptString(reader, out, "Template (minimal/predef/standard)", def)
 		if err != nil {
 			return "", err
 		}
 		if tmpl.IsBuiltin(value) {
 			return value, nil
 		}
-		fmt.Fprintln(out, "Please choose 'minimal' or 'standard'.")
+		fmt.Fprintln(out, "Please choose 'minimal', 'predef' or 'standard'.")
 	}
 }
 
@@ -729,7 +732,7 @@ func renderFieldDefault(fld tmpl.Field, vars map[string]any) (string, error) {
 	return def, nil
 }
 
-// renderBuiltinBundle renders a built-in template (minimal or standard) into the
+// renderBuiltinBundle renders a built-in template (minimal, predef or standard) into the
 // target directory via the shared template engine.
 func renderBuiltinBundle(name string, data initTemplateData, force bool) (created []string, dir string, err error) {
 	root, err := tmpl.BuiltinRoot(name)

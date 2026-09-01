@@ -142,7 +142,7 @@ there is a fatal error loading manifests.`),
 			// Step 2: Run lint rules
 			out.Step("Running lint rules...")
 			lintStart := time.Now()
-			runner := lint.NewDefaultRunner()
+			runner := lint.NewProjectRunner(projectRoot)
 			findings := runner.Run(ctx, lintDocs)
 
 			// Run plugin linters.

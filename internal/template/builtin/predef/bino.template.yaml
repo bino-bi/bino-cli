@@ -1,0 +1,15 @@
+apiVersion: bino.bi/v1alpha1
+kind: ProjectTemplate
+metadata:
+  name: predef
+spec:
+  fields:
+    - { name: ReportName, prompt: "Package name", default: rainbow-kit }
+    - { name: ReportTitle, prompt: "Package title", default: Rainbow Starter Kit }
+    - { name: Language, prompt: "Language (en/de)", default: en }
+  verbatim:
+    - .bnignore
+    - .gitignore
+  # Never read as text: the logo shipped with the package.
+  binary:
+    - "*.svg"

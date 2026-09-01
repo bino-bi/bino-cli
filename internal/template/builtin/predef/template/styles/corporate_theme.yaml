@@ -1,0 +1,12 @@
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: "@acme/{{ .ReportName }}/corporate_theme"
+  description: The style the kit's table wears. Ships with the package.
+spec:
+  content:
+    global:
+      fontSizePx: 14
+      fontFamily: "'Inter', sans-serif"
+      fontColor: "#1a1a1a"
+      fontBackgroundColor: "#ffffff"

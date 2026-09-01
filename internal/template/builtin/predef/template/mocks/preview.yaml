@@ -1,0 +1,27 @@
+# The preview harness: a page that binds the packaged table to the mock data,
+# and the artefact that renders it. Both live outside the package.
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: {{ .ReportName }}-preview
+  description: Renders the packaged table against the mock DataSet. Run 'bino preview' to see it.
+spec:
+  children:
+    - kind: Table
+      ref: "@acme/{{ .ReportName }}/revenue_table"
+      params:
+        DATASET: mock_revenue
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: {{ .ReportName }}
+spec:
+  format: xga
+  orientation: landscape
+  language: {{ .Language }}
+  filename: {{ .Filename }}
+  title: {{ .ReportTitle | yaml }}
+  description: {{ printf "Preview harness for the %s package." .ReportName | yaml }}
+  layoutPages:
+    - page: {{ .ReportName }}-preview

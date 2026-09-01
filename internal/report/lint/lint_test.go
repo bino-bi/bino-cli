@@ -96,3 +96,12 @@ func TestRunnerSkipsNilCheck(t *testing.T) {
 		t.Errorf("expected rule ID 'has-check', got %q", findings[0].RuleID)
 	}
 }
+
+func TestNewProjectRunnerWithoutPackage(t *testing.T) {
+	// A project with no bino.toml is not a predef project, so the runner must
+	// carry exactly the default rules.
+	runner := NewProjectRunner(t.TempDir())
+	if got, want := len(runner.Rules()), len(NewDefaultRunner().Rules()); got != want {
+		t.Fatalf("got %d rules, want %d", got, want)
+	}
+}
