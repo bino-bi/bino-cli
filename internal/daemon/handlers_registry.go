@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -29,11 +30,15 @@ type RegistryParam struct {
 // RegistryPackage is the served shape of one dependency: the union of its
 // bino.toml declaration, its bino.lock resolution, and its on-disk install.
 type RegistryPackage struct {
-	Name         string          `json:"name"`
-	Version      string          `json:"version,omitempty"`
-	Tag          string          `json:"tag,omitempty"`
-	Kind         string          `json:"kind,omitempty"`
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	Tag     string `json:"tag,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	// Path is the package's primary document, kept for clients that open a
+	// package with a single click. Files lists the whole tree.
 	Path         string          `json:"path,omitempty"`
+	Kinds        []string        `json:"kinds,omitempty"`
+	Files        []string        `json:"files,omitempty"`
 	Direct       bool            `json:"direct"`
 	DeclaredRef  string          `json:"declaredRef,omitempty"`
 	Installed    bool            `json:"installed"`
@@ -61,19 +66,20 @@ func (s *Server) handleRegistryPackages(w http.ResponseWriter, _ *http.Request) 
 	locked := make(map[string]bool, len(lf.Packages))
 	for _, e := range lf.Packages {
 		locked[e.Name] = true
-		abs := filepath.Join(root, filepath.FromSlash(e.Path))
-		_, statErr := os.Stat(abs)
+		files, installed := packageFileState(root, e)
 		packages = append(packages, RegistryPackage{
 			Name:         e.Name,
 			Version:      e.Version,
 			Tag:          e.Tag,
 			Kind:         e.Kind,
 			Path:         e.Path,
+			Kinds:        e.Kinds,
+			Files:        files,
 			Direct:       e.Direct,
 			DeclaredRef:  declared[e.Name],
-			Installed:    statErr == nil,
+			Installed:    installed,
 			Dependencies: e.Dependencies,
-			Params:       paramsByPath[abs],
+			Params:       packageParams(root, files, paramsByPath),
 		})
 	}
 	// Declared-but-unlocked dependencies (bino.toml edited by hand, `bino
@@ -129,7 +135,7 @@ func (s *Server) handleRegistryInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	res, err := registry.NewClient(cfg).Resolve(ctx, spec.Scope, spec.Base, spec.Ref)
+	res, err := registry.NewClient(cfg).ResolveTree(ctx, spec.Scope, spec.Base, spec.Ref)
 	if err != nil {
 		s.writeRegistryError(w, err)
 		return
@@ -141,7 +147,7 @@ func (s *Server) handleRegistryInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.writeJSON(w, struct {
-		registry.ResolveResult
+		registry.ResolveV2Result
 		InstalledVersion string `json:"installedVersion,omitempty"`
 	}{res, installed})
 }
@@ -171,9 +177,59 @@ func (s *Server) writeRegistryError(w http.ResponseWriter, err error) {
 	s.writeJSONError(w, status, err, code)
 }
 
+// packageFileState lists a locked package's project-relative files and reports
+// whether every one of them is on disk. A package is a file tree, so stat-ing
+// the package directory would not do: os.Stat succeeds on an empty directory,
+// which would report a half-installed package as installed.
+func packageFileState(root string, e registry.Entry) (files []string, installed bool) {
+	entryFiles := e.TreeFiles()
+	if len(entryFiles) == 0 {
+		return nil, false
+	}
+	// A single-document package is addressed by the path the lock recorded; a
+	// tree's files are relative to the package directory.
+	dirRel := ""
+	if e.IsTree() {
+		var err error
+		if _, dirRel, err = registry.PackageDir(root, e.Name); err != nil {
+			return nil, false
+		}
+	}
+	files = make([]string, 0, len(entryFiles))
+	installed = true
+	for _, f := range entryFiles {
+		rel := e.Path
+		if e.IsTree() {
+			rel = path.Join(dirRel, f.Path)
+		}
+		files = append(files, rel)
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			installed = false
+		}
+	}
+	return files, installed
+}
+
+// packageParams collects the declared params of every document a package
+// ships. A package used to be one document, so its params could be looked up
+// by that one path; a tree contributes them from all of its files.
+func packageParams(root string, files []string, byPath map[string][]RegistryParam) []RegistryParam {
+	var out []RegistryParam
+	seen := map[string]bool{}
+	for _, rel := range files {
+		for _, p := range byPath[filepath.Join(root, filepath.FromSlash(rel))] {
+			if seen[p.Name] {
+				continue
+			}
+			seen[p.Name] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // packageParamsByPath maps each loaded document's absolute file path to its
-// declared params (documents without params are skipped). Registry packages are
-// single-document files, so the file path identifies the package.
+// declared params (documents without params are skipped).
 func packageParamsByPath(root string, docs []config.Document) map[string][]RegistryParam {
 	out := make(map[string][]RegistryParam)
 	for _, d := range docs {
@@ -184,7 +240,9 @@ func packageParamsByPath(root string, docs []config.Document) map[string][]Regis
 		if !filepath.IsAbs(abs) {
 			abs = filepath.Join(root, abs)
 		}
-		out[abs] = toRegistryParams(d.Params)
+		// A manifest file may hold several "---" documents, each with its own
+		// params, so this accumulates rather than overwrites.
+		out[abs] = append(out[abs], toRegistryParams(d.Params)...)
 	}
 	return out
 }

@@ -414,3 +414,49 @@ func TestDefinition_RefChildSiblingKind(t *testing.T) {
 		t.Errorf("definition file = %s, want the installed package %s", got, wantFile)
 	}
 }
+
+// Every document of a multi-file package must carry the registry annotation,
+// not only the one bino.lock names as the package's primary document.
+func TestPackageOriginsCoversEveryFileOfATree(t *testing.T) {
+	root := t.TempDir()
+	lock := `lockfile_version = 2
+
+[[package]]
+name = "@acme/kit"
+version = "2.0.0"
+tag = "latest"
+digest = "sha256:manifest"
+format = "tree"
+kind = "LayoutPage"
+path = ".bino/registry/acme/kit/kit.yaml"
+direct = true
+dependencies = []
+kinds = ["LayoutPage", "Table"]
+
+[[package.files]]
+path = "kit.yaml"
+type = "document"
+digest = "sha256:a"
+
+[[package.files]]
+path = "components/sales.yaml"
+type = "document"
+digest = "sha256:b"
+`
+	if err := os.WriteFile(filepath.Join(root, "bino.lock"), []byte(lock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
+	s := NewServer(&fakeBackend{}, log, true, root)
+	origins := s.packageOrigins()
+	for _, rel := range []string{".bino/registry/acme/kit/kit.yaml", ".bino/registry/acme/kit/components/sales.yaml"} {
+		key := normPath(filepath.Join(root, filepath.FromSlash(rel)))
+		o, ok := origins[key]
+		if !ok {
+			t.Fatalf("no origin for %s; got %v", rel, origins)
+		}
+		if o.Name != "@acme/kit" || o.Version != "2.0.0" || o.Tag != "latest" {
+			t.Errorf("%s origin = %+v", rel, o)
+		}
+	}
+}

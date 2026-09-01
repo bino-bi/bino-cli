@@ -17,7 +17,7 @@ export class PackageItem extends vscode.TreeItem {
             this.iconPath = new vscode.ThemeIcon('package');
             this.tooltip = [
                 pkg.name,
-                `Kind: ${pkg.kind ?? 'unknown'}`,
+                `Kind: ${pkg.kinds?.join(', ') ?? pkg.kind ?? 'unknown'}`,
                 `Version: ${pkg.version}${pkg.tag ? ` (follows tag '${pkg.tag}')` : ' (pinned)'}`,
                 pkg.direct ? 'Direct dependency' : 'Transitive dependency',
                 `Path: ${pkg.path}`,
@@ -99,14 +99,17 @@ export class DependenciesTreeProvider implements vscode.TreeDataProvider<DepsTre
 
     private getPackageDetails(pkg: RegistryPackage): DepsTreeItem[] {
         const items: DepsTreeItem[] = [];
-        if (pkg.kind) {
-            items.push(new DetailItem('Kind', pkg.kind, 'symbol-class'));
+        const kinds = pkg.kinds?.length ? pkg.kinds.join(', ') : pkg.kind;
+        if (kinds) {
+            items.push(new DetailItem('Kind', kinds, 'symbol-class'));
         }
-        if (pkg.path) {
-            items.push(new DetailItem('Path', pkg.path, 'go-to-file', {
+        // A package is a file tree, so every file it installs is listed and
+        // openable, not just the primary document.
+        for (const file of pkg.files ?? (pkg.path ? [pkg.path] : [])) {
+            items.push(new DetailItem('File', file, 'go-to-file', {
                 command: 'bino.registryOpenPackageFile',
                 title: 'Open Installed File',
-                arguments: [new PackageItem(pkg)],
+                arguments: [new PackageItem(pkg), file],
             }));
         }
         for (const param of pkg.params ?? []) {
