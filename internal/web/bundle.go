@@ -74,6 +74,7 @@ func main() {
 	}
 
 	copyFonts(wd)
+	copyKatex(wd)
 }
 
 // copyFonts copies the IBM Plex Mono woff2 subsets used by shared/fonts.css
@@ -91,6 +92,33 @@ func copyFonts(wd string) {
 		data, err := os.ReadFile(filepath.Join(srcDir, name))
 		must(err)
 		must(os.WriteFile(filepath.Join(dstDir, name), data, 0o644))
+	}
+}
+
+// copyKatex copies the KaTeX stylesheet and woff2 fonts (KaTeX, MIT license)
+// from the katex npm package into static/katex/ so they are committed and
+// embedded. The document template links the stylesheet when math is enabled;
+// without it the server-rendered math shows both the KaTeX HTML and the
+// MathML fallback. The npm pin MUST match the KaTeX version vendored inside
+// goldmark-qjs-katex (0.11.1 — check its katex.mjs on upgrades): 0.12 renamed
+// emitted CSS classes (mathdefault → mathnormal), so a mismatched stylesheet
+// silently unstyles glyphs. The fonts/ subdirectory is kept because
+// katex.min.css references fonts via relative url(fonts/...) paths.
+func copyKatex(wd string) {
+	srcDir := filepath.Join(wd, "node_modules", "katex", "dist")
+	dstDir := filepath.Join(wd, "static", "katex")
+	must(os.MkdirAll(filepath.Join(dstDir, "fonts"), 0o755))
+
+	css, err := os.ReadFile(filepath.Join(srcDir, "katex.min.css"))
+	must(err)
+	must(os.WriteFile(filepath.Join(dstDir, "katex.min.css"), css, 0o644))
+
+	fonts, err := filepath.Glob(filepath.Join(srcDir, "fonts", "*.woff2"))
+	must(err)
+	for _, font := range fonts {
+		data, err := os.ReadFile(font)
+		must(err)
+		must(os.WriteFile(filepath.Join(dstDir, "fonts", filepath.Base(font)), data, 0o644))
 	}
 }
 

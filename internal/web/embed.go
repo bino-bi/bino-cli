@@ -11,7 +11,7 @@ import (
 
 //go:generate go run bundle.go
 
-//go:embed shared/tokens.css shared/fonts.css preview/preview.css preview/loading.html serve/serve.css static/preview.js static/serve.js static/layout-capture.js static/fonts assets/bino-mark.png assets/favicon.png
+//go:embed shared/tokens.css shared/fonts.css preview/preview.css preview/loading.html serve/serve.css static/preview.js static/serve.js static/layout-capture.js static/fonts static/katex assets/bino-mark.png assets/favicon.png
 var assets embed.FS
 
 // LoadingPageHTML returns the embedded boot/loading page served while the

@@ -99,6 +99,103 @@ bn-context:has(.bn-document-content) {
   box-shadow: var(--bino-shadow-page);
   padding: 2cm;
 }
+/* Page-break marker in document previews. The doc template renders the break
+   as a 0-height div (print keeps break-after); this preview-only rule makes
+   it visible — preview.css never loads in built PDFs. */
+.bn-document-content .bn-page-break {
+  height: auto;
+  margin: 2rem 0;
+  border-top: 1px dashed var(--bino-gray-300);
+  position: relative;
+}
+.bn-document-content .bn-page-break::after {
+  content: 'page break';
+  position: absolute;
+  top: -0.7em;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 8px;
+  background: var(--bino-surface);
+  border: 1px solid var(--bino-border);
+  border-radius: var(--bino-radius-pill);
+  color: var(--bino-text-secondary);
+  font: 500 var(--bino-font-size-xs) var(--bino-font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+/* Header/footer placeholder bands on document previews. Shown only when the
+   manifest sets displayHeaderFooter (data-bino-doc-hf, injected by
+   withDocumentPreviewMeta together with the margin properties). Negative
+   margins pull the bands into the container's 2cm page padding so they read
+   as margin bands, not content. */
+bn-context[data-bino-doc-hf]:has(.bn-document-content)::before {
+  content: 'header — rendered here by bino build';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--bn-doc-margin-top, 20mm);
+  margin: -2cm -2cm 2rem;
+  border-bottom: 1px dashed var(--bino-gray-300);
+  background: var(--bino-surface-subtle);
+  color: var(--bino-text-secondary);
+  font: 500 var(--bino-font-size-xs) var(--bino-font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+bn-context[data-bino-doc-hf]:has(.bn-document-content)::after {
+  content: 'footer — rendered here by bino build';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--bn-doc-margin-bottom, 15mm);
+  margin: 2rem -2cm -2cm;
+  border-top: 1px dashed var(--bino-gray-300);
+  background: var(--bino-surface-subtle);
+  color: var(--bino-text-secondary);
+  font: 500 var(--bino-font-size-xs) var(--bino-font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Documents strip on the All Pages view (injected by withAllPagesDocuments) */
+.bn-docs-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bino-space-xs);
+  width: min(100%, 640px);
+  padding: var(--bino-space-md) var(--bino-space-lg);
+  background: var(--bino-surface);
+  border: 1px solid var(--bino-border);
+  border-radius: var(--bino-radius);
+  font-family: var(--bino-font-sans);
+  font-size: var(--bino-font-size-base);
+}
+.bn-docs-strip-title {
+  font-size: var(--bino-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bino-text-muted);
+}
+.bn-docs-strip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bino-space-md);
+}
+.bn-doc-link {
+  color: var(--bino-accent-strong);
+  text-decoration: none;
+  font-weight: 500;
+}
+.bn-doc-link:hover {
+  text-decoration: underline;
+}
+.bn-doc-link-meta {
+  color: var(--bino-text-secondary);
+  font-size: var(--bino-font-size-sm);
+  white-space: nowrap;
+}
 /* Error indicator badges on components with has-error/has-errors attributes */
 [has-error]::before, [has-errors]::before {
   content: "\26A0";

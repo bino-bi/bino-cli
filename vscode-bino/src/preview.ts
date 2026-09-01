@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
 import { getEmbeddableKinds } from './embeddable';
@@ -685,7 +686,24 @@ export class BinoPreviewManager {
     }
 
     /** Handle reveal source message from preview webview */
-    private async handleRevealSource(msg: { kind: string; name: string; ref: string }): Promise<void> {
+    private async handleRevealSource(msg: { kind?: string; name?: string; ref?: string; file?: string }): Promise<void> {
+        // Markdown source sections carry a project-root-relative file path
+        // (no manifest to index) — open the file directly.
+        if (msg.file) {
+            const root = this.getWorkspaceRoot();
+            const abs = path.isAbsolute(msg.file) ? msg.file : path.join(root ?? '', msg.file);
+            try {
+                const document = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
+                await vscode.window.showTextDocument(document, {
+                    viewColumn: vscode.ViewColumn.One,
+                    preview: false
+                });
+            } catch (err) {
+                this.outputChannel.appendLine(`[Preview] Failed to open source file ${msg.file}: ${err}`);
+            }
+            return;
+        }
+
         if (!this.indexer) {
             this.outputChannel.appendLine('[Preview] No indexer available for source navigation');
             return;
