@@ -158,21 +158,32 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
     source.close();
   });
 
-  // Click-to-source: Cmd/Ctrl+click on a [data-bino-kind] element
+  // Click-to-source: Cmd/Ctrl+click on a [data-bino-kind] element (component
+  // manifests) or a [data-bino-file] section (markdown sources on doc routes).
+  // closest() finds the nearest matching ancestor, so a click inside an
+  // embedded component wins over its surrounding prose section.
   document.addEventListener('click', function (e) {
     if (!e.metaKey && !e.ctrlKey) {
       return;
     }
-    var el = e.target.closest('[data-bino-kind]');
+    var el = e.target.closest('[data-bino-kind], [data-bino-file]');
     if (!el) {
       return;
     }
-    var msg = {
-      type: 'bino:revealSource',
-      kind: el.getAttribute('data-bino-kind'),
-      name: el.getAttribute('data-bino-name') || '',
-      ref: el.getAttribute('data-bino-ref') || ''
-    };
+    var msg;
+    if (el.hasAttribute('data-bino-kind')) {
+      msg = {
+        type: 'bino:revealSource',
+        kind: el.getAttribute('data-bino-kind'),
+        name: el.getAttribute('data-bino-name') || '',
+        ref: el.getAttribute('data-bino-ref') || ''
+      };
+    } else {
+      msg = {
+        type: 'bino:revealSource',
+        file: el.getAttribute('data-bino-file')
+      };
+    }
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(msg, '*');
     }

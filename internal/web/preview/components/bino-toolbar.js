@@ -13,6 +13,7 @@ class BinoToolbar extends LitElement {
     _refreshing: { state: true },
     _refreshError: { state: true },
     _inspectorAvailable: { state: true },
+    _buildCopied: { state: true },
   };
 
   static styles = css`
@@ -85,7 +86,7 @@ class BinoToolbar extends LitElement {
     .warning-icon {
       font-size: var(--bino-font-size-md);
     }
-    .assets-btn, .graph-btn, .explorer-btn, .inspect-btn {
+    .assets-btn, .graph-btn, .explorer-btn, .inspect-btn, .build-btn {
       display: inline-flex;
       align-items: center;
       gap: var(--bino-space-xs);
@@ -100,9 +101,17 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover, .inspect-btn:hover:not(:disabled) {
+    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover, .inspect-btn:hover:not(:disabled), .build-btn:hover {
       background: var(--bino-surface-hover);
       border-color: var(--bino-border-hover);
+    }
+    .doc-meta {
+      color: var(--bino-text-secondary);
+      font-size: var(--bino-font-size-sm);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 32ch;
     }
     .graph-btn:disabled, .present-btn:disabled, .inspect-btn:disabled {
       opacity: 0.5;
@@ -113,7 +122,7 @@ class BinoToolbar extends LitElement {
       border-color: var(--bino-border-light);
       color: var(--bino-text-secondary);
     }
-    .assets-icon, .graph-icon, .explorer-icon, .inspect-icon {
+    .assets-icon, .graph-icon, .explorer-icon, .inspect-icon, .build-icon {
       font-size: var(--bino-font-size-md);
     }
     .present-btn {
@@ -215,6 +224,7 @@ class BinoToolbar extends LitElement {
     this._refreshError = '';
     this._panelDismissed = false;
     this._inspectorAvailable = false;
+    this._buildCopied = false;
     this._boundOnContentUpdated = this._refreshInspectorAvailability.bind(this);
     this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
     this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
@@ -266,6 +276,9 @@ class BinoToolbar extends LitElement {
     var isReportArt = currentPath !== '/' && !currentPath.startsWith('/doc/') && !currentPath.startsWith('/pres/');
     var presURL = isReportArt ? appBase() + '/pres' + currentPath : null;
 
+    // The document being viewed, if the current route is a /doc/ one.
+    var currentDoc = docArts.find(function(art) { return '/doc/' + art.name === currentPath; }) || null;
+
     return html`
       <span class="title">
         <img class="mark" src=${appBase() + '/__bino/assets/bino-mark.png'} alt="">
@@ -292,6 +305,9 @@ class BinoToolbar extends LitElement {
           </optgroup>
         ` : ''}
       </select>
+      ${currentDoc ? html`
+        <span class="doc-meta" title="Document settings from the manifest">${this._docMetaText(currentDoc)}</span>
+      ` : ''}
       <span class="warning-badge ${this._badgeVisible ? 'visible' : ''}"
         title="Show warnings" @click=${this._onBadgeClick}>
         <span class="warning-icon">\u26A0</span>
@@ -313,7 +329,7 @@ class BinoToolbar extends LitElement {
       </button>
       <button class="inspect-btn" ?disabled=${!this._inspectorAvailable}
         title=${this._inspectorAvailable
-          ? 'Inspect the rendered report'
+          ? (currentDoc ? 'Inspect embedded engine components' : 'Inspect the rendered report')
           : 'Requires template engine v1.0.0-next.24 or newer'}
         @click=${this._onInspectClick}>
         <span class="inspect-icon">\u25a3</span>
@@ -325,6 +341,14 @@ class BinoToolbar extends LitElement {
         <span class="present-icon">\u25B6</span>
         <span>Present</span>
       </button>
+      ${currentDoc ? html`
+        <button class="build-btn"
+          title=${'Copy "bino build --artefact ' + currentDoc.name + '" to the clipboard \u2014 pagination, TOC page numbers and headers render only in the built PDF'}
+          @click=${function() { self._onCopyBuildCmd(currentDoc.name); }}>
+          <span class="build-icon">${this._buildCopied ? '\u2713' : '\u2193'}</span>
+          <span>${this._buildCopied ? 'Copied' : 'Build PDF'}</span>
+        </button>
+      ` : ''}
       <span class="spacer"></span>
       ${this._refreshError ? html`
         <span class="refresh-error-msg" title=${this._refreshError}>
@@ -363,6 +387,51 @@ class BinoToolbar extends LitElement {
 
   _onInspectClick() {
     document.dispatchEvent(new CustomEvent('bino-open-inspector'));
+  }
+
+  // _docMetaText renders the manifest settings line for the viewed document,
+  // e.g. "a4 · portrait · en · 3 chapters · TOC · header/footer".
+  _docMetaText(doc) {
+    var parts = [];
+    if (doc.format) parts.push(doc.format);
+    if (doc.orientation) parts.push(doc.orientation);
+    if (doc.locale) parts.push(doc.locale);
+    if (doc.chapters === 1) parts.push('1 chapter');
+    if (doc.chapters > 1) parts.push(doc.chapters + ' chapters');
+    if (doc.toc) parts.push('TOC');
+    if (doc.headerFooter) parts.push('header/footer');
+    return parts.join(' · ');
+  }
+
+  // _onCopyBuildCmd copies the build command for the viewed document. The
+  // textarea fallback is load-bearing inside the VS Code preview webview,
+  // whose iframe sandbox grants no clipboard permission.
+  _onCopyBuildCmd(name) {
+    var self = this;
+    var cmd = 'bino build --artefact ' + name;
+    var markCopied = function() {
+      self._buildCopied = true;
+      setTimeout(function() { self._buildCopied = false; }, 2000);
+    };
+    var fallback = function() {
+      var ta = document.createElement('textarea');
+      ta.value = cmd;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (document.execCommand('copy')) markCopied();
+      } catch (err) {
+        console.warn('bino-toolbar: clipboard copy failed', err);
+      }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cmd).then(markCopied, fallback);
+    } else {
+      fallback();
+    }
   }
 
   _refreshInspectorAvailability() {
