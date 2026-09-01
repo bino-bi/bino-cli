@@ -218,7 +218,7 @@ func fetchPackage(ctx context.Context, p registryProject, client *registry.Clien
 			return packagePlan{}, fmt.Errorf("%s@%s: %w", r.Name, r.Version, err)
 		}
 		for _, f := range entry.Files {
-			if reuseOnDisk(p.Root, r.Name, f) {
+			if reuseOnDisk(p.Root, registry.FormatTree, r.Name, f) {
 				continue
 			}
 			body, err := downloadVerifiedTreeFile(ctx, client, r.Name, r.Version, f)
@@ -280,7 +280,11 @@ func checkTreeBudget(r registry.Resolved) error {
 // the registry advertises, so it need not be downloaded again. This mirrors
 // the server's own content-addressed dedup and is what makes a re-install of
 // an unchanged closure nearly free.
-func reuseOnDisk(projectRoot, name string, f registry.FileEntry) bool {
+//
+// format selects the digest rule, exactly as it does for a downloaded file: a
+// single-document package's document is digested the way it was published,
+// which is not the rule a tree's documents use.
+func reuseOnDisk(projectRoot, format, name string, f registry.FileEntry) bool {
 	abs, _, err := registry.TreeFilePath(projectRoot, name, f.Path)
 	if err != nil {
 		return false
@@ -289,7 +293,7 @@ func reuseOnDisk(projectRoot, name string, f registry.FileEntry) bool {
 	if err != nil {
 		return false
 	}
-	return registry.VerifyFile(registry.FormatTree, f.Type, data, f.Digest) == nil
+	return registry.VerifyFile(format, f.Type, data, f.Digest) == nil
 }
 
 // fetchResources verifies the bundled resources of a single-document package,
@@ -307,7 +311,7 @@ func fetchResources(ctx context.Context, p registryProject, client *registry.Cli
 	entries := make([]registry.ResourceEntry, 0, len(metas))
 	for _, m := range metas {
 		entries = append(entries, registry.ResourceEntry{Name: m.Name, ContentHash: m.ContentHash})
-		if reuseOnDisk(p.Root, name, registry.FileEntry{Path: m.Name, Type: registry.FileResource, Digest: m.ContentHash}) {
+		if reuseOnDisk(p.Root, registry.FormatDocument, name, registry.FileEntry{Path: m.Name, Type: registry.FileResource, Digest: m.ContentHash}) {
 			continue
 		}
 		body, err := downloadVerifiedResource(ctx, client, name, ver, m.Name, m.ContentHash)

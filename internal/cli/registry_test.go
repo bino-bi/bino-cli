@@ -51,6 +51,10 @@ type fakePackage struct {
 	tree         []fakeTreeFile
 	compatEngine string
 	compatCLI    string
+
+	// fileDownloads counts every served file of this package, so a test can
+	// assert that a warm store costs no bandwidth.
+	fileDownloads atomic.Int64
 }
 
 // treeEntries digests a fake package's tree the way the registry does.
@@ -130,6 +134,7 @@ func fakeRegistryServer(t *testing.T, packages map[string]*fakePackage) (srv *ht
 			fmt.Fprint(w, `{"code":"version_not_found","message":"not found"}`)
 			return
 		}
+		pkg.fileDownloads.Add(1)
 		w.Header().Set("ETag", fmt.Sprintf("%q", pkg.digest))
 		w.Header().Set("Content-Type", "application/yaml")
 		w.Write(pkg.body)
@@ -165,6 +170,7 @@ func fakeRegistryServer(t *testing.T, packages map[string]*fakePackage) (srv *ht
 		}
 		for _, res := range pkg.resources {
 			if res.name == r.PathValue("resourceName") {
+				pkg.fileDownloads.Add(1)
 				w.Header().Set("ETag", fmt.Sprintf("%q", sha256Hex(res.body)))
 				w.Write(res.body)
 				return
@@ -244,6 +250,7 @@ func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]
 				fmt.Fprint(w, `{"code":"file_not_found","message":"not found"}`)
 				return
 			}
+			pkg.fileDownloads.Add(1)
 			w.Header().Set("ETag", fmt.Sprintf("%q", pkg.digest))
 			w.Write(pkg.body) //nolint:errcheck // test handler
 			return
@@ -251,6 +258,7 @@ func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]
 		entries := pkg.treeEntries(t)
 		for i, f := range pkg.tree {
 			if f.path == want {
+				pkg.fileDownloads.Add(1)
 				w.Header().Set("ETag", fmt.Sprintf("%q", entries[i].Digest))
 				w.Write(f.body) //nolint:errcheck // test handler
 				return
@@ -1095,5 +1103,45 @@ func TestRegistryInstallDetectsAStrippedLock(t *testing.T) {
 	err = runRegistry(t, "install")
 	if err == nil || !strings.Contains(err.Error(), "package format") {
 		t.Fatalf("err = %v, want a stripped-lock complaint", err)
+	}
+}
+
+// A warm store costs no bandwidth: install re-checks each file's digest on
+// disk and only fetches what is missing or changed. The digest rule is the one
+// the package was published under, so a single-document package must be
+// recognized as unchanged just as a tree is.
+func TestRegistryInstallReusesAWarmStore(t *testing.T) {
+	v1Body, v1Digest := fakeDoc(t, "@bino/style_a", "ComponentStyle")
+	packages := map[string]*fakePackage{
+		"@acme/kit": {
+			tag: "latest", version: "2.0.0", kind: "Text", kinds: []string{"Text"},
+			dependencies: []string{"@bino/style_a"}, tree: fakeTree(),
+		},
+		"@bino/style_a": {
+			tag: "latest", version: "1.4.0", kind: "ComponentStyle",
+			body: v1Body, digest: v1Digest,
+			resources: []fakeResource{{name: "sales.csv", body: []byte("region,revenue\n")}},
+		},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	newRegistryTestProject(t, srv.URL)
+
+	if err := runRegistry(t, "add", "@acme/kit"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	for name, pkg := range packages {
+		if pkg.fileDownloads.Load() == 0 {
+			t.Fatalf("%s served no files on the first install", name)
+		}
+		pkg.fileDownloads.Store(0)
+	}
+
+	if err := runRegistry(t, "install"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	for name, pkg := range packages {
+		if n := pkg.fileDownloads.Load(); n != 0 {
+			t.Errorf("%s re-downloaded %d file(s) into a warm store", name, n)
+		}
 	}
 }

@@ -117,7 +117,7 @@ func checkLockDrift(p registryProject, lock *registry.Lockfile) error {
 func fetchLockedPackage(ctx context.Context, p registryProject, client *registry.Client, e registry.Entry) (packagePlan, error) {
 	plan := packagePlan{entry: e, bodies: map[string][]byte{}}
 	for _, f := range e.TreeFiles() {
-		if reuseOnDisk(p.Root, e.Name, f) {
+		if reuseOnDisk(p.Root, e.Format, e.Name, f) {
 			continue
 		}
 		body, err := fetchLockedFile(ctx, client, e, f)
