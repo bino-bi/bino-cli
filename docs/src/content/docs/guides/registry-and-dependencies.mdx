@@ -3,10 +3,14 @@ title: Registry and dependencies
 description: Reuse predef packages from a bino registry with pinned, verified dependencies.
 ---
 
-A bino registry hosts reusable predef packages — manifests such as layouts,
-styles, or rule sets published under scoped names like `@acme/base-layout`.
+A bino registry hosts reusable predef packages — layouts, styles, rule sets and
+the resources they need, published under scoped names like `@acme/base-layout`.
+A package is a small file tree, so one package can ship a page, the components
+it embeds, a style and a dataset together.
+
 This guide covers declaring dependencies, the lockfile workflow, reproducible
-installs in CI, and authentication.
+installs in CI, and authentication. To author and publish a package of your
+own, see [Publishing packages](/guides/publishing-packages/).
 
 The full command reference lives at [bino registry](/cli/registry/).
 
@@ -16,7 +20,7 @@ The full command reference lives at [bino registry](/cli/registry/).
 |------------------|------|---------|
 | `bino.toml` `[dependencies]` | What you depend on (name → version or tag) | yes |
 | `bino.lock` | Exact resolved versions and digests | yes — commit it |
-| `.bino/registry/` | Materialized package files | no — gitignore it |
+| `.bino/registry/` | Materialized package files, one directory per package | no — gitignore it |
 
 The build, preview, serve, and LSP all include `.bino/registry/` in the
 manifest set automatically, so installed packages behave like local documents.
@@ -47,9 +51,22 @@ bino registry remove @acme/base-layout
 ```
 
 `add` resolves the transitive closure (exactly one version per package — a
-conflicting pin fails with a dependency-conflict error), downloads the
-documents, verifies their digests, writes `.bino/registry/<scope>/<name>.yml`,
-and pins everything in `bino.lock`.
+conflicting pin fails with a dependency-conflict error), downloads every file
+of every package, verifies each file's digest, and only then writes anything.
+A package's files land verbatim under `.bino/registry/<scope>/<name>/`, keeping
+the layout and the comments its author wrote:
+
+```
+.bino/registry/
+└── acme/
+    └── finance-kit/
+        ├── finance-kit.yaml        # the package's main document
+        ├── components/waterfall.yaml
+        └── resources/logo.png
+```
+
+A package published as a single document occupies the same shape with one
+file, `<name>.yml`. Everything is then pinned in `bino.lock`.
 
 Installed packages keep their scoped name as `metadata.name`, which is why
 `@scope/name` is a valid document name — see
@@ -57,13 +74,18 @@ Installed packages keep their scoped name as `metadata.name`, which is why
 
 ## The lockfile workflow
 
-`bino.lock` records the exact version, digest, kind, path, and dependency
+`bino.lock` records the exact version, digest, kinds, file list and dependency
 edges of every installed package. Commit it: it is what makes a checkout
 reproducible.
 
+The digest of a package is taken over its file manifest, and each file has its
+own digest: manifests over their canonical form, so reformatting or
+re-commenting a document does not change its identity, and resources over their
+raw bytes.
+
 - `bino registry install` – re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
 - `bino registry update` – re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
-- `bino registry verify` – re-hashes the installed files against the locked digests. Digests cover the canonical document form, so reformatting a file does not fail verification — content changes do.
+- `bino registry verify` – re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification — content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
 
 A typical CI job:
 
@@ -186,5 +208,14 @@ and revokes the stored credential.
 
 ## Publishing
 
-The CLI is consumer-only — there is no `bino publish`. Packages are published
-through the registry service itself.
+Packages are published from source with `bino publish`, from a project whose
+`bino.toml` carries a `[package]` table:
+
+```bash
+bino publish --dry-run      # validate against the registry, mint nothing
+bino publish --bump minor
+```
+
+The registry mints the version from the bump and validates the package before
+it accepts it. [Publishing packages](/guides/publishing-packages/) covers
+authoring a package project end to end.

@@ -74,8 +74,9 @@ offline. A transitive dependency still required by another package is kept.
 bino registry list
 ```
 
-Lists the packages pinned in `bino.lock` with version, tag, kind, origin
-(direct or transitive), and path. Works offline.
+Lists the packages pinned in `bino.lock` with version, tag, kinds, file count,
+origin (direct or transitive), and the package's primary document. Works
+offline.
 
 ## bino registry search
 
@@ -97,8 +98,8 @@ Searches the registry for packages.
 bino registry info <package[@version|@tag]>
 ```
 
-Shows a package's resolved metadata: version, tag, kind, digest, dependencies,
-and download URL. Requires network access.
+Shows a package's resolved metadata: version, tag, kinds, digest, compat
+ranges, dependencies, and the files the version ships. Requires network access.
 
 ## bino registry verify
 
@@ -107,9 +108,13 @@ bino registry verify
 ```
 
 Re-hashes every package file under `.bino/registry/` and compares it with the
-digest pinned in `bino.lock`. Works offline; intended as a CI gate. The digest
-is computed over the canonical document form, so cosmetic reformatting of a
-file does not fail verification. Exits non-zero on any failure.
+digest pinned in `bino.lock`. Works offline; intended as a CI gate. Manifest
+digests are computed over the canonical document form, so cosmetic reformatting
+of a file does not fail verification; resources are hashed over their raw bytes.
+A file inside a package directory that `bino.lock` does not record is reported
+as `EXTRA`. Exits non-zero on any failure.
+
+To publish a package rather than consume one, see [bino publish](/cli/publish/).
 
 ## bino registry login
 
