@@ -12,4 +12,4 @@ spec:
     - .gitignore
   # Never read as text: the logo shipped with the package.
   binary:
-    - "*.svg"
+    - "*.png"

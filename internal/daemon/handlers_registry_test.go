@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -231,5 +232,109 @@ func TestHealthAdvertisesRegistryCapabilities(t *testing.T) {
 		if !caps[want] {
 			t.Errorf("capabilities missing %q: %v", want, body.Capabilities)
 		}
+	}
+}
+
+// A package is a file tree, so the served shape lists every file it installs
+// and reports "installed" only when all of them are on disk — stat-ing the
+// package directory would succeed on an empty one. A single-document package
+// with bundled resources must list each of them once, not its document three
+// times.
+func TestRegistryPackagesReportsEveryFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("BINO_REGISTRY_TOKEN", "")
+	t.Setenv("BINO_REGISTRY_URL", "")
+
+	lock := `lockfile_version = 2
+
+[[package]]
+name = "@acme/kit"
+version = "2.0.0"
+digest = "sha256:manifest"
+format = "tree"
+kind = "Table"
+path = ".bino/registry/acme/kit/kit.yaml"
+direct = true
+dependencies = []
+kinds = ["LayoutPage", "Table"]
+
+[[package.files]]
+path = "kit.yaml"
+type = "document"
+digest = "sha256:a"
+
+[[package.files]]
+path = "components/sales.yaml"
+type = "document"
+digest = "sha256:b"
+
+[[package]]
+name = "@acme/solo"
+version = "1.0.0"
+digest = "sha256:c"
+format = "document"
+kind = "Text"
+path = ".bino/registry/acme/solo/solo.yml"
+direct = true
+dependencies = []
+
+[[package.resources]]
+name = "sales.csv"
+content_hash = "sha256:d"
+`
+	write := func(rel, body string) {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("bino.toml", "report-id = \"test\"\n")
+	write("bino.lock", lock)
+	// The tree's second document is deliberately absent: a partially
+	// materialized package is not installed.
+	write(".bino/registry/acme/kit/kit.yaml", "kind: LayoutPage\n")
+	write(".bino/registry/acme/solo/solo.yml", "kind: Text\n")
+	write(".bino/registry/acme/solo/sales.csv", "region\n")
+
+	srv := newWizardTestServer(t, root)
+	if err := srv.state.Refresh(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/registry/packages", nil)
+	w := httptest.NewRecorder()
+	srv.handleRegistryPackages(w, req)
+
+	var body struct {
+		Packages []RegistryPackage `json:"packages"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Packages) != 2 {
+		t.Fatalf("packages = %+v", body.Packages)
+	}
+	kit, solo := body.Packages[0], body.Packages[1]
+
+	wantKit := []string{".bino/registry/acme/kit/kit.yaml", ".bino/registry/acme/kit/components/sales.yaml"}
+	if strings.Join(kit.Files, ",") != strings.Join(wantKit, ",") {
+		t.Errorf("tree files = %v, want %v", kit.Files, wantKit)
+	}
+	if kit.Installed {
+		t.Error("a package missing one of its files must not report as installed")
+	}
+	if strings.Join(kit.Kinds, ",") != "LayoutPage,Table" {
+		t.Errorf("kinds = %v", kit.Kinds)
+	}
+
+	wantSolo := []string{".bino/registry/acme/solo/solo.yml", ".bino/registry/acme/solo/sales.csv"}
+	if strings.Join(solo.Files, ",") != strings.Join(wantSolo, ",") {
+		t.Errorf("document files = %v, want %v", solo.Files, wantSolo)
+	}
+	if !solo.Installed {
+		t.Error("a fully materialized single-document package must report as installed")
 	}
 }

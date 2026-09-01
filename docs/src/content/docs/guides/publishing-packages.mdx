@@ -1,0 +1,164 @@
+---
+title: Publishing packages
+description: Author a reusable predef package in git, lint it, and publish it to a bino registry with bino publish.
+---
+
+A **package project** is an ordinary bino project whose `bino.toml` carries a
+`[package]` table. It is authored in git like any other project — you preview
+it, lint it, and review it in pull requests — and `bino publish` ships it to a
+registry as an immutable version.
+
+There is no second manifest file and no separate project type: the presence of
+`[package]` is what makes a project publishable.
+
+## Scaffolding one
+
+```bash
+bino init predef -d finance-kit
+cd finance-kit
+```
+
+The scaffold is a working example rather than a skeleton:
+
+```
+finance-kit/
+├── bino.toml                    # engine pin, [package], [dependencies]
+├── components/revenue_table.yaml
+├── styles/corporate_theme.yaml
+├── resources/logo.yaml          # an Asset
+├── resources/logo.png           # the bytes it points at
+└── mocks/                       # sample data + a page, so you can preview it
+```
+
+`mocks/` is the convention that makes a package previewable without a consumer:
+it holds a dataset and a small report page that renders the package's
+definitions. It is **never** part of a published package, so `bino preview`
+works out of the box and the mock data never leaves your repository.
+
+## The `[package]` table
+
+```toml
+engine-version = "1.2.3"
+
+[package]
+name        = "@acme/finance-kit"   # the registry coordinate
+description = "IBCS finance report building blocks"
+tags        = ["finance", "ibcs"]
+category    = "components"
+visibility  = "private"             # only used when the package is created
+
+# Warn-only semver ranges, reported to consumers on install:
+compat-engine = ">=1.2.0"
+compat-cli    = ">=0.92.0"
+
+# Which files ship. The default is every canonical manifest folder plus
+# resources/, minus mocks/, reports/ and .bino/.
+include = ["components", "styles", "resources"]
+
+# What the registry snapshots for its preview: "path#definition-name".
+preview = "components/waterfall.yaml#@acme/finance-kit/waterfall"
+
+[dependencies]                      # the same table a report project uses
+"@acme/base-style" = "2.1.0"
+```
+
+`visibility` only takes effect when the package is created. Afterwards the
+registry owns it — change it in the web UI, not here.
+
+## Naming definitions
+
+Every document a package ships must be named under the package:
+
+- `@acme/finance-kit` — the package's *main* definition, at most one;
+- `@acme/finance-kit/waterfall` — any other definition.
+
+Consumers reference either form with an ordinary `ref`. `bino lint` checks this
+along with the rest of the package ruleset, which activates automatically when
+`[package]` is present:
+
+```bash
+bino lint
+```
+
+It flags definitions named outside the package, artefact and credential kinds
+that cannot be published, absolute `localPath` values, and refs to names that
+are neither in the package nor a declared dependency.
+
+## What a package may contain
+
+| | |
+|---|---|
+| Documents | `.yaml` / `.yml` manifests. One file may hold several `---`-separated definitions. |
+| Resources | `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.csv`, `.xlsx`, `.parquet` |
+| Layout | At most **one directory level** — `components/waterfall.yaml` is fine, `components/tables/waterfall.yaml` is not |
+| Size | 50 files, 1 MB per manifest, 50 MB per resource |
+
+Two things are refused before anything is uploaded, whatever `include` says:
+anything under `secrets/` or `signing/`, and any document declaring a
+`ConnectionSecret` or `SigningProfile`. Symbolic links are refused too — the
+file you see would not be the file that ships.
+
+## Publishing
+
+```bash
+bino registry login          # once, with a bino_pat_ token from the web UI
+bino publish --dry-run       # validate against the registry, mint nothing
+bino publish --bump minor
+```
+
+`--bump` is `patch`, `minor` or `major`; the registry mints the version from it
+(the first publish is always `1.0.0`). Use `--json` for a machine-readable
+result.
+
+The registry is the validation authority. `bino publish` runs your local lint
+first and prints what it finds, but a package that lints clean can still be
+rejected — the registry validates the uploaded tree with its own bino and
+engine. When it does reject, the output names both versions:
+
+```
+✗ The registry rejected this package:
+  • components/waterfall.yaml:12: [error] unknown field "colour" (schema-validation)
+
+ℹ validated by bino 0.92.5 / engine 1.4.0 (registry)
+ℹ             bino 0.94.0 / engine 1.5.0 (here)
+```
+
+A gap between those two lines is the usual explanation for a package that is
+valid locally and invalid remotely.
+
+## Republishing and CI
+
+Publishing the same content twice is not an error. The registry recognises the
+identical file manifest and reports the version that already carries it:
+
+```
+✓ @acme/finance-kit is unchanged — already published as 1.3.0
+```
+
+That makes a re-run of a CI job safe, so publishing on a tag is a two-line step:
+
+```bash
+export BINO_REGISTRY_TOKEN="bino_pat_..."
+bino publish --bump patch
+```
+
+Versions are immutable and there is no unpublish. `--dry-run` is worth the
+extra minute in a pipeline that publishes automatically.
+
+## Consuming it
+
+Nothing about consumption is special — see
+[Registry and dependencies](/guides/registry-and-dependencies/):
+
+```bash
+bino registry add @acme/finance-kit
+```
+
+```yaml
+spec:
+  children:
+    - kind: Table
+      ref: "@acme/finance-kit/waterfall"
+      params:
+        REGION: EU
+```

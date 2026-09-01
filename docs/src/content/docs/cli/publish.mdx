@@ -1,0 +1,78 @@
+---
+title: bino publish
+description: Publish the current project to a bino registry as a new package version.
+---
+
+`bino publish` ships the current project to a bino registry as a new immutable
+package version. It works in a **package project**: an ordinary bino project
+whose `bino.toml` carries a `[package]` table. See
+[Publishing packages](/guides/publishing-packages/) for the authoring workflow.
+
+## Usage
+
+```bash
+bino publish --bump <patch|minor|major> [flags]
+```
+
+Flags:
+
+- `--bump` – how the registry increments the version: `patch`, `minor` or `major`. Required unless `--dry-run` is set.
+- `--dry-run` – run the registry's validation without creating a version.
+- `--visibility` – `public` or `private`. Only used when the package is created; ignored afterwards.
+- `--json` – print the result as JSON on stdout (progress goes to stderr).
+
+## What is published
+
+The files `[package].include` selects — by default every canonical manifest
+folder plus `resources/`, minus `mocks/`, `reports/` and `.bino/`. Manifests
+(`.yaml`/`.yml`, each possibly a `---` stream) ship as documents; the rest ship
+as resources, limited to `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.csv`,
+`.xlsx` and `.parquet`.
+
+Files may sit at most one directory deep, and a package may hold at most 50
+files (1 MB per manifest, 50 MB per resource).
+
+Publishing refuses, before uploading anything: symbolic links, anything under
+`secrets/` or `signing/`, and any document declaring a `ConnectionSecret` or
+`SigningProfile`.
+
+## Validation
+
+`bino lint` runs first and its findings are printed, but they never block —
+the registry validates the uploaded package with its own bino and engine and is
+the authority. A rejection prints the findings together with both sides'
+versions, so a skew between your CLI and the registry's is visible.
+
+Run `--dry-run` first in any pipeline that publishes automatically: versions
+are immutable and there is no unpublish.
+
+## Examples
+
+Check a package without publishing it:
+
+```bash
+bino publish --dry-run
+```
+
+Publish a bug-fix release:
+
+```bash
+bino publish --bump patch
+```
+
+Publish from CI:
+
+```bash
+export BINO_REGISTRY_TOKEN="bino_pat_..."
+bino publish --bump minor --json
+```
+
+Republishing unchanged content is not an error — the registry recognises the
+identical package and reports the version that already carries it, so a re-run
+of a job is safe.
+
+## Exit codes
+
+- `0` – published, or already published as an identical version.
+- `1` – configuration error: no `[package]` table, an invalid one, or a file that cannot be published.
+- `3` – the registry rejected the package, or was unreachable.

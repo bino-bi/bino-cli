@@ -147,6 +147,12 @@
         "icon": "$(sign-out)"
       },
       {
+        "command": "bino.registryPublish",
+        "title": "Publish Package",
+        "category": "Bino",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "bino.newDataSourceFromFile",
         "title": "New DataSource from File…",
         "category": "Bino",
@@ -464,9 +470,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "bino.registryRefresh",
+          "command": "bino.registryPublish",
           "when": "view == binoDependencies",
           "group": "navigation@2"
+        },
+        {
+          "command": "bino.registryRefresh",
+          "when": "view == binoDependencies",
+          "group": "navigation@3"
         }
       ],
       "explorer/context": [
@@ -503,6 +514,10 @@
         },
         {
           "command": "bino.registryLogout",
+          "when": "bino.projectDetected"
+        },
+        {
+          "command": "bino.registryPublish",
           "when": "bino.projectDetected"
         },
         {

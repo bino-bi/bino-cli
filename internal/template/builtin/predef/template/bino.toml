@@ -19,7 +19,8 @@ visibility = "private"
 compat-engine = ">=1.0.0-alpha.1"
 
 # Without an explicit list every canonical manifest folder is published.
-# mocks/, reports/ and .bino/ are never part of a package.
+# mocks/, reports/ and .bino/ are never part of a package, and a package file
+# may sit at most one directory deep.
 # include = ["components", "styles", "resources"]
 
-preview = "mocks/preview.yaml#{{ .ReportName }}-preview"
+preview = "components/revenue_table.yaml#@acme/{{ .ReportName }}/revenue_table"

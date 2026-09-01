@@ -208,8 +208,8 @@ var predefFiles = []string{
 	"components/revenue_table.yaml",
 	"mocks/mock_data.yaml",
 	"mocks/preview.yaml",
-	"resources/assets/logo.svg",
-	"resources/assets/logo.yaml",
+	"resources/logo.png",
+	"resources/logo.yaml",
 	"styles/corporate_theme.yaml",
 }
 
@@ -248,7 +248,7 @@ func TestRenderPredefFoldered(t *testing.T) {
 func TestRenderPredefLeavesNoActions(t *testing.T) {
 	created, dest := renderPredef(t)
 	for _, rel := range created {
-		if filepath.Ext(rel) == ".svg" {
+		if filepath.Ext(rel) == ".png" {
 			continue
 		}
 		body, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(rel)))

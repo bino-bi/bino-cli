@@ -66,7 +66,7 @@ dependency is held at its locked version.`,
 			if err != nil {
 				return registryCommandError(err)
 			}
-			bodies, err := registrySync(ctx, p, client, plan)
+			plans, err := registrySync(ctx, p, client, plan)
 			if err != nil {
 				return err
 			}
@@ -91,7 +91,7 @@ dependency is held at its locked version.`,
 					changes++
 				}
 			}
-			registryCompatWarnings(p, bodies, plan)
+			registryCompatWarnings(p, planEntries(plans))
 			if changes == 0 {
 				p.Out.Success("Everything up to date")
 			} else {

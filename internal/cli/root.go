@@ -90,11 +90,14 @@ func newRootCommand() *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			// Check if setup has been completed for commands that need it
-			// Skip for: setup, version, update, help, completion
+			// Check if setup has been completed for commands that need it.
+			// Skip for: setup, version, update, help, completion, about, and
+			// publish — publishing talks to the registry and needs no engine
+			// or browser, so the setup banner would only be noise.
 			cmdName := cmd.Name()
 			skipSetupCheck := cmdName == "setup" || cmdName == "version" || cmdName == "update" ||
-				cmdName == "help" || cmdName == "completion" || cmdName == "about"
+				cmdName == "help" || cmdName == "completion" || cmdName == "about" ||
+				cmdName == "publish"
 			if !skipSetupCheck {
 				state, err := updater.LoadState()
 				if err == nil && !state.SetupCompleted {
@@ -192,5 +195,6 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newSchemaCommand())
 	cmd.AddCommand(newPluginCommand())
 	cmd.AddCommand(newRegistryCommand())
+	cmd.AddCommand(newPublishCommand())
 	return cmd
 }

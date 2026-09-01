@@ -18,7 +18,7 @@ package name `@scope/{{ .ReportName }}`.
 | --- | --- |
 | `components/revenue_table.yaml` | The kit's `Table`. `spec.dataset` is `${DATASET}`, a required `metadata.params` entry, so a consumer binds it to their own DataSet. |
 | `styles/corporate_theme.yaml` | The `ComponentStyle` the table wears. Referenced by its full package name. |
-| `resources/assets/logo.{yaml,svg}` | An `Asset` with a manifest-relative `localPath`. Absolute paths cannot be published. |
+| `resources/logo.{yaml,png}` | An `Asset` with a manifest-relative `localPath`. Absolute paths cannot be published, and a package file may sit at most one directory deep. |
 | `mocks/` | Sample data plus a `LayoutPage` and a `ReportArtefact` that render the kit. **Not published** — this is what makes `bino preview` work without a consumer project. |
 
 ## Working on it
