@@ -1415,6 +1415,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		ExcludeTOC:     opts.ExcludeTOC,
 		TOCOnly:        opts.TOCOnly,
 		TOCNumbering:   s.TOCNumberingEnabled(),
+		ProjectRoot:    workdir,
 	})
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
