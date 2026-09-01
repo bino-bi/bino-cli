@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"bino.bi/bino/internal/httpserver"
@@ -352,11 +353,7 @@ func withDocumentPreviewMeta(doc []byte, docSpec config.DocumentArtefactSpec) []
 		return doc
 	}
 	insertAt := idx + len(openTag)
-	out := make([]byte, 0, len(doc)+len(attr))
-	out = append(out, doc[:insertAt]...)
-	out = append(out, attr...)
-	out = append(out, doc[insertAt:]...)
-	return out
+	return slices.Concat(doc[:insertAt], attr, doc[insertAt:])
 }
 
 // documentPageWidth returns the CSS width for the given page format and orientation.
@@ -444,11 +441,7 @@ func withAllPagesDocuments(ctx []byte, docArts []config.DocumentArtefact) []byte
 		if rel := bytes.Index(ctx[start:], []byte("</section>")); rel != -1 {
 			end := start + rel + len("</section>")
 			replacement := append([]byte("<section class='empty-state'>No report pages are defined in this bundle.</section>"), stripHTML...)
-			out := make([]byte, 0, len(ctx)-(end-start)+len(replacement))
-			out = append(out, ctx[:start]...)
-			out = append(out, replacement...)
-			out = append(out, ctx[end:]...)
-			return out
+			return slices.Concat(ctx[:start], replacement, ctx[end:])
 		}
 	}
 
@@ -457,11 +450,7 @@ func withAllPagesDocuments(ctx []byte, docArts []config.DocumentArtefact) []byte
 	if idx == -1 {
 		return ctx
 	}
-	out := make([]byte, 0, len(ctx)+len(stripHTML))
-	out = append(out, ctx[:idx]...)
-	out = append(out, stripHTML...)
-	out = append(out, ctx[idx:]...)
-	return out
+	return slices.Concat(ctx[:idx], stripHTML, ctx[idx:])
 }
 
 // withPreviewPageMetadata injects page metadata (constraints and artifact usage) into
