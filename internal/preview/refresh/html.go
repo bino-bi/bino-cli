@@ -8,6 +8,7 @@ import (
 	"math"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"bino.bi/bino/internal/httpserver"
@@ -23,6 +24,27 @@ type previewArtefactInfo struct {
 	Title  string `json:"title"`
 	Format string `json:"format"`
 	IsDoc  bool   `json:"isDoc"` // true for DocumentArtefact
+	// Document-only fields feeding the toolbar's doc meta strip.
+	Orientation  string `json:"orientation,omitempty"`
+	Locale       string `json:"locale,omitempty"`
+	Chapters     int    `json:"chapters,omitempty"`
+	TOC          bool   `json:"toc,omitempty"`
+	HeaderFooter bool   `json:"headerFooter,omitempty"`
+}
+
+// docArtefactInfo maps a DocumentArtefact to its dropdown/meta-strip payload.
+func docArtefactInfo(docArt config.DocumentArtefact) previewArtefactInfo {
+	return previewArtefactInfo{
+		Name:         docArt.Document.Name,
+		Title:        docArt.Spec.Title,
+		Format:       docArt.Spec.Format,
+		IsDoc:        true,
+		Orientation:  docArt.Spec.Orientation,
+		Locale:       docArt.Spec.Locale,
+		Chapters:     docSourceCount(docArt),
+		TOC:          docArt.Spec.TableOfContents,
+		HeaderFooter: docArt.Spec.DisplayHeaderFooter,
+	}
 }
 
 // previewDocumentInfo holds metadata about a manifest document for the assets modal.
@@ -292,15 +314,38 @@ func withPreviewStyles(doc []byte) []byte {
 	return updated
 }
 
-// withDocumentPageWidth injects a CSS custom property with the page width
-// derived from the document's format and orientation so the preview can
-// size the page container accordingly. The property is set as an inline
-// style on the <bn-context> element (not in <head>) so it survives — and
-// updates through — the attribute sync performed by swapContext on SSE
-// content morphs.
-func withDocumentPageWidth(doc []byte, format, orientation string) []byte {
-	width := documentPageWidth(format, orientation)
-	attr := fmt.Appendf(nil, ` style="--bn-doc-page-width:%s"`, width)
+// cssLengthPattern accepts the margin lengths the preview mirrors into CSS
+// custom properties. Anything else falls back to the Chrome print defaults —
+// an unvalidated value would poison the whole var() declaration.
+var cssLengthPattern = regexp.MustCompile(`^\d+(\.\d+)?(mm|cm|in|px)$`)
+
+// withDocumentPreviewMeta injects page-geometry CSS custom properties derived
+// from the DocumentArtefact spec as an inline style on the <bn-context>
+// element (not in <head>) so they survive — and update through — the
+// attribute sync performed by swapContext on SSE content morphs. When the
+// built PDF will render a header/footer, the element is also marked with
+// data-bino-doc-hf so preview.css can show placeholder bands sized by the
+// margin properties. Margin defaults mirror internal/chrome/render.go
+// (20mm top / 15mm bottom).
+func withDocumentPreviewMeta(doc []byte, docSpec config.DocumentArtefactSpec) []byte {
+	width := documentPageWidth(docSpec.Format, docSpec.Orientation)
+
+	var attr []byte
+	if docSpec.DisplayHeaderFooter {
+		marginTop := "20mm"
+		if cssLengthPattern.MatchString(docSpec.MarginTop) {
+			marginTop = docSpec.MarginTop
+		}
+		marginBottom := "15mm"
+		if cssLengthPattern.MatchString(docSpec.MarginBottom) {
+			marginBottom = docSpec.MarginBottom
+		}
+		attr = fmt.Appendf(nil, ` style="--bn-doc-page-width:%s;--bn-doc-margin-top:%s;--bn-doc-margin-bottom:%s" data-bino-doc-hf='true'`,
+			width, marginTop, marginBottom)
+	} else {
+		attr = fmt.Appendf(nil, ` style="--bn-doc-page-width:%s"`, width)
+	}
+
 	openTag := []byte("<bn-context")
 	idx := bytes.Index(doc, openTag)
 	if idx == -1 {

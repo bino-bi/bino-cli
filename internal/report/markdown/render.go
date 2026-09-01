@@ -24,6 +24,7 @@ import (
 	toc "go.abhg.dev/goldmark/toc"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
@@ -190,6 +191,11 @@ type FullRenderOptions struct {
 	// TOCNumbering enables hierarchical chapter numbers in the TOC
 	// (e.g. 1, 1.1, 1.1.1, 1.1.1 a).
 	TOCNumbering bool
+	// ProjectRoot, when set, wraps each source file's output in a
+	// <section data-bino-file='…'> carrying the file's root-relative path,
+	// so the preview can map clicks in prose back to the markdown source.
+	// Empty disables the wrappers.
+	ProjectRoot string
 }
 
 // RenderResult holds the output of RenderFilesWithContext.
@@ -279,10 +285,20 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 			}
 		}
 
-		// Render markdown to HTML (skip if TOCOnly)
+		// Render markdown to HTML (skip if TOCOnly). Page breaks stay
+		// between the per-file sections, written above before the wrapper.
 		if !opts.TOCOnly {
+			if opts.ProjectRoot != "" {
+				contentBuf.WriteString(`<section class='bn-doc-source' data-bino-file='`)
+				contentBuf.WriteString(html.EscapeString(pathutil.RelPath(opts.ProjectRoot, absPath)))
+				contentBuf.WriteString(`'>`)
+				contentBuf.WriteString("\n")
+			}
 			if err := md.Convert(content, &contentBuf); err != nil {
 				return RenderResult{}, fmt.Errorf("convert markdown %s: %w", absPath, err)
+			}
+			if opts.ProjectRoot != "" {
+				contentBuf.WriteString("</section>\n")
 			}
 		}
 	}
@@ -1077,12 +1093,20 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 	if r.rc != nil {
 		doc, found := r.rc.ResolveRef(kind, name)
 		if found {
-			// Render the actual component
+			// Render the actual component. data-bino-kind/name mirror the
+			// report renderer's source attributes so the preview's search,
+			// inspector, and cmd/ctrl-click reveal-source work on embedded
+			// components. No id attribute: a component :ref'd twice in one
+			// document would produce duplicate ids.
 			componentHTML, err := RenderComponentHTML(doc, r.rc.AssetURLs)
 			if err == nil {
 				_, _ = w.WriteString(`<div class='bn-ref-container' data-ref-kind='`)
 				_, _ = w.WriteString(html.EscapeString(kind))
 				_, _ = w.WriteString(`' data-ref-name='`)
+				_, _ = w.WriteString(html.EscapeString(name))
+				_, _ = w.WriteString(`' data-bino-kind='`)
+				_, _ = w.WriteString(html.EscapeString(kind))
+				_, _ = w.WriteString(`' data-bino-name='`)
 				_, _ = w.WriteString(html.EscapeString(name))
 				_, _ = w.WriteString(`'>`)
 				_, _ = w.WriteString(componentHTML)

@@ -203,6 +203,31 @@ SELECT * FROM sales WHERE year = 2024;
 ```
 ````
 
+## Previewing documents
+
+`bino preview` serves every DocumentArtefact at `/doc/<name>`. The route is reachable
+from the artefact dropdown in the toolbar and from the Documents list on the All Pages
+view. Edits to the markdown sources, the manifest, or any embedded component's data
+reload the open page in place — long documents keep their scroll position.
+
+The preview is exact for content and approximate for print geometry:
+
+- **Exact**: the rendered markdown, math, embedded `:ref` components with live data,
+  and your custom stylesheet.
+- **Approximated**: the page width follows `format` and `orientation`; page breaks
+  between sources show as dashed markers; with `displayHeaderFooter` the reserved
+  margin bands appear as labeled placeholders sized by `marginTop`/`marginBottom`.
+- **Only in `bino build`**: real pagination, the page numbers in the table of contents,
+  and the separately paginated TOC pages with Roman numerals (the preview shows the TOC
+  inline, without page numbers), the actual header/footer templates, and signing.
+
+The toolbar shows the document's settings (format, orientation, locale, chapter count,
+TOC, header/footer), the search box jumps to headings, and the Build PDF button copies
+the `bino build --artefact <name>` command for the real thing.
+
+In the VS Code preview, Cmd/Ctrl+click on prose opens the markdown source file it came
+from; on an embedded component it opens the component's YAML manifest.
+
 ## Examples
 
 ### Minimal document
