@@ -139,8 +139,9 @@ func predefForbiddenKind(inc *pathutil.IncludeSet) Rule {
 		Description: "Artefact kinds (ReportArtefact, LiveReportArtefact, ScreenshotArtefact, DocumentArtefact) " +
 			"and credential kinds (ConnectionSecret, SigningProfile) must not be inside the package include set.",
 		Check: func(_ context.Context, docs []Document) []Finding {
-			var findings []Finding
-			for _, doc := range includedDocs(docs, inc) {
+			included := includedDocs(docs, inc)
+			findings := make([]Finding, 0, len(included))
+			for _, doc := range included {
 				var message string
 				switch doc.Kind {
 				case "ReportArtefact", "LiveReportArtefact", "ScreenshotArtefact", "DocumentArtefact":

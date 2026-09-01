@@ -16,11 +16,9 @@ const (
 	testPackageName = "@acme/kit"
 )
 
-// testIncludeSet builds the include set the predef rules close over, using the
-// default include list when no entry is given.
-func testIncludeSet(include ...string) *pathutil.IncludeSet {
-	pkg := &pathutil.PackageConfig{Name: testPackageName, Include: include}
-	return pkg.IncludeSet(testProjectRoot)
+// testIncludeSet builds the default include set the predef rules close over.
+func testIncludeSet() *pathutil.IncludeSet {
+	return (&pathutil.PackageConfig{Name: testPackageName}).IncludeSet(testProjectRoot)
 }
 
 // predefDoc builds a document at a project-relative path under the synthetic

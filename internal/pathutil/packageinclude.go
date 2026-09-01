@@ -1,6 +1,7 @@
 package pathutil
 
 import (
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -76,4 +77,20 @@ func (s *IncludeSet) Contains(absPath string) bool {
 		}
 	}
 	return false
+}
+
+// cleanProjectRelative normalizes a project-relative entry to slash form and
+// reports whether it stays inside the project.
+func cleanProjectRelative(entry string) (string, bool) {
+	if entry == "" || filepath.IsAbs(entry) || strings.HasPrefix(entry, "/") {
+		return "", false
+	}
+	if len(entry) >= 2 && entry[1] == ':' {
+		return "", false
+	}
+	cleaned := path.Clean(filepath.ToSlash(entry))
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", false
+	}
+	return cleaned, true
 }
