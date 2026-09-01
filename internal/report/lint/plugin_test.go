@@ -74,28 +74,3 @@ func TestRunPluginLinters_PluginError_NonFatal(t *testing.T) {
 		t.Fatalf("expected finding from working plugin, got %q", findings[0].RuleID)
 	}
 }
-
-func TestFilterFindings_DisableRule(t *testing.T) {
-	findings := []Finding{
-		{RuleID: "sf/deprecated-api", Message: "old"},
-		{RuleID: "sf/missing-flag", Message: "missing"},
-		{RuleID: "builtin/unused-ds", Message: "unused"},
-	}
-
-	cfg := LintConfig{Disable: []string{"sf/deprecated-api"}}
-	filtered := FilterFindings(findings, cfg)
-	if len(filtered) != 2 {
-		t.Fatalf("expected 2 findings after filter, got %d", len(filtered))
-	}
-	if filtered[0].RuleID != "sf/missing-flag" {
-		t.Fatal("wrong finding remained")
-	}
-}
-
-func TestFilterFindings_EmptyConfig(t *testing.T) {
-	findings := []Finding{{RuleID: "a"}, {RuleID: "b"}}
-	filtered := FilterFindings(findings, LintConfig{})
-	if len(filtered) != 2 {
-		t.Fatal("empty config should pass all findings through")
-	}
-}

@@ -6,7 +6,8 @@ description: Reference of all available lint rules for bino report validation.
 This appendix lists all lint rules that `bino lint` and `bino build` apply to your report manifests.
 Lint rules check the **content** of your documents (semantic/business rules), while schema validation checks the **structure**.
 
-Most lint findings are treated as **warnings** and do not block builds. However, some rules produce **errors** that will cause the build to fail (marked with severity below).
+The **Severity** column below is the severity a rule reports: it picks the colour of the squiggle in the editor.
+No lint finding blocks a build, and none of them changes the exit code of `bino lint` on its own — only a severity you set yourself in `bino.toml` does that, and `bino lint` prints that one in front of the finding; see [Disabling and re-grading rules](#disabling-and-re-grading-rules).
 
 The last five rules only run on a **predef project** — a project whose `bino.toml` carries a `[package]` table (see [Predef packages](/concepts/project-configuration/#predef-packages)). A project without that table never sees them.
 
@@ -158,7 +159,7 @@ The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Gr
 
 Child references (`ref`) in LayoutPage and LayoutCard must point to documents that exist. This rule catches typos, missing files, and broken references early.
 
-**Severity:** Error (blocks build)
+**Severity:** Error
 
 **Example problem:**
 
@@ -632,9 +633,52 @@ The bino linter is designed for easy rule addition. Each rule has:
 
 Rules are registered in `internal/report/lint/rules.go`.
 
-## Suppressing warnings
+## Disabling and re-grading rules
 
-Currently, lint warnings cannot be suppressed. Future versions may add per-rule or per-file suppression.
+The `[lint]` table in `bino.toml` switches rules off and changes the severity they report:
+
+```toml
+[lint]
+disable = ["table-sum-title-unused"]
+
+[lint.severity]
+text-content-required = "error"
+i18n-code-unused = "info"
+```
+
+`disable` hides a rule's findings everywhere — CLI output, lint log and editor.
+`severity` re-grades them everywhere: `bino lint` prints the finding under its
+new severity and the editor squiggles it in the matching colour.
+
+Only a severity you set in `bino.toml` affects an exit code: a rule you raise to
+`"error"` fails `bino lint` on its own, a rule you lower to `"info"` no longer
+counts for `--fail-on-warnings`. The Severity column above changes no exit code
+by itself, and no lint finding fails `bino build` — `[lint]` changes neither.
+
+Besides the rule IDs above you can name four more IDs, which findings carry
+although no rule of that name declares them:
+
+| ID | Covers |
+| -- | ------ |
+| `schema-validation` | A manifest that failed schema validation. |
+| `manifest-load` | A manifest that could not be loaded at all. |
+| `engine-version-incompatible` | The `engine-version` pin check in `bino.toml`. |
+| `missing-required-reference` | The dangling-reference finding above, which [`page-layout-slots-used`](#page-layout-slots-used) emits while it walks the children. |
+
+Disabling `schema-validation` or `manifest-load` hides the lines only — `bino lint`
+still exits non-zero on a bundle it could not load, because the load really
+failed. Disabling `engine-version-incompatible`, in contrast, drops the finding
+and the exit code it forced together.
+
+Those three accept `disable` only: their weight follows the state of the bundle,
+so `bino lint` rejects a `[lint.severity]` entry on them with a warning rather
+than honouring nothing.
+
+There is still no per-file or per-line suppression: `[lint]` works on rule IDs
+for the whole project.
+
+See [Lint rules in bino.toml](/concepts/project-configuration/#lint-rules) for
+the full semantics, plugin rule IDs and how unknown entries are reported.
 
 ## See also
 

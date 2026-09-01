@@ -213,6 +213,36 @@ type Config struct {
 	Exclude []string
 }
 
+// logLintFindings runs the lint rules over the loaded manifests and logs every
+// finding the project's [lint] table keeps, at the severity that table gives
+// it. A rule the project raised to "error" must not scroll by as a warning,
+// and one lowered to "info" must not shout; without a [lint] table every
+// finding logs as a warning exactly as before.
+func logLintFindings(ctx context.Context, logger logx.Logger, watchDir string, lintDocs []lint.Document, pluginLinters lint.PluginLinterRegistry) {
+	runner := lint.NewProjectRunner(watchDir)
+	findings := runner.Run(ctx, lintDocs)
+	if pluginLinters != nil {
+		findings = append(findings, lint.RunPluginLinters(ctx, lintDocs, pluginLinters)...)
+	}
+	findings = runner.Apply(findings)
+	for _, f := range findings {
+		relPath := pathutil.RelPath(watchDir, f.File)
+		loc := relPath
+		if f.DocIdx > 0 {
+			loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
+		}
+		line := fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message)
+		switch runner.SeverityOverride(f.RuleID) {
+		case "error":
+			logger.Errorf("%s", line)
+		case "info":
+			logger.Infof("%s", line)
+		default:
+			logger.Warnf("%s", line)
+		}
+	}
+}
+
 // Run loads manifests, renders affected artifacts, and updates the preview
 // server. When changed is nil, every artefact is re-rendered (full rebuild).
 // When changed lists file paths and every path maps to a node in the
@@ -265,21 +295,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	}
 
 	if cfg.EnableLint {
-		lintDocs := lint.DocumentsFromConfig(docs)
-		runner := lint.NewProjectRunner(watchDir)
-		findings := runner.Run(ctx, lintDocs)
-		if cfg.PluginLinters != nil {
-			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, cfg.PluginLinters)
-			findings = append(findings, pluginFindings...)
-		}
-		for _, f := range findings {
-			relPath := pathutil.RelPath(watchDir, f.File)
-			loc := relPath
-			if f.DocIdx > 0 {
-				loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
-			}
-			logger.Warnf("[%s] %s: %s", f.RuleID, loc, f.Message)
-		}
+		logLintFindings(ctx, logger, watchDir, lint.DocumentsFromConfig(docs), cfg.PluginLinters)
 	}
 
 	artifacts, err := config.CollectArtefacts(docs)

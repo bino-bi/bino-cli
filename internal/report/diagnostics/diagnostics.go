@@ -59,6 +59,12 @@ type Options struct {
 // Collect validates the bundle at dir and returns its diagnostics. The result
 // is never nil, so serializing it always yields [] rather than null.
 func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
+	// The runner carries the project's [lint] table. disable governs every
+	// report, the editor's included: a rule the project silenced must not
+	// squiggle. It never repairs the bundle — `bino lint` and `bino build`
+	// still fail on manifests they cannot read, only the rendering is hidden.
+	runner := lint.NewProjectRunner(dir)
+
 	// Load documents in strict mode to catch schema errors. Errors are
 	// collected per document so every schema issue is reported, not just
 	// the first one. ValidateDocuments runs inside the loader and its
@@ -75,7 +81,12 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	}
 	diagnostics := make([]Diagnostic, 0, len(loadErrs))
 	for _, loadErr := range loadErrs {
-		diagnostics = append(diagnostics, FromLoadError(loadErr)...)
+		for _, d := range FromLoadError(loadErr) {
+			if runner.Skip(lintRuleID(d.Code)) {
+				continue
+			}
+			diagnostics = append(diagnostics, d)
+		}
 	}
 	if len(loadErrs) > 0 {
 		// Use lenient docs so downstream checks still see schema-invalid documents
@@ -96,7 +107,7 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	}
 
 	if opts.EngineCompat != nil {
-		if d, ok := opts.EngineCompat(dir); ok {
+		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
 		}
 	}
@@ -104,12 +115,12 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
 	// ref-params rule is inert without the declarations.
 	lintDocs := lint.DocumentsFromConfig(docs)
-	runner := lint.NewProjectRunner(dir)
 	findings := runner.Run(ctx, lintDocs)
 	if opts.PluginLinters != nil {
 		pluginFindings := lint.RunPluginLinters(ctx, lintDocs, opts.PluginLinters)
 		findings = append(findings, pluginFindings...)
 	}
+	findings = runner.Apply(findings)
 	for _, f := range findings {
 		sev := f.Severity
 		if sev == "" {
@@ -175,4 +186,17 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 	}
 
 	return diagnostics
+}
+
+// lintRuleID maps a diagnostic code to the rule ID the lint command reports for
+// the same condition. The diagnostics vocabulary splits what `bino lint` calls
+// a single "manifest-load" finding into yaml-syntax and validation-error, so
+// without this a [lint] disable entry could silence the CLI but not the editor.
+func lintRuleID(code string) string {
+	switch code {
+	case "yaml-syntax", "validation-error":
+		return "manifest-load"
+	default:
+		return code
+	}
 }

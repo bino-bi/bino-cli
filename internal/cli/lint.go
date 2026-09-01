@@ -40,8 +40,9 @@ func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered comple
 		Long: strings.TrimSpace(`Load manifests, validate against the schema, and run lint rules.
 This command does not execute queries or generate PDFs.
 
-All lint findings are treated as warnings. The exit code is always 0 unless
-there is a fatal error loading manifests.`),
+Lint findings are warnings by default; the exit code is non-zero when manifests
+fail to load, when a rule is raised to "error" in bino.toml's [lint] table, or
+with --fail-on-warnings.`),
 		Example: strings.TrimSpace(`  bino lint
   bino lint --work-dir ./reports
   bino lint --log-format json`),
@@ -89,13 +90,24 @@ there is a fatal error loading manifests.`),
 				}
 			}
 
+			runner := lint.NewProjectRunner(projectRoot)
+			for _, w := range runner.ConfigWarnings() {
+				out.Warning("bino.toml: " + w)
+			}
+			if cfgErr != nil {
+				// The runner falls back to defaults when bino.toml cannot be
+				// read, so a [lint] table in an unparseable file is silently
+				// inert. Say so instead of letting the entries vanish.
+				out.Warning(fmt.Sprintf("bino.toml could not be read, so any [lint] configuration was ignored: %v", cfgErr))
+			}
+
 			// Engine version compatibility check. Runs before manifest loading so
 			// the finding is reported even when YAML manifests fail to parse —
 			// the engine pin is the more actionable problem in that case. Forces
 			// a non-zero exit independent of --fail-on-warnings.
 			var compatFatal bool
 			var compatFinding lint.Finding
-			if cfgErr == nil {
+			if cfgErr == nil && !runner.Skip("engine-version-incompatible") {
 				if f, fatal := engineCompatFinding(projectRoot, projectCfg.EngineVersion); fatal {
 					compatFinding = f
 					compatFatal = true
@@ -129,7 +141,8 @@ there is a fatal error loading manifests.`),
 				return ConfigErrorf("no YAML documents found in %s", projectRoot)
 			}
 
-			schemaFindings := schemaFindingsFromErrors(loadErrors)
+			rawSchemaFindings := schemaFindingsFromErrors(loadErrors)
+			schemaFindings := runner.Apply(rawSchemaFindings)
 			if len(loadErrors) > 0 {
 				out.StepDone(fmt.Sprintf("Validated %d document(s), %d failed validation", len(documents), len(loadErrors)), time.Since(loadStart))
 			} else {
@@ -142,7 +155,6 @@ there is a fatal error loading manifests.`),
 			// Step 2: Run lint rules
 			out.Step("Running lint rules...")
 			lintStart := time.Now()
-			runner := lint.NewProjectRunner(projectRoot)
 			findings := runner.Run(ctx, lintDocs)
 
 			// Run plugin linters.
@@ -150,6 +162,7 @@ there is a fatal error loading manifests.`),
 				pluginFindings := lint.RunPluginLinters(ctx, lintDocs, pluginLinters)
 				findings = append(findings, pluginFindings...)
 			}
+			findings = runner.Apply(findings)
 
 			out.StepDone(fmt.Sprintf("Checked %d rule(s)", len(runner.Rules())), time.Since(lintStart))
 
@@ -183,14 +196,21 @@ there is a fatal error loading manifests.`),
 			if len(schemaFindings) > 0 {
 				out.Blank()
 				out.Warning(fmt.Sprintf("Found %d schema validation issue(s):", len(schemaFindings)))
-				printFindingLines(out, projectRoot, schemaFindings)
+				printFindingLines(out, projectRoot, schemaFindings, runner)
 			}
+
+			// Only severities the project set in bino.toml carry weight: "error"
+			// fails on its own, "info" is exempt from --fail-on-warnings. Rules
+			// that emit "error" natively stay advisory, as they always were. The
+			// printed report and the exit code read the same counts, so the body
+			// can never contradict the exit.
+			errCount, warnCount, infoCount := countByLintSeverity(runner, findings)
 
 			// Print lint findings
 			if len(findings) > 0 {
 				out.Blank()
-				out.Warning(fmt.Sprintf("Found %d lint warning(s):", len(findings)))
-				printFindingLines(out, projectRoot, findings)
+				out.Warning(lintFindingSummary(errCount, warnCount, infoCount))
+				printFindingLines(out, projectRoot, findings, runner)
 			} else {
 				out.Blank()
 				out.Done("No lint warnings found")
@@ -235,14 +255,18 @@ there is a fatal error loading manifests.`),
 				return RuntimeErrorf("engine-version-incompatible")
 			}
 
-			// Schema validation errors remain fatal (as they were before they
-			// were collected), but only after every issue has been reported.
+			// Manifests that failed to load stay fatal even when [lint] hides
+			// their findings: lint must never report success on a bundle it
+			// could not read. The count is the pre-filter one, so it is honest.
 			if len(loadErrors) > 0 {
-				return ConfigErrorf("schema validation failed: %d issue(s) in %d document(s)", len(schemaFindings), len(loadErrors))
+				return ConfigErrorf("schema validation failed: %d issue(s) in %d document(s)", len(rawSchemaFindings), len(loadErrors))
 			}
 
-			// Exit with error if --fail-on-warnings and there are warnings
-			totalWarnings := len(findings) + len(dataValidationWarnings)
+			if errCount > 0 {
+				return RuntimeErrorf("lint found %d error(s)", errCount)
+			}
+
+			totalWarnings := warnCount + len(dataValidationWarnings)
 			if failOnWarnings && totalWarnings > 0 {
 				return RuntimeErrorf("lint found %d warning(s)", totalWarnings)
 			}
@@ -293,8 +317,47 @@ func schemaFindingsFromErrors(loadErrors []error) []lint.Finding {
 	return findings
 }
 
+// countByLintSeverity splits findings by the severity the project set in
+// bino.toml's [lint] table. A rule without an override counts as a warning
+// whatever severity it emits natively — that is what the exit code has always
+// keyed on.
+func countByLintSeverity(runner *lint.Runner, findings []lint.Finding) (errCount, warnCount, infoCount int) {
+	for _, f := range findings {
+		switch runner.SeverityOverride(f.RuleID) {
+		case "error":
+			errCount++
+		case "info":
+			infoCount++
+		default:
+			warnCount++
+		}
+	}
+	return errCount, warnCount, infoCount
+}
+
+// lintFindingSummary renders the count line above the finding list. Without a
+// [lint] table every finding is a warning and the wording is the historic one.
+func lintFindingSummary(errCount, warnCount, infoCount int) string {
+	if errCount == 0 && infoCount == 0 {
+		return fmt.Sprintf("Found %d lint warning(s):", warnCount)
+	}
+	parts := make([]string, 0, 3)
+	if errCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d error(s)", errCount))
+	}
+	if warnCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d warning(s)", warnCount))
+	}
+	if infoCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d info", infoCount))
+	}
+	return "Found " + strings.Join(parts, ", ") + " lint finding(s):"
+}
+
 // printFindingLines prints findings one per line with file:line:col locations.
-func printFindingLines(out *Output, projectRoot string, findings []lint.Finding) {
+// A rule the project re-graded in [lint] severity leads with that severity;
+// without a [lint] table the line is byte-for-byte what it always was.
+func printFindingLines(out *Output, projectRoot string, findings []lint.Finding, runner *lint.Runner) {
 	for _, f := range findings {
 		relPath := pathutil.RelPath(projectRoot, f.File)
 		loc := relPath
@@ -306,7 +369,11 @@ func printFindingLines(out *Output, projectRoot string, findings []lint.Finding)
 		if f.Path != "" {
 			loc = fmt.Sprintf("%s (%s)", loc, f.Path)
 		}
-		out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
+		line := fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message)
+		if sev := runner.SeverityOverride(f.RuleID); sev != "" {
+			line = fmt.Sprintf("[%s] %s", sev, line)
+		}
+		out.List(line)
 	}
 }
 
@@ -315,7 +382,7 @@ func findingsToLintEntries(findings []lint.Finding) []buildlog.LintEntry {
 	entries := make([]buildlog.LintEntry, 0, len(findings))
 	for _, f := range findings {
 		entries = append(entries, buildlog.BuildLintEntry(
-			f.RuleID, f.Message, f.File, f.DocIdx, f.Path, f.Line, f.Column,
+			f.RuleID, f.Severity, f.Message, f.File, f.DocIdx, f.Path, f.Line, f.Column,
 		))
 	}
 	return entries
@@ -344,7 +411,14 @@ func writeLintLog(path, runID string, startTime time.Time, workdir string, docs 
 	}
 	fmt.Fprintln(file)
 
-	fmt.Fprintf(file, "LINT WARNINGS (%d)\n", len(findings))
+	header := "LINT WARNINGS"
+	for _, f := range findings {
+		if f.Severity != "" && f.Severity != "warning" {
+			header = "LINT FINDINGS"
+			break
+		}
+	}
+	fmt.Fprintf(file, "%s (%d)\n", header, len(findings))
 	fmt.Fprintf(file, "------------------\n")
 	if len(findings) == 0 {
 		fmt.Fprintln(file, "  (none)")

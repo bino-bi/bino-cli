@@ -14,16 +14,32 @@ import (
 // project's bino.toml declares a [package] table, the predef package rules.
 // A project without [package] — or without a readable bino.toml — gets exactly
 // the default rule set, so nothing changes for an ordinary report project.
+// The runner also carries the project's [lint] table, which callers enforce on
+// the findings with Apply.
 func NewProjectRunner(projectRoot string) *Runner {
-	return NewRunner(append(DefaultRules(), PredefRules(projectRoot)...))
+	// One parse serves both the [package] rules and the [lint] table.
+	cfg := projectConfigOrNil(projectRoot)
+	r := NewRunner(append(DefaultRules(), predefRules(projectRoot, cfg)...))
+	r.loadLintConfig(cfg)
+	return r
 }
 
-// PredefRules returns the lint rules that apply only to predef packages:
+// projectConfigOrNil loads the project's bino.toml, treating an unreadable or
+// malformed one as absent: both [package] and [lint] fail open, so a project
+// whose config cannot be parsed still gets exactly the default rule set.
+func projectConfigOrNil(projectRoot string) *pathutil.ProjectConfig {
+	cfg, err := pathutil.LoadProjectConfig(projectRoot)
+	if err != nil {
+		return nil
+	}
+	return cfg
+}
+
+// predefRules returns the lint rules that apply only to predef packages:
 // projects whose bino.toml carries a [package] table. It returns nil for every
 // other project, so callers can append unconditionally.
-func PredefRules(projectRoot string) []Rule {
-	cfg, err := pathutil.LoadProjectConfig(projectRoot)
-	if err != nil || cfg == nil || cfg.Package == nil {
+func predefRules(projectRoot string, cfg *pathutil.ProjectConfig) []Rule {
+	if cfg == nil || cfg.Package == nil {
 		return nil
 	}
 	pkg := cfg.Package

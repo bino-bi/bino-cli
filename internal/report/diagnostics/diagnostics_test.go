@@ -306,3 +306,181 @@ spec:
 		t.Fatalf("expected a missing-required-reference finding, got %+v", diags)
 	}
 }
+
+// lintCfgProject writes a bino.toml plus manifests and returns the directory.
+func lintCfgProject(t *testing.T, toml string, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// twoFindingBundle raises exactly two findings. Artefact "r_a4" is a4 and no
+// page is, so artefact-layoutpage-required fires for it. Artefact "r" and page
+// "p" both default to xga, so the page is walked for it and its dangling
+// "ghost_text" child raises missing-required-reference. Both artefacts are
+// needed: page-layout-slots-used only walks a page that matches an artefact,
+// so a single a4 artefact would leave the ghost ref unseen.
+const twoFindingBundle = `apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: r_a4
+spec:
+  format: a4
+  orientation: portrait
+  language: en
+  filename: a4.pdf
+  title: A4
+---
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: r
+spec:
+  filename: out.pdf
+  title: Sample
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: p
+spec:
+  children:
+    - kind: Text
+      spec:
+        value: hi
+    - kind: Text
+      ref: ghost_text
+`
+
+func hasCode(diags []Diagnostic, code string) bool {
+	for _, d := range diags {
+		if d.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+// TestCollect_LintConfigDisable: a disabled rule produces no diagnostic while
+// the other rules keep theirs. The control run pins that the fixture really
+// raises both, so the disable assertion cannot pass vacuously.
+func TestCollect_LintConfigDisable(t *testing.T) {
+	files := map[string]string{"bundle.yaml": twoFindingBundle}
+
+	on := lintCfgProject(t, "report-id = \"t\"\n", files)
+	control := Collect(context.Background(), on, Options{SkipForeign: true})
+	if len(control) != 2 || !hasCode(control, "missing-required-reference") || !hasCode(control, "artefact-layoutpage-required") {
+		t.Fatalf("fixture must raise exactly missing-required-reference and artefact-layoutpage-required, got %+v", control)
+	}
+
+	off := lintCfgProject(t, "report-id = \"t\"\n\n[lint]\ndisable = [\"missing-required-reference\"]\n", files)
+	diags := Collect(context.Background(), off, Options{SkipForeign: true})
+	if hasCode(diags, "missing-required-reference") {
+		t.Errorf("disabled rule still diagnosed: %+v", diags)
+	}
+	if !hasCode(diags, "artefact-layoutpage-required") {
+		t.Errorf("expected the other rule's diagnostic, got %+v", diags)
+	}
+}
+
+// TestCollect_LintConfigSeverity: a severity override reaches the editor.
+func TestCollect_LintConfigSeverity(t *testing.T) {
+	dir := lintCfgProject(t, "report-id = \"t\"\n\n[lint.severity]\nartefact-layoutpage-required = \"error\"\n",
+		map[string]string{"bundle.yaml": twoFindingBundle})
+
+	diags := Collect(context.Background(), dir, Options{SkipForeign: true})
+	var found bool
+	for _, d := range diags {
+		if d.Code == "artefact-layoutpage-required" {
+			found = true
+			if d.Severity != "error" {
+				t.Errorf("Severity = %q, want error", d.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected an artefact-layoutpage-required diagnostic, got %+v", diags)
+	}
+}
+
+// TestCollect_LintConfigDisablesSchemaValidation: disable removes a finding
+// from every report, the editor's included, so a disabled schema-validation
+// stops squiggling. It does not repair the bundle —
+// TestLintCommand_DisableSchemaValidationStaysFatal (internal/cli) pins that
+// `bino lint` still exits non-zero on the same project.
+func TestCollect_LintConfigDisablesSchemaValidation(t *testing.T) {
+	bad := `apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: r
+spec:
+  filename: 5
+  title: Sample
+`
+	files := map[string]string{"bad.yaml": bad}
+
+	on := lintCfgProject(t, "report-id = \"t\"\n", files)
+	if !hasCode(Collect(context.Background(), on, Options{SkipForeign: true}), "schema-validation") {
+		t.Fatal("expected a schema-validation diagnostic without a [lint] table")
+	}
+
+	off := lintCfgProject(t, "report-id = \"t\"\n\n[lint]\ndisable = [\"schema-validation\"]\n", files)
+	if hasCode(Collect(context.Background(), off, Options{SkipForeign: true}), "schema-validation") {
+		t.Fatal("disabled schema-validation was still diagnosed")
+	}
+}
+
+// TestCollect_LintConfigDisablesEngineCompat: the compat diagnostic is gated
+// by disable so the editor does not squiggle what lint stays quiet about.
+func TestCollect_LintConfigDisablesEngineCompat(t *testing.T) {
+	compat := func(dir string) (Diagnostic, bool) {
+		return Diagnostic{
+			File:     filepath.Join(dir, "bino.toml"),
+			Severity: "error",
+			Message:  "engine v0.5.0 is not supported",
+			Code:     "engine-version-incompatible",
+		}, true
+	}
+	files := map[string]string{"bundle.yaml": twoFindingBundle}
+
+	on := lintCfgProject(t, "report-id = \"t\"\n", files)
+	if !hasCode(Collect(context.Background(), on, Options{SkipForeign: true, EngineCompat: compat}), "engine-version-incompatible") {
+		t.Fatal("expected the compat diagnostic without a [lint] table")
+	}
+
+	off := lintCfgProject(t, "report-id = \"t\"\n\n[lint]\ndisable = [\"engine-version-incompatible\"]\n", files)
+	if hasCode(Collect(context.Background(), off, Options{SkipForeign: true, EngineCompat: compat}), "engine-version-incompatible") {
+		t.Fatal("disabled compat diagnostic was still emitted")
+	}
+}
+
+// TestLintRuleID pins the mapping from the diagnostics vocabulary to the rule
+// IDs [lint] disable is written in. Without it, disable = ["manifest-load"]
+// silences `bino lint` but not the editor, and no spelling silences both.
+func TestLintRuleID(t *testing.T) {
+	cases := []struct {
+		code string
+		want string
+	}{
+		{code: "yaml-syntax", want: "manifest-load"},
+		{code: "validation-error", want: "manifest-load"},
+		{code: "schema-validation", want: "schema-validation"},
+		{code: "i18n-code-unused", want: "i18n-code-unused"},
+		{code: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			if got := lintRuleID(tc.code); got != tc.want {
+				t.Fatalf("lintRuleID(%q) = %q, want %q", tc.code, got, tc.want)
+			}
+		})
+	}
+}

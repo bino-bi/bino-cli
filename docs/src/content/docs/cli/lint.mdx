@@ -20,6 +20,8 @@ Common flags:
 - `--execute-queries` – execute dataset queries and validate data (slower but catches data issues).
 - `--fail-on-warnings` – exit with non-zero code if any warnings are found (useful for CI).
 
+No lint finding fails the command on its own, whatever severity it reports — only a rule you re-grade to `"error"` in `bino.toml` does, see [Lint rules](/concepts/project-configuration/#lint-rules).
+
 ## Examples
 
 Lint all manifests in the current directory:
@@ -71,8 +73,22 @@ Data validation checks include:
 
 ## Exit code
 
-By default, `bino lint` exits with code 0 unless there is a fatal error loading manifests.
-All lint findings are treated as warnings and do not cause a non-zero exit.
+`bino lint` exits with code 0 unless one of the following holds. The command
+checks them in this order:
+
+| Condition | Suppressible via `[lint]`? |
+| --- | --- |
+| The `engine-version` pin is incompatible with this CLI | Yes — `disable = ["engine-version-incompatible"]` turns the check off |
+| Manifests failed to load or failed schema validation | No — `disable` hides the individual lines, the command still fails |
+| A rule you raised with `[lint.severity]` to `"error"` produced a finding | n/a — this is the opt-in |
+| `--fail-on-warnings` and any remaining finding or data validation warning | Findings you lowered to `"info"` do not count |
+
+The `[lint]` table lives in `bino.toml`; see
+[Lint rules](/concepts/project-configuration/#lint-rules) for the full
+semantics. Without that table, nothing but the first two rows and
+`--fail-on-warnings` can fail the command, exactly as before. `bino build` is
+not affected by `[lint]` at all: it prints the findings that survive `disable`,
+but no finding has ever failed a build.
 
 Use `--fail-on-warnings` to exit with code 1 if any warnings are found:
 

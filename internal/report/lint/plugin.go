@@ -133,32 +133,3 @@ func pluginSeverityString(s int) string {
 		return ""
 	}
 }
-
-// LintConfig holds lint filtering configuration from bino.toml.
-//
-//nolint:revive // name used widely across codebase
-type LintConfig struct {
-	Disable  []string
-	Severity map[string]string
-}
-
-// FilterFindings removes findings for disabled rules and applies severity overrides.
-func FilterFindings(findings []Finding, cfg LintConfig) []Finding {
-	if len(cfg.Disable) == 0 && len(cfg.Severity) == 0 {
-		return findings
-	}
-
-	disabled := make(map[string]struct{}, len(cfg.Disable))
-	for _, id := range cfg.Disable {
-		disabled[id] = struct{}{}
-	}
-
-	filtered := make([]Finding, 0, len(findings))
-	for _, f := range findings {
-		if _, ok := disabled[f.RuleID]; ok {
-			continue
-		}
-		filtered = append(filtered, f)
-	}
-	return filtered
-}

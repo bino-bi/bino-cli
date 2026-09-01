@@ -10,6 +10,8 @@
 //  1. Create a Rule with a unique ID, name, and description.
 //  2. Implement the Check function that inspects documents and returns findings.
 //  3. Add the rule to DefaultRules() in rules.go.
+//  4. If the rule emits a finding whose RuleID is not the rule's own ID, add
+//     that ID to nonRuleFindingIDs in config.go, or [lint] will call it unknown.
 //
 // Example:
 //
@@ -66,9 +68,14 @@ type Rule struct {
 	Check       func(ctx context.Context, docs []Document) []Finding // The check function.
 }
 
-// Runner executes lint rules against a set of documents.
+// Runner executes lint rules against a set of documents. The zero value of
+// the [lint] configuration fields means "no filtering", so a Runner built by
+// NewRunner behaves exactly as it always has.
 type Runner struct {
-	rules []Rule
+	rules    []Rule
+	disabled map[string]struct{} // rule IDs from [lint] disable
+	severity map[string]string   // rule ID -> "error"|"warning"|"info" from [lint] severity
+	warnings []string            // problems found in the [lint] table itself
 }
 
 // NewRunner creates a Runner with the given rules.

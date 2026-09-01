@@ -332,16 +332,23 @@ func TestPredefRulesWithoutPackage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if rules := PredefRules(tt.root(t)); rules != nil {
+			if rules := predefRulesFor(tt.root(t)); rules != nil {
 				t.Fatalf("got %d rules, want nil", len(rules))
 			}
 		})
 	}
 }
 
+// predefRulesFor is the production path NewProjectRunner takes, minus the
+// default rules: load the project config (nil when unreadable), then derive
+// the predef rules from it.
+func predefRulesFor(projectRoot string) []Rule {
+	return predefRules(projectRoot, projectConfigOrNil(projectRoot))
+}
+
 func TestPredefRulesWithPackage(t *testing.T) {
 	root := writeProject(t, "report-id = \"r1\"\n\n[package]\nname = \"@acme/kit\"\n")
-	rules := PredefRules(root)
+	rules := predefRulesFor(root)
 
 	want := []string{"predef-name-namespace", "predef-forbidden-kind", "predef-asset-absolute-path", "predef-external-ref"}
 	if len(rules) != len(want) {
@@ -356,7 +363,7 @@ func TestPredefRulesWithPackage(t *testing.T) {
 
 func TestPredefRulesInvalidPackage(t *testing.T) {
 	root := writeProject(t, "[package]\nname = \"kit\"\n")
-	rules := PredefRules(root)
+	rules := predefRulesFor(root)
 
 	if len(rules) != 1 {
 		t.Fatalf("got %d rules, want 1", len(rules))

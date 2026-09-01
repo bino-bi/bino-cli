@@ -76,6 +76,103 @@ Each checkpoint maps to an array of shell commands executed sequentially. Comman
 
 See [Hooks](/concepts/hooks/) for the full reference of checkpoints, environment variables, and error handling.
 
+## Lint rules
+
+The `[lint]` table decides which lint findings you see and how bino grades them:
+
+```toml
+[lint]
+disable = ["table-sum-title-unused", "myplugin/deprecated-api"]
+
+[lint.severity]
+text-content-required = "error"
+i18n-code-unused = "info"
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `lint.disable` | array | Rule IDs whose findings are never reported. |
+| `lint.severity` | table | Rule ID mapped to `"error"`, `"warning"` or `"info"`. |
+
+**`disable`** removes a finding from everything bino prints, writes to the lint
+log, or sends to the editor — `bino lint`, `bino build`, `bino preview --lint`
+and the LSP alike. It hides the finding; it does not repair what the finding
+was about.
+
+**`severity`** re-grades a finding everywhere it is reported: `bino lint` prints
+the severity in front of the finding, and the editor squiggles it in the
+matching colour.
+
+### Exit codes
+
+Only a severity you set here affects an exit code.
+
+- `"error"` makes `bino lint` exit non-zero on its own, without `--fail-on-warnings`.
+- `"info"` keeps the finding visible but exempts it from `--fail-on-warnings`.
+- A rule that reports `Error` in the [rules table](/appendix/lint-rules/) by itself stays advisory and changes no exit code. That has always been true, and `[lint]` does not change it — name the rule in `[lint.severity]` if you want it to fail the command.
+
+`bino build` is not affected at all. It prints the findings that survive
+`[lint]`, but no lint finding has ever failed a build, and `[lint]` neither
+makes one fail nor makes `bino build` accept a bundle it cannot render.
+
+`disable` also never repairs a bundle. With
+`disable = ["schema-validation", "manifest-load"]`, manifests that fail to load
+or fail schema validation no longer produce a line anywhere, but `bino lint`
+still exits non-zero: the bundle really could not be read, and that is not a
+finding you can switch off.
+
+### Rule IDs you can name
+
+Every rule in the [lint rules appendix](/appendix/lint-rules/), plus four IDs
+that findings carry although no rule of that name declares them:
+
+| ID | Covers |
+| -- | ------ |
+| `schema-validation` | One finding per manifest that failed schema validation. |
+| `manifest-load` | One finding per manifest that could not be loaded at all. |
+| `engine-version-incompatible` | The `engine-version` pin check. |
+| `missing-required-reference` | The dangling-reference finding, which [`page-layout-slots-used`](/appendix/lint-rules/#page-layout-slots-used) emits while it walks the children of a page. The appendix documents it under its own heading. |
+
+Disabling `engine-version-incompatible` turns that check off completely: the
+finding disappears and so does the non-zero exit it forced, in `bino lint` and
+in the editor. Disabling `schema-validation` or `manifest-load` only hides the
+lines, as described above.
+
+The first three take `disable` only. How much they weigh follows the state of
+the bundle, not a severity you pick, so a `[lint.severity]` entry on them is
+rejected with a warning instead of quietly doing nothing.
+
+Plugin rules are named `"<plugin>/<rule>"`, for example
+`"myplugin/deprecated-api"`. Bino cannot know a plugin's rule set before the
+plugin has run, so entries containing a `/` are taken as written.
+
+### Unknown entries
+
+A rule ID that no rule in this project declares, a severity outside `error`,
+`warning` and `info`, and a severity on an ID that cannot honour one are
+ignored and reported by `bino lint`:
+
+```
+bino.toml: unknown rule id "no-such-rule" in [lint] disable
+bino.toml: invalid severity "fatal" for rule id "text-content-required" in [lint] severity (want error, warning or info)
+bino.toml: severity is not configurable for "schema-validation"; use [lint] disable to silence it
+```
+
+Such an entry is never silently honoured — it disables nothing and re-grades
+nothing.
+
+<Aside>
+Bino checks your entries against the rules that really run in *this* project.
+The `predef-*` rules and `package-config-invalid` only exist in a project with a
+`[package]` table, so naming one of them in an ordinary report project is
+reported as an unknown rule ID.
+</Aside>
+
+### Not covered by `[lint]`
+
+- Data validation warnings from `bino lint --execute-queries`. They are not lint findings and carry no rule ID.
+- Unresolved `${VAR}` environment variables and the YAML syntax errors the editor reports on their own. No rule declares them, so naming them in `[lint]` is an unknown rule ID.
+
 ## Registry and dependencies
 
 Projects can consume predef packages from a bino registry. The registry

@@ -1219,6 +1219,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, pluginLinters)
 			lintFindings = append(lintFindings, pluginFindings...)
 		}
+		lintFindings = runner.Apply(lintFindings)
 
 		if len(lintFindings) > 0 {
 			printLintFindings(out, lintFindings, projectRoot)
