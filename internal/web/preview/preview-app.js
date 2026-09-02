@@ -15,7 +15,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
   // Bumped on each user-visible runtime change so a quick devtools check
   // confirms whether the page is on the latest preview-app.js. Increment
   // when fixing a hot-reload bug here.
-  console.info('bn preview runtime v11 (proxy base-prefix aware)');
+  console.info('bn preview runtime v12 (doc routes live-reload)');
 
   var parser = new DOMParser();
   var basePrefix = appBase();
@@ -67,8 +67,9 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
         }
       }
       // Server completed a refresh but didn't broadcast for this view.
-      // Most often: the artefact at this path failed to render. Surface
-      // a distinct warning so the toolbar can show why.
+      // On selective refreshes that's expected (nothing this view depends
+      // on changed); genuine render failures arrive as refresh-error
+      // events. Log for debugging only — no toolbar pill.
       if (!matched) {
         console.warn('bn preview: refresh did not include this view', normalizedPath, 'broadcast paths:', paths);
         document.dispatchEvent(new CustomEvent('bn-preview:no-payload', { detail: { path: normalizedPath, broadcastPaths: paths } }));
@@ -157,21 +158,32 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
     source.close();
   });
 
-  // Click-to-source: Cmd/Ctrl+click on a [data-bino-kind] element
+  // Click-to-source: Cmd/Ctrl+click on a [data-bino-kind] element (component
+  // manifests) or a [data-bino-file] section (markdown sources on doc routes).
+  // closest() finds the nearest matching ancestor, so a click inside an
+  // embedded component wins over its surrounding prose section.
   document.addEventListener('click', function (e) {
     if (!e.metaKey && !e.ctrlKey) {
       return;
     }
-    var el = e.target.closest('[data-bino-kind]');
+    var el = e.target.closest('[data-bino-kind], [data-bino-file]');
     if (!el) {
       return;
     }
-    var msg = {
-      type: 'bino:revealSource',
-      kind: el.getAttribute('data-bino-kind'),
-      name: el.getAttribute('data-bino-name') || '',
-      ref: el.getAttribute('data-bino-ref') || ''
-    };
+    var msg;
+    if (el.hasAttribute('data-bino-kind')) {
+      msg = {
+        type: 'bino:revealSource',
+        kind: el.getAttribute('data-bino-kind'),
+        name: el.getAttribute('data-bino-name') || '',
+        ref: el.getAttribute('data-bino-ref') || ''
+      };
+    } else {
+      msg = {
+        type: 'bino:revealSource',
+        file: el.getAttribute('data-bino-file')
+      };
+    }
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(msg, '*');
     }

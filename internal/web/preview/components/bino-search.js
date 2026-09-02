@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { viewPath } from '../../shared/dom-utils.js';
 
 class BinoSearch extends LitElement {
   static properties = {
@@ -150,10 +151,11 @@ class BinoSearch extends LitElement {
 
   render() {
     var self = this;
+    var placeholder = viewPath().startsWith('/doc/') ? 'Search headings...' : 'Search elements...';
     return html`
       <div class="search-wrap">
         <span class="search-icon">\u2315</span>
-        <input type="text" placeholder="Search elements..." autocomplete="off" spellcheck="false"
+        <input type="text" placeholder=${placeholder} autocomplete="off" spellcheck="false"
           @input=${this._onInput}
           @keydown=${this._onKeydown}
           @focus=${this._onFocus}>
@@ -278,6 +280,27 @@ class BinoSearch extends LitElement {
           type: 'page',
           kind: 'LayoutPage',
           name: pageName,
+          el: el
+        });
+      }
+    });
+
+    // Search document headings (doc routes; the selector matches nothing on
+    // report routes). Headings carry auto-generated anchor ids.
+    var headings = document.querySelectorAll('.bn-document-content h1, .bn-document-content h2, .bn-document-content h3, .bn-document-content h4, .bn-document-content h5, .bn-document-content h6');
+    headings.forEach(function(el) {
+      var text = (el.textContent || '').trim();
+      if (!text) return;
+      var key = 'heading:' + (el.id || text);
+
+      if (seen.has(key)) return;
+
+      if (text.toLowerCase().indexOf(lowerQuery) !== -1) {
+        seen.add(key);
+        results.push({
+          type: 'heading',
+          kind: el.tagName.toLowerCase() + ' heading',
+          name: text,
           el: el
         });
       }

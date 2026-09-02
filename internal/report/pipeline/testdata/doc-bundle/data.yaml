@@ -1,0 +1,11 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: src_a
+spec:
+  type: inline
+  content:
+    - region: DACH
+      amount: 4250
+    - region: Nordics
+      amount: 2870
