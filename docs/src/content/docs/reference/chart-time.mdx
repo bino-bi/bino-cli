@@ -37,7 +37,7 @@ spec:
   intervalSpanLimit: 50
   percentageScaling: auto      # auto | percentage points per em | ScalingGroup name
   unitScaling: auto             # auto | data units per em | ScalingGroup name
-  syncSpaceLeft: 0
+  syncSpaceLeft: -1          # -1 = auto (widest label) | px, same value on several charts to align them
   scenarios: ["ac1", "fc1"]   # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
   variances: ["dfc1_ac1_pos"]
   scale: auto                    # "" | none | auto | 0.5 | 1.2 | …
@@ -69,7 +69,7 @@ spec:
 - `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
 - `unitScaling` – data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
 - `percentageScaling` – percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
-- `syncSpaceLeft` – sync option. When `unitScaling` is set to a numeric value and bars exceed the available container height, an **overdrive bar** is rendered: the bar is visually split into a base section, a zigzag break indicator, and a proportionally scaled overdrive section above it. This preserves value labels and relative comparisons between overflowing bars instead of clipping them. AC scenario bars break at a higher point than non-AC scenarios (PP, FC, PL) to maintain visual hierarchy.
+- `syncSpaceLeft` – space reserved left of the axis for the scenario labels and the chart title, in px. `-1` (default) measures the widest label. Set the same value on several charts to align their axes; a value smaller than the widest label clips it.
 - `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `scale` – proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
