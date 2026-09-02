@@ -3,10 +3,13 @@ kind: ProjectTemplate
 metadata:
   name: predef
 spec:
+  # The [package] fields the wizard asks for; --set accepts the same names.
   fields:
-    - { name: ReportName, prompt: "Package name", default: rainbow-kit }
-    - { name: ReportTitle, prompt: "Package title", default: Rainbow Starter Kit }
-    - { name: Language, prompt: "Language (en/de)", default: en }
+    - { name: Scope, prompt: "Registry scope (without @)", default: acme }
+    - { name: Description, prompt: "Description", default: "A reusable kit: an IBCS table, the style it wears and a logo asset." }
+    - { name: Visibility, prompt: "Visibility (public/private)", default: private }
+    - { name: Tags, prompt: "Tags (comma-separated)", default: "starter, ibcs" }
+    - { name: Category, prompt: "Category", default: components }
   verbatim:
     - .bnignore
     - .gitignore

@@ -4,13 +4,13 @@ A predef project scaffolded with `bino init predef`. A predef project is an
 ordinary bino project that also authors a reusable registry package: the
 `[package]` table in `bino.toml` is the marker, nothing else.
 
-## First thing to do
+## Naming
 
-Replace `@acme` with your own registry scope — in `bino.toml` and in the
-`metadata.name` of every document under `components/`, `styles/` and
-`resources/`. Every document a package publishes is named
-`@scope/{{ .ReportName }}/<definition>`; exactly one document may carry the bare
-package name `@scope/{{ .ReportName }}`.
+Every document this package publishes is named
+`{{ .PackageName }}/<definition>`; exactly one document may carry the bare
+package name `{{ .PackageName }}`. `bino init` already wrote that prefix into
+`bino.toml` and into the `metadata.name` of every document under `components/`,
+`styles/` and `resources/`.
 
 ## What is in here
 

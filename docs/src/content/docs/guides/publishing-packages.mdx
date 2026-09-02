@@ -18,6 +18,12 @@ bino init predef -d finance-kit
 cd finance-kit
 ```
 
+The wizard asks for the registry scope, package name, description, visibility,
+tags and category and writes them into the `[package]` table. Every namespaced
+manifest already carries `@scope/name`, so there is nothing to search and
+replace afterwards. Non-interactive runs pass the same values with `--set`, for
+example `--set Scope=myorg --set Visibility=public -y`.
+
 The scaffold is a working example rather than a skeleton:
 
 ```

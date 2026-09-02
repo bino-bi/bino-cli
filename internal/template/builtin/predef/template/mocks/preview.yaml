@@ -8,7 +8,7 @@ metadata:
 spec:
   children:
     - kind: Table
-      ref: "@acme/{{ .ReportName }}/revenue_table"
+      ref: "{{ .PackageName }}/revenue_table"
       params:
         DATASET: mock_revenue
 ---

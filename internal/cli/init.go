@@ -67,7 +67,7 @@ and never execute code.`),
 
 			if src.Kind == tmpl.SourceBuiltin {
 				return runBuiltinInit(cmd, src, builtinInitFlags{
-					dir: flagDir, name: flagName, title: flagTitle, language: flagLanguage,
+					dir: flagDir, name: flagName, title: flagTitle, language: flagLanguage, sets: sets,
 					yes: flagYes, force: flagForce, jsonOut: flagJSON, explicitSource: rawSource != "",
 				})
 			}
@@ -82,10 +82,10 @@ and never execute code.`),
 
 	cmd.Flags().StringVarP(&flagDir, "directory", "d", "", "Target directory for the new bundle (default ./rainbow-report)")
 	cmd.Flags().StringVarP(&flagDir, "output", "o", "", "Alias for --directory")
-	cmd.Flags().StringVar(&flagName, "name", "", "metadata.name to assign to the sample ReportArtefact (built-in templates)")
+	cmd.Flags().StringVar(&flagName, "name", "", "metadata.name to assign to the sample ReportArtefact; the package name segment for predef (built-in templates)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Display title for the sample ReportArtefact (built-in templates)")
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Default locale for the bundle (en or de)")
-	cmd.Flags().StringArrayVar(&flagSet, "set", nil, "Set a template field value as key=value (repeatable)")
+	cmd.Flags().StringArrayVar(&flagSet, "set", nil, "Set a template field value as key=value (repeatable); for predef the [package] fields Scope, Description, Visibility, Tags, Category")
 	cmd.Flags().BoolVarP(&flagYes, "yes", "y", false, "Accept defaults and skip the interactive wizard")
 	cmd.Flags().BoolVar(&flagForce, "force", false, "Overwrite files if they already exist")
 	cmd.Flags().BoolVar(&flagOffline, "offline", false, "Never reach the network; require a cached template")
@@ -97,21 +97,34 @@ and never execute code.`),
 
 type builtinInitFlags struct {
 	dir, name, title, language          string
+	sets                                map[string]string
 	yes, force, jsonOut, explicitSource bool
 }
 
 func runBuiltinInit(cmd *cobra.Command, src tmpl.Source, f builtinInitFlags) error {
 	answers := initAnswers{Directory: f.dir, ReportName: f.name, ReportTitle: f.title, Language: f.language}
 	lockReportName := cmd.Flags().Changed("name")
+	lockTitle := cmd.Flags().Changed("title")
 	lockLanguage := cmd.Flags().Changed("language")
 	applyInitDefaults(&answers)
 	templateName := src.Name
-	if !f.yes {
+	if f.yes {
+		if templateName == tmpl.BuiltinPredef {
+			if !lockReportName {
+				answers.ReportName = sanitizeManifestName(filepath.Base(answers.Directory), answers.ReportName)
+			}
+			if err := applyPackageDefaults(&answers, f.sets, lockTitle); err != nil {
+				return ConfigError(err)
+			}
+		}
+	} else {
 		chosen, err := runInitWizard(cmd, &answers, wizardOptions{
 			lockReportName:  lockReportName,
+			lockTitle:       lockTitle,
 			lockLanguage:    lockLanguage,
 			offerTemplate:   !f.explicitSource,
 			defaultTemplate: templateName,
+			sets:            f.sets,
 		})
 		if err != nil {
 			if errors.Is(err, errInitCanceled) {
@@ -209,13 +222,42 @@ type initAnswers struct {
 	ReportName  string
 	ReportTitle string
 	Language    string
+	Package     packageAnswers // predef only
+}
+
+// packageAnswers are the [package] table values the predef wizard collects.
+type packageAnswers struct {
+	Scope       string
+	Name        string
+	Description string
+	Visibility  string
+	Tags        []string
+	Category    string
+}
+
+// fullName is the registry coordinate "@scope/name".
+func (p packageAnswers) fullName() string {
+	return "@" + p.Scope + "/" + p.Name
+}
+
+// toConfig maps the answers onto the bino.toml table they describe.
+func (p packageAnswers) toConfig() *pathutil.PackageConfig {
+	return &pathutil.PackageConfig{
+		Name:        p.fullName(),
+		Description: p.Description,
+		Tags:        p.Tags,
+		Category:    p.Category,
+		Visibility:  p.Visibility,
+	}
 }
 
 type wizardOptions struct {
 	lockReportName  bool
+	lockTitle       bool
 	lockLanguage    bool
 	offerTemplate   bool
 	defaultTemplate string
+	sets            map[string]string
 }
 
 func applyInitDefaults(ans *initAnswers) {
@@ -267,30 +309,44 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) (st
 		ans.ReportName = sanitizeManifestName(base, ans.ReportName)
 	}
 
-	name, err := promptString(reader, out, "Report identifier (metadata.name)", ans.ReportName)
-	if err != nil {
-		return "", err
-	}
-	ans.ReportName = name
+	question := fmt.Sprintf("Create sample project in %s?", ans.Directory)
+	if templateName == tmpl.BuiltinPredef {
+		// A predef project is a package first: ask for its [package] table
+		// instead of the report fields, which only feed the mocks/ harness.
+		if err := applyPackageDefaults(ans, opts.sets, opts.lockTitle); err != nil {
+			return "", err
+		}
+		if err := promptPackage(reader, out, ans, opts.sets); err != nil {
+			return "", err
+		}
+		derivePredefReportFields(ans, opts.lockTitle)
+		question = fmt.Sprintf("Create predef project %s in %s?", ans.Package.fullName(), ans.Directory)
+	} else {
+		name, err := promptString(reader, out, "Report identifier (metadata.name)", ans.ReportName)
+		if err != nil {
+			return "", err
+		}
+		ans.ReportName = name
 
-	title, err := promptString(reader, out, "Report title", ans.ReportTitle)
-	if err != nil {
-		return "", err
-	}
-	ans.ReportTitle = title
+		title, err := promptString(reader, out, "Report title", ans.ReportTitle)
+		if err != nil {
+			return "", err
+		}
+		ans.ReportTitle = title
 
-	langDefault := ans.Language
-	if opts.lockLanguage {
-		langDefault = normalizeLanguage(ans.Language)
+		langDefault := ans.Language
+		if opts.lockLanguage {
+			langDefault = normalizeLanguage(ans.Language)
+		}
+		lang, err := promptLanguage(reader, out, langDefault)
+		if err != nil {
+			return "", err
+		}
+		ans.Language = lang
 	}
-	lang, err := promptLanguage(reader, out, langDefault)
-	if err != nil {
-		return "", err
-	}
-	ans.Language = lang
 
 	fmt.Fprintln(out)
-	confirmed, err := promptConfirm(reader, out, fmt.Sprintf("Create sample project in %s?", ans.Directory), true)
+	confirmed, err := promptConfirm(reader, out, question, true)
 	if err != nil {
 		return "", err
 	}
@@ -298,6 +354,155 @@ func runInitWizard(cmd *cobra.Command, ans *initAnswers, opts wizardOptions) (st
 		return "", errInitCanceled
 	}
 	return templateName, nil
+}
+
+// Package field names accepted by --set for the predef built-in. They mirror
+// spec.fields in builtin/predef/bino.template.yaml, which validateSetKeys
+// checks against.
+const (
+	setKeyScope       = "Scope"
+	setKeyDescription = "Description"
+	setKeyVisibility  = "Visibility"
+	setKeyTags        = "Tags"
+	setKeyCategory    = "Category"
+)
+
+// applyPackageDefaults seeds the predef [package] answers: built-in defaults,
+// overridden by --set values, then validated with the same rules bino publish
+// enforces. The package name segment defaults to the (already sanitized)
+// report name, i.e. the target folder or --name.
+func applyPackageDefaults(ans *initAnswers, sets map[string]string, lockTitle bool) error {
+	manifest, err := tmpl.BuiltinManifest(tmpl.BuiltinPredef)
+	if err != nil {
+		return err
+	}
+	if err := validateSetKeys(manifest, sets); err != nil {
+		return err
+	}
+	p := &ans.Package
+	p.Scope = "acme"
+	p.Name = sanitizeManifestName(ans.ReportName, "rainbow-kit")
+	p.Description = "A reusable kit: an IBCS table, the style it wears and a logo asset."
+	p.Visibility = "private"
+	p.Tags = []string{"starter", "ibcs"}
+	p.Category = "components"
+	if v, ok := sets[setKeyScope]; ok {
+		p.Scope = normalizeScope(v)
+	}
+	if v, ok := sets[setKeyDescription]; ok {
+		p.Description = strings.TrimSpace(v)
+	}
+	if v, ok := sets[setKeyVisibility]; ok {
+		p.Visibility = strings.ToLower(strings.TrimSpace(v))
+	}
+	if v, ok := sets[setKeyTags]; ok {
+		p.Tags = splitTags(v)
+	}
+	if v, ok := sets[setKeyCategory]; ok {
+		p.Category = strings.TrimSpace(v)
+	}
+	cfg := p.toConfig()
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	derivePredefReportFields(ans, lockTitle)
+	return nil
+}
+
+// derivePredefReportFields fills the report fields the predef wizard no longer
+// asks for: the mocks/ preview artefact is named after the package and titled
+// after it unless --title was given.
+func derivePredefReportFields(ans *initAnswers, lockTitle bool) {
+	ans.ReportName = ans.Package.Name
+	if !lockTitle {
+		ans.ReportTitle = tmpl.TitleCase(strings.NewReplacer("-", " ", "_", " ").Replace(ans.Package.Name))
+	}
+}
+
+// promptPackage asks for the [package] fields, skipping any given via --set.
+// Scope, name and visibility loop until they pass PackageConfig.Validate.
+func promptPackage(reader *bufio.Reader, out io.Writer, ans *initAnswers, sets map[string]string) error {
+	p := &ans.Package
+	if _, ok := sets[setKeyScope]; !ok {
+		for {
+			v, err := promptString(reader, out, "Registry scope (without @)", p.Scope)
+			if err != nil {
+				return err
+			}
+			candidate := packageAnswers{Scope: normalizeScope(v), Name: p.Name}
+			if err := candidate.toConfig().Validate(); err != nil {
+				fmt.Fprintln(out, err)
+				continue
+			}
+			p.Scope = candidate.Scope
+			break
+		}
+	}
+	for {
+		v, err := promptString(reader, out, "Package name", p.Name)
+		if err != nil {
+			return err
+		}
+		candidate := packageAnswers{Scope: p.Scope, Name: strings.ToLower(strings.TrimSpace(v))}
+		if err := candidate.toConfig().Validate(); err != nil {
+			fmt.Fprintln(out, err)
+			continue
+		}
+		p.Name = candidate.Name
+		break
+	}
+	if _, ok := sets[setKeyDescription]; !ok {
+		v, err := promptString(reader, out, "Description", p.Description)
+		if err != nil {
+			return err
+		}
+		p.Description = v
+	}
+	if _, ok := sets[setKeyVisibility]; !ok {
+		for {
+			v, err := promptString(reader, out, "Visibility (public/private)", p.Visibility)
+			if err != nil {
+				return err
+			}
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "public", "private":
+				p.Visibility = strings.ToLower(strings.TrimSpace(v))
+			default:
+				fmt.Fprintln(out, "Please enter 'public' or 'private'.")
+				continue
+			}
+			break
+		}
+	}
+	if _, ok := sets[setKeyTags]; !ok {
+		v, err := promptString(reader, out, "Tags (comma-separated)", strings.Join(p.Tags, ", "))
+		if err != nil {
+			return err
+		}
+		p.Tags = splitTags(v)
+	}
+	if _, ok := sets[setKeyCategory]; !ok {
+		v, err := promptString(reader, out, "Category", p.Category)
+		if err != nil {
+			return err
+		}
+		p.Category = v
+	}
+	return nil
+}
+
+func normalizeScope(v string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(v), "@"))
+}
+
+func splitTags(v string) []string {
+	var tags []string
+	for _, t := range strings.Split(v, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
 }
 
 // promptTemplateChoice asks the user to pick a built-in template, looping until
@@ -394,6 +599,7 @@ type initTemplateData struct {
 	LayoutName     string
 	DataSourceName string
 	DataSetName    string
+	Package        pathutil.PackageConfig // predef only; zero value otherwise
 }
 
 func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
@@ -426,6 +632,9 @@ func buildInitTemplateData(ans initAnswers) (initTemplateData, error) {
 		LayoutName:     layoutName,
 		DataSourceName: dsName,
 		DataSetName:    dsetName,
+	}
+	if ans.Package.Name != "" {
+		data.Package = *ans.Package.toConfig()
 	}
 	return data, nil
 }
@@ -535,6 +744,11 @@ func (d initTemplateData) renderVars() map[string]any {
 	vars["LayoutName"] = d.LayoutName
 	vars["DataSourceName"] = d.DataSourceName
 	vars["DataSetName"] = d.DataSetName
+	vars["PackageName"] = d.Package.Name
+	vars["PackageDescription"] = d.Package.Description
+	vars["PackageVisibility"] = d.Package.Visibility
+	vars["PackageTags"] = d.Package.Tags
+	vars["PackageCategory"] = d.Package.Category
 	return vars
 }
 

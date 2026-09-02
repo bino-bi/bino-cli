@@ -1,7 +1,7 @@
 apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
-  name: "@acme/{{ .ReportName }}/logo"
+  name: "{{ .PackageName }}/logo"
   description: The kit's logo. localPath is relative to this manifest, as a published package requires.
 spec:
   type: image

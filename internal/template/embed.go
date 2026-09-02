@@ -13,6 +13,10 @@ import (
 //go:embed all:builtin
 var builtinFS embed.FS
 
+// BuiltinPredef is the built-in template that scaffolds a predef project; the
+// init wizard branches on it because it collects a [package] table.
+const BuiltinPredef = "predef"
+
 // builtinNames is the set of built-in template names.
 var builtinNames = map[string]struct{}{
 	"minimal":  {},

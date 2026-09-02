@@ -25,10 +25,12 @@ Common flags:
 
 - `--directory, -d` (alias `-o, --output`) – target directory (default `./rainbow-report`
   for built-ins; required for remote templates).
-- `--name` – internal report name (built-in templates).
+- `--name` – internal report name; for `predef` the package name segment (built-in templates).
 - `--title` – human-readable report title (built-in templates).
 - `--language` – language code, for example `en`, `de` (built-in templates).
-- `--set key=value` – set a template field value; repeatable (remote/local templates).
+- `--set key=value` – set a template field value; repeatable. Remote/local templates declare
+  their own fields; `predef` accepts the `[package]` fields `Scope`, `Description`,
+  `Visibility`, `Tags` (comma-separated) and `Category`.
 - `-y, --yes` – run non-interactively with defaults.
 - `--force` – overwrite existing files.
 - `--offline` – never reach the network; require a cached template (also `BINO_OFFLINE`).
@@ -55,6 +57,14 @@ Scaffold a predef project that authors a reusable package:
 
 ```bash
 bino init predef -d starter-kit
+```
+
+The `predef` wizard asks for the `[package]` table instead of the report fields:
+registry scope, package name, description, visibility, tags and category. To skip
+the wizard, pass them with `--set`:
+
+```bash
+bino init predef -d starter-kit --set Scope=myorg --set Visibility=public -y
 ```
 
 Create a bundle non-interactively with explicit title and language:

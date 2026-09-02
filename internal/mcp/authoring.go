@@ -88,7 +88,7 @@ type ScaffoldFile struct {
 type InitBundleInput struct {
 	Directory string            `json:"directory,omitempty" jsonschema:"target directory for the new bundle, relative to the project root; defaults to the project root itself (scaffold in place)"`
 	Source    string            `json:"source,omitempty" jsonschema:"template source; empty selects the built-in minimal scaffold (zero network). 'standard' is a full reference bundle (CSV data source, dataset, IBCS table, chart, style, i18n, assets) in the canonical folder layout — prefer it when a worked example is wanted. 'predef' is a predef project: a reusable registry package with a [package] table plus mock data to preview it against. May also be owner/repo[/subdir]#ref, a URL, or a local path"`
-	Set       map[string]string `json:"set,omitempty" jsonschema:"template field values by name (for remote/local templates)"`
+	Set       map[string]string `json:"set,omitempty" jsonschema:"template field values by name (remote/local templates; for predef the [package] fields Scope, Description, Visibility, Tags, Category)"`
 	Name      string            `json:"name,omitempty" jsonschema:"metadata.name for the sample ReportArtefact (built-in templates)"`
 	Title     string            `json:"title,omitempty" jsonschema:"display title for the sample report (built-in templates)"`
 	Language  string            `json:"language,omitempty" jsonschema:"default locale: en or de (built-in templates)"`

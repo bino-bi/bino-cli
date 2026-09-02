@@ -1,7 +1,7 @@
 apiVersion: bino.bi/v1alpha1
 kind: Table
 metadata:
-  name: "@acme/{{ .ReportName }}/revenue_table"
+  name: "{{ .PackageName }}/revenue_table"
   description: The kit's IBCS table. Consumers bind it to their own DataSet through the DATASET param.
   params:
     - name: DATASET
@@ -10,7 +10,7 @@ metadata:
       description: Name of the DataSet this table renders.
 spec:
   dataset: "${DATASET}"
-  selectedStyle: "@acme/{{ .ReportName }}/corporate_theme"
+  selectedStyle: "{{ .PackageName }}/corporate_theme"
   scenarios:
     - ac1
     - pp1

@@ -8,14 +8,20 @@ engine-version = {{ .EngineVersion | yaml }}
 {{- end }}
 
 # The [package] table marks this project as a predef project: an ordinary bino
-# project that also authors a reusable registry package. Replace '@acme' with
-# your own registry scope, here and in every metadata.name below.
+# project that also authors a reusable registry package. Every document the
+# package publishes carries the package name in its metadata.name.
 [package]
-name = "@acme/{{ .ReportName }}"
-description = "A reusable kit: an IBCS table, the style it wears and a logo asset."
-tags = ["starter", "ibcs"]
-category = "components"
-visibility = "private"
+name = {{ .PackageName | yaml }}
+{{- if .PackageDescription }}
+description = {{ .PackageDescription | yaml }}
+{{- end }}
+{{- if .PackageTags }}
+tags = [{{ range $i, $t := .PackageTags }}{{ if $i }}, {{ end }}{{ $t | yaml }}{{ end }}]
+{{- end }}
+{{- if .PackageCategory }}
+category = {{ .PackageCategory | yaml }}
+{{- end }}
+visibility = {{ .PackageVisibility | yaml }}
 compat-engine = ">=1.0.0-alpha.1"
 
 # Without an explicit list every canonical manifest folder is published.
@@ -23,4 +29,4 @@ compat-engine = ">=1.0.0-alpha.1"
 # may sit at most one directory deep.
 # include = ["components", "styles", "resources"]
 
-preview = "components/revenue_table.yaml#@acme/{{ .ReportName }}/revenue_table"
+preview = "components/revenue_table.yaml#{{ .PackageName }}/revenue_table"

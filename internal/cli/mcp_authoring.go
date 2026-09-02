@@ -212,6 +212,14 @@ func (a *cliAuthoring) InitBundle(ctx context.Context, in mcp.InitBundleInput) (
 	if src.Kind == tmpl.SourceBuiltin {
 		ans := initAnswers{Directory: dir, ReportName: in.Name, ReportTitle: in.Title, Language: in.Language}
 		applyInitDefaults(&ans)
+		if src.Name == tmpl.BuiltinPredef {
+			if in.Name == "" {
+				ans.ReportName = sanitizeManifestName(filepath.Base(dir), ans.ReportName)
+			}
+			if err := applyPackageDefaults(&ans, in.Set, in.Title != ""); err != nil {
+				return mcp.InitResult{}, err
+			}
+		}
 		data, err := buildInitTemplateData(ans)
 		if err != nil {
 			return mcp.InitResult{}, err

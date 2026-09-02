@@ -28,6 +28,12 @@ func minimalGoldenData() map[string]any {
 		"EngineVersion":  "v1.0.0-alpha.15",
 		"Date":           "2026-01-01T00:00:00Z",
 		"BinoVersion":    "0.0.0-test",
+		// [package] vars; only the predef template references them.
+		"PackageName":        "@acme/rainbow-sample-report",
+		"PackageDescription": "A reusable kit.",
+		"PackageVisibility":  "private",
+		"PackageTags":        []string{"starter", "ibcs"},
+		"PackageCategory":    "components",
 	}
 }
 

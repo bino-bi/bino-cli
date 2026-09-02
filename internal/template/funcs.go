@@ -11,7 +11,7 @@ func FuncMap() template.FuncMap {
 	return template.FuncMap{
 		"yaml":      yamlQuote,
 		"sqlString": sqlString,
-		"title":     titleCase,
+		"title":     TitleCase,
 	}
 }
 
@@ -28,9 +28,9 @@ func sqlString(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
 }
 
-// titleCase upper-cases the first ASCII letter of each word, used for derived
+// TitleCase upper-cases the first ASCII letter of each word, used for derived
 // defaults such as {{ .ReportName | title }}.
-func titleCase(v string) string {
+func TitleCase(v string) string {
 	var b strings.Builder
 	atWordStart := true
 	for _, r := range v {
