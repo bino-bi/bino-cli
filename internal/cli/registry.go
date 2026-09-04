@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/registry"
 	"bino.bi/bino/internal/version"
@@ -454,16 +455,16 @@ func registrySync(ctx context.Context, p registryProject, client *registry.Clien
 	return plans, nil
 }
 
-// registryCompatWarnings emits the non-blocking compat warnings a package
+// registryCompatWarnings returns the non-blocking compat warnings a package
 // declares. The ranges come from the resolve response and are recorded in
 // bino.lock, so an install that never resolves still reports them.
-func registryCompatWarnings(p registryProject, entries []registry.Entry) {
+func registryCompatWarnings(p registryProject, entries []registry.Entry) []string {
 	engineVersion := resolveEngineVersionForCompat(p.Cfg.EngineVersion)
+	var out []string
 	for _, e := range entries {
-		for _, w := range registry.CompatWarnings(e.Name, e.Version, e.CompatEngine, e.CompatCLI, version.Version, engineVersion) {
-			p.Out.Warning(w)
-		}
+		out = append(out, registry.CompatWarnings(e.Name, e.Version, e.CompatEngine, e.CompatCLI, version.Version, engineVersion)...)
 	}
+	return out
 }
 
 // registryGitignoreHint warns once when the project is a git repo whose
@@ -496,4 +497,25 @@ func planEntries(plans []packagePlan) []registry.Entry {
 		out[i] = pl.entry
 	}
 	return out
+}
+
+// lockChanges diffs a resolved closure against the lock it replaces: every
+// plan entry in plan order, then the previously locked packages that left it.
+func lockChanges(old *registry.Lockfile, plan []registry.Resolved) []mcp.RegistryChange {
+	changes := make([]mcp.RegistryChange, 0, len(plan))
+	inPlan := map[string]bool{}
+	for _, r := range plan {
+		inPlan[r.Name] = true
+		c := mcp.RegistryChange{Name: r.Name, After: r.Version, Tag: r.Tag, Direct: r.Direct}
+		if e := old.Get(r.Name); e != nil {
+			c.Before = e.Version
+		}
+		changes = append(changes, c)
+	}
+	for _, e := range old.Packages {
+		if !inPlan[e.Name] {
+			changes = append(changes, mcp.RegistryChange{Name: e.Name, Before: e.Version, Tag: e.Tag, Direct: e.Direct})
+		}
+	}
+	return changes
 }

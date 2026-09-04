@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -69,4 +70,54 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 		}
 		return nil, res, nil
 	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "registry_add",
+		Description: "Add registry packages as project dependencies (network; writes bino.toml, bino.lock and .bino/registry/). Each spec is @scope/name[@version|@tag]; a bare name follows the latest tag. Resolves the transitive closure, verifies every download before writing anything, and reloads the project before returning. The result lists every package in the closure with its locked version before and after, non-blocking compat warnings, and nameCollisions: an installed document that shares kind and name with a local document fails the build's duplicate-name check — rename the local document.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryAddInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
+		if len(in.Specs) == 0 {
+			return errorResult(errors.New("specs is required")), RegistryMutationResult{}, nil
+		}
+		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Add(ctx, in.Specs) })
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "registry_update",
+		Description: "Re-resolve tag-following dependencies to their newest versions and rewrite bino.lock (network). Pinned versions are held. With packages given, only those are re-resolved and every other direct dependency is held at its locked version.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryUpdateInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
+		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Update(ctx, in.Packages) })
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "registry_remove",
+		Description: "Remove declared dependencies from bino.toml and sweep every locked package no longer reachable from the remaining declarations (offline). A transitive still required by another package is kept.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryRemoveInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
+		if len(in.Packages) == 0 {
+			return errorResult(errors.New("packages is required")), RegistryMutationResult{}, nil
+		}
+		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Remove(ctx, in.Packages) })
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "registry_install",
+		Description: "Re-materialize .bino/registry/ exactly as pinned in bino.lock without re-resolving (idempotent). Fails when bino.lock disagrees with bino.toml [dependencies]; then run registry_update.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
+		return h.mutatePackages(func() (RegistryMutationResult, error) { return p.Install(ctx) })
+	})
+}
+
+// mutatePackages runs one registry write under buildMu: two writes, or a write
+// and a build, must never interleave on bino.lock and .bino/registry/. On
+// success it tells the daemon's editor clients.
+func (h *handlers) mutatePackages(op func() (RegistryMutationResult, error)) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
+	buildMu.Lock()
+	defer buildMu.Unlock()
+	res, err := op()
+	if err != nil {
+		return errorResult(err), RegistryMutationResult{}, nil
+	}
+	if h.deps.RegistryChanged != nil {
+		h.deps.RegistryChanged()
+	}
+	return nil, res, nil
 }

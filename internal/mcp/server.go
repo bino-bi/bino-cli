@@ -29,10 +29,15 @@ type Deps struct {
 	// write_manifest, scaffold_source, init_bundle, edit_manifest). Supplied by
 	// the CLI layer.
 	Authoring Authoring
-	// Packages, when non-nil, enables the read-only registry tools
-	// (registry_packages, registry_search, registry_info, registry_auth_status)
-	// and the bino://packages resource. Supplied by the CLI layer.
+	// Packages, when non-nil, enables the registry tools (registry_packages,
+	// registry_search, registry_info, registry_auth_status, registry_add,
+	// registry_update, registry_remove, registry_install) and the
+	// bino://packages resource. Supplied by the CLI layer.
 	Packages Packages
+	// RegistryChanged, when non-nil, is called after a registry write tool has
+	// changed bino.toml, bino.lock or .bino/registry/. The daemon uses it to
+	// broadcast the registry-changed SSE event to editors; standalone leaves it nil.
+	RegistryChanged func()
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -52,6 +57,8 @@ Schema tools:
 Packages: published predefs live in a registry. Before authoring a component from
 scratch, registry_search for one; registry_info(spec) describes it;
 registry_auth_status says whether the human must run ` + "`bino registry login`" + `.
+registry_add(specs) installs packages and records them in bino.toml; registry_update,
+registry_remove and registry_install change the lock the same way ` + "`bino registry`" + ` does.
 
 Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /

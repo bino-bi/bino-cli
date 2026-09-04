@@ -18,6 +18,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/mcp"
+	"bino.bi/bino/internal/registry"
 )
 
 const packagesTestPackage = `kind: Table
@@ -150,7 +151,7 @@ func TestRegistryPackagesOffline(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names = append(names, tool.Name)
 	}
-	for _, want := range []string{"registry_packages", "registry_search", "registry_info", "registry_auth_status"} {
+	for _, want := range []string{"registry_packages", "registry_search", "registry_info", "registry_auth_status", "registry_add", "registry_update", "registry_remove", "registry_install"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("tool %s missing: %v", want, names)
 		}
@@ -331,5 +332,415 @@ func TestRegistryHTTPAndMCPPayloadsMatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// newMutationProject writes a bare project (bino.toml only, no lock, no store)
+// pointing at registryURL, with HOME isolated like newPackagesProject. The
+// process working directory is never changed: the MCP path must resolve the
+// project from the State's root alone.
+func newMutationProject(t *testing.T, registryURL string) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("BINO_REGISTRY_TOKEN", "")
+	t.Setenv("BINO_REGISTRY_URL", "")
+	binoToml := "report-id = \"test\"\n\n[registry]\nurl = \"" + registryURL + "\"\n"
+	if err := os.WriteFile(filepath.Join(root, "bino.toml"), []byte(binoToml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func mutationResult(t *testing.T, res *mcpsdk.CallToolResult) mcp.RegistryMutationResult {
+	t.Helper()
+	var out mcp.RegistryMutationResult
+	if err := json.Unmarshal([]byte(toolText(t, res)), &out); err != nil {
+		t.Fatalf("unmarshal %q: %v", toolText(t, res), err)
+	}
+	return out
+}
+
+func findChange(changes []mcp.RegistryChange, name string) *mcp.RegistryChange {
+	for i := range changes {
+		if changes[i].Name == name {
+			return &changes[i]
+		}
+	}
+	return nil
+}
+
+func readFileT(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
+}
+
+// storeListing returns every file under .bino/registry, relative to it.
+func storeListing(t *testing.T, root string) []string {
+	t.Helper()
+	store := filepath.Join(root, ".bino", "registry")
+	var out []string
+	err := filepath.WalkDir(store, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			rel, _ := filepath.Rel(store, path)
+			out = append(out, rel)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestRegistryAddWritesTomlLockStoreAndIsIdempotent(t *testing.T) {
+	greetingBody, greetingDigest := fakeDoc(t, "@acme/greeting", "Text")
+	styleBody, styleDigest := fakeDoc(t, "@acme/style", "ComponentStyle")
+	packages := map[string]*fakePackage{
+		"@acme/greeting": {tag: "latest", version: "1.2.0", kind: "Text", dependencies: []string{"@acme/style"}, body: greetingBody, digest: greetingDigest},
+		"@acme/style":    {tag: "latest", version: "2.0.0", kind: "ComponentStyle", body: styleBody, digest: styleDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	cs, _ := newPackagesClient(t, root)
+
+	res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/greeting"}})
+	if res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+	out := mutationResult(t, res)
+	if len(out.Changes) != 2 {
+		t.Fatalf("changes = %+v, want 2", out.Changes)
+	}
+	if g := findChange(out.Changes, "@acme/greeting"); g == nil || g.Before != "" || g.After != "1.2.0" || g.Tag != "latest" || !g.Direct {
+		t.Errorf("greeting change: %+v", g)
+	}
+	if s := findChange(out.Changes, "@acme/style"); s == nil || s.Before != "" || s.After != "2.0.0" || s.Direct {
+		t.Errorf("style change: %+v", s)
+	}
+
+	tomlPath := filepath.Join(root, "bino.toml")
+	lockPath := filepath.Join(root, "bino.lock")
+	if data := readFileT(t, tomlPath); !strings.Contains(string(data), `"@acme/greeting" = "latest"`) {
+		t.Errorf("bino.toml missing dependency:\n%s", data)
+	}
+	lock, err := registry.LoadLockfile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lock.Packages) != 2 {
+		t.Fatalf("lock has %d packages, want 2: %+v", len(lock.Packages), lock.Packages)
+	}
+	greetingPath := filepath.Join(root, ".bino", "registry", "acme", "greeting", "greeting.yml")
+	if data := readFileT(t, greetingPath); string(data) != string(greetingBody) {
+		t.Errorf("materialized greeting.yml differs from the published body")
+	}
+
+	tomlBefore := readFileT(t, tomlPath)
+	lockBefore := readFileT(t, lockPath)
+	storeBefore := storeListing(t, root)
+
+	// A second identical add resolves the same closure and leaves bino.toml,
+	// bino.lock and the store byte-identical.
+	res = callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/greeting"}})
+	if res.IsError {
+		t.Fatalf("second registry_add failed: %s", toolText(t, res))
+	}
+	out = mutationResult(t, res)
+	for _, c := range out.Changes {
+		if c.Before != c.After {
+			t.Errorf("second add should be a no-op, got %+v", c)
+		}
+	}
+	if string(readFileT(t, tomlPath)) != string(tomlBefore) {
+		t.Error("bino.toml changed on the second add")
+	}
+	if string(readFileT(t, lockPath)) != string(lockBefore) {
+		t.Error("bino.lock changed on the second add")
+	}
+	if data := readFileT(t, greetingPath); string(data) != string(greetingBody) {
+		t.Error("greeting.yml changed on the second add")
+	}
+	if got := storeListing(t, root); !reflect.DeepEqual(got, storeBefore) {
+		t.Errorf("store listing changed on the second add:\nbefore %v\nafter  %v", storeBefore, got)
+	}
+}
+
+func TestRegistryRemoveSweepsUnreachableKeepsShared(t *testing.T) {
+	aBody, aDigest := fakeDoc(t, "@acme/a", "Text")
+	bBody, bDigest := fakeDoc(t, "@acme/b", "Text")
+	sharedBody, sharedDigest := fakeDoc(t, "@acme/shared", "ComponentStyle")
+	onlyBody, onlyDigest := fakeDoc(t, "@acme/only", "ComponentStyle")
+	packages := map[string]*fakePackage{
+		"@acme/a":      {tag: "latest", version: "1.0.0", kind: "Text", dependencies: []string{"@acme/shared", "@acme/only"}, body: aBody, digest: aDigest},
+		"@acme/b":      {tag: "latest", version: "1.0.0", kind: "Text", dependencies: []string{"@acme/shared"}, body: bBody, digest: bDigest},
+		"@acme/shared": {tag: "latest", version: "1.0.0", kind: "ComponentStyle", body: sharedBody, digest: sharedDigest},
+		"@acme/only":   {tag: "latest", version: "1.0.0", kind: "ComponentStyle", body: onlyBody, digest: onlyDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	cs, _ := newPackagesClient(t, root)
+
+	if res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/a", "@acme/b"}}); res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+
+	res := callTool(t, cs, "registry_remove", map[string]any{"packages": []string{"@acme/a"}})
+	if res.IsError {
+		t.Fatalf("registry_remove failed: %s", toolText(t, res))
+	}
+	out := mutationResult(t, res)
+	if len(out.Changes) != 2 {
+		t.Fatalf("changes = %+v, want exactly @acme/a and @acme/only", out.Changes)
+	}
+	for _, name := range []string{"@acme/a", "@acme/only"} {
+		if c := findChange(out.Changes, name); c == nil || c.After != "" || c.Before != "1.0.0" {
+			t.Errorf("%s should be reported removed: %+v", name, c)
+		}
+	}
+
+	lock, err := registry.LoadLockfile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Get("@acme/a") != nil || lock.Get("@acme/only") != nil {
+		t.Errorf("swept packages still locked: %+v", lock.Packages)
+	}
+	if lock.Get("@acme/shared") == nil || lock.Get("@acme/b") == nil {
+		t.Errorf("shared transitive or remaining root missing from lock: %+v", lock.Packages)
+	}
+	store := filepath.Join(root, ".bino", "registry", "acme")
+	if _, err := os.Stat(filepath.Join(store, "shared", "shared.yml")); err != nil {
+		t.Errorf("shared.yml should survive: %v", err)
+	}
+	for _, gone := range []string{filepath.Join(store, "a", "a.yml"), filepath.Join(store, "only", "only.yml")} {
+		if _, err := os.Stat(gone); !os.IsNotExist(err) {
+			t.Errorf("%s should be swept, stat err = %v", gone, err)
+		}
+	}
+	toml := string(readFileT(t, filepath.Join(root, "bino.toml")))
+	if strings.Contains(toml, "@acme/a\"") {
+		t.Errorf("bino.toml still declares @acme/a:\n%s", toml)
+	}
+	if !strings.Contains(toml, `"@acme/b"`) {
+		t.Errorf("bino.toml lost @acme/b:\n%s", toml)
+	}
+
+	res = callTool(t, cs, "registry_remove", map[string]any{"packages": []string{"@acme/nope"}})
+	if !res.IsError || !strings.Contains(toolText(t, res), "not a declared dependency") {
+		t.Errorf("removing an undeclared package should be a tool error: %+v", res.Content)
+	}
+}
+
+func TestRegistryInstallRefusesDriftedLock(t *testing.T) {
+	xBody, xDigest := fakeDoc(t, "@acme/x", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/x": {tag: "latest", version: "1.0.0", kind: "Text", body: xBody, digest: xDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	cs, _ := newPackagesClient(t, root)
+
+	if res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/x"}}); res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+	// Hand-edit the declaration so bino.toml and bino.lock disagree.
+	if err := registry.SetDependency(root, "@acme/x", "9.9.9"); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(root, ".bino", "registry")
+	if err := os.RemoveAll(store); err != nil {
+		t.Fatal(err)
+	}
+
+	res := callTool(t, cs, "registry_install", nil)
+	if !res.IsError {
+		t.Fatalf("install on a drifted lock must fail: %s", toolText(t, res))
+	}
+	if text := toolText(t, res); !strings.Contains(text, "out of date") {
+		t.Errorf("error = %q, want the drift message", text)
+	}
+	if _, err := os.Stat(store); !os.IsNotExist(err) {
+		t.Errorf("drifted install must not materialize anything, stat err = %v", err)
+	}
+
+	// Back in sync, install replays the lock and is idempotent.
+	if err := registry.SetDependency(root, "@acme/x", "latest"); err != nil {
+		t.Fatal(err)
+	}
+	res = callTool(t, cs, "registry_install", nil)
+	if res.IsError {
+		t.Fatalf("registry_install failed: %s", toolText(t, res))
+	}
+	out := mutationResult(t, res)
+	if len(out.Changes) != 1 || out.Changes[0].Before != "1.0.0" || out.Changes[0].After != "1.0.0" {
+		t.Errorf("install changes = %+v", out.Changes)
+	}
+	xPath := filepath.Join(store, "acme", "x", "x.yml")
+	if data := readFileT(t, xPath); string(data) != string(xBody) {
+		t.Error("x.yml not re-materialized")
+	}
+	lockBefore := readFileT(t, filepath.Join(root, "bino.lock"))
+	res = callTool(t, cs, "registry_install", nil)
+	if res.IsError {
+		t.Fatalf("second registry_install failed: %s", toolText(t, res))
+	}
+	if !reflect.DeepEqual(mutationResult(t, res), out) {
+		t.Errorf("second install result differs: %s", toolText(t, res))
+	}
+	if string(readFileT(t, filepath.Join(root, "bino.lock"))) != string(lockBefore) {
+		t.Error("bino.lock changed on the second install")
+	}
+}
+
+func TestRegistryAddFailureMidDownloadWritesNothing(t *testing.T) {
+	xBody, xDigest := fakeDoc(t, "@acme/x", "Text")
+	aBody, aDigest := fakeDoc(t, "@acme/a", "ComponentStyle")
+	badBody, _ := fakeDoc(t, "@acme/bad", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/x": {tag: "latest", version: "1.0.0", kind: "Text", body: xBody, digest: xDigest},
+		// Closure order is by name: @acme/a is downloaded and verified into
+		// memory first, then @acme/bad fails verification.
+		"@acme/a":   {tag: "latest", version: "1.0.0", kind: "ComponentStyle", body: aBody, digest: aDigest},
+		"@acme/bad": {tag: "latest", version: "1.0.0", kind: "Text", dependencies: []string{"@acme/a"}, body: badBody, digest: "sha256:wrong"},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	cs, _ := newPackagesClient(t, root)
+
+	if res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/x"}}); res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+	tomlBefore := readFileT(t, filepath.Join(root, "bino.toml"))
+	lockBefore := readFileT(t, filepath.Join(root, "bino.lock"))
+	storeBefore := storeListing(t, root)
+
+	res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/bad"}})
+	if !res.IsError {
+		t.Fatalf("adding a package with a wrong digest must fail: %s", toolText(t, res))
+	}
+	if text := toolText(t, res); !strings.Contains(text, "does not match") {
+		t.Errorf("error = %q, want a digest mismatch", text)
+	}
+	if n := packages["@acme/a"].fileDownloads.Load(); n == 0 {
+		t.Error("@acme/a should have been downloaded before the failure")
+	}
+	if string(readFileT(t, filepath.Join(root, "bino.toml"))) != string(tomlBefore) {
+		t.Error("bino.toml changed after a failed add")
+	}
+	if string(readFileT(t, filepath.Join(root, "bino.lock"))) != string(lockBefore) {
+		t.Error("bino.lock changed after a failed add")
+	}
+	if got := storeListing(t, root); !reflect.DeepEqual(got, storeBefore) {
+		t.Errorf("store changed after a failed add:\nbefore %v\nafter  %v", storeBefore, got)
+	}
+}
+
+// newPackagesClient builds on newTestState, a bare daemon.State with no
+// ManagedState and no file watcher, so only the explicit reload after a write
+// can make describe_project see the installed documents.
+func TestRegistryAddRefreshesStateWithoutWatcher(t *testing.T) {
+	greetingBody, greetingDigest := fakeDoc(t, "@acme/greeting", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/greeting": {tag: "latest", version: "1.2.0", kind: "Text", body: greetingBody, digest: greetingDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	cs, _ := newPackagesClient(t, root)
+
+	describe := func() daemon.IndexResult {
+		res := callTool(t, cs, "describe_project", nil)
+		if res.IsError {
+			t.Fatalf("describe_project failed: %s", toolText(t, res))
+		}
+		var idx daemon.IndexResult
+		if err := json.Unmarshal([]byte(toolText(t, res)), &idx); err != nil {
+			t.Fatal(err)
+		}
+		return idx
+	}
+	findDoc := func(idx daemon.IndexResult) *daemon.IndexDocument {
+		for i := range idx.Documents {
+			if idx.Documents[i].Name == "@acme/greeting" {
+				return &idx.Documents[i]
+			}
+		}
+		return nil
+	}
+
+	if d := findDoc(describe()); d != nil {
+		t.Fatalf("package document present before add: %+v", d)
+	}
+	if res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/greeting"}}); res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+	d := findDoc(describe())
+	if d == nil {
+		t.Fatal("describe_project does not list @acme/greeting right after registry_add")
+	}
+	if d.Kind != "Text" || !strings.HasPrefix(d.File, filepath.Join(root, ".bino", "registry")) {
+		t.Errorf("package document = %+v", d)
+	}
+
+	res := callTool(t, cs, "registry_packages", nil)
+	if res.IsError {
+		t.Fatalf("registry_packages failed: %s", toolText(t, res))
+	}
+	var body struct {
+		Packages []daemon.RegistryPackage `json:"packages"`
+	}
+	if err := json.Unmarshal([]byte(toolText(t, res)), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Packages) != 1 || body.Packages[0].Name != "@acme/greeting" || !body.Packages[0].Installed {
+		t.Errorf("registry_packages = %+v, want @acme/greeting installed", body.Packages)
+	}
+
+	if res := callTool(t, cs, "registry_remove", map[string]any{"packages": []string{"@acme/greeting"}}); res.IsError {
+		t.Fatalf("registry_remove failed: %s", toolText(t, res))
+	}
+	if d := findDoc(describe()); d != nil {
+		t.Errorf("describe_project still lists the removed package: %+v", d)
+	}
+}
+
+func TestRegistryAddReportsNameCollision(t *testing.T) {
+	greetingBody, greetingDigest := fakeDoc(t, "@acme/greeting", "Text")
+	packages := map[string]*fakePackage{
+		"@acme/greeting": {tag: "latest", version: "1.2.0", kind: "Text", body: greetingBody, digest: greetingDigest},
+	}
+	srv, _, _ := fakeRegistryServer(t, packages)
+	root := newMutationProject(t, srv.URL)
+	localFile := filepath.Join(root, "local.yml")
+	local := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: \"@acme/greeting\"\nspec:\n  value: local\n"
+	if err := os.WriteFile(localFile, []byte(local), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cs, _ := newPackagesClient(t, root)
+
+	res := callTool(t, cs, "registry_add", map[string]any{"specs": []string{"@acme/greeting"}})
+	if res.IsError {
+		t.Fatalf("registry_add failed: %s", toolText(t, res))
+	}
+	out := mutationResult(t, res)
+	if len(out.NameCollisions) != 1 {
+		t.Fatalf("nameCollisions = %+v, want exactly one", out.NameCollisions)
+	}
+	c := out.NameCollisions[0]
+	if c.Kind != "Text" || c.Name != "@acme/greeting" || c.Package != "@acme/greeting" || c.LocalFile != localFile {
+		t.Errorf("collision = %+v", c)
+	}
+	if !strings.HasPrefix(c.PackageFile, filepath.Join(root, ".bino", "registry")) {
+		t.Errorf("packageFile = %q, want a store path", c.PackageFile)
+	}
+	if !strings.Contains(c.Hint, "rename the local") {
+		t.Errorf("hint = %q", c.Hint)
 	}
 }

@@ -92,8 +92,19 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			// activity for the idle-shutdown check below.
 			var mcpHandler http.Handler
 			var mcpActive func() int64
+			var server *daemon.Server
 			if mcpEnabled {
-				deps := mcp.Deps{State: state, Registry: env.PluginRegistry, Authoring: newCLIAuthoring(env.ProjectRoot), Packages: newCLIPackages(state)}
+				deps := mcp.Deps{
+					State:     state,
+					Registry:  env.PluginRegistry,
+					Authoring: newCLIAuthoring(env.ProjectRoot),
+					Packages:  newCLIPackages(state),
+					// server is assigned below; the callback only runs once a
+					// tool call has gone through the mounted handler.
+					RegistryChanged: func() {
+						server.BroadcastEvent("registry-changed", map[string]any{"reasons": []string{"mcp"}})
+					},
+				}
 				inner := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 					return mcp.NewServer(deps)
 				}, nil)
@@ -112,7 +123,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				defer env.PluginManager.ShutdownAll(ctx)
 			}
 
-			server, err := daemon.NewServer(daemon.ServerConfig{
+			server, err = daemon.NewServer(daemon.ServerConfig{
 				ListenAddr:     fullListenAddr,
 				State:          state,
 				Logger:         logger.Channel("server"),
