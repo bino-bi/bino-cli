@@ -14,8 +14,8 @@ layer the JSON Schema can't express: which column is an actual vs a plan, how a 
 coloured, which component fits the question. This skill is that rubric. It teaches semantics, not
 structure — for the exact fields of any kind, always `describe_kind` (see `bino-authoring`).
 
-> Source of truth (cite, don't copy): `bn-template-engine/src/utils/ibcsRuleSet.ts`,
-> `src/utils/model/VarianceScenario.ts`, `doc/data-model.md`, `src/components/bn-text/bn-text.tsx`.
+> Source of truth (cite, don't copy): the bundled `references/data-model.md` (the engine's row
+> shape, stamped with the engine commit it was copied from) and https://cli.bino.bi/concepts/data-model/.
 > For the full IBCS standard (the SUCCESS rules, the rationale, the concepts bino doesn't yet model),
 > read `references/ibcs-standard.md`.
 
@@ -92,7 +92,7 @@ ask — don't assume. (And these are *impact* colours, **not** traffic lights �
 
 When the question is a *derived* time view — year-to-date, year-to-go, a moving total, an average —
 bino renders the IBCS analysis notation on the period label automatically. These are real features
-(the `_dateLinkFormat` map in `ibcsRuleSet.ts`), not decoration:
+(the engine's date-link rule set renders them), not decoration:
 
 | Analysis | Notation | Example |
 | --- | --- | --- |
@@ -104,7 +104,7 @@ bino renders the IBCS analysis notation on the period label automatically. These
 | First / last day | leading / trailing `.` | `.2021` / `2021.` |
 
 Reach for these when the brief asks for an accumulated, projected, or smoothed view rather than the
-raw period. Confirm the component's support with `describe_kind` before authoring.
+raw period. Confirm the component's support with `outline_kind` before authoring.
 
 ## Choosing a component
 
@@ -116,7 +116,7 @@ Pick by the *question*, not by habit:
 | **ChartTime** | A **time** dimension (a date field): trends across year / quarter / month / week / day. Bars by default; lines for many points. |
 | **ChartStructure** | A categorical / structural breakdown **without** time (e.g. by region, product) — a bar chart over a set. |
 
-Confirm the exact kind names and fields with `list_kinds` / `describe_kind` — this list is the
+Confirm the exact kind names and fields with `list_kinds` / `outline_kind` — this list is the
 guidance, the schema is the contract.
 
 ## Narrative — data-aware Text
