@@ -63,7 +63,13 @@ func registryProjectSetup() (registryProject, error) {
 	if err != nil {
 		return registryProject{}, RuntimeError(err)
 	}
-	root, err := pathutil.FindProjectRoot(workdir)
+	return registryProjectFor(workdir)
+}
+
+// registryProjectFor resolves the project containing dir. The MCP server uses
+// it with its fixed project root, since its cwd may be anywhere.
+func registryProjectFor(dir string) (registryProject, error) {
+	root, err := pathutil.FindProjectRoot(dir)
 	if err != nil {
 		if errors.Is(err, pathutil.ErrProjectRootNotFound) {
 			return registryProject{}, ConfigError(err)
