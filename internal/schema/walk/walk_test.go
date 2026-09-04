@@ -2,6 +2,7 @@ package walk
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"testing"
 
@@ -322,5 +323,33 @@ func TestResolveAt_RealSchema(t *testing.T) {
 func TestParse_EmbeddedSchemaKinds(t *testing.T) {
 	if kinds := Parse(schema.DocumentSchemaBytes()).Kinds(); len(kinds) == 0 {
 		t.Fatal("embedded schema yields no kinds")
+	}
+}
+
+func TestProps_TypesUnionAcrossVariants(t *testing.T) {
+	m := miniModel(t)
+	for _, p := range m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props() {
+		if p.Name == "grouped" && !slices.Equal(p.Types, []string{"boolean"}) {
+			t.Errorf("grouped Types = %v, want [boolean]", p.Types)
+		}
+	}
+	full := Parse(schema.DocumentSchemaBytes())
+	for _, p := range full.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props() {
+		if p.Name != "dataset" {
+			continue
+		}
+		if len(p.Types) < 2 || p.Type != p.Types[0] {
+			t.Errorf("dataset Types = %v (Type %q): want the union of the oneOf branches, first one matching Type", p.Types, p.Type)
+		}
+	}
+}
+
+func TestIsMap(t *testing.T) {
+	m := miniModel(t)
+	if !m.ResolveAt([]string{"spec"}, map[string]string{"": "I18n"}).IsMap() {
+		t.Error("i18n spec (additionalProperties) must be map-shaped")
+	}
+	if m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).IsMap() {
+		t.Error("Table spec must not be map-shaped")
 	}
 }

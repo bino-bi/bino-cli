@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/plugin"
 	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/pkg/duckdb"
 )
@@ -19,6 +20,13 @@ import (
 // newTestClient builds a managed State over the sample project, constructs the
 // MCP server, and returns a connected in-memory client session.
 func newTestClient(t *testing.T) *mcpsdk.ClientSession {
+	t.Helper()
+	return newTestClientWithRegistry(t, nil)
+}
+
+// newTestClientWithRegistry is newTestClient with a plugin registry, for tests
+// that need a plugin-provided kind.
+func newTestClientWithRegistry(t *testing.T, reg *plugin.PluginRegistry) *mcpsdk.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 
@@ -28,7 +36,7 @@ func newTestClient(t *testing.T) *mcpsdk.ClientSession {
 	}
 
 	state := newTestState(t, root)
-	server := NewServer(Deps{State: state})
+	server := NewServer(Deps{State: state, Registry: reg})
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
