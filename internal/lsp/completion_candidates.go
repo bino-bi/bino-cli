@@ -1,15 +1,14 @@
 package lsp
 
 import (
-	"encoding/json"
 	"sort"
-	"strconv"
 	"strings"
 
 	"go.lsp.dev/protocol"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/schema/walk"
 )
 
 // These pure builders turn a resolved context + project data into completion
@@ -18,8 +17,8 @@ import (
 
 // completeKinds offers every manifest kind from the live merged schema, each
 // documented with the kind's spec prose and required fields.
-func completeKinds(m *schemaModel) []protocol.CompletionItem {
-	kinds := m.kinds()
+func completeKinds(m *walk.Model) []protocol.CompletionItem {
+	kinds := m.Kinds()
 	sort.Strings(kinds)
 	items := make([]protocol.CompletionItem, 0, len(kinds))
 	for _, k := range kinds {
@@ -27,28 +26,12 @@ func completeKinds(m *schemaModel) []protocol.CompletionItem {
 			Label: k,
 			Kind:  protocol.CompletionItemKindClass,
 		}
-		if doc := kindDocMarkdown(m, k); doc != "" {
+		if doc := walk.KindDocMarkdown(m, k); doc != "" {
 			item.Documentation = protocol.String(doc)
 		}
 		items = append(items, item)
 	}
 	return items
-}
-
-// kindDocMarkdown renders a kind's description plus its required spec fields.
-func kindDocMarkdown(m *schemaModel, kind string) string {
-	desc, req := m.kindDoc(kind)
-	if desc == "" && len(req) == 0 {
-		return ""
-	}
-	out := desc
-	if len(req) > 0 {
-		if out != "" {
-			out += "\n\n"
-		}
-		out += "Required: `" + strings.Join(req, "`, `") + "`"
-	}
-	return out
 }
 
 // documentScaffolds offers one full-manifest snippet per kind for a fresh
@@ -56,10 +39,10 @@ func kindDocMarkdown(m *schemaModel, kind string) string {
 // metadata.name and the kind's required spec fields as tabstops, defaults and
 // enum choices pre-wired. Plain-text bodies are emitted for clients without
 // snippet support.
-func documentScaffolds(m *schemaModel, snippets bool) []protocol.CompletionItem {
-	kinds := m.kinds()
+func documentScaffolds(m *walk.Model, snippets bool) []protocol.CompletionItem {
+	kinds := m.Kinds()
 	sort.Strings(kinds)
-	apiVersion := scaffoldAPIVersion(m)
+	apiVersion := walk.ScaffoldAPIVersion(m)
 	items := make([]protocol.CompletionItem, 0, len(kinds))
 	for _, k := range kinds {
 		item := protocol.CompletionItem{
@@ -67,7 +50,7 @@ func documentScaffolds(m *schemaModel, snippets bool) []protocol.CompletionItem 
 			Kind:       protocol.CompletionItemKindSnippet,
 			FilterText: protocol.NewOptional(k),
 			SortText:   protocol.NewOptional("2_" + k), // after plain field keys
-			InsertText: protocol.NewOptional(scaffoldBody(m, k, apiVersion, snippets)),
+			InsertText: protocol.NewOptional(walk.ScaffoldBody(m, k, apiVersion, snippets)),
 			Detail:     protocol.NewOptional("scaffold a full " + k + " document"),
 		}
 		if snippets {
@@ -75,7 +58,7 @@ func documentScaffolds(m *schemaModel, snippets bool) []protocol.CompletionItem 
 		} else {
 			item.InsertTextFormat = protocol.InsertTextFormatPlainText
 		}
-		if doc := kindDocMarkdown(m, k); doc != "" {
+		if doc := walk.KindDocMarkdown(m, k); doc != "" {
 			item.Documentation = protocol.String(doc)
 		}
 		items = append(items, item)
@@ -83,81 +66,11 @@ func documentScaffolds(m *schemaModel, snippets bool) []protocol.CompletionItem 
 	return items
 }
 
-// scaffoldAPIVersion reads the schema's apiVersion const/enum, with the
-// current version as fallback.
-func scaffoldAPIVersion(m *schemaModel) string {
-	node := m.resolveAt([]string{"apiVersion"}, nil)
-	if vals := node.enumValues(); len(vals) > 0 {
-		return vals[0]
-	}
-	return "bino.bi/v1alpha1"
-}
-
-// scaffoldBody renders a kind's full-document template. Tabstops cover
-// metadata.name and every required spec field; defaults are pre-filled and
-// enums become snippet choices.
-func scaffoldBody(m *schemaModel, kind, apiVersion string, snippets bool) string {
-	var b strings.Builder
-	b.WriteString("apiVersion: " + apiVersion + "\n")
-	b.WriteString("kind: " + kind + "\n")
-	b.WriteString("metadata:\n")
-	if snippets {
-		b.WriteString("  name: ${1:name}\n")
-	} else {
-		b.WriteString("  name: name\n")
-	}
-	b.WriteString("spec:")
-	var required []propInfo
-	for _, p := range m.resolveAt([]string{"spec"}, map[string]string{"": kind}).props() {
-		if p.Required {
-			required = append(required, p)
-		}
-	}
-	sort.Slice(required, func(i, j int) bool { return required[i].Name < required[j].Name })
-	if len(required) == 0 {
-		if snippets {
-			b.WriteString("\n  $2")
-		} else {
-			b.WriteString(" {}")
-		}
-		return b.String()
-	}
-	tab := 2
-	for _, p := range required {
-		b.WriteString("\n  " + p.Name + ": " + scaffoldValue(p, tab, snippets))
-		tab++
-	}
-	return b.String()
-}
-
-// scaffoldValue renders one required field's placeholder.
-func scaffoldValue(p propInfo, tab int, snippets bool) string {
-	if !snippets {
-		switch {
-		case p.Default != nil:
-			return renderDefault(p.Default)
-		case len(p.Enum) > 0:
-			return p.Enum[0]
-		default:
-			return ""
-		}
-	}
-	n := strconv.Itoa(tab)
-	switch {
-	case p.Default != nil:
-		return "${" + n + ":" + renderDefault(p.Default) + "}"
-	case len(p.Enum) > 0:
-		return "${" + n + "|" + strings.Join(p.Enum, ",") + "|}"
-	default:
-		return "${" + n + "}"
-	}
-}
-
 // childScaffolds offers layout-child templates for a bare `- ` slot: a
 // referenced component (kind + ref) and an inline one (kind + spec). The kind
 // enum comes from the slot's own schema, so plugin exclusions hold.
-func childScaffolds(node schemaNode, snippets bool) []protocol.CompletionItem {
-	kp, ok := node.prop("kind")
+func childScaffolds(node walk.Node, snippets bool) []protocol.CompletionItem {
+	kp, ok := node.Prop("kind")
 	if !ok || len(kp.Enum) == 0 {
 		return nil
 	}
@@ -195,7 +108,7 @@ func childScaffolds(node schemaNode, snippets bool) []protocol.CompletionItem {
 // completeFields offers an object position's properties not already present,
 // required fields first, annotated with type/required/default and the schema
 // description.
-func completeFields(props []propInfo, present map[string]bool) []protocol.CompletionItem {
+func completeFields(props []walk.PropInfo, present map[string]bool) []protocol.CompletionItem {
 	sort.Slice(props, func(i, j int) bool { return props[i].Name < props[j].Name })
 	items := make([]protocol.CompletionItem, 0, len(props))
 	for _, p := range props {
@@ -221,7 +134,7 @@ func completeFields(props []propInfo, present map[string]bool) []protocol.Comple
 }
 
 // fieldSortKey ranks required fields before optional ones; names break ties.
-func fieldSortKey(p propInfo) string {
+func fieldSortKey(p walk.PropInfo) string {
 	if p.Required {
 		return "0_" + p.Name
 	}
@@ -229,7 +142,7 @@ func fieldSortKey(p propInfo) string {
 }
 
 // propDetail renders the type/required/default summary shown beside a field.
-func propDetail(p propInfo) string {
+func propDetail(p walk.PropInfo) string {
 	var parts []string
 	if p.Type != "" {
 		parts = append(parts, p.Type)
@@ -238,23 +151,11 @@ func propDetail(p propInfo) string {
 		parts = append(parts, "required")
 	}
 	if p.Default != nil {
-		if r := renderDefault(p.Default); r != "" {
+		if r := walk.RenderDefault(p.Default); r != "" {
 			parts = append(parts, "default: "+r)
 		}
 	}
 	return strings.Join(parts, " · ")
-}
-
-// renderDefault renders a schema default for display (strings unquoted).
-func renderDefault(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return ""
-	}
-	return string(b)
 }
 
 // completeEnum offers a value position's admissible tokens.
