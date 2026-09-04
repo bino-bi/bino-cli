@@ -1,4 +1,4 @@
-package lsp
+package walk
 
 import (
 	"encoding/json"
@@ -6,30 +6,31 @@ import (
 	"strings"
 )
 
-// schemaModel is a lazily-parsed view of the merged JSON schema, cached on the
-// server and rebuilt on project change. It exposes what completion and hover
-// need: the kind list and a path-walking resolver over the schema's
-// $ref/allOf/oneOf/if-then composition.
-type schemaModel struct {
+// Model is a parsed view of the merged JSON schema. It exposes what
+// completion, hover and schema projections need: the kind list and a
+// path-walking resolver over the schema's $ref/allOf/oneOf/if-then composition.
+type Model struct {
 	doc map[string]any
 }
 
-func parseSchema(merged json.RawMessage) *schemaModel {
+// Parse decodes the merged document schema. A schema that fails to decode
+// yields an empty model, which every method tolerates.
+func Parse(merged json.RawMessage) *Model {
 	var doc map[string]any
 	if json.Unmarshal(merged, &doc) != nil {
-		return &schemaModel{}
+		return &Model{}
 	}
-	return &schemaModel{doc: doc}
+	return &Model{doc: doc}
 }
 
-// empty reports that no schema is loaded (cold start or backend failure).
+// Empty reports that no schema is loaded (cold start or backend failure).
 // Completion built from an empty model must be marked incomplete so the client
 // re-queries instead of caching the empty list for the whole typing session.
-func (m *schemaModel) empty() bool { return m.doc == nil }
+func (m *Model) Empty() bool { return m.doc == nil }
 
-// kinds returns every manifest kind known to the schema, preferring the explicit
+// Kinds returns every manifest kind known to the schema, preferring the explicit
 // properties.kind.enum and falling back to the per-kind allOf consts.
-func (m *schemaModel) kinds() []string {
+func (m *Model) Kinds() []string {
 	if m.doc == nil {
 		return nil
 	}
@@ -51,8 +52,8 @@ func (m *schemaModel) kinds() []string {
 	return out
 }
 
-// propInfo is the completion-relevant metadata of one schema property.
-type propInfo struct {
+// PropInfo is the completion-relevant metadata of one schema property.
+type PropInfo struct {
 	Name        string
 	Description string
 	Enum        []string
@@ -61,18 +62,18 @@ type propInfo struct {
 	Required    bool
 }
 
-// kindDoc returns a kind's spec description (the per-kind prose carried by the
+// KindDoc returns a kind's spec description (the per-kind prose carried by the
 // schema's spec $defs) and its required spec field names, sorted.
-func (m *schemaModel) kindDoc(kind string) (desc string, required []string) {
-	node := m.resolveAt([]string{"spec"}, map[string]string{"": kind})
-	for _, p := range node.props() {
+func (m *Model) KindDoc(kind string) (desc string, required []string) {
+	node := m.ResolveAt([]string{"spec"}, map[string]string{"": kind})
+	for _, p := range node.Props() {
 		if p.Required {
 			required = append(required, p.Name)
 		}
 	}
 	sort.Strings(required)
 	// The description must come from the kind's own spec def, not the generic
-	// root `spec` envelope the resolveAt variants list first — read the
+	// root `spec` envelope the ResolveAt variants list first — read the
 	// discriminated branch directly.
 	for _, block := range m.allOf() {
 		if kindConst(block) != kind {
@@ -93,12 +94,12 @@ func (m *schemaModel) kindDoc(kind string) (desc string, required []string) {
 	return desc, required
 }
 
-// schemaNode is the resolver's verdict for a path: the set of raw schema
+// Node is the resolver's verdict for a path: the set of raw schema
 // objects that could describe the position. Multiple variants arise from
 // oneOf/anyOf and from allOf members, which are kept flat — helpers union
 // across them, which is exactly the candidate semantics completion wants.
-type schemaNode struct {
-	m        *schemaModel
+type Node struct {
+	m        *Model
 	variants []map[string]any
 }
 
@@ -106,12 +107,12 @@ type schemaNode struct {
 // is the real cycle guard (layoutChild → layoutCardSpec → children is cyclic).
 const maxSchemaDepth = 32
 
-// resolveAt walks the schema along a document path (mapping keys and sequence
+// ResolveAt walks the schema along a document path (mapping keys and sequence
 // indices), discriminating kind-conditional branches with the document's
 // kinds-by-path (see reportspec.PositionContext.KindsByPath; "" = root).
-func (m *schemaModel) resolveAt(path []string, kinds map[string]string) schemaNode {
+func (m *Model) ResolveAt(path []string, kinds map[string]string) Node {
 	if m.doc == nil {
-		return schemaNode{m: m}
+		return Node{m: m}
 	}
 	cur := m.normalize(m.doc, kinds[""], 0, map[string]bool{})
 	dotted := ""
@@ -131,14 +132,14 @@ func (m *schemaModel) resolveAt(path []string, kinds map[string]string) schemaNo
 		}
 		cur = expanded
 	}
-	return schemaNode{m: m, variants: cur}
+	return Node{m: m, variants: cur}
 }
 
 // normalize expands one raw schema node into its concrete variants: $refs are
 // followed, allOf members flattened in, kind-discriminated conditionals
 // resolved against the document's kind at this level, other conditionals
 // unioned (then + else), and oneOf/anyOf branches all kept.
-func (m *schemaModel) normalize(node any, kind string, depth int, seen map[string]bool) []map[string]any {
+func (m *Model) normalize(node any, kind string, depth int, seen map[string]bool) []map[string]any {
 	obj, ok := node.(map[string]any)
 	if !ok || depth > maxSchemaDepth {
 		return nil
@@ -188,7 +189,7 @@ func (m *schemaModel) normalize(node any, kind string, depth int, seen map[strin
 // condition contributes `then` only when the document kind matches (nothing
 // when the kind is unknown — offering every kind's fields would be noise); any
 // other condition cannot be decided statically, so both branches are unioned.
-func (m *schemaModel) expandConditional(obj map[string]any, kind string, expand func(any)) {
+func (m *Model) expandConditional(obj map[string]any, kind string, expand func(any)) {
 	if kc := kindConst(obj); kc != "" {
 		if kc == kind {
 			expand(obj["then"])
@@ -202,7 +203,7 @@ func (m *schemaModel) expandConditional(obj map[string]any, kind string, expand 
 // step descends one path segment: a numeric segment enters `items`, a named
 // one enters `properties` (falling back to `additionalProperties` for
 // map-shaped nodes like i18n content).
-func (m *schemaModel) step(obj map[string]any, seg string) []map[string]any {
+func (m *Model) step(obj map[string]any, seg string) []map[string]any {
 	if isIndexSegment(seg) {
 		if items, ok := obj["items"].(map[string]any); ok {
 			return []map[string]any{items}
@@ -232,11 +233,11 @@ func isIndexSegment(seg string) bool {
 	return true
 }
 
-// props returns the union of the variants' properties. `required` entries may
+// Props returns the union of the variants' properties. `required` entries may
 // name properties defined in a sibling variant (tableSpec declares required
 // while tableSpecBase declares the properties), so requiredness is collected
 // across all variants first.
-func (n schemaNode) props() []propInfo {
+func (n Node) Props() []PropInfo {
 	required := map[string]bool{}
 	for _, v := range n.variants {
 		if req, ok := v["required"].([]any); ok {
@@ -246,7 +247,7 @@ func (n schemaNode) props() []propInfo {
 		}
 	}
 	index := map[string]int{}
-	var out []propInfo
+	var out []PropInfo
 	for _, v := range n.variants {
 		props, ok := v["properties"].(map[string]any)
 		if !ok {
@@ -257,7 +258,7 @@ func (n schemaNode) props() []propInfo {
 				n.m.enrichProp(&out[i], raw)
 				continue
 			}
-			p := propInfo{Name: name, Required: required[name]}
+			p := PropInfo{Name: name, Required: required[name]}
 			n.m.enrichProp(&p, raw)
 			index[name] = len(out)
 			out = append(out, p)
@@ -269,7 +270,7 @@ func (n schemaNode) props() []propInfo {
 // enrichProp fills a property's completion metadata from its (possibly
 // $ref/oneOf-composed) schema, unioning enums and keeping the first
 // description/type/default found.
-func (m *schemaModel) enrichProp(p *propInfo, raw any) {
+func (m *Model) enrichProp(p *PropInfo, raw any) {
 	for _, v := range m.normalize(raw, "", 0, map[string]bool{}) {
 		if p.Description == "" {
 			p.Description, _ = v["description"].(string)
@@ -284,10 +285,10 @@ func (m *schemaModel) enrichProp(p *propInfo, raw any) {
 	}
 }
 
-// enumValues returns the union of the variants' enum/const values, including
+// EnumValues returns the union of the variants' enum/const values, including
 // the item enums of array-shaped variants (a oneOf of `enum` and `array of
 // enum` completes the same tokens either way).
-func (n schemaNode) enumValues() []string {
+func (n Node) EnumValues() []string {
 	var out []string
 	for _, v := range n.variants {
 		out = appendUniqueStrings(out, enumOf(v))
@@ -300,8 +301,8 @@ func (n schemaNode) enumValues() []string {
 	return out
 }
 
-// defaultValue returns the first declared default across the variants.
-func (n schemaNode) defaultValue() any {
+// DefaultValue returns the first declared default across the variants.
+func (n Node) DefaultValue() any {
 	for _, v := range n.variants {
 		if d, ok := v["default"]; ok && d != nil {
 			return d
@@ -310,8 +311,8 @@ func (n schemaNode) defaultValue() any {
 	return nil
 }
 
-// doc returns the first non-empty description across the variants.
-func (n schemaNode) doc() string {
+// Doc returns the first non-empty description across the variants.
+func (n Node) Doc() string {
 	for _, v := range n.variants {
 		if d, _ := v["description"].(string); d != "" {
 			return d
@@ -320,19 +321,19 @@ func (n schemaNode) doc() string {
 	return ""
 }
 
-// prop returns the named property's metadata at this node, if declared.
-func (n schemaNode) prop(name string) (propInfo, bool) {
-	for _, p := range n.props() {
+// Prop returns the named property's metadata at this node, if declared.
+func (n Node) Prop(name string) (PropInfo, bool) {
+	for _, p := range n.Props() {
 		if p.Name == name {
 			return p, true
 		}
 	}
-	return propInfo{}, false
+	return PropInfo{}, false
 }
 
-// isObject reports whether any variant is object-shaped (a position where key
+// IsObject reports whether any variant is object-shaped (a position where key
 // completion applies, e.g. a bare `- ` under `children:`).
-func (n schemaNode) isObject() bool {
+func (n Node) IsObject() bool {
 	for _, v := range n.variants {
 		if t, _ := v["type"].(string); t == "object" {
 			return true
@@ -344,8 +345,8 @@ func (n schemaNode) isObject() bool {
 	return false
 }
 
-// isBool reports whether any variant is boolean-typed.
-func (n schemaNode) isBool() bool {
+// IsBool reports whether any variant is boolean-typed.
+func (n Node) IsBool() bool {
 	for _, v := range n.variants {
 		if t, _ := v["type"].(string); t == "boolean" {
 			return true
@@ -382,7 +383,7 @@ func appendUniqueStrings(dst []string, add []string) []string {
 }
 
 // resolveRef follows a local JSON pointer ("#/$defs/foo").
-func (m *schemaModel) resolveRef(ref string) map[string]any {
+func (m *Model) resolveRef(ref string) map[string]any {
 	if m.doc == nil || !strings.HasPrefix(ref, "#/") {
 		return nil
 	}
@@ -399,7 +400,7 @@ func (m *schemaModel) resolveRef(ref string) map[string]any {
 	return out
 }
 
-func (m *schemaModel) allOf() []map[string]any {
+func (m *Model) allOf() []map[string]any {
 	if m.doc == nil {
 		return nil
 	}
