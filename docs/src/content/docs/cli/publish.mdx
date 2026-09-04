@@ -46,6 +46,10 @@ versions, so a skew between your CLI and the registry's is visible.
 Run `--dry-run` first in any pipeline that publishes automatically: versions
 are immutable and there is no unpublish.
 
+An AI agent can publish through the [MCP server](/cli/mcp/#registry) with `registry_publish`
+(same `bump`, `dry_run` and `visibility` inputs), but only when the server was started with
+`--allow-publish`; see the [security notes](/cli/mcp/#security).
+
 ## Examples
 
 Check a package without publishing it:

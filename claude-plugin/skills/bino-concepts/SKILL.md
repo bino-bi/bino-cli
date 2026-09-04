@@ -5,7 +5,7 @@ description: bino's mental model in one read — the manifest envelope, the Data
   dataset columns, ref vs inline children, LayoutPage params, constraints, inline datasets, ${VAR}
   substitution, bino.toml, and what validate_draft / validate_project / build each catch. Read before
   authoring any bino manifest, and whenever a diagnostic or a brief mentions dependencies, a scenario
-  column, ref, params, a constraint, an inline dataset, an unresolved variable, or bino.toml.
+  column, ref, params, a constraint, an inline dataset, an unresolved variable, a registry package, or bino.toml.
 ---
 
 # How bino thinks
@@ -113,6 +113,18 @@ Docs: https://cli.bino.bi/concepts/workdir-and-manifests/
 `bino init`) and an optional `engine-version` pin. `dist/` is build output and `.bino/` is cache and
 agent state; both are generated, never edited by hand.
 Docs: https://cli.bino.bi/concepts/project-configuration/
+
+## Packages
+
+A **package** is a set of predef documents published to a registry under `@scope/name`. The project
+declares it in `bino.toml` `[dependencies]` (an exact version or a tag such as `latest`), `bino.lock`
+pins the resolved version and digests (commit it), and `bino registry install` — or the `registry_add`
+tool — materializes the files under `.bino/registry/` (generated, gitignored). Installed documents join
+the project load exactly like local ones: reference them by `metadata.name`, and a package document
+that shares kind and name with a local document fails the build's duplicate-name check — rename the
+local document. `registry_packages` lists what the project depends on; `registry_search` and `registry_info` look
+in the registry.
+Docs: https://cli.bino.bi/guides/registry-and-dependencies/
 
 ## Three levels of checking
 

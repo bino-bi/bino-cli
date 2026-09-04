@@ -31,6 +31,8 @@ Flags:
 
 - `--work-dir`, `-w` – report bundle directory (default: `.`).
 - `--no-proxy` – always run standalone, even if a daemon is running.
+- `--allow-publish` – also expose the `registry_publish` tool (see [Security](#security)). When
+  `bino mcp` proxies to a running daemon, the daemon's `--mcp-allow-publish` flag decides instead.
 
 Clients that speak MCP over HTTP can instead point straight at a running daemon's endpoint
 (`http://127.0.0.1:<port>/mcp`; the port is recorded in `.bino/daemon.json`). The daemon mounts
@@ -70,6 +72,7 @@ Read-only context an agent can pull in:
 | `bino://schema/{kind}` | The self-contained spec schema for one kind (e.g. `bino://schema/Table`). |
 | `bino://kinds` | Every manifest kind and its capability category (`data` / `layout` / `embeddable` / `artefact` / `config`). |
 | `bino://documents` | The project index: every document → `{kind, name, file, position}`. |
+| `bino://packages` | The project's registry packages: `bino.lock` merged with `bino.toml` `[dependencies]`, with installed state. |
 
 ## Tools
 
@@ -114,6 +117,20 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 | --- | --- |
 | `build(artefacts?, out_dir?)` | Render artefacts by running `bino build` — streams progress and returns the exit code, output, and produced artefacts. Subject to the usual engine-compatibility check. |
 
+### Registry
+
+| Tool | What it does |
+| --- | --- |
+| `registry_packages()` | The project's dependencies, offline: `bino.lock` merged with `bino.toml` `[dependencies]`, whether each is installed under `.bino/registry/`, and the params each package declares. |
+| `registry_search(query, kinds?, scopes?, tags?, page?, per_page?)` | Search the registry for published packages (network). Use it before authoring a component from scratch. |
+| `registry_info(spec)` | Resolve one package spec (`@scope/name`, optionally `@version` or `@tag`): version, kinds, files, dependencies, and the installed version when the project already locks it. |
+| `registry_auth_status()` | The resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token. |
+| `registry_add(specs)` | Add packages as dependencies: resolves the transitive closure, verifies every download, then writes `bino.toml`, `bino.lock` and `.bino/registry/`. Reports name collisions with local documents. |
+| `registry_update(packages?)` | Re-resolve tag-following dependencies to their newest versions and rewrite `bino.lock`; exact pins are held. |
+| `registry_remove(packages)` | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline). |
+| `registry_install()` | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving. |
+| `registry_publish(bump?, dry_run?, visibility?)` | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag — see [Security](#security). |
+
 ## The authoring loop
 
 ```text
@@ -133,3 +150,10 @@ The server runs SQL, reads the filesystem, and (via `build`) launches headless C
 intended for **local** use over stdio and a loopback HTTP endpoint. Exposing the daemon on a
 non-loopback address (`bino daemon --listen-addr`) is out of scope for this surface and would
 require additional hardening.
+
+`registry_publish` is **off by default**. It is only registered when a human starts the server with
+`bino mcp --allow-publish`, or `bino daemon --mcp-allow-publish` when `bino mcp` proxies to a running
+daemon. Publishing is irreversible — it mints an immutable version that cannot be deleted — and a
+first publish with `visibility: public` makes the package public, so an agent must not be able to
+trigger it by accident. The other registry tools only change the local project and never return a
+credential; when `registry_auth_status` reports none, the human runs `bino registry login`.
