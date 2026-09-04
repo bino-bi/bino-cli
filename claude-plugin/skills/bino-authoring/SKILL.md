@@ -1,10 +1,11 @@
 ---
 name: bino-authoring
 description: The disciplined loop for authoring bino report manifests (YAML + SQL) through the bino
-  MCP server — read the live schema, learn a dataset's columns, draft, validate_draft, write, then
-  validate_project and build. Use whenever creating, editing, or wiring bino manifests (DataSource,
-  DataSet, Table, Text, Tree, ChartTime, ChartStructure, LayoutPage, ReportArtefact, …) or fixing
-  validation diagnostics. Pairs with bino-ibcs for the report semantics.
+  MCP server — outline the kind, scaffold the document, learn a dataset's columns, draft,
+  validate_draft, write, then validate_project and build. Use whenever creating, editing, or wiring
+  bino manifests (DataSource, DataSet, Table, Text, Tree, ChartTime, ChartStructure, LayoutPage,
+  ReportArtefact, …) or fixing validation diagnostics. Assumes bino-concepts; pairs with bino-ibcs for
+  the report semantics.
 ---
 
 # Authoring bino manifests
@@ -13,6 +14,9 @@ bino is **Report-as-Code**: a report is a set of YAML manifests (each typed by a
 bino's JSON Schema and validators tell you precisely whether what you wrote is correct — they are
 your guardrails. Lean on them; never guess structure.
 
+Read `bino-concepts` first — it is the mental model this loop assumes (names are tables,
+dependencies, the standard columns, ref vs inline children, constraints, variables).
+
 ## The one rule: introspect live, never invent
 
 **Always read structure from the running server. Never recall or hard-code a manifest's fields.**
@@ -20,21 +24,31 @@ The schema is the source of truth and it evolves.
 
 - `list_kinds` → every available kind and its capability category (`data` / `layout` / `embeddable`
   / `artefact` / `config`). Plugins can add kinds, so always check.
-- `describe_kind(kind)` (or the `bino://schema/{kind}` resource) → the self-contained spec schema for
-  one kind, with `$defs`. Read it **before** drafting that kind.
+- `outline_kind(kind)` → the **first read for any kind**: one entry per spec field with its path,
+  type, required flag, enum, default and description. For a layout kind it lists the allowed child
+  kinds as `childKinds` instead of expanding them.
+- `scaffold_kind(kind)` → **starts every new document**: the minimal YAML with `apiVersion`, `kind`,
+  `metadata.name` and every required spec field pre-filled. Fill the placeholders; do not ship it as is.
+- `describe_kind(kind)` (or the `bino://schema/{kind}` resource) → the full spec JSON Schema with
+  `$defs`. Large. Use it **only** when the outline leaves a shape ambiguous.
 - `describe_project()` / `bino://documents` → every document already in the project.
 
-If you find yourself writing a field you didn't see in `describe_kind`, stop and re-read the schema.
+If you find yourself writing a field you did not see in the outline, stop and re-read it.
+
+If outline_kind is not offered by this server, the bino binary predates it — use describe_kind and
+read only its `properties` and `required` keys; ignore allOf/if/then wrappers.
 
 ## The authoring loop
 
 For every manifest you create:
 
-1. **Read the schema** — `describe_kind("Table")` (or whichever kind).
+1. **Read the shape** — `outline_kind("Table")` (or whichever kind), then `scaffold_kind("Table")`
+   and fill its placeholders. For a layout kind (`LayoutPage`, `LayoutCard`, `Grid`): read
+   `childKinds`, then `outline_kind(child)` for each child kind you place.
 2. **Learn the data** — before writing any SQL or `${data…}` binding, call `get_columns("sales")`
    to get the real column names (prefix `$` to force a DataSource: `get_columns("$raw")`). Use
    `get_rows("sales", 20)` to ground values you'll reference in narrative.
-3. **Draft** the YAML document(s) against the schema you just read.
+3. **Draft** the YAML document(s) against the outline you just read.
 4. **Validate in memory** — `validate_draft(yaml)` before touching disk. Fix every diagnostic and
    re-validate until clean. This is the pre-write guardrail; use it on every draft.
 5. **Write** — `create_manifest(kind, name, spec, …)` to create a new manifest (it builds the
@@ -73,7 +87,7 @@ References are by `metadata.name` (and `$ref` where the schema uses it). After w
 
 ## Don't
 
-- Don't copy a kind's schema into your draft from memory — `describe_kind` every time.
+- Don't copy a kind's schema into your draft from memory — `outline_kind` every time.
 - Don't write SQL or data bindings before `get_columns` confirms the column names.
 - Don't `build` before `validate_project` is clean.
 - Don't treat "validates + builds" as "correct" — that's what the human review is for.

@@ -6,7 +6,7 @@ description: Autopilot data subagent. Locates and profiles sources, maps raw col
   "the data can't satisfy this."
 model: opus
 color: blue
-tools: Read, Write, mcp__plugin_bino_bino__introspect_source, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__scaffold_source, mcp__plugin_bino_bino__validate_project
+tools: Read, Write, mcp__plugin_bino_bino__introspect_source, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__outline_kind, mcp__plugin_bino_bino__scaffold_kind, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__scaffold_source, mcp__plugin_bino_bino__validate_project
 ---
 
 You are the **data** worker of the bino autopilot. You turn a REPORT BRIEF into the report's data

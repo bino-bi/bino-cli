@@ -34,7 +34,7 @@ direction the brief specified:
 {type}{base}_{delta}_{direction}    e.g.  dac1_pl1_pos   drac1_pp1_neg
 ```
 
-Compute them in SQL or let the component derive them — follow the schema (`describe_kind`) for how the
+Compute them in SQL or let the component derive them — follow the schema (`outline_kind`) for how the
 chosen component expects variances.
 
 The `direction` (`pos`/`neg`/`neu`) is the measure's **polarity** (UN 4.1): is "more" favorable
@@ -68,5 +68,6 @@ satisfy is a human decision (reduce scope / find more data), never a fabricated 
 Pick the grain from the brief's `granularity`. Aggregate to it in SQL; don't emit a finer grain than
 the report uses (it inflates rows and risks the row-count limit).
 
-> Cite, don't copy: `bn-template-engine/doc/data-model.md`, `src/utils/ibcsRuleSet.ts`. For the
-> scenario/variance semantics, see `bino-ibcs` and its `references/ibcs-standard.md`.
+> Cite, don't copy: `bino-ibcs/references/data-model.md` (the engine's row shape) and
+> https://cli.bino.bi/concepts/data-model/. For the scenario/variance semantics, see `bino-ibcs` and
+> its `references/ibcs-standard.md`.
