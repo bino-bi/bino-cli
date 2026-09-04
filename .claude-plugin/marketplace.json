@@ -10,7 +10,7 @@
       "name": "bino",
       "source": "./claude-plugin",
       "description": "Co-author and autopilot IBCS PDF reports with bino (Report-as-Code: YAML + SQL). Registers the bino MCP server and ships IBCS knowledge, slash commands, and a checkpointed autopilot pipeline.",
-      "version": "0.93.0",
+      "version": "0.94.0",
       "license": "AGPL-3.0-or-later",
       "keywords": ["bino", "ibcs", "report-as-code", "pdf", "mcp"]
     }
