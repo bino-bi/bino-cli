@@ -58,8 +58,12 @@ type PropInfo struct {
 	Description string
 	Enum        []string
 	Type        string
-	Default     any
-	Required    bool
+	// Types lists every type declared across the property's variants in
+	// first-seen order (Type keeps only the first). A oneOf of string and
+	// array yields [string array].
+	Types    []string
+	Default  any
+	Required bool
 }
 
 // KindDoc returns a kind's spec description (the per-kind prose carried by the
@@ -278,6 +282,9 @@ func (m *Model) enrichProp(p *PropInfo, raw any) {
 		if p.Type == "" {
 			p.Type, _ = v["type"].(string)
 		}
+		if t, _ := v["type"].(string); t != "" {
+			p.Types = appendUniqueStrings(p.Types, []string{t})
+		}
 		if p.Default == nil {
 			p.Default = v["default"]
 		}
@@ -349,6 +356,18 @@ func (n Node) IsObject() bool {
 func (n Node) IsBool() bool {
 	for _, v := range n.variants {
 		if t, _ := v["type"].(string); t == "boolean" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsMap reports whether any variant is map-shaped (an object-valued
+// additionalProperties): its keys are user-chosen, so any named properties are
+// examples rather than an enumerable key set.
+func (n Node) IsMap() bool {
+	for _, v := range n.variants {
+		if _, ok := v["additionalProperties"].(map[string]any); ok {
 			return true
 		}
 	}

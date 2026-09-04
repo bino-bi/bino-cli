@@ -78,7 +78,9 @@ Read-only context an agent can pull in:
 | Tool | What it does |
 | --- | --- |
 | `list_kinds` | Every manifest kind with its capability category. |
-| `describe_kind(kind)` | The spec JSON Schema for one kind. |
+| `outline_kind(kind)` | A compact outline of one kind's spec: every field with its path, type, required flag, enum, default and description. Layout kinds report the allowed child kinds as `childKinds`. Start here. |
+| `scaffold_kind(kind)` | A minimal YAML document for one kind with every required spec field pre-filled. |
+| `describe_kind(kind)` | The full spec JSON Schema for one kind. Large (up to ~20k tokens for layout kinds); prefer `outline_kind`. |
 | `describe_project()` | All documents in the project. |
 | `describe_document(file)` | The documents declared in one file. |
 | `get_columns(name)` | Column names of a DataSet or DataSource (prefix `$` to force a DataSource). |
@@ -115,13 +117,14 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 ## The authoring loop
 
 ```text
-1. Read bino://schema/Table          → learn the Table spec fields
-2. get_columns({name:"sales"})        → {columns:["region","ac1","pl1",...]}
-3. draft a Table manifest using those columns
-4. validate_draft({yaml:"..."})       → {valid:false, diagnostics:[{message:"...", ...}]}
-5. fix and re-validate                → {valid:true}
-6. create_manifest({kind:"Table", name:"q3", spec:{...}})
-7. build({artefacts:["q3"]})          → q3.pdf
+1. outline_kind({kind:"Table"})       → the Table spec fields, types, enums, defaults
+2. scaffold_kind({kind:"Table"})      → a minimal Table document to fill in
+3. get_columns({name:"sales"})        → {columns:["region","ac1","pl1",...]}
+4. draft the Table manifest using those columns
+5. validate_draft({yaml:"..."})       → {valid:false, diagnostics:[{message:"...", ...}]}
+6. fix and re-validate                → {valid:true}
+7. create_manifest({kind:"Table", name:"q3", spec:{...}})
+8. build({artefacts:["q3"]})          → q3.pdf
 ```
 
 ## Security

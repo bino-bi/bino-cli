@@ -39,9 +39,14 @@ Resources:
   bino://kinds           every manifest kind + its capability category
   bino://documents       project index: every document -> {kind, name, file, position}
 
-Typical authoring loop: read bino://schema/{kind} -> get_columns to learn a
-dataset's columns -> draft YAML -> validate_draft -> create_manifest / write_manifest
--> build. bino's schema and validation are your guardrails.`
+Schema tools:
+  outline_kind(kind)     compact per-field outline of a kind's spec (start here)
+  scaffold_kind(kind)    minimal YAML document for a kind, required fields pre-filled
+  describe_kind(kind)    full spec JSON Schema (large; only when the outline is ambiguous)
+
+Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
+learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
+write_manifest -> build. bino's schema and validation are your guardrails.`
 
 // NewServer constructs the MCP server. deps.State must be non-nil; deps.Registry
 // may be nil (no plugins).
@@ -57,6 +62,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h := &handlers{deps: deps}
 	h.registerResources(srv)
 	h.registerReadTools(srv)
+	h.registerSchemaTools(srv)
 	h.registerBuildTool(srv)
 	h.registerLayoutTool(srv)
 	h.registerAuthoringTools(srv)
@@ -187,7 +193,7 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_kind",
-		Description: "Return the spec JSON Schema for a single manifest kind (self-contained, with $defs).",
+		Description: "Full spec JSON Schema for one manifest kind (self-contained, with $defs). Large — up to ~20k tokens for layout kinds. Prefer outline_kind first and scaffold_kind to start a document; use this only for a shape the outline leaves ambiguous.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in describeKindInput) (*mcpsdk.CallToolResult, describeKindOutput, error) {
 		raw, ok, err := h.specSchemaForKind(ctx, in.Kind)
 		if err != nil {
