@@ -38,6 +38,11 @@ type Deps struct {
 	// changed bino.toml, bino.lock or .bino/registry/. The daemon uses it to
 	// broadcast the registry-changed SSE event to editors; standalone leaves it nil.
 	RegistryChanged func()
+	// AllowPublish, when true, enables registry_publish, which mints an
+	// immutable — possibly public — version on the registry. Off by default;
+	// only the human's `bino mcp --allow-publish` / `bino daemon
+	// --mcp-allow-publish` flag sets it.
+	AllowPublish bool
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -83,6 +88,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerLayoutTool(srv)
 	h.registerAuthoringTools(srv)
 	h.registerPackagesTools(srv)
+	h.registerPublishTool(srv)
 	return srv
 }
 
