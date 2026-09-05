@@ -1,15 +1,18 @@
 ---
 title: ScalingGroup
-description: Define named scaling values to synchronize bar and pin sizes across multiple charts and tables.
+description: Define named scaling values to synchronize bar and pin sizes across multiple charts.
 ---
 
-`ScalingGroup` manifests define named scaling values that multiple chart and table
+`ScalingGroup` manifests define named scaling values that multiple chart
 components can reference. When several components share the same scaling group name,
 their bar lengths (absolute variances) or pin lengths (relative variances) are
 guaranteed to use the same em-based scale, making visual comparisons across
 components meaningful.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `ScalingGroup` is the name that consumers reference plus
+the scaling value. `spec.value` is the only spec attribute.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -19,6 +22,8 @@ metadata:
 spec:
   value: 250000
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Fields
 
@@ -36,19 +41,25 @@ spec:
 
 1. Define one or more `ScalingGroup` manifests with a unique `metadata.name` and a
    numeric `value`.
-2. On consumer components (`Table`, `ChartTime`, `ChartStructure`, and
-   `ChartBubble` via `size.group`), set `unitScaling` and/or `percentageScaling`
-   to the scaling group name instead of a hard-coded number.
+2. On consumer components (`ChartTime`, `ChartStructure`, and `ChartBubble` via
+   `size.group`), set `unitScaling` and/or `percentageScaling` to the scaling
+   group name instead of a hard-coded number.
 3. Every consumer that references the same name resolves to the same value.
    Changing the `ScalingGroup` value updates all consumers at once.
 
-Because the value is em-based, one group works uniformly for tables and charts:
+:::note
+`Table` is not a consumer: its `unitScaling` and `percentageScaling` attributes
+accept numbers only, so a group name there is a validation error.
+:::
+
+Because the value is em-based, one group works uniformly across charts:
 a revenue delta of 500 000 at `value: 250000` renders as a 2 em bar in every
 consumer, proportioned relative to each component's own font size.
 
-## Example: Synchronized table and chart
+## Example: Synchronized charts
 
-A table and a structure chart that share the same absolute and relative scaling:
+A time chart and a structure chart that share the same absolute and relative
+scaling:
 
 ```yaml
 ---
@@ -67,16 +78,17 @@ spec:
   value: 10
 ---
 apiVersion: bino.bi/v1alpha1
-kind: Table
+kind: ChartTime
 metadata:
-  name: revenue_table
+  name: revenue_trend
 spec:
-  dataset: revenue_by_segment
+  dataset: revenue_monthly
+  chartTitle: "Revenue trend"
+  dateInterval: month
   measureScale: M
   measureUnit: "EUR"
   scenarios: ["ac1", "pp1"]
   variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
-  barColumns: ["dac1_pp1_pos", "drac1_pp1_pos"]
   unitScaling: revenue_abs
   percentageScaling: revenue_pct
 ---
@@ -130,12 +142,13 @@ spec:
         scenarios: ["ac1", "fc1"]
         variances: ["dac1_fc1_pos"]
         unitScaling: cost_scale
-    - kind: Table
+    - kind: ChartStructure
       spec:
         dataset: cost_by_department
+        chartTitle: "Cost by department"
+        level: category
         scenarios: ["ac1", "fc1"]
         variances: ["dac1_fc1_pos"]
-        barColumns: ["dac1_fc1_pos"]
         unitScaling: cost_scale
 ```
 
@@ -157,12 +170,13 @@ bars are required.
 
 ## Naming rules and diagnostics
 
-- The name `auto` is reserved and cannot be used.
-- Names that would parse as a number — including SI-suffixed forms like `1M` or
-  `250k` — are rejected; they would be ambiguous with a literal scaling value on
-  the consumer attribute.
-- Declaring two groups with the same name and different values emits a warning;
-  the last one wins.
+- Avoid the name `auto`. It passes validation, but consumer attributes read
+  `auto` as the auto-fit keyword, so the group can never be referenced.
+- Avoid names that would parse as a number — including SI-suffixed forms like
+  `1M` or `250k`. They pass validation too, but they are ambiguous with a
+  literal scaling value on the consumer attribute.
+- Two groups with the same name are a hard error: validation reports
+  `duplicate ScalingGroup name` per artefact, after constraints are applied.
 
 ## Attribute Reference
 
@@ -172,7 +186,7 @@ bars are required.
 |-----------|------|----------|---------|-------------|
 | `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
 | `kind` | string | yes | — | Must be `ScalingGroup`. |
-| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling` or `percentageScaling`. The name `auto` and names that parse as numbers (e.g. `1M`) are reserved. |
+| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling`, `percentageScaling` or `size.group`. Duplicate names are a validation error. Avoid `auto` and names that parse as a number (e.g. `1M`) — consumers read those as literal values. |
 | `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
 | `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
 | `metadata.description` | string | no | — | Free-form description. |
@@ -182,4 +196,4 @@ bars are required.
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.value` | number | yes | — | Positive scaling value. Meaning depends on context: data units per em of bar (for `unitScaling`), percentage points per em of pin (for `percentageScaling`), or data units per em² of bubble area (for `size.group`). Larger value = smaller bars. | `value: 250000` |
+| `spec.value` | number | yes | — | Scaling value, greater than `0`. Meaning depends on context: data units per em of bar (for `unitScaling`), percentage points per em of pin (for `percentageScaling`), or data units per em² of bubble area (for `size.group`). Larger value = smaller bars. | `value: 250000` |

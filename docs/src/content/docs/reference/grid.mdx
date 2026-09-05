@@ -5,46 +5,58 @@ description: Create tabular layouts with row and column headers for organizing c
 
 `Grid` manifests define CSS grid-based layouts with row and column headers, allowing you to organize child components in a structured tabular format. Grids are useful for creating dashboards, comparison views, and data matrices where components need to be arranged in rows and columns.
 
-## Spec outline
+## Minimal definition
+
+This is the smallest well-formed `Grid`: the required headers and children plus
+`chartTitle`, which every grid should set — without it the title area is omitted
+and the matrix carries no message.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: Grid
 metadata:
-  name: comparison-grid
+  name: product-comparison
 spec:
-  chartTitle: Regional Sales Overview
+  chartTitle: Product Performance Matrix
   rowHeaders:
-    - label: Electronics
-      id: electronics
-    - label: Apparel
-      id: apparel
-    - label: Home & Garden
-      id: home
+    - label: Laptops
+      id: laptops
+    - label: Tablets
+      id: tablets
   columnHeaders:
-    - label: Q1
-      id: q1
-    - label: Q2
-      id: q2
-    - label: Q3
-      id: q3
-  showRowHeaders: true      # default: true
-  showColumnHeaders: true   # default: true
-  showBorders: true         # default: true
-  rowHeaderWidth: auto      # CSS width (auto, 100px, 20%)
-  cellGap: 0px              # CSS gap between cells
-  selectedStyle: corporate-style # name of a ComponentStyle to apply
+    - label: Revenue
+      id: rev
+    - label: Trend
+      id: trend
   children:
-    - row: electronics
-      column: q1
-      kind: ChartStructure
-      ref: electronics-q1-chart
-    - row: electronics
-      column: q2
-      kind: Table
+    - row: laptops
+      column: rev
+      kind: Text
       spec:
-        dataset: electronics-q2-data
+        dataset: laptop-revenue
+        value: "${total_revenue} EUR"
+    - row: laptops
+      column: trend
+      kind: ChartTime
+      ref: laptop-trend-chart
+    - row: tablets
+      column: rev
+      kind: Text
+      spec:
+        dataset: tablet-revenue
+        value: "${total_revenue} EUR"
+    - row: tablets
+      column: trend
+      kind: ChartTime
+      ref: tablet-trend-chart
 ```
+
+Headers also accept a plain list of labels instead of the explicit `label`/`id`
+objects (see [Header formats](#header-formats)), and a cell is either inline
+(`kind` + `spec`) or a reference to a standalone document (`kind` + `ref`, see
+[Child references and inline definitions](#child-references-and-inline-definitions)).
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Fields
 
@@ -53,8 +65,8 @@ spec:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `chartTitle` | string | `""` | Title displayed at the top-left of the grid. |
-| `rowHeaders` | array | (required) | Row header definitions. Can be simple strings or objects with `label` and `id`. |
-| `columnHeaders` | array | (required) | Column header definitions. Can be simple strings or objects with `label` and `id`. |
+| `rowHeaders` | array | (required) | Row header definitions, at least one. Can be simple strings or objects with both `label` and `id`. |
+| `columnHeaders` | array | (required) | Column header definitions, at least one. Can be simple strings or objects with both `label` and `id`. |
 
 **Row and column headers** support two formats:
 
@@ -99,7 +111,7 @@ columnHeaders:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `children` | array | Array of child definitions. Each child specifies its grid position and content. |
+| `children` | array | Array of child definitions, at least one. Each child specifies its grid position and content. |
 
 Each child object has these properties:
 
@@ -107,7 +119,7 @@ Each child object has these properties:
 |----------|------|----------|-------------|
 | `row` | string or integer | Yes | Row identifier matching a row ID from `rowHeaders`. Can be string or integer. |
 | `column` | string or integer | Yes | Column identifier matching a column ID from `columnHeaders`. Can be string or integer. |
-| `kind` | string | Yes | Component type: `Text`, `Table`, `ChartStructure`, `ChartTime`, `Tree`, or `Image`. |
+| `kind` | string | Yes | Component type: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, or `Image`. |
 | `ref` | string | No | Reference to a standalone component document by name. |
 | `optional` | boolean | No | When `true`, skip gracefully if `ref` is missing (default: `false`). |
 | `params` | object | No | Parameter values (string map) passed to the referenced document. Only valid together with `ref`. |
@@ -412,21 +424,27 @@ See [ComponentStyle](/reference/component-style/) for all available grid styling
 | `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
 | `metadata.description` | string | no | — | Free-form description. |
 | `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| `metadata.params` | array | no | — | Typed parameters expected when this grid is referenced with `params`. Same structure as [LayoutPage parameters](/reference/layout-page/#layoutpage-parameters). |
 
 ### Spec Attributes
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.chartTitle` | string | no | `""` | Title displayed at the top-left of the grid. | `chartTitle: "Sales Matrix"` |
-| `spec.rowHeaders` | array | yes | — | Row header definitions. Simple strings (IDs auto-generated as 0, 1, 2…) or objects with `label` and `id`. | `rowHeaders: [North, South]` |
-| `spec.columnHeaders` | array | yes | — | Column header definitions. Simple strings or objects with `label` and `id`. | `columnHeaders: [Q1, Q2, Q3]` |
+| `spec.chartTitle` | string | no | `""` | Title displayed at the top-left of the grid. If empty, the title area is omitted. | `chartTitle: "Regional Sales Overview"` |
+| `spec.rowHeaders` | array | yes | — | Row header definitions, at least one entry. Simple strings (IDs auto-generated as 0, 1, 2…) or objects with `label` and `id`. | `rowHeaders: [North, South]` |
+| `spec.rowHeaders[].label` | string | yes | — | Display text for the row header. Required in the object form. | `label: Electronics` |
+| `spec.rowHeaders[].id` | string | yes | — | Unique identifier for the row, used in cell references. Required in the object form. | `id: electronics` |
+| `spec.columnHeaders` | array | yes | — | Column header definitions, at least one entry. Simple strings or objects with `label` and `id`. | `columnHeaders: [Q1, Q2, Q3]` |
+| `spec.columnHeaders[].label` | string | yes | — | Display text for the column header. Required in the object form. | `label: Q1 2024` |
+| `spec.columnHeaders[].id` | string | yes | — | Unique identifier for the column, used in cell references. Required in the object form. | `id: q1` |
 | `spec.showRowHeaders` | boolean | no | `true` | Display the row headers column. | `showRowHeaders: true` |
 | `spec.showColumnHeaders` | boolean | no | `true` | Display the column headers row. | `showColumnHeaders: true` |
 | `spec.showBorders` | boolean | no | `true` | Display border/divider lines between cells. | `showBorders: false` |
-| `spec.rowHeaderWidth` | string | no | `"auto"` | CSS width of the row header column. | `rowHeaderWidth: "120px"` |
-| `spec.cellGap` | string | no | `"0px"` | CSS gap between grid cells. | `cellGap: "8px"` |
+| `spec.rowHeaderWidth` | string | no | `"auto"` | CSS width of the row header column (e.g. `auto`, `100px`, `20%`). | `rowHeaderWidth: "120px"` |
+| `spec.cellGap` | string | no | `"0px"` | CSS gap between grid cells (e.g. `0px`, `8px`). | `cellGap: "8px"` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.children` | array | yes | — | Array of grid child definitions specifying position and content. | see below |
+| `spec.i18nNamespace` | string | no | — | I18n namespace inherited by the grid's children (their own `i18nNamespace` wins). Resolved from the enclosing artefact, page or card when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: sales` |
+| `spec.children` | array | yes | — | Array of grid child definitions specifying position and content, at least one entry. | see below |
 
 #### Header formats
 
@@ -461,7 +479,7 @@ spec:
   children:
     - row: electronics        # must match rowHeaders ID
       column: q1              # must match columnHeaders ID
-      kind: ChartStructure    # Text | Table | ChartStructure | ChartTime | Tree | Image
+      kind: ChartStructure    # see the kind values below
       ref: my-chart           # optional reference to standalone document
       optional: false         # skip gracefully if ref is missing
       spec:                   # inline spec or override for ref
@@ -472,13 +490,14 @@ spec:
           - mode==build
 ```
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `children[].row` | string or integer | yes | — | Row identifier matching a row ID from `rowHeaders`. |
-| `children[].column` | string or integer | yes | — | Column identifier matching a column ID from `columnHeaders`. |
-| `children[].kind` | string | yes | — | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `Tree`, `Image`. |
-| `children[].ref` | string | no | — | Reference to standalone document by name. |
-| `children[].optional` | boolean | no | `false` | Skip gracefully if `ref` is missing. |
-| `children[].spec` | object | conditional | — | Component specification. Required for inline children, optional override for `ref` children. |
-| `children[].metadata` | object | no | — | Optional metadata including `name` and `constraints`. |
+| Property | Type | Required | Default | Description | Sample |
+|----------|------|----------|---------|-------------|--------|
+| `children[].row` | string or integer | yes | — | Row identifier matching a row ID from `rowHeaders` (or the auto-generated index). | `row: electronics` |
+| `children[].column` | string or integer | yes | — | Column identifier matching a column ID from `columnHeaders` (or the auto-generated index). | `column: q1` |
+| `children[].kind` | string | yes | — | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Image`. | `kind: ChartStructure` |
+| `children[].ref` | string | no | — | Reference to standalone document by name (`metadata.name`). The referenced spec is used as the base. | `ref: electronics-q1-chart` |
+| `children[].optional` | boolean | no | `false` | Skip gracefully if `ref` is missing. | `optional: true` |
+| `children[].params` | object of string | no | — | Parameter values passed to the referenced document, expanded as `${NAME}` in its spec. Only valid together with `ref`. | `params: { QUARTER: "q1" }` |
+| `children[].spec` | object | conditional | — | Component specification. Required for inline children, optional override for `ref` children. | `spec: { dataset: sales-data }` |
+| `children[].metadata` | object | no | — | Optional metadata including `name` and `constraints`. | `metadata: { name: cell-name }` |
 

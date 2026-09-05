@@ -5,7 +5,10 @@ description: Define interactive web applications with multiple routes and dynami
 
 `LiveReportArtefact` manifests define production-ready web applications that serve multiple `ReportArtefact`s as navigable pages with support for dynamic query parameter substitution.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `LiveReportArtefact` sets the required `spec.title` and the
+mandatory root route `/` with the deliverable it serves.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -14,36 +17,17 @@ metadata:
   name: sales-dashboard
 spec:
   title: "Sales Dashboard"
-  description: "Interactive sales reporting application"
-  pwa:
-    # Optional: serve the application as an installable Progressive Web App
-    shortName: Sales
-    themeColor: "#0B5FFF"
-    icons:
-      - asset: app-icon
-        sizes: 512x512
   routes:
     "/":
       artefact: overview-report
-      queryParams:
-        - name: YEAR
-          default: "2024"
-          description: "Year to display"
-    "/sales":
-      artefact: sales-report
-      title: "Sales Analysis"
-      queryParams:
-        - name: REGION
-          description: "Region filter (required)"
-    "/regions":
-      artefact: region-report
-      title: "Regional Breakdown"
-    "/quick-view":
-      # Alternative: use layoutPages instead of artefact
-      layoutPages:
-        - summary-page
-        - charts-page
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+Each route serves either an `artefact` or one or more `layoutPages` (see
+[spec.routes](#specroutes-required) and
+[Parameterized LayoutPages in routes](#parameterized-layoutpages-in-routes)), and the
+application becomes installable only when [spec.pwa](#specpwa) is set.
 
 ## Fields
 
@@ -141,7 +125,7 @@ Map of URL paths to route configurations. The root route `/` is **mandatory**.
 Each route must specify **either** `artefact` **or** `layoutPages` (but not both):
 
 - `artefact` – name of a `ReportArtefact` to render for this route.
-- `layoutPages` – name of a `LayoutPage` or an array of `LayoutPage` names to render directly (without a ReportArtefact wrapper).
+- `layoutPages` – a single `LayoutPage` name, or an array whose entries are either a name, a glob pattern matching `LayoutPage` names, or an object with `page` and `params`, rendered directly (without a ReportArtefact wrapper).
 - `title` – optional page title override.
 - `queryParams` – array of query parameters allowed for this route.
 
@@ -174,6 +158,8 @@ routes:
       - page-3
 ```
 
+String entries in the array may also be glob patterns (`*`, `?`, `[…]`) that match `LayoutPage` names, e.g. `- "sales-*"`. A glob entry expands to every matching page in name order; it cannot carry `params`.
+
 The `layoutPages` option is useful when you want to serve individual LayoutPage documents directly without defining a full ReportArtefact.
 
 ### spec.routes[path].queryParams
@@ -187,7 +173,7 @@ Each parameter has:
 - `default` – default value if parameter is not provided.
 - `optional` – if `true`, the parameter is optional even without a default value. The parameter will be empty if not provided.
 - `description` – human-readable description.
-- `options` – configuration for `select`, `number`, and `number_range` types.
+- `options` – configuration for `select`, `number`, and `number_range` types: `items` for a static option list (each item requires a `value`, its `label` defaults to that value), `dataset` with `valueColumn` and `labelColumn` for options loaded from a `DataSet`, and `min`, `max`, `step` for numeric inputs.
 
 **Important:** If a parameter has no `default` and `optional` is not `true`, the server returns HTTP 400 with a JSON error listing the missing parameters.
 
@@ -675,3 +661,62 @@ The CLI validates LiveReportArtefact manifests at load time:
 - Every `spec.pwa.icons[].asset` must name an existing `Asset` manifest with `spec.type: image` and a `source.localPath`.
 
 Validation errors are reported before the server starts.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `LiveReportArtefact`. |
+| `metadata.name` | string | yes | — | Unique identifier, used with `bino serve --live <name>`. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.title` | string | yes | — | Human-readable title of the live report application. Must not be empty. | `title: "Sales Dashboard"` |
+| `spec.description` | string | no | — | Description of the application. Also the fallback for `spec.pwa.description`. | `description: "Interactive sales reporting application"` |
+| `spec.pwa` | object | no | — | Progressive Web App configuration. When present, `bino serve` adds a web app manifest, a service worker, and the related tags; when absent, serving behavior is unchanged. See [spec.pwa](#specpwa). | `pwa: { shortName: Sales, icons: [...] }` |
+| `spec.pwa.name` | string | no | `spec.title` | Full application name shown during installation and on splash screens. | `name: "Sales Dashboard"` |
+| `spec.pwa.shortName` | string | no | `pwa.name` | Short name shown under the home screen icon. | `shortName: Sales` |
+| `spec.pwa.description` | string | no | `spec.description` | Description shown in install prompts. | `description: "Sales KPIs on the go"` |
+| `spec.pwa.themeColor` | string | no | — | Theme color applied to the browser UI around the installed app. | `themeColor: "#0B5FFF"` |
+| `spec.pwa.backgroundColor` | string | no | — | Background color of the splash screen shown while the installed app loads. | `backgroundColor: "#FFFFFF"` |
+| `spec.pwa.display` | string | no | `standalone` | Display mode of the installed app. Values: `standalone`, `fullscreen`, `minimal-ui`, `browser`. | `display: fullscreen` |
+| `spec.pwa.icons` | array | yes (within `pwa`) | — | Icons offered to the operating system, at least one. A `512x512` icon is recommended. See [spec.pwa.icons](#specpwaicons). | `icons: [{ asset: app-icon, sizes: 512x512 }]` |
+| `spec.pwa.icons[].asset` | string | yes | — | `metadata.name` of an [`Asset`](/reference/asset/) with `spec.type: image` and a `source.localPath`. Remote or inline asset sources are rejected. | `asset: app-icon-512` |
+| `spec.pwa.icons[].sizes` | string | yes | — | Pixel dimensions as `WIDTHxHEIGHT`. | `sizes: 512x512` |
+| `spec.pwa.icons[].purpose` | string | no | `any` | Icon purpose. Values: `any` for a regular icon, `maskable` for an icon with a safe zone the OS may mask. | `purpose: maskable` |
+| `spec.routes` | object | yes | — | Map of URL paths to route configurations. The key `/` is mandatory; every path must start with `/`; `/manifest.webmanifest` and `/sw.js` are reserved. See [spec.routes](#specroutes-required). | `routes: { "/": { artefact: overview-report } }` |
+| `spec.routes[path]` | object | — | — | One route. Must set exactly one of `artefact` or `layoutPages`. | `"/sales": { artefact: sales-report, title: "Sales Analysis" }` |
+| `spec.routes[path].artefact` | string | one of `artefact` / `layoutPages` | — | `metadata.name` of the `ReportArtefact` rendered for this route. Cannot be combined with `layoutPages`. | `artefact: overview-report` |
+| `spec.routes[path].layoutPages` | string or array | one of `artefact` / `layoutPages` | — | One or more `LayoutPage` documents rendered directly, without a ReportArtefact wrapper. Cannot be combined with `artefact`. | `layoutPages: overview-page` |
+| `spec.routes[path].layoutPages[]` | string or object | — | — | Array entry: a `LayoutPage` name, a glob pattern matching names, or the object form below. | `- summary-page` |
+| `spec.routes[path].layoutPages[].page` | string | yes (in object form) | — | Exact `LayoutPage` name, no glob pattern. See [Parameterized LayoutPages in routes](#parameterized-layoutpages-in-routes). | `page: regional-sales` |
+| `spec.routes[path].layoutPages[].params` | object of strings | no | — | Parameter values passed to the LayoutPage; keys must match its `metadata.params`. Values may be static or `${QUERY_PARAM}` references. | `params: { REGION: "${REGION}" }` |
+| `spec.routes[path].title` | string | no | — | Page title override for this route. Titled non-root routes also become PWA app shortcuts. | `title: "Regional Breakdown"` |
+| `spec.routes[path].queryParams` | array | no | — | Query parameters allowed for this route, substituted as `${VAR}` in the documents. Names must be unique per route. See [spec.routes[path].queryParams](#specroutespathqueryparams). | `queryParams: [{ name: YEAR, default: "2024" }]` |
+| `spec.routes[path].queryParams[].name` | string | yes | — | Parameter name, used as `${name}` in documents. Must match `^[A-Za-z_][A-Za-z0-9_]*$`. | `name: REGION` |
+| `spec.routes[path].queryParams[].type` | string | no | `string` | Input control in the serve UI. Values: `string`, `number`, `number_range`, `select`, `date`, `date_time`. See [Parameter types](#parameter-types). | `type: select` |
+| `spec.routes[path].queryParams[].default` | string | no | — | Default value when the parameter is not provided. Without a default and without `optional: true` the request returns HTTP 400. | `default: "2024"` |
+| `spec.routes[path].queryParams[].optional` | boolean | no | `false` | If `true`, the parameter may be missing without a default; it is then empty. | `optional: true` |
+| `spec.routes[path].queryParams[].description` | string | no | — | Human-readable description of what the parameter controls. | `description: "Year to display"` |
+| `spec.routes[path].queryParams[].options` | object | no | — | Input configuration for `select`, `number`, and `number_range`. See [Options configuration](#options-configuration). | `options: { min: 2000, max: 2030 }` |
+| `spec.routes[path].queryParams[].options.items` | array | no | — | Static option list for `select`. | `items: [{ value: "EU", label: "Europe" }]` |
+| `spec.routes[path].queryParams[].options.items[].value` | string | yes | — | Value submitted when the option is selected, available as `${NAME}`. | `value: "EU"` |
+| `spec.routes[path].queryParams[].options.items[].label` | string | no | the item's `value` | Human-readable label, available as `${NAME_LABEL}`. | `label: "Europe"` |
+| `spec.routes[path].queryParams[].options.dataset` | string | no | — | Name of a `DataSet` the `select` options are loaded from. | `dataset: category_list` |
+| `spec.routes[path].queryParams[].options.valueColumn` | string | no | — | Dataset column used as the option value. | `valueColumn: category_id` |
+| `spec.routes[path].queryParams[].options.labelColumn` | string | no | `valueColumn` | Dataset column used as the option label. | `labelColumn: category_name` |
+| `spec.routes[path].queryParams[].options.min` | number | no | — | Minimum value for `number` and `number_range`. | `min: 2000` |
+| `spec.routes[path].queryParams[].options.max` | number | no | — | Maximum value for `number` and `number_range`. | `max: 2030` |
+| `spec.routes[path].queryParams[].options.step` | number | no | — | Step increment for `number` and `number_range`. | `step: 100` |
+
+See [`ReportArtefact`](/reference/report-artefact/) for the PDF deliverable served by a
+route, and [`bino serve`](/cli/serve/) for running the application.

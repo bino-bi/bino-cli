@@ -6,20 +6,30 @@ description: Define derived tables with SQL or PRQL.
 `DataSet` manifests describe derived tables built using SQL or [PRQL](https://prql-lang.org) (Pipelined Relational Query Language).
 Datasets typically select from `DataSource` views and may depend on other datasets.
 
-## Spec overview
+## Minimal definition
+
+The smallest well-formed `DataSet`: the envelope, a name, a query and the datasources the query reads.
+`dependencies` is not required by the schema, but without it the dataset cache does not notice when the underlying file changes, so set it whenever the query reads a datasource.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: DataSet
 metadata:
-  name: sales_summary
+  name: sales_by_region
 spec:
   query: |
-    SELECT ...
+    SELECT
+      region AS category,
+      row_number() OVER (ORDER BY region) AS categoryIndex,
+      SUM(amount) AS ac1
+    FROM sales_csv
+    GROUP BY region
   dependencies:
     - sales_csv
-    - exchange_rates
 ```
+
+Instead of `query` you can write the transformation in [PRQL](#using-prql) (`spec.prql`) or skip it entirely with a [direct source pass-through](#direct-source-pass-through) (`spec.source`).
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 Fields:
 
@@ -267,14 +277,15 @@ These fields determine how data is hierarchically organized and sorted.
 | `category`    | `categoryIndex`    | Primary data dimension (e.g., "Product A", "Region North"). |
 | `subCategory` | `subCategoryIndex` | Detail dimension for drill-down (creates "thereOf" rows).   |
 | `columnGroup` | `columnGroupIndex` | Column-level grouping for breaking down measures.           |
+| `columnSubGroup` | `columnSubGroupIndex` | Second column level underneath `columnGroup`.         |
 
-**Note**: When providing a grouping dimension string (e.g., `rowGroup`), you should likewise provide the corresponding index (e.g., `rowGroupIndex`) to ensure consistent sort ordering.
+**Note**: The two columns of a pair depend on each other in both directions. Provide the index (e.g., `rowGroupIndex`) whenever you provide the dimension string (e.g., `rowGroup`) to ensure consistent sort ordering — and likewise, an index column without its dimension string is reported by data validation.
 
 ### Metadata & Control Fields
 
 | Column      | Type     | Description                                                                                                                       |
 | :---------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `date`      | `string` | **Required for TimeCharts**. ISO 8601 date (e.g., `2024-01-15`). Used for time-series axes and normalization.                     |
+| `date`      | `string` | **Required for TimeCharts**. ISO 8601 date (e.g., `2024-01-15`) or datetime (e.g., `2024-01-15T08:30:00Z`). Used for time-series axes and normalization. |
 | `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals. |
 | `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results.                                                    |
 
@@ -301,7 +312,8 @@ bino registers a few scalar helper functions on the DuckDB engine, so they are a
 
 ### `op(value)` — sign as an operator
 
-`op` reduces a numeric value to its sign as a string — exactly the shape the `operation` control field (documented above) expects.
+`op` reduces a numeric value to its sign as a string, the shape the `operation` control field (documented above) expects.
+Note that `operation` only accepts `'+'` and `'-'`, so the empty string returned for `0` is reported by [data validation](#data-validation) — wrap the call (for example `nullif(op(x), '')`) when zero values can occur.
 
 | Input       | Result                |
 | :---------- | :-------------------- |
@@ -352,8 +364,8 @@ bino can validate query results against the standard schema at build time. This 
 | Type validation           | String fields (`category`, `rowGroup`, etc.) must be strings        |
 | Type validation           | Number fields (`ac1`, `categoryIndex`, etc.) must be numbers        |
 | Enum validation           | `operation` must be `"+"` or `"-"`                                  |
-| Date format               | `date` must be ISO 8601 format (`YYYY-MM-DD`)                       |
-| Dependent required        | `rowGroup` requires `rowGroupIndex`, `category` requires `categoryIndex`, etc. |
+| Date format               | `date` must be ISO 8601 (`YYYY-MM-DD`, or `YYYY-MM-DDThh:mm:ss` with an optional `Z` or `±hh:mm` offset) |
+| Dependent required        | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup` |
 
 ### Enabling validation
 
@@ -582,7 +594,7 @@ User-defined document names must **not** start with `_inline_` as this prefix is
 |-----------|------|----------|---------|-------------|
 | `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
 | `kind` | string | yes | — | Must be `DataSet`. |
-| `metadata.name` | string | yes | — | Unique identifier. Pattern: `^[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$`. |
+| `metadata.name` | string | yes | — | Unique identifier, and the table name the query is registered under. Pattern: `^(@[a-z0-9][a-z0-9_-]*/([a-z0-9][a-z0-9_-]*/)?)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$` — a plain name, optionally prefixed with a registry scope such as `@acme/` or `@acme/kit/`. |
 | `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
 | `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
 | `metadata.description` | string | no | — | Free-form description. |
@@ -590,14 +602,21 @@ User-defined document names must **not** start with `_inline_` as this prefix is
 
 ### Spec Attributes
 
-Exactly one of `query`, `prql`, or `source` is required. They are mutually exclusive.
+At least one of `query`, `prql`, or `source` is required.
+`source` is mutually exclusive with `query` and `prql` — combining them is rejected by the lint rule `dataset-source-exclusive`.
+Setting `query` and `prql` together is accepted by the schema, but only `prql` is executed (the precedence is `source` before `prql` before `query`).
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.query` | string or object | conditional | — | SQL query, inline or from external file. Required if `prql` and `source` are not set. | `query: SELECT * FROM sales` |
-| `spec.prql` | string or object | conditional | — | PRQL query, inline or from external file. Required if `query` and `source` are not set. | `prql: from sales_csv` |
-| `spec.source` | string or object | conditional | — | Direct DataSource pass-through. A string name or inline DataSource definition. Required if `query` and `prql` are not set. | `source: sales_csv` |
-| `spec.dependencies` | array | no | — | List of DataSource references or inline definitions. Referenced in queries via `@inline(N)` syntax. | see below |
+| `spec.query` | string or object | conditional | — | SQL query executed against DuckDB, inline or from an external file. DataSource and DataSet names are the table names; inline dependencies are addressed as `@inline(N)`. Required if `prql` and `source` are not set. | `query: SELECT * FROM sales` |
+| `spec.query.$file` | string | conditional | — | Path to an external `.sql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files). | `$file: ./queries/sales_summary.sql` |
+| `spec.prql` | string or object | conditional | — | [PRQL](https://prql-lang.org) query, inline or from an external file, compiled to SQL by DuckDB's prql extension. Required if `query` and `source` are not set. | `prql: from sales_csv` |
+| `spec.prql.$file` | string | conditional | — | Path to an external `.prql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files). | `$file: ./queries/customer_orders.prql` |
+| `spec.source` | string or object | conditional | — | Direct DataSource pass-through, equivalent to `SELECT * FROM <name>`. A string name or an inline DataSource definition. Required if `query` and `prql` are not set. See [Direct source pass-through](#direct-source-pass-through). | `source: sales_csv` |
+| `spec.dependencies` | array | no | — | List of DataSource dependencies. Feeds the dependency graph and the cache digest, so a changed input file invalidates the dataset. | see below |
+| `spec.dependencies[]` | string or object | no | — | Either the `metadata.name` of a DataSource, or an inline DataSource definition referenced in the query as `@inline(N)` with `N` the zero-based index. | `- sales_csv` |
+
+An inline DataSource — as `spec.source` or as an item of `spec.dependencies` — takes the full DataSource spec (`type` with the values `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`, plus `path`, `content`, `columns`, `connection`, `delimiter`, `sample`, …). Those attributes are documented in the [DataSource reference](/reference/datasource/).
 
 #### External file reference
 
