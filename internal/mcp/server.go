@@ -29,6 +29,20 @@ type Deps struct {
 	// write_manifest, scaffold_source, init_bundle, edit_manifest). Supplied by
 	// the CLI layer.
 	Authoring Authoring
+	// Packages, when non-nil, enables the registry tools (registry_packages,
+	// registry_search, registry_info, registry_auth_status, registry_add,
+	// registry_update, registry_remove, registry_install) and the
+	// bino://packages resource. Supplied by the CLI layer.
+	Packages Packages
+	// RegistryChanged, when non-nil, is called after a registry write tool has
+	// changed bino.toml, bino.lock or .bino/registry/. The daemon uses it to
+	// broadcast the registry-changed SSE event to editors; standalone leaves it nil.
+	RegistryChanged func()
+	// AllowPublish, when true, enables registry_publish, which mints an
+	// immutable — possibly public — version on the registry. Off by default;
+	// only the human's `bino mcp --allow-publish` / `bino daemon
+	// --mcp-allow-publish` flag sets it.
+	AllowPublish bool
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -38,11 +52,18 @@ Resources:
   bino://schema/{kind}   spec schema for one kind (self-contained, with $defs)
   bino://kinds           every manifest kind + its capability category
   bino://documents       project index: every document -> {kind, name, file, position}
+  bino://packages        the project's registry packages (bino.lock + bino.toml [dependencies])
 
 Schema tools:
   outline_kind(kind)     compact per-field outline of a kind's spec (start here)
   scaffold_kind(kind)    minimal YAML document for a kind, required fields pre-filled
   describe_kind(kind)    full spec JSON Schema (large; only when the outline is ambiguous)
+
+Packages: published predefs live in a registry. Before authoring a component from
+scratch, registry_search for one; registry_info(spec) describes it;
+registry_auth_status says whether the human must run ` + "`bino registry login`" + `.
+registry_add(specs) installs packages and records them in bino.toml; registry_update,
+registry_remove and registry_install change the lock the same way ` + "`bino registry`" + ` does.
 
 Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
@@ -66,6 +87,8 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerBuildTool(srv)
 	h.registerLayoutTool(srv)
 	h.registerAuthoringTools(srv)
+	h.registerPackagesTools(srv)
+	h.registerPublishTool(srv)
 	return srv
 }
 
@@ -108,6 +131,16 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 		Description: "Every document in the project: kind, name, file, and document position.",
 		MIMEType:    "application/json",
 	}, h.readDocuments)
+
+	if h.deps.Packages != nil {
+		srv.AddResource(&mcpsdk.Resource{
+			Name:        "packages",
+			URI:         "bino://packages",
+			Title:       "Package dependencies",
+			Description: "The project's registry packages: bino.lock merged with bino.toml [dependencies], install state, and declared params (same payload as registry_packages).",
+			MIMEType:    "application/json",
+		}, h.readPackages)
+	}
 
 	srv.AddResource(&mcpsdk.Resource{
 		Name:        "templates",
@@ -163,6 +196,14 @@ func (h *handlers) readKinds(ctx context.Context, _ *mcpsdk.ReadResourceRequest)
 
 func (h *handlers) readDocuments(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
 	return jsonResource("bino://documents", h.deps.State.Index())
+}
+
+func (h *handlers) readPackages(ctx context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+	pkgs, err := h.deps.Packages.Packages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return jsonResource("bino://packages", registryPackagesOutput{Packages: pkgs})
 }
 
 // --- Read tools ---

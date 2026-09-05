@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/registry"
 )
 
@@ -20,53 +21,76 @@ func newRegistryInstallCommand() *cobra.Command {
 anything, so CI and fresh checkouts reproduce the exact locked versions.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
 			p, err := registryProjectSetup()
 			if err != nil {
 				return err
 			}
-			lock, err := registry.LoadLockfile(p.Root)
-			if err != nil {
-				return ConfigError(err)
-			}
-			if len(lock.Packages) == 0 {
-				if len(p.Cfg.Dependencies) == 0 {
-					p.Out.Info("Nothing to install")
-					return nil
-				}
-				return ConfigErrorf("bino.toml declares dependencies but %s has no packages — run 'bino registry update' to create it", registry.LockfileName)
-			}
-			if err := checkLockDrift(p, lock); err != nil {
-				return err
-			}
-
-			client, err := p.client()
+			res, err := registryInstall(cmd.Context(), p)
 			if err != nil {
 				return err
 			}
-
-			entries := append([]registry.Entry(nil), lock.Packages...)
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-			plans := make([]packagePlan, 0, len(entries))
-			for _, e := range entries {
-				pp, err := fetchLockedPackage(ctx, p, client, e)
-				if err != nil {
-					return err
-				}
-				plans = append(plans, pp)
+			if len(res.Changes) == 0 {
+				p.Out.Info("Nothing to install")
+				return nil
 			}
-			// The lock is authoritative here — it is not rewritten, so a v1
-			// lock stays a v1 lock on disk and re-installing produces no diff.
-			if err := materialize(p, plans, false); err != nil {
-				return err
+			for _, w := range res.Warnings {
+				p.Out.Warning(w)
 			}
-
-			registryCompatWarnings(p, entries)
 			registryGitignoreHint(p)
-			p.Out.Success(fmt.Sprintf("Installed %d package(s) from %s", len(entries), registry.LockfileName))
+			p.Out.Success(fmt.Sprintf("Installed %d package(s) from %s", len(res.Changes), registry.LockfileName))
 			return nil
 		},
 	}
+}
+
+// registryInstall re-materializes .bino/registry/ from bino.lock without
+// re-resolving, refusing a lock that disagrees with bino.toml. Every locked
+// package is reported with Before == After. It never prints: the MCP server
+// calls it too.
+func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutationResult, error) {
+	lock, err := registry.LoadLockfile(p.Root)
+	if err != nil {
+		return mcp.RegistryMutationResult{}, ConfigError(err)
+	}
+	if len(lock.Packages) == 0 {
+		if len(p.Cfg.Dependencies) == 0 {
+			return mcp.RegistryMutationResult{Changes: []mcp.RegistryChange{}}, nil
+		}
+		return mcp.RegistryMutationResult{}, ConfigErrorf("bino.toml declares dependencies but %s has no packages — run 'bino registry update' to create it", registry.LockfileName)
+	}
+	if err := checkLockDrift(p, lock); err != nil {
+		return mcp.RegistryMutationResult{}, err
+	}
+
+	client, err := p.client()
+	if err != nil {
+		return mcp.RegistryMutationResult{}, err
+	}
+
+	entries := append([]registry.Entry(nil), lock.Packages...)
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	plans := make([]packagePlan, 0, len(entries))
+	for _, e := range entries {
+		pp, err := fetchLockedPackage(ctx, p, client, e)
+		if err != nil {
+			return mcp.RegistryMutationResult{}, err
+		}
+		plans = append(plans, pp)
+	}
+	// The lock is authoritative here — it is not rewritten, so a v1
+	// lock stays a v1 lock on disk and re-installing produces no diff.
+	if err := materialize(p, plans, false); err != nil {
+		return mcp.RegistryMutationResult{}, err
+	}
+
+	changes := make([]mcp.RegistryChange, 0, len(entries))
+	for _, e := range entries {
+		changes = append(changes, mcp.RegistryChange{Name: e.Name, Before: e.Version, After: e.Version, Tag: e.Tag, Direct: e.Direct})
+	}
+	return mcp.RegistryMutationResult{
+		Changes:  changes,
+		Warnings: registryCompatWarnings(p, entries),
+	}, nil
 }
 
 // checkLockDrift verifies bino.lock still reflects bino.toml's [dependencies]

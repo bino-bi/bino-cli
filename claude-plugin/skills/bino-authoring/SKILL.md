@@ -40,6 +40,13 @@ read only its `properties` and `required` keys; ignore allOf/if/then wrappers.
 
 ## The authoring loop
 
+**Check the registry before authoring from scratch.** A published predef may already ship the
+component: `registry_search("kpi card", kinds: ["Table"])` finds candidates, `registry_info("@acme/kpi-card")`
+shows what one contains, and `registry_add(["@acme/kpi-card"])` installs it as a dependency. Call
+`registry_packages()` to see what the project already depends on and reference those documents by
+`metadata.name` instead of re-authoring them. Author the component yourself only when nothing fits.
+If the server does not offer the registry tools, the bino binary predates them — skip this check.
+
 For every manifest you create:
 
 1. **Read the shape** — `outline_kind("Table")` (or whichever kind), then `scaffold_kind("Table")`

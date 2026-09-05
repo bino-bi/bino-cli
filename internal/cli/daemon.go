@@ -36,10 +36,11 @@ const defaultInactivityTimeout = 5 * time.Minute
 
 func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
 	var (
-		port       int
-		workdir    string
-		listenAddr string
-		mcpEnabled bool
+		port            int
+		workdir         string
+		listenAddr      string
+		mcpEnabled      bool
+		mcpAllowPublish bool
 	)
 
 	cmd := &cobra.Command{
@@ -92,8 +93,20 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			// activity for the idle-shutdown check below.
 			var mcpHandler http.Handler
 			var mcpActive func() int64
+			var server *daemon.Server
 			if mcpEnabled {
-				deps := mcp.Deps{State: state, Registry: env.PluginRegistry, Authoring: newCLIAuthoring(env.ProjectRoot)}
+				deps := mcp.Deps{
+					State:        state,
+					Registry:     env.PluginRegistry,
+					Authoring:    newCLIAuthoring(env.ProjectRoot),
+					Packages:     newCLIPackages(state),
+					AllowPublish: mcpAllowPublish,
+					// server is assigned below; the callback only runs once a
+					// tool call has gone through the mounted handler.
+					RegistryChanged: func() {
+						server.BroadcastEvent("registry-changed", map[string]any{"reasons": []string{"mcp"}})
+					},
+				}
 				inner := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 					return mcp.NewServer(deps)
 				}, nil)
@@ -112,7 +125,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				defer env.PluginManager.ShutdownAll(ctx)
 			}
 
-			server, err := daemon.NewServer(daemon.ServerConfig{
+			server, err = daemon.NewServer(daemon.ServerConfig{
 				ListenAddr:     fullListenAddr,
 				State:          state,
 				Logger:         logger.Channel("server"),
@@ -216,6 +229,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().StringVar(&listenAddr, "listen-addr", "127.0.0.1", "Address to listen on (use 0.0.0.0 to accept connections from a container network)")
 	cmd.Flags().BoolVar(&mcpEnabled, "mcp", true, "Mount the MCP server at /mcp (Streamable HTTP); use --mcp=false to disable")
+	cmd.Flags().BoolVar(&mcpAllowPublish, "mcp-allow-publish", false, "Expose the registry_publish MCP tool (irreversible: mints an immutable, possibly public, registry version)")
 
 	return cmd
 }

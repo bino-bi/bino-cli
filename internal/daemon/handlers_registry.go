@@ -46,21 +46,30 @@ type RegistryPackage struct {
 	Params       []RegistryParam `json:"params,omitempty"`
 }
 
-// handleRegistryPackages reports the project's dependencies fully offline:
-// bino.lock entries merged with bino.toml [dependencies] and an install check
-// on the store, with params read from the already-loaded documents.
+// handleRegistryPackages serves the project's dependencies fully offline.
 func (s *Server) handleRegistryPackages(w http.ResponseWriter, _ *http.Request) {
-	root := s.state.ProjectRoot()
-	lf, err := registry.LoadLockfile(root)
+	packages, err := RegistryPackages(s.state.ProjectRoot(), s.state.Documents())
 	if err != nil {
 		s.writeJSON(w, map[string]any{"packages": []RegistryPackage{}, "error": err.Error()})
 		return
+	}
+	s.writeJSON(w, map[string]any{"packages": packages})
+}
+
+// RegistryPackages reports the project's dependencies fully offline:
+// bino.lock entries merged with bino.toml [dependencies] and an install check
+// on the store, with params read from the already-loaded documents. It is
+// shared by the HTTP handler and the MCP registry_packages tool.
+func RegistryPackages(root string, docs []config.Document) ([]RegistryPackage, error) {
+	lf, err := registry.LoadLockfile(root)
+	if err != nil {
+		return nil, err
 	}
 	declared := map[string]string{}
 	if cfg, cfgErr := pathutil.LoadProjectConfig(root); cfgErr == nil && cfg != nil && cfg.Dependencies != nil {
 		declared = cfg.Dependencies
 	}
-	paramsByPath := packageParamsByPath(root, s.state.Documents())
+	paramsByPath := packageParamsByPath(root, docs)
 
 	packages := make([]RegistryPackage, 0, len(lf.Packages)+len(declared))
 	locked := make(map[string]bool, len(lf.Packages))
@@ -90,17 +99,12 @@ func (s *Server) handleRegistryPackages(w http.ResponseWriter, _ *http.Request) 
 		}
 	}
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Name < packages[j].Name })
-	s.writeJSON(w, map[string]any{"packages": packages})
+	return packages, nil
 }
 
 // handleRegistrySearch proxies the registry's full-text search using the
 // project's resolved registry config (URL chain + token/credentials).
 func (s *Server) handleRegistrySearch(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.registryClientConfig()
-	if err != nil {
-		s.writeRegistryError(w, err)
-		return
-	}
 	q := r.URL.Query()
 	params := registry.SearchParams{
 		Query:   q.Get("q"),
@@ -110,14 +114,25 @@ func (s *Server) handleRegistrySearch(w http.ResponseWriter, r *http.Request) {
 		Page:    atoiOrZero(q.Get("page")),
 		PerPage: atoiOrZero(q.Get("perPage")),
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	res, err := registry.NewClient(cfg).Search(ctx, params)
+	res, err := RegistrySearch(r.Context(), s.state.ProjectRoot(), params)
 	if err != nil {
 		s.writeRegistryError(w, err)
 		return
 	}
 	s.writeJSON(w, res)
+}
+
+// RegistrySearch runs a registry search with the project's resolved registry
+// config, bounded by a 10s timeout. Shared by the HTTP handler and the MCP
+// registry_search tool.
+func RegistrySearch(ctx context.Context, root string, params registry.SearchParams) (registry.SearchResult, error) {
+	cfg, err := registryClientConfig(root)
+	if err != nil {
+		return registry.SearchResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return registry.NewClient(cfg).Search(ctx, params)
 }
 
 // handleRegistryInfo resolves a package spec ("@scope/name[@ref]") against the
@@ -128,35 +143,49 @@ func (s *Server) handleRegistryInfo(w http.ResponseWriter, r *http.Request) {
 		s.writeJSONError(w, http.StatusBadRequest, err, "")
 		return
 	}
-	cfg, err := s.registryClientConfig()
+	res, err := RegistryInfo(r.Context(), s.state.ProjectRoot(), spec)
 	if err != nil {
 		s.writeRegistryError(w, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	s.writeJSON(w, res)
+}
+
+// RegistryInfoResult is a resolved package annotated with the version the
+// project's bino.lock currently pins, if any.
+type RegistryInfoResult struct {
+	registry.ResolveV2Result
+	InstalledVersion string `json:"installedVersion,omitempty"`
+}
+
+// RegistryInfo resolves a package spec against the project's registry
+// (10s timeout) and annotates the locally locked version. Shared by the HTTP
+// handler and the MCP registry_info tool.
+func RegistryInfo(ctx context.Context, root string, spec registry.Spec) (RegistryInfoResult, error) {
+	cfg, err := registryClientConfig(root)
+	if err != nil {
+		return RegistryInfoResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	res, err := registry.NewClient(cfg).ResolveTree(ctx, spec.Scope, spec.Base, spec.Ref)
 	if err != nil {
-		s.writeRegistryError(w, err)
-		return
+		return RegistryInfoResult{}, err
 	}
 	installed := ""
-	if lf, lockErr := registry.LoadLockfile(s.state.ProjectRoot()); lockErr == nil {
+	if lf, lockErr := registry.LoadLockfile(root); lockErr == nil {
 		if e := lf.Get(spec.Name); e != nil {
 			installed = e.Version
 		}
 	}
-	s.writeJSON(w, struct {
-		registry.ResolveV2Result
-		InstalledVersion string `json:"installedVersion,omitempty"`
-	}{res, installed})
+	return RegistryInfoResult{ResolveV2Result: res, InstalledVersion: installed}, nil
 }
 
-// registryClientConfig resolves the registry connection for this project:
+// registryClientConfig resolves the registry connection for a project:
 // bino.toml [registry] → env → global config → default, token → credentials.
-func (s *Server) registryClientConfig() (registry.Config, error) {
+func registryClientConfig(root string) (registry.Config, error) {
 	var rawURL, rawToken string
-	if cfg, err := pathutil.LoadProjectConfig(s.state.ProjectRoot()); err == nil && cfg != nil {
+	if cfg, err := pathutil.LoadProjectConfig(root); err == nil && cfg != nil {
 		rawURL, rawToken = cfg.Registry.URL, cfg.Registry.Token
 	}
 	return registry.ResolveConfig(rawURL, rawToken)
