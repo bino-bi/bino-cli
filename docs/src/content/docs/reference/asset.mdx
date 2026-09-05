@@ -8,20 +8,27 @@ Layouts refer to assets by `metadata.name` so that paths and URLs are centralize
 Image assets also serve as the icon sources for installable web apps — see
 [`spec.pwa.icons`](/reference/live-report-artefact/#specpwaicons) on `LiveReportArtefact`.
 
-## Spec overview
+## Minimal definition
+
+The smallest well-formed `Asset` sets the required fields `spec.type`, `spec.mediaType`
+and one `spec.source` variant.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: Asset
 metadata:
   name: brandLogo
-  description: Main brand logo used in report headers
 spec:
-  type: image            # image | file | font
-  mediaType: image/png   # MIME type
+  type: image
+  mediaType: image/png
   source:
-    # exactly one of: inlineBase64 | localPath | remoteURL
+    localPath: ./assets/brand-logo.png
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+Exactly one `spec.source` variant must be set: `localPath` as shown above, `remoteURL` for a
+hosted file (see [Examples](#examples)) or `inlineBase64` for a self-contained bundle.
 
 Important fields:
 

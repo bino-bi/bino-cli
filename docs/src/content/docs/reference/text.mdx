@@ -8,7 +8,10 @@ import textImg from "../../../assets/sample-text.png";
 `Text` manifests define text values that can be used directly or as children of layouts and cards.
 They can optionally bind to one or more datasets and support font-size scaling to fit the available space.
 
-## Spec overview
+## Minimal definition
+
+This is the smallest well-formed `Text`: the required `value` plus the `dataset` the
+commentary reads its numbers from.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -16,18 +19,25 @@ kind: Text
 metadata:
   name: reportSubtitle
 spec:
-  value: "Quarterly performance overview"
-  dataset: kpi_summary   # string or array
-  scale: auto             # optional scaling mode
-  selectedStyle: corporate-style   # optional ComponentStyle name
+  dataset: kpi_summary
+  value: |
+    **H1 2025 Summary**
+
+    Total revenue reached **EUR ${data.kpi_summary[0].ac1}m**, exceeding plan by **+3.6%**.
 ```
+
+A single dataset name is the common case; `dataset` also accepts an array of names or an
+inline `DataSet` definition (see [Template expressions](#template-expressions) for how the
+bound rows are addressed).
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 Fields:
 
 - `spec.value` – required string. Supports **Markdown** syntax (see below) and **template expressions** (see below).
-- `spec.dataset` – optional dataset reference; either a single string or an array of strings.
+- `spec.dataset` – optional dataset reference; a single name, an array of names, or an inline [`DataSet`](/reference/dataset/) definition.
 - `spec.scale` – optional scaling mode (see [Scaling](#scaling)).
 - `spec.selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `spec.i18nNamespace` – optional [i18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) for this component's labels; when unset it is inherited from the nearest ancestor that carries one.
 
 ## Markdown support
 
@@ -100,7 +110,7 @@ Expressions are evaluated at runtime in the browser with access to bound dataset
 Available variables inside `${...}`:
 
 - `data.<datasetName>` – the bound dataset rows (array of objects).
-- `t('<key>')` – looks the key up in the component's i18n namespace (set via `i18nNamespace`, default `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
+- `t('<key>')` – looks the key up in the component's i18n namespace (set via `i18nNamespace`, otherwise inherited from the nearest ancestor carrying one; keys missing there fall back to `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
 
 ```yaml
 spec:
@@ -135,8 +145,8 @@ the tighter constraint wins.
 | `"auto"` | Auto-scale to fit, silently (no warning) |
 | `"0.5"`, `"0.8"`, `"1.2"`, … | Apply `baseFontSize × factor`; emits `WARN_overflow` if content still overflows |
 
-Invalid values (negative, non-numeric, unrecognized keywords) fall back to the
-default behaviour and emit an `ERR_scale` warning.
+Other values (negative or zero factors, non-numeric strings, unrecognized keywords) are
+rejected by schema validation, so they never reach the renderer.
 
 ```yaml
 spec:
@@ -198,7 +208,8 @@ spec:
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
 | `spec.value` | string | yes | — | Text content. Supports Markdown syntax and template expressions `${data.<dataset>[0].field}` and `${t('key')}`. | `value: "**Revenue** grew by *12%*"` |
-| `spec.dataset` | string or array | no | — | Dataset reference for template interpolation. Single name or array of names. Provided by the **withDataset** mixin. | `dataset: kpi_summary` |
-| `spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: explicit factor. When omitted, auto-scales and emits a warning. | `scale: auto` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.dataset` | string, object, or array | no | — | Dataset reference for template interpolation: a [`DataSet`](/reference/dataset/) name, an inline `DataSet` definition, or an array of either. Provided by the **withDataset** mixin. | `dataset: kpi_summary` |
+| `spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. A positive number or numeric string (e.g. `0.5`, `"0.8"`, `1.2`): explicit `baseFontSize × factor`. When omitted, auto-scales and emits an `AUTO_scale` warning. See [Scaling](#scaling). | `scale: auto` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. The effective style merges `_system`, then `_default`, then the named style. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
 

@@ -7,7 +7,11 @@ description: Generate PDF documents from Markdown files with table of contents, 
 Unlike `ReportArtefact` which renders data-driven layouts, `DocumentArtefact` is designed for
 text-heavy documents like manuals, specifications, or narrative reports.
 
-## Spec outline
+## Minimal definition
+
+This is the smallest well-formed `DocumentArtefact`: the two required fields (`format` and
+`sources`) plus the fields a real document deliverable needs — its output filename, its title,
+the locale, a table of contents and page numbers.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -16,37 +20,33 @@ metadata:
   name: technical_manual
 spec:
   format: a4
-  orientation: portrait
   locale: en
   filename: technical-manual.pdf
   title: "Technical Manual"
-  author: "Engineering Team"
-  subject: "Product Documentation"
-  keywords: ["manual", "technical", "documentation"]
+  tableOfContents: true
+  displayHeaderFooter: true
   sources:
     - ./docs/introduction.md
     - ./docs/installation.md
     - ./docs/configuration.md
-  stylesheet: ./styles/manual.css
-  tableOfContents: true
-  tocNumbering: true
-  math: true
-  pageBreakBetweenSources: true
-  displayHeaderFooter: true
-  marginTop: "20mm"
-  marginBottom: "15mm"
-  signingProfile: corporateSigner
 ```
+
+Entries in `sources` are file paths or [glob patterns](#glob-patterns); the older object form
+(`- file: ./docs/intro.md`) is deprecated and should not be used in new manifests.
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Fields
 
 ### Basic settings
 
-- `spec.format` – Page size: `a4`, `a5`, `letter`, or `legal`. Default: `a4`.
+- `spec.format` – Required page size: `a4`, `a5`, `letter`, or `legal`. A manifest without it fails
+  schema validation; the loader falls back to `a4` with a warning.
 - `spec.orientation` – `portrait` or `landscape`. Default: `portrait`.
-- `spec.locale` – Document locale (e.g., `en`, `de`). Default: `en`.
-- `spec.filename` – Required output filename (relative to output directory).
-- `spec.title` – Required document title; used in PDF metadata and default header.
+- `spec.locale` – Document locale (e.g., `en`, `de`). Default: `de`.
+- `spec.filename` – Output filename (relative to output directory). Without it the PDF is named
+  after `metadata.name` (`<name>.pdf`).
+- `spec.title` – Document title; used in PDF metadata and default header.
 
 ### Metadata
 
@@ -56,11 +56,12 @@ spec:
 
 ### Content sources
 
-- `spec.sources` – List of Markdown file paths or glob patterns to include in the document.
-  Files matching glob patterns are sorted alphabetically for deterministic ordering.
-  Supports patterns like `./docs/*.md` or `./docs/**/*.md`.
+- `spec.sources` – Required list of Markdown file paths or glob patterns to include in the document,
+  at least one entry. Files matching glob patterns are sorted alphabetically for deterministic
+  ordering. Supports patterns like `./docs/*.md` or `./docs/**/*.md`.
 - `spec.stylesheet` – Optional path to a custom CSS file for styling.
-- `spec.pageBreakBetweenSources` – Insert page breaks between source files. Default: `false`.
+- `spec.pageBreakBetweenSources` – Insert page breaks between source files. Default: `true`. With
+  more than one source the loader forces it to `true`.
 
 #### Glob patterns
 
@@ -110,8 +111,8 @@ Math is rendered server-side using KaTeX, so no JavaScript is required in the ou
 - `spec.displayHeaderFooter` – Enable header and footer in the PDF. Default: `false`.
 - `spec.headerTemplate` – Custom HTML template for the header.
 - `spec.footerTemplate` – Custom HTML template for the footer.
-- `spec.marginTop` – Top margin (e.g., `20mm`). Required when using headers.
-- `spec.marginBottom` – Bottom margin (e.g., `15mm`). Required when using footers.
+- `spec.marginTop` – Top margin reserved for the header (e.g., `20mm`). Default: `20mm`.
+- `spec.marginBottom` – Bottom margin reserved for the footer (e.g., `15mm`). Default: `15mm`.
 
 When `displayHeaderFooter` is enabled without custom templates, default templates are used:
 - **Header**: Document title centered
@@ -124,6 +125,7 @@ Templates use Chromium's PDF header/footer format. Available CSS classes:
 - `.date` – Current date
 - `.pageNumber` – Current page number
 - `.totalPages` – Total page count
+- `.url` – Document URL
 
 Example custom footer:
 ```yaml
@@ -238,6 +240,7 @@ kind: DocumentArtefact
 metadata:
   name: readme
 spec:
+  format: a4
   filename: readme.pdf
   title: "Project README"
   sources:
@@ -313,6 +316,7 @@ kind: DocumentArtefact
 metadata:
   name: branded_manual
 spec:
+  format: a4
   filename: manual.pdf
   title: "Product Manual"
   stylesheet: ./styles/brand.css
@@ -343,6 +347,7 @@ kind: DocumentArtefact
 metadata:
   name: complete_docs
 spec:
+  format: a4
   filename: complete-documentation.pdf
   title: "Complete Documentation"
   tableOfContents: true
@@ -385,3 +390,47 @@ The correlation coefficient $r$ is calculated as:
 
 $$r = \frac{\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_{i=1}^n (x_i - \bar{x})^2 \sum_{i=1}^n (y_i - \bar{y})^2}}$$
 ```
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `DocumentArtefact`. |
+| `metadata.name` | string | yes | — | Unique identifier. Also the fallback output filename (`<name>.pdf`) and the preview route `/doc/<name>`. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.format` | string | yes | — (loader falls back to `a4` with a warning) | Page format of the rendered document. Values: `a4`, `a5`, `letter`, `legal`. | `format: a4` |
+| `spec.orientation` | string | no | `portrait` | Page orientation. Values: `portrait`, `landscape`. | `orientation: portrait` |
+| `spec.locale` | string | no | `de` | Locale of the document, used for i18n and the `bn-context` element (for example `en`, `de`, `fr`). | `locale: en` |
+| `spec.filename` | string | no | `<metadata.name>.pdf` | Output filename of the generated PDF, relative to the output directory. | `filename: technical-manual.pdf` |
+| `spec.title` | string | no | — | Human-readable title, stored in PDF metadata and used by the default header template. | `title: "Technical Manual"` |
+| `spec.author` | string | no | — | Author name stored in the PDF metadata. | `author: "Engineering Team"` |
+| `spec.subject` | string | no | — | Subject line stored in the PDF metadata. | `subject: "Product Documentation"` |
+| `spec.keywords` | array of strings | no | — | Keywords stored in the PDF metadata; entries must be unique. | `keywords: ["manual", "technical", "documentation"]` |
+| `spec.sources` | array of strings | yes | — | Ordered list of markdown files to include, at least one entry. Paths are relative to the manifest and may be [glob patterns](#glob-patterns). An array of `{ file: ... }` objects is accepted but deprecated. | `sources: [./docs/introduction.md]` |
+| `spec.sources[]` | string | — | — | A single markdown path or glob pattern. | `- ./docs/**/*.md` |
+| `spec.sources[].file` | string | yes (in the deprecated object form) | — | Path to a markdown file, relative to the manifest file. Use plain strings instead. | `- file: ./docs/introduction.md` |
+| `spec.stylesheet` | string | no | — | Path to a custom CSS stylesheet, relative to the manifest file. | `stylesheet: ./styles/manual.css` |
+| `spec.tableOfContents` | boolean | no | `false` | Generates a [table of contents](#table-of-contents) from the markdown headings. | `tableOfContents: true` |
+| `spec.tocNumbering` | boolean | no | `true` | Adds hierarchical chapter numbers to TOC entries (`1`, `1.1`, `1.1.1`). Only applies when `tableOfContents` is enabled. | `tocNumbering: false` |
+| `spec.math` | boolean | no | `true` | Enables [LaTeX math rendering](#math-rendering) via KaTeX (`$...$` inline, `$$...$$` display). | `math: true` |
+| `spec.pageBreakBetweenSources` | boolean | no | `true` | Inserts a page break between each source file. The loader forces `true` when more than one source is present. | `pageBreakBetweenSources: true` |
+| `spec.displayHeaderFooter` | boolean | no | `false` | Displays a [header and footer](#header-and-footer) on each page, using the default templates when none are given. | `displayHeaderFooter: true` |
+| `spec.headerTemplate` | string | no | document title, centered | Custom HTML template for the page header. Supports the template classes `date`, `title`, `url`, `pageNumber`, `totalPages`. See [Custom header/footer templates](#custom-headerfooter-templates). | `headerTemplate: '<div class="title"></div>'` |
+| `spec.footerTemplate` | string | no | date on the left, page number on the right | Custom HTML template for the page footer. Supports the same template classes as `headerTemplate`. See [Custom header/footer templates](#custom-headerfooter-templates). | `footerTemplate: '<div><span class="pageNumber"></span></div>'` |
+| `spec.marginTop` | string | no | `20mm` | Top margin reserved for the header (for example `20mm`, `1in`). Only used when `displayHeaderFooter` is true. | `marginTop: "20mm"` |
+| `spec.marginBottom` | string | no | `15mm` | Bottom margin reserved for the footer (for example `15mm`, `0.5in`). Only used when `displayHeaderFooter` is true. | `marginBottom: "15mm"` |
+| `spec.signingProfile` | string | no | — | Name of a [`SigningProfile`](/reference/signing-profile/) manifest used to digitally sign the generated PDF. | `signingProfile: corporateSigner` |
+
+See [`ReportArtefact`](/reference/report-artefact/) for data-driven page layouts instead of
+markdown sources.

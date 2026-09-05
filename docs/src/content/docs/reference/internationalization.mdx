@@ -14,8 +14,9 @@ Three rules determine whether your translations are used:
 1. **The locale code must match exactly.** Components look up
    `store[namespace][locale][key]` where `locale` is the artefact's
    `spec.language` — `de` or `en`. There is no BCP 47 normalization: a manifest
-   with `code: de-DE` is **never** consulted when the report renders with
-   `language: de`. Always use plain `de` or `en`.
+   with `code: de-DE` passes schema validation but is **never** consulted when
+   the report renders with `language: de` — only the `i18n-code-unused` lint
+   points it out. Always use plain `de` or `en`.
 2. **The default namespace is `_system`.** That is the namespace every component
    reads, and where the engine's built-in labels live. When `spec.namespace` is
    omitted, your content merges into `_system` on top of the built-ins, so a
@@ -29,7 +30,10 @@ Three rules determine whether your translations are used:
    number or a boolean (`report.year: "2024"`). Free-form keys are only useful
    from a `Text` component's `${t('…')}` templates.
 
-## Spec outline
+## Minimal definition
+
+This is the smallest well-formed `Internationalization`: a language code and the
+flat map of overrides, merged into the default `_system` namespace.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -37,18 +41,23 @@ kind: Internationalization
 metadata:
   name: labels_de
 spec:
-  code: de              # must equal ReportArtefact.language ('de' or 'en')
-  content:              # merges into the '_system' namespace on top of the built-ins
+  code: de
+  content:
     global.ac1: Ist
-    global.pp1: VJ
-    bn-table.there_of: davon
+    global.pl1: Plan
+    global.pp1: Vorjahr
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+Instead of the YAML map, `spec.content` may also be a JSON string holding the same
+map, and adding `spec.namespace` turns the manifest into a
+[scoped override](#scoped-overrides-with-i18nnamespace).
 
 Fields:
 
-- `spec.code` – language code, exactly `de` or `en` (must equal the artefact's `spec.language`).
+- `spec.code` – language code. It must equal the artefact's `spec.language` character for character, which in practice means `de` or `en`; the schema itself accepts any code of the form `de`, `de-DE` or `zh_Hans`, but a code no artefact uses is only reported by the `i18n-code-unused` lint.
 - `spec.namespace` – storage namespace, default `_system`. Only set this for [scoped overrides](#scoped-overrides-with-i18nnamespace).
-- `spec.content` – flat map of dotted keys to label strings, or a JSON string holding the same map.
+- `spec.content` – flat map of dotted keys to label strings, or a JSON string (at least 2 characters) holding the same map.
 
 Multiple manifests for the same namespace and code merge in document order (later wins per key).
 
@@ -220,7 +229,9 @@ With `language: de` on the artefact, every table and chart now shows "Ist",
 To apply a translation set only to part of a report, store it under a named
 namespace and point components at it with `i18nNamespace`. The property is
 available on `ReportArtefact` (applies to everything), `LayoutPage`,
-`LayoutCard`, `Grid`, `Tree`, and every leaf component. Inheritance is resolved
+`LayoutCard`, `Grid`, `Tree`, and the leaf components that render labels —
+`Table`, `Text`, `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`,
+and `ChartBullet`. `Image` has no `i18nNamespace`. Inheritance is resolved
 by the engine at render time: a component without its own value uses the nearest
 ancestor that has one — card, then page, then tree/grid containers, then the
 artefact. To opt a component out of an inherited namespace, pin it explicitly
@@ -284,6 +295,12 @@ spec:
 
 An unknown key renders as the key itself (it never breaks the component).
 
+## Lint rules
+
+- `i18n-code-unused` — warns when `spec.code` matches no artefact language (catches `de-DE`).
+- `i18n-namespace-unreferenced` — warns when a named namespace is never referenced by any `i18nNamespace`.
+- `i18n-title-namespace-deprecated` — warns on `titleNamespace` usage.
+
 ## Attribute Reference
 
 ### Common Metadata
@@ -302,12 +319,6 @@ An unknown key renders as the key itself (it never breaks the component).
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.code` | string | yes | — | Language code; must exactly equal an artefact `spec.language` (`de` or `en`). | `code: de` |
-| `spec.namespace` | string | no | `_system` | Storage namespace. The default merges into the bundle every component reads; a named namespace is only consulted via `i18nNamespace`. | `namespace: audited` |
-| `spec.content` | object or string | yes | — | Flat map of dotted keys to label strings, or a JSON string holding the same map. Nested blocks and non-string values are rejected. | see above |
-
-## Lint rules
-
-- `i18n-code-unused` — warns when `spec.code` matches no artefact language (catches `de-DE`).
-- `i18n-namespace-unreferenced` — warns when a named namespace is never referenced by any `i18nNamespace`.
-- `i18n-title-namespace-deprecated` — warns on `titleNamespace` usage.
+| `spec.code` | string | yes | — | Language code, pattern `^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$`. Only a code that exactly equals an artefact `spec.language` (`de` or `en`) takes effect; `de-DE` validates but never matches and is reported by `i18n-code-unused`. | `code: de` |
+| `spec.namespace` | string | no | `_system` | Storage namespace, at least 1 character. The default merges into the bundle every component reads, on top of the built-in labels; a named namespace is only consulted via `i18nNamespace`. | `namespace: audited` |
+| `spec.content` | object, or string of at least 2 characters | yes | — | Flat map of dotted keys to label strings, or a JSON string holding the same map. Nested blocks and non-string values are rejected. | `global.ac1: Ist`, `global.pp1: VJ`, `bn-table.there_of: davon` |

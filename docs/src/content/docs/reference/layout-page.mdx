@@ -10,44 +10,50 @@ They control headers, date and measure metadata, page size/orientation, and chil
 
 <img src={dashboardImg.src} alt="LayoutPage with 2x2 grid showing ChartStructure, ChartTime, Table, and Text components" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
-## Spec outline
+## Minimal definition
+
+The schema requires nothing but the document envelope, so the smallest *useful*
+`LayoutPage` is driven by what the page actually renders: a title row that says who,
+what and when, a layout with as many slots as children, and the children themselves.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
-  name: sales_overview_page
+  name: kpi_dashboard
 spec:
-  titleBusinessUnit: "Sales"
-  titleNamespace: _system
-  titleDateStart: 2024-01-01
-  titleDateEnd: 2024-03-31
-  titleDateFormat: quarter
+  titleBusinessUnit: "Group Controlling"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "mEUR"
+  titleScenarios: ["ac1", "pp1"]
+  titleDateStart: "2024-01-01"
+  titleDateEnd: "2024-12-31"
+  titleDateFormat: month
   titleDateLink: interval
-  titleMeasures: []
-  titleScenarios: ["ac1", "fc1", "pp1"]
-  titleVariances: ["dpp1_ac1_pos"]
-  titleOrder: category
-  titleOrderDirection: asc
-  pageLayout: 2x2
-  pageFormat: a4
-  pageOrientation: landscape
-  footerDisplayPageNumber: true
-  footerText: "Internal use only"
-  messageImage: "debug/concordia.png"
-  messageText: "Placeholder message"
-  selectedStyle: corporate-style   # optional ComponentStyle name
-  ruleset: corporate-rules         # optional RuleSet name
+  pageLayout: split-vertical
+  footerText: "bino - internal preview"
   children:
     - kind: ChartStructure
-      spec: { ... }
+      spec:
+        dataset: revenue_by_region
+        chartTitle: "Revenue by region"
+        scenarios: ["ac1", "pp1"]
+        variances: ["dac1_pp1_pos"]
     - kind: Table
-      spec: { ... }
+      spec:
+        dataset: revenue_by_customer
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+Children can also be pulled in by name instead of being inlined, see
+[Referencing standalone components](#referencing-standalone-components), and the page
+can be reused with different values, see [LayoutPage Parameters](#layoutpage-parameters).
 
 Key fields (see JSON schema for full list):
 
-- Title row fields: `titleBusinessUnit`, `titleNamespace`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
+- Title row fields: `titleBusinessUnit`, `i18nNamespace` (`titleNamespace` is deprecated), `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
 - Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
@@ -116,7 +122,6 @@ metadata:
   name: kpi_dashboard
 spec:
   titleBusinessUnit: "Group Controlling"
-  titleNamespace: _system
   titleDateStart: 2024-01-01
   titleDateEnd: 2024-12-31
   titleDateFormat: year
@@ -214,6 +219,9 @@ You can reference documents of these kinds:
 - `Table`
 - `ChartStructure`
 - `ChartTime`
+- `ChartScatter`
+- `ChartBubble`
+- `ChartBullet`
 - `Tree`
 - `Grid`
 - `LayoutCard`
@@ -785,13 +793,15 @@ You can combine both: use constraints to filter which pages are included, and pa
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
 | `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the title header. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
-| `spec.titleNamespace` | string | no | `"_system"` | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children. | `titleNamespace: _system` |
+| `spec.titleNamespace` | string | no | — | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children. Setting it raises the `titleNamespace Deprecated` lint finding. | `titleNamespace: audited` |
 | `spec.i18nNamespace` | string | no | — | I18n namespace for the page title and, via inheritance, all children (their own `i18nNamespace` wins). Takes precedence over `titleNamespace`. | `i18nNamespace: audited` |
 | `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
 | `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
 | `spec.titleDateFormat` | string | no | `none` | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`. none is a simple datestring with no format | `titleDateFormat: quarter` |
 | `spec.titleDateLink` | string | no | `none` | Date linking style. Values: `avg`, `interval`, `cum`, `start`, `end`, `ytd`, `ytg`, `mat`, `none`. | `titleDateLink: interval` |
-| `spec.titleMeasures` | array or string | no | — | Measures displayed in the title. Array of `{name, unit}` objects or JSON string. | see below |
+| `spec.titleMeasures` | array or string | no | — | Measures displayed in the title. Array of `{name, unit}` objects or JSON string. If all units are the same, redundant units are reduced and the names concatenated. If the unit is empty, the row is omitted. | see below |
+| `spec.titleMeasures[].name` | string | yes | — | Measure name. | `name: "Revenue"` |
+| `spec.titleMeasures[].unit` | string | yes | — | Measure unit. | `unit: "mEUR"` |
 | `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the title. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
 | `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. | `titleVariances: ["dpp1_ac1_pos"]` |
 | `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. | `titleOrder: ac1` |
@@ -805,7 +815,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.pageCustomTemplate` | string | no | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `pageLayout: custom-template`. | see [Page layouts](#page-layouts) |
 | `spec.pageGridGap` | string | no | `"0"` | Gap between grid cells in pixels. | `pageGridGap: "8"` |
 | `spec.pageFormat` | string | no | `xga` | Page size. Values: `xga`, `hd`, `full-hd`, `4k`, `4k2k`, `a4`, `a3`, `a2`, `a1`, `a0`, `letter`, `legal`. | `pageFormat: a4` |
-| `spec.pageOrientation` | string | no | — | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
+| `spec.pageOrientation` | string | no | derived from `pageFormat` | Page orientation. Values: `landscape`, `portrait`. | `pageOrientation: landscape` |
 | `spec.pageFitToContent` | boolean | no | `false` | When `true`, the page body height shrinks to fit content. When `false` (default), it stretches to fill the full page height. Use `false` when the page contains auto-scaling components. | `pageFitToContent: false` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest applied to the page title and inheritable by children via `inherited-page` / `inherited-closest`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
@@ -817,14 +827,23 @@ You can combine both: use constraints to filter which pages are included, and pa
 | `spec.pageNumber` | string | no | — | Page number displayed in the footer. | `pageNumber: "1"` |
 | `spec.footerDisplayPageNumber` | boolean | no | `true` | Show or hide the page number in the footer. | `footerDisplayPageNumber: true` |
 | `spec.footerText` | string | no | — | Footer text. | `footerText: "Internal use only"` |
-| `spec.messageImage` | string | no | `""` | Name of an [Asset](/reference/asset/) document, or an absolute URL, for the message row image. | `messageImage: "logo"` |
+| `spec.messageImage` | string | no | `""` | URL of the message row's logo/pictogram. A value that does not start with `http` is looked up in the component's asset folder. If empty, the image is omitted. | `messageImage: "debug/concordia.png"` |
 | `spec.messageText` | string | no | `""` | Message text displayed above the title. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit). | `messageText: "Draft<br />Q3 2026"` |
 
 ### Spec Attributes — Children
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.children` | array | yes | — | Array of layout child objects (minimum 1). Each child specifies a `kind`, optional `ref`, optional `spec`, and optional `metadata` with constraints. | see [Referencing standalone components](#referencing-standalone-components) |
+| `spec.children` | array | no | — | Array of layout child objects. May be empty or omitted; the `page-layout-slots-used` lint rule warns when a page referenced by an artefact does not fill its layout slots. | see [Referencing standalone components](#referencing-standalone-components) |
+| `spec.children[].kind` | string | yes | — | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `LayoutCard`, `Image`. Must match the kind of the referenced document when `ref` is used. | `kind: ChartStructure` |
+| `spec.children[].spec` | object | no | — | Component specification. Required for inline children (without `ref`); with `ref` its fields override the referenced document's spec. | `spec: { dataset: revenue_by_region }` |
+| `spec.children[].ref` | string | no | — | Name (`metadata.name`) of a standalone document of the same kind used as base spec. `LayoutPage` cannot be referenced. | `ref: salesTrendChart` |
+| `spec.children[].optional` | boolean | no | `false` | When `true` and the ref is missing, the child is skipped gracefully instead of failing the build. | `optional: true` |
+| `spec.children[].params` | object | no | — | Parameter values passed to the referenced document, expanded as `${NAME}` in its spec. Only valid together with `ref`. See [LayoutPage Parameters](#layoutpage-parameters). | `params: { REGION: "EU" }` |
+| `spec.children[].metadata` | object | no | — | Metadata of the inline child. See [Inline child constraints](#inline-child-constraints). | see below |
+| `spec.children[].metadata.name` | string | no | — | Name of the inline child, used in error messages and for identification. | `name: prodTable` |
+| `spec.children[].metadata.description` | string | no | — | Human-readable description of the child. Documentation only; not rendered. | `description: "Revenue by region"` |
+| `spec.children[].metadata.constraints` | array | no | — | Constraint expressions deciding whether the child is included for a given artefact. String or structured format. See [Inline child constraints](#inline-child-constraints). | `constraints: ["mode==build"]` |
 
 #### Title measures
 

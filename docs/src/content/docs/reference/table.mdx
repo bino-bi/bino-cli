@@ -6,7 +6,12 @@ description: Configure tabular output with grouping, variances, and drilldowns.
 `Table` manifests describe tables bound to datasets.
 They control formatting, grouping, scenarios, and optional drilldown views.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `Table` sets the required `spec.dataset` plus the fields
+that turn it into an IBCS table: the scenario columns, at least one variance
+column, and row grouping. `measureType` and `measureUnit` label the numbers so
+the reader knows what they mean.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -14,44 +19,26 @@ kind: Table
 metadata:
   name: revenue_table
 spec:
-  dataset: revenue_by_customer
-  filter: "region = 'DE'"
-  order: ac1                         # category | categoryindex | rowgroup | rowgroupindex | ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
-  orderDirection: desc
-  measureScale: M
-  measureType: currency              # volume | currency
-  measureUnit: "EUR"
-  categoryWidth: w25                 # w5 | w10 | w15 | w20 | w25 | w50 | inf
-  dataFormat: decimal                # percent | decimal
-  dataFormatDigitsDecimal: 1
-  dataFormatDigitsPercent: 1
+  dataset: revenue_by_segment
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
   grouped: true
-  showGroupTitle: true
-  showMeasureScale: true
-  limit: 10
-  type: list                         # list | sum | opt | sumnototal | optnototal
-  sumTitle: "Total"                  # label of the grand-total row; only rendered for type sum | opt
-  scenarios: ["ac1", "py1"]          # ac1-4 | fc1-4 | pp1-4 | pl1-4 | auto
-  variances: ["dpy1_ac1_pos"]
-  barColumns: []                     # columns to render as inline bar charts
-  barColumnWidth: w10                # w5 | w10 | w15 | w20 | w25 | w30 | w40 | w60 | w80 | w100
-  scale: auto                        # "" | none | auto | 0.5 | 1.2 | …
-  unitScaling: 100                   # data units per em of bar (absolute variance bars)
-  percentageScaling: 2               # percentage points per em of pin (relative variance pins)
-  thereof: []
-  partof: []
-  columnthereof: null
-  interval: none                     # none | setname | year | quarter | month | week | day | hour | minute | second | millisecond | auto
-  attributes: []                     # computed attribute columns (label + expression)
-  selectedStyle: corporate-style     # name of a ComponentStyle to apply
-  ruleset: corporate-rules           # name of a RuleSet to apply
+  measureType: currency
+  measureUnit: "EUR"
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+`dataset` accepts the dataset name shown above, an inline [`DataSet`](/reference/dataset/)
+definition, or an array of both. `scenarios`, `variances`, `order`, and
+`orderDirection` can also be taken from the surrounding layout instead of being
+repeated here (see [Inherited props](#inherited-props)).
 
 ## Fields
 
-- `dataset` – required dataset reference.
+- `dataset` – required dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those.
 - `filter` – optional filter expression.
-- `order` – sort key; using scenario names requires them to appear in `scenarios`. Set to `auto` to detect from the dataset silently. Default: `category`.
+- `order` – sort key; using scenario names requires them to appear in `scenarios`. Default: `category`.
 - `orderDirection` – sort direction (`asc` or `desc`).
 - `measureScale`, `measureType`, `measureUnit` – control how measures are interpreted and displayed.
 - `categoryWidth` – width of the category column (`w5`..`w50`, `inf`).
@@ -68,13 +55,14 @@ spec:
 - `unitScaling` – data units displayed per 1 em of bar length for absolute variance bars (d_ prefix columns) — map-scale semantics: a larger value means smaller bars. Also accepts `auto` (fit the largest bar to the bar column) or a [ScalingGroup](/reference/scaling-group/) name. Default: 100.
 - `percentageScaling` – percentage points displayed per 1 em of pin length for relative variance pins (dr_ prefix columns); `2` means a +2 % pin is 1 em long. Also accepts `auto` or a scaling group name. Default: 2.
 - `scale` – proportional scaling of the entire table (font size, em-based spacing, SVG bar charts, pins, patterns). All visual dimensions scale together.
-  - *not set* or `""` – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor.
+  - *not set* – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor. (An empty string `""` is rejected by the schema.)
   - `"none"` – no scaling; render at the base font size regardless of available space.
   - `"auto"` – auto-scale to fit the parent width silently (no warning).
   - A positive number (`"0.5"`, `"1.2"`, …) – fixed factor applied to the base font size.
 - `thereof`, `partof`, `columnthereof` – drilldown configuration.
 - `interval` – repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band. Values: `none` (default), `setname`, or a date granularity (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`). Mutually exclusive with `columnthereof` (`columnthereof` wins). See [Interval column grouping](#interval-column-grouping).
 - `attributes` – computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
+- `i18nNamespace` – optional namespace consulted for this component's labels; missing keys fall back to `_system`. When unset, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
@@ -96,8 +84,8 @@ spec:
   categoryWidth: w25
   type: list
   limit: 5
-  scenarios: ["ac1", "py1"]
-  variances: ["dpy1_ac1_pos"]
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos"]
   thereof:
     - rowGroup: "Revenue"
       category: "Applications"
@@ -301,7 +289,7 @@ spec:
 
 | Value | Behaviour |
 |-------|-----------|
-| *not set* / `""` | Auto-scale to fit the parent width. Emits an `AUTO_scale` warning with the applied factor. |
+| *not set* | Auto-scale to fit the parent width. Emits an `AUTO_scale` warning with the applied factor. |
 | `none` | No scaling. The table renders at its base font size regardless of available space. |
 | `auto` | Auto-scale to fit the parent width silently (no warning). |
 | `0.5`, `1.2`, … | Fixed factor applied to the base font size. All dimensions scale proportionally. |
@@ -348,11 +336,11 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_by_customer` |
+| `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_by_customer` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows before rendering. | `filter: "region = 'DE'"` |
-| `spec.order` | string | no | `category` | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `order: ac1` |
+| `spec.order` | string | no | `category` | Sort key. A scenario key must also appear in `scenarios`. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. | `order: ac1` |
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
-| `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
+| `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling; `_` means no prefix. `GREATEST` / `LEAST` pick the largest / smallest value in the dataset (write them uppercase). Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureType` | string | no | `volume` | Measure interpretation. Values: `volume`, `currency`. | `measureType: currency` |
 | `spec.measureUnit` | string | no | `""` | Unit string displayed in headers. | `measureUnit: "EUR"` |
 | `spec.categoryWidth` | string | no | `w15` | Width of the category column. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w50`, `inf`. | `categoryWidth: w25` |
@@ -365,19 +353,29 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.limit` | integer | no | `0` | Maximum rows per group. Extra rows are cumulated as REST. `0` means unlimited. | `limit: 10` |
 | `spec.type` | string | no | `list` | Table type. Values: `list`, `sum`, `opt`, `sumnototal`, `optnototal`. Only `sum` and `opt` render a grand-total row. | `type: sum` |
 | `spec.sumTitle` | string | no | `❖` | Label of the grand-total row at the bottom of the table (not a title above it). Ignored by the table types that render no total row. Empty renders the IBCS grand-total symbol ❖. Maps to the `sum-title` HTML attribute. | `sumTitle: "Total"` |
-| `spec.scenarios` | string or array | no | — | Scenario measures to display. Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "py1"]` |
-| `spec.variances` | string or array | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dpy1_ac1_pos"]` |
+| `spec.scenarios` | string or array | no | — | Scenario measures to display, as a YAML array or a JSON string. Left blank they are detected from the dataset with a warning. Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`. | `scenarios: ["ac1", "pp1"]` |
+| `spec.variances` | string or array | no | — | Variance definitions, as a YAML array or a JSON string. The scenarios used must be listed in `scenarios`. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`. | `variances: ["dac1_pp1_pos"]` |
 | `spec.barColumns` | string or array | no | — | Column names to render as inline IBCS-compliant bar/pin charts. | `barColumns: ["dac1_pp1_pos"]` |
 | `spec.barColumnWidth` | string | no | `w10` | Maximum width of inline bar chart columns. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w30`, `w40`, `w60`, `w80`, `w100`. | `barColumnWidth: w20` |
 | `spec.unitScaling` | number | no | `100` | Data units per em of bar length for absolute variance bars (`d_` prefix columns). Larger value = smaller bars. | `unitScaling: 50` |
 | `spec.percentageScaling` | number | no | `2` | Percentage points per em of pin length for relative variance pins (`dr_` prefix columns). | `percentageScaling: 1` |
-| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling of the entire table. `""` or omitted: auto-scale with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling of the entire table. Omitted: auto-scale with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
 | `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
-| `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level). | see below |
-| `spec.partof` | string or array | no | `[]` | Part-of groupings (category level). | see below |
-| `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration. | see below |
+| `spec.thereof` | string or array | no | `[]` | Drilldown rows (subCategory level), as a YAML array or a JSON string. See [Thereof](#thereof-drilldown-rows). | see below |
+| `spec.thereof[].rowGroup` | string | no | — | Row group the drilled row belongs to. | `rowGroup: "Revenue"` |
+| `spec.thereof[].category` | string | no | — | Category the drilldown starts from. | `category: "Applications"` |
+| `spec.thereof[].subCategory` | string | no | — | Sub-category rendered as the drilled row. | `subCategory: "Applications-A"` |
+| `spec.partof` | string or array | no | `[]` | Part-of groupings (category level), as a YAML array or a JSON string. See [Partof](#partof-category-groupings). | see below |
+| `spec.partof[].rowGroup` | string | no | — | Row group holding the drill percentage. | `rowGroup: "Revenue"` |
+| `spec.partof[].category` | string | no | — | Category the percentage is calculated for. | `category: "Applications"` |
+| `spec.columnthereof` | string, array, or null | no | `null` | Column-level drilldown configuration, as a YAML array or a JSON string. Mutually exclusive with `interval` (`columnthereof` wins). See [Columnthereof](#columnthereof-column-drilldown). | see below |
+| `spec.columnthereof[].scenario` | string | no | — | Scenario column that is drilled. | `scenario: "ac1"` |
+| `spec.columnthereof[].name` | string | no | — | Name of the drilled column group. | `name: "DE"` |
+| `spec.columnthereof[].subGroups` | array | no | — | Sub-columns rendered under the drilled column. | `subGroups: ["Berlin", "Hamburg"]` |
 | `spec.interval` | string | no | `none` | Repeats the scenario/variance column block once per interval group. Values: `none`, `setname`, `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. Mutually exclusive with `columnthereof`. See [Interval column grouping](#interval-column-grouping). | `interval: year` |
-| `spec.attributes` | string or array | no | — | Computed attribute columns (header label → aggregate expression). See [Computed attribute columns](#computed-attribute-columns). | see below |
+| `spec.attributes` | string or array | no | — | Computed attribute columns (header label → aggregate expression), in list order; also accepts a JSON object string whose key order defines the column order. See [Computed attribute columns](#computed-attribute-columns). | see below |
+| `spec.attributes[].label` | string | yes (per entry) | — | Column header label. | `label: "Verkaufsleiter"` |
+| `spec.attributes[].expression` | string | yes (per entry) | — | Aggregate expression: `set`, `first`, `last`, `min`, `max`, `avg`, `sum` over a dataset field or a custom `_`-prefixed field, or `lit(constant)`. | `expression: "sum(ac1)"` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 
