@@ -392,13 +392,40 @@ spec:
     pp3: { from: pl1, shift: 1 year,  grain: month }   # pp3 comes from the query; bino checks it
 ```
 
-- `from` — the slot the earlier row is read from, any of the sixteen slots.
-- `shift` — how far back: `<n> <unit>` with the unit `day`, `week`, `month`, `quarter` or `year` (pattern `^[1-9][0-9]* (day|week|month|quarter|year)$`).
-- `grain` — the period one row stands for, one of the same five units. It is **always required** and never inferred from the data.
+Each declaration has three attributes, all required:
 
-The declarations work with `query`, `prql` and `source` alike. A slot may appear in `derive` or in `assert`, not both ([`dataset-derive-conflict`](/appendix/lint-rules/#dataset-derive-conflict)), and a derived slot must not be returned by the query.
+| Attribute | Value | Meaning |
+| :-------- | :---- | :------ |
+| `from`    | one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4` | The slot whose value is copied from the earlier row. |
+| `shift`   | `<n> <unit>`, `n` ≥ 1, unit `day`, `week`, `month`, `quarter` or `year` | How far back the earlier row lies. |
+| `grain`   | `day`, `week`, `month`, `quarter` or `year` | The period one row of the dataset stands for. It is declared, never inferred from the dates. |
 
-**Identity and periods.** Rows are matched by identity — every non-measure column except `date`, so all dimension columns and their index twins — and by period, the `date` truncated to `grain` on both sides. Keying on the truncated period is what makes month ends line up: `2020-03-31` shifted by one month finds `2020-02-29`. The shift has to round-trip, so under grain `day` a one-month shift leaves the 31st empty rather than matching a clamped day. A row without a prior period gets `NULL`; the first month of a table has no `pp1`, its first year no `pp2`.
+Grain says what a row is, shift says which earlier row to compare against: on a monthly table, `shift: 1 month` is the previous month and `shift: 1 year` the same month last year.
+
+The declarations work with `query`, `prql` and `source` alike. A slot may appear in `derive` or in `assert`, not both ([`dataset-derive-conflict`](/appendix/lint-rules/#dataset-derive-conflict)), and a derived slot must not be returned by the query. Two declared slots are independent of each other.
+
+### How a row is matched
+
+For every row bino computes two keys:
+
+- **identity** — the values of every column except `date` and the sixteen slot columns, so all dimension columns with their index twins, `operation` and `setname`;
+- **period** — `date` truncated to the grain (`date_trunc(grain, date::DATE)`; a week starts on Monday).
+
+The slot receives the `from` value of the row that has the same identity and whose period equals this row's period minus `shift`, provided that period plus `shift` gives this row's period again. Without such a row the slot is `NULL`. With `from: ac1, shift: 1 month, grain: month` and `region` as the only dimension:
+
+| `region` | `date`       | `ac1` | period    | period − shift | `pp1`  |
+| :------- | :----------- | ----: | :-------- | :------------- | -----: |
+| North    | `2024-01-31` |   100 | `2024-01` | `2023-12`      | `NULL` — no such row |
+| North    | `2024-02-29` |   110 | `2024-02` | `2024-01`      |    100 |
+| North    | `2024-03-31` |   120 | `2024-03` | `2024-02`      |    110 |
+| South    | `2024-03-31` |    80 | `2024-03` | `2024-02`      | `NULL` — South has no February row |
+
+What follows from the rule:
+
+- Periods are compared, not dates, so month ends line up (`2024-03-31` finds `2024-02-29`) and the day within the period does not matter.
+- Choose a shift that is a whole number of grains. A shift shorter than the grain (`1 week` on grain `month`) never matches. A month shift on grain `day` matches by day of month, and the round-trip condition leaves the 31st empty when the prior month is shorter.
+- Every identity must have at most one row per period; duplicates are an error (see below).
+- Rows before the first shifted period have no prior row: the first month of a table has no `pp1`, its first year no `pp2`. If that is every row, the build warns.
 
 **Caption.** The engine captions `pp1`…`pp4` as `PY` by default. That is right for a year shift; for any other unit bino emits an [`Internationalization`](/reference/internationalization/) bundle for the artefact's language that captions the slot `PP`. It is placed before your own manifests, so a project override of `global.pp1` still wins.
 
