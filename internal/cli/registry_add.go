@@ -31,7 +31,10 @@ tag; "@1.2.3" pins that exact version.`,
 
 			requested := make(map[string]bool, len(args))
 			for _, arg := range args {
-				spec, _ := registry.ParseSpec(arg) // already validated by registryAdd
+				spec, err := registry.ParseSpec(arg)
+				if err != nil {
+					return err
+				}
 				requested[spec.Name] = true
 			}
 			for _, c := range res.Changes {

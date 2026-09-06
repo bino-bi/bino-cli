@@ -48,6 +48,28 @@ type DataSetSpec struct {
 	// Inline DataSources are referenced in queries via @inline(N) syntax,
 	// where N is the zero-based index in this array.
 	Dependencies []DataSourceRef `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+
+	// Derive declares previous-period slots (pp1..pp4) the CLI produces from
+	// another slot shifted back in time. The slot must not be in the query result.
+	Derive map[string]ShiftDeclaration `yaml:"derive,omitempty" json:"derive,omitempty"`
+
+	// Assert declares previous-period slots (pp1..pp4) the query supplies and
+	// the CLI checks against another slot shifted back in time.
+	Assert map[string]ShiftDeclaration `yaml:"assert,omitempty" json:"assert,omitempty"`
+}
+
+// ShiftDeclaration says what a previous-period slot means: the slot it is read
+// from, how far back, and the period one row stands for.
+type ShiftDeclaration struct {
+	// From is the slot to read (ac1..ac4, pp1..pp4, fc1..fc4, pl1..pl4).
+	From string `yaml:"from" json:"from"`
+
+	// Shift is the distance back in time, "<n> <unit>" with unit day, week,
+	// month, quarter or year, e.g. "1 year".
+	Shift string `yaml:"shift" json:"shift"`
+
+	// Grain is the period one row stands for: day, week, month, quarter or year.
+	Grain string `yaml:"grain" json:"grain"`
 }
 
 // HasQuery returns true if a query is specified.

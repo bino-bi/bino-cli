@@ -52,10 +52,11 @@ func (f *signFunc) Executor() duckdbdriver.ScalarFuncExecutor {
 	}
 }
 
-// registerBuiltinUDFs installs bino's built-in scalar UDFs (op, iop) into the
-// session's shared in-memory database. The database/sql pool shares a single
-// DuckDB instance (one Connector), so registering on one pooled connection makes
-// the functions available to every query run through the session.
+// registerBuiltinUDFs installs bino's built-in scalar UDFs (op, iop) and the
+// bino_shift table macro into the session's shared in-memory database. The
+// database/sql pool shares a single DuckDB instance (one Connector), so
+// registering on one pooled connection makes the functions available to every
+// query run through the session.
 func (s *Session) registerBuiltinUDFs(ctx context.Context) error {
 	doubleInfo, err := duckdbdriver.NewTypeInfo(duckdbdriver.TYPE_DOUBLE)
 	if err != nil {
@@ -87,6 +88,12 @@ func (s *Session) registerBuiltinUDFs(ctx context.Context) error {
 		if err := duckdbdriver.RegisterScalarUDF(conn, u.name, u.fn); err != nil {
 			return fmt.Errorf("register scalar UDF %q: %w", u.name, err)
 		}
+	}
+
+	// A plain (not TEMP) macro lands in the shared catalog and is visible on
+	// every pooled connection; a TEMP macro would be connection-local.
+	if _, err := conn.ExecContext(ctx, shiftMacroSQL); err != nil {
+		return fmt.Errorf("register table macro %q: %w", ShiftMacroName, err)
 	}
 	return nil
 }

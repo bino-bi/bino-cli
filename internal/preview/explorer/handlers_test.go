@@ -320,3 +320,165 @@ func TestHandleExportInvalidSQLReturnsJSONError(t *testing.T) {
 		t.Error("expected an error message for invalid SQL")
 	}
 }
+
+// setupDerivedSession registers a CSV-free inline source and a dataset that
+// derives pp2, the way the preview does on each refresh.
+func setupDerivedSession(t *testing.T) *Session {
+	t.Helper()
+	ctx := context.Background()
+	sess, err := NewSession(ctx, logx.Nop())
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	t.Cleanup(func() { sess.Close() })
+
+	source := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSource",
+		"metadata": {"name": "sales"},
+		"spec": {
+			"type": "inline",
+			"content": [
+				{"category": "A", "date": "2019-03-31", "ac1": 30},
+				{"category": "A", "date": "2020-03-31", "ac1": 130}
+			]
+		}
+	}`)
+	dataset := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSet",
+		"metadata": {"name": "sales_pp"},
+		"spec": {
+			"query": "SELECT category, \"date\", \"ac1\"::DOUBLE AS ac1 FROM sales",
+			"derive": {"pp2": {"from": "ac1", "shift": "1 year", "grain": "month"}}
+		}
+	}`)
+	docs := []config.Document{
+		{Kind: "DataSource", Name: "sales", Raw: source},
+		{Kind: "DataSet", Name: "sales_pp", Raw: dataset},
+	}
+	if err := sess.Refresh(ctx, docs); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	return sess
+}
+
+func TestHandleMetadataAndQuery_DerivedDataset(t *testing.T) {
+	sess := setupDerivedSession(t)
+	handler := Handler(sess)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/__explorer/metadata", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var meta metadataResponse
+	if err := json.NewDecoder(w.Body).Decode(&meta); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if len(meta.Datasets) != 1 || meta.Datasets[0].SQLError != "" {
+		t.Fatalf("datasets = %+v", meta.Datasets)
+	}
+	sqlText := meta.Datasets[0].SQL
+	if !strings.Contains(sqlText, "bino_shift('_bino_ds_sales_pp', 'ac1', '1 year', 'month')") {
+		t.Errorf("published SQL = %q", sqlText)
+	}
+
+	// The browser posts the published SQL back; the view must already exist.
+	body, _ := json.Marshal(map[string]any{"sql": sqlText, "limit": 10})
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/__explorer/query", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var resp queryResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode query: %v", err)
+	}
+	if resp.Error != "" {
+		t.Fatalf("query error: %s", resp.Error)
+	}
+	if len(resp.Columns) != 4 || resp.Columns[3].Name != "pp2" {
+		t.Errorf("columns = %v", resp.Columns)
+	}
+	if len(resp.Rows) != 2 {
+		t.Fatalf("rows = %d", len(resp.Rows))
+	}
+}
+
+// A PRQL dataset takes the same view path; bare PRQL cannot be wrapped in a
+// subquery, so the explorer must run the published SQL against the (| |) view.
+func TestHandleMetadataAndQuery_PrqlDerivedDataset(t *testing.T) {
+	ctx := context.Background()
+	sess, err := NewSession(ctx, logx.Nop())
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	t.Cleanup(func() { sess.Close() })
+
+	source := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSource",
+		"metadata": {"name": "sales"},
+		"spec": {
+			"type": "inline",
+			"content": [
+				{"category": "A", "date": "2019-03-31", "ac1": 30},
+				{"category": "A", "date": "2020-03-31", "ac1": 130}
+			]
+		}
+	}`)
+	dataset := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSet",
+		"metadata": {"name": "sales_prql"},
+		"spec": {
+			"prql": "from sales\nselect {category, date, ac1}",
+			"derive": {"pp2": {"from": "ac1", "shift": "1 year", "grain": "month"}}
+		}
+	}`)
+	docs := []config.Document{
+		{Kind: "DataSource", Name: "sales", Raw: source},
+		{Kind: "DataSet", Name: "sales_prql", Raw: dataset},
+	}
+	if err := sess.Refresh(ctx, docs); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	handler := Handler(sess)
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/__explorer/metadata", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var meta metadataResponse
+	if err := json.NewDecoder(w.Body).Decode(&meta); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if len(meta.Datasets) != 1 {
+		t.Fatalf("datasets = %+v", meta.Datasets)
+	}
+	if e := meta.Datasets[0].SQLError; e != "" {
+		if strings.Contains(strings.ToLower(e), "prql") {
+			t.Skipf("prql extension unavailable: %s", e)
+		}
+		t.Fatalf("sql error: %s", e)
+	}
+
+	body, _ := json.Marshal(map[string]any{"sql": meta.Datasets[0].SQL, "limit": 10})
+	req = httptest.NewRequestWithContext(ctx, http.MethodPost, "/__explorer/query", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var resp queryResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode query: %v", err)
+	}
+	if resp.Error != "" {
+		if strings.Contains(strings.ToLower(resp.Error), "prql") {
+			t.Skipf("prql extension unavailable: %s", resp.Error)
+		}
+		t.Fatalf("query error: %s", resp.Error)
+	}
+	if len(resp.Columns) != 4 || resp.Columns[3].Name != "pp2" {
+		t.Errorf("columns = %v", resp.Columns)
+	}
+	if len(resp.Rows) != 2 {
+		t.Fatalf("rows = %d", len(resp.Rows))
+	}
+}

@@ -26,6 +26,50 @@ spec:
 `,
 		},
 		{
+			name: "valid DataSet with derive and assert on a source pass-through",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test_dataset
+spec:
+  source: sales_csv
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+    pp2: { from: ac1, shift: 1 year, grain: month }
+  assert:
+    pp3: { from: pl1, shift: 1 year, grain: month }
+`,
+		},
+		{
+			name: "valid Table with inline dataset declaring derive",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales_table
+spec:
+  dataset:
+    query: SELECT * FROM sales_csv
+    dependencies: [sales_csv]
+    derive:
+      pp1: { from: ac1, shift: 1 year, grain: month }
+`,
+		},
+		{
+			name: "valid DataSet with derive on a PRQL query",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test_dataset
+spec:
+  prql: from sales_csv
+  derive:
+    pp1: { from: ac1, shift: 7 day, grain: day }
+`,
+		},
+		{
 			name: "valid DataSource CSV",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

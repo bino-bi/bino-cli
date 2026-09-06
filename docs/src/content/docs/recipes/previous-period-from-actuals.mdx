@@ -1,0 +1,175 @@
+---
+title: "Recipe: Previous period from actuals"
+description: Derive previous-month and previous-year columns from a table of monthly actuals instead of shipping them in the source.
+sidebar:
+  order: 6
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Most warehouses hold actuals with history and no "previous period" column. This recipe takes a CSV of monthly actuals per region and lets bino derive both comparisons: `pp1` as the previous month and `pp2` as the same month last year. A ChartTime shows actuals against last year, a Table shows all three, and the column captions come out as `PP` and `PY` without any translation manifest.
+
+## Project structure
+
+```
+regional-actuals/
+  bino.toml
+  data/
+    actuals.csv
+  manifests/
+    source.yaml        # DataSource
+    dataset.yaml       # DataSet with derive
+    page.yaml          # LayoutPage with ChartTime and Table
+    report.yaml        # ReportArtefact
+```
+
+## Source
+
+The CSV has one row per region and month, with month-end dates. Two years of history are enough for a full year of `pp2`:
+
+```csv
+date,region,regionIndex,ac1
+2023-01-31,North,1,412.0
+2023-01-31,South,2,388.5
+2023-02-28,North,1,398.2
+2023-02-28,South,2,401.7
+...
+2024-12-31,North,1,455.3
+2024-12-31,South,2,430.9
+```
+
+```yaml
+# manifests/source.yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: actuals_csv
+spec:
+  type: csv
+  path: ../data/actuals.csv
+```
+
+## Dataset
+
+The query selects only what the source has: the dimension with its index twin, the actual and the date. No `pp` column appears in the `SELECT`; the two slots are declared instead.
+
+```yaml
+# manifests/dataset.yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: actuals_monthly
+spec:
+  query: |
+    SELECT
+      region,
+      regionIndex,
+      "ac1"::DOUBLE AS ac1,
+      "date"        AS date
+    FROM actuals_csv
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+    pp2: { from: ac1, shift: 1 year,  grain: month }
+```
+
+`grain: month` says one row stands for a month. bino matches rows of the same identity — here `region` and `regionIndex` — whose month is one shift earlier, so `2024-03-31` finds `2024-02-29` for `pp1` and `2023-03-31` for `pp2`. Rows without a prior period stay empty: January 2023 has no `pp1`, and all of 2023 has no `pp2`.
+
+<Aside type="tip">
+If the source already carried a previous-year column, you would keep it in the query and declare the same shape under `assert:` instead. bino then checks it on every row and fails the build on a mismatch, even under the default `--data-validation warn`. See [Deriving previous period](/reference/dataset/#deriving-previous-period).
+</Aside>
+
+## Page
+
+The chart compares the year; the table shows both comparisons and the absolute variance to last year.
+
+```yaml
+# manifests/page.yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: regional_actuals
+spec:
+  titleBusinessUnit: "Regional Sales"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "kEUR"
+  titleScenarios: ["ac1", "pp2"]
+  titleDateStart: "2024-01-01"
+  titleDateEnd: "2024-12-31"
+  titleDateFormat: month
+  titleDateLink: interval
+  pageLayout: split-vertical
+  children:
+    - kind: ChartTime
+      spec:
+        dataset: actuals_monthly
+        chartTitle: "Revenue vs. last year"
+        dateInterval: month
+        level: category
+        scenarios: ["ac1", "pp2"]
+        measureScale: k
+        measureUnit: "EUR"
+    - kind: Table
+      spec:
+        dataset: actuals_monthly
+        scenarios: ["ac1", "pp1", "pp2"]
+        variances: ["dac1_pp2_pos"]
+        measureType: currency
+        measureUnit: "EUR"
+```
+
+```yaml
+# manifests/report.yaml
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: regional_actuals_report
+spec:
+  format: xga
+  orientation: landscape
+  language: en
+  filename: regional-actuals.pdf
+  title: "Regional actuals"
+  layoutPages:
+    - regional_actuals
+```
+
+## What you get
+
+Run `bino build`. The table has three scenario columns and one variance column:
+
+| Column | Caption | Why |
+| :----- | :------ | :-- |
+| `ac1`  | `AC`    | the engine default |
+| `pp1`  | `PP`    | derived with `shift: 1 month`; a non-year shift is captioned `PP` |
+| `pp2`  | `PY`    | derived with `shift: 1 year`; a year shift keeps the default `PY` |
+| `dac1_pp2_pos` | `ΔPY` | variance against `pp2` |
+
+The `PP` caption comes from a translation bundle bino synthesizes for the artefact's language, because the engine labels every `pp` slot `PY` on its own. The rendered HTML carries it as:
+
+```html
+<bn-internationalization code='en' namespace='_system'>{"global.pp1":"PP"}</bn-internationalization>
+```
+
+Nothing is emitted for `pp2`. To caption either slot differently, add an `Internationalization` manifest; it is merged after the synthesized bundle, so it wins:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: en
+spec:
+  code: en
+  content:
+    global.pp1: "PM"
+```
+
+## Checks you will see
+
+- If the query window starts in 2023 and you ask for `pp2` only, the build warns that `pp2` is null on every row: the window has no prior year.
+- If two rows share `region`, `regionIndex` and a month, the build fails with `duplicate rows for identity …` regardless of `--data-validation`. Aggregate to the grain in the query.
+- If you later add a `pp1` column to the `SELECT` but leave `derive.pp1` in place, the build fails: use `assert` for a supplied slot.
+
+<Aside type="note">
+The macro behind the declaration is available in SQL too, for cases where you need the shifted value inside a larger query: `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('actuals_csv', 'ac1', '1 year', 'month')`. See [Built-in SQL functions](/reference/dataset/#built-in-sql-functions).
+</Aside>

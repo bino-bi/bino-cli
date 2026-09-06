@@ -52,6 +52,9 @@ Every measure column belongs to a **scenario**. There are four families, each wi
 
 Aliases: `bu` (budget) → `pl`, `py` (prior year) → `pp`.
 
+What a `pp` slot compares against is declared on the DataSet (`derive:` or `assert:` with `shift`
+and `grain`), and its caption follows the shift: a year shift is captioned `PY`, anything else `PP`.
+
 **Column display order** follows IBCS: `pp` < `pl` < `fc` < `ac`. When you model a dataset, name the
 measure columns with these prefixes so bino applies the right notation automatically.
 

@@ -32,6 +32,9 @@ func DefaultRules() []Rule {
 		inlineRefBounds,
 		datasetSourceExclusive,
 		inlineNamingConflict,
+		// Derived previous-period rules
+		datasetDeriveConflict,
+		reservedNamePrefix,
 	}
 }
 

@@ -263,7 +263,7 @@ The schema supports four parallel sets of scenario columns for comparative analy
 | Column          | Description                                                   |
 | :-------------- | :------------------------------------------------------------ |
 | `ac1` ... `ac4` | **Actual** values (current measurements)                      |
-| `pp1` ... `pp4` | **Previous Period** values (Year-over-Year, Month-over-Month) |
+| `pp1` ... `pp4` | **Previous Period** values. What a slot compares against (prior month, prior year, …) is declared per dataset with `derive`/`assert`, see [Deriving previous period](#deriving-previous-period) |
 | `fc1` ... `fc4` | **Forecast** values (predictions)                             |
 | `pl1` ... `pl4` | **Plan/Budget** values (targets)                              |
 
@@ -308,7 +308,7 @@ GROUP BY product_name, product_rank
 
 ## Built-in SQL functions
 
-bino registers a few scalar helper functions on the DuckDB engine, so they are available in every DataSet (and DataSource) query without any import or extension.
+bino registers a few helper functions on the DuckDB engine — two scalar functions and one table macro — so they are available in every DataSet (and DataSource) query without any import or extension.
 
 ### `op(value)` — sign as an operator
 
@@ -353,6 +353,96 @@ SELECT op(variance) || abs(variance)::VARCHAR AS signed_variance
 -- variance =  500  ->  '+500'
 ```
 
+### `bino_shift(src, source, shift, grain)` — previous period as a table macro
+
+`bino_shift` is the table macro behind [`derive` and `assert`](#deriving-previous-period). It returns every row and column of `src` plus one column named `shifted`: the value of `source` on the row with the same identity one `shift` earlier, or `NULL` when there is none.
+
+| Parameter | Value                                                                 |
+| :-------- | :-------------------------------------------------------------------- |
+| `src`     | Name of a view or table in the session (a DataSource or DataSet name). A macro parameter cannot be a subquery. |
+| `source`  | The slot to read from the earlier row: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4` |
+| `shift`   | `'<n> <unit>'`, e.g. `'1 year'`, `'1 month'`, `'2 week'`, `'3 day'`, `'1 quarter'` |
+| `grain`   | The period one row stands for: `'day'`, `'week'`, `'month'`, `'quarter'` or `'year'` |
+
+The identity of a row is every column except `date` and the sixteen slot columns; two rows match when their identities are equal and the period of the earlier one (`date` truncated to `grain`) equals the period of the later one minus `shift`. The extra column is always called `shifted` — a macro cannot name an output column from a parameter — so alias it to the slot you want:
+
+```sql
+SELECT * EXCLUDE (shifted), shifted AS pp2
+FROM bino_shift('sales_view', 'ac1', '1 year', 'month')
+```
+
+Prefer `derive` on the DataSet unless you need the shifted value inside a larger query; the declaration also gives you the [checks](#checks-and-diagnostics) and the caption.
+
+## Deriving previous period
+
+A DataSet can declare what a previous-period slot means instead of supplying it. `derive` makes bino produce the column, `assert` checks a column the query already returns. Both take the same shape, keyed by the slot (`pp1` to `pp4`):
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_monthly
+spec:
+  query: |
+    SELECT region, regionIndex, ac1, pl1, date FROM sales   -- no pp column here
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }   # previous month
+    pp2: { from: ac1, shift: 1 year,  grain: month }   # same month last year
+  assert:
+    pp3: { from: pl1, shift: 1 year,  grain: month }   # pp3 comes from the query; bino checks it
+```
+
+Each declaration has three attributes, all required:
+
+| Attribute | Value | Meaning |
+| :-------- | :---- | :------ |
+| `from`    | one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4` | The slot whose value is copied from the earlier row. |
+| `shift`   | `<n> <unit>`, `n` ≥ 1, unit `day`, `week`, `month`, `quarter` or `year` | How far back the earlier row lies. |
+| `grain`   | `day`, `week`, `month`, `quarter` or `year` | The period one row of the dataset stands for. It is declared, never inferred from the dates. |
+
+Grain says what a row is, shift says which earlier row to compare against: on a monthly table, `shift: 1 month` is the previous month and `shift: 1 year` the same month last year.
+
+The declarations work with `query`, `prql` and `source` alike. A slot may appear in `derive` or in `assert`, not both ([`dataset-derive-conflict`](/appendix/lint-rules/#dataset-derive-conflict)), and a derived slot must not be returned by the query. Two declared slots are independent of each other.
+
+### How a row is matched
+
+For every row bino computes two keys:
+
+- **identity** — the values of every column except `date` and the sixteen slot columns, so all dimension columns with their index twins, `operation` and `setname`;
+- **period** — `date` truncated to the grain (`date_trunc(grain, date::DATE)`; a week starts on Monday).
+
+The slot receives the `from` value of the row that has the same identity and whose period equals this row's period minus `shift`, provided that period plus `shift` gives this row's period again. Without such a row the slot is `NULL`. With `from: ac1, shift: 1 month, grain: month` and `region` as the only dimension:
+
+| `region` | `date`       | `ac1` | period    | period − shift | `pp1`  |
+| :------- | :----------- | ----: | :-------- | :------------- | -----: |
+| North    | `2024-01-31` |   100 | `2024-01` | `2023-12`      | `NULL` — no such row |
+| North    | `2024-02-29` |   110 | `2024-02` | `2024-01`      |    100 |
+| North    | `2024-03-31` |   120 | `2024-03` | `2024-02`      |    110 |
+| South    | `2024-03-31` |    80 | `2024-03` | `2024-02`      | `NULL` — South has no February row |
+
+What follows from the rule:
+
+- Periods are compared, not dates, so month ends line up (`2024-03-31` finds `2024-02-29`) and the day within the period does not matter.
+- Choose a shift that is a whole number of grains. A shift shorter than the grain (`1 week` on grain `month`) never matches. A month shift on grain `day` matches by day of month, and the round-trip condition leaves the 31st empty when the prior month is shorter.
+- Every identity must have at most one row per period; duplicates are an error (see below).
+- Rows before the first shifted period have no prior row: the first month of a table has no `pp1`, its first year no `pp2`. If that is every row, the build warns.
+
+**Caption.** The engine captions `pp1`…`pp4` as `PY` by default. That is right for a year shift; for any other unit bino emits an [`Internationalization`](/reference/internationalization/) bundle for the artefact's language that captions the slot `PP`. It is placed before your own manifests, so a project override of `global.pp1` still wins.
+
+### Checks and diagnostics
+
+After the query runs, bino checks **every row** — not the [validation sample](#sample-size) — and reports through the same channel as data validation. Four of the checks are errors that fail `bino build` regardless of `--data-validation`, because a declared expectation is not a sampled type check:
+
+| Check                        | Message                                                                                   | Outcome |
+| :--------------------------- | :---------------------------------------------------------------------------------------- | :------ |
+| Derived slot supplied        | `slot pp2 is already in the query result; use assert: for a supplied slot`                 | error, fails the build even under `--data-validation warn` |
+| Source column missing        | `slot ac1 (from of pp2) is missing from the query result`, `column "date" is missing from the query result`, `slot pp3 is asserted but missing from the query result` | error, fails the build even under `--data-validation warn` |
+| Duplicate identity in period | `duplicate rows for identity region=North in period 2024-03-01 (grain month)`             | error, fails the build even under `--data-validation warn` |
+| Assert mismatch              | `assert pp3: 4 row(s) differ from pl1 shifted by 1 year (grain month); first at identity region=North, period 2024-03-01` | error, fails the build even under `--data-validation warn` |
+| Derived slot empty           | `pp2 derived from ac1 is null on every row — the query window has no prior period`        | warning |
+
+The assert comparison tolerates relative noise below `1e-9`; rows whose shifted value is `NULL` have nothing to compare and are skipped. `--warn-on-query-errors` downgrades the four errors like any other query failure, so preview and `bino lint --execute-queries` show them as warnings.
+
 ## Data Validation
 
 bino can validate query results against the standard schema at build time. This catches common data issues early:
@@ -366,6 +456,8 @@ bino can validate query results against the standard schema at build time. This 
 | Enum validation           | `operation` must be `"+"` or `"-"`                                  |
 | Date format               | `date` must be ISO 8601 (`YYYY-MM-DD`, or `YYYY-MM-DDThh:mm:ss` with an optional `Z` or `±hh:mm` offset) |
 | Dependent required        | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup` |
+
+The [`derive`/`assert` checks](#checks-and-diagnostics) are not part of this sampled validation: they run on every row, and their four error cases fail the build in every validation mode.
 
 ### Enabling validation
 
@@ -584,7 +676,7 @@ This means inline definitions are fully compatible with caching, the dependency 
 
 ### Naming restrictions
 
-User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this.
+User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this. Names starting with `bino_` or `_bino_` are reserved as well, for the functions and macros bino registers in every session and the views it creates for `derive`/`assert` ([`reserved-name-prefix`](/appendix/lint-rules/#reserved-name-prefix)).
 
 ## Attribute Reference
 
@@ -605,6 +697,7 @@ User-defined document names must **not** start with `_inline_` as this prefix is
 At least one of `query`, `prql`, or `source` is required.
 `source` is mutually exclusive with `query` and `prql` — combining them is rejected by the lint rule `dataset-source-exclusive`.
 Setting `query` and `prql` together is accepted by the schema, but only `prql` is executed (the precedence is `source` before `prql` before `query`).
+`derive` and `assert` combine with any of the three; the same slot in both is rejected by the lint rule `dataset-derive-conflict`.
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
@@ -615,6 +708,11 @@ Setting `query` and `prql` together is accepted by the schema, but only `prql` i
 | `spec.source` | string or object | conditional | — | Direct DataSource pass-through, equivalent to `SELECT * FROM <name>`. A string name or an inline DataSource definition. Required if `query` and `prql` are not set. See [Direct source pass-through](#direct-source-pass-through). | `source: sales_csv` |
 | `spec.dependencies` | array | no | — | List of DataSource dependencies. Feeds the dependency graph and the cache digest, so a changed input file invalidates the dataset. | see below |
 | `spec.dependencies[]` | string or object | no | — | Either the `metadata.name` of a DataSource, or an inline DataSource definition referenced in the query as `@inline(N)` with `N` the zero-based index. | `- sales_csv` |
+| `spec.derive` | object | no | — | Previous-period slots bino produces from another slot shifted back in time, keyed by `pp1`…`pp4`. The query must not return the slot. See [Deriving previous period](#deriving-previous-period). | `derive: { pp2: { from: ac1, shift: 1 year, grain: month } }` |
+| `spec.derive.<pp>.from` | string | yes | — | Slot the earlier row is read from: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4`. | `from: ac1` |
+| `spec.derive.<pp>.shift` | string | yes | — | How far back, `<n> <unit>` with the unit `day`, `week`, `month`, `quarter` or `year`. A year shift keeps the `PY` caption, any other unit is captioned `PP`. | `shift: 1 month` |
+| `spec.derive.<pp>.grain` | string | yes | — | The period one row stands for: `day`, `week`, `month`, `quarter` or `year`. Never inferred. | `grain: month` |
+| `spec.assert` | object | no | — | Previous-period slots the query supplies and bino checks, same shape as `derive`. A mismatch on any row with a prior period fails the build even under `--data-validation warn`. | `assert: { pp3: { from: pl1, shift: 1 year, grain: month } }` |
 
 An inline DataSource — as `spec.source` or as an item of `spec.dependencies` — takes the full DataSource spec (`type` with the values `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`, plus `path`, `content`, `columns`, `connection`, `delimiter`, `sample`, …). Those attributes are documented in the [DataSource reference](/reference/datasource/).
 

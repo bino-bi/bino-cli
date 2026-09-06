@@ -24,6 +24,7 @@ Common flags:
 - `--log-sql` – log executed SQL queries.
 - `--layout-state` – write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. See [Layout State](/cli/layout-state/).
 - `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
+- `--warn-on-query-errors` – downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
 
 Build log flags:
 
@@ -112,6 +113,17 @@ Validation modes:
 - `--data-validation=warn` (default) – log validation warnings and continue building.
 - `--data-validation=fail` – treat validation errors as fatal and exit with code 1.
 - `--data-validation=off` – skip data validation entirely.
+
+### Checks that ignore the mode
+
+A DataSet with [`derive` or `assert`](/reference/dataset/#deriving-previous-period) is checked on every row, not the sample, and four of those checks fail the build in every mode, including the default `warn`:
+
+- a derived slot that the query already returns (`slot pp2 is already in the query result; use assert: for a supplied slot`),
+- a missing `from` slot or `date` column,
+- duplicate rows for one identity in a period,
+- an `assert` mismatch against the shifted value.
+
+A derived slot that is `NULL` on every row is a normal warning. `--warn-on-query-errors` downgrades the four errors like any other query failure.
 
 For efficiency, only the first rows are validated (default: 10). Configure via `BNR_DATA_VALIDATION_SAMPLE_SIZE`:
 

@@ -28,7 +28,8 @@ inline in your prompt.
 2. **Probe** the source from `source_hint`: build the bare `DataSource` spec and call
    `introspect_source(spec, sheet?, limit?)` to learn real columns / sheets / sample rows.
 3. **Map** raw columns → scenario slots (`ac/pp/fc/pl`) + the variances the brief's primary message
-   needs (`d_`/`dr_`, the brief's favorable direction).
+   needs (`d_`/`dr_`, the brief's favorable direction). A `pp` slot without a source column is
+   declared with `derive:` when the source has rows for the prior period (see `bino-data-modeling`).
 4. **Author** the data manifests: `get_columns` to confirm names → draft typed `DataSet` SQL →
    `validate_draft` → write (`scaffold_source` for the source + starter dataset; `create_manifest` /
    `write_manifest` / `edit_manifest` thereafter). If `confirmed_writes` is set, return your proposed
@@ -45,7 +46,8 @@ inline in your prompt.
 - **H2 — execute_queries is untrusted code.** Run it **once**, only on the DataSets you authored this
   run, never against a credentialed source. (DuckDB SQL is not read-only.)
 - **H6 — Data correctness.** Any data-validation warning (null scenario fill, missing column) makes
-  the plan **not ready**. An aspirational brief the data can't satisfy → populate `unmet[]`, **never
+  the plan **not ready**; the `derive:`/`assert:` checks (duplicate identity in a period, assert
+  mismatch, slot both supplied and derived) are hard errors even in warn mode. An aspirational brief the data can't satisfy → populate `unmet[]`, **never
   fabricate a column**.
 
 ## Output
@@ -55,7 +57,8 @@ Write `.bino/agent/data-plan.json`:
 ```json
 {
   "sources": [{ "name": "...", "kind": "DataSource", "type": "csv|excel|postgres_query|...", "origin": "...", "credentialed": false }],
-  "datasets": [{ "name": "...", "file": "...", "columns": ["region", "ac1", "pl1", "dac1_pl1_pos"], "grain": "month × region" }],
+  "datasets": [{ "name": "...", "file": "...", "columns": ["region", "ac1", "pl1", "dac1_pl1_pos"], "grain": "month × region",
+                 "derived": { "pp1": { "from": "ac1", "shift": "1 month", "grain": "month" } } }],
   "unmet": [{ "question_or_measure": "...", "reason": "..." }],
   "human_gates_hit": ["credentialed source 'warehouse' — needs env vars POSTGRES_*"]
 }

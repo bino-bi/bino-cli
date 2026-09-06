@@ -957,3 +957,26 @@ func hoverParams(u uri.URI, line, char uint32) *protocol.HoverParams {
 		},
 	}
 }
+
+const ppTableDoc = `kind: Table
+metadata:
+  name: pp_table
+spec:
+  dataset: sales
+  scenarios:
+    - ac1
+    - pp1
+`
+
+func TestHover_PreviousPeriodExplainsDerive(t *testing.T) {
+	s := newTestServer()
+	u := openDoc(t, s, ppTableDoc)
+	h, _ := s.Hover(context.Background(), hoverParams(u, 7, 7))
+	if h == nil {
+		t.Fatal("expected hover for the pp1 scenario token")
+	}
+	mc, ok := h.Contents.(*protocol.MarkupContent)
+	if !ok || !strings.Contains(mc.Value, "derive:") || !strings.Contains(mc.Value, "PY") {
+		t.Errorf("pp hover should point at derive:/assert: and the PY default (got %+v)", h.Contents)
+	}
+}
