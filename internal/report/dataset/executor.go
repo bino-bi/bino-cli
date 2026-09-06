@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,12 +77,24 @@ type ExecuteOptions struct {
 	Session *duckdb.Session
 }
 
+// shiftMacroRevision is the bino_shift revision hashed into the cache digest
+// of declaring datasets; a variable so tests can bump it.
+var shiftMacroRevision = duckdb.ShiftMacroRevision
+
 // dataSetSpec mirrors the new minimal DataSet spec structure.
 type dataSetSpec struct {
 	Query        reportspec.QueryField `json:"query"`
 	Prql         reportspec.QueryField `json:"prql"`
 	Source       string                `json:"source"` // Direct DataSource pass-through (mutually exclusive with query/prql)
 	Dependencies []string              `json:"dependencies"`
+
+	Derive map[string]reportspec.ShiftDeclaration `json:"derive"`
+	Assert map[string]reportspec.ShiftDeclaration `json:"assert"`
+}
+
+// declares reports whether the dataset declares any derived or asserted slot.
+func (s dataSetSpec) declares() bool {
+	return len(s.Derive) > 0 || len(s.Assert) > 0
 }
 
 // Execute evaluates all DataSet documents, using cached results when available.
@@ -237,6 +250,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 					}
 				}
 			}
+			warnings = append(warnings, allNullDerivedSlots(result.doc.Name, result.data, result.spec.Derive)...)
 			results = append(results, Result{Name: result.doc.Name, Data: result.data})
 			continue
 		}
@@ -296,6 +310,12 @@ func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceInde
 	h := sha256.New()
 	// Include dataset definition in hash
 	h.Write(doc.Raw)
+
+	// A derived/asserted result depends on the bino_shift macro; a macro fix
+	// must invalidate it and leave every other dataset's key unchanged.
+	if spec.declares() {
+		fmt.Fprintf(h, "%s:%d", duckdb.ShiftMacroName, shiftMacroRevision)
+	}
 
 	// Include external query file hashes if using $file reference
 	baseDir := filepath.Dir(doc.File)
@@ -410,6 +430,14 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		defer os.RemoveAll(tempDir)
 	}
 
+	// Names starting with the view prefix would collide with the views a
+	// derive/assert dataset is built on.
+	for _, doc := range allDocs {
+		if (doc.Kind == "DataSource" || doc.Kind == "DataSet") && strings.HasPrefix(doc.Name, ViewPrefix) {
+			return nil, nil, fmt.Errorf("%s %q: names starting with %q are reserved", doc.Kind, doc.Name, ViewPrefix)
+		}
+	}
+
 	// Register all DataSources as views first
 	viewDiags, err := datasource.RegisterViews(ctx, session, allDocs, &datasource.ViewsOptions{
 		TempDir: tempDir,
@@ -479,6 +507,8 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			}
 		}
 
+		warnings = append(warnings, allNullDerivedSlots(job.doc.Name, data, job.spec.Derive)...)
+
 		// Write to cache (skip for ephemeral sources where cachePath is empty)
 		if job.cachePath != "" {
 			if err := os.WriteFile(job.cachePath, data, 0o644); err != nil { //nolint:gosec // G306: cache files need standard read perms
@@ -495,50 +525,12 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, error) {
 	db := session.DB()
 
-	// Execute the query directly - DataSources are already registered as views
-	// Use PRQL if provided, otherwise use SQL query.
-	// PRQL is sent directly to DuckDB which compiles it via the prql extension.
-	//
-	// Resolve query content from $file reference if needed.
-	baseDir := filepath.Dir(job.doc.File)
-
-	var query string
-	var err error
-
-	// Check for source pass-through first - this creates a simple SELECT * FROM
-	switch {
-	case job.spec.Source != "":
-		// Source pass-through: SELECT * FROM the referenced DataSource
-		query = fmt.Sprintf("SELECT * FROM %q", job.spec.Source)
-	case !job.spec.Prql.IsEmpty():
-		query, err = job.spec.Prql.ResolveQuery(baseDir)
-		if err != nil {
-			return nil, fmt.Errorf("resolve prql: %w", err)
-		}
-	default:
-		query, err = job.spec.Query.ResolveQuery(baseDir)
-		if err != nil {
-			return nil, fmt.Errorf("resolve query: %w", err)
-		}
+	// Resolve the dataset (source / prql / query, $file, @inline) into the
+	// statements to run. DataSources are already registered as views.
+	compiled, err := compileSpec(job.doc, job.spec)
+	if err != nil {
+		return nil, err
 	}
-
-	if query == "" {
-		return nil, fmt.Errorf("no query, prql, or source specified")
-	}
-
-	// Rewrite @inline(N) references to generated datasource names
-	if HasInlineRefs(query) {
-		query, err = RewriteInlineRefs(query, job.spec.Dependencies)
-		if err != nil {
-			return nil, fmt.Errorf("rewrite inline refs: %w", err)
-		}
-	}
-
-	// Log the query before execution
-	session.LogQuery(query)
-
-	// Record timing for query execution metadata
-	startTime := time.Now()
 
 	// Enforce the per-query duration limit (BNR_MAX_QUERY_DURATION_MS, 0 = unlimited).
 	cfg := runtimecfg.Current()
@@ -548,6 +540,39 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		queryCtx, cancel = context.WithTimeout(ctx, cfg.MaxQueryDuration)
 		defer cancel()
 	}
+
+	// Setup: the view(s) a PRQL or derive/assert dataset is built on.
+	for _, stmt := range compiled.Setup {
+		session.LogQuery(stmt)
+		setupStart := time.Now()
+		if _, err := db.ExecContext(queryCtx, stmt); err != nil {
+			err = describeQueryLimitError(err, cfg.MaxQueryDuration)
+			logQueryExecError(session, stmt, job.doc.Name, setupStart, err)
+			return nil, fmt.Errorf("setup: %w", err)
+		}
+		session.LogQueryExec(duckdb.QueryExecMeta{
+			Query:      stmt,
+			QueryType:  "dataset_setup",
+			Dataset:    job.doc.Name,
+			StartTime:  setupStart,
+			DurationMs: time.Since(setupStart).Milliseconds(),
+		})
+	}
+
+	// Declared expectations are checked on every row before the query runs.
+	if compiled.Declares() {
+		if err := runDeclarationChecks(queryCtx, db, compiled); err != nil {
+			return nil, fmt.Errorf("check: %w", describeQueryLimitError(err, cfg.MaxQueryDuration))
+		}
+	}
+
+	query := compiled.Query
+
+	// Log the query before execution
+	session.LogQuery(query)
+
+	// Record timing for query execution metadata
+	startTime := time.Now()
 
 	// Execute query
 	rows, err := db.QueryContext(queryCtx, query)

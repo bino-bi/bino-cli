@@ -1,13 +1,13 @@
-package datasource
+package dataset
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -15,8 +15,9 @@ import (
 // The name can be prefixed with "$" to explicitly request a DataSource lookup.
 // This function is designed for IDE/LSP integrations that need schema information.
 //
-// The function registers all DataSources as views and then queries the schema
-// via SELECT * FROM <name> LIMIT 0.
+// The function registers all DataSources as views, compiles a DataSet the same
+// way the build does (source / prql / query, $file, @inline, derive/assert) and
+// queries the schema with LIMIT 0.
 func IntrospectColumns(ctx context.Context, docs []config.Document, name string) ([]string, error) {
 	// Find the target document (DataSource or DataSet)
 	var targetDoc *config.Document
@@ -73,42 +74,36 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	defer os.RemoveAll(tempDir)
 
 	// Register all DataSources as views
-	_, err = RegisterViews(ctx, session, allDocs, &ViewsOptions{
+	_, err = datasource.RegisterViews(ctx, session, allDocs, &datasource.ViewsOptions{
 		TempDir: tempDir,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("register views: %w", err)
 	}
 
-	// Build the query based on document type
-	var query string
+	// Build the schema query based on document type
+	var schemaQuery string
 	switch doc.Kind {
 	case "DataSource":
-		// DataSource is already a view, just select from it
-		query = fmt.Sprintf("SELECT * FROM %q", doc.Name)
-
+		schemaQuery = fmt.Sprintf("SELECT * FROM %q LIMIT 0", doc.Name)
 	case "DataSet":
-		// DataSet has a custom query
-		var payload struct {
-			Spec struct {
-				Query string `json:"query"`
-			} `json:"spec"`
+		compiled, err := Compile(*doc)
+		if err != nil {
+			return nil, err
 		}
-		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
-			return nil, fmt.Errorf("parse dataset spec: %w", err)
+		if compiled.Prql {
+			if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
+				return nil, fmt.Errorf("load prql extension: %w", err)
+			}
 		}
-		if payload.Spec.Query == "" {
-			return nil, fmt.Errorf("dataset missing query")
+		if err := RunSetup(ctx, session, compiled); err != nil {
+			return nil, err
 		}
-		// Strip trailing semicolons to avoid syntax errors when wrapping
-		query = strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
-
+		schemaQuery = LimitQuery(compiled.Query, 0)
 	default:
 		return nil, fmt.Errorf("unsupported kind: %s", doc.Kind)
 	}
 
-	// Use LIMIT 0 to get schema without data
-	schemaQuery := fmt.Sprintf("SELECT * FROM (%s) AS _schema LIMIT 0", query)
 	rows, err := session.DB().QueryContext(ctx, schemaQuery)
 	if err != nil {
 		return nil, fmt.Errorf("query schema: %w", err)
@@ -121,15 +116,4 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	}
 
 	return columns, nil
-}
-
-// BuildDataSourceQuery constructs a DuckDB query for a DataSource document.
-// This returns a simple SELECT * FROM "<name>" since DataSources are views.
-// This is kept for backward compatibility with dataset execution.
-func BuildDataSourceQuery(doc *config.Document, allDocs []config.Document) (string, error) {
-	if doc.Kind != "DataSource" {
-		return "", fmt.Errorf("expected DataSource, got %s", doc.Kind)
-	}
-	// Since DataSources are views, just select from the view name
-	return fmt.Sprintf("SELECT * FROM %q", doc.Name), nil
 }

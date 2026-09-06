@@ -150,6 +150,22 @@ type InlineDataSet struct {
 	// Inline DataSources are referenced in queries via @inline(N) syntax,
 	// where N is the zero-based index in this array.
 	Dependencies []DataSourceRef `json:"dependencies,omitempty"`
+
+	// Derive declares previous-period slots (pp1..pp4) the CLI produces from
+	// another slot shifted back in time.
+	Derive map[string]ShiftDeclaration `json:"derive,omitempty"`
+
+	// Assert declares previous-period slots (pp1..pp4) the query supplies and
+	// the CLI checks against another slot shifted back in time.
+	Assert map[string]ShiftDeclaration `json:"assert,omitempty"`
+}
+
+// ShiftDeclaration says what a previous-period slot means: the slot it is read
+// from, how far back, and the period one row stands for.
+type ShiftDeclaration struct {
+	From  string `json:"from"`
+	Shift string `json:"shift"`
+	Grain string `json:"grain"`
 }
 
 // HasQuery returns true if a query is specified.

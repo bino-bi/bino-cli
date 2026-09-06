@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"reflect"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -38,6 +39,21 @@ func TestDocumentRoundTrip(t *testing.T) {
 				},
 				Spec: &DataSetSpec{
 					Query: &QueryField{File: "queries/users.sql"},
+				},
+			},
+		},
+		{
+			name: "DataSet with derive and assert",
+			doc: &Document{
+				APIVersion: APIVersion,
+				Kind:       KindDataSet,
+				Metadata: Metadata{
+					Name: "sales_pp",
+				},
+				Spec: &DataSetSpec{
+					Query:  &QueryField{Inline: "SELECT * FROM sales"},
+					Derive: map[string]ShiftDeclaration{"pp2": {From: "ac1", Shift: "1 year", Grain: "month"}},
+					Assert: map[string]ShiftDeclaration{"pp3": {From: "pl1", Shift: "1 year", Grain: "month"}},
 				},
 			},
 		},
@@ -449,6 +465,24 @@ func TestDocumentRoundTrip(t *testing.T) {
 			}
 			if len(parsed.Metadata.Constraints) != len(tt.doc.Metadata.Constraints) {
 				t.Errorf("Constraints length mismatch: got %d, want %d", len(parsed.Metadata.Constraints), len(tt.doc.Metadata.Constraints))
+			}
+
+			// DataSet derive/assert declarations must survive the round-trip.
+			if want, ok := tt.doc.Spec.(*DataSetSpec); ok && (want.Derive != nil || want.Assert != nil) {
+				var got DataSetSpec
+				specYAML, err := yaml.Marshal(parsed.Spec)
+				if err != nil {
+					t.Fatalf("re-marshal spec: %v", err)
+				}
+				if err := yaml.Unmarshal(specYAML, &got); err != nil {
+					t.Fatalf("decode spec: %v", err)
+				}
+				if !reflect.DeepEqual(got.Derive, want.Derive) {
+					t.Errorf("Derive mismatch: got %+v, want %+v", got.Derive, want.Derive)
+				}
+				if !reflect.DeepEqual(got.Assert, want.Assert) {
+					t.Errorf("Assert mismatch: got %+v, want %+v", got.Assert, want.Assert)
+				}
 			}
 		})
 	}

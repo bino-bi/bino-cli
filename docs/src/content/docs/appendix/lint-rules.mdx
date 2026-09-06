@@ -28,6 +28,8 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
 | `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
 | `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
+| `dataset-derive-conflict`      | DataSet Derive Conflict      | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                      |
+| `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
 | `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
@@ -421,6 +423,55 @@ spec:
 ```yaml
 metadata:
   name: my_data
+```
+
+### dataset-derive-conflict
+
+A DataSet declares what a previous-period slot means either with `derive` (the CLI produces the column) or with `assert` (the query supplies the column and the CLI checks it). The same slot cannot be in both maps: the executor rejects the dataset before running it.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT ... AS ac1, ... AS pp1, ... AS date FROM sales_csv
+  derive:
+    pp1: { from: ac1, shift: 1 year, grain: month }
+  assert:
+    pp1: { from: ac1, shift: 1 year, grain: month }  # pp1 is also derived!
+```
+
+**Fix:** Keep the slot in one map. Use `assert` when the query already returns the column, `derive` when it does not:
+
+```yaml
+spec:
+  query: SELECT ... AS ac1, ... AS pp1, ... AS date FROM sales_csv
+  assert:
+    pp1: { from: ac1, shift: 1 year, grain: month }
+```
+
+### reserved-name-prefix
+
+Names starting with `bino_` are reserved for the functions and macros the CLI registers in every DuckDB session (`op`, `iop`, `bino_shift`), and names starting with `_bino_` for the views it creates while executing a dataset with `derive` or `assert`. A DataSource or DataSet with such a name can shadow one of them. The executor also refuses to run a project with a `_bino_` name.
+
+**Example problem:**
+
+```yaml
+kind: DataSource
+metadata:
+  name: bino_sales  # Reserved prefix!
+spec:
+  type: csv
+  path: ./sales.csv
+```
+
+**Fix:** Choose a name without the prefix:
+
+```yaml
+metadata:
+  name: sales
 ```
 
 ### i18n-code-unused
