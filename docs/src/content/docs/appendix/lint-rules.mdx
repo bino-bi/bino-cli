@@ -28,6 +28,7 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
 | `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
 | `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
+| `ref-params`                   | Ref Params                   | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match. |
 | `dataset-derive-conflict`      | DataSet Derive Conflict      | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                      |
 | `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
@@ -423,6 +424,40 @@ spec:
 ```yaml
 metadata:
   name: my_data
+```
+
+### ref-params
+
+Validates `metadata.params` declarations on documents that accept parameters (LayoutPage, ReportArtefact and the other param-capable kinds) and the values passed to them where they are referenced: a layout child, a grid child or a tree node with `ref` and `params`. A parameter that is passed but not declared, a required parameter that is missing, or a value that does not fit the declared type is reported.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: region_page
+  params:
+    - name: region
+      type: string
+      required: true
+---
+kind: ReportArtefact
+metadata:
+  name: report
+spec:
+  layoutPages:
+    - ref: region_page
+      params:
+        regoin: North   # misspelled, and the required 'region' is missing
+```
+
+**Fix:** Pass exactly the declared parameters:
+
+```yaml
+  layoutPages:
+    - ref: region_page
+      params:
+        region: North
 ```
 
 ### dataset-derive-conflict

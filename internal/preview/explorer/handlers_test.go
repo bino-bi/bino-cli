@@ -402,3 +402,83 @@ func TestHandleMetadataAndQuery_DerivedDataset(t *testing.T) {
 		t.Fatalf("rows = %d", len(resp.Rows))
 	}
 }
+
+// A PRQL dataset takes the same view path; bare PRQL cannot be wrapped in a
+// subquery, so the explorer must run the published SQL against the (| |) view.
+func TestHandleMetadataAndQuery_PrqlDerivedDataset(t *testing.T) {
+	ctx := context.Background()
+	sess, err := NewSession(ctx, logx.Nop())
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	t.Cleanup(func() { sess.Close() })
+
+	source := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSource",
+		"metadata": {"name": "sales"},
+		"spec": {
+			"type": "inline",
+			"content": [
+				{"category": "A", "date": "2019-03-31", "ac1": 30},
+				{"category": "A", "date": "2020-03-31", "ac1": 130}
+			]
+		}
+	}`)
+	dataset := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1beta1",
+		"kind": "DataSet",
+		"metadata": {"name": "sales_prql"},
+		"spec": {
+			"prql": "from sales\nselect {category, date, ac1}",
+			"derive": {"pp2": {"from": "ac1", "shift": "1 year", "grain": "month"}}
+		}
+	}`)
+	docs := []config.Document{
+		{Kind: "DataSource", Name: "sales", Raw: source},
+		{Kind: "DataSet", Name: "sales_prql", Raw: dataset},
+	}
+	if err := sess.Refresh(ctx, docs); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	handler := Handler(sess)
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/__explorer/metadata", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var meta metadataResponse
+	if err := json.NewDecoder(w.Body).Decode(&meta); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if len(meta.Datasets) != 1 {
+		t.Fatalf("datasets = %+v", meta.Datasets)
+	}
+	if e := meta.Datasets[0].SQLError; e != "" {
+		if strings.Contains(strings.ToLower(e), "prql") {
+			t.Skipf("prql extension unavailable: %s", e)
+		}
+		t.Fatalf("sql error: %s", e)
+	}
+
+	body, _ := json.Marshal(map[string]any{"sql": meta.Datasets[0].SQL, "limit": 10})
+	req = httptest.NewRequestWithContext(ctx, http.MethodPost, "/__explorer/query", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var resp queryResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode query: %v", err)
+	}
+	if resp.Error != "" {
+		if strings.Contains(strings.ToLower(resp.Error), "prql") {
+			t.Skipf("prql extension unavailable: %s", resp.Error)
+		}
+		t.Fatalf("query error: %s", resp.Error)
+	}
+	if len(resp.Columns) != 4 || resp.Columns[3].Name != "pp2" {
+		t.Errorf("columns = %v", resp.Columns)
+	}
+	if len(resp.Rows) != 2 {
+		t.Fatalf("rows = %d", len(resp.Rows))
+	}
+}

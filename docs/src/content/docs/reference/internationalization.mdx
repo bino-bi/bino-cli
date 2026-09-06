@@ -60,6 +60,7 @@ Fields:
 - `spec.content` – flat map of dotted keys to label strings, or a JSON string (at least 2 characters) holding the same map.
 
 Multiple manifests for the same namespace and code merge in document order (later wins per key).
+When a DataSet [derives or asserts](/reference/dataset/#deriving-previous-period) a previous-period slot with a shift other than a year, bino emits a `_system` bundle for the artefact language that captions that slot `PP` instead of the built-in `PY`. It comes before your manifests, so your own `global.pp1` still wins.
 
 ## Built-in token vocabulary
 

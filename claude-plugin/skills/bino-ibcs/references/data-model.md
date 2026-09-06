@@ -25,6 +25,10 @@ Four scenario families, each with up to four slots:
 | **Forecast (FC)** | `fc1`, `fc2`, `fc3`, `fc4` | Projected values | Hatched bars |
 | **Plan (PL)** | `pl1`, `pl2`, `pl3`, `pl4` | Target / budget values | Outlined bars |
 
+A `pp` slot need not come from the source: the DataSet declares it with `derive:` (bino fills it from
+another slot shifted back by `shift` at `grain`) or `assert:` (the query supplies it, bino checks it).
+Its caption follows the shift — `PY` for a year shift, `PP` otherwise.
+
 All scenario fields are `number | null`. In the engine's queries they are aggregated with the
 operation sign — `SUM(ac1 * sign(operation))` where `"+"` is `1` and `"-"` is `-1`:
 

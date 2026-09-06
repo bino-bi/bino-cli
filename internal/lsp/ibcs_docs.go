@@ -7,7 +7,7 @@ import "strings"
 // scenario/variance tokens.
 var scenarioDoc = map[string]string{
 	"ac": "Actual — measured/realized values.",
-	"pp": "Previous Period — the comparable prior period (or Plan, per convention).",
+	"pp": "Previous Period — the comparable prior period. What a pp slot compares against (shift and grain) is declared per DataSet in derive:/assert:; captioned PY by default, PP when the shift unit is not year.",
 	"fc": "Forecast — expected values for the remaining horizon.",
 	"pl": "Plan — budgeted/target values.",
 }

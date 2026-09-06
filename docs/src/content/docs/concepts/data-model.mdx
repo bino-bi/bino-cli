@@ -36,6 +36,8 @@ Key ideas:
 - `spec.dependencies` is an optional list of datasource names that must be materialized before the query runs.
 - Use dependencies to make relationships explicit and to help graph inspection.
 
+A dataset can also declare what a previous-period slot means instead of supplying it: `spec.derive` names the slot bino fills from another slot shifted back in time (`pp1: { from: ac1, shift: 1 month, grain: month }`), and `spec.assert` checks a slot the query already returns. The grain is always declared, rows are matched by identity and by the date truncated to that grain, and the caption follows the shift (`PY` for a year, `PP` otherwise). See [Deriving previous period](/reference/dataset/#deriving-previous-period).
+
 See the [DataSet reference](/reference/dataset/) for examples.
 
 ## Secrets and external storage

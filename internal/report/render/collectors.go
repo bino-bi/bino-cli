@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"bino.bi/bino/internal/report/config"
+	reportspec "bino.bi/bino/internal/report/spec"
 )
 
 // fontAsset represents a font resource to be linked in the HTML.
@@ -112,9 +113,15 @@ func normalizeSpecContent(raw json.RawMessage, label string) (string, error) {
 	return string(trimmed), nil
 }
 
-// collectInternationalizations extracts internationalization entries from documents.
-func collectInternationalizations(docs []config.Document) ([]internationalization, error) {
+// collectInternationalizations extracts internationalization entries from
+// documents for the artefact language. A caption bundle synthesized from the
+// DataSets' derive/assert declarations comes first, so that a project-authored
+// "_system" bundle for the same code, emitted after it, wins in the engine.
+func collectInternationalizations(docs []config.Document, locale string) ([]internationalization, error) {
 	var entries []internationalization
+	if caption := derivedCaptionEntry(docs, locale); caption != nil {
+		entries = append(entries, *caption)
+	}
 	for _, doc := range docs {
 		if doc.Kind != "Internationalization" {
 			continue
@@ -145,6 +152,46 @@ func collectInternationalizations(docs []config.Document) ([]internationalizatio
 		})
 	}
 	return entries, nil
+}
+
+// derivedCaptionEntry builds the "_system" bundle that captions previous-period
+// slots declared with a non-year shift as "PP". The engine's built-in label for
+// pp1..pp4 is "PY", which is only right for a year shift. Nil when no DataSet
+// declares such a slot, so projects without derive/assert render unchanged.
+func derivedCaptionEntry(docs []config.Document, locale string) *internationalization {
+	labels := map[string]string{}
+	for _, doc := range docs {
+		if doc.Kind != "DataSet" {
+			continue
+		}
+		var payload struct {
+			Spec struct {
+				Derive map[string]reportspec.ShiftDeclaration `json:"derive"`
+				Assert map[string]reportspec.ShiftDeclaration `json:"assert"`
+			} `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			// The executor reports a broken DataSet; the caption is not the place.
+			continue
+		}
+		for _, decls := range []map[string]reportspec.ShiftDeclaration{payload.Spec.Derive, payload.Spec.Assert} {
+			for slot, decl := range decls {
+				fields := strings.Fields(decl.Shift)
+				if len(fields) == 0 || fields[len(fields)-1] == "year" {
+					continue
+				}
+				labels["global."+slot] = "PP"
+			}
+		}
+	}
+	if len(labels) == 0 {
+		return nil
+	}
+	value, err := json.Marshal(labels)
+	if err != nil {
+		return nil
+	}
+	return &internationalization{code: locale, namespace: "_system", value: string(value)}
 }
 
 // scalingGroup represents a named scaling value for synchronized chart/table scaling.
