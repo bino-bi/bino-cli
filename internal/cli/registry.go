@@ -460,7 +460,7 @@ func registrySync(ctx context.Context, p registryProject, client *registry.Clien
 // bino.lock, so an install that never resolves still reports them.
 func registryCompatWarnings(p registryProject, entries []registry.Entry) []string {
 	engineVersion := resolveEngineVersionForCompat(p.Cfg.EngineVersion)
-	var out []string
+	out := make([]string, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, registry.CompatWarnings(e.Name, e.Version, e.CompatEngine, e.CompatCLI, version.Version, engineVersion)...)
 	}
