@@ -248,3 +248,85 @@ func TestBinoShift_VisibleOnEveryPooledConnection(t *testing.T) {
 		t.Fatalf("conn 2: %v", err)
 	}
 }
+
+// A category that appears for the first time keeps its row; the slot is NULL
+// because there is no prior row of the same identity.
+func TestBinoShift_NewIdentityKeepsRowWithNullShifted(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('A', 1, '2024-02-29', 110.0),
+		('C', 3, '2024-02-29', 50.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	call := "bino_shift('t', 'ac1', '1 month', 'month')"
+	a := shiftedByDate(ctx, t, s, call, "category = 'A'")
+	wantValue(t, a, "2024-02-29", 100)
+	c := shiftedByDate(ctx, t, s, call, "category = 'C'")
+	wantNull(t, c, "2024-02-29")
+}
+
+// A category that existed only in the prior period has no current row to
+// attach its value to: the macro adds a column, never rows.
+func TestBinoShift_PriorOnlyIdentityEmitsNoRow(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('B', 2, '2024-01-31', 563.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	var total, bFeb int
+	if err := s.DB().QueryRowContext(ctx, "SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month')").Scan(&total); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("row count = %d, want 3 (the source row count)", total)
+	}
+	if err := s.DB().QueryRowContext(ctx, `SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month')
+		WHERE category = 'B' AND date_trunc('month', "date"::DATE) = DATE '2024-02-01'`).Scan(&bFeb); err != nil {
+		t.Fatalf("count B: %v", err)
+	}
+	if bFeb != 0 {
+		t.Errorf("B has %d February row(s), want none", bFeb)
+	}
+}
+
+// The documented scaffold pattern: the query produces a row with an empty
+// actual for the faded identity, and the macro fills its previous period.
+// The scaffold SQL is the one from reference/dataset.mdx, verbatim.
+func TestBinoShift_ScaffoldRowWithNullSourceIsShifted(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE actuals AS SELECT * FROM (VALUES
+		('North', 1, '2024-01-31', 563.0),
+		('South', 2, '2024-01-31', 100.0),
+		('South', 2, '2024-02-29', 110.0)
+	) v(region, "regionIndex", "date", ac1)`)
+	mustExec(ctx, t, s, `CREATE VIEW scaffolded AS
+WITH periods AS (SELECT DISTINCT "date" FROM actuals),
+     identities AS (SELECT DISTINCT region, "regionIndex" FROM actuals)
+SELECT i.region, i."regionIndex", p."date", a.ac1
+FROM identities i CROSS JOIN periods p
+LEFT JOIN actuals a USING (region, "regionIndex", "date")`)
+
+	call := "bino_shift('scaffolded', 'ac1', '1 month', 'month')"
+	north := shiftedByDate(ctx, t, s, call, "region = 'North'")
+	wantValue(t, north, "2024-02-29", 563)
+	var ac1 *float64
+	if err := s.DB().QueryRowContext(ctx, "SELECT ac1 FROM "+call+" WHERE region = 'North' AND \"date\" = '2024-02-29'").Scan(&ac1); err != nil {
+		t.Fatalf("ac1: %v", err)
+	}
+	if ac1 != nil {
+		t.Errorf("North February ac1 = %v, want NULL", *ac1)
+	}
+}
+
+// The index twin is part of the identity: the same category with a different
+// categoryIndex in the prior period does not match.
+func TestBinoShift_IndexTwinIsPartOfIdentity(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('A', 2, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	got := shiftedByDate(ctx, t, s, "bino_shift('t', 'ac1', '1 month', 'month')", "")
+	wantNull(t, got, "2024-02-29")
+}

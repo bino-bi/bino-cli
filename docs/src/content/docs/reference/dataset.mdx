@@ -426,6 +426,18 @@ What follows from the rule:
 - Choose a shift that is a whole number of grains. A shift shorter than the grain (`1 week` on grain `month`) never matches. A month shift on grain `day` matches by day of month, and the round-trip condition leaves the 31st empty when the prior month is shorter.
 - Every identity must have at most one row per period; duplicates are an error (see below).
 - Rows before the first shifted period have no prior row: the first month of a table has no `pp1`, its first year no `pp2`. If that is every row, the build warns.
+- Index twins and control columns are part of the identity: `categoryIndex`, `rowGroupIndex`, `operation` and `setname` must be the same in both periods. An index computed per period (a rank by value) changes the identity and breaks the match; compute indexes from a stable attribute.
+- `derive` adds a column, never rows. An identity that is new in this period keeps its row with an empty slot. An identity that existed only in the prior period has no current row to attach the value to, so it does not appear at all. To show it as `ac1 = NULL, pp1 = <prior value>`, the query has to produce the row, for example by joining the actuals onto every identity × period:
+
+  ```sql
+  WITH periods AS (SELECT DISTINCT "date" FROM actuals),
+       identities AS (SELECT DISTINCT region, "regionIndex" FROM actuals)
+  SELECT i.region, i."regionIndex", p."date", a.ac1
+  FROM identities i CROSS JOIN periods p
+  LEFT JOIN actuals a USING (region, "regionIndex", "date")
+  ```
+
+  With `derive: { pp1: { from: ac1, shift: 1 month, grain: month } }` the faded identity's row then carries its `pp1`, and a new identity's first-period row is empty on both.
 
 **Caption.** The engine captions `pp1`…`pp4` as `PY` by default. That is right for a year shift; for any other unit bino emits an [`Internationalization`](/reference/internationalization/) bundle for the artefact's language that captions the slot `PP`. It is placed before your own manifests, so a project override of `global.pp1` still wins.
 
