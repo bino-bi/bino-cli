@@ -76,6 +76,11 @@ earlier and fills the slot; rows without a prior period get NULL. Record it in t
 carries the column, keep it in the query and declare the same shape under `assert:` so the build
 checks it. The caption follows the shift: a year shift is captioned `PY`, anything else `PP`.
 
+One trap: the index twins (`categoryIndex`, `rowGroupIndex`, …) are part of the identity, so compute
+them from a stable attribute, never as a per-period rank. An identity that exists only in the prior
+period is kept: `derive` adds its row with an empty actual and the slot filled, so the drop stays
+visible.
+
 ## Honest failure — unmet[] over fabrication
 
 If the brief asks for a measure or comparison the source **cannot** provide (no plan column, no rows

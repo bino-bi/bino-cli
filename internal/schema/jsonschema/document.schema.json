@@ -1161,7 +1161,7 @@
         },
         "derive": {
           "$ref": "#/$defs/shiftDeclarationMap",
-          "description": "pp slots (pp1..pp4) the CLI produces from another slot shifted back in time, keyed by target slot; the query must not return the slot itself. Rows of one identity (all columns except date and the scenario slots) match on the date truncated to the grain; without a prior period the value is NULL. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP. Example: { pp2: { from: ac1, shift: \"1 year\", grain: month } }."
+          "description": "pp slots (pp1..pp4) the CLI produces from another slot shifted back in time, keyed by target slot; the query must not return the slot itself. Rows of one identity (all columns except date and the scenario slots) match on the date truncated to the grain; without a prior period the value is NULL, and an identity that exists only in the prior period gets a row with the slot filled and every other measure NULL. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP. Example: { pp2: { from: ac1, shift: \"1 year\", grain: month } }."
         },
         "assert": {
           "$ref": "#/$defs/shiftDeclarationMap",
@@ -1396,7 +1396,7 @@
         },
         "derive": {
           "$ref": "#/$defs/shiftDeclarationMap",
-          "description": "pp slots (pp1..pp4) the CLI produces from another slot shifted back in time, keyed by target slot; the query must not return the slot itself. Rows of one identity (all columns except date and the scenario slots) match on the date truncated to the grain; without a prior period the value is NULL. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP. Example: { pp2: { from: ac1, shift: \"1 year\", grain: month } }."
+          "description": "pp slots (pp1..pp4) the CLI produces from another slot shifted back in time, keyed by target slot; the query must not return the slot itself. Rows of one identity (all columns except date and the scenario slots) match on the date truncated to the grain; without a prior period the value is NULL, and an identity that exists only in the prior period gets a row with the slot filled and every other measure NULL. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP. Example: { pp2: { from: ac1, shift: \"1 year\", grain: month } }."
         },
         "assert": {
           "$ref": "#/$defs/shiftDeclarationMap",

@@ -113,7 +113,9 @@ SELECT * EXCLUDE (_bino_key) FROM _bino_k QUALIFY count(*) OVER (PARTITION BY _b
 // where a shifted value exists. Tolerance is 1e-9 relative to the larger
 // magnitude (at least 1); a NULL on exactly one side is a mismatch.
 func checkAssert(ctx context.Context, db *sql.DB, view, slot string, d ShiftDeclaration) error {
-	source := fmt.Sprintf("%s('%s', '%s', '%s', '%s')", duckdb.ShiftMacroName, view, d.From, d.Shift, d.Grain)
+	// fill := false: assert compares the rows the query supplied; a row added
+	// for an identity that exists only in the prior period has nothing to compare.
+	source := fmt.Sprintf("%s('%s', '%s', '%s', '%s', fill := false)", duckdb.ShiftMacroName, view, d.From, d.Shift, d.Grain)
 	mismatch := fmt.Sprintf(`shifted IS NOT NULL AND (%q::DOUBLE IS NULL OR abs(%q::DOUBLE - shifted::DOUBLE) > 1e-9 * greatest(abs(%q::DOUBLE), abs(shifted::DOUBLE), 1))`,
 		slot, slot, slot)
 
