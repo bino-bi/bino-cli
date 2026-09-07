@@ -418,3 +418,67 @@ spec:
 		t.Errorf("plain dataset should keep one cache file, got %d in %v", plain, third)
 	}
 }
+
+// An identity that stops after February keeps a March row with an empty
+// actual and its previous period, all the way through Execute.
+func TestExecute_DeriveKeepsFadedIdentity(t *testing.T) {
+	t.Parallel()
+	workdir, docs := writeProject(t, datasetYAML(`
+  query: |
+    SELECT category, "date", "ac1"::DOUBLE AS ac1 FROM sales_csv
+    WHERE NOT (category = 'B' AND "date"::DATE >= DATE '2020-03-01')
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+`))
+	results, _, err := Execute(context.Background(), workdir, docs, warnOpts(false))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	rows := rowsByKey(t, results[0].Data)
+	march, ok := rows["B/2020-03-31"]
+	if !ok {
+		t.Fatalf("B has no March row; keys: %v", keysOf(rows))
+	}
+	if march["ac1"] != nil {
+		t.Errorf("B/2020-03-31 ac1 = %v, want NULL", march["ac1"])
+	}
+	if want := rows["B/2020-02-29"]["ac1"]; march["pp1"] != want || want == nil {
+		t.Errorf("B/2020-03-31 pp1 = %v, want February's ac1 %v", march["pp1"], want)
+	}
+	if _, ok := rows["B/2020-04-30"]; ok {
+		t.Errorf("B/2020-04-30 exists: a filled row must not seed the next period")
+	}
+}
+
+// assert compares supplied rows only: a faded identity is not reported as a
+// mismatch just because a filled row would have no supplied value.
+func TestExecute_AssertIgnoresFadedIdentity(t *testing.T) {
+	t.Parallel()
+	workdir, docs := writeProject(t, datasetYAML(`
+  query: |
+    SELECT category, "date", "ac1"::DOUBLE AS ac1,
+           (SELECT p."ac1"::DOUBLE FROM sales_csv p
+             WHERE p.category = s.category
+               AND date_trunc('month', p."date"::DATE) = date_trunc('month', s."date"::DATE) - INTERVAL 1 MONTH) AS pp1
+    FROM sales_csv s
+    WHERE NOT (category = 'B' AND "date"::DATE >= DATE '2020-03-01')
+  assert:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+`))
+	results, _, err := Execute(context.Background(), workdir, docs, warnOpts(false))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	rows := rowsByKey(t, results[0].Data)
+	if _, ok := rows["B/2020-03-31"]; ok {
+		t.Errorf("assert must not add rows, but B/2020-03-31 exists")
+	}
+}
+
+func keysOf(m map[string]map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}

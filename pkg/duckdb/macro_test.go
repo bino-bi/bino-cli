@@ -265,58 +265,125 @@ func TestBinoShift_NewIdentityKeepsRowWithNullShifted(t *testing.T) {
 	wantNull(t, c, "2024-02-29")
 }
 
-// A category that existed only in the prior period has no current row to
-// attach its value to: the macro adds a column, never rows.
-func TestBinoShift_PriorOnlyIdentityEmitsNoRow(t *testing.T) {
+// A category that existed only in the prior period gets a row in the current
+// period: identity from the earlier row, source NULL, shifted filled.
+func TestBinoShift_PriorOnlyIdentityGetsRowWithNullSource(t *testing.T) {
 	ctx, s := openTestSession(t)
 	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
 		('A', 1, '2024-01-31', 100.0),
 		('B', 2, '2024-01-31', 563.0),
 		('A', 1, '2024-02-29', 110.0)
 	) v(category, "categoryIndex", "date", ac1)`)
-	var total, bFeb int
-	if err := s.DB().QueryRowContext(ctx, "SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month')").Scan(&total); err != nil {
-		t.Fatalf("count: %v", err)
+	call := "bino_shift('t', 'ac1', '1 month', 'month')"
+	if got := rowCount(ctx, t, s, "SELECT count(*) FROM "+call); got != 4 {
+		t.Errorf("row count = %d, want 4 (3 source rows + the filled B row)", got)
 	}
-	if total != 3 {
-		t.Errorf("row count = %d, want 3 (the source row count)", total)
+	b := shiftedByDate(ctx, t, s, call, "category = 'B'")
+	wantNull(t, b, "2024-01-31")
+	wantValue(t, b, "2024-02-29", 563)
+}
+
+// Rows are only filled into periods the data covers: nothing is created after
+// the last period, and fill := false adds no rows at all.
+func TestBinoShift_FillOnlyWithinExistingPeriods(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	if got := rowCount(ctx, t, s, "SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month')"); got != 2 {
+		t.Errorf("row count = %d, want 2: no March row after the data ends", got)
 	}
-	if err := s.DB().QueryRowContext(ctx, `SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month')
-		WHERE category = 'B' AND date_trunc('month', "date"::DATE) = DATE '2024-02-01'`).Scan(&bFeb); err != nil {
-		t.Fatalf("count B: %v", err)
-	}
-	if bFeb != 0 {
-		t.Errorf("B has %d February row(s), want none", bFeb)
+	if got := rowCount(ctx, t, s, "SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month') WHERE \"date\" > '2024-02-29'"); got != 0 {
+		t.Errorf("%d row(s) after the last period", got)
 	}
 }
 
-// The documented scaffold pattern: the query produces a row with an empty
-// actual for the faded identity, and the macro fills its previous period.
-// The scaffold SQL is the one from reference/dataset.mdx, verbatim.
-func TestBinoShift_ScaffoldRowWithNullSourceIsShifted(t *testing.T) {
+func TestBinoShift_FillFalseAddsNoRows(t *testing.T) {
 	ctx, s := openTestSession(t)
-	mustExec(ctx, t, s, `CREATE TABLE actuals AS SELECT * FROM (VALUES
-		('North', 1, '2024-01-31', 563.0),
-		('South', 2, '2024-01-31', 100.0),
-		('South', 2, '2024-02-29', 110.0)
-	) v(region, "regionIndex", "date", ac1)`)
-	mustExec(ctx, t, s, `CREATE VIEW scaffolded AS
-WITH periods AS (SELECT DISTINCT "date" FROM actuals),
-     identities AS (SELECT DISTINCT region, "regionIndex" FROM actuals)
-SELECT i.region, i."regionIndex", p."date", a.ac1
-FROM identities i CROSS JOIN periods p
-LEFT JOIN actuals a USING (region, "regionIndex", "date")`)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('B', 2, '2024-01-31', 563.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	if got := rowCount(ctx, t, s, "SELECT count(*) FROM bino_shift('t', 'ac1', '1 month', 'month', fill := false)"); got != 3 {
+		t.Errorf("row count = %d, want 3 (the source rows)", got)
+	}
+}
 
-	call := "bino_shift('scaffolded', 'ac1', '1 month', 'month')"
-	north := shiftedByDate(ctx, t, s, call, "region = 'North'")
-	wantValue(t, north, "2024-02-29", 563)
-	var ac1 *float64
-	if err := s.DB().QueryRowContext(ctx, "SELECT ac1 FROM "+call+" WHERE region = 'North' AND \"date\" = '2024-02-29'").Scan(&ac1); err != nil {
-		t.Fatalf("ac1: %v", err)
+// The filled row borrows the date string the data uses in the target period,
+// so its format matches and it lands in the period other rows use.
+func TestBinoShift_FilledRowUsesPeriodDate(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-31', 100.0),
+		('B', 2, '2024-01-31', 563.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	var date string
+	var ac1, shifted *float64
+	err := s.DB().QueryRowContext(ctx, `SELECT "date", ac1, shifted FROM bino_shift('t', 'ac1', '1 month', 'month') WHERE category = 'B' AND "date" <> '2024-01-31'`).Scan(&date, &ac1, &shifted)
+	if err != nil {
+		t.Fatalf("filled row: %v", err)
+	}
+	if date != "2024-02-29" {
+		t.Errorf("date = %q, want the period's date 2024-02-29", date)
 	}
 	if ac1 != nil {
-		t.Errorf("North February ac1 = %v, want NULL", *ac1)
+		t.Errorf("ac1 = %v, want NULL", *ac1)
 	}
+	if shifted == nil || *shifted != 563 {
+		t.Errorf("shifted = %v, want 563", shifted)
+	}
+}
+
+// Under grain day a month shift must round-trip, so a prior row on the 31st
+// does not fill a day that does not exist in the target month.
+func TestBinoShift_FilledRowsRoundTripUnderDayGrain(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('A', 1, '2024-01-30', 100.0),
+		('B', 2, '2024-01-31', 563.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	call := "bino_shift('t', 'ac1', '1 month', 'day')"
+	if got := rowCount(ctx, t, s, "SELECT count(*) FROM "+call+" WHERE category = 'B'"); got != 1 {
+		t.Errorf("B has %d row(s), want 1: Jan 31 + 1 month does not round-trip", got)
+	}
+}
+
+// Two layers: the row layer one adds is a current row for layer two.
+func TestBinoShift_TwoLayersFillInBothOrders(t *testing.T) {
+	ctx, s := openTestSession(t)
+	// B: February last year and January this year, nothing in February this year.
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT * FROM (VALUES
+		('B', 2, '2023-02-28', 500.0),
+		('B', 2, '2024-01-31', 563.0),
+		('A', 1, '2024-02-29', 110.0)
+	) v(category, "categoryIndex", "date", ac1)`)
+	mustExec(ctx, t, s, `CREATE VIEW m AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('t', 'ac1', '1 month', 'month')`)
+	mustExec(ctx, t, s, `CREATE VIEW my AS SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('m', 'ac1', '1 year', 'month')`)
+	mustExec(ctx, t, s, `CREATE VIEW y AS SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('t', 'ac1', '1 year', 'month')`)
+	mustExec(ctx, t, s, `CREATE VIEW ym AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('y', 'ac1', '1 month', 'month')`)
+	for _, view := range []string{"my", "ym"} {
+		var pp1, pp2 *float64
+		err := s.DB().QueryRowContext(ctx, `SELECT pp1, pp2 FROM `+view+` WHERE category = 'B' AND "date" = '2024-02-29'`).Scan(&pp1, &pp2)
+		if err != nil {
+			t.Fatalf("%s: filled B row: %v", view, err)
+		}
+		if pp1 == nil || *pp1 != 563 || pp2 == nil || *pp2 != 500 {
+			t.Errorf("%s: pp1 = %v, pp2 = %v; want 563 and 500", view, pp1, pp2)
+		}
+	}
+}
+
+func rowCount(ctx context.Context, t *testing.T, s *Session, query string) int {
+	t.Helper()
+	var n int
+	if err := s.DB().QueryRowContext(ctx, query).Scan(&n); err != nil {
+		t.Fatalf("query %q: %v", query, err)
+	}
+	return n
 }
 
 // The index twin is part of the identity: the same category with a different
@@ -327,6 +394,9 @@ func TestBinoShift_IndexTwinIsPartOfIdentity(t *testing.T) {
 		('A', 1, '2024-01-31', 100.0),
 		('A', 2, '2024-02-29', 110.0)
 	) v(category, "categoryIndex", "date", ac1)`)
-	got := shiftedByDate(ctx, t, s, "bino_shift('t', 'ac1', '1 month', 'month')", "")
-	wantNull(t, got, "2024-02-29")
+	call := "bino_shift('t', 'ac1', '1 month', 'month')"
+	// A/2 is a new identity: nothing to read.
+	wantNull(t, shiftedByDate(ctx, t, s, call, `"categoryIndex" = 2`), "2024-02-29")
+	// A/1 exists only in January: it is filled into February with its value.
+	wantValue(t, shiftedByDate(ctx, t, s, call, `"categoryIndex" = 1`), "2024-02-29", 100)
 }

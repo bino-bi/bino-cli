@@ -169,7 +169,7 @@ spec:
 - If the query window starts in 2023 and you ask for `pp2` only, the build warns that `pp2` is null on every row: the window has no prior year.
 - If two rows share `region`, `regionIndex` and a month, the build fails with `duplicate rows for identity …` regardless of `--data-validation`. Aggregate to the grain in the query.
 - If you later add a `pp1` column to the `SELECT` but leave `derive.pp1` in place, the build fails: use `assert` for a supplied slot.
-- A region that stops reporting disappears from the months it has no row for; `derive` never adds rows. To keep showing it with an empty actual and its previous period, scaffold the query over every region × month, see [How a row is matched](/reference/dataset/#how-a-row-is-matched).
+- A region that stops reporting keeps a row for the month after its last one, with an empty actual and its previous period filled, so the drop is visible; see [How a row is matched](/reference/dataset/#how-a-row-is-matched).
 
 <Aside type="note">
 The macro behind the declaration is available in SQL too, for cases where you need the shifted value inside a larger query: `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('actuals_csv', 'ac1', '1 year', 'month')`. See [Built-in SQL functions](/reference/dataset/#built-in-sql-functions).

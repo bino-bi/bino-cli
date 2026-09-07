@@ -419,6 +419,8 @@ The slot receives the `from` value of the row that has the same identity and who
 | North    | `2024-02-29` |   110 | `2024-02` | `2024-01`      |    100 |
 | North    | `2024-03-31` |   120 | `2024-03` | `2024-02`      |    110 |
 | South    | `2024-03-31` |    80 | `2024-03` | `2024-02`      | `NULL` — South has no February row |
+| West     | `2024-02-29` |    70 | `2024-02` | `2024-01`      | `NULL` — West is new in February |
+| West     | `2024-03-31` | `NULL` | `2024-03` | `2024-02`      | 70 — added: West has no March row, its February value is kept visible |
 
 What follows from the rule:
 
@@ -427,17 +429,8 @@ What follows from the rule:
 - Every identity must have at most one row per period; duplicates are an error (see below).
 - Rows before the first shifted period have no prior row: the first month of a table has no `pp1`, its first year no `pp2`. If that is every row, the build warns.
 - Index twins and control columns are part of the identity: `categoryIndex`, `rowGroupIndex`, `operation` and `setname` must be the same in both periods. An index computed per period (a rank by value) changes the identity and breaks the match; compute indexes from a stable attribute.
-- `derive` adds a column, never rows. An identity that is new in this period keeps its row with an empty slot. An identity that existed only in the prior period has no current row to attach the value to, so it does not appear at all. To show it as `ac1 = NULL, pp1 = <prior value>`, the query has to produce the row, for example by joining the actuals onto every identity × period:
-
-  ```sql
-  WITH periods AS (SELECT DISTINCT "date" FROM actuals),
-       identities AS (SELECT DISTINCT region, "regionIndex" FROM actuals)
-  SELECT i.region, i."regionIndex", p."date", a.ac1
-  FROM identities i CROSS JOIN periods p
-  LEFT JOIN actuals a USING (region, "regionIndex", "date")
-  ```
-
-  With `derive: { pp1: { from: ac1, shift: 1 month, grain: month } }` the faded identity's row then carries its `pp1`, and a new identity's first-period row is empty on both.
+- An identity that is new in this period keeps its row with an empty slot.
+- An identity that existed one shift earlier but has no row in this period **gets a row**: the dimension columns of the earlier row, every measure `NULL`, the slot filled, and the `date` the data uses for that period. So a region that stopped selling still shows `ac1 = NULL, pp1 = 563` and the drop stays visible. Rows are only added for periods the data covers; nothing is created after the last period. `assert` never adds rows, it checks the rows the query supplied.
 
 **Caption.** The engine captions `pp1`…`pp4` as `PY` by default. That is right for a year shift; for any other unit bino emits an [`Internationalization`](/reference/internationalization/) bundle for the artefact's language that captions the slot `PP`. It is placed before your own manifests, so a project override of `global.pp1` still wins.
 
