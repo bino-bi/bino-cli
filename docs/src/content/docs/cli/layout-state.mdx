@@ -68,7 +68,7 @@ sees the manifests.
 | --- | --- |
 | `layout-empty-component` | A component that rendered with no data — 0 bars, 0 rows, 0 points. Usually a wrong dataset reference or a query returning nothing. |
 | `layout-scale-mismatch` | Components showing the same measure that ended on different units-per-em. The engine auto-fits each component independently, so this happens silently; IBCS requires one scale so bars stay comparable. The finding names the value to pin. |
-| `layout-overflow` | Content that does not fit its component, with the engine's measured magnitude. |
+| `layout-overflow` | Content that does not fit its component, with the engine's measured magnitude. Tables report height overflow from engine v1.0.0-next.26 on; older engines stay silent about a clipped table. |
 | `layout-font-shrunk` | A font auto-fitted down to make content fit. The report still renders, so nothing else surfaces it — but type size then differs between pages. |
 
 `layout-scale-mismatch` needs to know which components show the same measure, and

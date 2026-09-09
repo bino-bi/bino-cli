@@ -167,6 +167,7 @@ func TestCheckOverflow(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		tag         string
 		diagnostics []Diagnostic
 		regions     []Region
 		want        bool
@@ -228,6 +229,22 @@ func TestCheckOverflow(t *testing.T) {
 			wantExtent:  "",
 		},
 		{
+			// A table is clipped by the layout-page slot wrapper, not by its
+			// own host, so its regions all sit inside the host box and there
+			// is no magnitude to add. The engine's diagnostic and severity
+			// must still come through on their own.
+			name:        "table clipped by its slot",
+			tag:         "bn-table",
+			diagnostics: []Diagnostic{{ID: "WARN_overflow", Type: "error", Message: "Table exceeds available height (673px > 341px)."}},
+			regions: []Region{
+				{ID: "header", Rect: DualRect{Component: Rect{Width: 100, Height: 10}}},
+				{ID: "body", Rect: DualRect{Component: Rect{Y: 10, Width: 100, Height: 40}}},
+			},
+			want:       true,
+			wantSev:    SeverityError,
+			wantExtent: "",
+		},
+		{
 			name:        "unrelated diagnostic",
 			diagnostics: []Diagnostic{{ID: "ERR_invalid_value", Type: "warning", Message: "level: invalid value."}},
 			regions:     []Region{{ID: "canvas:base", Rect: DualRect{Component: Rect{Width: 130, Height: 50}}}},
@@ -241,7 +258,11 @@ func TestCheckOverflow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := component(t, "bn-chart-time[0]", "bn-chart-time")
+			tag := tt.tag
+			if tag == "" {
+				tag = "bn-chart-time"
+			}
+			c := component(t, tag+"[0]", tag)
 			c.Diagnostics = tt.diagnostics
 			c.Regions = tt.regions
 
