@@ -294,6 +294,17 @@ spec:
 | `auto` | Auto-scale to fit the parent width silently (no warning). |
 | `0.5`, `1.2`, … | Fixed factor applied to the base font size. All dimensions scale proportionally. |
 
+`scale` only fits the width. A table whose content is taller than the space it
+gets is clipped at the bottom by the page cell — the last rows, grand total
+included, simply are not drawn. From template engine **v1.0.0-next.26** on the
+engine reports this as a `WARN_overflow` diagnostic; a build with
+[`--layout-state`](/cli/layout-state/) prints it as a `layout-overflow` finding,
+and the preview inspector shows it on the component.
+
+What helps: give the table more space (fewer components on the page, a taller
+layout), show fewer rows (`limit`), or set a smaller fixed `scale`. Setting
+`scale: auto` does not help — it fits the width, not the height.
+
 ## Inherited props
 
 Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
