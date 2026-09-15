@@ -112,6 +112,25 @@ func TestDaemonMCPMount(t *testing.T) {
 	if len(rr.Contents) == 0 || !strings.Contains(rr.Contents[0].Text, "properties") {
 		t.Errorf("bino://schema over HTTP looks wrong: %+v", rr.Contents)
 	}
+
+	// The daemon's /mcp serves the skill prompts too, not only the stdio entrypoint.
+	if !hasPrompt(t, upstream, "bino-ibcs") {
+		t.Error("prompt bino-ibcs missing over HTTP")
+	}
+}
+
+func hasPrompt(t *testing.T, cs *mcpsdk.ClientSession, name string) bool {
+	t.Helper()
+	res, err := cs.ListPrompts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	for _, p := range res.Prompts {
+		if p.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // TestProxyForwarding verifies the stdio->daemon forwarding proxy: a second
@@ -151,6 +170,19 @@ func TestProxyForwarding(t *testing.T) {
 	}
 	if len(rr.Contents) == 0 || !strings.Contains(rr.Contents[0].Text, "$defs") {
 		t.Errorf("templated resource through proxy looks wrong: %+v", rr.Contents)
+	}
+
+	// Prompts forwarded through both hops.
+	if !hasPrompt(t, pcs, "bino-concepts") {
+		t.Fatal("prompt bino-concepts missing through proxy")
+	}
+	pr, err := pcs.GetPrompt(ctx, &mcpsdk.GetPromptParams{Name: "bino-concepts"})
+	if err != nil {
+		t.Fatalf("get prompt bino-concepts through proxy: %v", err)
+	}
+	tc, ok := pr.Messages[0].Content.(*mcpsdk.TextContent)
+	if !ok || !strings.HasPrefix(tc.Text, "# How bino thinks") {
+		t.Errorf("prompt through proxy looks wrong: %+v", pr.Messages)
 	}
 }
 

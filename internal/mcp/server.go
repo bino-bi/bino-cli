@@ -13,6 +13,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	claudeplugin "bino.bi/bino/claude-plugin"
 	"bino.bi/bino/internal/daemon"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/datasource"
@@ -53,6 +54,8 @@ Resources:
   bino://kinds           every manifest kind + its capability category
   bino://documents       project index: every document -> {kind, name, file, position}
   bino://packages        the project's registry packages (bino.lock + bino.toml [dependencies])
+  bino://skills          index of the bino/IBCS knowledge skills (also served as prompts)
+  bino://skills/{name}   one skill as markdown, e.g. bino://skills/bino-ibcs
 
 Schema tools:
   outline_kind(kind)     compact per-field outline of a kind's spec (start here)
@@ -82,6 +85,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 
 	h := &handlers{deps: deps}
 	h.registerResources(srv)
+	h.registerSkills(srv)
 	h.registerReadTools(srv)
 	h.registerSchemaTools(srv)
 	h.registerBuildTool(srv)
@@ -149,6 +153,77 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 		Description: "Built-in and curated templates that init_bundle can scaffold from.",
 		MIMEType:    "application/json",
 	}, h.readTemplates)
+}
+
+// --- Skills (prompts + resources) ---
+
+// mcpSkills lists the plugin skills served over MCP, in display order.
+// bino-orchestration and bino-requirements are left out: they drive Claude
+// Code specifics (subagents, AskUserQuestion) and mean nothing to other clients.
+var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop"}
+
+// registerSkills serves each skill in mcpSkills twice: as a prompt (one user
+// message carrying the body) and as a bino://skills/{name} markdown resource,
+// plus a bino://skills JSON index. The skills are embedded, so a parse failure
+// is a build defect and panics rather than silently serving fewer prompts.
+func (h *handlers) registerSkills(srv *mcpsdk.Server) {
+	all, err := claudeplugin.Skills()
+	if err != nil {
+		panic(fmt.Sprintf("mcp: embedded plugin skills: %v", err))
+	}
+	byName := make(map[string]claudeplugin.Skill, len(all))
+	for _, s := range all {
+		byName[s.Name] = s
+	}
+
+	index := make([]skillIndexEntry, 0, len(mcpSkills))
+	for _, name := range mcpSkills {
+		s, ok := byName[name]
+		if !ok {
+			panic(fmt.Sprintf("mcp: embedded plugin skill %q not found", name))
+		}
+		index = append(index, skillIndexEntry{Name: s.Name, Description: s.Description})
+		title := strings.TrimPrefix(strings.SplitN(s.Body, "\n", 2)[0], "# ")
+		uri := "bino://skills/" + s.Name
+
+		srv.AddPrompt(&mcpsdk.Prompt{
+			Name:        s.Name,
+			Title:       title,
+			Description: s.Description,
+		}, func(_ context.Context, _ *mcpsdk.GetPromptRequest) (*mcpsdk.GetPromptResult, error) {
+			return &mcpsdk.GetPromptResult{
+				Description: s.Description,
+				Messages:    []*mcpsdk.PromptMessage{{Role: "user", Content: &mcpsdk.TextContent{Text: s.Body}}},
+			}, nil
+		})
+
+		srv.AddResource(&mcpsdk.Resource{
+			Name:        "skill-" + s.Name,
+			URI:         uri,
+			Title:       title,
+			Description: s.Description,
+			MIMEType:    "text/markdown",
+		}, func(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+			return &mcpsdk.ReadResourceResult{
+				Contents: []*mcpsdk.ResourceContents{{URI: uri, MIMEType: "text/markdown", Text: s.Body}},
+			}, nil
+		})
+	}
+
+	srv.AddResource(&mcpsdk.Resource{
+		Name:        "skills",
+		URI:         "bino://skills",
+		Title:       "Skills index",
+		Description: "The bino/IBCS knowledge skills served by this server: name and description of each; read bino://skills/{name} or get the prompt of the same name for the text.",
+		MIMEType:    "application/json",
+	}, func(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+		return jsonResource("bino://skills", map[string]any{"skills": index})
+	})
+}
+
+type skillIndexEntry struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 func (h *handlers) readTemplates(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {

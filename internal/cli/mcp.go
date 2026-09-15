@@ -161,8 +161,8 @@ func runMCPProxy(ctx context.Context, endpoint string) error {
 	return session.Wait()
 }
 
-// mirrorUpstream registers forwarding tools and resources on local that proxy
-// each call to the connected upstream daemon. bino exposes well under one page
+// mirrorUpstream registers forwarding tools, resources and prompts on local
+// that proxy each call to the connected upstream daemon. bino exposes well under one page
 // of tools/resources, so pagination is not needed.
 func mirrorUpstream(ctx context.Context, local *mcpsdk.Server, upstream *mcpsdk.ClientSession) error {
 	tools, err := upstream.ListTools(ctx, nil)
@@ -190,6 +190,13 @@ func mirrorUpstream(ctx context.Context, local *mcpsdk.Server, upstream *mcpsdk.
 		for _, tmpl := range templates.ResourceTemplates {
 			local.AddResourceTemplate(tmpl, func(ctx context.Context, req *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
 				return upstream.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: req.Params.URI})
+			})
+		}
+	}
+	if prompts, err := upstream.ListPrompts(ctx, nil); err == nil {
+		for _, p := range prompts.Prompts {
+			local.AddPrompt(p, func(ctx context.Context, req *mcpsdk.GetPromptRequest) (*mcpsdk.GetPromptResult, error) {
+				return upstream.GetPrompt(ctx, &mcpsdk.GetPromptParams{Name: req.Params.Name, Arguments: req.Params.Arguments})
 			})
 		}
 	}
