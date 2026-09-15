@@ -1,6 +1,7 @@
 # Keep the build context to the Go module and its embedded assets. Every
-# //go:embed in this repo reads from internal/, so docs/ and vscode-bino/ are
-# safe to drop — together with dist/ and .git they are most of the context.
+# //go:embed in this repo reads from internal/ or claude-plugin/, so docs/ and
+# vscode-bino/ are safe to drop — together with dist/ and .git they are most of
+# the context.
 
 .git
 .github
@@ -17,7 +18,6 @@
 .cursorrules
 CLAUDE.md
 __INTERNAL
-claude-plugin
 skills-lock.json
 
 # Local build output
