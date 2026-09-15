@@ -469,6 +469,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 	expectedIDs := []string{
 		"report-artefact-required",
 		"artefact-layoutpage-required",
+		"duplicate-name",
 		"text-content-required",
 		"dataset-required",
 		"table-sum-title-unused",

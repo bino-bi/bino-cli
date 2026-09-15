@@ -17,6 +17,7 @@ func DefaultRules() []Rule {
 	return []Rule{
 		reportArtefactRequired,
 		artefactLayoutPageRequired,
+		duplicateName,
 		textContentRequired,
 		datasetRequired,
 		tableSumTitleUnused,

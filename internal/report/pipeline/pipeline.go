@@ -528,12 +528,6 @@ type RenderArtefactOptions struct {
 // For preview rendering, use RenderArtefactHTMLForPreview instead.
 // The workdir parameter is required for dataset execution.
 func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts RenderArtefactOptions) (RenderResult, error) {
-	// Select LayoutPages by refs (before constraint filtering)
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return RenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
-	}
-
 	// Build constraint context from artifact
 	constraintCtx, err := buildConstraintContext(artifact, spec.ModeBuild)
 	if err != nil {
@@ -541,14 +535,20 @@ func RenderArtefactHTML(ctx context.Context, workdir string, docs []config.Docum
 	}
 
 	// Filter documents by constraints for this artifact
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	filtered, err := filterArtefactDocsByConstraints(docs, constraintCtx, artifact.Spec.LayoutPages)
 	if err != nil {
 		return RenderResult{}, err
 	}
 
-	// Validate name uniqueness after filtering
+	// Validate name uniqueness after filtering, before LayoutPages are selected by name
 	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return RenderResult{}, err
+	}
+
+	// Select LayoutPages by refs
+	filtered, err = selectLayoutPagesByRefs(filtered, artifact.Spec.LayoutPages)
+	if err != nil {
+		return RenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	return RenderHTML(ctx, filtered, RenderOptions{
@@ -604,6 +604,11 @@ func RenderScreenshotArtefactHTML(ctx context.Context, workdir string, docs []co
 	// Filter documents by constraints for this artifact
 	filtered, err := filterDocsByConstraintsWithContext(docs, constraintCtx)
 	if err != nil {
+		return RenderResult{}, err
+	}
+
+	// Validate name uniqueness after filtering
+	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return RenderResult{}, err
 	}
 
@@ -1108,12 +1113,6 @@ func RenderArtefactFrameAndContextWithOptions(ctx context.Context, workdir strin
 // The workdir parameter is required for dataset execution.
 // The mode parameter controls constraint evaluation (preview, serve, or build).
 func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, mode spec.Mode, opts FrameRenderOptions) (FrameRenderResult, error) {
-	// Select LayoutPages by refs (before constraint filtering)
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
-	}
-
 	// Build constraint context from artifact
 	constraintCtx, err := buildConstraintContext(artifact, mode)
 	if err != nil {
@@ -1121,14 +1120,20 @@ func RenderArtefactFrameAndContextWithModeAndOptions(ctx context.Context, workdi
 	}
 
 	// Filter documents by constraints for this artifact
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	filtered, err := filterArtefactDocsByConstraints(docs, constraintCtx, artifact.Spec.LayoutPages)
 	if err != nil {
 		return FrameRenderResult{}, err
 	}
 
-	// Validate name uniqueness after filtering
+	// Validate name uniqueness after filtering, before LayoutPages are selected by name
 	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return FrameRenderResult{}, err
+	}
+
+	// Select LayoutPages by refs
+	filtered, err = selectLayoutPagesByRefs(filtered, artifact.Spec.LayoutPages)
+	if err != nil {
+		return FrameRenderResult{}, fmt.Errorf("artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Map spec.Mode to RenderMode
@@ -1220,6 +1225,42 @@ func filterDocsByConstraintsWithContext(docs []config.Document, constraintCtx *s
 	}
 
 	return result, nil
+}
+
+// filterArtefactDocsByConstraints filters documents for a ReportArtefact like
+// filterDocsByConstraintsWithContext. A LayoutPage that no layoutPages ref selects
+// is dropped when its constraints cannot be evaluated for this artefact (for
+// example a label the artefact does not have), instead of failing the render.
+func filterArtefactDocsByConstraints(docs []config.Document, constraintCtx *spec.ConstraintContext, refs config.LayoutPagesOrRefs) ([]config.Document, error) {
+	kept := make([]config.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" && len(doc.Constraints) > 0 && !layoutPageListed(refs, doc.Name) {
+			if _, err := spec.EvaluateParsedConstraints(doc.Constraints, constraintCtx); err != nil {
+				continue
+			}
+		}
+		kept = append(kept, doc)
+	}
+	return filterDocsByConstraintsWithContext(kept, constraintCtx)
+}
+
+// layoutPageListed reports whether any layoutPages ref selects the page name.
+// Empty refs or a lone "*" select every page, as in selectLayoutPagesByRefs.
+func layoutPageListed(refs config.LayoutPagesOrRefs, name string) bool {
+	if len(refs) == 0 || (len(refs) == 1 && refs[0].Page == "*" && len(refs[0].Params) == 0) {
+		return true
+	}
+	for _, ref := range refs {
+		pageName := strings.TrimSpace(ref.Page)
+		if ref.IsGlob() {
+			if matched, _ := path.Match(pageName, name); matched { //nolint:errcheck // an invalid pattern counts as no match
+				return true
+			}
+		} else if pageName == name {
+			return true
+		}
+	}
+	return false
 }
 
 // LogDiagnostics logs datasource diagnostics as errors.
@@ -1586,24 +1627,24 @@ type PresentationFrameRenderResult struct {
 
 // RenderPresentationFrameAndContext generates a two-phase render for preview mode with SSE support.
 func RenderPresentationFrameAndContext(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions) (PresentationFrameRenderResult, error) {
-	// Select LayoutPages by refs
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return PresentationFrameRenderResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
-	}
-
 	constraintCtx, err := buildPresentationConstraintContext(artifact, spec.ModePreview)
 	if err != nil {
 		return PresentationFrameRenderResult{}, err
 	}
 
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	filtered, err := filterArtefactDocsByConstraints(docs, constraintCtx, artifact.Spec.LayoutPages)
 	if err != nil {
 		return PresentationFrameRenderResult{}, err
 	}
 
 	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return PresentationFrameRenderResult{}, err
+	}
+
+	// Select LayoutPages by refs
+	filtered, err = selectLayoutPagesByRefs(filtered, artifact.Spec.LayoutPages)
+	if err != nil {
+		return PresentationFrameRenderResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	execOpts := &dataset.ExecuteOptions{
@@ -1643,12 +1684,6 @@ func RenderPresentationFrameAndContext(ctx context.Context, workdir string, docs
 }
 
 func renderPresentationArtefactHTML(ctx context.Context, workdir string, docs []config.Document, artifact config.Artifact, opts PresentationArtefactRenderOptions, mode spec.Mode, standalone bool) (PresentationArtefactResult, error) {
-	// Select LayoutPages by refs
-	filtered, err := selectLayoutPagesByRefs(docs, artifact.Spec.LayoutPages)
-	if err != nil {
-		return PresentationArtefactResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
-	}
-
 	// Build constraint context
 	constraintCtx, err := buildPresentationConstraintContext(artifact, mode)
 	if err != nil {
@@ -1656,14 +1691,20 @@ func renderPresentationArtefactHTML(ctx context.Context, workdir string, docs []
 	}
 
 	// Filter documents by constraints
-	filtered, err = filterDocsByConstraintsWithContext(filtered, constraintCtx)
+	filtered, err := filterArtefactDocsByConstraints(docs, constraintCtx, artifact.Spec.LayoutPages)
 	if err != nil {
 		return PresentationArtefactResult{}, err
 	}
 
-	// Validate name uniqueness after filtering
+	// Validate name uniqueness after filtering, before LayoutPages are selected by name
 	if err := config.ValidateArtefactNames(artifact.Document.Name, filtered, nil); err != nil {
 		return PresentationArtefactResult{}, err
+	}
+
+	// Select LayoutPages by refs
+	filtered, err = selectLayoutPagesByRefs(filtered, artifact.Spec.LayoutPages)
+	if err != nil {
+		return PresentationArtefactResult{}, fmt.Errorf("presentation for artefact %s: %w", artifact.Document.Name, err)
 	}
 
 	// Execute datasets
