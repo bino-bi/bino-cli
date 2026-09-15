@@ -9,7 +9,7 @@ Datasets typically select from `DataSource` views and may depend on other datase
 ## Minimal definition
 
 The smallest well-formed `DataSet`: the envelope, a name, a query and the datasources the query reads.
-`dependencies` is not required by the schema, but without it the dataset cache does not notice when the underlying file changes, so set it whenever the query reads a datasource.
+`dependencies` is not required by the schema, but without it the dataset cache does not notice when the underlying file changes, so set it whenever the query reads a datasource. `bino lint` reports a query that reads a datasource missing from the list ([`dataset-dependency-undeclared`](/appendix/lint-rules/#dataset-dependency-undeclared)).
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -385,6 +385,8 @@ metadata:
 spec:
   query: |
     SELECT region, regionIndex, ac1, pl1, date FROM sales   -- no pp column here
+  dependencies:
+    - sales
   derive:
     pp1: { from: ac1, shift: 1 month, grain: month }   # previous month
     pp2: { from: ac1, shift: 1 year,  grain: month }   # same month last year
@@ -534,6 +536,8 @@ spec:
     SELECT region, product, month, revenue, costs, margin
     FROM sales_fact
     GROUP BY region, product, month
+  dependencies:
+    - sales_fact
 
 ---
 # Summarized dataset for screen (XGA)
@@ -550,6 +554,8 @@ spec:
     SELECT region, SUM(revenue) as total_revenue
     FROM sales_fact
     GROUP BY region
+  dependencies:
+    - sales_fact
 ```
 
 For the full constraint syntax and operators, see [Constraints and Scoped Names](/concepts/constraints-and-scoped-names/).

@@ -106,6 +106,9 @@ kind: DataSet
 metadata:
   name: adjusted_financials
 spec:
+  dependencies:
+    - financial_data
+    - auditor_adjustments
   query: |
     SELECT
       f.period,

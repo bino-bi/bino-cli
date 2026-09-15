@@ -65,6 +65,8 @@ prior-year column and do not hand-write a self-join; declare the slot on the Dat
 ```yaml
 spec:
   query: SELECT region, regionIndex, ac1, date FROM sales   # no pp column here
+  dependencies:
+    - sales
   derive:
     pp1: { from: ac1, shift: 1 month, grain: month }
     pp2: { from: ac1, shift: 1 year,  grain: month }

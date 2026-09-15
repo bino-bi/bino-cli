@@ -31,6 +31,8 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `ref-params`                   | Ref Params                   | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match. |
 | `dataset-derive-conflict`      | DataSet Derive Conflict      | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                      |
 | `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
+| `dataset-dependency-undeclared` | DataSet Dependency Undeclared | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                 |
+| `dataset-dependency-unused`    | DataSet Dependency Unused    | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                |
 | `duplicate-name`               | Duplicate Name               | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied. |
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
@@ -473,6 +475,8 @@ metadata:
   name: sales
 spec:
   query: SELECT ... AS ac1, ... AS pp1, ... AS date FROM sales_csv
+  dependencies:
+    - sales_csv
   derive:
     pp1: { from: ac1, shift: 1 year, grain: month }
   assert:
@@ -484,6 +488,8 @@ spec:
 ```yaml
 spec:
   query: SELECT ... AS ac1, ... AS pp1, ... AS date FROM sales_csv
+  dependencies:
+    - sales_csv
   assert:
     pp1: { from: ac1, shift: 1 year, grain: month }
 ```
@@ -509,6 +515,77 @@ spec:
 metadata:
   name: sales
 ```
+
+### dataset-dependency-undeclared
+
+Every DataSource is registered as a view for every DataSet query, so a query that reads a DataSource missing from `spec.dependencies` still runs. The dataset cache, however, only watches the files of the listed dependencies. When the unlisted source changes, the build keeps serving the old result and prints no warning. An entry must be spelled exactly like the DataSource's `metadata.name`; the query itself may use any case.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: revenue_by_region
+spec:
+  query: |
+    SELECT r.region, SUM(s.amount) AS ac1
+    FROM sales_csv s
+    JOIN regions_csv r USING (region_id)
+    GROUP BY r.region
+  dependencies:
+    - sales_csv  # regions_csv is read but not listed!
+```
+
+**Fix:** List every DataSource the query reads:
+
+```yaml
+spec:
+  dependencies:
+    - sales_csv
+    - regions_csv
+```
+
+The rule only sees what it can read from the query:
+
+- PRQL queries, `source:` DataSets and inline datasets inside a component's `dataset:` are not checked.
+- A query DuckDB cannot parse at lint time is not checked, for example a `PIVOT` or an unquoted `${param}` placeholder.
+- A CTE named like a DataSource hides unqualified reads of that DataSource.
+- Only names of DataSource documents count; tables in attached databases are ignored.
+- Table functions are not seen, except `bino_shift` and `query_table` with a literal table name.
+
+### dataset-dependency-unused
+
+An entry in `spec.dependencies` names a DataSource the query never reads. Nothing breaks, but the dataset is run again whenever that source changes, and the dependency graph shows a link that is not there.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: revenue_by_region
+spec:
+  query: SELECT region, SUM(amount) AS ac1 FROM sales_csv GROUP BY region
+  dependencies:
+    - sales_csv
+    - regions_csv  # Never read by the query!
+```
+
+**Fix:** Remove the entry, but only after checking that the query really does not read the source. The rule has the same limits as [`dataset-dependency-undeclared`](#dataset-dependency-undeclared), and a read it cannot see, for example through a CTE named like the source, looks like no read at all.
+
+```yaml
+spec:
+  dependencies:
+    - sales_csv
+```
+
+The Info severity does not exempt the finding from `bino lint --fail-on-warnings`; only a severity you set in `bino.toml` does (see [Disabling and re-grading rules](#disabling-and-re-grading-rules)):
+
+```toml
+[lint.severity]
+dataset-dependency-unused = "info"
+```
+
+With that setting `validate_project` still reports the finding.
 
 ### duplicate-name
 

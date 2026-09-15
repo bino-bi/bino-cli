@@ -10,6 +10,7 @@ import (
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
+	"gopkg.in/yaml.v3"
 
 	reportspec "bino.bi/bino/internal/report/spec"
 )
@@ -67,8 +68,9 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	return &protocol.WorkspaceEdit{Changes: changes}, nil
 }
 
-// CodeAction offers quick-fixes: append a missing ${VAR} to .env, insert a
-// missing required field, and scaffold a dangling reference's target manifest.
+// CodeAction offers quick-fixes: append a missing ${VAR} to .env, add a
+// DataSource the query reads to spec.dependencies, insert a missing required
+// field, and scaffold a dangling reference's target manifest.
 func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CommandOrCodeAction, error) {
 	var actions []protocol.CommandOrCodeAction
 	docURI := params.TextDocument.URI
@@ -78,6 +80,12 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 		case diagCode(d.Code) == "missing-env-var":
 			if name := envVarName(diagMessage(d.Message)); name != "" {
 				if a := s.addEnvVarAction(name, d); a != nil {
+					actions = append(actions, a)
+				}
+			}
+		case diagCode(d.Code) == "dataset-dependency-undeclared":
+			if name := dependencyName(diagMessage(d.Message)); name != "" {
+				if a := s.addDependencyAction(docURI, d, name); a != nil {
 					actions = append(actions, a)
 				}
 			}
@@ -322,6 +330,130 @@ func (s *Server) addEnvVarAction(name string, diag protocol.Diagnostic) *protoco
 	}
 }
 
+// addDependencyAction builds a quick-fix adding a DataSource the query reads to
+// spec.dependencies. The usual shapes get a plain text insert, so blank lines,
+// indentation and block scalars stay as written; other shapes fall back to
+// rewriting the document.
+func (s *Server) addDependencyAction(u uri.URI, d protocol.Diagnostic, name string) *protocol.CodeAction {
+	pc, ok := s.resolve(u, d.Range.Start)
+	if !ok {
+		return nil
+	}
+	doc, ok := s.docs.Get(u)
+	if !ok {
+		return nil
+	}
+	nodes, _ := reportspec.ParseYAMLNodes(doc.Text) //nolint:errcheck // lenient parse; a document the parse did not reach is out of range below
+	if pc.DocIndex >= len(nodes) {
+		return nil
+	}
+	// The diagnostic stays until save, so re-check the buffer it points at.
+	root := nodes[pc.DocIndex]
+	if _, kind := mappingEntry(root, "kind"); kind == nil || kind.Value != "DataSet" {
+		return nil
+	}
+	specKey, spec := mappingEntry(root, "spec")
+	// An empty YAML document shifts the finding onto the wrong document; never
+	// edit a DataSet whose query does not even mention the name.
+	if _, query := mappingEntry(spec, "query"); query != nil && query.Kind == yaml.ScalarNode &&
+		!strings.Contains(strings.ToLower(query.Value), strings.ToLower(name)) {
+		return nil
+	}
+	_, deps := mappingEntry(spec, "dependencies")
+	if deps != nil {
+		for _, item := range deps.Content {
+			if item.Kind == yaml.ScalarNode && item.Value == name {
+				return nil // already listed
+			}
+		}
+	}
+	out, err := yaml.Marshal(name) // quotes names YAML reserves, e.g. @scope/name
+	if err != nil {
+		return nil
+	}
+	value := strings.TrimSuffix(string(out), "\n")
+	newline := "\n"
+	if strings.Contains(doc.Text, "\r\n") {
+		newline = "\r\n"
+	}
+
+	var edit protocol.TextEdit
+	switch {
+	case deps != nil && deps.Kind == yaml.SequenceNode && deps.Style&yaml.FlowStyle == 0 && len(deps.Content) > 0 &&
+		oneLineScalar(doc, deps.Content[len(deps.Content)-1]):
+		// Indent like the last item's own "- " line; the sequence node's column
+		// is on the key line when the list carries an anchor or tag.
+		last := deps.Content[len(deps.Content)-1]
+		line, _ := doc.lineText(last.Line)
+		at := lineSpan(doc, last.Line, 1).End
+		edit = protocol.TextEdit{
+			Range:   protocol.Range{Start: at, End: at},
+			NewText: newline + line[:len(line)-len(strings.TrimLeft(line, " "))] + "- " + value,
+		}
+	case deps == nil && spec != nil && spec.Kind == yaml.MappingNode && spec.Style&yaml.FlowStyle == 0 && len(spec.Content) > 0:
+		indent := spec.Content[0].Column - 1
+		step := indent - (specKey.Column - 1)
+		if step <= 0 {
+			step = 2
+		}
+		at := lineSpan(doc, specKey.Line, 1).End
+		edit = protocol.TextEdit{
+			Range: protocol.Range{Start: at, End: at},
+			NewText: newline + strings.Repeat(" ", indent) + "dependencies:" +
+				newline + strings.Repeat(" ", indent+step) + "- " + value,
+		}
+	default:
+		var full string
+		if deps != nil && deps.Tag == "!!null" {
+			// AppendYAMLSequence rejects a null value; replace it instead.
+			full, _, err = reportspec.EditYAMLDocument(doc.Text, pc.DocIndex+1, map[string]any{"spec.dependencies": []any{name}})
+		} else {
+			full, _, err = reportspec.AppendYAMLSequence(doc.Text, pc.DocIndex+1, "spec.dependencies", name)
+		}
+		if err != nil {
+			return nil
+		}
+		edit = protocol.TextEdit{Range: wholeDocRange(doc), NewText: full}
+	}
+	quickFix := protocol.CodeActionKindQuickFix
+	return &protocol.CodeAction{
+		Title:       "Add " + name + " to dependencies",
+		Kind:        &quickFix,
+		Diagnostics: []protocol.Diagnostic{d},
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[uri.URI][]protocol.TextEdit{u: {edit}},
+		},
+	}
+}
+
+// mappingEntry returns the key and value nodes for key in a mapping node, or
+// (nil, nil) when n is not a mapping or has no such key.
+func mappingEntry(n *yaml.Node, key string) (k, v *yaml.Node) {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return n.Content[i], n.Content[i+1]
+		}
+	}
+	return nil, nil
+}
+
+// oneLineScalar reports whether a block sequence item is a scalar written whole
+// on its own "- " line, so a new item can go right after that line.
+func oneLineScalar(doc *Document, item *yaml.Node) bool {
+	if item.Kind != yaml.ScalarNode || item.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+		return false
+	}
+	line, ok := doc.lineText(item.Line)
+	if !ok {
+		return false
+	}
+	var items []string
+	return yaml.Unmarshal([]byte(strings.TrimSpace(line)), &items) == nil && len(items) == 1 && items[0] == item.Value
+}
+
 // envVarName extracts the variable name from a missing-env-var message.
 func envVarName(message string) string {
 	const prefix = "Unresolved environment variable:"
@@ -329,6 +461,20 @@ func envVarName(message string) string {
 		return ""
 	}
 	return strings.TrimSpace(message[strings.Index(message, prefix)+len(prefix):])
+}
+
+// dependencyName extracts the DataSource name from a
+// dataset-dependency-undeclared message.
+func dependencyName(message string) string {
+	_, rest, ok := strings.Cut(message, `query reads DataSource "`)
+	if !ok {
+		return ""
+	}
+	name, _, ok := strings.Cut(rest, `"`)
+	if !ok {
+		return ""
+	}
+	return name
 }
 
 // diagCode reads the string form of a diagnostic code token.

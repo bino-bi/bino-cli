@@ -40,18 +40,21 @@ Docs: https://cli.bino.bi/getting-started/key-ideas/
 
 ## metadata.name is the table name
 
-`metadata.name` is how documents reference each other. For `DataSource` and `DataSet` it is also the
-DuckDB table (view) name the query engine registers, so it must be a SQL identifier: snake_case
-matching `^[a-z_][a-z0-9_]*$`. SQL always references these names — `FROM sales_csv` — never a file
-path or a file name. Do not start a name with `_inline_`; bino reserves that prefix.
+`metadata.name` is how documents reference each other. For `DataSource` it is also the DuckDB table
+(view) name the query engine registers, so it must be a SQL identifier: snake_case matching
+`^[a-z_][a-z0-9_]*$`. SQL always references these names — `FROM sales_csv` — never a file path or
+a file name. A `DataSet` result is not a queryable table in a build. Do not start a name with
+`_inline_`; bino reserves that prefix.
 Docs: https://cli.bino.bi/concepts/data-model/
 
 ## dependencies
 
-A `DataSet` lists in `spec.dependencies` every DataSource or DataSet its SQL uses in `FROM` / `JOIN`.
-bino builds the dependency graph from these lists and registers only the listed tables for that query,
-so a table you forgot to list is "not found" even though it exists in the project. With `spec.source`
-the single dependency is inferred. `graph_deps` shows the resolved graph.
+A `DataSet` lists in `spec.dependencies` every DataSource its SQL reads. Every DataSource is
+registered as a view and queryable in every query, so a forgotten entry is not an error — but the
+dataset cache then misses changes to that source and serves stale results. `bino lint` and
+`validate_project` report it as `dataset-dependency-undeclared`. With `spec.source` the dependency is
+implied. `dataset-dependency-unused` is informational: remove an entry only after confirming the
+query does not read that source (e.g. through `bino_shift`). `graph_deps` shows the resolved graph.
 Docs: https://cli.bino.bi/reference/dataset/
 
 ## The standard dataset columns
