@@ -7,14 +7,6 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 // https://astro.build/config
 export default defineConfig({
 	site: "https://cli.bino.bi",
-	// Astro 6 deprecated `markdown.gfm` and leaves it undefined by default.
-	// Plain .md falls back to gfm=true internally, but @astrojs/mdx 5.x treats
-	// undefined as false and drops remark-gfm, breaking tables on every .mdx
-	// page. Setting it explicitly restores GFM for MDX (logs a deprecation
-	// warning at build time; harmless).
-	markdown: {
-		gfm: true,
-	},
 	integrations: [
 		starlight({
 			title: 'BinoBI CLI',
@@ -36,7 +28,7 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Why bino',
-					autogenerate: { directory: 'why' },
+					items: [{ autogenerate: { directory: 'why' } }],
 				},
 				{
 					label: 'Getting started',
@@ -48,27 +40,27 @@ export default defineConfig({
 				},
 				{
 					label: 'Concepts',
-					autogenerate: { directory: 'concepts' },
+					items: [{ autogenerate: { directory: 'concepts' } }],
 				},
 				{
 					label: 'How-to guides',
-					autogenerate: { directory: 'guides' },
+					items: [{ autogenerate: { directory: 'guides' } }],
 				},
 				{
 					label: 'Recipes',
-					autogenerate: { directory: 'recipes' },
+					items: [{ autogenerate: { directory: 'recipes' } }],
 				},
 				{
 					label: 'CLI',
-					autogenerate: { directory: 'cli' },
+					items: [{ autogenerate: { directory: 'cli' } }],
 				},
 				{
 					label: 'Reference',
-					autogenerate: { directory: 'reference' },
+					items: [{ autogenerate: { directory: 'reference' } }],
 				},
 				{
 					label: 'Appendix',
-					autogenerate: { directory: 'appendix' },
+					items: [{ autogenerate: { directory: 'appendix' } }],
 				},
 				{
 					label: 'Support',
