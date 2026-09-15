@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"bino.bi/bino/internal/pathutil"
@@ -97,6 +98,53 @@ func TestRunnerApply(t *testing.T) {
 				if got[i] != tc.want[i] {
 					t.Errorf("finding[%d] = %q, want %q", i, got[i], tc.want[i])
 				}
+			}
+		})
+	}
+}
+
+func TestRunnerApplyDatasetDependencyRules(t *testing.T) {
+	input := []Finding{
+		{RuleID: "dataset-dependency-undeclared", Message: "undeclared"},
+		{RuleID: "dataset-dependency-unused", Message: "unused", Severity: "info"},
+	}
+
+	tests := []struct {
+		name string
+		toml string
+		want []string
+	}{
+		{
+			name: "disable undeclared",
+			toml: "[lint]\ndisable = [\"dataset-dependency-undeclared\"]\n",
+			want: []string{"dataset-dependency-unused:info"},
+		},
+		{
+			name: "disable unused",
+			toml: "[lint]\ndisable = [\"dataset-dependency-unused\"]\n",
+			want: []string{"dataset-dependency-undeclared:"},
+		},
+		{
+			name: "severity undeclared",
+			toml: "[lint.severity]\ndataset-dependency-undeclared = \"error\"\n",
+			want: []string{"dataset-dependency-undeclared:error", "dataset-dependency-unused:info"},
+		},
+		{
+			name: "severity unused",
+			toml: "[lint.severity]\ndataset-dependency-unused = \"warning\"\n",
+			want: []string{"dataset-dependency-undeclared:", "dataset-dependency-unused:warning"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := NewProjectRunner(lintProject(t, tc.toml))
+			if warnings := runner.ConfigWarnings(); len(warnings) != 0 {
+				t.Fatalf("unexpected config warnings: %v", warnings)
+			}
+
+			if got := findingIDs(runner.Apply(input)); !slices.Equal(got, tc.want) {
+				t.Errorf("Apply returned %v, want %v", got, tc.want)
 			}
 		})
 	}

@@ -210,6 +210,60 @@ func TestLintCommand_DisableSilencesRule(t *testing.T) {
 	}
 }
 
+// TestLintCommand_DatasetDependencies: a DataSet whose dependencies list
+// exactly what its query reads is clean; a read left out is reported.
+func TestLintCommand_DatasetDependencies(t *testing.T) {
+	const dataSource = `apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./sales.csv
+`
+	const query = `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: |
+    WITH s AS (SELECT * FROM sales_csv)
+    SELECT * FROM s
+`
+
+	t.Run("declared", func(t *testing.T) {
+		dir := writeLintProject(t, "report-id = \"t\"\n", map[string]string{
+			"report.yaml":     lintCfgReportXGA,
+			"page.yaml":       lintCfgPage,
+			"datasource.yaml": dataSource,
+			"dataset.yaml":    query + "  dependencies:\n    - sales_csv\n",
+		})
+		out, err := runLintCommand(t, dir)
+		if err != nil {
+			t.Fatalf("expected exit 0, got %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "No lint warnings found") {
+			t.Errorf("expected a clean report, got:\n%s", out)
+		}
+	})
+
+	t.Run("undeclared", func(t *testing.T) {
+		dir := writeLintProject(t, "report-id = \"t\"\n", map[string]string{
+			"report.yaml":     lintCfgReportXGA,
+			"page.yaml":       lintCfgPage,
+			"datasource.yaml": dataSource,
+			"dataset.yaml":    query,
+		})
+		out, err := runLintCommand(t, dir)
+		if err != nil {
+			t.Fatalf("expected exit 0, got %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "[dataset-dependency-undeclared] dataset.yaml #1 (spec.query):") {
+			t.Errorf("expected an undeclared dependency finding, got:\n%s", out)
+		}
+	})
+}
+
 // TestLintCommand_DisableEngineCompat: the compat check's fatal exit exists
 // only to escalate its finding, so disabling the rule removes both.
 func TestLintCommand_DisableEngineCompat(t *testing.T) {

@@ -488,6 +488,9 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		// Derived previous-period rules
 		"dataset-derive-conflict",
 		"reserved-name-prefix",
+		// Dataset dependency rules
+		"dataset-dependency-undeclared",
+		"dataset-dependency-unused",
 	}
 
 	if len(rules) != len(expectedIDs) {

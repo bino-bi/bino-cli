@@ -36,6 +36,9 @@ func DefaultRules() []Rule {
 		// Derived previous-period rules
 		datasetDeriveConflict,
 		reservedNamePrefix,
+		// Dataset dependency rules
+		datasetDependencyUndeclared,
+		datasetDependencyUnused,
 	}
 }
 
