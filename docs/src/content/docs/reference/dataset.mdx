@@ -649,7 +649,7 @@ spec:
   source: sales_csv
 ```
 
-This is equivalent to `SELECT * FROM sales_csv` but more explicit and efficient. The `source` field is **mutually exclusive** with `query` and `prql`.
+This is equivalent to `SELECT * FROM sales_csv` but more explicit and efficient. The `source` field is **mutually exclusive** with `query` and `prql`. The named source is the DataSet's dependency, so no `dependencies` entry is needed.
 
 ### Inline source pass-through
 

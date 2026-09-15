@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -97,6 +98,15 @@ func (s dataSetSpec) declares() bool {
 	return len(s.Derive) > 0 || len(s.Assert) > 0
 }
 
+// effectiveDependencies returns the DataSource names the dataset's cache
+// depends on: spec.dependencies plus spec.source when it is not listed.
+func (s dataSetSpec) effectiveDependencies() []string {
+	if s.Source == "" || slices.Contains(s.Dependencies, s.Source) {
+		return s.Dependencies
+	}
+	return append(slices.Clip(s.Dependencies), s.Source)
+}
+
 // Execute evaluates all DataSet documents, using cached results when available.
 // Results are cached under workdir/.bino/cache/datasets/ and invalidated when the
 // dataset definition (query or dependencies) changes, or when any dependent
@@ -170,7 +180,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 
 			// Check if any dependency is ephemeral - if so, skip cache entirely
 			hasEphemeralDep := false
-			for _, depName := range spec.Dependencies {
+			for _, depName := range spec.effectiveDependencies() {
 				depDoc, ok := dataSourceIndex[depName]
 				if !ok {
 					continue
@@ -352,13 +362,16 @@ func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceInde
 
 	// Collect and hash dependent datasource files
 	var depHashes []string
-	for _, depName := range spec.Dependencies {
+	for _, depName := range spec.effectiveDependencies() {
 		depDoc, ok := dataSourceIndex[depName]
 		if !ok {
-			warnings = append(warnings, Warning{
-				DataSet: doc.Name,
-				Message: fmt.Sprintf("missing dependency: %s", depName),
-			})
+			// An unknown source already fails its own query, which names it.
+			if slices.Contains(spec.Dependencies, depName) {
+				warnings = append(warnings, Warning{
+					DataSet: doc.Name,
+					Message: fmt.Sprintf("missing dependency: %s", depName),
+				})
+			}
 			continue
 		}
 

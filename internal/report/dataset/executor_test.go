@@ -135,6 +135,50 @@ spec:
 	}
 }
 
+func TestExecute_UnknownSourceNoMissingDependencyWarning(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test-dataset
+spec:
+  source: nonexistent_source
+`)
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	_, warnings, err := Execute(ctx, workdir, docs, &ExecuteOptions{ContinueOnQueryError: true})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	// The source is the query itself, so its failure already names the
+	// unknown source; a missing dependency warning would only repeat it.
+	foundQueryWarning := false
+	for _, w := range warnings {
+		if w.DataSet != "test-dataset" {
+			continue
+		}
+		if contains(w.Message, "missing dependency") {
+			t.Fatalf("unexpected missing dependency warning: %v", w)
+		}
+		if contains(w.Message, "nonexistent_source") {
+			foundQueryWarning = true
+		}
+	}
+	if !foundQueryWarning {
+		t.Fatalf("expected query warning naming the source, got: %v", warnings)
+	}
+}
+
 func TestExecute_QueryErrorFailsByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -695,6 +739,220 @@ spec:
 	default:
 		t.Fatalf("unexpected value type %T: %v", val2, val2)
 	}
+}
+
+const salesDataSourceYAML = `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./sales.csv
+`
+
+func TestExecute_SourceCacheInvalidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dataset string
+	}{
+		{
+			name: "named source",
+			dataset: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  source: sales_csv
+`,
+		},
+		{
+			name: "named source also in dependencies",
+			dataset: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  source: sales_csv
+  dependencies:
+    - sales_csv
+`,
+		},
+		{
+			name: "inline source",
+			dataset: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  source:
+    type: csv
+    path: ./sales.csv
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workdir := t.TempDir()
+			writeTestFile(t, workdir, "sales.csv", "region,amount\nnorth,1\n")
+			writeTestFile(t, workdir, "datasource.yaml", salesDataSourceYAML)
+			writeTestFile(t, workdir, "dataset.yaml", tt.dataset)
+
+			if got := executeSalesAmount(t, workdir); got != 1 {
+				t.Fatalf("first execute: amount = %v, want 1", got)
+			}
+
+			writeTestFile(t, workdir, "sales.csv", "region,amount\nnorth,999\n")
+
+			if got := executeSalesAmount(t, workdir); got != 999 {
+				t.Fatalf("second execute: amount = %v, want 999 (stale cache)", got)
+			}
+		})
+	}
+}
+
+func TestComputeDigestWithDeps_SourceInDependenciesHashedOnce(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "sales.csv", "region,amount\nnorth,1\n")
+	writeTestFile(t, workdir, "datasource.yaml", salesDataSourceYAML)
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  source: sales_csv
+  dependencies:
+    - sales_csv
+`)
+
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	dataSourceIndex := make(map[string]config.Document)
+	var dataSetDoc config.Document
+	for _, doc := range docs {
+		switch doc.Kind {
+		case "DataSource":
+			dataSourceIndex[doc.Name] = doc
+		case "DataSet":
+			dataSetDoc = doc
+		}
+	}
+
+	spec, err := parseDataSetSpec(dataSetDoc.Raw)
+	if err != nil {
+		t.Fatalf("parse spec: %v", err)
+	}
+
+	withSource, _ := computeDigestWithDeps(dataSetDoc, spec, dataSourceIndex)
+	spec.Source = ""
+	depsOnly, _ := computeDigestWithDeps(dataSetDoc, spec, dataSourceIndex)
+
+	if withSource != depsOnly {
+		t.Fatalf("source listed in dependencies changed the digest: %s != %s", withSource, depsOnly)
+	}
+}
+
+func TestExecute_EphemeralSourceSkipsCache(t *testing.T) {
+	t.Parallel()
+
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "sales.csv", "region,amount\nnorth,1\n")
+	writeTestFile(t, workdir, "datasource.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./sales.csv
+  ephemeral: true
+`)
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  source: sales_csv
+`)
+
+	if got := executeSalesAmount(t, workdir); got != 1 {
+		t.Fatalf("first execute: amount = %v, want 1", got)
+	}
+
+	files, err := os.ReadDir(filepath.Join(workdir, ".bino", "cache", "datasets"))
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected no cache file for an ephemeral source, got %d", len(files))
+	}
+
+	writeTestFile(t, workdir, "sales.csv", "region,amount\nnorth,999\n")
+
+	if got := executeSalesAmount(t, workdir); got != 999 {
+		t.Fatalf("second execute: amount = %v, want 999", got)
+	}
+}
+
+// writeTestFile writes content to name inside dir.
+func writeTestFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+}
+
+// executeSalesAmount loads workdir, executes its datasets and returns the
+// amount in the first row of the "sales" dataset.
+func executeSalesAmount(t *testing.T, workdir string) float64 {
+	t.Helper()
+
+	ctx := context.Background()
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	results, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	for _, result := range results {
+		if result.Name != "sales" {
+			continue
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(result.Data, &rows); err != nil {
+			t.Fatalf("unmarshal result: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("expected 1 row, got %d", len(rows))
+		}
+		amount, ok := rows[0]["amount"].(float64)
+		if !ok {
+			t.Fatalf("unexpected amount %T: %v", rows[0]["amount"], rows[0]["amount"])
+		}
+		return amount
+	}
+	t.Fatalf("no result for dataset sales")
+	return 0
 }
 
 func TestQueryField_UnmarshalJSON(t *testing.T) {
