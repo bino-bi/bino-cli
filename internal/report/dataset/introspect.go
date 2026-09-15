@@ -83,6 +83,7 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 
 	// Build the schema query based on document type
 	var schemaQuery string
+	var constants []Constant
 	switch doc.Kind {
 	case "DataSource":
 		schemaQuery = fmt.Sprintf("SELECT * FROM %q LIMIT 0", doc.Name)
@@ -100,6 +101,7 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 			return nil, err
 		}
 		schemaQuery = LimitQuery(compiled.Query, 0)
+		constants = compiled.Constants
 	default:
 		return nil, fmt.Errorf("unsupported kind: %s", doc.Kind)
 	}
@@ -114,6 +116,7 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
 	}
+	columns, _ = StampConstants(nil, columns, constants)
 
 	return columns, nil
 }

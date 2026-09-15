@@ -135,3 +135,53 @@ func TestRowsAndColumns_DerivedDataset(t *testing.T) {
 		t.Errorf("prql rows = %d", len(data))
 	}
 }
+
+func TestRowsAndColumns_ConstantColumns(t *testing.T) {
+	root := writeDerivedProject(t)
+	if err := os.WriteFile(filepath.Join(root, "constants.yaml"), []byte(`
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_const
+spec:
+  query: SELECT category, "ac1"::DOUBLE AS ac1 FROM sales_csv
+  constants:
+    unit: kEUR
+    spec:
+      table:
+        barColumns: [ac1, pl1]
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := newWizardTestServer(t, root)
+	if err := srv.state.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	cols := getJSON(t, srv.handleColumns, "/columns?name=sales_const")
+	if e, _ := cols["error"].(string); e != "" {
+		t.Fatalf("columns error: %s", e)
+	}
+	want := []string{"category", "ac1", "_spec_table_barColumns", "_unit"}
+	if names := columnNames(t, cols); len(names) != 4 || names[2] != want[2] || names[3] != want[3] {
+		t.Errorf("columns = %v, want %v", names, want)
+	}
+
+	rows := getJSON(t, srv.handleRows, "/rows?name=sales_const&limit=10")
+	if e, _ := rows["error"].(string); e != "" {
+		t.Fatalf("rows error: %s", e)
+	}
+	if names := columnNames(t, rows); len(names) != 4 || names[3] != "_unit" {
+		t.Errorf("row columns = %v", names)
+	}
+	data, _ := rows["rows"].([]any)
+	if len(data) != 4 {
+		t.Fatalf("rows = %d, want 4", len(data))
+	}
+	for _, r := range data {
+		row := r.(map[string]any)
+		if row["_unit"] != "kEUR" || row["_spec_table_barColumns"] != "ac1,pl1" {
+			t.Errorf("row not stamped: %v", row)
+		}
+	}
+}

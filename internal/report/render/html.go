@@ -149,6 +149,9 @@ type Result struct {
 	// EmittedData is non-nil only when PluginOptions.DataMode == "url". The
 	// caller must register these on httpserver.Server before serving HTML.
 	EmittedData []EmittedData
+	// Warnings are render-time findings for the build log, e.g. a dataset
+	// that carries defaults but is not a component's primary dataset.
+	Warnings []string
 }
 
 // FrameResult captures a two-phase render output: a lightweight frame HTML
@@ -339,6 +342,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
+	rc.withDatasetDefaults(datasetResults)
+	var renderWarnings []string
+	rc.warnings = &renderWarnings
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -364,7 +370,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			if rootComponent == "" || doc.Name != rootComponent {
 				continue
 			}
-			htmlContent, err := renderStandaloneComponentDoc(doc, assetURLMap, rc.inheritedStyle)
+			htmlContent, err := renderStandaloneComponentDoc(doc, rc)
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: component %s: %w", doc.Name, err)
 			}
@@ -392,7 +398,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 	headMarkup := fontMarkup + extraHeadMarkup
 	markup := fmt.Sprintf(baseTemplate, html.EscapeString(locale), engineVersion, engineVersion, headMarkup, contextAttrs, html.EscapeString(locale), body.String())
-	return Result{HTML: []byte(markup), LocalAssets: localAssets, EmittedData: emitted}, diags, nil
+	return Result{HTML: []byte(markup), LocalAssets: localAssets, EmittedData: emitted, Warnings: renderWarnings}, diags, nil
 }
 
 // GenerateFrameAndContext produces a two-phase render output for preview mode.
@@ -494,6 +500,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
+	rc.withDatasetDefaults(datasetResults)
 
 	for _, doc := range docs {
 		switch doc.Kind {

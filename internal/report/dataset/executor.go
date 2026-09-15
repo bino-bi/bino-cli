@@ -37,6 +37,9 @@ import (
 type Result struct {
 	Name string
 	Data json.RawMessage
+	// Defaults are the dataset defaults folded from the rows' `_spec_` columns
+	// (see FoldDefaults); nil when the rows carry none.
+	Defaults Defaults
 }
 
 // Warning represents a non-fatal issue encountered during dataset execution.
@@ -91,6 +94,9 @@ type dataSetSpec struct {
 
 	Derive map[string]reportspec.ShiftDeclaration `json:"derive"`
 	Assert map[string]reportspec.ShiftDeclaration `json:"assert"`
+
+	// Constants are the values written as `_`-prefixed columns onto every row.
+	Constants map[string]any `json:"constants"`
 }
 
 // declares reports whether the dataset declares any derived or asserted slot.
@@ -261,7 +267,9 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 				}
 			}
 			warnings = append(warnings, allNullDerivedSlots(result.doc.Name, result.data, result.spec.Derive)...)
-			results = append(results, Result{Name: result.doc.Name, Data: result.data})
+			defaults, defaultWarnings := FoldDefaults(result.doc.Name, result.data)
+			warnings = append(warnings, defaultWarnings...)
+			results = append(results, Result{Name: result.doc.Name, Data: result.data, Defaults: defaults})
 			continue
 		}
 
@@ -497,7 +505,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			return results, warnings, err
 		}
 
-		data, err := executeDataSet(ctx, session, job, opts)
+		data, execWarnings, err := executeDataSet(ctx, session, job, opts)
 		if err != nil {
 			if opts != nil && opts.ContinueOnQueryError {
 				warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
@@ -505,6 +513,7 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			}
 			return results, warnings, fmt.Errorf("dataset %s: %w", job.doc.Name, err)
 		}
+		warnings = append(warnings, execWarnings...)
 
 		// Validate data if enabled
 		if validationSampleSize > 0 {
@@ -521,6 +530,8 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		}
 
 		warnings = append(warnings, allNullDerivedSlots(job.doc.Name, data, job.spec.Derive)...)
+		defaults, defaultWarnings := FoldDefaults(job.doc.Name, data)
+		warnings = append(warnings, defaultWarnings...)
 
 		// Write to cache (skip for ephemeral sources where cachePath is empty)
 		if job.cachePath != "" {
@@ -529,20 +540,23 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			}
 		}
 
-		results = append(results, Result{Name: job.doc.Name, Data: data})
+		results = append(results, Result{Name: job.doc.Name, Data: data, Defaults: defaults})
 	}
 
 	return results, warnings, nil
 }
 
-func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, error) {
+// executeDataSet runs one dataset and returns its rows as a JSON array, with
+// spec.constants stamped onto every row. The warnings name the query columns
+// a constant has shadowed.
+func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob, _ *ExecuteOptions) (json.RawMessage, []Warning, error) {
 	db := session.DB()
 
 	// Resolve the dataset (source / prql / query, $file, @inline) into the
 	// statements to run. DataSources are already registered as views.
 	compiled, err := compileSpec(job.doc, job.spec)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Enforce the per-query duration limit (BNR_MAX_QUERY_DURATION_MS, 0 = unlimited).
@@ -561,7 +575,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		if _, err := db.ExecContext(queryCtx, stmt); err != nil {
 			err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 			logQueryExecError(session, stmt, job.doc.Name, setupStart, err)
-			return nil, fmt.Errorf("setup: %w", err)
+			return nil, nil, fmt.Errorf("setup: %w", err)
 		}
 		session.LogQueryExec(duckdb.QueryExecMeta{
 			Query:      stmt,
@@ -575,7 +589,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Declared expectations are checked on every row before the query runs.
 	if compiled.Declares() {
 		if err := runDeclarationChecks(queryCtx, db, compiled); err != nil {
-			return nil, fmt.Errorf("check: %w", describeQueryLimitError(err, cfg.MaxQueryDuration))
+			return nil, nil, fmt.Errorf("check: %w", describeQueryLimitError(err, cfg.MaxQueryDuration))
 		}
 	}
 
@@ -593,17 +607,32 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		// Log failed query execution if logger is available
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
-		return nil, fmt.Errorf("query: %w", err)
+		return nil, nil, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 
-	// Serialize to JSON array and capture rows for metadata.
+	// Scan the rows and capture them for metadata.
 	// Enforces the row limit (BNR_MAX_QUERY_ROWS, 0 = unlimited).
-	data, columns, rowStrings, err := rowsToJSONWithMeta(rows, cfg.MaxQueryRows)
+	scanned, columns, rowStrings, err := scanRows(rows, cfg.MaxQueryRows)
 	if err != nil {
 		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
-		return nil, fmt.Errorf("serialize: %w", err)
+		return nil, nil, fmt.Errorf("serialize: %w", err)
+	}
+
+	// Constants go onto every row after the query has run; a constant wins
+	// over a query column of the same name.
+	var warnings []Warning
+	_, shadowed := StampConstants(scanned, columns, compiled.Constants)
+	for _, c := range shadowed {
+		warnings = append(warnings, Warning{
+			DataSet: job.doc.Name,
+			Message: fmt.Sprintf("constants.%s shadows query column %s", c.Path, c.Column),
+		})
+	}
+	data, err := json.Marshal(scanned)
+	if err != nil {
+		return nil, nil, fmt.Errorf("serialize: %w", err)
 	}
 
 	// Calculate duration and emit query execution metadata
@@ -621,7 +650,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		Rows:       rowStrings,
 	})
 
-	return data, nil
+	return data, warnings, nil
 }
 
 // logQueryExecError logs a failed query execution if the logger is available.
@@ -655,16 +684,15 @@ type rowScanner interface {
 	Err() error
 }
 
-// rowsToJSONWithMeta serializes rows to JSON and also returns column names and rows as strings
+// scanRows scans rows into maps and also returns column names and rows as strings
 // for CSV embedding in build logs. maxRows bounds the result size (0 = unlimited);
 // exceeding it is an error so a capped result can never silently ship as complete data.
-func rowsToJSONWithMeta(rows rowScanner, maxRows int) (data json.RawMessage, columns []string, rowStrings [][]string, err error) {
+func scanRows(rows rowScanner, maxRows int) (results []map[string]any, columns []string, rowStrings [][]string, err error) {
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	var results []map[string]any
 	values := make([]any, len(cols))
 	valuePtrs := make([]any, len(cols))
 	for i := range values {
@@ -695,8 +723,7 @@ func rowsToJSONWithMeta(rows rowScanner, maxRows int) (data json.RawMessage, col
 		results = []map[string]any{}
 	}
 
-	data, err = json.Marshal(results)
-	return data, cols, rowStrings, err
+	return results, cols, rowStrings, nil
 }
 
 // valueToString converts a value to its string representation for CSV building.

@@ -1166,6 +1166,10 @@
         "assert": {
           "$ref": "#/$defs/shiftDeclarationMap",
           "description": "pp slots (pp1..pp4) the query supplies and the CLI checks against another slot shifted back in time, keyed by slot. A mismatch on any row with a prior period fails the build even under --data-validation warn. A slot cannot be in derive too. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP."
+        },
+        "constants": {
+          "$ref": "#/$defs/constantsObject",
+          "description": "Values that are the same on every row, added as `_`-prefixed columns after the query has run (works with query, prql and source alike). Every key becomes a column `_<key>`; nested keys join with `_` (spec.table.barColumns -> _spec_table_barColumns); a list of scalars becomes one comma-joined string; an object or a list of objects flattens by key and zero-based index (spec.table.thereof[0].rowGroup -> _spec_table_thereof_0_rowGroup). Keys are camelCase without underscores. A constant wins over a query column of the same name, with a dataset warning. Columns named _spec_<kind>_<field> and _spec_any_<field> are dataset defaults: they fill the spec fields a bound component left unset. Example: { unit: kEUR, spec: { table: { barColumns: ac1,pl1 } } }."
         }
       },
       "anyOf": [
@@ -1174,6 +1178,20 @@
         { "required": ["source"] }
       ],
       "additionalProperties": false
+    },
+    "constantsObject": {
+      "type": "object",
+      "description": "Constant columns keyed by camelCase name (^[a-z][A-Za-z0-9]*$); nested keys join with `_` in the column name.",
+      "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]*$" },
+      "additionalProperties": { "$ref": "#/$defs/constantValue" }
+    },
+    "constantValue": {
+      "description": "A constant cell: a scalar, a list (of scalars: one comma-joined column; otherwise one column per index), or a nested object.",
+      "anyOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "$ref": "#/$defs/constantValue" } },
+        { "$ref": "#/$defs/constantsObject" }
+      ]
     },
     "scenarioSlotName": {
       "type": "string",
@@ -1401,6 +1419,10 @@
         "assert": {
           "$ref": "#/$defs/shiftDeclarationMap",
           "description": "pp slots (pp1..pp4) the query supplies and the CLI checks against another slot shifted back in time, keyed by slot. A mismatch on any row with a prior period fails the build even under --data-validation warn. A slot cannot be in derive too. The caption follows the shift: a year shift keeps PY, any other unit is captioned PP."
+        },
+        "constants": {
+          "$ref": "#/$defs/constantsObject",
+          "description": "Values that are the same on every row, added as `_`-prefixed columns after the query has run. Nested keys join with `_`; keys are camelCase without underscores. See the DataSet spec for the flattening rules."
         }
       },
       "anyOf": [

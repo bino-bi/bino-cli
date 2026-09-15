@@ -425,6 +425,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 
 	// Build the query based on document type
 	var query string
+	var constants []dataset.Constant
 	switch doc.Kind {
 	case "DataSource":
 		// DataSource is already a view, just select from it
@@ -446,6 +447,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 			return nil, nil, false, err
 		}
 		query = dataset.LimitQuery(compiled.Query, limit+1)
+		constants = compiled.Constants
 
 	default:
 		return nil, nil, false, fmt.Errorf("unsupported kind: %s", doc.Kind)
@@ -494,6 +496,7 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 	if results == nil {
 		results = []map[string]any{}
 	}
+	columns, _ = dataset.StampConstants(results, columns, constants)
 
 	// Truncated if we had more rows than the limit
 	truncated := rowCount > limit

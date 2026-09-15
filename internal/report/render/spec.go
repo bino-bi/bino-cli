@@ -478,7 +478,7 @@ type tableSpec struct {
 	Type                    string                       `json:"type"`
 	Scenarios               reportspec.StringOrSlice     `json:"scenarios"`
 	Variances               reportspec.StringOrSlice     `json:"variances"`
-	BarColumns              []string                     `json:"barColumns"`
+	BarColumns              reportspec.StringOrSlice     `json:"barColumns"`
 	BarColumnWidth          string                       `json:"barColumnWidth"`
 	UnitScaling             *float64                     `json:"unitScaling"`
 	PercentageScaling       *float64                     `json:"percentageScaling"`
@@ -513,7 +513,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "type", s.Type)
 	writeAttr(b, "scenarios", s.Scenarios.String())
 	writeAttr(b, "variances", s.Variances.String())
-	writeCSVAttr(b, "bar-columns", s.BarColumns)
+	writeAttr(b, "bar-columns", s.BarColumns.String())
 	writeAttr(b, "bar-column-width", s.BarColumnWidth)
 	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
 	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
@@ -549,14 +549,6 @@ func writeFloatAttr(b *strings.Builder, name string, value *float64) {
 		return
 	}
 	writeAttr(b, name, strconv.FormatFloat(*value, 'f', -1, 64))
-}
-
-// writeCSVAttr writes a comma-separated list attribute if non-empty.
-func writeCSVAttr(b *strings.Builder, name string, values []string) {
-	if len(values) == 0 {
-		return
-	}
-	writeAttr(b, name, strings.Join(values, ","))
 }
 
 // writeFloatSliceAttr writes a numeric-array attribute as compact JSON if

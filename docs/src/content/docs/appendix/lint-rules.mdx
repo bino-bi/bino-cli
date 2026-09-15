@@ -33,6 +33,7 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
 | `dataset-dependency-undeclared` | DataSet Dependency Undeclared | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                 |
 | `dataset-dependency-unused`    | DataSet Dependency Unused    | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                |
+| `dataset-constants-spec`       | DataSet Constants Spec       | Warning  | `constants.spec.<kind>.<field>` must name a known kind token and a field of that kind's spec.  |
 | `duplicate-name`               | Duplicate Name               | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied. |
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
@@ -586,6 +587,36 @@ dataset-dependency-unused = "info"
 ```
 
 With that setting `validate_project` still reports the finding.
+
+### dataset-constants-spec
+
+The keys under a DataSet's `constants.spec` become the reserved `_spec_<kind>_<field>` columns. The kind token must be one of `text`, `table`, `chartstructure`, `charttime`, `chartscatter`, `chartbubble`, `chartbullet` or `any`, and the field must exist in that kind's spec (for `any`, in at least one of them). A typo would produce a column nothing ever reads.
+
+**Example problem:**
+
+```yaml
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT ...
+  constants:
+    spec:
+      tabel:                 # unknown kind token
+        barColumns: ac1,pl1
+      table:
+        barColumnz: ac1,pl1  # Table has no spec field "barColumnz"
+```
+
+**Fix:** Use the lowercase manifest kind and the field name as written in the component's spec:
+
+```yaml
+spec:
+  constants:
+    spec:
+      table:
+        barColumns: ac1,pl1
+```
 
 ### duplicate-name
 

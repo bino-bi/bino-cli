@@ -1269,3 +1269,128 @@ spec:
 		})
 	}
 }
+
+func TestValidate_DataSetConstants(t *testing.T) {
+	accepted := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "constants on a DataSet",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 1
+  constants:
+    unit: kEUR
+    factor: 1000
+    draft: true
+    spec:
+      any:
+        scenarios: [ac1, pl1]
+      table:
+        barColumns: ac1,pl1
+        thereof:
+          - rowGroup: Revenue
+            category: Applications
+`,
+		},
+		{
+			name: "constants on an inline DataSet",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales_table
+spec:
+  dataset:
+    query: SELECT 1
+    constants:
+      unit: kEUR
+`,
+		},
+	}
+	for _, tt := range accepted {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate([]byte(tt.yaml)); err != nil {
+				t.Fatalf("expected valid document, got: %v", err)
+			}
+		})
+	}
+
+	rejected := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{
+			name: "constants on a DataSource",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales_csv
+spec:
+  type: csv
+  path: ./sales.csv
+  constants:
+    unit: kEUR
+`,
+			want: "not allowed",
+		},
+		{
+			name: "key with underscore",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 1
+  constants:
+    spec:
+      table:
+        bar_columns: ac1
+`,
+			want: "pattern",
+		},
+		{
+			name: "key not camelCase",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 1
+  constants:
+    Unit: kEUR
+`,
+			want: "pattern",
+		},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			ve := &ValidationError{}
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected ValidationError, got %T: %v", err, err)
+			}
+			found := false
+			for _, issue := range ve.Errors {
+				if strings.Contains(strings.ToLower(issue.Message), tt.want) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("expected an issue mentioning %q, got: %v", tt.want, err)
+			}
+		})
+	}
+}

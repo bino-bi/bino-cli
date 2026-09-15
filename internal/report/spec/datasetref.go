@@ -158,6 +158,10 @@ type InlineDataSet struct {
 	// Assert declares previous-period slots (pp1..pp4) the query supplies and
 	// the CLI checks against another slot shifted back in time.
 	Assert map[string]ShiftDeclaration `json:"assert,omitempty"`
+
+	// Constants declares values that are the same on every row. Every key
+	// becomes a `_`-prefixed column; nested keys join with `_`.
+	Constants map[string]any `json:"constants,omitempty"`
 }
 
 // ShiftDeclaration says what a previous-period slot means: the slot it is read

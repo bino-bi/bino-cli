@@ -341,15 +341,17 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 
 	// Build query (datasource views already registered during refresh)
 	var schemaQuery string
+	var constants []dataset.Constant
 	switch targetDoc.Kind {
 	case "DataSource":
 		schemaQuery = fmt.Sprintf("SELECT * FROM %q LIMIT 0", targetDoc.Name)
 	case "DataSet":
-		query, err := s.prepareDataSet(ctx, targetDoc)
+		compiled, err := s.prepareDataSet(ctx, targetDoc)
 		if err != nil {
 			return nil, err
 		}
-		schemaQuery = dataset.LimitQuery(query, 0)
+		schemaQuery = dataset.LimitQuery(compiled.Query, 0)
+		constants = compiled.Constants
 	default:
 		return nil, fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
 	}
@@ -360,7 +362,12 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 	}
 	defer rows.Close()
 
-	return rows.Columns()
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	cols, _ = dataset.StampConstants(nil, cols, constants)
+	return cols, nil
 }
 
 // prepareDataSet compiles a DataSet the same way the build does and makes the
@@ -368,24 +375,24 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 // the view(s) a PRQL or derive/assert dataset is built on. Setup runs on
 // demand under setupMu so concurrent handlers do not race on CREATE OR
 // REPLACE VIEW, and a failing view reports its real error to the caller.
-func (s *State) prepareDataSet(ctx context.Context, doc *config.Document) (string, error) {
+func (s *State) prepareDataSet(ctx context.Context, doc *config.Document) (dataset.Compiled, error) {
 	compiled, err := dataset.Compile(*doc)
 	if err != nil {
-		return "", err
+		return dataset.Compiled{}, err
 	}
 	if compiled.Prql {
 		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
-			return "", fmt.Errorf("load prql extension: %w", err)
+			return dataset.Compiled{}, fmt.Errorf("load prql extension: %w", err)
 		}
 	}
 	if len(compiled.Setup) > 0 {
 		s.setupMu.Lock()
 		defer s.setupMu.Unlock()
 		if err := dataset.RunSetup(ctx, s.session, compiled); err != nil {
-			return "", err
+			return dataset.Compiled{}, err
 		}
 	}
-	return compiled.Query, nil
+	return compiled, nil
 }
 
 // QueryRows returns preview rows for a DataSource or DataSet using the shared session.
@@ -421,15 +428,17 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	}
 
 	var query string
+	var constants []dataset.Constant
 	switch targetDoc.Kind {
 	case "DataSource":
 		query = fmt.Sprintf("SELECT * FROM %q LIMIT %d", targetDoc.Name, limit+1)
 	case "DataSet":
-		compiledQuery, err := s.prepareDataSet(ctx, targetDoc)
+		compiled, err := s.prepareDataSet(ctx, targetDoc)
 		if err != nil {
 			return nil, nil, false, "", err
 		}
-		query = dataset.LimitQuery(compiledQuery, limit+1)
+		query = dataset.LimitQuery(compiled.Query, limit+1)
+		constants = compiled.Constants
 	default:
 		return nil, nil, false, "", fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
 	}
@@ -471,6 +480,7 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	if results == nil {
 		results = []map[string]any{}
 	}
+	cols, _ = dataset.StampConstants(results, cols, constants)
 
 	return cols, results, rowCount > limit, targetDoc.Kind, nil
 }

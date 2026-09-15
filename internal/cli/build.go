@@ -389,6 +389,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 			documentResults := buildResults.Documents
 
 			for _, r := range results {
+				buildWarnings = append(buildWarnings, r.RenderWarnings...)
 				buildWarnings = append(buildWarnings, r.LayoutWarnings...)
 			}
 
@@ -506,6 +507,8 @@ type artefactResult struct {
 	LayoutStatePath string
 	// LayoutWarnings are the render-time findings derived from that snapshot.
 	LayoutWarnings []string
+	// RenderWarnings are the HTML renderer's findings (dataset defaults).
+	RenderWarnings []string
 }
 
 type buildArtefactConfig struct {
@@ -566,6 +569,9 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 
 	renderResult, err := cfg.Builder.RenderArtefactHTML(ctx, cfg.Docs, cfg.Artifact)
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
+	for _, w := range renderResult.Warnings {
+		logger.Warnf("%s", w)
+	}
 	if err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
@@ -686,7 +692,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	if spinner != nil {
 		spinner.Stop()
 	}
-	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath}
+	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath, RenderWarnings: renderResult.Warnings}
 	if capture != nil {
 		result.LayoutStatePath = capture.SnapshotPath
 		result.LayoutWarnings = capture.Warnings(artefactName)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1094,4 +1095,304 @@ func containsAt(s, substr string, start int) bool {
 		}
 	}
 	return false
+}
+
+func TestExecute_ConstantsStampRows(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: products
+spec:
+  type: inline
+  content:
+    - category: Coffee
+      ac1: 3.5
+    - category: Tea
+      ac1: 2.5
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: by_query
+spec:
+  query: SELECT category, ac1 FROM products ORDER BY category
+  dependencies: [products]
+  constants:
+    unit: kEUR
+    factor: 1000
+    spec:
+      any:
+        scenarios: [ac1, pl1]
+      table:
+        barColumns: ac1,pl1
+        thereof:
+          - rowGroup: Revenue
+            category: Applications
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: by_source
+spec:
+  source: products
+  constants:
+    unit: kEUR
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	results, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	byName := map[string][]map[string]any{}
+	for _, r := range results {
+		var rows []map[string]any
+		if err := json.Unmarshal(r.Data, &rows); err != nil {
+			t.Fatalf("unmarshal %s: %v", r.Name, err)
+		}
+		byName[r.Name] = rows
+	}
+
+	want := map[string]any{
+		"_unit":                          "kEUR",
+		"_factor":                        1000.0,
+		"_spec_any_scenarios":            "ac1,pl1",
+		"_spec_table_barColumns":         "ac1,pl1",
+		"_spec_table_thereof_0_rowGroup": "Revenue",
+		"_spec_table_thereof_0_category": "Applications",
+	}
+	rows := byName["by_query"]
+	if len(rows) != 2 {
+		t.Fatalf("by_query rows = %d, want 2", len(rows))
+	}
+	for _, row := range rows {
+		for col, v := range want {
+			if row[col] != v {
+				t.Errorf("by_query %s = %v, want %v", col, row[col], v)
+			}
+		}
+		if row["category"] == nil {
+			t.Errorf("query column missing: %v", row)
+		}
+	}
+
+	rows = byName["by_source"]
+	if len(rows) != 2 {
+		t.Fatalf("by_source rows = %d, want 2", len(rows))
+	}
+	for _, row := range rows {
+		if row["_unit"] != "kEUR" {
+			t.Errorf("by_source _unit = %v", row["_unit"])
+		}
+	}
+}
+
+func TestExecute_ConstantShadowsQueryColumn(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 1 AS ac1, 'EUR' AS _unit
+  constants:
+    unit: kEUR
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	results, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", warnings)
+	}
+	if warnings[0].DataSet != "sales" || warnings[0].Message != "constants.unit shadows query column _unit" {
+		t.Errorf("unexpected warning %+v", warnings[0])
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(rows) != 1 || rows[0]["_unit"] != "kEUR" {
+		t.Errorf("rows = %v, want the constant to win", rows)
+	}
+}
+
+func TestExecute_ConstantsCachedEqualsFresh(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 1 AS ac1
+  constants:
+    unit: kEUR
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	fresh, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("fresh execute: %v", err)
+	}
+	files, err := os.ReadDir(filepath.Join(workdir, ".bino", "cache", "datasets"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("cache files = %d (err %v), want 1", len(files), err)
+	}
+	cached, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("cached execute: %v", err)
+	}
+	if string(cached[0].Data) != string(fresh[0].Data) {
+		t.Fatalf("cached rows differ from fresh rows:\n%s\n%s", cached[0].Data, fresh[0].Data)
+	}
+	if !contains(string(cached[0].Data), `"_unit":"kEUR"`) {
+		t.Fatalf("cached rows lack the constant: %s", cached[0].Data)
+	}
+}
+
+func TestExecute_DefaultsCachedEqualsFresh(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: >-
+    SELECT * FROM (VALUES ('A', 'ac1', 'kEUR'), ('B', 'pl1', NULL))
+    AS t(category, _spec_table_barColumns, _spec_any_measureUnit)
+  constants:
+    spec:
+      table:
+        grouped: true
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	fresh, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("fresh execute: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	want := Defaults{
+		"table": {"barColumns": json.RawMessage(`["ac1","pl1"]`), "grouped": json.RawMessage(`true`)},
+		"any":   {"measureUnit": json.RawMessage(`"kEUR"`)},
+	}
+	if !reflect.DeepEqual(fresh[0].Defaults, want) {
+		t.Fatalf("fresh defaults = %v, want %v", fresh[0].Defaults, want)
+	}
+	cached, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("cached execute: %v", err)
+	}
+	if !reflect.DeepEqual(cached[0].Defaults, fresh[0].Defaults) {
+		t.Fatalf("cached defaults = %v, fresh = %v", cached[0].Defaults, fresh[0].Defaults)
+	}
+}
+
+func TestExecute_DefaultsClashWarns(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT * FROM (VALUES ('A', 'kEUR'), ('B', 'EUR')) AS t(category, _spec_table_measureUnit)
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	results, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(warnings) != 1 || warnings[0].Message != "measureUnit: 2 distinct values (kEUR, EUR) in dataset sales" {
+		t.Fatalf("warnings = %v", warnings)
+	}
+	if len(results[0].Defaults) != 0 {
+		t.Fatalf("clashing field must be dropped: %v", results[0].Defaults)
+	}
+}
+
+func TestExecute_ObjectConstantsRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT 'Revenue' AS rowGroup, 'Applications' AS category, 1 AS ac1
+  constants:
+    spec:
+      table:
+        thereof:
+          - rowGroup: Revenue
+            category: Applications
+      chartstructure:
+        stack: { by: scenarios }
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	fresh, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("fresh execute: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	want := Defaults{
+		"table":          {"thereof": json.RawMessage(`[{"category":"Applications","rowGroup":"Revenue"}]`)},
+		"chartstructure": {"stack": json.RawMessage(`{"by":"scenarios"}`)},
+	}
+	if !reflect.DeepEqual(fresh[0].Defaults, want) {
+		t.Fatalf("fresh defaults = %v, want %v", fresh[0].Defaults, want)
+	}
+	cached, _, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("cached execute: %v", err)
+	}
+	if !reflect.DeepEqual(cached[0].Defaults, want) {
+		t.Fatalf("cached defaults = %v", cached[0].Defaults)
+	}
 }
