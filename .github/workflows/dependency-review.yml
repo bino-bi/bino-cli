@@ -36,7 +36,10 @@ jobs:
           # only link the code. sharp's prebuilt libvips binaries (@img/*) are
           # LGPL-3.0; they are only used to build the docs site and are not part
           # of the CLI or the published docs image.
+          # @astrojs/compiler-binding-android-arm64 is MIT on npm, but GitHub's
+          # dependency graph reports it as unlicensed.
           allow-dependencies-licenses: >-
+            pkg:npm/@astrojs/compiler-binding-android-arm64,
             pkg:golang/github.com/modelcontextprotocol/go-sdk,
             pkg:golang/golang.org/x/crypto,
             pkg:golang/golang.org/x/image,
