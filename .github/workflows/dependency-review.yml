@@ -33,7 +33,9 @@ jobs:
           # BSD-3-Clause license, which the scanner reports as a LicenseRef and
           # then rejects. modelcontextprotocol/go-sdk has a single LICENSE file
           # covering Apache-2.0 code, MIT legacy code and CC-BY-4.0 docs; we
-          # only link the code.
+          # only link the code. sharp's prebuilt libvips binaries (@img/*) are
+          # LGPL-3.0; they are only used to build the docs site and are not part
+          # of the CLI or the published docs image.
           allow-dependencies-licenses: >-
             pkg:golang/github.com/modelcontextprotocol/go-sdk,
             pkg:golang/golang.org/x/crypto,
@@ -45,5 +47,19 @@ jobs:
             pkg:golang/golang.org/x/term,
             pkg:golang/golang.org/x/text,
             pkg:golang/golang.org/x/time,
-            pkg:golang/golang.org/x/tools
+            pkg:golang/golang.org/x/tools,
+            pkg:npm/@img/sharp-libvips-darwin-arm64,
+            pkg:npm/@img/sharp-libvips-darwin-x64,
+            pkg:npm/@img/sharp-libvips-linux-arm,
+            pkg:npm/@img/sharp-libvips-linux-arm64,
+            pkg:npm/@img/sharp-libvips-linux-ppc64,
+            pkg:npm/@img/sharp-libvips-linux-riscv64,
+            pkg:npm/@img/sharp-libvips-linux-s390x,
+            pkg:npm/@img/sharp-libvips-linux-x64,
+            pkg:npm/@img/sharp-libvips-linuxmusl-arm64,
+            pkg:npm/@img/sharp-libvips-linuxmusl-x64,
+            pkg:npm/@img/sharp-wasm32,
+            pkg:npm/@img/sharp-win32-arm64,
+            pkg:npm/@img/sharp-win32-ia32,
+            pkg:npm/@img/sharp-win32-x64
           comment-summary-in-pr: on-failure
