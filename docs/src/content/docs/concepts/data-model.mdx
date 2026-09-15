@@ -27,14 +27,14 @@ See the [DataSource reference](/reference/datasource/) for full details.
 
 ## Datasets as derived tables
 
-`DataSet` manifests define SQL queries that run on top of datasources or other datasets.
+`DataSet` manifests define SQL queries that run on top of datasources.
 The query is executed in the query engine, and the results are reused by layouts and charts.
 
 Key ideas:
 
-- `spec.query` is SQL; refer to datasources and datasets using their `metadata.name`.
-- `spec.dependencies` is an optional list of datasource names that must be materialized before the query runs.
-- Use dependencies to make relationships explicit and to help graph inspection.
+- `spec.query` is SQL; every datasource is queryable by its `metadata.name` in any dataset query.
+- `spec.dependencies` lists the datasources the query reads, so the dataset cache notices when they change and the dependency graph shows them.
+- `bino lint` reports a datasource the query reads but the list misses ([`dataset-dependency-undeclared`](/appendix/lint-rules/#dataset-dependency-undeclared)).
 
 A dataset can also declare what a previous-period slot means instead of supplying it: `spec.derive` names the slot bino fills from another slot shifted back in time (`pp1: { from: ac1, shift: 1 month, grain: month }`), and `spec.assert` checks a slot the query already returns. `grain` is the period one row stands for, `shift` how far back the compared row lies; rows are matched by their dimension values and by the date truncated to the grain, and the caption follows the shift (`PY` for a year, `PP` otherwise). See [Deriving previous period](/reference/dataset/#deriving-previous-period).
 

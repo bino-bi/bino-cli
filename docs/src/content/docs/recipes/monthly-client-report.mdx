@@ -79,6 +79,8 @@ kind: DataSet
 metadata:
   name: client_kpis
 spec:
+  dependencies:
+    - client_usage
   query: |
     SELECT
       active_users,
@@ -116,6 +118,8 @@ kind: DataSet
 metadata:
   name: feature_adoption
 spec:
+  dependencies:
+    - client_usage
   query: |
     SELECT feature, SUM(feature_sessions) AS sessions
     FROM client_usage

@@ -67,6 +67,8 @@ spec:
       "ac1"::DOUBLE AS ac1,
       "date"        AS date
     FROM actuals_csv
+  dependencies:
+    - actuals_csv
   derive:
     pp1: { from: ac1, shift: 1 month, grain: month }
     pp2: { from: ac1, shift: 1 year,  grain: month }

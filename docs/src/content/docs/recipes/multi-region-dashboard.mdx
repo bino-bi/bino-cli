@@ -68,6 +68,8 @@ kind: DataSet
 metadata:
   name: regional_kpis
 spec:
+  dependencies:
+    - ops_metrics
   query: |
     SELECT
       deliveries_total,
