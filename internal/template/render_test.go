@@ -116,7 +116,6 @@ func TestRenderMinimalNoEngineVersion(t *testing.T) {
 var standardFiles = []string{
 	".bnignore",
 	".gitignore",
-	"LICENSE",
 	"README.md",
 	"bino.toml",
 	"components/example_chart.yaml",
