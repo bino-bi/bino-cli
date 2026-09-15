@@ -73,6 +73,27 @@ Read-only context an agent can pull in:
 | `bino://kinds` | Every manifest kind and its capability category (`data` / `layout` / `embeddable` / `artefact` / `config`). |
 | `bino://documents` | The project index: every document → `{kind, name, file, position}`. |
 | `bino://packages` | The project's registry packages: `bino.lock` merged with `bino.toml` `[dependencies]`, with installed state. |
+| `bino://templates` | The built-in and curated templates `init_bundle` can scaffold from. |
+| `bino://skills` | Index of the knowledge skills below: name and description of each, as JSON. |
+| `bino://skills/{name}` | One skill as markdown (e.g. `bino://skills/bino-ibcs`), the same text the prompt of that name carries. |
+
+## Prompts
+
+The server also serves bino's authoring and IBCS knowledge as MCP prompts. They are the same skills
+the Claude Code plugin ships, embedded in the binary, so any client that can run `bino mcp` gets
+them without a copy of the plugin. Each prompt takes no arguments and returns one user message with
+the skill text; the same text is readable as `bino://skills/{name}`.
+
+| Prompt | What it teaches |
+| --- | --- |
+| `bino-concepts` | bino's mental model: the manifest envelope, the DataSource → DataSet → LayoutPage → artefact pipeline, dependencies, standard columns, params, constraints, `bino.toml`. Read first. |
+| `bino-authoring` | The authoring loop through this server: outline, scaffold, learn columns, draft, `validate_draft`, write, `validate_project`, build. |
+| `bino-ibcs` | The IBCS rubric: SUCCESS rules, scenarios (`ac`/`pp`/`fc`/`pl`), variances, notations, choosing a component, data-aware commentary. Includes the full IBCS standard reference and the engine data model. |
+| `bino-data-modeling` | Mapping raw source columns onto scenario slots, deriving variances, choosing the grain, writing typed DataSet SQL. |
+| `bino-validation-loop` | The four-layer check (schema, IBCS, build-readiness, acceptance) and the bounded fix loop. |
+
+The plugin's `bino-orchestration` and `bino-requirements` skills are not served: they drive Claude
+Code specific machinery (subagents, questions to the human) and mean nothing to other clients.
 
 ## Tools
 
@@ -105,6 +126,8 @@ Read-only context an agent can pull in:
 | `create_manifest(kind, name, spec, ...)` | Create any manifest from a spec object; validated and written atomically, auto-placed by project convention. |
 | `write_manifest(file, yaml, append?)` | Persist a full manifest document, validated before writing. |
 | `edit_manifest(file, position, patch)` | Edit one document in place via dotted-path edits, preserving comments and key order. |
+| `remove_manifest_fields(file, position, paths, dryRun?)` | Delete dotted paths from one document in place; a trailing `[index]` removes a sequence element. Validated before the atomic write; `dryRun` returns the rewritten file instead. |
+| `reorder_manifest_sequence(file, position, path, from, to, dryRun?)` | Move an element within a sequence (e.g. `spec.columns`) from one 0-based index to another, in place and validated. |
 | `scaffold_source(dataSource, dataSet?)` | Scaffold a DataSource and an optional typed DataSet in one step. |
 | `init_bundle(...)` | Bootstrap a new starter report bundle. |
 
@@ -116,6 +139,7 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 | Tool | What it does |
 | --- | --- |
 | `build(artefacts?, out_dir?)` | Render artefacts by running `bino build` — streams progress and returns the exit code, output, and produced artefacts. Subject to the usual engine-compatibility check. |
+| `get_layout_state(artefact?, component?)` | Build with a layout capture and report what actually rendered: per component the box, row/bar counts, resolved scaling and diagnostics, plus findings (empty components, overflow, auto-fitted fonts, diverging scales). Slow (headless Chrome). Requires template engine v1.0.0-next.24 or newer. |
 
 ### Registry
 

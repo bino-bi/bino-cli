@@ -3,9 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -146,6 +148,94 @@ func TestResourcesReadable(t *testing.T) {
 	}
 	if !hasDocument(docs.Documents, "DataSet", "revenue_by_region") {
 		t.Errorf("project index missing DataSet revenue_by_region; got %+v", docs.Documents)
+	}
+}
+
+// TestSkillsPromptsAndResources pins the skills served over MCP: the five
+// client-neutral plugin skills as prompts and bino://skills/{name} resources,
+// with bino-ibcs carrying its reference files, and the Claude Code specific
+// skills left out.
+func TestSkillsPromptsAndResources(t *testing.T) {
+	cs := newTestClient(t)
+	ctx := context.Background()
+
+	wantHeading := map[string]string{
+		"bino-concepts":        "# How bino thinks",
+		"bino-authoring":       "# Authoring bino manifests",
+		"bino-ibcs":            "# IBCS semantics for bino",
+		"bino-data-modeling":   "# Modeling source data into a bino DataSet",
+		"bino-validation-loop": "# The validation loop",
+	}
+
+	listed, err := cs.ListPrompts(ctx, nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	names := make([]string, 0, len(listed.Prompts))
+	for _, p := range listed.Prompts {
+		names = append(names, p.Name)
+		if p.Description == "" {
+			t.Errorf("prompt %s: empty description", p.Name)
+		}
+	}
+	slices.Sort(names)
+	want := slices.Sorted(maps.Keys(wantHeading))
+	if !slices.Equal(names, want) {
+		t.Fatalf("prompts = %v, want %v", names, want)
+	}
+	for _, skip := range []string{"bino-orchestration", "bino-requirements"} {
+		if slices.Contains(names, skip) {
+			t.Errorf("prompt %s is Claude Code specific and must not be registered", skip)
+		}
+	}
+
+	for name, heading := range wantHeading {
+		res, err := cs.GetPrompt(ctx, &mcpsdk.GetPromptParams{Name: name})
+		if err != nil {
+			t.Fatalf("get prompt %s: %v", name, err)
+		}
+		if len(res.Messages) != 1 || res.Messages[0].Role != "user" {
+			t.Fatalf("prompt %s: messages = %+v, want one user message", name, res.Messages)
+		}
+		tc, ok := res.Messages[0].Content.(*mcpsdk.TextContent)
+		if !ok {
+			t.Fatalf("prompt %s: content is %T, want TextContent", name, res.Messages[0].Content)
+		}
+		if !strings.HasPrefix(tc.Text, heading) {
+			t.Errorf("prompt %s: body starts with %.40q, want %q", name, tc.Text, heading)
+		}
+
+		// The same text is readable as a resource.
+		if got := readResourceText(t, cs, "bino://skills/"+name); got != tc.Text {
+			t.Errorf("bino://skills/%s differs from the prompt body", name)
+		}
+	}
+
+	// bino-ibcs carries its reference files so the prompt is self-contained.
+	ibcs, err := cs.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: "bino://skills/bino-ibcs"})
+	if err != nil {
+		t.Fatalf("read bino://skills/bino-ibcs: %v", err)
+	}
+	if ibcs.Contents[0].MIMEType != "text/markdown" {
+		t.Errorf("bino://skills/bino-ibcs mime = %q, want text/markdown", ibcs.Contents[0].MIMEType)
+	}
+	if !strings.Contains(ibcs.Contents[0].Text, "## 1. The SUCCESS formula") {
+		t.Error("bino://skills/bino-ibcs is missing the ibcs-standard reference")
+	}
+
+	// The index lists exactly the served skills.
+	var index struct {
+		Skills []skillIndexEntry `json:"skills"`
+	}
+	if err := json.Unmarshal([]byte(readResourceText(t, cs, "bino://skills")), &index); err != nil {
+		t.Fatalf("bino://skills not JSON: %v", err)
+	}
+	if len(index.Skills) != len(wantHeading) {
+		t.Errorf("bino://skills lists %d skills, want %d", len(index.Skills), len(wantHeading))
+	}
+
+	if _, err := cs.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: "bino://skills/bino-orchestration"}); err == nil {
+		t.Error("bino://skills/bino-orchestration is readable, want not found")
 	}
 }
 
