@@ -797,16 +797,16 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "@types/vscode": "1.85.0",
-    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.61.0",
     "esbuild": "^0.28.2",
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
     "vscode-languageclient": "^10.1.1",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }
