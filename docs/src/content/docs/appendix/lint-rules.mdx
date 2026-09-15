@@ -31,6 +31,7 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `ref-params`                   | Ref Params                   | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match. |
 | `dataset-derive-conflict`      | DataSet Derive Conflict      | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                      |
 | `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
+| `duplicate-name`               | Duplicate Name               | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied. |
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
 | `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
@@ -508,6 +509,50 @@ spec:
 metadata:
   name: sales
 ```
+
+### duplicate-name
+
+A name only has to be unique per kind within one `ReportArtefact`, after its `metadata.constraints` are applied. The rule checks every `ReportArtefact` in `build` and `preview` mode and reports the later of two documents that are both included. Documents of different kinds may share a name.
+
+This is a build error at render time: `bino build` fails, and `bino preview` and `bino serve` show a `duplicate ... name` error instead of the artefact. The rule surfaces it while you are still editing.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: mainPage
+spec:
+  children: [...]
+---
+kind: LayoutPage
+metadata:
+  name: mainPage  # Same kind and name, and nothing keeps them apart!
+spec:
+  children: [...]
+```
+
+**Fix:** Rename one of them, or add constraints so that no artefact includes both. This is allowed:
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: mainPage
+  constraints:
+    - mode==build
+spec:
+  children: [...]
+---
+kind: LayoutPage
+metadata:
+  name: mainPage
+  constraints:
+    - mode==preview
+spec:
+  children: [...]
+```
+
+**See also:** [Name scoping](/concepts/constraints-and-scoped-names/#name-scoping)
 
 ### i18n-code-unused
 
