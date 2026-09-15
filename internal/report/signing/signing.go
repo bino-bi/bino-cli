@@ -81,7 +81,7 @@ func Apply(ctx context.Context, profile config.SigningProfile, pdfPath string) e
 		return fmt.Errorf("close temp signed PDF: %w", err)
 	}
 
-	if err := sign.SignFile(pdfPath, tmpPath, signData); err != nil {
+	if err := sign.SignFile(pdfPath, tmpPath, signData); err != nil { //nolint:staticcheck // new builder API is still a release candidate
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("sign %s using profile %s: %w", pdfPath, profile.Document.Name, err)
 	}

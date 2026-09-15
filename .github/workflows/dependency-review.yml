@@ -37,6 +37,7 @@ jobs:
           allow-dependencies-licenses: >-
             pkg:golang/github.com/modelcontextprotocol/go-sdk,
             pkg:golang/golang.org/x/crypto,
+            pkg:golang/golang.org/x/image,
             pkg:golang/golang.org/x/mod,
             pkg:golang/golang.org/x/net,
             pkg:golang/golang.org/x/sync,
