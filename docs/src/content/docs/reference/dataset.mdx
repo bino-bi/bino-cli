@@ -289,6 +289,12 @@ These fields determine how data is hierarchically organized and sorted.
 | `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals. |
 | `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results.                                                    |
 
+### Custom `_` columns
+
+Any column whose name starts with `_` passes through untouched: data validation ignores it, the engine does not read it, and it reaches the rendered rows as an extra column. The one consumer today is the Table's [`attributes`](/reference/table/#computed-attribute-columns) expressions, e.g. `set(_leiter)`. Use this namespace for anything the report needs per row that is not part of the standard schema, either in the query (`'kEUR' AS _unit`) or as a [constant column](#constant-columns).
+
+Inside the `_` namespace, the prefix `_spec_` is **reserved**: columns named `_spec_<kind>_<field>` and `_spec_any_<field>` are read by bino as [dataset defaults](#dataset-defaults) and must not be used for your own passthrough.
+
 ### Example Query
 
 Here is an example SQL query producing a compliant dataset:
@@ -497,6 +503,184 @@ BNR_DATA_VALIDATION_SAMPLE_SIZE=100 bino build
 
 Default sample size is 10 rows.
 
+## Constant columns
+
+A value that is the same on every row — a unit, a note, a setting — does not have to be typed into the `SELECT`. Declare it under `spec.constants` and bino adds it as a [`_` column](#custom-_-columns) to every row after the query has run:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT region AS category, revenue AS ac1, plan AS pl1 FROM sales_fact
+  dependencies: [sales_fact]
+  constants:
+    unit: kEUR                       # → _unit = "kEUR"
+    spec:
+      table:
+        barColumns: ac1,pl1          # → _spec_table_barColumns = "ac1,pl1"
+        thereof:                     # → _spec_table_thereof_0_rowGroup = "Revenue"
+          - rowGroup: Revenue        #   _spec_table_thereof_0_category = "Applications"
+            category: Applications
+```
+
+A Table bound to `sales` can then show the unit with `attributes: [{label: Unit, expression: "set(_unit)"}]`.
+
+### Flattening rules
+
+| In `constants` | Column(s) on the row |
+| :--- | :--- |
+| Top-level key `unit` | `_unit` |
+| Nested keys `spec.table.barColumns` | keys joined with `_`: `_spec_table_barColumns` |
+| Scalar (`kEUR`, `1000`, `true`) | one column, the value keeps its type |
+| List of scalars (`[ac1, pl1]`) | one column holding the comma-joined string `ac1,pl1` (the string `"ac1,pl1"` stays as it is) |
+| Object, or list of objects (`thereof: [{rowGroup: Revenue}]`) | one column per leaf, list items by zero-based index: `_spec_table_thereof_0_rowGroup` |
+
+Keys must be camelCase without underscores (`^[a-z][A-Za-z0-9]*$`), because `_` is the path separator of the column name; the schema rejects anything else. `${NAME}` substitution applies as everywhere in a spec.
+
+Constants work the same for `query`, `prql` and `source` datasets, and for [inline DataSet definitions](#inline-dataset-definitions). They are materialized in Go after the query has run, so the cached rows carry them (a changed constant invalidates the cache), and every path that shows a dataset's rows — `bino build`, the daemon behind the VS Code wizard, and the MCP tools `get_columns` / `get_rows` — lists the same columns. The preview's SQL explorer runs the dataset SQL itself and therefore does not show constant columns.
+
+If the query already produces a column of the same name, the constant wins and the build reports a dataset warning: `constants.unit shadows query column _unit`.
+
+The keys under `constants.spec` are checked statically by the lint rule [`dataset-constants-spec`](/appendix/lint-rules/#dataset-constants-spec): `constants.spec.<kind>.<field>` must name one of the kind tokens `text`, `table`, `chartstructure`, `charttime`, `chartscatter`, `chartbubble`, `chartbullet` or `any`, and a field of that kind's spec. These columns are the reserved `_spec_` namespace: bino reads them as [dataset defaults](#dataset-defaults).
+
+## Dataset defaults
+
+The rows a component renders may fill the settings its author left unset. A column named `_spec_<kind>_<field>` sets `<field>` on every component of that kind bound to the dataset; `_spec_any_<field>` sets it on every kind that has the field. Whether the column comes from the query, from a sheet, or from [`constants`](#constant-columns) makes no difference.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT region AS category, revenue AS ac1, plan AS pl1 FROM sales_fact
+  dependencies: [sales_fact]
+  constants:
+    spec:
+      any:
+        scenarios: ac1,pl1           # → every bound component with a scenarios field
+      table:
+        barColumns: ac1,pl1          # → Tables only
+        measureUnit: kEUR
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales_table
+spec:
+  dataset: sales                     # every other setting comes from the rows
+```
+
+The Table renders with `scenarios="ac1,pl1"`, `bar-columns="ac1,pl1"` and `measure-unit="kEUR"`, exactly as if they had been written on the Table.
+
+### Grammar
+
+- `<kind>` is the lowercase manifest kind: `text`, `table`, `chartstructure`, `charttime`, `chartscatter`, `chartbubble`, `chartbullet`, or the reserved word `any`. The kind-specific column beats the `any` column for the same field.
+- `<field>` is the spec key exactly as written in YAML (`barColumns`, `measureUnit`, `scenarios`). Every spec field of the kind is a target except `dataset` itself. An `any` field is applied to every bound kind that has it and skipped for kinds that do not.
+- The `_spec_` prefix is matched **case-sensitively**; a sheet header must spell it exactly.
+- A further `_` in the field part addresses the inside of an object-valued field: `_spec_table_thereof_0_rowGroup` is the `rowGroup` of the first `thereof` entry, see [Object-valued fields](#object-valued-fields).
+
+### Precedence
+
+Anything written in YAML beats anything the data says. Lowest first:
+
+| Level | Set by |
+| :--- | :--- |
+| engine default and auto-detection | the template engine |
+| `ComponentStyle` | the selected style |
+| **dataset default** | the rows of the component's primary dataset |
+| inherited value | `selectedStyle` on the page or card |
+| the component's own spec | the manifest, including a `ref` override |
+
+A dataset default only fills a field nobody wrote. Leaving a field unset is the opt-in; a field the author set to anything, even an empty list, stays as written. A component that binds several datasets takes defaults from its **primary** dataset, the first entry of `dataset`; `_spec_` columns on any other bound dataset are ignored with a build warning. Components bound directly to a DataSource (`dataset: $name`) get no defaults.
+
+### Reading the cells
+
+The target field's schema type decides how a cell is read:
+
+| Field type | Accepted cell |
+| :--- | :--- |
+| string or enum (`measureUnit`, `type`, `level`) | the string |
+| number (`percentageScaling`, `limit`) | a numeric cell or a numeric string |
+| boolean (`grouped`, `showMeasureScale`) | a boolean cell, `true`/`false`, `1`/`0` |
+| list of strings (`barColumns`, `scenarios`, `variances`) | a comma list (`ac1,pl1`) or a JSON array string |
+| object or list of objects (`thereof`, `attributes`, `stack`) | a JSON cell, index columns, or a row marker; see [Object-valued fields](#object-valued-fields) |
+
+Across rows, NULL and empty cells are ignored, so filling one row of a sheet is enough. A list field merges the distinct values of all rows in row order (`ac1` on one row and `pl1` on another become `ac1,pl1`). Any other field must hold the same value on every filled row.
+
+### Diagnostics
+
+Every problem is a dataset warning attributed to the DataSet, never a failed build. It appears in `bino build` output and in `bino lint --execute-queries`, the daemon and the MCP `validate_project` tool as a `data-validation` diagnostic. The setting is dropped and the field falls back to the next level:
+
+- `measureUnit: 2 distinct values (kEUR, EUR) in dataset sales` — a scalar field disagrees between rows
+- `_spec_tabel_barColumns: unknown kind token "tabel"; …` — the kind token is not one of the eight
+- `_spec_table_barColumnz: Table has no spec field "barColumnz"` — the field does not exist on that kind (for `any`: on no kind)
+- `_spec_table_percentageScaling: cannot parse "lots" as number` — the cell does not fit the field's type
+
+`bino serve --live` renders per request, so dataset defaults follow the route parameters like the rows do. Component embeds inside a DocumentArtefact's markdown do not receive dataset defaults.
+
+### Object-valued fields
+
+An object-valued field — the Table's `thereof`, `partof`, `columnthereof` and `attributes`, a chart's `stack`, the axis objects of scatter and bubble charts — can be filled in one of three forms. **One form per field per dataset**: a dataset that carries two forms for the same field raises the warning `thereof: two forms (marker, index) in dataset sales` and the field is dropped.
+
+**1. JSON cell.** The `_spec_table_thereof` cell holds the value as JSON, told by its first character `[` or `{`:
+
+```sql
+SELECT …, '[{"rowGroup":"Revenue","category":"Applications"}]' AS _spec_table_thereof FROM sales_fact
+```
+
+A single object with the entry's keys is accepted for a list field (`{"rowGroup":"Revenue"}` becomes a one-entry list). A DuckDB list or struct column works the same way. Two special cases follow the field's own manifest forms: the Table's `attributes` also takes its object form (`{"Unit":"set(_unit)"}`, key order preserved), and the measure objects of scatter, bubble and bullet charts (`x`, `y`, `size`, `share`, `actual`, `target`) also take a bare measure token such as `ac1`.
+
+**2. Index columns.** A numeric segment is a zero-based list index, the segment after it a key; a plain object takes its keys directly. This is what [`constants`](#constant-columns) produces from a YAML list:
+
+```yaml
+constants:
+  spec:
+    table:
+      thereof:
+        - rowGroup: Revenue
+          category: Applications
+        - rowGroup: Revenue
+          category: Services
+          subCategory: Consulting     # narrows the drill to one detail row
+    chartstructure:
+      stack: { by: scenarios }      # → _spec_chartstructure_stack_by
+```
+
+or, in SQL, `'Revenue' AS _spec_table_thereof_0_rowGroup, 'Applications' AS _spec_table_thereof_0_category, …`. Indices must be contiguous from 0 (`thereof: index columns must be contiguous from 0 (missing 1)` otherwise), every key must exist on the entry, a required key must be present (`stack` needs `by`), and each column follows the across-rows rule of a scalar. A `subGroups` column takes a comma list.
+
+**3. Row marker.** For a list whose entries are keyed by the row dimensions (`thereof`: `rowGroup`, `category`, `subCategory`; `partof`: `rowGroup`, `category`) the cell names the **level** to expand on the rows it sits on, and the entry is built from that row's own dimension values. The rule can be a condition instead of a list of names:
+
+```sql
+SELECT 'Revenue' AS rowGroup, region AS category, product AS subCategory,
+       revenue AS ac1, plan AS pl1,
+       CASE WHEN ABS(revenue - plan) / plan > 0.10 THEN 'category' END AS _spec_table_thereof
+FROM sales_fact
+```
+
+| rowGroup | category | subCategory | `_spec_table_thereof` | entry |
+| :--- | :--- | :--- | :--- | :--- |
+| Revenue | Applications | Applications-A | `category` | `{rowGroup: Revenue, category: Applications}` |
+| Revenue | Applications | Applications-B | `category` | same entry, deduplicated |
+| Revenue | Services | Consulting | `subCategory` | `{rowGroup: Revenue, category: Services, subCategory: Consulting}` |
+
+Rows without a marker contribute nothing; entries keep row order. A level the entry does not have (`subCategory` on `partof`) and a marked row without the needed dimension value are warnings that drop the field. A marker set through `constants` marks every row and expands every group.
+
+`columnthereof` is column-keyed: the cell holds the **scenario** on the rows whose `columnGroup` should be spread, and `subGroups` collects the distinct `columnSubGroup` values of those rows:
+
+```sql
+SELECT …, columnGroup, columnSubGroup,
+       CASE WHEN columnGroup = 'DE' THEN 'ac1' END AS _spec_table_columnthereof
+FROM sales_fact
+```
+
+→ `columnthereof='[{"scenario":"ac1","name":"DE","subGroups":["Berlin","Hamburg"]}]'`.
+
+Precedence is the same as everywhere: `thereof: []` written on the Table stays empty whatever the rows say, and a Table's own list replaces the data's list. A plain object such as `stack` merges key by key, so `stack: {by: scenarios}` on the chart keeps a `mode` the data supplied; write the key explicitly (`mode: absolute`) to override it.
+
 ## Conditional inclusion with constraints
 
 DataSet documents support `metadata.constraints` to conditionally include them for specific artefacts, modes, or environments.
@@ -562,7 +746,7 @@ For the full constraint syntax and operators, see [Constraints and Scoped Names]
 
 ## Inline DataSet definitions
 
-Instead of defining DataSets as separate documents, you can define them **inline** directly within components. This is useful for simple, component-specific data transformations.
+Instead of defining DataSets as separate documents, you can define them **inline** directly within components. This is useful for simple, component-specific data transformations. An inline definition takes the same fields as a DataSet spec, including `derive`, `assert` and [`constants`](#constant-columns).
 
 ### Inline DataSet in a Chart
 
@@ -724,6 +908,7 @@ Setting `query` and `prql` together is accepted by the schema, but only `prql` i
 | `spec.derive.<pp>.shift` | string | yes | — | How far back, `<n> <unit>` with the unit `day`, `week`, `month`, `quarter` or `year`. A year shift keeps the `PY` caption, any other unit is captioned `PP`. | `shift: 1 month` |
 | `spec.derive.<pp>.grain` | string | yes | — | The period one row stands for: `day`, `week`, `month`, `quarter` or `year`. Never inferred. | `grain: month` |
 | `spec.assert` | object | no | — | Previous-period slots the query supplies and bino checks, same shape as `derive`. A mismatch on any row with a prior period fails the build even under `--data-validation warn`. | `assert: { pp3: { from: pl1, shift: 1 year, grain: month } }` |
+| `spec.constants` | object | no | — | Values added as `_`-prefixed columns to every row after the query has run. Keys are camelCase without underscores; nested keys join with `_`, lists of scalars become a comma string, objects and lists of objects flatten by key and index. See [Constant columns](#constant-columns). | `constants: { unit: kEUR, spec: { table: { barColumns: ac1,pl1 } } }` |
 
 An inline DataSource — as `spec.source` or as an item of `spec.dependencies` — takes the full DataSource spec (`type` with the values `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`, plus `path`, `content`, `columns`, `connection`, `delimiter`, `sample`, …). Those attributes are documented in the [DataSource reference](/reference/datasource/).
 

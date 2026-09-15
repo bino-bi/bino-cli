@@ -39,6 +39,8 @@ func DefaultRules() []Rule {
 		// Dataset dependency rules
 		datasetDependencyUndeclared,
 		datasetDependencyUnused,
+		// Constant columns
+		datasetConstantsSpec,
 	}
 }
 

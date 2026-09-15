@@ -491,6 +491,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		// Dataset dependency rules
 		"dataset-dependency-undeclared",
 		"dataset-dependency-unused",
+		// Constant columns
+		"dataset-constants-spec",
 	}
 
 	if len(rules) != len(expectedIDs) {

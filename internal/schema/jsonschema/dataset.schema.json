@@ -2,7 +2,7 @@
     "$id": "https://bino.bi/schemas/dataset.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Dataset Row",
-    "description": "A dataset row representing a data point with dimensional attributes (groupings) and measure values (scenarios). Supports hierarchical row/column groupings for drill-down, multiple scenario values for comparative analysis, temporal dimensions for time-series, and signed operations for additive/subtractive contributions.",
+    "description": "A dataset row representing a data point with dimensional attributes (groupings) and measure values (scenarios). Supports hierarchical row/column groupings for drill-down, multiple scenario values for comparative analysis, temporal dimensions for time-series, and signed operations for additive/subtractive contributions. Columns whose name starts with `_` are custom passthrough columns outside this schema (a DataSet's spec.constants produces them); the prefix `_spec_` (`_spec_<kind>_<field>`, `_spec_any_<field>`) is reserved for dataset defaults, which fill the spec fields a bound component left unset.",
     "type": "object",
     "properties": {
         "setname": {

@@ -484,3 +484,40 @@ func TestLintRuleID(t *testing.T) {
 		})
 	}
 }
+
+// TestRunQueryValidation_DatasetDefaultsWarning: a dataset-default clash found
+// while executing the query is reported as a data-validation warning on the
+// DataSet document. This is the path bino lint --execute-queries, the daemon
+// and the MCP validate_project tool share.
+func TestRunQueryValidation_DatasetDefaultsWarning(t *testing.T) {
+	dir := t.TempDir()
+	manifest := `apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT * FROM (VALUES ('A', 'kEUR'), ('B', 'EUR')) AS t(category, _spec_table_measureUnit)
+`
+	if err := os.WriteFile(filepath.Join(dir, "sales.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := config.LoadDir(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	diags := RunQueryValidation(context.Background(), dir, docs)
+	want := "measureUnit: 2 distinct values (kEUR, EUR) in dataset sales"
+	found := false
+	for _, d := range diags {
+		if d.Code == "data-validation" && d.Message == want {
+			found = true
+			if d.Severity != "warning" || d.Field != "sales" || !strings.HasSuffix(d.File, "sales.yaml") {
+				t.Errorf("diagnostic not attributed to the DataSet: %+v", d)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected a data-validation diagnostic %q, got %+v", want, diags)
+	}
+}

@@ -37,6 +37,9 @@ type Compiled struct {
 	// Derive and Assert are the validated declarations, keyed by pp slot.
 	Derive map[string]reportspec.ShiftDeclaration
 	Assert map[string]reportspec.ShiftDeclaration
+	// Constants are the columns spec.constants adds to every row after the
+	// query has run (see StampConstants).
+	Constants []Constant
 }
 
 // Declares reports whether the dataset declares any derived or asserted slot.
@@ -115,7 +118,12 @@ func compileSpec(doc config.Document, spec dataSetSpec) (Compiled, error) {
 		return Compiled{}, err
 	}
 
-	c := Compiled{Query: query, Prql: prql, Derive: spec.Derive, Assert: spec.Assert}
+	constants, err := FlattenConstants(spec.Constants)
+	if err != nil {
+		return Compiled{}, err
+	}
+
+	c := Compiled{Query: query, Prql: prql, Derive: spec.Derive, Assert: spec.Assert, Constants: constants}
 	if !prql && !c.Declares() {
 		return c, nil
 	}

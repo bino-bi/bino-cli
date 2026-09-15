@@ -67,6 +67,13 @@ type renderCtx struct {
 	// (i18nNamespace needs no such plumbing: the engine resolves the
 	// i18n-namespace attribute from the nearest ancestor at runtime.)
 	inheritedStyle string
+	// datasetDefaults maps a dataset name to the defaults folded from its
+	// rows' `_spec_` columns; a component's primary dataset fills the spec
+	// fields its author left unset.
+	datasetDefaults map[string]dataset.Defaults
+	// warnings collects render-time warnings for the build log; nil when the
+	// caller has no use for them (they are always logged).
+	warnings *[]string
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
@@ -117,6 +124,109 @@ func (rc *renderCtx) withInheritedStyle(style string) *renderCtx {
 	c := *rc
 	c.inheritedStyle = style
 	return &c
+}
+
+// withDatasetDefaults indexes the dataset defaults of the executed datasets.
+func (rc *renderCtx) withDatasetDefaults(results []dataset.Result) {
+	for _, r := range results {
+		if len(r.Defaults) == 0 {
+			continue
+		}
+		if rc.datasetDefaults == nil {
+			rc.datasetDefaults = map[string]dataset.Defaults{}
+		}
+		rc.datasetDefaults[r.Name] = r.Defaults
+	}
+}
+
+// warn logs a render warning and keeps it for the build log when a sink is set.
+func (rc *renderCtx) warn(msg string) {
+	logx.FromContext(rc.ctx).Channel("render").Warnf("%s", msg)
+	if rc.warnings != nil {
+		*rc.warnings = append(*rc.warnings, msg)
+	}
+}
+
+// applyDatasetDefaults merges the dataset defaults of a component's primary
+// dataset (the first entry of spec.dataset) as the base under everything the
+// author wrote: kind-specific defaults over `any` defaults, both under the
+// spec, so an author's value always wins. A `$` DataSource binding gets no
+// defaults; a non-primary dataset carrying defaults is ignored with a warning.
+func applyDatasetDefaults(specRaw json.RawMessage, kind, name string, rc *renderCtx) (json.RawMessage, error) {
+	if len(rc.datasetDefaults) == 0 {
+		return specRaw, nil
+	}
+	token := kindTokenOf(kind)
+	if token == "" {
+		return specRaw, nil
+	}
+	if len(specRaw) == 0 || string(specRaw) == "null" {
+		return specRaw, nil
+	}
+	var payload struct {
+		Dataset spec.DatasetList `json:"dataset"`
+	}
+	if err := json.Unmarshal(specRaw, &payload); err != nil {
+		// The kind's own parser reports a broken spec; it gets no defaults.
+		return specRaw, nil //nolint:nilerr // intentional: defaults are best-effort
+	}
+	entries := payload.Dataset.Entries()
+	if len(entries) == 0 {
+		return specRaw, nil
+	}
+	for _, entry := range entries[1:] {
+		if entry.Ref != "" && len(rc.datasetDefaults[entry.Ref]) > 0 {
+			rc.warn(fmt.Sprintf("%s %q: dataset %q carries _spec_ columns but is not its primary dataset; ignored", kind, name, entry.Ref))
+		}
+	}
+	primary := entries[0]
+	if primary.Ref == "" || strings.HasPrefix(primary.Ref, "$") {
+		return specRaw, nil
+	}
+	defaults := rc.datasetDefaults[primary.Ref]
+	base := map[string]json.RawMessage{}
+	for field, v := range defaults[dataset.AnyToken] {
+		if _, ok := dataset.SpecField(kind, field); ok {
+			base[field] = v
+		}
+	}
+	for field, v := range defaults[token] {
+		base[field] = v
+	}
+	delete(base, "dataset")
+	if len(base) == 0 {
+		return specRaw, nil
+	}
+	baseJSON, err := json.Marshal(base)
+	if err != nil {
+		return nil, fmt.Errorf("marshal dataset defaults: %w", err)
+	}
+	// An explicit null in the spec would replace the default; unset means absent.
+	var specMap map[string]json.RawMessage
+	if err := json.Unmarshal(specRaw, &specMap); err != nil {
+		return nil, fmt.Errorf("parse %s spec: %w", kind, err)
+	}
+	for k, v := range specMap {
+		if string(v) == "null" {
+			delete(specMap, k)
+		}
+	}
+	stripped, err := json.Marshal(specMap)
+	if err != nil {
+		return nil, fmt.Errorf("marshal %s spec: %w", kind, err)
+	}
+	return ref.MergeSpec(baseJSON, stripped)
+}
+
+// kindTokenOf returns the dataset-defaults kind token of a manifest kind, or
+// "" for kinds that bind no dataset.
+func kindTokenOf(kind string) string {
+	for token, k := range dataset.KindTokens {
+		if k == kind {
+			return token
+		}
+	}
+	return ""
 }
 
 // applyInheritedStyle injects the inherited style as a default selectedStyle
@@ -768,6 +878,10 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err != nil {
 			return "", false, fmt.Errorf("apply inherited style to %s child: %w", child.Kind, err)
 		}
+		effectiveSpec, err = applyDatasetDefaults(effectiveSpec, child.Kind, child.Metadata.Name, rc)
+		if err != nil {
+			return "", false, fmt.Errorf("apply dataset defaults to %s child: %w", child.Kind, err)
+		}
 	}
 
 	var component string
@@ -1100,6 +1214,10 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("apply inherited style to %s node: %w", node.Kind, err)
 	}
+	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, node.Kind, node.ID, rc)
+	if err != nil {
+		return "", fmt.Errorf("apply dataset defaults to %s node: %w", node.Kind, err)
+	}
 
 	switch node.Kind {
 	case "Label":
@@ -1269,6 +1387,10 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
 	if err != nil {
 		return "", fmt.Errorf("apply inherited style to %s grid child: %w", child.Kind, err)
+	}
+	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, child.Kind, child.Metadata.Name, rc)
+	if err != nil {
+		return "", fmt.Errorf("apply dataset defaults to %s grid child: %w", child.Kind, err)
 	}
 
 	switch child.Kind {
@@ -1497,18 +1619,22 @@ func ComponentFromSpec(kind string, specRaw json.RawMessage, assetURLs map[strin
 // component element, with no wrapping LayoutPage. Only the leaf component kinds
 // supported by ComponentFromSpec apply; container kinds (Tree, Grid, LayoutCard)
 // need child ref resolution and must be rendered inside a LayoutPage.
-// The inheritedStyle parameter is injected as the default selectedStyle; the
-// document's own selectedStyle wins.
-func renderStandaloneComponentDoc(doc config.Document, assetURLs map[string]string, inheritedStyle string) (string, error) {
+// The context's inherited style is injected as the default selectedStyle and
+// its dataset defaults below that; the document's own spec wins.
+func renderStandaloneComponentDoc(doc config.Document, rc *renderCtx) (string, error) {
 	var payload struct {
 		Spec json.RawMessage `json:"spec"`
 	}
 	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
 		return "", fmt.Errorf("parse %s %q: %w", doc.Kind, doc.Name, err)
 	}
-	effectiveSpec, err := applyInheritedStyle(payload.Spec, inheritedStyle)
+	effectiveSpec, err := applyInheritedStyle(payload.Spec, rc.inheritedStyle)
 	if err != nil {
 		return "", fmt.Errorf("apply inherited style to %s %q: %w", doc.Kind, doc.Name, err)
 	}
-	return ComponentFromSpec(doc.Kind, effectiveSpec, assetURLs)
+	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, doc.Kind, doc.Name, rc)
+	if err != nil {
+		return "", fmt.Errorf("apply dataset defaults to %s %q: %w", doc.Kind, doc.Name, err)
+	}
+	return ComponentFromSpec(doc.Kind, effectiveSpec, rc.assetURLs)
 }

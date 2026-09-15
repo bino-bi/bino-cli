@@ -161,3 +161,28 @@ spec:
 		t.Errorf("columns = %v, rows = %d", cols, len(rows))
 	}
 }
+
+func TestExecuteRowsPreview_ConstantColumns(t *testing.T) {
+	docs := writeRowsPreviewProject(t, `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales
+spec:
+  query: SELECT category FROM sales_csv
+  constants:
+    unit: kEUR
+`, nil)
+	cols, rows, _, err := executeRowsPreview(context.Background(), findDoc(t, docs, "sales"), docs, 10)
+	if err != nil {
+		t.Fatalf("executeRowsPreview: %v", err)
+	}
+	if len(cols) != 2 || cols[1] != "_unit" {
+		t.Errorf("columns = %v, want [category _unit]", cols)
+	}
+	for _, r := range rows {
+		if r["_unit"] != "kEUR" {
+			t.Errorf("row not stamped: %v", r)
+		}
+	}
+}

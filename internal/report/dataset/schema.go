@@ -26,6 +26,12 @@ type StandardColumn struct {
 // derived from it, and it is exposed verbatim to the VS Code wizard's mapper via
 // `bino lsp-helper dataset-schema` / the daemon's GET /dataset-schema, so the CLI
 // and the editor can never drift apart.
+//
+// Columns whose name starts with `_` are outside the schema: validation ignores
+// them and they pass through to the rendered rows untouched (the Table's
+// attributes expressions read them). spec.constants produces such columns (see
+// constants.go). Inside that namespace, `_spec_` (`_spec_<kind>_<field>`,
+// `_spec_any_<field>`) is reserved for dataset defaults (defaults.go).
 var standardColumns = func() []StandardColumn {
 	cols := make([]StandardColumn, 0, 29)
 	for _, n := range []string{

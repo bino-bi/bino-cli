@@ -53,6 +53,10 @@ func TestDocumentRoundTrip(t *testing.T) {
 				Spec: &DataSetSpec{
 					Query:  &QueryField{Inline: "SELECT * FROM sales"},
 					Derive: map[string]ShiftDeclaration{"pp2": {From: "ac1", Shift: "1 year", Grain: "month"}},
+					Constants: map[string]any{
+						"unit": "kEUR",
+						"spec": map[string]any{"table": map[string]any{"barColumns": "ac1,pl1"}},
+					},
 					Assert: map[string]ShiftDeclaration{"pp3": {From: "pl1", Shift: "1 year", Grain: "month"}},
 				},
 			},
@@ -482,6 +486,9 @@ func TestDocumentRoundTrip(t *testing.T) {
 				}
 				if !reflect.DeepEqual(got.Assert, want.Assert) {
 					t.Errorf("Assert mismatch: got %+v, want %+v", got.Assert, want.Assert)
+				}
+				if !reflect.DeepEqual(got.Constants, want.Constants) {
+					t.Errorf("Constants mismatch: got %+v, want %+v", got.Constants, want.Constants)
 				}
 			}
 		})

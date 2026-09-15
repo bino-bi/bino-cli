@@ -387,6 +387,8 @@ type RenderResult struct {
 	// EmittedData carries dataset/datasource bodies that must be registered on
 	// httpserver.Server when the renderer ran in url mode. Nil in inline mode.
 	EmittedData []render.EmittedData
+	// Warnings are render-time findings destined for the build log.
+	Warnings []string
 }
 
 // FrameRenderResult captures the outcome of a two-phase (frame + context) render.
@@ -493,6 +495,7 @@ func RenderHTML(ctx context.Context, docs []config.Document, opts RenderOptions)
 		LocalAssets: result.LocalAssets,
 		Diagnostics: renderDiags,
 		EmittedData: result.EmittedData,
+		Warnings:    result.Warnings,
 	}, nil
 }
 
