@@ -164,6 +164,23 @@ jobs:
         working-directory: vscode-bino
         run: npm run compile
 
+  docs:
+    name: Docs Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Same image the release job publishes. Without this, a broken docs
+      # dependency or base image update only shows up at release time.
+      - name: Build docs image
+        run: docker build ./docs
+
   plugin-version:
     name: Plugin Version Sync
     runs-on: ubuntu-24.04
