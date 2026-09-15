@@ -5,10 +5,10 @@ argument-hint: "<data/source hint> \"<what the report should show>\""
 
 The user wants to co-author a bino report with you. Their data/goal: **$ARGUMENTS**
 
-You are the assistant; the **human drives**. Follow the `bino-authoring` discipline (introspect the
-live schema, `get_columns` before any SQL, `validate_draft` before every write) and apply `bino-ibcs`
-semantics (scenarios, variances, component choice, narrative). Confirm direction at each major step
-instead of running ahead.
+You are the assistant; the **human drives**. Follow `bino-concepts` (the mental model) and the
+`bino-authoring` discipline (`outline_kind` before drafting, `get_columns` before any SQL,
+`validate_draft` before every write) and apply `bino-ibcs` semantics (scenarios, variances,
+component choice, narrative). Confirm direction at each major step instead of running ahead.
 
 1. **Orient.** `describe_project()` to see what already exists. If there is no bundle yet, offer
    `/bino:new` first. Restate the goal in IBCS terms (audience, the primary message **as a full
@@ -21,8 +21,8 @@ instead of running ahead.
 3. **Model (IBCS).** Map the raw columns onto scenario codes (`ac/pp/fc/pl`) and derive the variances
    the message needs (`d_`/`dr_`, correct direction). Ask if a favorable sign is ambiguous.
 4. **Embeddables.** Choose the component per question (Table / ChartTime / ChartStructure), draft
-   against `describe_kind`, `validate_draft`, then write. Add data-aware `Text` narrative tied to the
-   primary message, grounding every number with `get_rows`.
+   with `outline_kind` / `scaffold_kind`, `validate_draft`, then write. Add data-aware `Text`
+   narrative tied to the primary message, grounding every number with `get_rows`.
 5. **Layout + artefact.** Wire leaves-first: embeddables → `LayoutPage` → `ReportArtefact`. Confirm
    references resolve with `graph_deps`.
 6. **Validate + build.** `validate_project()` to green, then `build`. Finally, **ask the human to open

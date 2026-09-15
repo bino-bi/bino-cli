@@ -1,0 +1,19 @@
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: refdoc
+spec:
+  format: a4
+  title: Referencing Document
+  sources:
+    - docs/refdoc.md
+---
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: plaindoc
+spec:
+  format: a4
+  title: Plain Document
+  sources:
+    - docs/plaindoc.md

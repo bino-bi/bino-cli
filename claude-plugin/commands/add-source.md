@@ -15,4 +15,5 @@ Add a data source to the current bino report. Source: **$ARGUMENTS**
    when it's useful, a starter typed `DataSet` that selects from it. It validates before writing.
 3. **Confirm.** `get_columns` on the new dataset/source to verify the columns resolved, and
    `validate_project()` to confirm the project is still clean.
-4. Suggest modeling the data into IBCS scenarios next (`/bino:report`, applying `bino-ibcs`).
+4. Suggest modeling the data into IBCS scenarios next (`/bino:report`, applying `bino-concepts` and
+   `bino-ibcs`).

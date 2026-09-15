@@ -20,7 +20,9 @@ import (
 )
 
 // buildMu serializes builds across the process so concurrent agent-triggered
-// builds cannot clobber the same output directory.
+// builds cannot clobber the same output directory, and so registry writes
+// (tools_packages.go), which rewrite the files a build reads, cannot
+// interleave with a build.
 var buildMu sync.Mutex
 
 // maxBuildOutput caps the captured build output returned to the agent.

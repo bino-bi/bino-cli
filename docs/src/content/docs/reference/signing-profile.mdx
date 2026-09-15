@@ -6,7 +6,11 @@ description: Configure digital signatures for generated PDFs.
 `SigningProfile` manifests describe how bino signs PDFs.
 `ReportArtefact` manifests can reference a signing profile by name.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `SigningProfile` carries the required certificate,
+private key and signer, plus the signer details that a reader sees in the PDF
+signature panel.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -14,20 +18,21 @@ kind: SigningProfile
 metadata:
   name: corporateSigner
 spec:
-  certificate:            # pemSource
+  certificate:
     path: ./certs/corporate-cert.pem
-  privateKey:             # pemSource
+  privateKey:
     path: ./certs/corporate-key.pem
-  tsaURL: https://tsa.example.com/tsa
-  digestAlgorithm: sha256 # sha256 | sha384 | sha512
-  certType: approval      # certification | approval | usage-rights | timestamp
-  docMDPPerm: form-fill-sign # no-changes | form-fill-sign | annotate
   signer:
     name: "Group Controlling"
     location: "Headquarters"
-    reason: "Approved report"
-    contact: "controlling@example.com"
+    reason: "Approved financial statements"
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+`certificate` and `privateKey` accept either the `path` variant shown above or
+the `inline` variant that carries the PEM text directly (see
+[PEM source](#pem-source)).
 
 ## PEM source
 
@@ -76,3 +81,37 @@ spec:
 ```
 
 In your documentation, you can show screenshots of the PDF signature panel using placeholder images first and replace them later.
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `SigningProfile`. |
+| `metadata.name` | string | yes | — | Unique identifier. `ReportArtefact.spec.signingProfile` references this name. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.certificate` | object | yes | — | The signing certificate as a [PEM source](#pem-source). Exactly one of `inline` or `path`. | `certificate: { path: ./certs/corporate-cert.pem }` |
+| `spec.certificate.inline` | string | one of `inline` / `path` | — | The certificate PEM text embedded in the manifest. | `inline: "-----BEGIN CERTIFICATE-----\n..."` |
+| `spec.certificate.path` | string | one of `inline` / `path` | — | Path to a PEM file. Relative paths resolve against the manifest file. | `path: ./certs/corporate-cert.pem` |
+| `spec.privateKey` | object | yes | — | The private key as a [PEM source](#pem-source), matching the certificate. Exactly one of `inline` or `path`. | `privateKey: { path: ./certs/corporate-key.pem }` |
+| `spec.privateKey.inline` | string | one of `inline` / `path` | — | The private key PEM text embedded in the manifest. | `inline: "-----BEGIN PRIVATE KEY-----\n..."` |
+| `spec.privateKey.path` | string | one of `inline` / `path` | — | Path to a PEM file. Relative paths resolve against the manifest file. | `path: ./certs/corporate-key.pem` |
+| `spec.signer` | object | yes | — | Identity shown in the PDF signature panel. | `signer: { name: "Group Controlling" }` |
+| `spec.signer.name` | string | yes | — | Name of the signer, must not be empty. | `name: "Group Controlling"` |
+| `spec.signer.location` | string | no | — | Place of signing, shown as *Location* in the signature panel. | `location: "Headquarters"` |
+| `spec.signer.reason` | string | no | — | Why the document was signed, shown as *Reason* in the signature panel. | `reason: "Approved report"` |
+| `spec.signer.contact` | string | no | — | Contact details, shown as *ContactInfo* in the signature panel. | `contact: "controlling@example.com"` |
+| `spec.tsaURL` | string (URI) | no | — | URL of an RFC 3161 timestamp authority. Set it when the signature needs a trusted timestamp. | `tsaURL: https://tsa.example.com/tsa` |
+| `spec.digestAlgorithm` | string | no | `sha256` | Digest used for the signature. Values: `sha256`, `sha384`, `sha512`. | `digestAlgorithm: sha512` |
+| `spec.certType` | string | no | `approval` | Type of the PDF signature. Values: `certification`, `approval`, `usage-rights`, `timestamp`. | `certType: certification` |
+| `spec.docMDPPerm` | string | no | `form-fill-sign` | Changes that stay allowed after signing. Values: `no-changes`, `form-fill-sign`, `annotate`. | `docMDPPerm: no-changes` |

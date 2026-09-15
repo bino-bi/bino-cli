@@ -262,12 +262,11 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		if language != "" {
 			docArt.Spec.Locale = language
 		}
-		result, e := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, docArt, pipeline.DocumentArtefactRenderOptions{
+		result, e := pipeline.RenderDocumentArtefactHTML(ctx, cfg.Workdir, docs, docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion:        cfg.EngineVersion,
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
-			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})

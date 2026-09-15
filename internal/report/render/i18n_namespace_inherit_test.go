@@ -191,7 +191,7 @@ func TestCollectInternationalizations_DefaultsNamespace(t *testing.T) {
 		"spec": {"code": "de", "content": {"global.ac1": "Ist"}}
 	}`))
 
-	entries, err := collectInternationalizations([]config.Document{doc})
+	entries, err := collectInternationalizations([]config.Document{doc}, "de")
 	if err != nil {
 		t.Fatalf("collectInternationalizations failed: %v", err)
 	}

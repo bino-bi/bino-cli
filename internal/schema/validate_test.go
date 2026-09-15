@@ -26,6 +26,50 @@ spec:
 `,
 		},
 		{
+			name: "valid DataSet with derive and assert on a source pass-through",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test_dataset
+spec:
+  source: sales_csv
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+    pp2: { from: ac1, shift: 1 year, grain: month }
+  assert:
+    pp3: { from: pl1, shift: 1 year, grain: month }
+`,
+		},
+		{
+			name: "valid Table with inline dataset declaring derive",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: sales_table
+spec:
+  dataset:
+    query: SELECT * FROM sales_csv
+    dependencies: [sales_csv]
+    derive:
+      pp1: { from: ac1, shift: 1 year, grain: month }
+`,
+		},
+		{
+			name: "valid DataSet with derive on a PRQL query",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: test_dataset
+spec:
+  prql: from sales_csv
+  derive:
+    pp1: { from: ac1, shift: 7 day, grain: day }
+`,
+		},
+		{
 			name: "valid DataSource CSV",
 			yaml: `
 apiVersion: bino.bi/v1alpha1
@@ -910,6 +954,7 @@ func TestValidate_ScopedNames(t *testing.T) {
 		{"scoped Text", doc("Text", "@acme/intro_text", "  value: hello\n")},
 		{"scoped minimal tokens", doc("Text", "@a1/x", "  value: hello\n")},
 		{"unscoped name still valid", doc("Text", "intro_text", "  value: hello\n")},
+		{"scoped name with package segment", doc("Text", "@acme/kit/waterfall", "  value: hello\n")},
 		{"scoped DataSource", doc("DataSource", "@acme/revenue-table", "  type: csv\n  path: data/x.csv\n")},
 		{"unscoped DataSource still valid", doc("DataSource", "revenue_table", "  type: csv\n  path: data/x.csv\n")},
 	}
@@ -928,7 +973,11 @@ func TestValidate_ScopedNames(t *testing.T) {
 		{"scope without name", doc("Text", "@acme", "  value: hello\n")},
 		{"scope with empty name", doc("Text", "@acme/", "  value: hello\n")},
 		{"uppercase scope", doc("Text", "@Acme/x", "  value: hello\n")},
-		{"nested slash", doc("Text", "@acme/x/y", "  value: hello\n")},
+		{"two package segments", doc("Text", "@acme/kit/sub/deep", "  value: hello\n")},
+		{"uppercase package segment", doc("Text", "@acme/Kit/x", "  value: hello\n")},
+		{"empty package segment", doc("Text", "@acme//x", "  value: hello\n")},
+		{"package segment without definition", doc("Text", "@acme/kit/", "  value: hello\n")},
+		{"package segment without scope", doc("Text", "kit/waterfall", "  value: hello\n")},
 		{"at sign inside name", doc("Text", "x@y", "  value: hello\n")},
 		{"empty scope", doc("Text", "@/x", "  value: hello\n")},
 		{"name part starts with hyphen", doc("Text", "@acme/-x", "  value: hello\n")},

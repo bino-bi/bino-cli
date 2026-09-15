@@ -20,18 +20,18 @@ concrete model:
 
 | IBCS standard says | In bino it is |
 | --- | --- |
-| Scenario codes AC / PY / PL / BU / FC | `ac` / `pp` (alias `py`) / `pl` (alias `bu`) / `fc` — see `ibcsRuleSet.ts`. **`PY → pp`, `BU → pl`.** |
+| Scenario codes AC / PY / PL / BU / FC | `ac` / `pp` (alias `py`) / `pl` (alias `bu`) / `fc` — the engine's scenario codes. **`PY → pp`, `BU → pl`.** |
 | Solid / lighter-solid / hatched / outlined fills | `colorIndex` 10 (ac) / 20 (pp) / 30 (fc) / 50 (pl) — applied automatically from the code. |
 | Variance `ΔPL` = AC − PL (Δ + subtrahend) | column code `d{base}_{delta}_{direction}`, e.g. `dac1_pl1_pos` (base = minuend, delta = subtrahend). **Same meaning, different notation.** |
 | Positive/negative/neutral impact = green/red/blue | the `direction` suffix `pos` / `neg` / `neu`. |
 | WG1 "more scenarios per scenario type" (AC1, AC2 …) | the numbered slots `ac1…ac4`, `fc1…fc4`, `pl1…pl4`, `pp1…pp4`. |
-| Time-series analyses (`_` YTD, `~` moving, `Ø` average, `..` span) | the `_dateLinkFormat` map in `ibcsRuleSet.ts` — bino renders these on period labels. |
+| Time-series analyses (`_` YTD, `~` moving, `Ø` average, `..` span) | the engine's date-link format rules — bino renders these on period labels. |
 | Identical scale across charts (CH 4.1) | the **`ScalingGroup`** kind. |
 | EXPRESS bans (no pie / gauge / radar / funnel / traffic light) | **satisfied by construction** — bino offers no such component. |
 | References/benchmarks in a distinct violet base colour (WG1 §6) | **not yet modeled in bino** — standard context only, not an authoring directive. |
 
-> Source of truth (cite, don't copy): `bn-template-engine/src/utils/ibcsRuleSet.ts`,
-> `src/utils/model/VarianceScenario.ts`, `doc/data-model.md`, `src/components/bn-text/bn-text.tsx`.
+> Source of truth (cite, don't copy): `data-model.md` in this directory (the engine's row shape,
+> stamped with the engine commit it was copied from) and https://cli.bino.bi/concepts/data-model/.
 
 ---
 
@@ -102,12 +102,12 @@ Standard two-letter codes: **AC** Actual, **PY** Previous Year, **PL** Plan, **B
 
 > → in bino: codes are `ac`, `pp` (Previous **Period** — the canonical name; `py` is an alias), `pl`
 > (`bu` alias), `fc`. Fills are applied automatically via `colorIndex` (ac 10 / pp 20 / fc 30 / pl 50)
-> in `ibcsRuleSet.ts`. Column display order follows IBCS: **`pp < pl < fc < ac`** (sortIndex 100 / 200
+> by the engine's rule set. Column display order follows IBCS: **`pp < pl < fc < ac`** (sortIndex 100 / 200
 > / 300 / 400). Name a DataSet's measure columns with these prefixes and bino does the rest.
 
 > Benchmarks (competitor, market average) may also be treated as scenarios. WG1 (§6) recommends
 > rendering external **references/benchmarks in a distinct base colour — violet**.
-> → in bino: **not yet modeled** — there is no violet/benchmark scenario in `ibcsRuleSet.ts`. Treat as
+> → in bino: **not yet modeled** — there is no violet/benchmark scenario in the engine's rule set. Treat as
 > standard context, not an authoring instruction.
 
 ### 2.2 Variances — the analysis (UN 4.1)
@@ -122,7 +122,7 @@ A variance compares two scenarios. Two kinds:
 > → in bino: a variance is a column code `d{base}_{delta}_{direction}` (absolute) or
 > `dr{base}_{delta}_{direction}` (relative). `dac1_pl1_pos` = `ac1 − pl1`, favorable when positive.
 > The IBCS `ΔPL` label names the **subtrahend**; the bino code names **both** (base = minuend, delta =
-> subtrahend). See `VarianceScenario.ts`.
+> subtrahend). See `data-model.md` (Variances).
 
 **The variance colour rule (memorize):**
 
@@ -176,11 +176,11 @@ Lightweight notations layered onto period/element names:
 | Ranking | arrow `↑`/`↓` suffix | `product sales↑` |
 | Index | black arrowhead at index point + `100%` label | reference = 100 |
 
-> → in bino: these are **real, renderable features** — the `_dateLinkFormat` map in `ibcsRuleSet.ts`
-> defines `ytd: "_[DATE]"`, `ytg: "[DATE]_"`, `mat: "~[DATE]"`, `avg: "Ø[DATE]"`, `interval`
+> → in bino: these are **real, renderable features** — the engine's date-link format rules
+> define `ytd: "_[DATE]"`, `ytg: "[DATE]_"`, `mat: "~[DATE]"`, `avg: "Ø[DATE]"`, `interval`
 > (`[DATE]..[DATE]`), `start`/`end` (`.[DATE]` / `[DATE].`), `cum` (`[DATE]_[DATE]`). When the question
 > is a YTD / year-to-go / moving / average view, reach for them. Confirm the component's support via
-> `describe_kind` before authoring.
+> `outline_kind` before authoring.
 
 ### 2.6 Highlighting & scaling indicators (UN 5.1 / 5.2 / 5.3)
 

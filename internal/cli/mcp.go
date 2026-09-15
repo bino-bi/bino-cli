@@ -19,8 +19,9 @@ import (
 
 func newMCPCommand() *cobra.Command {
 	var (
-		workdir string
-		noProxy bool
+		workdir      string
+		noProxy      bool
+		allowPublish bool
 	)
 
 	cmd := &cobra.Command{
@@ -55,6 +56,9 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 				if pf, _ := daemon.ReadPortFile(projectRoot); pf != nil { //nolint:errcheck // a missing or unreadable port file means no daemon to proxy to
 					endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", pf.Port)
 					logger.Infof("Proxying to daemon MCP at %s", endpoint)
+					if allowPublish {
+						logger.Warnf("--allow-publish has no effect when proxying; the daemon's --mcp-allow-publish decides whether registry_publish is exposed")
+					}
 					if err := runMCPProxy(ctx, endpoint); err != nil {
 						logger.Warnf("Proxy to daemon failed (%v); falling back to standalone", err)
 					} else {
@@ -63,12 +67,13 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 				}
 			}
 
-			return runMCPStandalone(ctx, logger, projectRoot)
+			return runMCPStandalone(ctx, logger, projectRoot, allowPublish)
 		},
 	}
 
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory (project root)")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "Always run standalone, even if a daemon is running")
+	cmd.Flags().BoolVar(&allowPublish, "allow-publish", false, "Expose the registry_publish tool (irreversible: mints an immutable, possibly public, registry version)")
 	return cmd
 }
 
@@ -96,7 +101,7 @@ func resolveMCPRoot(workdir string) (root string, initialized bool, err error) {
 
 // runMCPStandalone serves the MCP directly over stdio from a freshly loaded
 // project State (no daemon involved).
-func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string) error {
+func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string, allowPublish bool) error {
 	// Plugins are loaded so plugin kinds/linters appear in schema/validate (parity
 	// with the daemon and `bino schema`); the build tool shells out to `bino build`,
 	// which enforces engine-compat itself.
@@ -114,7 +119,7 @@ func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot strin
 	}
 
 	logger.Infof("bino MCP server ready (standalone) for %s", projectRoot)
-	srv := mcp.NewServer(mcp.Deps{State: managed.State, Registry: reg, Authoring: newCLIAuthoring(projectRoot)})
+	srv := mcp.NewServer(mcp.Deps{State: managed.State, Registry: reg, Authoring: newCLIAuthoring(projectRoot), Packages: newCLIPackages(managed.State), AllowPublish: allowPublish})
 	return srv.Run(ctx, &mcpsdk.StdioTransport{})
 }
 

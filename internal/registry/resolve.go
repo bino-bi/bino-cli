@@ -23,19 +23,38 @@ type Root struct {
 
 // Resolved is one package in a fully resolved closure.
 type Resolved struct {
-	Name         string
-	Version      string
-	Tag          string // "" when pinned
-	Kind         string
-	Digest       string
-	Dependencies []string // bare identities of direct edges
+	Name    string
+	Version string
+	Tag     string // "" when pinned
+	Kind    string // primary kind; the only kind of a single-document package
+	Digest  string
+	Format  string // "document" | "tree"
+
+	Kinds        []string   // every kind the version ships
+	Files        []FileMeta // the version's file tree
+	Dependencies []string   // bare identities of direct edges
 	Direct       bool
+
+	CompatEngine string // warn-only semver ranges declared by the package
+	CompatCLI    string
+}
+
+// FileEntries reduces the resolved file list to the manifest shape recorded in
+// the lock.
+func (r Resolved) FileEntries() []FileEntry {
+	out := make([]FileEntry, len(r.Files))
+	for i, f := range r.Files {
+		out[i] = FileEntry{Path: f.Path, Type: f.Type, Digest: f.Digest}
+	}
+	return out
 }
 
 // depResolver is the single client method the resolver needs; narrowed for
-// testing with a fake.
+// testing with a fake. It answers in the v2 file-tree shape, which the client
+// also synthesizes for a v1-only registry, so the closure walk has one path
+// whatever generation the server is.
 type depResolver interface {
-	Resolve(ctx context.Context, scope, name, ref string) (ResolveResult, error)
+	ResolveTree(ctx context.Context, scope, name, ref string) (ResolveV2Result, error)
 }
 
 // ResolveClosure resolves the transitive closure of roots with flat
@@ -69,7 +88,7 @@ func ResolveClosure(ctx context.Context, r depResolver, roots []Root) ([]Resolve
 		if err != nil {
 			return err
 		}
-		resp, err := r.Resolve(ctx, scope, base, ref)
+		resp, err := r.ResolveTree(ctx, scope, base, ref)
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", name, err)
 		}
@@ -88,10 +107,15 @@ func ResolveClosure(ctx context.Context, r depResolver, roots []Root) ([]Resolve
 			Name:         name,
 			Version:      resp.Version,
 			Tag:          resp.Tag,
-			Kind:         resp.Kind,
+			Kind:         primaryKind(resp.Kinds),
 			Digest:       resp.Digest,
+			Format:       resp.Format,
+			Kinds:        resp.Kinds,
+			Files:        resp.Files,
 			Dependencies: deps,
 			Direct:       direct,
+			CompatEngine: resp.CompatEngine,
+			CompatCLI:    resp.CompatCli,
 		}
 		stack = append(stack, name)
 		defer func() { stack = stack[:len(stack)-1] }()
@@ -115,4 +139,13 @@ func ResolveClosure(ctx context.Context, r depResolver, roots []Root) ([]Resolve
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// primaryKind is the kind a package is listed and faceted under: the first of
+// its sorted kind set. A single-document package has exactly one.
+func primaryKind(kinds []string) string {
+	if len(kinds) == 0 {
+		return ""
+	}
+	return kinds[0]
 }

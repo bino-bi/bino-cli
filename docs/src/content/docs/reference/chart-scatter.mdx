@@ -8,49 +8,35 @@ two numeric value axes, one point per data row, points colored by series,
 selective collision-free labels, optional highlight bands, and hyperbolic
 iso-lines `x·y = k` for a third derived measure.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `ChartScatter` sets the required `dataset`, `x` and `y`
+plus the fields a readable scattergram needs: an axis `label` and `unit` on both
+axes (values are drawn as delivered, so the unit is the only magnitude cue) and a
+`chartTitle` carrying the message.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: ChartScatter
 metadata:
-  name: product_margin
+  name: product_portfolio
 spec:
   dataset: products
-  x:                          # measure token or object
+  chartTitle: "Product portfolio"
+  x:
     measure: ac1
     label: "Margin"
     unit: "% of net sales"
-    min: 0
-    max: 40
-    refLine: 20               # reference line perpendicular to this axis
-    highlight: { from: 30 }   # shaded band along this axis
-  y: ac2                      # bare token shorthand for { measure: ac2 }
-  iso:                        # scatter-only: iso-lines x*y = k
-    values: [100, 200, 300]   # or "auto"
-    label: "Gross profit"
+  y:
+    measure: ac2
+    label: "Net sales"
     unit: "mUSD"
-    highlight: { from: 300 }
-  level: auto                 # auto | category | subcategory
-  seriesLevel: auto           # auto | rowgroup | category | none
-  facet:                      # small-multiple panels
-    level: rowgroup           # rowgroup | category
-    columns: 3
-  labels:
-    points: auto              # auto | none | all | [name, ...]
-    values: false
-    max: 12
-  legend:
-    show: true
-    position: right           # right | bottom
-  aspect: "16:9"              # plot aspect ratio "w:h"
-  limit: 0                    # max points per panel, 0 = unlimited
-  filter: "category = 'New SBUs'"
-  chartTitle: "Margin vs. net sales"
-  scale: auto                 # "" | none | auto | 0.5 | 1.2 | …
-  selectedStyle: corporate-style
-  ruleset: corporate-rules
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+Both axis mappings also accept the short form `x: ac1` instead of the object
+shown above — see [Measure tokens](#measure-tokens).
 
 ## Measure tokens
 
@@ -89,9 +75,10 @@ Iso-lines require a strictly positive domain on both axes.
 
 ## Fields
 
-- `dataset` – required dataset name or array.
+- `dataset` – required dataset name, inline definition, or array of either.
 - `x`, `y` – required axis measure mappings (token or object with
-  `measure`, `label`, `unit`, `min`, `max`, `refLine`, `highlight`).
+  `measure`, `label`, `unit`, `min`, `max`, `refLine`, and `highlight` with
+  `from`/`to`; an open end runs to the domain edge).
 - `iso` – optional iso-line configuration (`values`, `label`, `unit`,
   `highlight.from` shades the region where `x·y >= from`).
 - `level`, `seriesLevel` – point identity and series grouping levels.
@@ -195,20 +182,51 @@ spec:
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). | `dataset: products` |
-| `spec.x` | string or object | yes | — | Horizontal axis measure mapping. Maps to the `x` HTML attribute. | `x: ac1` |
-| `spec.y` | string or object | yes | — | Vertical axis measure mapping. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "mEUR" }` |
-| `spec.iso` | object | no | — | Hyperbolic iso-lines `x·y = k`. Requires a strictly positive domain on both axes. | `iso: { values: [100, 200] }` |
-| `spec.level` | string | no | `auto` | Point identity level. Values: `auto`, `category`, `subcategory`. | `level: category` |
-| `spec.seriesLevel` | string | no | `auto` | Series/color level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute. | `seriesLevel: rowgroup` |
-| `spec.facet` | object | no | — | Small-multiple panels: `level` (required, `rowgroup` or `category`) and `columns` (≥ 1). | `facet: { level: rowgroup }` |
-| `spec.labels` | object | no | `points: auto`, `values: false`, `max: 12` | Point labels: `points` (`auto`, `none`, `all`, or a name list), `values` (boolean), `max` (≥ 1). | `labels: { points: all }` |
-| `spec.legend` | object | no | `show: true`, `position: right` | Series legend: `show` (boolean) and `position` (`right` or `bottom`). | `legend: { position: bottom }` |
-| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. | `aspect: "21:9"` |
+| `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of either. | `dataset: products` |
+| `spec.x` | string or object | yes | — | Horizontal axis measure mapping: a bare [measure token](#measure-tokens) or the object below. All plain scenario measures across `x` and `y` must share one scenario family. Maps to the `x` HTML attribute. | `x: ac1` |
+| `spec.x.measure` | string | yes (object form) | — | Scenario slot (`ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`) or a variance token (`dac1_pp1`, `drac1_pl1`). | `measure: ac1` |
+| `spec.x.label` | string | no | — | Axis title displayed next to the axis. | `label: "Margin"` |
+| `spec.x.unit` | string | no | — | Unit suffix after the axis title. Values are drawn as delivered — scale in the DataSet SQL. | `unit: "% of net sales"` |
+| `spec.x.min` | number | no | data minimum | Lower axis domain bound. Points outside an explicit domain are clipped with a warning. | `min: 0` |
+| `spec.x.max` | number | no | data maximum | Upper axis domain bound. Must be greater than `min` or both overrides are dropped. | `max: 40` |
+| `spec.x.refLine` | number | no | — | Draws a reference line perpendicular to this axis at the given value. | `refLine: 20` |
+| `spec.x.highlight` | object | no | — | Shades a band of the plot along this axis. | `highlight: { from: 30 }` |
+| `spec.x.highlight.from` | number | no | domain start | Band start value. | `from: 30` |
+| `spec.x.highlight.to` | number | no | domain end | Band end value. | `to: 40` |
+| `spec.y` | string or object | yes | — | Vertical axis measure mapping, same shape as `spec.x`. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "mEUR" }` |
+| `spec.y.measure` | string | yes (object form) | — | Scenario slot or variance token for the vertical axis. | `measure: ac2` |
+| `spec.y.label` | string | no | — | Axis title displayed next to the axis. | `label: "Net sales"` |
+| `spec.y.unit` | string | no | — | Unit suffix after the axis title. Values are drawn as delivered — scale in the DataSet SQL. | `unit: "mUSD"` |
+| `spec.y.min` | number | no | data minimum | Lower axis domain bound. Points outside an explicit domain are clipped with a warning. | `min: 0` |
+| `spec.y.max` | number | no | data maximum | Upper axis domain bound. Must be greater than `min` or both overrides are dropped. | `max: 100` |
+| `spec.y.refLine` | number | no | — | Draws a reference line perpendicular to this axis at the given value. | `refLine: 20` |
+| `spec.y.highlight` | object | no | — | Shades a band of the plot along this axis. | `highlight: { from: 30 }` |
+| `spec.y.highlight.from` | number | no | domain start | Band start value. | `from: 30` |
+| `spec.y.highlight.to` | number | no | domain end | Band end value. | `to: 60` |
+| `spec.iso` | object | no | — | Hyperbolic iso-lines `x·y = k`. Requires a strictly positive domain on both axes. Maps to the `iso` HTML attribute. | `iso: { values: [100, 200] }` |
+| `spec.iso.values` | string or array of numbers | no | — | Iso-line constants: `auto` derives them from the data, or list explicit `k` values. | `values: [100, 200, 300]` |
+| `spec.iso.label` | string | no | — | Caption of the derived measure, rendered at the iso-line exits. | `label: "Gross profit"` |
+| `spec.iso.unit` | string | no | — | Unit suffix for the iso-line caption. | `unit: "mUSD"` |
+| `spec.iso.highlight` | object | no | — | Shades the region where `x·y >= from`. | `highlight: { from: 300 }` |
+| `spec.iso.highlight.from` | number | no | — | Iso value the shading starts at. | `from: 300` |
+| `spec.level` | string | no | `auto` | Point identity level (one row = one point, duplicates are dropped with a warning). Values: `auto`, `category`, `subcategory`. | `level: category` |
+| `spec.seriesLevel` | string | no | `auto` | Series/color level, strictly above the point level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute. | `seriesLevel: rowgroup` |
+| `spec.facet` | object | no | — | Small-multiple panels on a hierarchy level above the series level. | `facet: { level: rowgroup }` |
+| `spec.facet.level` | string | yes (when `facet` is set) | — | Hierarchy level whose values become the facet panels. Values: `rowgroup`, `category`. | `level: rowgroup` |
+| `spec.facet.columns` | integer | no | all panels in one row | Number of panels per row (≥ 1). | `columns: 3` |
+| `spec.labels` | object | no | `points: auto`, `values: false`, `max: 12` | Point label configuration. | `labels: { points: all }` |
+| `spec.labels.points` | string or array of strings | no | `auto` | Which points get a name label: `auto` picks up to `max` collision-free candidates, `all` labels every point, `none` disables labels, or list explicit point names. | `points: none` |
+| `spec.labels.values` | boolean | no | `false` | Render the measure value with the label. | `values: true` |
+| `spec.labels.max` | integer | no | `12` | Candidate cap when `points` is `auto` (≥ 1). | `max: 8` |
+| `spec.legend` | object | no | `show: true`, `position: right` | Series legend configuration. | `legend: { position: bottom }` |
+| `spec.legend.show` | boolean | no | `true` | Toggles the legend. | `show: false` |
+| `spec.legend.position` | string | no | `right` | Legend placement. Values: `right`, `bottom`. | `position: bottom` |
+| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. XY charts have no data-driven height. | `aspect: "21:9"` |
 | `spec.limit` | integer | no | `0` | Max points per facet panel (first rows in dataset order). `0` means unlimited. | `limit: 50` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "category = 'New SBUs'"` |
-| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Portfolio"` |
+| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Margin vs. net sales"` |
 | `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor. | `scale: auto` |
+| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: sales` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 

@@ -1,10 +1,12 @@
-package lsp
+package walk
 
 import (
 	"encoding/json"
-	"os"
+	"slices"
 	"sort"
 	"testing"
+
+	"bino.bi/bino/internal/schema"
 )
 
 // miniSchema mirrors every composition shape the real document schema uses:
@@ -75,16 +77,16 @@ const miniSchema = `{
   ]
 }`
 
-func miniModel(t *testing.T) *schemaModel {
+func miniModel(t *testing.T) *Model {
 	t.Helper()
-	m := parseSchema(json.RawMessage(miniSchema))
-	if m.empty() {
+	m := Parse(json.RawMessage(miniSchema))
+	if m.Empty() {
 		t.Fatal("mini schema failed to parse")
 	}
 	return m
 }
 
-func propNames(props []propInfo) []string {
+func propNames(props []PropInfo) []string {
 	names := make([]string, len(props))
 	for i, p := range props {
 		names[i] = p.Name
@@ -104,8 +106,8 @@ func hasString(ss []string, want string) bool {
 
 func TestResolveAt_RootProps(t *testing.T) {
 	m := miniModel(t)
-	node := m.resolveAt(nil, map[string]string{"": "Table"})
-	props := node.props()
+	node := m.ResolveAt(nil, map[string]string{"": "Table"})
+	props := node.Props()
 	names := propNames(props)
 	for _, want := range []string{"apiVersion", "kind", "metadata", "spec"} {
 		if !hasString(names, want) {
@@ -124,7 +126,7 @@ func TestResolveAt_RootProps(t *testing.T) {
 
 func TestResolveAt_MetadataProps(t *testing.T) {
 	m := miniModel(t)
-	props := m.resolveAt([]string{"metadata"}, map[string]string{"": "Table"}).props()
+	props := m.ResolveAt([]string{"metadata"}, map[string]string{"": "Table"}).Props()
 	if len(props) != 1 || props[0].Name != "name" || !props[0].Required {
 		t.Fatalf("metadata props = %+v, want the required name field", props)
 	}
@@ -132,7 +134,7 @@ func TestResolveAt_MetadataProps(t *testing.T) {
 
 func TestResolveAt_SpecPropsMergeAllOfBaseAndRequired(t *testing.T) {
 	m := miniModel(t)
-	props := m.resolveAt([]string{"spec"}, map[string]string{"": "Table"}).props()
+	props := m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props()
 	names := propNames(props)
 	for _, want := range []string{"dataset", "title", "order", "grouped", "scale"} {
 		if !hasString(names, want) {
@@ -159,7 +161,7 @@ func TestResolveAt_SpecPropsMergeAllOfBaseAndRequired(t *testing.T) {
 
 func TestResolveAt_OneOfEnumUnion(t *testing.T) {
 	m := miniModel(t)
-	vals := m.resolveAt([]string{"spec", "order"}, map[string]string{"": "Table"}).enumValues()
+	vals := m.ResolveAt([]string{"spec", "order"}, map[string]string{"": "Table"}).EnumValues()
 	if !hasString(vals, "category") || !hasString(vals, "auto") {
 		t.Fatalf("oneOf-wrapped enum (string or array-of) must union, got %v", vals)
 	}
@@ -168,14 +170,14 @@ func TestResolveAt_OneOfEnumUnion(t *testing.T) {
 func TestResolveAt_LayoutChildKindEnum(t *testing.T) {
 	m := miniModel(t)
 	kinds := map[string]string{"": "LayoutPage"}
-	vals := m.resolveAt([]string{"spec", "children", "0", "kind"}, kinds).enumValues()
+	vals := m.ResolveAt([]string{"spec", "children", "0", "kind"}, kinds).EnumValues()
 	if !hasString(vals, "Text") || !hasString(vals, "Table") {
 		t.Fatalf("layout child kind enum unreachable, got %v", vals)
 	}
 	// The same resolution with a partially-typed child kind ("Ta") must still
 	// reach the enum — the conditional simply matches no branch.
 	kinds["spec.children.0"] = "Ta"
-	vals = m.resolveAt([]string{"spec", "children", "0", "kind"}, kinds).enumValues()
+	vals = m.ResolveAt([]string{"spec", "children", "0", "kind"}, kinds).EnumValues()
 	if !hasString(vals, "Table") {
 		t.Fatalf("mid-word child kind broke enum resolution, got %v", vals)
 	}
@@ -184,11 +186,11 @@ func TestResolveAt_LayoutChildKindEnum(t *testing.T) {
 func TestResolveAt_LayoutChildKeys(t *testing.T) {
 	m := miniModel(t)
 	kinds := map[string]string{"": "LayoutPage", "spec.children.0": "Table"}
-	node := m.resolveAt([]string{"spec", "children", "0"}, kinds)
-	if !node.isObject() {
+	node := m.ResolveAt([]string{"spec", "children", "0"}, kinds)
+	if !node.IsObject() {
 		t.Fatal("layout child position must be object-shaped")
 	}
-	names := propNames(node.props())
+	names := propNames(node.Props())
 	for _, want := range []string{"kind", "ref", "optional", "spec"} {
 		if !hasString(names, want) {
 			t.Errorf("child keys missing %q (got %v)", want, names)
@@ -204,7 +206,7 @@ func TestResolveAt_NestedChildSpecUnionsConditional(t *testing.T) {
 	// present vs not) — both branches union, so tableBase fields appear.
 	m := miniModel(t)
 	kinds := map[string]string{"": "LayoutPage", "spec.children.0": "Table"}
-	props := m.resolveAt([]string{"spec", "children", "0", "spec"}, kinds).props()
+	props := m.ResolveAt([]string{"spec", "children", "0", "spec"}, kinds).Props()
 	names := propNames(props)
 	if !hasString(names, "title") || !hasString(names, "dataset") {
 		t.Fatalf("nested child spec props incomplete, got %v", names)
@@ -213,15 +215,15 @@ func TestResolveAt_NestedChildSpecUnionsConditional(t *testing.T) {
 
 func TestResolveAt_AdditionalProperties(t *testing.T) {
 	m := miniModel(t)
-	node := m.resolveAt([]string{"spec", "de_DE"}, map[string]string{"": "I18n"})
-	if node.doc() != "A translation entry." {
-		t.Fatalf("additionalProperties fallback failed, doc=%q", node.doc())
+	node := m.ResolveAt([]string{"spec", "de_DE"}, map[string]string{"": "I18n"})
+	if node.Doc() != "A translation entry." {
+		t.Fatalf("additionalProperties fallback failed, doc=%q", node.Doc())
 	}
 }
 
 func TestResolveAt_UnknownKindOffersNoSpecFields(t *testing.T) {
 	m := miniModel(t)
-	props := m.resolveAt([]string{"spec"}, map[string]string{}).props()
+	props := m.ResolveAt([]string{"spec"}, map[string]string{}).Props()
 	if len(props) != 0 {
 		t.Fatalf("spec with unknown kind must offer nothing (not every kind's fields), got %v", propNames(props))
 	}
@@ -230,29 +232,25 @@ func TestResolveAt_UnknownKindOffersNoSpecFields(t *testing.T) {
 func TestResolveAt_BoolAndCycleSafety(t *testing.T) {
 	m := miniModel(t)
 	kinds := map[string]string{"": "LayoutPage"}
-	if !m.resolveAt([]string{"spec", "children", "0", "optional"}, kinds).isBool() {
+	if !m.ResolveAt([]string{"spec", "children", "0", "optional"}, kinds).IsBool() {
 		t.Error("optional must resolve as boolean")
 	}
 	// Degenerate schemas must not hang or panic.
-	cyclic := parseSchema(json.RawMessage(`{"$defs": {"a": {"$ref": "#/$defs/b"}, "b": {"$ref": "#/$defs/a"}}, "properties": {"x": {"$ref": "#/$defs/a"}}}`))
-	_ = cyclic.resolveAt([]string{"x", "y"}, nil)
+	cyclic := Parse(json.RawMessage(`{"$defs": {"a": {"$ref": "#/$defs/b"}, "b": {"$ref": "#/$defs/a"}}, "properties": {"x": {"$ref": "#/$defs/a"}}}`))
+	_ = cyclic.ResolveAt([]string{"x", "y"}, nil)
 }
 
 // TestResolveAt_RealSchema locks the resolver to the shipped document schema —
 // the shapes the fixtures mirror must actually hold in the real file.
 func TestResolveAt_RealSchema(t *testing.T) {
-	raw, err := os.ReadFile("../schema/jsonschema/document.schema.json")
-	if err != nil {
-		t.Fatalf("read real schema: %v", err)
-	}
-	m := parseSchema(raw)
-	if m.empty() {
+	m := Parse(schema.DocumentSchemaBytes())
+	if m.Empty() {
 		t.Fatal("real schema failed to parse")
 	}
 
 	t.Run("layout child kind enum", func(t *testing.T) {
 		kinds := map[string]string{"": "LayoutPage"}
-		vals := m.resolveAt([]string{"spec", "children", "0", "kind"}, kinds).enumValues()
+		vals := m.ResolveAt([]string{"spec", "children", "0", "kind"}, kinds).EnumValues()
 		for _, want := range []string{"Text", "Table", "ChartTime", "Tree", "Grid", "LayoutCard", "Image"} {
 			if !hasString(vals, want) {
 				t.Errorf("child kind enum missing %q (got %v)", want, vals)
@@ -262,7 +260,7 @@ func TestResolveAt_RealSchema(t *testing.T) {
 
 	t.Run("child key completion", func(t *testing.T) {
 		kinds := map[string]string{"": "LayoutPage", "spec.children.0": "Table"}
-		names := propNames(m.resolveAt([]string{"spec", "children", "0"}, kinds).props())
+		names := propNames(m.ResolveAt([]string{"spec", "children", "0"}, kinds).Props())
 		for _, want := range []string{"kind", "ref", "optional", "params", "spec"} {
 			if !hasString(names, want) {
 				t.Errorf("child keys missing %q (got %v)", want, names)
@@ -271,7 +269,7 @@ func TestResolveAt_RealSchema(t *testing.T) {
 	})
 
 	t.Run("table spec fields with required dataset", func(t *testing.T) {
-		props := m.resolveAt([]string{"spec"}, map[string]string{"": "Table"}).props()
+		props := m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props()
 		var hasDataset, hasSumTitle bool
 		for _, p := range props {
 			if p.Name == "dataset" {
@@ -290,13 +288,13 @@ func TestResolveAt_RealSchema(t *testing.T) {
 	})
 
 	t.Run("root and metadata props", func(t *testing.T) {
-		rootNames := propNames(m.resolveAt(nil, map[string]string{"": "Table"}).props())
+		rootNames := propNames(m.ResolveAt(nil, map[string]string{"": "Table"}).Props())
 		for _, want := range []string{"apiVersion", "kind", "metadata", "spec"} {
 			if !hasString(rootNames, want) {
 				t.Errorf("root props missing %q (got %v)", want, rootNames)
 			}
 		}
-		metaNames := propNames(m.resolveAt([]string{"metadata"}, map[string]string{"": "Table"}).props())
+		metaNames := propNames(m.ResolveAt([]string{"metadata"}, map[string]string{"": "Table"}).Props())
 		if !hasString(metaNames, "name") {
 			t.Errorf("metadata props missing name (got %v)", metaNames)
 		}
@@ -306,7 +304,7 @@ func TestResolveAt_RealSchema(t *testing.T) {
 	})
 
 	t.Run("oneOf enum union on table scale", func(t *testing.T) {
-		props := m.resolveAt([]string{"spec"}, map[string]string{"": "Table"}).props()
+		props := m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props()
 		for _, p := range props {
 			if p.Name != "scale" {
 				continue
@@ -318,4 +316,40 @@ func TestResolveAt_RealSchema(t *testing.T) {
 		}
 		t.Error("scale prop not found on Table spec")
 	})
+}
+
+// TestParse_EmbeddedSchemaKinds locks the walker to the embedded schema: the
+// MCP server parses exactly these bytes to project a kind's spec.
+func TestParse_EmbeddedSchemaKinds(t *testing.T) {
+	if kinds := Parse(schema.DocumentSchemaBytes()).Kinds(); len(kinds) == 0 {
+		t.Fatal("embedded schema yields no kinds")
+	}
+}
+
+func TestProps_TypesUnionAcrossVariants(t *testing.T) {
+	m := miniModel(t)
+	for _, p := range m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props() {
+		if p.Name == "grouped" && !slices.Equal(p.Types, []string{"boolean"}) {
+			t.Errorf("grouped Types = %v, want [boolean]", p.Types)
+		}
+	}
+	full := Parse(schema.DocumentSchemaBytes())
+	for _, p := range full.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).Props() {
+		if p.Name != "dataset" {
+			continue
+		}
+		if len(p.Types) < 2 || p.Type != p.Types[0] {
+			t.Errorf("dataset Types = %v (Type %q): want the union of the oneOf branches, first one matching Type", p.Types, p.Type)
+		}
+	}
+}
+
+func TestIsMap(t *testing.T) {
+	m := miniModel(t)
+	if !m.ResolveAt([]string{"spec"}, map[string]string{"": "I18n"}).IsMap() {
+		t.Error("i18n spec (additionalProperties) must be map-shaped")
+	}
+	if m.ResolveAt([]string{"spec"}, map[string]string{"": "Table"}).IsMap() {
+		t.Error("Table spec must not be map-shaped")
+	}
 }

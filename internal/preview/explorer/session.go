@@ -7,15 +7,14 @@ package explorer
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
-	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -84,7 +83,7 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 
 	// PRQL cannot autoload (community extension); load it only when a
 	// dataset actually uses it.
-	if needsPrql(docs) {
+	if dataset.NeedsPrql(docs) {
 		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
 			s.logger.Warnf("explorer: prql extension: %v", err)
 		}
@@ -99,6 +98,12 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 	}
 	if err != nil {
 		return fmt.Errorf("explorer: register views: %w", err)
+	}
+
+	// Datasets built on a view (PRQL, derive/assert) publish a query that
+	// refers to it; the browser posts that query back, so the view must exist.
+	for _, w := range dataset.RegisterDataSetViews(ctx, s.session, docs) {
+		s.logger.Warnf("explorer: %v", w)
 	}
 
 	s.docs = docs
@@ -129,27 +134,6 @@ func (s *Session) Close() error {
 		return s.session.Close()
 	}
 	return nil
-}
-
-// needsPrql reports whether any DataSet document uses a PRQL query.
-func needsPrql(docs []config.Document) bool {
-	for _, doc := range docs {
-		if doc.Kind != "DataSet" {
-			continue
-		}
-		var payload struct {
-			Spec struct {
-				Prql spec.QueryField `json:"prql"`
-			} `json:"spec"`
-		}
-		if json.Unmarshal(doc.Raw, &payload) != nil {
-			continue
-		}
-		if !payload.Spec.Prql.IsEmpty() {
-			return true
-		}
-	}
-	return false
 }
 
 // dropUserViews drops all non-internal views from the DuckDB session.

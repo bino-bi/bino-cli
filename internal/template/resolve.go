@@ -13,7 +13,7 @@ import (
 type SourceKind int
 
 const (
-	// SourceBuiltin is a //go:embed'd template (minimal, standard).
+	// SourceBuiltin is a //go:embed'd template (minimal, predef, standard).
 	SourceBuiltin SourceKind = iota
 	// SourceCurated is a baked-in short-name pinned to a repo + commit.
 	SourceCurated

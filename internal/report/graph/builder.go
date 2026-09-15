@@ -6,12 +6,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/mdscan"
 	componentref "bino.bi/bino/internal/report/ref"
 )
 
@@ -215,10 +218,15 @@ func (b *builder) buildDataSets() error {
 		// Mark inline-generated nodes with special attributes for visualization.
 		addInlineAttributes(doc, attrs)
 
-		// Mark datasets that use source pass-through (alias to DataSource).
+		// Mark datasets that use source pass-through (alias to DataSource)
+		// and depend on the aliased source, so edits to it propagate to the
+		// artefacts using this dataset.
 		if spec.Source != "" {
 			attrs["source"] = spec.Source
 			attrs["edgeType"] = "alias"
+			if srcID, ok := b.dataSourceIndex[spec.Source]; ok {
+				deps = uniqueStrings(append(deps, srcID))
+			}
 		}
 
 		id := makeNodeID(NodeDataSet, doc.Name)
@@ -677,26 +685,25 @@ func (b *builder) buildDocumentArtefacts() error {
 			return fmt.Errorf("document artefact %s: %w", doc.Name, err)
 		}
 
-		// Create markdown file nodes as dependencies
-		// Note: For graph building, we use the raw source paths (including globs)
-		// since glob resolution requires filesystem access
+		// Resolve each source to concrete markdown files so node File values
+		// match the absolute paths the watcher reports — that exact match is
+		// what makes selective refresh work for markdown edits. Resolution
+		// failures (missing file, glob with zero matches) degrade to an
+		// unresolved pattern node, never a Build error: a failed Build would
+		// disable selective refresh for the whole bundle.
+		manifestDir := filepath.Dir(doc.File)
 		var deps []string
 		for _, src := range spec.Sources {
-			mdFileID := makeNodeID(NodeMarkdownFile, src)
-			if _, exists := b.nodes[mdFileID]; !exists {
-				b.nodes[mdFileID] = &Node{
-					ID:         mdFileID,
-					Kind:       NodeMarkdownFile,
-					Name:       src,
-					Label:      src,
-					File:       src,
-					DependsOn:  nil,
-					Attributes: map[string]string{},
-					baseDigest: hashBytes([]byte(src)),
-				}
+			files, rerr := mdscan.ResolveSourceFiles(manifestDir, []string{src})
+			if rerr != nil {
+				deps = append(deps, b.addUnresolvedMarkdownNode(manifestDir, src))
+				continue
 			}
-			deps = append(deps, mdFileID)
+			for _, f := range files {
+				deps = append(deps, b.addMarkdownFileNode(manifestDir, f))
+			}
 		}
+		deps = uniqueStrings(deps)
 
 		id := makeNodeID(NodeDocumentArtefact, doc.Name)
 		attrs := map[string]string{
@@ -720,6 +727,89 @@ func (b *builder) buildDocumentArtefacts() error {
 		b.documentArtefactIDs = append(b.documentArtefactIDs, id)
 	}
 	return nil
+}
+
+// addMarkdownFileNode registers (or reuses) the node for a resolved markdown
+// file and returns its ID. The file content is hashed into the node digest
+// and scanned for :ref[Kind:name] component references, which become
+// dependencies — so edits to an embedded component (or its data) propagate
+// to every document embedding it. Two artefacts sharing a file share the node.
+func (b *builder) addMarkdownFileNode(manifestDir, file string) string {
+	id := makeNodeID(NodeMarkdownFile, file)
+	if _, exists := b.nodes[id]; exists {
+		return id
+	}
+	label := file
+	if rel, err := filepath.Rel(manifestDir, file); err == nil {
+		label = rel
+	}
+	node := &Node{
+		ID:         id,
+		Kind:       NodeMarkdownFile,
+		Name:       file,
+		Label:      label,
+		File:       file,
+		Attributes: map[string]string{},
+	}
+	content, err := os.ReadFile(file)
+	if err != nil {
+		// File vanished between glob and read; keep a path-hashed node with
+		// no ref edges — the next refresh rebuilds the graph anyway.
+		node.baseDigest = hashBytes([]byte(file))
+		b.nodes[id] = node
+		return id
+	}
+	node.baseDigest = hashBytes(content)
+	for _, ref := range mdscan.ScanRefs(content) {
+		// Require the exact kind+name to exist as a manifest: Component node
+		// IDs are name-only, so without this check a ref of one kind could
+		// link a same-named component of another kind.
+		if _, ok := b.docIndex[ref.Kind+":"+ref.Name]; !ok {
+			continue
+		}
+		var depID string
+		switch ref.Kind {
+		case "LayoutCard":
+			depID = makeNodeID(NodeLayoutCard, ref.Name)
+		default:
+			if _, isComponent := componentKindSet[ref.Kind]; !isComponent {
+				continue // not a graph-linkable kind (e.g. LayoutPage)
+			}
+			depID = makeNodeID(NodeComponent, ref.Name)
+		}
+		if _, ok := b.nodes[depID]; ok {
+			node.DependsOn = append(node.DependsOn, depID)
+		}
+	}
+	node.DependsOn = uniqueStrings(node.DependsOn)
+	b.nodes[id] = node
+	return id
+}
+
+// addUnresolvedMarkdownNode registers the fallback node for a source entry
+// that could not be resolved to files. Keyed on the manifest-dir-joined path
+// so identical source strings in different directories stay distinct. Its
+// File value never matches a watcher path, so edits under an unresolved
+// pattern keep falling back to a full rebuild — today's safe behavior.
+func (b *builder) addUnresolvedMarkdownNode(manifestDir, src string) string {
+	pattern := src
+	if !filepath.IsAbs(pattern) {
+		pattern = filepath.Join(manifestDir, pattern)
+	}
+	id := makeNodeID(NodeMarkdownFile, pattern)
+	if _, exists := b.nodes[id]; exists {
+		return id
+	}
+	b.nodes[id] = &Node{
+		ID:         id,
+		Kind:       NodeMarkdownFile,
+		Name:       src,
+		Label:      src,
+		File:       pattern,
+		Attributes: map[string]string{"unresolved": "true"},
+		baseDigest: hashBytes([]byte(pattern)),
+	}
+	return id
 }
 
 type documentArtefactSpec struct {

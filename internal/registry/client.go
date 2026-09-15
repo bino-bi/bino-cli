@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +27,10 @@ const (
 	maxResourceBytes = 50<<20 + 1<<20
 	// maxRetryAfter caps how long a single 429 retry may wait.
 	maxRetryAfter = 30 * time.Second
+	// publishTimeout bounds one publish attempt, upload included. The shared
+	// client's Timeout is a wall clock that covers the request body, so a
+	// multi-megabyte tree needs its own budget on its own client.
+	publishTimeout = 15 * time.Minute
 )
 
 // PATPrefix marks a personal access token (as opposed to a raw auth JWT).
@@ -38,27 +43,49 @@ type Client struct {
 	baseURL string
 	token   string
 	hc      *http.Client
+	// hcUpload carries publishes. It has no wall-clock Timeout — that would
+	// cap the body transfer — and is bounded by a per-attempt context deadline
+	// instead.
+	hcUpload *http.Client
 
 	exchOnce sync.Once // PAT→JWT exchange, at most once per client
 	exchJWT  string
 	exchErr  error
+
+	// v2 caches whether this registry serves the v2 routes: v2Unknown until
+	// the first v2 request answers. It is a property of the server, not of a
+	// package — a v1 version resolves through v2 as a one-file tree — so one
+	// probe per client covers every package of a closure.
+	v2 atomic.Int32
 }
+
+// v2 support states for Client.v2.
+const (
+	v2Unknown int32 = iota
+	v2Supported
+	v2Absent
+)
 
 // NewClient builds a client for the given resolved configuration.
 func NewClient(cfg Config) *Client {
 	return &Client{
-		baseURL: cfg.URL,
-		token:   cfg.Token,
-		hc: &http.Client{
-			Timeout: requestTimeout,
-			Transport: &http.Transport{
-				Proxy:                 http.ProxyFromEnvironment,
-				DialContext:           (&net.Dialer{Timeout: connectTimeout}).DialContext,
-				TLSHandshakeTimeout:   connectTimeout,
-				ResponseHeaderTimeout: connectTimeout,
-				ForceAttemptHTTP2:     true,
-			},
-		},
+		baseURL:  cfg.URL,
+		token:    cfg.Token,
+		hc:       &http.Client{Timeout: requestTimeout, Transport: newTransport(connectTimeout)},
+		hcUpload: &http.Client{Transport: newTransport(0)},
+	}
+}
+
+// newTransport builds the shared transport settings. responseHeader is the
+// ResponseHeaderTimeout; 0 disables it, for uploads whose response only
+// arrives after the server has digested and validated the whole tree.
+func newTransport(responseHeader time.Duration) *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: connectTimeout}).DialContext,
+		TLSHandshakeTimeout:   connectTimeout,
+		ResponseHeaderTimeout: responseHeader,
+		ForceAttemptHTTP2:     true,
 	}
 }
 
@@ -67,6 +94,11 @@ type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Status  int    `json:"-"`
+	// Details carries the response's structured "details" items verbatim.
+	// It stays raw on purpose: a typed field would make the single
+	// json.Unmarshal below fail whenever a route reports details in a shape
+	// this CLI does not know, which would also lose Code and Message.
+	Details json.RawMessage `json:"details,omitempty"`
 }
 
 func (e *APIError) Error() string {
@@ -291,13 +323,53 @@ func (c *Client) request(ctx context.Context, method, u string, reqBody []byte, 
 		return nil, nil, err
 	}
 	if status < 200 || status > 299 {
-		apiErr := &APIError{Status: status}
-		if jsonErr := json.Unmarshal(body, apiErr); jsonErr != nil || apiErr.Code == "" {
-			apiErr.Code = fmt.Sprintf("http_%d", status)
-		}
-		return nil, nil, apiErr
+		return nil, nil, apiErrorFrom(body, status)
 	}
 	return body, header, nil
+}
+
+// requestStream performs a single request with a streamed body of an
+// arbitrary content type, on the upload client and a per-call deadline.
+//
+// It deliberately does not retry: the body is a one-shot io.Reader that cannot
+// be replayed, and replaying a mutating POST would be at-least-once delivery
+// for a publish. Non-2xx maps to *APIError exactly as request does.
+func (c *Client) requestStream(ctx context.Context, method, u, contentType, auth string, body io.Reader, timeout time.Duration) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	if auth != "" {
+		req.Header.Set("Authorization", "Bearer "+auth)
+	}
+	resp, err := c.hcUpload.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("registry: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("registry: read response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, apiErrorFrom(respBody, resp.StatusCode)
+	}
+	return respBody, nil
+}
+
+// apiErrorFrom maps a non-2xx body onto the canonical {code, message,
+// details} error, synthesizing a code when the body is not the registry's
+// error envelope.
+func apiErrorFrom(body []byte, status int) *APIError {
+	apiErr := &APIError{Status: status}
+	if err := json.Unmarshal(body, apiErr); err != nil || apiErr.Code == "" {
+		apiErr.Code = fmt.Sprintf("http_%d", status)
+	}
+	return apiErr
 }
 
 func (c *Client) doOnce(ctx context.Context, method, u string, reqBody []byte, auth string, maxBytes int64) (body []byte, header http.Header, status int, err error) {

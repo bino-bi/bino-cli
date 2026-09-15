@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/registry"
 	reportspec "bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/schema/walk"
 	"bino.bi/bino/internal/version"
 )
 
@@ -41,7 +42,7 @@ type Server struct {
 	client protocol.Client
 
 	mu      sync.RWMutex
-	schema  *schemaModel
+	schema  *walk.Model
 	index   []IndexDoc
 	nameIdx *reportspec.NameIndex
 	lock    *registry.Lockfile
@@ -314,7 +315,7 @@ func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 const backendFetchBudget = 500 * time.Millisecond
 
 // getSchema returns the cached merged-schema model, loading it on first use.
-func (s *Server) getSchema(ctx context.Context) *schemaModel {
+func (s *Server) getSchema(ctx context.Context) *walk.Model {
 	s.mu.RLock()
 	m := s.schema
 	s.mu.RUnlock()
@@ -328,9 +329,9 @@ func (s *Server) getSchema(ctx context.Context) *schemaModel {
 		// Warn, not Debug: this is the mechanism behind "no suggestions", and
 		// an editor-spawned server never runs with --verbose.
 		s.log.Warnf("merged schema unavailable, serving without schema: %v", err)
-		return &schemaModel{}
+		return &walk.Model{}
 	}
-	m = parseSchema(raw)
+	m = walk.Parse(raw)
 	s.mu.Lock()
 	s.schema = m
 	s.mu.Unlock()

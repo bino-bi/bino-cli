@@ -1,0 +1,24 @@
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: used_ds
+spec:
+  query: SELECT region, amount FROM src_a
+  dependencies:
+    - src_a
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: unused_ds
+spec:
+  query: SELECT region FROM src_a
+  dependencies:
+    - src_a
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: alias_ds
+spec:
+  source: src_a

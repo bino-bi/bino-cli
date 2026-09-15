@@ -6,7 +6,10 @@ description: Define reusable visual styles for layouts and components.
 `ComponentStyle` manifests capture styling information for components.
 They allow you to centralize typography, colors, spacing, and other visual rules.
 
-## Spec outline
+## Minimal definition
+
+This is the smallest well-formed `ComponentStyle`: the required `spec.content`
+with the base typography that almost every style block overrides.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -14,13 +17,16 @@ kind: ComponentStyle
 metadata:
   name: corporateTheme
 spec:
-  content: {}  # object or JSON string
+  content:
+    global:
+      fontSizePx: 14
+      fontFamily: "'Inter', sans-serif"
 ```
 
-`spec.content` can be either:
-
-- A YAML object
-- A JSON string (useful when copying from front-end configuration)
+`spec.content` can also be written as a JSON string instead of a YAML object,
+which is useful when copying from front-end configuration — see
+[JSON string style](#json-string-style).
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Using named styles
 
@@ -83,7 +89,10 @@ The style object has the following top-level sections:
 | `bn-chart-time` | Style settings for time/column charts |
 | `bn-chart-structure` | Style settings for structure/bar charts |
 | `bn-tree` | Style settings for hierarchical tree diagrams |
-| `bn-grid` | Style settings for grid layouts with row/column headers |
+| `bn-grid` | Style settings for grid layouts with row/column headers (not part of the schema, see below) |
+
+The style object accepts additional keys beyond these sections, so unknown or
+misspelled style keys pass validation without a diagnostic.
 
 ---
 
@@ -215,6 +224,10 @@ bn-tree:
 
 Style settings for grid layouts with row and column headers.
 
+This section is not described by the manifest schema. It is accepted because the
+style object allows extra keys, so its properties and defaults are not validated
+and a typo in a key stays silent.
+
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `headerBackground` | string | `"transparent"` | Background color for row and column headers (CSS color) |
@@ -243,7 +256,8 @@ Both `axisStyles` and `barStyles` use scenario-based grouping following IBCS not
 | `pp` | Style for **Prior Period** values |
 | `pl` | Style for **Plan** values |
 
-Each scenario key contains an SVG style object.
+Each scenario key contains an SVG style object. Further scenario keys are allowed
+and take the same SVG style object.
 
 ---
 
@@ -256,6 +270,8 @@ The `varianceStyles` property groups styles by variance direction:
 | `pos` | Style for **positive** variances (favorable) |
 | `neg` | Style for **negative** variances (unfavorable) |
 | `neu` | Style for **neutral/zero** variances |
+
+Further variance keys are allowed and take the same SVG style object.
 
 ---
 
@@ -402,20 +418,28 @@ spec:
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.content` | object or string | yes | — | Style definitions as a YAML object or JSON string. Contains component-specific style sections. | see sections above |
+| `spec.content` | object or string | yes | — | Style definitions as a YAML object or a JSON string (at least 2 characters). Contains the component-specific style sections below; unknown keys are accepted. | `content: '{"global":{"fontSizePx":12}}'` |
+| `spec.content.global` | object | no | — | Global typography and color settings, inherited by all components. See [Global style](#global-style). | `global: { fontSizePx: 14 }` |
+| `spec.content.bn-text` | object | no | — | Style settings for text components. Reserved for future use, accepts any properties. See [Text style](#text-style-bn-text). | `bn-text: {}` |
+| `spec.content.bn-chart-time` | object | no | — | Style settings for time/column charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Time chart style](#time-chart-style-bn-chart-time). | `bn-chart-time: { scaleFactors: { columnWidth: 2.5 } }` |
+| `spec.content.bn-chart-structure` | object | no | — | Style settings for structure/bar charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Structure chart style](#structure-chart-style-bn-chart-structure). | `bn-chart-structure: { scaleFactors: { barWidth: 1.5 } }` |
+| `spec.content.bn-tree` | object | no | — | Style settings for hierarchical tree diagrams. See [Tree chart style](#tree-chart-style-bn-tree). | `bn-tree: { edgeColor: "#606060" }` |
+| `spec.content.bn-grid` | object | no | — | Style settings for grid layouts. Not described by the schema, so it is neither validated nor completed. See [Grid style](#grid-style-bn-grid). | `bn-grid: { cellPadding: 8 }` |
 
 Components reference a named style through their own `spec.selectedStyle` attribute; see [Using named styles](#using-named-styles).
 
-#### Content structure
+#### Chart section properties
 
-| Section | Description |
-|---------|-------------|
-| `content.global` | Global typography and color settings (inherited by all components). |
-| `content.bn-text` | Style settings for text components. |
-| `content.bn-chart-time` | Style settings for time/column charts. |
-| `content.bn-chart-structure` | Style settings for structure/bar charts. |
-| `content.bn-tree` | Style settings for hierarchical tree diagrams. |
-| `content.bn-grid` | Style settings for grid layouts. |
+Both `bn-chart-time` and `bn-chart-structure` take the same properties.
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `scaleFactors` | object | no | per property | Scale factors for element sizing, multiplied by `global.fontSizePx`. Defaults differ per chart: see [time chart](#scale-factors-time-chart) and [structure chart](#scale-factors-structure-chart). | `scaleFactors: { columnWidth: 2.5 }` |
+| `axisStyles` | object | no | — | SVG styles for axis elements, keyed by scenario. See [SVG style group](#svg-style-group). | `axisStyles: { ac: { stroke: "#000000" } }` |
+| `barStyles` | object | no | — | SVG styles for bar/column elements, keyed by scenario. See [SVG style group](#svg-style-group). | `barStyles: { ac: { fill: "#333333" } }` |
+| `varianceStyles` | object | no | — | SVG styles for variance indicators, keyed by direction. See [SVG variance style group](#svg-variance-style-group). | `varianceStyles: { neg: { fill: "#ff0000" } }` |
+| `stackColors` | array of strings | no | `["#000000", "#c0c0c0", "#808080"]` | Ordered CSS colors for stacked segments. Segments cycle through these colors. | `stackColors: ["#000000", "#c0c0c0"]` |
+| `padding` | object | no | `10` per side | Padding around the chart area. See [Padding](#padding). | `padding: { top: 15 }` |
 
 #### Global style properties
 

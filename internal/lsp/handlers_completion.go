@@ -12,6 +12,7 @@ import (
 
 	"bino.bi/bino/internal/report/config"
 	reportspec "bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/schema/walk"
 )
 
 // Completion resolves the cursor to a PositionContext and assembles the matching
@@ -117,20 +118,20 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 		if pc.Path == "kind" {
 			// The document root `kind:` — the schema's full kind enum, which
 			// includes plugin kinds the nested layoutChild enum excludes.
-			return completeKinds(schema), schema.empty()
+			return completeKinds(schema), schema.Empty()
 		}
-		vals := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath).enumValues()
-		return completeEnum(vals), schema.empty()
+		vals := schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath).EnumValues()
+		return completeEnum(vals), schema.Empty()
 	case reportspec.PosKey:
 		schema := s.getSchema(ctx)
-		node := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath)
-		items := completeFields(node.props(), keySet(pc.PresentKeys))
+		node := schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		items := completeFields(node.Props(), keySet(pc.PresentKeys))
 		if pc.Path == "(root)" && len(pc.PresentKeys) == 0 {
 			// A fresh document (empty buffer, or right after `---`): offer
 			// full-manifest scaffolds alongside the bare root keys.
 			items = append(items, documentScaffolds(schema, s.snippetSupport)...)
 		}
-		return items, schema.empty()
+		return items, schema.Empty()
 	case reportspec.PosScenarioItem:
 		available := s.scenarioColumns(ctx, pc.BoundDatasets)
 		return completeScenarios(available)
@@ -167,23 +168,23 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 		return completeColumns(cols), false
 	case reportspec.PosFreeValue:
 		schema := s.getSchema(ctx)
-		node := schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath)
-		if enum := node.enumValues(); len(enum) > 0 {
+		node := schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		if enum := node.EnumValues(); len(enum) > 0 {
 			return completeEnum(enum), false
 		}
-		if node.isBool() {
+		if node.IsBool() {
 			return completeEnum([]string{"true", "false"}), false
 		}
-		if node.isObject() {
+		if node.IsObject() {
 			// An object-shaped position typed as a scalar so far — e.g. a bare
 			// `- ` slot under `children:`, or the first key being typed under a
 			// still-empty `spec:` — offer the object's keys, plus child
 			// scaffolds when the slot is a layout child.
-			items := completeFields(node.props(), nil)
+			items := completeFields(node.Props(), nil)
 			items = append(items, childScaffolds(node, s.snippetSupport)...)
-			return items, schema.empty()
+			return items, schema.Empty()
 		}
-		return nil, schema.empty()
+		return nil, schema.Empty()
 	default:
 		return nil, false
 	}
@@ -330,28 +331,28 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		if md := kindHover(schema, pc.Prefix); md != "" {
 			return md
 		}
-		return schema.resolveAt(pathSegments(pc.Path), pc.KindsByPath).doc()
+		return schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath).Doc()
 	case reportspec.PosKey:
 		// pc.Path is the enclosing MAPPING's path; the hovered key token is
 		// pc.Prefix (empty on a blank line — nothing to document).
-		node := s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath)
-		if p, ok := node.prop(pc.Prefix); ok {
+		node := s.getSchema(ctx).ResolveAt(pathSegments(pc.Path), pc.KindsByPath)
+		if p, ok := node.Prop(pc.Prefix); ok {
 			return propHover(p)
 		}
 		return ""
 	case reportspec.PosFreeValue:
-		return valueHover(s.getSchema(ctx).resolveAt(pathSegments(pc.Path), pc.KindsByPath))
+		return valueHover(s.getSchema(ctx).ResolveAt(pathSegments(pc.Path), pc.KindsByPath))
 	default:
 		return ""
 	}
 }
 
 // kindHover renders a known kind's title, spec prose, and required fields.
-func kindHover(m *schemaModel, kind string) string {
+func kindHover(m *walk.Model, kind string) string {
 	if kind == "" {
 		return ""
 	}
-	doc := kindDocMarkdown(m, kind)
+	doc := walk.KindDocMarkdown(m, kind)
 	if doc == "" {
 		return ""
 	}
@@ -359,7 +360,7 @@ func kindHover(m *schemaModel, kind string) string {
 }
 
 // propHover renders a field's schema metadata for a hovered key token.
-func propHover(p propInfo) string {
+func propHover(p walk.PropInfo) string {
 	var parts []string
 	if d := propDetail(p); d != "" {
 		parts = append(parts, "`"+p.Name+"` — "+d)
@@ -375,17 +376,17 @@ func propHover(p propInfo) string {
 
 // valueHover renders a value position's schema doc: description, default, and
 // admissible values.
-func valueHover(n schemaNode) string {
+func valueHover(n walk.Node) string {
 	var parts []string
-	if d := n.doc(); d != "" {
+	if d := n.Doc(); d != "" {
 		parts = append(parts, d)
 	}
-	if def := n.defaultValue(); def != nil {
-		if r := renderDefault(def); r != "" {
+	if def := n.DefaultValue(); def != nil {
+		if r := walk.RenderDefault(def); r != "" {
 			parts = append(parts, "Default: `"+r+"`")
 		}
 	}
-	if enum := n.enumValues(); len(enum) > 0 {
+	if enum := n.EnumValues(); len(enum) > 0 {
 		parts = append(parts, "One of: `"+strings.Join(enum, "`, `")+"`")
 	}
 	return strings.Join(parts, "\n\n")

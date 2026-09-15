@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"reflect"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -351,6 +352,10 @@ func TestDatasetRef_RoundTrip(t *testing.T) {
 				{Ref: "sales_csv"},
 			},
 		}},
+		{Inline: &DataSetSpec{
+			Query:  &QueryField{Inline: "SELECT * FROM sales"},
+			Derive: map[string]ShiftDeclaration{"pp1": {From: "ac1", Shift: "1 month", Grain: "month"}},
+		}},
 	}
 
 	for _, original := range tests {
@@ -369,6 +374,9 @@ func TestDatasetRef_RoundTrip(t *testing.T) {
 		}
 		if (parsed.Inline == nil) != (original.Inline == nil) {
 			t.Errorf("Inline nil mismatch: got %v, want %v", parsed.Inline == nil, original.Inline == nil)
+		}
+		if original.Inline != nil && !reflect.DeepEqual(parsed.Inline.Derive, original.Inline.Derive) {
+			t.Errorf("Derive mismatch: got %+v, want %+v", parsed.Inline.Derive, original.Inline.Derive)
 		}
 	}
 }

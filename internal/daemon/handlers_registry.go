@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -29,11 +30,15 @@ type RegistryParam struct {
 // RegistryPackage is the served shape of one dependency: the union of its
 // bino.toml declaration, its bino.lock resolution, and its on-disk install.
 type RegistryPackage struct {
-	Name         string          `json:"name"`
-	Version      string          `json:"version,omitempty"`
-	Tag          string          `json:"tag,omitempty"`
-	Kind         string          `json:"kind,omitempty"`
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	Tag     string `json:"tag,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	// Path is the package's primary document, kept for clients that open a
+	// package with a single click. Files lists the whole tree.
 	Path         string          `json:"path,omitempty"`
+	Kinds        []string        `json:"kinds,omitempty"`
+	Files        []string        `json:"files,omitempty"`
 	Direct       bool            `json:"direct"`
 	DeclaredRef  string          `json:"declaredRef,omitempty"`
 	Installed    bool            `json:"installed"`
@@ -41,39 +46,49 @@ type RegistryPackage struct {
 	Params       []RegistryParam `json:"params,omitempty"`
 }
 
-// handleRegistryPackages reports the project's dependencies fully offline:
-// bino.lock entries merged with bino.toml [dependencies] and an install check
-// on the store, with params read from the already-loaded documents.
+// handleRegistryPackages serves the project's dependencies fully offline.
 func (s *Server) handleRegistryPackages(w http.ResponseWriter, _ *http.Request) {
-	root := s.state.ProjectRoot()
-	lf, err := registry.LoadLockfile(root)
+	packages, err := RegistryPackages(s.state.ProjectRoot(), s.state.Documents())
 	if err != nil {
 		s.writeJSON(w, map[string]any{"packages": []RegistryPackage{}, "error": err.Error()})
 		return
+	}
+	s.writeJSON(w, map[string]any{"packages": packages})
+}
+
+// RegistryPackages reports the project's dependencies fully offline:
+// bino.lock entries merged with bino.toml [dependencies] and an install check
+// on the store, with params read from the already-loaded documents. It is
+// shared by the HTTP handler and the MCP registry_packages tool.
+func RegistryPackages(root string, docs []config.Document) ([]RegistryPackage, error) {
+	lf, err := registry.LoadLockfile(root)
+	if err != nil {
+		return nil, err
 	}
 	declared := map[string]string{}
 	if cfg, cfgErr := pathutil.LoadProjectConfig(root); cfgErr == nil && cfg != nil && cfg.Dependencies != nil {
 		declared = cfg.Dependencies
 	}
-	paramsByPath := packageParamsByPath(root, s.state.Documents())
+	paramsByPath := packageParamsByPath(root, docs)
 
 	packages := make([]RegistryPackage, 0, len(lf.Packages)+len(declared))
 	locked := make(map[string]bool, len(lf.Packages))
 	for _, e := range lf.Packages {
 		locked[e.Name] = true
-		abs := filepath.Join(root, filepath.FromSlash(e.Path))
-		_, statErr := os.Stat(abs)
+		files, installed := packageFileState(root, e)
 		packages = append(packages, RegistryPackage{
 			Name:         e.Name,
 			Version:      e.Version,
 			Tag:          e.Tag,
 			Kind:         e.Kind,
 			Path:         e.Path,
+			Kinds:        e.Kinds,
+			Files:        files,
 			Direct:       e.Direct,
 			DeclaredRef:  declared[e.Name],
-			Installed:    statErr == nil,
+			Installed:    installed,
 			Dependencies: e.Dependencies,
-			Params:       paramsByPath[abs],
+			Params:       packageParams(root, files, paramsByPath),
 		})
 	}
 	// Declared-but-unlocked dependencies (bino.toml edited by hand, `bino
@@ -84,17 +99,12 @@ func (s *Server) handleRegistryPackages(w http.ResponseWriter, _ *http.Request) 
 		}
 	}
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Name < packages[j].Name })
-	s.writeJSON(w, map[string]any{"packages": packages})
+	return packages, nil
 }
 
 // handleRegistrySearch proxies the registry's full-text search using the
 // project's resolved registry config (URL chain + token/credentials).
 func (s *Server) handleRegistrySearch(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.registryClientConfig()
-	if err != nil {
-		s.writeRegistryError(w, err)
-		return
-	}
 	q := r.URL.Query()
 	params := registry.SearchParams{
 		Query:   q.Get("q"),
@@ -104,14 +114,25 @@ func (s *Server) handleRegistrySearch(w http.ResponseWriter, r *http.Request) {
 		Page:    atoiOrZero(q.Get("page")),
 		PerPage: atoiOrZero(q.Get("perPage")),
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	res, err := registry.NewClient(cfg).Search(ctx, params)
+	res, err := RegistrySearch(r.Context(), s.state.ProjectRoot(), params)
 	if err != nil {
 		s.writeRegistryError(w, err)
 		return
 	}
 	s.writeJSON(w, res)
+}
+
+// RegistrySearch runs a registry search with the project's resolved registry
+// config, bounded by a 10s timeout. Shared by the HTTP handler and the MCP
+// registry_search tool.
+func RegistrySearch(ctx context.Context, root string, params registry.SearchParams) (registry.SearchResult, error) {
+	cfg, err := registryClientConfig(root)
+	if err != nil {
+		return registry.SearchResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return registry.NewClient(cfg).Search(ctx, params)
 }
 
 // handleRegistryInfo resolves a package spec ("@scope/name[@ref]") against the
@@ -122,35 +143,49 @@ func (s *Server) handleRegistryInfo(w http.ResponseWriter, r *http.Request) {
 		s.writeJSONError(w, http.StatusBadRequest, err, "")
 		return
 	}
-	cfg, err := s.registryClientConfig()
+	res, err := RegistryInfo(r.Context(), s.state.ProjectRoot(), spec)
 	if err != nil {
 		s.writeRegistryError(w, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	res, err := registry.NewClient(cfg).Resolve(ctx, spec.Scope, spec.Base, spec.Ref)
+	s.writeJSON(w, res)
+}
+
+// RegistryInfoResult is a resolved package annotated with the version the
+// project's bino.lock currently pins, if any.
+type RegistryInfoResult struct {
+	registry.ResolveV2Result
+	InstalledVersion string `json:"installedVersion,omitempty"`
+}
+
+// RegistryInfo resolves a package spec against the project's registry
+// (10s timeout) and annotates the locally locked version. Shared by the HTTP
+// handler and the MCP registry_info tool.
+func RegistryInfo(ctx context.Context, root string, spec registry.Spec) (RegistryInfoResult, error) {
+	cfg, err := registryClientConfig(root)
 	if err != nil {
-		s.writeRegistryError(w, err)
-		return
+		return RegistryInfoResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	res, err := registry.NewClient(cfg).ResolveTree(ctx, spec.Scope, spec.Base, spec.Ref)
+	if err != nil {
+		return RegistryInfoResult{}, err
 	}
 	installed := ""
-	if lf, lockErr := registry.LoadLockfile(s.state.ProjectRoot()); lockErr == nil {
+	if lf, lockErr := registry.LoadLockfile(root); lockErr == nil {
 		if e := lf.Get(spec.Name); e != nil {
 			installed = e.Version
 		}
 	}
-	s.writeJSON(w, struct {
-		registry.ResolveResult
-		InstalledVersion string `json:"installedVersion,omitempty"`
-	}{res, installed})
+	return RegistryInfoResult{ResolveV2Result: res, InstalledVersion: installed}, nil
 }
 
-// registryClientConfig resolves the registry connection for this project:
+// registryClientConfig resolves the registry connection for a project:
 // bino.toml [registry] → env → global config → default, token → credentials.
-func (s *Server) registryClientConfig() (registry.Config, error) {
+func registryClientConfig(root string) (registry.Config, error) {
 	var rawURL, rawToken string
-	if cfg, err := pathutil.LoadProjectConfig(s.state.ProjectRoot()); err == nil && cfg != nil {
+	if cfg, err := pathutil.LoadProjectConfig(root); err == nil && cfg != nil {
 		rawURL, rawToken = cfg.Registry.URL, cfg.Registry.Token
 	}
 	return registry.ResolveConfig(rawURL, rawToken)
@@ -171,9 +206,58 @@ func (s *Server) writeRegistryError(w http.ResponseWriter, err error) {
 	s.writeJSONError(w, status, err, code)
 }
 
+// packageFileState lists a locked package's project-relative files and reports
+// whether every one of them is on disk. A package is a file tree, so stat-ing
+// the package directory would not do: os.Stat succeeds on an empty directory,
+// which would report a half-installed package as installed.
+func packageFileState(root string, e registry.Entry) (files []string, installed bool) {
+	entryFiles := e.TreeFiles()
+	if len(entryFiles) == 0 {
+		return nil, false
+	}
+	_, dirRel, err := registry.PackageDir(root, e.Name)
+	if err != nil {
+		return nil, false
+	}
+	files = make([]string, 0, len(entryFiles))
+	installed = true
+	for _, f := range entryFiles {
+		rel := path.Join(dirRel, f.Path)
+		if !e.IsTree() && f.Type == registry.FileDocument && e.Path != "" {
+			// A single-document package's document is addressed by the path
+			// the lock recorded, which also keeps locks written before the
+			// store gained a per-package directory reporting correctly. Its
+			// bundled resources sit beside it, in the package directory.
+			rel = e.Path
+		}
+		files = append(files, rel)
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); statErr != nil {
+			installed = false
+		}
+	}
+	return files, installed
+}
+
+// packageParams collects the declared params of every document a package
+// ships. A package used to be one document, so its params could be looked up
+// by that one path; a tree contributes them from all of its files.
+func packageParams(root string, files []string, byPath map[string][]RegistryParam) []RegistryParam {
+	var out []RegistryParam
+	seen := map[string]bool{}
+	for _, rel := range files {
+		for _, p := range byPath[filepath.Join(root, filepath.FromSlash(rel))] {
+			if seen[p.Name] {
+				continue
+			}
+			seen[p.Name] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // packageParamsByPath maps each loaded document's absolute file path to its
-// declared params (documents without params are skipped). Registry packages are
-// single-document files, so the file path identifies the package.
+// declared params (documents without params are skipped).
 func packageParamsByPath(root string, docs []config.Document) map[string][]RegistryParam {
 	out := make(map[string][]RegistryParam)
 	for _, d := range docs {
@@ -184,7 +268,9 @@ func packageParamsByPath(root string, docs []config.Document) map[string][]Regis
 		if !filepath.IsAbs(abs) {
 			abs = filepath.Join(root, abs)
 		}
-		out[abs] = toRegistryParams(d.Params)
+		// A manifest file may hold several "---" documents, each with its own
+		// params, so this accumulates rather than overwrites.
+		out[abs] = append(out[abs], toRegistryParams(d.Params)...)
 	}
 	return out
 }

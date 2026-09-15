@@ -277,7 +277,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	// Merge existing diagnostics (from dataset warnings) with datasource diagnostics
 	diags = append(existingDiags, diags...)
 
-	internationalizations, err := collectInternationalizations(docs)
+	internationalizations, err := collectInternationalizations(docs, locale)
 	if err != nil {
 		return Result{}, diags, err
 	}
@@ -432,7 +432,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	}
 	diags = append(existingDiags, diags...)
 
-	internationalizations, err := collectInternationalizations(docs)
+	internationalizations, err := collectInternationalizations(docs, locale)
 	if err != nil {
 		return FrameResult{}, diags, err
 	}

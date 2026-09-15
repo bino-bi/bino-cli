@@ -13,7 +13,8 @@ Get the current bino project validating cleanly. Context: **$ARGUMENTS**
    often cascades into the embeddables that bind to it).
 3. **Fix surgically.** Prefer `edit_manifest(file, position?, patch)` — dotted-path edits that
    preserve comments and key order and validate before writing. Read the live schema
-   (`describe_kind`) when a field is in question; don't guess.
+   (`outline_kind`; `describe_kind` only if that is still ambiguous) when a field is in question;
+   don't guess. `bino-concepts` explains what a reference or dependency diagnostic means.
 4. **Re-validate after each fix** and confirm the specific diagnostic is gone — don't assume. Repeat
    until `validate_project()` is clean.
 5. If a diagnostic is an IBCS-semantic or ambiguous-direction judgment (which scenario, which sign is

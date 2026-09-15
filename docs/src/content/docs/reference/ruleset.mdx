@@ -7,7 +7,11 @@ description: Adjust IBCS scenario naming, coloring, and ordering rules.
 use to display scenario columns: the display name, the IBCS color encoding, and
 the sort order of each scenario prefix (`ac`, `fc`, `pl`, `bu`, `pp`, `py`, ...).
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `RuleSet` sets the required `spec.content` and overrides
+the scenario rules you actually want to change. An empty `content` leaves the
+built-in rules untouched, so the manifest would have no effect.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -15,13 +19,19 @@ kind: RuleSet
 metadata:
   name: corporateRules
 spec:
-  content: {}  # object or JSON string
+  content:
+    scenarios:
+      pl:
+        name: PLAN
+        colorIndex: 50
+        sortIndex: 900
 ```
 
-`spec.content` can be either:
+Instead of a YAML object, `spec.content` also accepts a JSON string, which is
+handy when copying from front-end configuration; see
+[JSON string form](#json-string-form).
 
-- A YAML object
-- A JSON string (useful when copying from front-end configuration)
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Using named rule sets
 
@@ -56,14 +66,18 @@ spec:
   ruleset: corporateRules
 ```
 
-`ruleset` is available on `Table`, `ChartStructure`, `ChartTime`, `LayoutPage`,
-and `LayoutCard`. It is emitted as the `ruleset` HTML attribute on the
-corresponding `bn-*` element.
+`ruleset` is available on `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`,
+`ChartBubble`, `ChartBullet`, `LayoutPage`, and `LayoutCard`. It is emitted as the
+`ruleset` HTML attribute on the corresponding `bn-*` element.
 
-Besides a rule-set name, `ruleset` accepts two inheritance keywords:
+Besides a rule-set name, the component kinds (`Table` and the `Chart*` kinds)
+accept two inheritance keywords:
 
 - `inherited-closest` – reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage`.
 - `inherited-page` – reuse the `ruleset` of the surrounding `LayoutPage` (cards are skipped).
+
+On `LayoutPage` and `LayoutCard` only `inherited-page` is meaningful, because a
+layout inherits from the page around it, never from itself.
 
 A `ruleset` set on a `LayoutPage` or `LayoutCard` also applies to the layout's
 own title row, so scenario labels in page/card titles follow the same rules.
@@ -187,7 +201,17 @@ spec:
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.content` | object or string | yes | — | Rule-set overrides as a YAML object or JSON string. Deep-merged over the built-in defaults. | see sections above |
+| `spec.content` | object or string | yes | — | Rule-set overrides as a YAML object or as a JSON string (at least 2 characters). Deep-merged over the `_system` and `_default` layers. Rendered as the JSON body of a `bn-ruleset` element. | `content: { scenarios: { pl: { name: PLAN } } }` |
+| `spec.content.scenarios` | object | no | — | Per-scenario-prefix rule overrides, keyed by scenario prefix (`ac`, `fc`, `pl`, `bu`, `pp`, `py`, `dac`..`dpy`, `drac`..`drpy`, or a user-defined prefix). See [Scenario rules](#scenario-rules-scenarios). | `scenarios: { pl: { name: PLAN } }` |
+| `spec.content.scenarios.<prefix>` | object | no | built-in `_system` rule of that prefix | Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values. See [Built-in defaults](#built-in-defaults-_system). | `pl: { name: PLAN, colorIndex: 50, sortIndex: 900 }` |
+| `spec.content.scenarios.<prefix>.name` | string | no | — | Display base name; variants get `1`..`4` appended (e.g. `AC` → `AC1`). | `name: PLAN` |
+| `spec.content.scenarios.<prefix>.colorIndex` | number | no | — | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. | `colorIndex: 50` |
+| `spec.content.scenarios.<prefix>.sortIndex` | number | no | — | Base sort index for column ordering; variant `n` adds `n*10`. | `sortIndex: 900` |
+| `spec.content.fallback` | object | no | — | Style applied to scenario names not present in `scenarios`. See [Fallback rules](#fallback-rules-fallback). | `fallback: { name: Other, colorIndex: 20 }` |
+| `spec.content.fallback.name` | string | no | see [Fallback rules](#fallback-rules-fallback) | Display name for unmatched scenarios. | `name: Other` |
+| `spec.content.fallback.group` | string | no | see [Fallback rules](#fallback-rules-fallback) | Group label for unmatched scenarios. | `group: Other` |
+| `spec.content.fallback.colorIndex` | number | no | see [Fallback rules](#fallback-rules-fallback) | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. | `colorIndex: 20` |
+| `spec.content.fallback.sortIndex` | number | no | see [Fallback rules](#fallback-rules-fallback) | Sort index for column ordering. | `sortIndex: 500` |
 
 Components reference a named rule set through their own `spec.ruleset`
 attribute; see [Using named rule sets](#using-named-rule-sets).

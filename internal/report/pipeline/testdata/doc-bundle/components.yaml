@@ -1,0 +1,13 @@
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: main_table
+spec:
+  dataset: used_ds
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: alias_table
+spec:
+  dataset: alias_ds

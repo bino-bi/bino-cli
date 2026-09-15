@@ -11,6 +11,7 @@ import (
 // empty) and counts calls per package.
 type fakeResolver struct {
 	responses map[string]ResolveResult
+	trees     map[string]ResolveV2Result
 	calls     map[string]int
 }
 
@@ -26,6 +27,34 @@ func (f *fakeResolver) Resolve(_ context.Context, scope, name, ref string) (Reso
 		return res, nil
 	}
 	return ResolveResult{}, &APIError{Code: "version_not_found", Status: 404}
+}
+
+// ResolveTree renders the fake's v1 answers the way the client does for a
+// registry with no v2 routes, so the existing cases keep exercising a v1
+// server while tree cases can be added alongside.
+func (f *fakeResolver) ResolveTree(ctx context.Context, scope, name, ref string) (ResolveV2Result, error) {
+	if f.trees != nil {
+		if res, ok := f.trees[scope+"/"+name+"@"+ref]; ok {
+			f.count(scope, name)
+			return res, nil
+		}
+		if res, ok := f.trees[scope+"/"+name+"@"]; ok && !IsPin(ref) {
+			f.count(scope, name)
+			return res, nil
+		}
+	}
+	v1, err := f.Resolve(ctx, scope, name, ref)
+	if err != nil {
+		return ResolveV2Result{}, err
+	}
+	return legacyTreeOf(v1, name), nil
+}
+
+func (f *fakeResolver) count(scope, name string) {
+	if f.calls == nil {
+		f.calls = map[string]int{}
+	}
+	f.calls[scope+"/"+name]++
 }
 
 func res(pkg, tag, version, kind string, deps ...string) ResolveResult {
@@ -151,5 +180,51 @@ func TestResolveClosureDirectFlagUpgrade(t *testing.T) {
 		if !r.Direct {
 			t.Errorf("%s not marked direct: %+v", r.Name, got)
 		}
+	}
+}
+
+// A closure may mix generations: a tree package depending on a v1 package must
+// resolve with each node carrying its own format, because the format decides
+// which digest rule verifies it.
+func TestResolveClosureMixesTreeAndDocumentPackages(t *testing.T) {
+	f := &fakeResolver{
+		trees: map[string]ResolveV2Result{
+			"acme/kit@": {
+				Package: "@acme/kit", Tag: "latest", Version: "1.0.0", Digest: "sha256:manifest",
+				Kinds: []string{"LayoutPage", "Table"}, Dependencies: []string{"@bino/style_a"},
+				CompatEngine: ">=1.0.0",
+				Files: []FileMeta{
+					{Path: "kit.yaml", Type: FileDocument, Digest: "sha256:a"},
+					{Path: "resources/logo.png", Type: FileResource, Digest: "sha256:b"},
+				},
+				Format: FormatTree,
+			},
+		},
+		responses: map[string]ResolveResult{
+			"bino/style_a@": res("@bino/style_a", "latest", "1.4.0", "ComponentStyle"),
+		},
+	}
+	got, err := ResolveClosure(context.Background(), f, []Root{{Name: "@acme/kit"}})
+	if err != nil {
+		t.Fatalf("ResolveClosure: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("closure = %d packages, want 2", len(got))
+	}
+	kit, style := got[0], got[1]
+	if kit.Name != "@acme/kit" || style.Name != "@bino/style_a" {
+		t.Fatalf("closure = %s, %s", kit.Name, style.Name)
+	}
+	if kit.Format != FormatTree || len(kit.Files) != 2 || kit.Kind != "LayoutPage" {
+		t.Errorf("tree package = %+v", kit)
+	}
+	if kit.CompatEngine != ">=1.0.0" {
+		t.Errorf("compat range lost: %+v", kit)
+	}
+	if style.Format != FormatDocument || len(style.Files) != 1 || style.Files[0].Path != "style_a.yml" {
+		t.Errorf("document package = %+v", style)
+	}
+	if style.Files[0].Digest != style.Digest {
+		t.Errorf("a document package's file must carry the version digest: %+v", style)
 	}
 }

@@ -10,7 +10,11 @@ Each artefact typically corresponds to one PDF file.
 
 <img src={dashboardImg.src} alt="A rendered PDF page from a ReportArtefact showing a sales dashboard" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
 
-## Spec outline
+## Minimal definition
+
+This is the smallest well-formed `ReportArtefact`: the two required fields
+(`filename`, `title`) plus the fields a real report sets, because their defaults
+rarely fit — page geometry, renderer language and the page order.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -18,28 +22,27 @@ kind: ReportArtefact
 metadata:
   name: sales_report
 spec:
-  format: xga              # logical page size (e.g. xga, a4, letter)
-  orientation: landscape   # portrait | landscape
-  language: en             # de | en
-  layoutPages:             # optional: LayoutPage selection patterns
-    - cover                # exact name match
-    - sales-*              # glob pattern
+  format: xga
+  orientation: landscape
+  language: en
   filename: sales-report.pdf
   title: "Sales Overview"
-  description: "Quarterly sales overview for the group."
-  subject: "Sales report"
-  author: "Group Controlling"
-  keywords: ["sales", "quarterly", "internal"]
-  signingProfile: corporateSigner
-  selectedStyle: corporateTheme
+  layoutPages:
+    - cover
+    - sales-*
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+Each `layoutPages` entry has two forms: a name or glob pattern as shown here
+(see [Page selection](#page-selection)) and an object with `page` and `params`
+(see [Parameterized LayoutPages](#parameterized-layoutpages)).
 
 Fields:
 
 - `spec.format` – logical page size, default `xga`.
 - `spec.orientation` – `portrait` or `landscape`, default `landscape`.
-- `spec.language` – current options: `de` or `en`.
-- `spec.layoutPages` – optional list of patterns to select LayoutPages by `metadata.name`. Supports glob syntax (`*`, `?`, `[abc]`). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: `["*"]` (all pages matching format).
+- `spec.language` – current options: `de` or `en`, default `de`.
+- `spec.layoutPages` – optional list of patterns to select LayoutPages by `metadata.name`. Supports glob syntax (`*`, `?`, `[abc]`). A single pattern may also be written as a plain string (`layoutPages: cover`). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: `["*"]` (every LayoutPage in the bundle).
 - `spec.filename` – required output filename (relative to output directory).
 - `spec.title` – required human-readable title; also used in PDF metadata.
 - `spec.description` – optional description.
@@ -115,7 +118,7 @@ spec:
 
 ## Page selection
 
-By default, a ReportArtefact includes all LayoutPages that match its `spec.format`. Use `spec.layoutPages` to explicitly select which pages to include and control their order.
+By default, a ReportArtefact includes every LayoutPage in the bundle, in alphabetical order — a page is only left out when its own [`metadata.constraints`](/concepts/constraints-and-scoped-names/) exclude it. Use `spec.layoutPages` to explicitly select which pages to include and control their order.
 
 ```yaml
 ---
@@ -182,6 +185,8 @@ spec:
 ```
 
 Each parameterized reference creates a unique page instance with the specified values substituted into the LayoutPage's spec.
+
+All `params` values are strings. Quote numbers and dates (`YEAR: "2024"`), otherwise the manifest fails schema validation.
 
 ### Mixing forms
 
@@ -341,3 +346,39 @@ spec:
 ```
 
 For complete documentation on defining parameters in LayoutPages, see [LayoutPage Parameters](/reference/layout-page/#layoutpage-parameters).
+
+## Attribute Reference
+
+### Common Metadata
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
+| `kind` | string | yes | — | Must be `ReportArtefact`. |
+| `metadata.name` | string | yes | — | Unique identifier. |
+| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
+| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
+| `metadata.description` | string | no | — | Free-form description. |
+| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+
+### Spec Attributes
+
+| Attribute | Type | Required | Default | Description | Sample |
+|-----------|------|----------|---------|-------------|--------|
+| `spec.filename` | string | yes | — | Output filename of the generated artefact, relative to the output directory. | `filename: sales-report.pdf` |
+| `spec.title` | string | yes | — | Human-readable title of the artefact. Also stored in the PDF metadata. | `title: "Sales Overview"` |
+| `spec.format` | string | no | `xga` | Logical page size, for example `xga`, `a4`, `letter`. Lowercase letters, digits, `_` and `-` only. | `format: a4` |
+| `spec.orientation` | string | no | `landscape` | Page orientation. Values: `portrait`, `landscape`. | `orientation: portrait` |
+| `spec.language` | string | no | `de` | Language code passed to the renderer. Values: `de`, `en`. | `language: en` |
+| `spec.layoutPages` | string or array | no | `["*"]` (every LayoutPage in the bundle) | LayoutPage selection. A single pattern as a plain string, or a non-empty array of references. Pages appear in pattern order; within each pattern, pages are sorted alphabetically. See [Page selection](#page-selection). | `layoutPages: [cover, "sales-*"]` |
+| `spec.layoutPages[]` | string or object | — | — | One reference: a name or glob pattern (`*`, `?`, `[abc]`), or the object form below. | `- sales-*` |
+| `spec.layoutPages[].page` | string | yes (in object form) | — | Name of the LayoutPage. Must be an exact name, not a glob pattern. | `page: regional-sales` |
+| `spec.layoutPages[].params` | object | no | — | Parameter values passed to the LayoutPage; keys must match its `metadata.params`, all values are strings. See [Parameterized LayoutPages](#parameterized-layoutpages). | `params: { REGION: EU }` |
+| `spec.description` | string | no | — | Short description of the artefact contents, used in logs and metadata. | `description: "Quarterly sales overview for the group."` |
+| `spec.subject` | string | no | — | Subject line stored in the PDF metadata. | `subject: "Sales report"` |
+| `spec.author` | string | no | — | Author or owning team name stored in the PDF metadata. | `author: "Group Controlling"` |
+| `spec.keywords` | array of strings | no | — | Keywords stored in the PDF metadata to help search and classification. Entries must be unique. | `keywords: ["sales", "quarterly", "internal"]` |
+| `spec.keywords[]` | string | — | — | A single keyword. | `sales` |
+| `spec.signingProfile` | string | no | — | Name of a [`SigningProfile`](/reference/signing-profile/) manifest used to digitally sign the PDF. If omitted, the artefact is not signed. | `signingProfile: corporateSigner` |
+| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest applied as the default style for every page and component in this artefact; a nearer ancestor wins. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporateTheme` |
+| `spec.i18nNamespace` | string | no | — | [I18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) inherited as the default by every page and component in this artefact; a nearer ancestor wins. | `i18nNamespace: audited` |

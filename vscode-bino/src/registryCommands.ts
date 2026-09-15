@@ -27,6 +27,7 @@ export function registerRegistryCommands(context: vscode.ExtensionContext, deps:
         vscode.commands.registerCommand('bino.registryUpdateAll', () => runInTerminal('registry update')),
         vscode.commands.registerCommand('bino.registryLogin', () => runInTerminal('registry login')),
         vscode.commands.registerCommand('bino.registryLogout', () => runInTerminal('registry logout')),
+        vscode.commands.registerCommand('bino.registryPublish', () => publishPackage(deps)),
 
         vscode.commands.registerCommand('bino.registryUpdatePackage', (item?: PackageItem) => {
             if (item?.pkg) {
@@ -46,13 +47,21 @@ export function registerRegistryCommands(context: vscode.ExtensionContext, deps:
                 runInTerminal(`registry remove ${item.pkg.name}`);
             }
         }),
-        vscode.commands.registerCommand('bino.registryOpenPackageFile', async (item?: PackageItem) => {
+        vscode.commands.registerCommand('bino.registryOpenPackageFile', async (item?: PackageItem, file?: string) => {
             const root = deps.projectRoot();
-            if (!item?.pkg?.path || !root) {
+            const target = file ?? item?.pkg?.path;
+            if (!target || !root) {
                 return;
             }
-            const uri = vscode.Uri.file(path.join(root, item.pkg.path));
-            await vscode.window.showTextDocument(uri, { preview: true });
+            const uri = vscode.Uri.file(path.join(root, target));
+            // A multi-file package's primary document is still a document, but
+            // a lock written by an older bino may name something else, so fall
+            // back to revealing rather than failing to open.
+            try {
+                await vscode.window.showTextDocument(uri, { preview: true });
+            } catch {
+                await vscode.commands.executeCommand('revealInExplorer', uri);
+            }
         }),
         vscode.commands.registerCommand('bino.registryCopyRef', async (item?: PackageItem) => {
             if (!item?.pkg) {
@@ -63,6 +72,28 @@ export function registerRegistryCommands(context: vscode.ExtensionContext, deps:
         }),
         vscode.commands.registerCommand('bino.registryInsertRef', (item?: PackageItem) => insertComponentRef(deps, item)),
     );
+}
+
+/**
+ * Publishes the open project. `bino publish` needs a --bump (a version is
+ * minted server-side and cannot be taken back), so the bump is asked for here
+ * rather than letting the command fail on a missing flag; everything after
+ * that is the terminal shell-out the other mutations use.
+ */
+async function publishPackage(deps: RegistryCommandDeps): Promise<void> {
+    const choice = await vscode.window.showQuickPick(
+        [
+            { label: 'Dry run', description: 'Validate against the registry without publishing', args: '--dry-run' },
+            { label: 'patch', description: 'Bug fixes — 1.2.3 becomes 1.2.4', args: '--bump patch' },
+            { label: 'minor', description: 'New definitions, still compatible — 1.2.3 becomes 1.3.0', args: '--bump minor' },
+            { label: 'major', description: 'Breaking changes — 1.2.3 becomes 2.0.0', args: '--bump major' },
+        ],
+        { placeHolder: 'How should this publish bump the version?', title: 'Publish package' }
+    );
+    if (!choice) {
+        return;
+    }
+    deps.runInTerminal(`publish ${choice.args}`);
 }
 
 /** Search-as-you-type over the registry, ending in a terminal `registry add`. */

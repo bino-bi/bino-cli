@@ -484,6 +484,9 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"inline-ref-bounds",
 		"dataset-source-exclusive",
 		"inline-naming-conflict",
+		// Derived previous-period rules
+		"dataset-derive-conflict",
+		"reserved-name-prefix",
 	}
 
 	if len(rules) != len(expectedIDs) {

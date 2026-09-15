@@ -69,8 +69,6 @@ type Builder struct {
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	// PostDatasetHook is called after dataset execution. May be nil.
 	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
-	// KindProvider enables plugin kind validation. May be nil.
-	KindProvider config.KindProvider
 }
 
 func (b *Builder) logger() logx.Logger {
@@ -119,7 +117,7 @@ func (b *Builder) RenderScreenshotHTML(ctx context.Context, docs []config.Docume
 }
 
 // RenderDocumentHTML generates HTML for a DocumentArtefact.
-func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
+func (b *Builder) RenderDocumentHTML(ctx context.Context, docs []config.Document, artifact config.DocumentArtefact, opts DocumentArtefactRenderOptions) (DocumentArtefactResult, error) {
 	if opts.EngineVersion == "" {
 		opts.EngineVersion = b.EngineVersion
 	}
@@ -132,11 +130,8 @@ func (b *Builder) RenderDocumentHTML(ctx context.Context, artifact config.Docume
 	if opts.PostDatasetHook == nil {
 		opts.PostDatasetHook = b.PostDatasetHook
 	}
-	if opts.KindProvider == nil {
-		opts.KindProvider = b.KindProvider
-	}
 	opts.ContinueOnQueryError = opts.ContinueOnQueryError || b.ContinueOnQueryError
-	return RenderDocumentArtefactHTML(ctx, b.Workdir, artifact, opts)
+	return RenderDocumentArtefactHTML(ctx, b.Workdir, docs, artifact, opts)
 }
 
 // RenderPresentationHTML generates Reveal.js HTML for a ReportArtefact's presentation view.

@@ -213,6 +213,36 @@ type Config struct {
 	Exclude []string
 }
 
+// logLintFindings runs the lint rules over the loaded manifests and logs every
+// finding the project's [lint] table keeps, at the severity that table gives
+// it. A rule the project raised to "error" must not scroll by as a warning,
+// and one lowered to "info" must not shout; without a [lint] table every
+// finding logs as a warning exactly as before.
+func logLintFindings(ctx context.Context, logger logx.Logger, watchDir string, lintDocs []lint.Document, pluginLinters lint.PluginLinterRegistry) {
+	runner := lint.NewProjectRunner(watchDir)
+	findings := runner.Run(ctx, lintDocs)
+	if pluginLinters != nil {
+		findings = append(findings, lint.RunPluginLinters(ctx, lintDocs, pluginLinters)...)
+	}
+	findings = runner.Apply(findings)
+	for _, f := range findings {
+		relPath := pathutil.RelPath(watchDir, f.File)
+		loc := relPath
+		if f.DocIdx > 0 {
+			loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
+		}
+		line := fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message)
+		switch runner.SeverityOverride(f.RuleID) {
+		case "error":
+			logger.Errorf("%s", line)
+		case "info":
+			logger.Infof("%s", line)
+		default:
+			logger.Warnf("%s", line)
+		}
+	}
+}
+
 // Run loads manifests, renders affected artifacts, and updates the preview
 // server. When changed is nil, every artefact is re-rendered (full rebuild).
 // When changed lists file paths and every path maps to a node in the
@@ -265,21 +295,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	}
 
 	if cfg.EnableLint {
-		lintDocs := lint.DocumentsFromConfig(docs)
-		runner := lint.NewDefaultRunner()
-		findings := runner.Run(ctx, lintDocs)
-		if cfg.PluginLinters != nil {
-			pluginFindings := lint.RunPluginLinters(ctx, lintDocs, cfg.PluginLinters)
-			findings = append(findings, pluginFindings...)
-		}
-		for _, f := range findings {
-			relPath := pathutil.RelPath(watchDir, f.File)
-			loc := relPath
-			if f.DocIdx > 0 {
-				loc = fmt.Sprintf("%s #%d", relPath, f.DocIdx)
-			}
-			logger.Warnf("[%s] %s: %s", f.RuleID, loc, f.Message)
-		}
+		logLintFindings(ctx, logger, watchDir, lint.DocumentsFromConfig(docs), cfg.PluginLinters)
 	}
 
 	artifacts, err := config.CollectArtefacts(docs)
@@ -325,12 +341,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		})
 	}
 	for _, docArt := range documentArtefacts {
-		artefactInfos = append(artefactInfos, previewArtefactInfo{
-			Name:   docArt.Document.Name,
-			Title:  docArt.Spec.Title,
-			Format: docArt.Spec.Format,
-			IsDoc:  true,
-		})
+		artefactInfos = append(artefactInfos, docArtefactInfo(docArt))
 	}
 
 	documentInfos := make([]previewDocumentInfo, 0, len(docs))
@@ -440,7 +451,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		pipeline.RegisterEmittedData(server, allPagesResult.EmittedData)
 		allPagesFrameHTML := withPreviewHeader(withPreviewStyles(allPagesResult.FrameHTML), artefactInfos, documentInfos, "/", nil)
 		pageMeta := buildPageMetadata(docs, artifacts)
-		allPagesContextHTML := withPreviewPageMetadata(withPreviewContextStyles(allPagesResult.ContextHTML), pageMeta)
+		allPagesContextHTML := withPreviewPageMetadata(withAllPagesDocuments(withPreviewContextStyles(allPagesResult.ContextHTML), documentArtefacts), pageMeta)
 		state.allPagesFrameHTML = allPagesFrameHTML
 		state.allPagesContextHTML = allPagesContextHTML
 		state.allPagesAssets = pipeline.ConvertLocalAssets(allPagesResult.LocalAssets)
@@ -526,12 +537,11 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 			}
 		}
 		report.Progress(rendered, totalRender, docArt.Document.Name)
-		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docArt, pipeline.DocumentArtefactRenderOptions{
+		renderResult, rerr := pipeline.RenderDocumentArtefactHTML(ctx, watchDir, docs, docArt, pipeline.DocumentArtefactRenderOptions{
 			EngineVersion:        cfg.EngineVersion,
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
-			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})
@@ -548,9 +558,13 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 				docGraph = buildPreviewGraphData(g, rootNode)
 			}
 		}
-		styledHTML := withPreviewStyles(withDocumentPageWidth(renderResult.HTML, docArt.Spec.Format, docArt.Spec.Orientation))
+		styledHTML := withPreviewStyles(withDocumentPreviewMeta(renderResult.HTML, docArt.Spec))
 		frameHTML := withPreviewHeader(styledHTML, artefactInfos, documentInfos, docPath, docGraph)
 		routeMap[docPath] = httpserver.StaticContent(append([]byte(nil), frameHTML...), "text/html; charset=utf-8")
+		// Broadcast like the report loop does: swapContext extracts the
+		// <bn-context> from the full page, so no frame/context split needed.
+		server.BroadcastContent(docPath, styledHTML)
+		broadcastPaths = append(broadcastPaths, docPath)
 		rendered++
 		report.Progress(rendered, totalRender, docArt.Document.Name)
 	}
@@ -593,20 +607,21 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	return broadcastPaths, nil
 }
 
-// needsAllPagesRerender returns true when any seed node is a LayoutPage or a
-// ReportArtefact — both affect what the "All Pages" view shows. Other kinds
-// (DataSource, DataSet, Component, MarkdownFile, LayoutCard, DocumentArtefact)
-// only change what renders inside an artefact, so the All-Pages frame stays
-// valid.
+// needsAllPagesRerender returns true when any seed node is a LayoutPage, a
+// ReportArtefact, or a DocumentArtefact — the first two affect what the
+// "All Pages" view shows, and DocumentArtefact manifests feed its Documents
+// strip (title/format/sources). Other kinds (DataSource, DataSet, Component,
+// MarkdownFile, LayoutCard) only change content within artefacts, so the
+// All-Pages frame stays valid.
 func needsAllPagesRerender(seeds []*reportgraph.Node) bool {
 	for _, n := range seeds {
 		if n == nil {
 			continue
 		}
 		switch n.Kind {
-		case reportgraph.NodeLayoutPage, reportgraph.NodeReportArtefact:
+		case reportgraph.NodeLayoutPage, reportgraph.NodeReportArtefact, reportgraph.NodeDocumentArtefact:
 			return true
-		case reportgraph.NodeDocumentArtefact, reportgraph.NodeLayoutCard, reportgraph.NodeComponent,
+		case reportgraph.NodeLayoutCard, reportgraph.NodeComponent,
 			reportgraph.NodeDataSet, reportgraph.NodeDataSource, reportgraph.NodeMarkdownFile:
 			// These kinds only change content within artefacts, not the
 			// All-Pages frame itself.

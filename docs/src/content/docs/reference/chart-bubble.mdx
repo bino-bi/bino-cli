@@ -9,49 +9,39 @@ bubble area sized by a third measure. Optional pie-share slices, a
 comparison-scenario overlay, and cross-chart size synchronization via
 [`ScalingGroup`](/reference/scaling-group/) manifests.
 
-## Spec outline
+## Minimal definition
+
+The smallest well-formed `ChartBubble` sets the required dataset, the two axis
+measures and the size measure, plus the labels that make a portfolio readable: a
+chart title, an axis title per axis and a caption for the size legend.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
 kind: ChartBubble
 metadata:
-  name: portfolio
+  name: bcg_portfolio
 spec:
   dataset: business_units
-  x:                          # measure token or object
+  chartTitle: "Business unit portfolio"
+  x:
     measure: ac1
-    label: "Market attractiveness"
-    min: 0
-    max: 1
-    refLine: 0.5
-  y: ac2                      # bare token shorthand for { measure: ac2 }
-  size:                       # bubble-only, required: bubble area measure
+    label: "Relative market share"
+  y:
+    measure: ac2
+    label: "Market growth"
+    unit: "%"
+  size:
     measure: ac3
     label: "Net sales"
     unit: "mEUR"
-    group: netsales_area      # optional ScalingGroup for cross-chart sizing
-  share: ac4                  # optional pie-share measure (fraction 0..1)
-  compareWith: pp             # optional comparison family: ac | pp | fc | pl
-  level: auto                 # auto | category | subcategory
-  seriesLevel: auto           # auto | rowgroup | category | none
-  facet:                      # small-multiple panels
-    level: rowgroup           # rowgroup | category
-    columns: 3
-  labels:
-    points: all               # auto | none | all | [name, ...]
-    values: true
-    max: 12
-  legend:
-    show: true
-    position: right           # right | bottom
-  aspect: "16:9"              # plot aspect ratio "w:h"
-  limit: 0                    # max bubbles per panel (largest kept), 0 = unlimited
-  filter: "rowGroup = 'Region A'"
-  chartTitle: "Business unit portfolio"
-  scale: auto                 # "" | none | auto | 0.5 | 1.2 | …
-  selectedStyle: corporate-style
-  ruleset: corporate-rules
 ```
+
+All attributes are listed in the [Attribute Reference](#attribute-reference) below.
+
+`dataset` also accepts an inline [`DataSet`](/reference/dataset/) definition or an
+array of either form, and `x`, `y`, `size`, and `share` accept the bare
+measure-token shorthand instead of the object form shown above (see
+[Measure tokens](#measure-tokens)).
 
 ## Measure tokens
 
@@ -103,6 +93,9 @@ a blocking render error. For full comparability also pin identical axis
   bubbles, hidden when they do not fit), `max: 12`.
 - `limit` – max bubbles per facet panel, keeping the **largest by size**;
   `0` means unlimited.
+- `i18nNamespace` – optional namespace consulted for this component's
+  labels; missing keys fall back to `_system`. When unset, it is resolved
+  from the nearest ancestor carrying one.
 
 ## Example: Portfolio matrix
 
@@ -196,22 +189,53 @@ spec:
 
 | Attribute | Type | Required | Default | Description | Sample |
 |-----------|------|----------|---------|-------------|--------|
-| `spec.dataset` | string or object | yes | — | Dataset reference (name or inline definition). | `dataset: business_units` |
-| `spec.x` | string or object | yes | — | Horizontal axis measure mapping. Maps to the `x` HTML attribute. | `x: ac1` |
-| `spec.y` | string or object | yes | — | Vertical axis measure mapping. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "%" }` |
-| `spec.size` | string or object | yes | — | Bubble size measure mapping (`measure`, `label`, `unit`, `group`). Area ∝ value; values must be ≥ 0. | `size: { measure: ac3, group: netsales_area }` |
-| `spec.share` | string or object | no | — | Pie-share measure (fraction 0..1). | `share: ac4` |
+| `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of either. | `dataset: business_units` |
+| `spec.x` | string or object | yes | — | Horizontal axis measure mapping: a bare measure token or an object. All plain scenario measures across `x`, `y`, `size`, and `share` must share one scenario family. Maps to the `x` HTML attribute. | `x: ac1` |
+| `spec.x.measure` | string | yes (object form) | — | Scenario slot (`ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`) or variance token. See [Measure tokens](#measure-tokens). | `measure: ac1` |
+| `spec.x.label` | string | no | — | Axis title displayed next to the axis. | `label: "Market attractiveness"` |
+| `spec.x.unit` | string | no | — | Unit suffix displayed after the axis title. Values are drawn as delivered — scale in the DataSet SQL. | `unit: "% of net sales"` |
+| `spec.x.min` | number | no | data range | Lower axis domain bound. Points outside an explicit domain are clipped with a warning. | `min: 0` |
+| `spec.x.max` | number | no | data range | Upper axis domain bound. Must be greater than `min` or both overrides are dropped. | `max: 1` |
+| `spec.x.refLine` | number | no | — | Draws a reference line perpendicular to this axis at the given value. | `refLine: 0.5` |
+| `spec.x.highlight` | object | no | — | Shades a band of the plot along this axis: `from` and `to`. Open ends run to the domain edge. | `highlight: { from: 0.5 }` |
+| `spec.x.highlight.from` | number | no | domain start | Band start value. | `from: 0.5` |
+| `spec.x.highlight.to` | number | no | domain end | Band end value. | `to: 1` |
+| `spec.y` | string or object | yes | — | Vertical axis measure mapping, same shape as `spec.x`. Maps to the `y` HTML attribute. | `y: { measure: ac2, unit: "%" }` |
+| `spec.y.measure` | string | yes (object form) | — | Scenario slot or variance token, same grammar as `spec.x.measure`. | `measure: ac2` |
+| `spec.y.label` | string | no | — | Axis title displayed next to the axis. | `label: "Market growth"` |
+| `spec.y.unit` | string | no | — | Unit suffix displayed after the axis title. | `unit: "%"` |
+| `spec.y.min` | number | no | data range | Lower axis domain bound. | `min: 0` |
+| `spec.y.max` | number | no | data range | Upper axis domain bound. Must be greater than `min`. | `max: 1` |
+| `spec.y.refLine` | number | no | — | Draws a reference line perpendicular to this axis at the given value. | `refLine: 0.1` |
+| `spec.y.highlight` | object | no | — | Shades a band of the plot along this axis: `from` and `to`. Open ends run to the domain edge. | `highlight: { to: 0 }` |
+| `spec.y.highlight.from` | number | no | domain start | Band start value. | `from: 0` |
+| `spec.y.highlight.to` | number | no | domain end | Band end value. | `to: 0.1` |
+| `spec.size` | string or object | yes | — | Bubble size measure mapping: a bare measure token or an object. Area ∝ value; values must be ≥ 0 (negative values drop the bubble with a warning). Maps to the `size` HTML attribute. | `size: { measure: ac3, group: netsales_area }` |
+| `spec.size.measure` | string | yes (object form) | — | Scenario slot or variance token for the bubble area. | `measure: ac3` |
+| `spec.size.label` | string | no | — | Caption of the size measure in the size legend. | `label: "Net sales"` |
+| `spec.size.unit` | string | no | — | Unit suffix for the size legend. | `unit: "mEUR"` |
+| `spec.size.group` | string | no | per-chart normalization | Name of a [`ScalingGroup`](/reference/scaling-group/) manifest for cross-chart value-to-area synchronization. An unknown group name is a blocking render error. See [Cross-chart size synchronization](#cross-chart-size-synchronization). | `group: netsales_area` |
+| `spec.share` | string or object | no | — | Pie-share measure (fraction 0..1) rendered as a slice from 12 o'clock in the hue's dark shade. Maps to the `share` HTML attribute. | `share: ac4` |
+| `spec.share.measure` | string | yes (object form) | — | Scenario slot or variance token for the pie share. | `measure: ac4` |
 | `spec.compareWith` | string | no | — | Comparison scenario family rendered behind the primary set. Values: `ac`, `pp`, `fc`, `pl`. Maps to the `compare-with` HTML attribute. | `compareWith: pp` |
 | `spec.level` | string | no | `auto` | Bubble identity level. Values: `auto`, `category`, `subcategory`. | `level: category` |
 | `spec.seriesLevel` | string | no | `auto` | Series/color level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute. | `seriesLevel: rowgroup` |
-| `spec.facet` | object | no | — | Small-multiple panels: `level` (required, `rowgroup` or `category`) and `columns` (≥ 1). | `facet: { level: rowgroup }` |
-| `spec.labels` | object | no | `points: all`, `values: true`, `max: 12` | Bubble labels: `points` (`auto`, `none`, `all`, or a name list), `values` (boolean), `max` (≥ 1). | `labels: { values: false }` |
-| `spec.legend` | object | no | `show: true`, `position: right` | Series legend; a size legend (and compare legend) renders alongside. | `legend: { position: bottom }` |
-| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. | `aspect: "4:3"` |
+| `spec.facet` | object | no | — | Small-multiple panels on a level above the series level. | `facet: { level: rowgroup }` |
+| `spec.facet.level` | string | yes (inside `facet`) | — | Hierarchy level whose values become the facet panels. Values: `rowgroup`, `category`. | `level: rowgroup` |
+| `spec.facet.columns` | integer | no | all panels in one row | Number of panels per row (≥ 1). | `columns: 3` |
+| `spec.labels` | object | no | `points: all`, `values: true`, `max: 12` | Bubble labels; the defaults differ from [`ChartScatter`](/reference/chart-scatter/). | `labels: { values: false }` |
+| `spec.labels.points` | string or array | no | `all` | Which bubbles get a name label. Values: `auto` (up to `max` collision-free candidates), `none`, `all`, or a list of point names. | `points: auto` |
+| `spec.labels.values` | boolean | no | `true` | Render the measure value with the label, contrast-colored inside the bubble and hidden when it does not fit. | `values: false` |
+| `spec.labels.max` | integer | no | `12` | Candidate cap when `points` is `auto` (≥ 1). | `max: 8` |
+| `spec.legend` | object | no | `show: true`, `position: right` | Series legend; a size legend (and a compare legend when `compareWith` is set) renders alongside. | `legend: { position: bottom }` |
+| `spec.legend.show` | boolean | no | `true` | Toggles the legend. | `show: false` |
+| `spec.legend.position` | string | no | `right` | Legend placement. Values: `right`, `bottom`. | `position: bottom` |
+| `spec.aspect` | string | no | `16:9` | Plot aspect ratio `"w:h"`. XY charts have no data-driven height. | `aspect: "4:3"` |
 | `spec.limit` | integer | no | `0` | Max bubbles per facet panel (largest by size kept). `0` means unlimited. | `limit: 20` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "rowGroup = 'Region A'"` |
 | `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "Portfolio"` |
-| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (ScalingGroup bubble areas follow the effective font size, so the factor applies squared to areas). | `scale: auto` |
+| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. Values: `none` (no scaling), `auto` (auto-scale silently), or a positive number as a fixed factor (ScalingGroup bubble areas follow the effective font size, so the factor applies squared to areas). | `scale: auto` |
+| `spec.i18nNamespace` | string | no | inherited from the nearest ancestor | I18n namespace consulted for this component's labels; keys missing there fall back to `_system`. Maps to the `i18n-namespace` HTML attribute. See [Internationalization](/reference/internationalization/). | `i18nNamespace: sales` |
 | `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
 | `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
 

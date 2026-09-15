@@ -5,50 +5,51 @@ import (
 	"testing"
 )
 
-func compatBody(labels string) []byte {
-	return []byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Text","metadata":{"name":"@acme/x","labels":{` + labels + `}},"spec":{}}`)
-}
-
 func TestCompatWarnings(t *testing.T) {
-	t.Run("in range is silent", func(t *testing.T) {
-		body := compatBody(`"registry.compat.cli":">=1.0.0 <3.0.0","registry.compat.engine":">=1.0.0"`)
-		if got := CompatWarnings("@acme/x", "1.0.0", body, "1.4.0", "v1.2.0"); len(got) != 0 {
-			t.Errorf("unexpected warnings: %v", got)
-		}
-	})
-
-	t.Run("out of range warns", func(t *testing.T) {
-		body := compatBody(`"registry.compat.cli":">=2.0.0"`)
-		got := CompatWarnings("@acme/x", "1.0.0", body, "1.4.0", "")
-		if len(got) != 1 || !strings.Contains(got[0], "registry.compat.cli") || !strings.Contains(got[0], "1.4.0") {
-			t.Errorf("warnings = %v", got)
-		}
-	})
-
-	t.Run("both out of range", func(t *testing.T) {
-		body := compatBody(`"registry.compat.cli":">=2.0.0","registry.compat.engine":">=9.0.0"`)
-		if got := CompatWarnings("@acme/x", "1.0.0", body, "1.0.0", "v1.0.0"); len(got) != 2 {
-			t.Errorf("warnings = %v", got)
-		}
-	})
-
-	t.Run("no labels is silent", func(t *testing.T) {
-		if got := CompatWarnings("@acme/x", "1.0.0", compatBody(``), "1.0.0", "v1.0.0"); len(got) != 0 {
-			t.Errorf("warnings = %v", got)
-		}
-	})
-
-	t.Run("unknown engine version skips engine check", func(t *testing.T) {
-		body := compatBody(`"registry.compat.engine":">=9.0.0"`)
-		if got := CompatWarnings("@acme/x", "1.0.0", body, "1.0.0", ""); len(got) != 0 {
-			t.Errorf("warnings = %v", got)
-		}
-	})
-
-	t.Run("unparsable range skips silently", func(t *testing.T) {
-		body := compatBody(`"registry.compat.cli":"not a range"`)
-		if got := CompatWarnings("@acme/x", "1.0.0", body, "1.0.0", ""); len(got) != 0 {
-			t.Errorf("warnings = %v", got)
-		}
-	})
+	tests := []struct {
+		name                      string
+		compatEngine, compatCLI   string
+		cliVersion, engineVersion string
+		wantCount                 int
+		wantSubstr                string
+	}{
+		{name: "no ranges declared", cliVersion: "0.90.0", engineVersion: "1.0.0"},
+		{
+			name: "cli outside the range", compatCLI: ">=0.95.0",
+			cliVersion: "0.90.0", engineVersion: "1.0.0",
+			wantCount: 1, wantSubstr: "compat-cli",
+		},
+		{
+			name: "engine outside the range", compatEngine: ">=2.0.0",
+			cliVersion: "0.95.0", engineVersion: "1.0.0",
+			wantCount: 1, wantSubstr: "the project's engine",
+		},
+		{
+			name: "both outside", compatCLI: ">=0.95.0", compatEngine: ">=2.0.0",
+			cliVersion: "0.90.0", engineVersion: "1.0.0", wantCount: 2,
+		},
+		{
+			name: "both satisfied", compatCLI: ">=0.90.0", compatEngine: ">=1.0.0",
+			cliVersion: "0.90.0", engineVersion: "1.0.0",
+		},
+		{
+			name: "unparsable range is skipped", compatCLI: "not-a-range",
+			cliVersion: "0.90.0", engineVersion: "1.0.0",
+		},
+		{
+			name: "unknown local version is skipped", compatCLI: ">=0.95.0",
+			cliVersion: "", engineVersion: "1.0.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CompatWarnings("@acme/kit", "1.0.0", tt.compatEngine, tt.compatCLI, tt.cliVersion, tt.engineVersion)
+			if len(got) != tt.wantCount {
+				t.Fatalf("warnings = %v, want %d", got, tt.wantCount)
+			}
+			if tt.wantSubstr != "" && !strings.Contains(got[0], tt.wantSubstr) {
+				t.Errorf("warning %q does not mention %q", got[0], tt.wantSubstr)
+			}
+		})
+	}
 }

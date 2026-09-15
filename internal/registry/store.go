@@ -2,10 +2,12 @@ package registry
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -95,8 +97,8 @@ func WritePackage(projectRoot, name string, body []byte) (rel string, err error)
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-		return "", fmt.Errorf("create %s: %w", filepath.Dir(abs), err)
+	if err := mkdirAllContained(projectRoot, filepath.Dir(abs)); err != nil {
+		return "", err
 	}
 	if err := writeFileAtomic(abs, body); err != nil {
 		return "", fmt.Errorf("write %s: %w", rel, err)
@@ -112,8 +114,8 @@ func WriteResource(projectRoot, name, resourceName string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(abs), err)
+	if err := mkdirAllContained(projectRoot, filepath.Dir(abs)); err != nil {
+		return err
 	}
 	if err := writeFileAtomic(abs, body); err != nil {
 		return fmt.Errorf("write %s: %w", rel, err)
@@ -129,11 +131,157 @@ func RemovePackage(projectRoot, name string) error {
 	if err != nil {
 		return err
 	}
+	// storeContain is lexical, so a symlinked scope directory would make this
+	// RemoveAll delete outside the store. Resolve before deleting.
+	if err := verifyContainedAfterResolve(projectRoot, abs); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(abs); err != nil {
 		return fmt.Errorf("remove %s: %w", rel, err)
 	}
 	// Prune the scope dir if empty; best-effort (fails when non-empty).
 	_ = os.Remove(filepath.Dir(abs))
+	return nil
+}
+
+// TreeFilePath returns the absolute and project-relative (slash-form) path
+// for one file of a package's materialized tree. The tree path comes from the
+// server and is never trusted: it is validated against the same grammar the
+// server enforces before any path is built, and the result is checked to
+// resolve inside the store.
+func TreeFilePath(projectRoot, name, treePath string) (abs, rel string, err error) {
+	if err := ValidateTreePath(treePath); err != nil {
+		return "", "", err
+	}
+	_, dirRel, err := PackageDir(projectRoot, name)
+	if err != nil {
+		return "", "", err
+	}
+	rel = path.Join(dirRel, treePath)
+	abs, err = storeContain(projectRoot, rel)
+	if err != nil {
+		return "", "", fmt.Errorf("package file %q resolves outside the registry store", treePath)
+	}
+	return abs, rel, nil
+}
+
+// WriteTreeFile atomically writes one file of a package's tree, creating its
+// directory. Digest verification is the caller's responsibility — the store is
+// plain I/O.
+func WriteTreeFile(projectRoot, name, treePath string, body []byte) (rel string, err error) {
+	abs, rel, err := TreeFilePath(projectRoot, name, treePath)
+	if err != nil {
+		return "", err
+	}
+	if err := mkdirAllContained(projectRoot, filepath.Dir(abs)); err != nil {
+		return "", err
+	}
+	if err := writeFileAtomic(abs, body); err != nil {
+		return "", fmt.Errorf("write %s: %w", rel, err)
+	}
+	return rel, nil
+}
+
+// ListPackageFiles returns every regular file materialized for a package, as
+// slash-form paths relative to the package directory, sorted. A missing
+// package directory yields no files and no error. Symlinks are reported so a
+// caller sweeping the directory can remove them rather than follow them.
+func ListPackageFiles(projectRoot, name string) ([]string, error) {
+	dirAbs, _, err := PackageDir(projectRoot, name)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	walkErr := filepath.WalkDir(dirAbs, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(dirAbs, p)
+		if relErr != nil {
+			return relErr
+		}
+		out = append(out, filepath.ToSlash(rel))
+		return nil
+	})
+	if walkErr != nil {
+		return nil, fmt.Errorf("read %s: %w", dirAbs, walkErr)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// RemoveTreeFile deletes one materialized file of a package and prunes the
+// directories it leaves empty, stopping at the package directory. A missing
+// file is not an error.
+func RemoveTreeFile(projectRoot, name, treePath string) error {
+	abs, rel, err := TreeFilePath(projectRoot, name, treePath)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", rel, err)
+	}
+	dirAbs, _, err := PackageDir(projectRoot, name)
+	if err != nil {
+		return err
+	}
+	pruneEmptyParents(filepath.Dir(abs), dirAbs)
+	return nil
+}
+
+// pruneEmptyParents removes now-empty directories from start upwards, stopping
+// below stop. os.Remove refuses a non-empty directory, and that refusal is the
+// loop's stop condition rather than a failure to report.
+func pruneEmptyParents(start, stop string) {
+	for parent := start; parent != stop && strings.HasPrefix(parent, stop); parent = filepath.Dir(parent) {
+		if os.Remove(parent) != nil {
+			return
+		}
+	}
+}
+
+// mkdirAllContained creates dir and then re-checks, with symlinks resolved,
+// that it is still inside the store. storeContain is purely lexical, and
+// MkdirAll happily traverses an existing symlinked component — so a planted
+// ".bino/registry/acme/kit/models -> /etc" would otherwise make the store
+// write outside the project. Mirrors internal/archive/zip.go's
+// verifyResolvedParent, which guards the same hazard for extracted archives.
+//
+// The atomic write itself needs no O_NOFOLLOW: os.CreateTemp opens with
+// O_CREATE|O_EXCL, which fails on any existing name including a symlink, and
+// os.Rename replaces a symlink rather than following it.
+func mkdirAllContained(projectRoot, dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	return verifyContainedAfterResolve(projectRoot, dir)
+}
+
+// verifyContainedAfterResolve reports an error unless dir, with every symlink
+// resolved, is the store directory or sits inside it.
+func verifyContainedAfterResolve(projectRoot, dir string) error {
+	resolved, err := filepath.EvalSymlinks(dir)
+	if os.IsNotExist(err) {
+		// Nothing exists at dir yet, so nothing can redirect a write out of
+		// the store; the lexical check in storeContain already covered it.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", dir, err)
+	}
+	root, err := filepath.EvalSymlinks(StoreDir(projectRoot))
+	if err != nil {
+		return fmt.Errorf("resolve registry store: %w", err)
+	}
+	if resolved != root && !strings.HasPrefix(resolved, root+string(filepath.Separator)) {
+		return fmt.Errorf("%s resolves outside the registry store", dir)
+	}
 	return nil
 }
 

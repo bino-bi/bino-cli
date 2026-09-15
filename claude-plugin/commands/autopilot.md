@@ -53,7 +53,8 @@ columns), and `unmet[]`; ask Proceed / Adjust / Cancel. **Do not continue until 
 ## Phase 3 — Authoring → MANIFESTS (`bino-author`)
 
 Spawn the `bino-author` subagent: "Read `.bino/agent/brief.json` + `.bino/agent/data-plan.json`;
-`confirmed_writes=…`; validate_draft before every write; wire leaves-first; author data-aware narrative
+`confirmed_writes=…`; follow `bino-concepts` and `bino-authoring` (`outline_kind` / `scaffold_kind`
+first); validate_draft before every write; wire leaves-first; author data-aware narrative
 Text tied to the primary message; write the authoring record to `.bino/agent/manifests.json`; return
 the file list + message→component map." Under `confirmed_writes`, gate each proposed write with the
 human. (No routine checkpoint here — phase 2's gate is behind it and validation is ahead.)

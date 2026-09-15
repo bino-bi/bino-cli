@@ -30,7 +30,12 @@ export interface RegistryPackage {
     version?: string;
     tag?: string;
     kind?: string;
+    /** The package's primary document, project-relative. */
     path?: string;
+    /** Every kind a multi-file package ships. */
+    kinds?: string[];
+    /** Every file the package installs, project-relative. */
+    files?: string[];
     direct: boolean;
     declaredRef?: string;
     installed: boolean;

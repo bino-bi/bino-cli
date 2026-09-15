@@ -18,6 +18,7 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/graph"
@@ -29,6 +30,7 @@ import (
 // State holds the shared daemon state with cached documents and diagnostics.
 type State struct {
 	mu            sync.RWMutex
+	setupMu       sync.Mutex // serializes dataset view setup on the shared session
 	projectRoot   string
 	session       *duckdb.Session
 	documents     []config.Document
@@ -337,29 +339,21 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 		return nil, fmt.Errorf("document not found: %s", name)
 	}
 
-	// Build query (views already registered during refresh)
-	var query string
+	// Build query (datasource views already registered during refresh)
+	var schemaQuery string
 	switch targetDoc.Kind {
 	case "DataSource":
-		query = fmt.Sprintf("SELECT * FROM %q", targetDoc.Name)
+		schemaQuery = fmt.Sprintf("SELECT * FROM %q LIMIT 0", targetDoc.Name)
 	case "DataSet":
-		var payload struct {
-			Spec struct {
-				Query string `json:"query"`
-			} `json:"spec"`
+		query, err := s.prepareDataSet(ctx, targetDoc)
+		if err != nil {
+			return nil, err
 		}
-		if err := json.Unmarshal(targetDoc.Raw, &payload); err != nil {
-			return nil, fmt.Errorf("parse dataset spec: %w", err)
-		}
-		if payload.Spec.Query == "" {
-			return nil, fmt.Errorf("dataset missing query")
-		}
-		query = strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
+		schemaQuery = dataset.LimitQuery(query, 0)
 	default:
 		return nil, fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
 	}
 
-	schemaQuery := fmt.Sprintf("SELECT * FROM (%s) AS _schema LIMIT 0", query)
 	rows, err := s.session.DB().QueryContext(ctx, schemaQuery)
 	if err != nil {
 		return nil, fmt.Errorf("query schema: %w", err)
@@ -367,6 +361,31 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 	defer rows.Close()
 
 	return rows.Columns()
+}
+
+// prepareDataSet compiles a DataSet the same way the build does and makes the
+// shared session ready to run its query: the prql extension when needed and
+// the view(s) a PRQL or derive/assert dataset is built on. Setup runs on
+// demand under setupMu so concurrent handlers do not race on CREATE OR
+// REPLACE VIEW, and a failing view reports its real error to the caller.
+func (s *State) prepareDataSet(ctx context.Context, doc *config.Document) (string, error) {
+	compiled, err := dataset.Compile(*doc)
+	if err != nil {
+		return "", err
+	}
+	if compiled.Prql {
+		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
+			return "", fmt.Errorf("load prql extension: %w", err)
+		}
+	}
+	if len(compiled.Setup) > 0 {
+		s.setupMu.Lock()
+		defer s.setupMu.Unlock()
+		if err := dataset.RunSetup(ctx, s.session, compiled); err != nil {
+			return "", err
+		}
+	}
+	return compiled.Query, nil
 }
 
 // QueryRows returns preview rows for a DataSource or DataSet using the shared session.
@@ -406,24 +425,11 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	case "DataSource":
 		query = fmt.Sprintf("SELECT * FROM %q LIMIT %d", targetDoc.Name, limit+1)
 	case "DataSet":
-		var payload struct {
-			Spec struct {
-				Query string `json:"query"`
-				Prql  string `json:"prql"`
-			} `json:"spec"`
+		compiledQuery, err := s.prepareDataSet(ctx, targetDoc)
+		if err != nil {
+			return nil, nil, false, "", err
 		}
-		if err := json.Unmarshal(targetDoc.Raw, &payload); err != nil {
-			return nil, nil, false, "", fmt.Errorf("parse dataset spec: %w", err)
-		}
-		switch {
-		case payload.Spec.Prql != "":
-			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", payload.Spec.Prql, limit+1)
-		case payload.Spec.Query != "":
-			sqlQuery := strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
-			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", sqlQuery, limit+1)
-		default:
-			return nil, nil, false, "", fmt.Errorf("dataset has no query or prql")
-		}
+		query = dataset.LimitQuery(compiledQuery, limit+1)
 	default:
 		return nil, nil, false, "", fmt.Errorf("unsupported kind: %s", targetDoc.Kind)
 	}

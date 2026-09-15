@@ -187,3 +187,113 @@ func TestLockfileUpsertRemove(t *testing.T) {
 		t.Error("entry still present after remove")
 	}
 }
+
+// A version-1 lock predates the format marker. Loading it must classify every
+// entry as a single-document package, and must not touch the file on disk —
+// an install against an old lock has to produce no diff.
+func TestLockfileV1UpgradesInMemoryOnly(t *testing.T) {
+	dir := t.TempDir()
+	content := "lockfile_version = 1\n\n[[package]]\nname = \"@acme/x\"\nversion = \"1.0.0\"\ndigest = \"sha256:cc\"\nkind = \"Text\"\npath = \".bino/registry/acme/x/x.yml\"\ndirect = true\ndependencies = []\n\n[[package.resources]]\nname = \"sales.csv\"\ncontent_hash = \"sha256:dd\"\n"
+	lockPath := filepath.Join(dir, LockfileName)
+	if err := os.WriteFile(lockPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(lockPath)
+
+	lf, err := LoadLockfile(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	e := lf.Get("@acme/x")
+	if e == nil {
+		t.Fatal("entry missing")
+	}
+	if e.Format != FormatDocument {
+		t.Errorf("Format = %q, want %q", e.Format, FormatDocument)
+	}
+	if e.IsTree() {
+		t.Error("a v1 entry must not read as a tree")
+	}
+	after, _ := os.ReadFile(lockPath)
+	if string(before) != string(after) {
+		t.Error("loading a v1 lock rewrote it on disk")
+	}
+
+	// The synthesized file list is exactly what the package occupies on disk.
+	files := e.TreeFiles()
+	if len(files) != 2 {
+		t.Fatalf("TreeFiles = %+v, want the document and its resource", files)
+	}
+	if files[0].Path != "x.yml" || files[0].Type != FileDocument || files[0].Digest != "sha256:cc" {
+		t.Errorf("document entry = %+v", files[0])
+	}
+	if files[1].Path != "sales.csv" || files[1].Type != FileResource || files[1].Digest != "sha256:dd" {
+		t.Errorf("resource entry = %+v", files[1])
+	}
+}
+
+// Rewriting an upgraded v1 entry must keep emitting the resources list, so a
+// developer still on an older bino can install the package completely.
+func TestLockfileV1UpgradeRoundTripsKeepsResources(t *testing.T) {
+	dir := t.TempDir()
+	lf := &Lockfile{LockfileVersion: 1, Packages: []Entry{{
+		Name: "@acme/x", Version: "1.0.0", Digest: "sha256:cc", Format: FormatDocument,
+		Kind: "Text", Path: ".bino/registry/acme/x/x.yml", Direct: true,
+		Resources: []ResourceEntry{{Name: "sales.csv", ContentHash: "sha256:dd"}},
+	}}}
+	lf.LockfileVersion = CurrentLockfileVersion
+	if err := SaveLockfile(dir, lf); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, LockfileName))
+	for _, want := range []string{"lockfile_version = 2", `format = 'document'`, "[[package.resources]]"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing %q in:\n%s", want, data)
+		}
+	}
+	reloaded, err := LoadLockfile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.Get("@acme/x"); got == nil || got.Format != FormatDocument || len(got.Resources) != 1 {
+		t.Errorf("round trip = %+v", got)
+	}
+}
+
+func TestLockfileTreeEntryRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	lf := &Lockfile{LockfileVersion: CurrentLockfileVersion, Packages: []Entry{{
+		Name: "@acme/kit", Version: "1.2.0", Digest: "sha256:manifest", Format: FormatTree,
+		Kind: "LayoutPage", Path: ".bino/registry/acme/kit/kit.yaml", Direct: true,
+		Kinds: []string{"Table", "LayoutPage"},
+		Files: []FileEntry{
+			{Path: "resources/logo.png", Type: FileResource, Digest: "sha256:b"},
+			{Path: "kit.yaml", Type: FileDocument, Digest: "sha256:a"},
+		},
+		CompatEngine: ">=1.0.0",
+	}}}
+	if err := SaveLockfile(dir, lf); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := LoadLockfile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := reloaded.Get("@acme/kit")
+	if e == nil || !e.IsTree() {
+		t.Fatalf("entry = %+v", e)
+	}
+	// Files and kinds are sorted on save so the file is byte-stable.
+	if len(e.Files) != 2 || e.Files[0].Path != "kit.yaml" || e.Files[1].Path != "resources/logo.png" {
+		t.Errorf("files = %+v, want sorted by path", e.Files)
+	}
+	if e.Kinds[0] != "LayoutPage" || e.Kinds[1] != "Table" {
+		t.Errorf("kinds = %v, want sorted", e.Kinds)
+	}
+	if e.CompatEngine != ">=1.0.0" {
+		t.Errorf("compat_engine = %q", e.CompatEngine)
+	}
+	if got := e.TreeFiles(); len(got) != 2 {
+		t.Errorf("TreeFiles = %+v", got)
+	}
+}

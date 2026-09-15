@@ -11,8 +11,9 @@ slash commands, and an autopilot pipeline that the raw MCP doesn't carry.
 
 The plugin drives the `bino` binary on your `PATH`. You need a build new enough to have the **`mcp`
 subcommand** — check with `bino version`, and confirm `bino mcp --help` works. The plugin detects a
-missing or too-old binary and tells you; it can't install bino for you. See the
-[install guide](https://github.com/bino-bi/bino-cli).
+missing or too-old binary and tells you; it can't install bino for you. The `outline_kind` and
+`scaffold_kind` tools need bino v0.94.0 or newer; on an older binary the skills fall back to
+`describe_kind` automatically. See the [install guide](https://github.com/bino-bi/bino-cli).
 
 ## Install
 
@@ -28,7 +29,7 @@ confirm the `bino` server is connected; `/help` lists the `/bino:*` commands.
 
 ### Mode A — Co-authoring (you drive, Claude assists)
 
-Claude follows bino's disciplined loop — read the live schema → learn a dataset's columns →
+Claude follows bino's disciplined loop — outline the kind → scaffold → learn a dataset's columns →
 draft → `validate_draft` → write → `validate_project` → `build` — and applies IBCS semantics the
 schema can't carry (scenarios, variances, component choice, narrative).
 
@@ -40,8 +41,9 @@ schema can't carry (scenarios, variances, component choice, narrative).
 | `/bino:fix` | Validate the project and walk the diagnostics to green. |
 | `/bino:build` | Render the report artefacts to PDF. |
 
-Two skills load automatically when relevant: **`bino-authoring`** (the draft→validate→write
-discipline) and **`bino-ibcs`** (the IBCS rubric).
+Three skills load automatically when relevant: **`bino-concepts`** (the mental model),
+**`bino-authoring`** (the outline→scaffold→validate→write discipline) and **`bino-ibcs`** (the IBCS
+rubric).
 
 ### Mode B — Autopilot (you delegate, Claude runs the pipeline)
 

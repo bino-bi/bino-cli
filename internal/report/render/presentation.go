@@ -265,7 +265,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	}
 	diags = append(existingDiags, diags...)
 
-	internationalizations, err := collectInternationalizations(docs)
+	internationalizations, err := collectInternationalizations(docs, locale)
 	if err != nil {
 		return PresentationResult{}, diags, err
 	}
@@ -405,7 +405,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	}
 	diags = append(existingDiags, diags...)
 
-	internationalizations, err := collectInternationalizations(docs)
+	internationalizations, err := collectInternationalizations(docs, locale)
 	if err != nil {
 		return PresentationFrameResult{}, diags, err
 	}

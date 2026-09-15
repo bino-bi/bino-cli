@@ -28,6 +28,12 @@ func minimalGoldenData() map[string]any {
 		"EngineVersion":  "v1.0.0-alpha.15",
 		"Date":           "2026-01-01T00:00:00Z",
 		"BinoVersion":    "0.0.0-test",
+		// [package] vars; only the predef template references them.
+		"PackageName":        "@acme/rainbow-sample-report",
+		"PackageDescription": "A reusable kit.",
+		"PackageVisibility":  "private",
+		"PackageTags":        []string{"starter", "ibcs"},
+		"PackageCategory":    "components",
 	}
 }
 
@@ -110,7 +116,6 @@ func TestRenderMinimalNoEngineVersion(t *testing.T) {
 var standardFiles = []string{
 	".bnignore",
 	".gitignore",
-	"LICENSE",
 	"README.md",
 	"bino.toml",
 	"components/example_chart.yaml",
@@ -182,6 +187,73 @@ func TestRenderStandardLeavesNoActions(t *testing.T) {
 	binary := map[string]bool{".png": true, ".svg": true, ".csv": true}
 	for _, rel := range created {
 		if binary[filepath.Ext(rel)] {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for _, marker := range []string{"{{", "<no value>"} {
+			if bytes.Contains(body, []byte(marker)) {
+				t.Errorf("%s contains unrendered %q", rel, marker)
+			}
+		}
+	}
+}
+
+// predefFiles is the exact file set the predef template scaffolds, in the
+// sorted order RenderTree returns. Like standardFiles this is a user-visible
+// contract; mocks/ is deliberately part of it and deliberately not a canonical
+// manifest folder.
+var predefFiles = []string{
+	".bnignore",
+	".gitignore",
+	"README.md",
+	"bino.toml",
+	"components/revenue_table.yaml",
+	"mocks/mock_data.yaml",
+	"mocks/preview.yaml",
+	"resources/logo.png",
+	"resources/logo.yaml",
+	"styles/corporate_theme.yaml",
+}
+
+// renderPredef renders the built-in predef template into a temp dir with the
+// pinned fixture values, returning the created paths and the destination.
+func renderPredef(t *testing.T) ([]string, string) {
+	t.Helper()
+	root, err := BuiltinRoot("predef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := BuiltinManifest("predef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	created, err := RenderTree(root, manifest, dest, minimalGoldenData(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return created, dest
+}
+
+// TestRenderPredefFoldered verifies the predef template scaffolds the package
+// tree plus its mocks/ preview harness and renders without error.
+func TestRenderPredefFoldered(t *testing.T) {
+	created, _ := renderPredef(t)
+	if !reflect.DeepEqual(created, predefFiles) {
+		t.Fatalf("created files = %v, want %v", created, predefFiles)
+	}
+}
+
+// TestRenderPredefLeavesNoActions guards the substitution: the scaffold must
+// contain no unresolved template action and no "<no value>" from a variable
+// that silently went missing.
+func TestRenderPredefLeavesNoActions(t *testing.T) {
+	created, dest := renderPredef(t)
+	for _, rel := range created {
+		if filepath.Ext(rel) == ".png" {
 			continue
 		}
 		body, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(rel)))

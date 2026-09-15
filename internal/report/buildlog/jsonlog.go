@@ -100,10 +100,15 @@ func BuildQueryEntry(meta duckdb.QueryExecMeta, embedOpts EmbedOptions) QueryEnt
 
 // BuildLintEntry creates a LintEntry from individual fields.
 // This is used to convert lint.Finding to LintEntry without importing the lint package.
-func BuildLintEntry(ruleID, message, file string, docIdx int, path string, line, column int) LintEntry {
+// An empty severity is recorded as "warning", which is what a finding means
+// when the project sets no [lint] severity for its rule.
+func BuildLintEntry(ruleID, severity, message, file string, docIdx int, path string, line, column int) LintEntry {
+	if severity == "" {
+		severity = "warning"
+	}
 	return LintEntry{
 		RuleID:   ruleID,
-		Severity: "warning", // All lint findings are warnings for now.
+		Severity: severity,
 		Message:  message,
 		File:     file,
 		DocIdx:   docIdx,

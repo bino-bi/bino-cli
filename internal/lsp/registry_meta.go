@@ -33,8 +33,12 @@ func (s *Server) getLockfile() *registry.Lockfile {
 	return lf
 }
 
-// packageOrigins maps each installed package file to its registry origin,
-// keyed off bino.lock's project-relative paths. Keys are normalized with
+// packageOrigins maps each installed package file to its registry origin.
+//
+// A package is a file tree, so it contributes one key per file rather than
+// one per package: every document of a multi-file package has to carry the
+// same "(registry)" annotation in completion and hover, not just whichever one
+// the lock names as the package's primary document. Keys are normalized with
 // normPath so they match index paths regardless of how the root was given.
 func (s *Server) packageOrigins() map[string]pkgOrigin {
 	lf := s.getLockfile()
@@ -43,8 +47,18 @@ func (s *Server) packageOrigins() map[string]pkgOrigin {
 	}
 	out := make(map[string]pkgOrigin, len(lf.Packages))
 	for _, e := range lf.Packages {
-		key := normPath(filepath.Join(s.root, filepath.FromSlash(e.Path)))
-		out[key] = pkgOrigin{Name: e.Name, Version: e.Version, Tag: e.Tag}
+		origin := pkgOrigin{Name: e.Name, Version: e.Version, Tag: e.Tag}
+		dirAbs, _, err := registry.PackageDir(s.root, e.Name)
+		if !e.IsTree() || err != nil {
+			// A single-document package is addressed by the path the lock
+			// recorded, which also keeps locks written before the store gained
+			// a per-package directory annotating correctly.
+			out[normPath(filepath.Join(s.root, filepath.FromSlash(e.Path)))] = origin
+			continue
+		}
+		for _, f := range e.Files {
+			out[normPath(filepath.Join(dirAbs, filepath.FromSlash(f.Path)))] = origin
+		}
 	}
 	return out
 }

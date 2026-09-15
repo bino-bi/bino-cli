@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/graph"
@@ -202,7 +203,7 @@ func runLSPColumns(ctx context.Context, dir, name string, out io.Writer) error {
 	}
 
 	// Use shared introspection from datasource package
-	columns, err := datasource.IntrospectColumns(ctx, docs, name)
+	columns, err := dataset.IntrospectColumns(ctx, docs, name)
 	if err != nil {
 		result.Error = fmt.Sprintf("extract columns: %v", err)
 		return outputJSON(out, result)
@@ -430,32 +431,21 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 		query = fmt.Sprintf("SELECT * FROM %q LIMIT %d", doc.Name, limit+1)
 
 	case "DataSet":
-		// DataSet has a custom query (SQL or PRQL)
-		var payload struct {
-			Spec struct {
-				Query string `json:"query"`
-				Prql  string `json:"prql"`
-			} `json:"spec"`
+		// DataSet: same resolution as the build (source / prql / query, $file,
+		// @inline, derive/assert) so the preview shows what the build produces.
+		compiled, err := dataset.Compile(*doc)
+		if err != nil {
+			return nil, nil, false, err
 		}
-		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
-			return nil, nil, false, fmt.Errorf("parse dataset spec: %w", err)
-		}
-
-		switch {
-		case payload.Spec.Prql != "":
-			// Load PRQL extension for PRQL queries
+		if compiled.Prql {
 			if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
 				return nil, nil, false, fmt.Errorf("load prql extension: %w", err)
 			}
-			// For PRQL, wrap the query with a LIMIT
-			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", payload.Spec.Prql, limit+1)
-		case payload.Spec.Query != "":
-			// Strip trailing semicolons to avoid syntax errors when wrapping
-			sqlQuery := strings.TrimSuffix(strings.TrimSpace(payload.Spec.Query), ";")
-			query = fmt.Sprintf("SELECT * FROM (%s) AS _preview LIMIT %d", sqlQuery, limit+1)
-		default:
-			return nil, nil, false, fmt.Errorf("dataset has no query or prql")
 		}
+		if err := dataset.RunSetup(ctx, session, compiled); err != nil {
+			return nil, nil, false, err
+		}
+		query = dataset.LimitQuery(compiled.Query, limit+1)
 
 	default:
 		return nil, nil, false, fmt.Errorf("unsupported kind: %s", doc.Kind)

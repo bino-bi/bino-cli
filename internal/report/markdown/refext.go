@@ -10,6 +10,8 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+
+	"bino.bi/bino/internal/report/mdscan"
 )
 
 // RefNode represents a :ref[Kind:name] or :ref[Kind:name]{caption="..."} reference in the AST.
@@ -41,8 +43,10 @@ func (n *RefNode) Dump(source []byte, level int) {
 var KindRefNode = ast.NewNodeKind("RefNode")
 
 // refPattern matches :ref[Kind:name] and :ref[Kind:name]{caption="..."} syntax.
-// Group 1: Kind, Group 2: name, Group 3 (optional): caption value
-var refPattern = regexp.MustCompile(`^:ref\[([A-Za-z]+):([A-Za-z0-9_-]+)\](?:\{caption="([^"]*)"\})?`)
+// Group 1: Kind, Group 2: name, Group 3 (optional): caption value.
+// The pattern source is shared with mdscan.ScanRefs (used by the dependency
+// graph); the leading ^ anchors it at goldmark's inline trigger position.
+var refPattern = regexp.MustCompile(`^` + mdscan.RefPatternSrc)
 
 // refParser parses :ref[Kind:name] inline syntax.
 type refParser struct{}

@@ -180,6 +180,106 @@ foo: bar
 			wantErr: true,
 		},
 		{
+			name: "DataSet derive and assert accepted",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp2: { from: ac1, shift: 1 year, grain: month }
+  assert:
+    pp3: { from: pl1, shift: 2 quarter, grain: week }
+`,
+			wantErr: false,
+		},
+		{
+			name: "DataSet derive pp5 rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp5: { from: ac1, shift: 1 year, grain: month }
+`,
+			wantErr: true,
+		},
+		{
+			name: "DataSet derive ac1 as key rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    ac1: { from: pp1, shift: 1 year, grain: month }
+`,
+			wantErr: true,
+		},
+		{
+			name: "DataSet derive shift in words rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp1: { from: ac1, shift: one year, grain: month }
+`,
+			wantErr: true,
+		},
+		{
+			name: "DataSet derive without grain rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp1: { from: ac1, shift: 1 year }
+`,
+			wantErr: true,
+		},
+		{
+			name: "DataSet derive unknown from rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp1: { from: revenue, shift: 1 year, grain: month }
+`,
+			wantErr: true,
+		},
+		{
+			name: "DataSet derive unknown sub-key rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: ds
+spec:
+  query: SELECT 1
+  derive:
+    pp1: { from: ac1, shift: 1 year, grain: month, tolerance: 1 }
+`,
+			wantErr: true,
+		},
+		{
 			name: "ConnectionSecret s3 valid",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

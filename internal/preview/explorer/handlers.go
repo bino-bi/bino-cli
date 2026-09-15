@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/runtimecfg"
 )
 
@@ -100,10 +101,10 @@ func handleMetadata(session *Session) http.HandlerFunc {
 			case "DataSet":
 				di := datasetInfo{Name: doc.Name}
 				di.DependsOn = extractDependsOn(doc.Raw)
-				if resolved, rerr := resolvedDatasetSQL(doc); rerr == nil {
-					di.SQL = resolved
+				if compiled, cerr := dataset.Compile(doc); cerr == nil {
+					di.SQL = compiled.Query
 				} else {
-					di.SQLError = rerr.Error()
+					di.SQLError = cerr.Error()
 				}
 				resp.Datasets = append(resp.Datasets, di)
 			}

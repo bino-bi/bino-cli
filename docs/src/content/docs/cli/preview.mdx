@@ -26,6 +26,18 @@ Common flags:
 - `--lint` – run lint rules on each refresh (disabled by default).
 - `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`.
 
+## Documents
+
+DocumentArtefacts render at `/doc/<name>` with the same live reload as report
+artefacts: editing a markdown source re-renders only the affected document, and
+edits to an embedded component or its data propagate into the open page. The
+preview pins the page to the artefact's paper width and marks page breaks and
+header/footer bands, but real pagination and TOC page numbers appear only in
+`bino build` — see
+[Previewing documents](/reference/document-artefact/#previewing-documents) for
+the exact contract. `--artefact` and `--exclude-artefact` filter document
+artefacts too.
+
 ## Default Arguments via bino.toml
 
 You can set default values for preview flags in your project's `bino.toml` file. These defaults are applied automatically and can be overridden by explicit command-line flags:
