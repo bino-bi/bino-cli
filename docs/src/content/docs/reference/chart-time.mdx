@@ -46,7 +46,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `chartMode` – rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
 - `maxBars` – threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `lineFullWidth` – when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
-- `axisLabelsMode` – `smart` (context-aware labels), `long`, or `short`.
+- `axisLabelsMode` – how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label.
 - `dateInterval` – desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` – optional filter expression.
 - `level` – aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` – keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
@@ -100,6 +100,30 @@ spec:
 ```
 
 <img src={chartTimeImg.src} alt="ChartTime showing monthly revenue trend as line chart with AC, PY, and FC scenarios" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+
+## Example: Short axis date labels
+
+Write every axis label in the short date style instead of the default `smart` mode:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: revenue_monthly_short_labels
+spec:
+  dataset: revenue_monthly
+  chartTitle: "Monthly revenue"
+  axisLabelsMode: short
+  dateInterval: month
+  scenarios: ["ac1"]
+  measureScale: M
+  measureUnit: "EUR"
+```
+
+With `dateInterval: month` the axis reads `Jan`, `Feb`, `Mar`, … on every column and never
+shows the year. The default `smart` writes the same labels but adds the year where a new one
+starts (`Jan 26`), and `long` writes `Jan 2026` on every column, which needs much more width.
 
 ## Example: Line chart mode
 
@@ -289,7 +313,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.chartMode` | string | no | `bar` | Rendering mode. Values: `bar`, `line`, `auto`. When `auto`, switches to line when data points exceed `maxBars`. | `chartMode: line` |
 | `spec.maxBars` | integer | no | `28` | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1. | `maxBars: 15` |
 | `spec.lineFullWidth` | boolean | no | `true` | Stretch line charts to fill full parent width. Has no effect in bar mode. | `lineFullWidth: true` |
-| `spec.axisLabelsMode` | string | no | — | Axis label rendering. Values: `smart` (context-aware), `long`, `short`. | `axisLabelsMode: smart` |
+| `spec.axisLabelsMode` | string | no | `smart` | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`. | `axisLabelsMode: short` |
 | `spec.dateInterval` | string | no | auto-detect | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. | `dateInterval: month` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
 | `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`. | `level: category` |
