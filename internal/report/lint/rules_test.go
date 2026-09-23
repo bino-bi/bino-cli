@@ -481,6 +481,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"i18n-code-unused",
 		"i18n-namespace-unreferenced",
 		"i18n-title-namespace-deprecated",
+		"i18n-no-data-markers",
 		// Inline definition rules
 		"inline-ref-bounds",
 		"dataset-source-exclusive",

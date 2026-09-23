@@ -2,6 +2,7 @@ package lint
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -198,5 +199,43 @@ func TestI18nTitleNamespaceDeprecated(t *testing.T) {
 	clean := componentDoc("LayoutPage", "page", map[string]any{"i18nNamespace": "global", "children": []any{}})
 	if findings := runRule(t, i18nTitleNamespaceDeprecated, []Document{clean}); len(findings) != 0 {
 		t.Fatalf("got %d findings %v, want 0", len(findings), findings)
+	}
+}
+
+func TestI18nNoDataMarkers(t *testing.T) {
+	withContent := func(content any) Document {
+		return Document{
+			File:     "/project/i18n.yaml",
+			Position: 1,
+			Kind:     "Internationalization",
+			Name:     "labels",
+			Raw:      rawDoc("Internationalization", "labels", map[string]any{"code": "en", "content": content}),
+		}
+	}
+
+	findings := runRule(t, i18nNoDataMarkers, []Document{withContent(map[string]any{
+		"bn-table.no-data":        "==No Data==",
+		"bn-chart-time.no-data":   "==Keine Daten==",
+		"bn-chart-bubble.no-data": "No Data",
+		"global.ac1":              "==No Data==",
+	})})
+	if len(findings) != 2 {
+		t.Fatalf("got %d findings %v, want 2", len(findings), findings)
+	}
+	if findings[0].Path != "spec.content.bn-chart-time.no-data" || !strings.Contains(findings[0].Message, `"Keine Daten"`) {
+		t.Errorf("unexpected first finding: %+v", findings[0])
+	}
+	if findings[1].Path != "spec.content.bn-table.no-data" || !strings.Contains(findings[1].Message, `"No Data"`) {
+		t.Errorf("unexpected second finding: %+v", findings[1])
+	}
+
+	for _, content := range []any{
+		map[string]any{"bn-table.no-data": "Keine Daten"},
+		map[string]any{"bn-table.no-data": ""},
+		`{"bn-table.no-data": "==No Data=="}`,
+	} {
+		if findings := runRule(t, i18nNoDataMarkers, []Document{withContent(content)}); len(findings) != 0 {
+			t.Errorf("content %v: got %d findings %v, want 0", content, len(findings), findings)
+		}
 	}
 }

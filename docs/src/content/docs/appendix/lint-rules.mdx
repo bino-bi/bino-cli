@@ -38,6 +38,7 @@ The last five rules only run on a **predef project** — a project whose `bino.t
 | `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
 | `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
 | `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
+| `i18n-no-data-markers`         | No-Data Label Markers        | Warning  | A `*.no-data` label set to `==No Data==` or `==Keine Daten==` prints the `==` markers.         |
 | `package-config-invalid`       | Package Config Invalid       | Error    | The `[package]` table in `bino.toml` must satisfy the constraints a registry publish enforces.  |
 | `predef-name-namespace`        | Predef Name Namespace        | Error    | Documents inside the package include set must be named after the package.                      |
 | `predef-forbidden-kind`        | Predef Forbidden Kind        | Error    | Artefact kinds and credential kinds must not be inside the package include set.                |
@@ -747,6 +748,32 @@ spec:
 ```
 
 **See also:** [Scoped overrides with `i18nNamespace`](/reference/internationalization/#scoped-overrides-with-i18nnamespace)
+
+### i18n-no-data-markers
+
+Up to v0.97.0, `bino add i18n --defaults` wrote the no-data labels as `==No Data==` and `==Keine Daten==`. The `==` was an old placeholder, not markup, and the engine no longer uses it. Content in an `Internationalization` document overrides the engine's labels, so a file scaffolded back then keeps printing the markers on every empty Table and chart.
+
+**Example problem:**
+
+```yaml
+kind: Internationalization
+metadata:
+  name: labels_en
+spec:
+  code: en
+  content:
+    bn-table.no-data: ==No Data== # shows "==No Data==" in the report
+```
+
+**Fix:** Set the current default, or delete the key so the engine's label applies.
+
+```yaml
+spec:
+  content:
+    bn-table.no-data: No Data
+```
+
+**See also:** [Internationalization](/reference/internationalization/)
 
 ### package-config-invalid
 

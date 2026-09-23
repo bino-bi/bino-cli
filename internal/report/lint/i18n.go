@@ -195,6 +195,69 @@ var i18nTitleNamespaceDeprecated = Rule{
 	},
 }
 
+// oldNoDataLabels maps the no-data labels that `bino add i18n --defaults`
+// wrote up to v0.97.0 to the engine's current defaults. The "==" was an old
+// placeholder, not markup.
+var oldNoDataLabels = map[string]string{
+	"==No Data==":     "No Data",
+	"==Keine Daten==": "Keine Daten",
+}
+
+// i18nNoDataMarkers flags content that still sets an old no-data label.
+//
+// The engine dropped the "==" markers, but content overrides the engine's
+// bundle, so a file scaffolded by an older CLI keeps printing them.
+var i18nNoDataMarkers = Rule{
+	ID:   "i18n-no-data-markers",
+	Name: "No-Data Label Markers",
+	Description: "A '*.no-data' label set to '==No Data==' or '==Keine Daten==' is an old default of " +
+		"'bino add i18n --defaults'; it overrides the engine's label and prints the '==' markers.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, doc := range docs {
+			if doc.Kind != "Internationalization" {
+				continue
+			}
+			var payload struct {
+				Spec struct {
+					Content any `json:"content"`
+				} `json:"spec"`
+			}
+			if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+				continue
+			}
+			// --defaults always writes a map, never the JSON-string form.
+			content, ok := payload.Spec.Content.(map[string]any)
+			if !ok {
+				continue
+			}
+			keys := make([]string, 0, len(content))
+			for key := range content {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				value, _ := content[key].(string)
+				label, old := oldNoDataLabels[value]
+				if !old || !strings.HasSuffix(key, ".no-data") {
+					continue
+				}
+				findings = append(findings, Finding{
+					RuleID: "i18n-no-data-markers",
+					Message: fmt.Sprintf(
+						"%q is an old default and prints the '==' markers; set it to %q or delete the key",
+						value, label,
+					),
+					File:   doc.File,
+					DocIdx: doc.Position,
+					Path:   "spec.content." + key,
+				})
+			}
+		}
+		return findings
+	},
+}
+
 // joinSorted renders a set of strings as a sorted, quoted list.
 func joinSorted(set map[string]bool) string {
 	values := make([]string, 0, len(set))
