@@ -8,6 +8,7 @@ import "sort"
 //
 // Source of truth: bn-template-engine/src/stores/internationalization.ts —
 // keep this file in sync when the engine's default bundles change.
+// TestDefaultI18nTokensMatchPinnedEngine compares it with the Dockerfile pin.
 var defaultI18nTokens = map[string]map[string]string{
 	"de": {
 		"global.ac1":                          "AC",

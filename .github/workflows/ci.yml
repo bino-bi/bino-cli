@@ -63,6 +63,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # TestDefaultI18nTokensMatchPinnedEngine compares the `bino add i18n
+      # --defaults` labels with the pinned engine and skips without it.
+      - name: Install the pinned template engine
+        env:
+          CGO_ENABLED: "1"
+        run: go run ./cmd/bino setup --template-engine --quiet --engine-version "$(sed -n 's/^ARG ENGINE_VERSION=//p' Dockerfile)"
+
       - name: Run tests
         env:
           CGO_ENABLED: "1"
