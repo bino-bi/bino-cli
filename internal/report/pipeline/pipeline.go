@@ -1434,9 +1434,15 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
 	}
 
+	scalingGroups, err := render.ScalingGroupElements(docs)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
+	}
+
 	// Create render context with documents, datasets, and datasources
 	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
 	renderCtx.AssetURLs = assetURLs
+	renderCtx.ScalingGroups = scalingGroups
 	if opts.PluginOptions != nil {
 		renderCtx.DataMode = opts.PluginOptions.DataMode
 		renderCtx.DataBaseURL = opts.PluginOptions.DataBaseURL
