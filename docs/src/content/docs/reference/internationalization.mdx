@@ -71,6 +71,9 @@ Scaffold a complete override file with every token via:
 bino add i18n german --code de --defaults --output i18n/de.yaml --no-prompt
 ```
 
+A file scaffolded this way by bino v0.97.0 or earlier still sets the old `no-data`
+labels, wrapped in `==` markers; update or delete those keys.
+
 ### Scenario labels (`global.` prefix — read by tables, charts, and titles)
 
 | Key | de | en |
@@ -103,7 +106,7 @@ The `{%}` token is replaced at render time with the comparison scenario's abbrev
 | `bn-table.in` | in | in | Prefix before the measure scale and unit, as in `in k€` |
 | `bn-table.category` | `" "` | `" "` | Header above the category column (a single space by default) |
 | `bn-table.operation` | `" "` | `" "` | Header above the operation (+/−) column |
-| `bn-table.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
+| `bn-table.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
 
 ### Title connectors (`bn-title.` prefix)
 
@@ -119,21 +122,21 @@ Note the key really is spelled `SEPERATOR_WS`.
 
 | Key | de | en | What it labels |
 |-----|----|----|----------------|
-| `bn-chart-time.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
-| `bn-chart-structure.no-data` | ==Keine Daten== | ==No Data== | Placeholder when the dataset yields no rows |
+| `bn-chart-time.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
+| `bn-chart-structure.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
 | `bn-chart-structure.REST` | REST | REST | The bar aggregating everything beyond `spec.limit` |
 
 :::note
 These three keys need a template engine that reads them. On older engines the
-manifest still validates and the override is simply ignored, leaving the
-built-in `==No Data==` in place.
+manifest still validates and the override is simply ignored, leaving that
+engine's old built-in placeholder in place.
 :::
 
 ### Chart labels (`bn-chart-scatter.`, `bn-chart-bubble.`, `bn-chart-bullet.` prefixes)
 
 | Key | de | en | Read by |
 |-----|----|----|---------|
-| `<chart>.no-data` | ==Keine Daten== | ==No Data== | scatter, bubble, bullet |
+| `<chart>.no-data` | Keine Daten | No Data | scatter, bubble, bullet |
 | `<chart>.axis.in` | in | in | scatter, bubble, bullet |
 | `<chart>.legend.title` | — | — | scatter, bubble — empty by default, which hides the heading |
 | `bn-chart-bubble.legend.size` | Größe | Size | Heading for the bubble-size scale |

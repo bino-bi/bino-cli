@@ -39,6 +39,18 @@ func TestDefaultI18nTokens(t *testing.T) {
 	}
 }
 
+// Older engines wrapped the no-data label in "==" markers. They were a
+// placeholder, not markup, so reports showed them verbatim.
+func TestNoDataDefaultHasNoMarkers(t *testing.T) {
+	for locale, tokens := range defaultI18nTokens {
+		for key, value := range tokens {
+			if strings.HasSuffix(key, ".no-data") && strings.Contains(value, "==") {
+				t.Errorf("%s: %s = %q contains '==' markers", locale, key, value)
+			}
+		}
+	}
+}
+
 func TestApplyI18nDefaultTokens(t *testing.T) {
 	data := &InternationalizationManifestData{
 		Code:    "de",
