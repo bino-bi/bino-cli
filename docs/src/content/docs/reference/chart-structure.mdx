@@ -44,7 +44,7 @@ and `orderDirection` can be inherited from the surrounding layout (see
 - `chartTitle` – optional custom title.
 - `filter` – optional filter expression.
 - `level` – aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` – keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When omitted, it is detected with a warning.
-- `order` / `orderDirection` – sort key and direction; if you use a scenario, it must appear in `scenarios`. When omitted, they are detected with a warning. `order` has no `auto` value – omit the field instead.
+- `order` / `orderDirection` – sort key and direction; if you use a scenario, it must appear in `scenarios`. When `order` is set to `auto`, it is detected from the dataset silently. When omitted, it is detected with a warning.
 - `measureScale` – SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
 - `measureUnit` – unit string, for example `mEUR`.
 - `unitScaling` – data units displayed per 1 em of bar width (map-scale semantics: larger value = smaller bars), `auto` to fit the available width, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
@@ -239,7 +239,7 @@ children:
 | `spec.chartTitle` | string | no | `""` | Custom chart title. | `chartTitle: "Revenue by region"` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
 | `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`. The index variants keep the original dataset order. When `auto`, detected silently. When omitted, detected with a warning. | `level: category` |
-| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. There is no `auto` value – omit the field to detect the key with a warning. A scenario used here must also appear in `scenarios`. | `order: ac1` |
+| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently. When omitted, detected with a warning. A scenario used here must also appear in `scenarios`. | `order: ac1` |
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | — | SI prefix for measure scaling; the original values are converted. `_` means no prefix, `GREATEST` picks the largest and `LEAST` the smallest value in the dataset. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST` (case-sensitive). | `measureScale: M` |
 | `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |

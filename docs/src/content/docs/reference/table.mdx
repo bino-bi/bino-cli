@@ -38,7 +38,7 @@ repeated here (see [Inherited props](#inherited-props)).
 
 - `dataset` – required dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those.
 - `filter` – optional filter expression.
-- `order` – sort key; using scenario names requires them to appear in `scenarios`. Default: `category`.
+- `order` – sort key; using scenario names requires them to appear in `scenarios`. Default: `category`. `auto` uses the key suggested by the dataset instead: subCategory if the dataset has subCategory values, else category, else rowGroup. With subCategory values the category rows keep their dataset order and `orderDirection` has no effect on them; `thereof` drilldown rows are sorted by subCategory, in the opposite direction to `orderDirection`. With only category values, `auto` and an omitted `order` sort the same.
 - `orderDirection` – sort direction (`asc` or `desc`).
 - `measureScale`, `measureType`, `measureUnit` – control how measures are interpreted and displayed.
 - `categoryWidth` – width of the category column (`w5`..`w50`, `inf`).
@@ -349,7 +349,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 |-----------|------|----------|---------|-------------|--------|
 | `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_by_customer` |
 | `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows before rendering. | `filter: "region = 'DE'"` |
-| `spec.order` | string | no | `category` | Sort key. A scenario key must also appear in `scenarios`. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. | `order: ac1` |
+| `spec.order` | string | no | `category` | Sort key. A scenario key must also appear in `scenarios`. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. `auto` uses the dataset's suggested key instead of `category` (see [Fields](#fields)). | `order: ac1` |
 | `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
 | `spec.measureScale` | string | no | `greatest` | SI prefix for measure scaling; `_` means no prefix. `GREATEST` / `LEAST` pick the largest / smallest value in the dataset (write them uppercase). Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`. | `measureScale: M` |
 | `spec.measureType` | string | no | `volume` | Measure interpretation. Values: `volume`, `currency`. | `measureType: currency` |

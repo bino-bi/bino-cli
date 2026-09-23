@@ -1457,6 +1457,31 @@ func TestValidate_ChartLevel(t *testing.T) {
 	}
 }
 
+// TestValidate_OrderAuto pins spec.order: auto on every kind whose template
+// engine component treats it as silent auto-detection.
+func TestValidate_OrderAuto(t *testing.T) {
+	for _, kind := range []string{"Table", "ChartStructure", "ChartTime", "ChartBullet"} {
+		t.Run(kind, func(t *testing.T) {
+			yaml := "apiVersion: bino.bi/v1alpha1\nkind: " + kind + "\nmetadata:\n  name: c\nspec:\n  dataset: d\n  order: auto\n"
+			if err := Validate([]byte(yaml)); err != nil {
+				t.Errorf("order: auto should be valid on %s, got: %v", kind, err)
+			}
+		})
+	}
+}
+
+// TestValidate_OrderRejectsUnknown keeps the order enum closed next to auto.
+func TestValidate_OrderRejectsUnknown(t *testing.T) {
+	for _, kind := range []string{"Table", "ChartStructure", "ChartTime"} {
+		t.Run(kind, func(t *testing.T) {
+			yaml := "apiVersion: bino.bi/v1alpha1\nkind: " + kind + "\nmetadata:\n  name: c\nspec:\n  dataset: d\n  order: automatic\n"
+			if err := Validate([]byte(yaml)); err == nil {
+				t.Errorf("order: automatic on %s: expected validation error, got nil", kind)
+			}
+		})
+	}
+}
+
 // TestValidate_Internationalization pins the typed spec.content: built-in tokens
 // and free-form keys are both accepted, but values must be strings.
 //
