@@ -72,7 +72,8 @@ bino add i18n german --code de --defaults --output i18n/de.yaml --no-prompt
 ```
 
 A file scaffolded this way by bino v0.97.0 or earlier still sets the old `no-data`
-labels, wrapped in `==` markers; update or delete those keys.
+labels, wrapped in `==` markers; update or delete those keys. The
+`i18n-no-data-markers` lint reports them.
 
 ### Scenario labels (`global.` prefix — read by tables, charts, and titles)
 
@@ -304,6 +305,7 @@ An unknown key renders as the key itself (it never breaks the component).
 - `i18n-code-unused` — warns when `spec.code` matches no artefact language (catches `de-DE`).
 - `i18n-namespace-unreferenced` — warns when a named namespace is never referenced by any `i18nNamespace`.
 - `i18n-title-namespace-deprecated` — warns on `titleNamespace` usage.
+- `i18n-no-data-markers` — warns when a `*.no-data` label is still `==No Data==` or `==Keine Daten==`.
 
 ## Attribute Reference
 

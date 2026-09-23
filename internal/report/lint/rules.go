@@ -29,6 +29,7 @@ func DefaultRules() []Rule {
 		i18nCodeUnused,
 		i18nNamespaceUnreferenced,
 		i18nTitleNamespaceDeprecated,
+		i18nNoDataMarkers,
 		// Inline definition rules
 		inlineRefBounds,
 		datasetSourceExclusive,
