@@ -127,6 +127,24 @@ func TestDatasetDefaults_AnyToken(t *testing.T) {
 	}
 }
 
+// The Table scaling fields take "auto" and ScalingGroup names from data. An
+// `any` scaling default is typed by the charts as a string, so the Table must
+// accept a string there too.
+func TestDatasetDefaults_TableScaling(t *testing.T) {
+	sales := defaultsResult(t, "sales", map[string]any{
+		"_spec_table_unitScaling":     "auto",
+		"_spec_any_percentageScaling": "sg_pct",
+	})
+	html, warnings := renderWithDefaults(t, []config.Document{tablePage(`{"dataset": "sales"}`)}, []dataset.Result{sales}, "")
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	table := openTag(t, html, "bn-table")
+	if !strings.Contains(table, `unit-scaling='auto'`) || !strings.Contains(table, `percentage-scaling='sg_pct'`) {
+		t.Errorf("scaling defaults missing on table: %s", table)
+	}
+}
+
 func TestDatasetDefaults_NonPrimaryDatasetWarns(t *testing.T) {
 	sales := defaultsResult(t, "sales", map[string]any{"_spec_table_barColumns": "ac1"})
 	other := defaultsResult(t, "other", map[string]any{"_spec_table_measureUnit": "kEUR"})

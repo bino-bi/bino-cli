@@ -43,6 +43,8 @@ type RenderContext struct {
 	Internationalizations []I18nEntry
 	// ComponentStyles contains component style entries.
 	ComponentStyles []ComponentStyleEntry
+	// ScalingGroups contains the rendered bn-scaling-group elements.
+	ScalingGroups []string
 	// EngineVersion is the template engine version to use.
 	EngineVersion string
 	// AssetURLs maps asset names to resolved URLs for asset: image references.
@@ -550,6 +552,7 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 			b.WriteString("</bn-component-style>")
 			segments = append(segments, b.String())
 		}
+		segments = append(segments, rc.ScalingGroups...)
 	}
 
 	// Render datasources (deduped by name; see render.dedupeDatasourceResultsByName).

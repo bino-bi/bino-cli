@@ -42,19 +42,20 @@ func TestFoldDefaults_ListMergesDistinctInRowOrder(t *testing.T) {
 
 func TestFoldDefaults_ScalarsAndTypes(t *testing.T) {
 	d, warnings := FoldDefaults("sales", rowsJSON(t,
-		map[string]any{"_spec_table_measureUnit": "kEUR", "_spec_table_grouped": "1", "_spec_table_percentageScaling": "100", "_spec_table_limit": 2, "_spec_table_thereof": `[{"rowGroup":"Revenue"}]`, "_spec_any_scenarios": "ac1,pl1"},
-		map[string]any{"_spec_table_measureUnit": " kEUR ", "_spec_table_grouped": true, "_spec_table_percentageScaling": 100, "_spec_table_limit": 2.0, "_spec_table_thereof": nil, "_spec_any_scenarios": ""},
+		map[string]any{"_spec_table_measureUnit": "kEUR", "_spec_table_grouped": "1", "_spec_table_dataFormatDigitsDecimal": "1", "_spec_table_unitScaling": "auto", "_spec_table_limit": 2, "_spec_table_thereof": `[{"rowGroup":"Revenue"}]`, "_spec_any_scenarios": "ac1,pl1"},
+		map[string]any{"_spec_table_measureUnit": " kEUR ", "_spec_table_grouped": true, "_spec_table_dataFormatDigitsDecimal": 1, "_spec_table_limit": 2.0, "_spec_table_thereof": nil, "_spec_any_scenarios": ""},
 	))
 	if len(warnings) != 0 {
 		t.Fatalf("unexpected warnings: %v", warnings)
 	}
 	want := map[[2]string]string{
-		{"table", "measureUnit"}:       `"kEUR"`,
-		{"table", "grouped"}:           `true`,
-		{"table", "percentageScaling"}: `100`,
-		{"table", "limit"}:             `2`,
-		{"table", "thereof"}:           `[{"rowGroup":"Revenue"}]`,
-		{"any", "scenarios"}:           `["ac1","pl1"]`,
+		{"table", "measureUnit"}:             `"kEUR"`,
+		{"table", "grouped"}:                 `true`,
+		{"table", "dataFormatDigitsDecimal"}: `1`,
+		{"table", "unitScaling"}:             `"auto"`,
+		{"table", "limit"}:                   `2`,
+		{"table", "thereof"}:                 `[{"rowGroup":"Revenue"}]`,
+		{"any", "scenarios"}:                 `["ac1","pl1"]`,
 	}
 	for k, w := range want {
 		if got := value(t, d, k[0], k[1]); got != w {
@@ -91,8 +92,8 @@ func TestFoldDefaults_Warnings(t *testing.T) {
 		},
 		{
 			name: "bad number",
-			rows: []map[string]any{{"_spec_table_percentageScaling": "lots"}},
-			want: `_spec_table_percentageScaling: cannot parse "lots" as number`,
+			rows: []map[string]any{{"_spec_table_dataFormatDigitsDecimal": "lots"}},
+			want: `_spec_table_dataFormatDigitsDecimal: cannot parse "lots" as number`,
 		},
 		{
 			name: "bad boolean",

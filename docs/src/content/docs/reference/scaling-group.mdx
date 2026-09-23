@@ -1,9 +1,9 @@
 ---
 title: ScalingGroup
-description: Define named scaling values to synchronize bar and pin sizes across multiple charts.
+description: Define named scaling values to synchronize bar and pin sizes across multiple charts and tables.
 ---
 
-`ScalingGroup` manifests define named scaling values that multiple chart
+`ScalingGroup` manifests define named scaling values that multiple chart and table
 components can reference. When several components share the same scaling group name,
 their bar lengths (absolute variances) or pin lengths (relative variances) are
 guaranteed to use the same em-based scale, making visual comparisons across
@@ -41,20 +41,71 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 1. Define one or more `ScalingGroup` manifests with a unique `metadata.name` and a
    numeric `value`.
-2. On consumer components (`ChartTime`, `ChartStructure`, and `ChartBubble` via
-   `size.group`), set `unitScaling` and/or `percentageScaling` to the scaling
-   group name instead of a hard-coded number.
+2. On consumer components (`Table`, `ChartTime`, `ChartStructure`, and
+   `ChartBubble` via `size.group`), set `unitScaling` and/or `percentageScaling`
+   to the scaling group name instead of a hard-coded number.
 3. Every consumer that references the same name resolves to the same value.
    Changing the `ScalingGroup` value updates all consumers at once.
 
-:::note
-`Table` is not a consumer: its `unitScaling` and `percentageScaling` attributes
-accept numbers only, so a group name there is a validation error.
-:::
-
-Because the value is em-based, one group works uniformly across charts:
+Because the value is em-based, one group works uniformly for tables and charts:
 a revenue delta of 500 000 at `value: 250000` renders as a 2 em bar in every
 consumer, proportioned relative to each component's own font size.
+
+## Example: Synchronized table and chart
+
+A table and a structure chart that share the same absolute and relative scaling:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: revenue_abs
+spec:
+  value: 250000
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScalingGroup
+metadata:
+  name: revenue_pct
+spec:
+  value: 10
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_table
+spec:
+  dataset: revenue_by_segment
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  barColumns: ["dac1_pp1_pos", "drac1_pp1_pos"]
+  unitScaling: revenue_abs
+  percentageScaling: revenue_pct
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: revenue_chart
+spec:
+  dataset: revenue_by_segment
+  chartTitle: "Revenue by segment"
+  level: category
+  order: ac1
+  orderDirection: desc
+  measureScale: M
+  measureUnit: "EUR"
+  scenarios: ["ac1", "pp1"]
+  variances: ["dac1_pp1_pos"]
+  unitScaling: revenue_abs
+  percentageScaling: revenue_pct
+```
+
+Both components render bars at exactly 250 000 units per em and pins at 10
+percentage points per em. A revenue delta of 500 000 always produces a 2 em bar
+regardless of which component it appears in.
 
 ## Example: Synchronized charts
 

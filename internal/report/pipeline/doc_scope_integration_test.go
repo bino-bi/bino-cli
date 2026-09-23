@@ -111,6 +111,19 @@ func TestIntegration_DocRenderZeroRefsExecutesNothing(t *testing.T) {
 	}
 }
 
+// TestIntegration_DocRenderEmitsScalingGroups proves a document carries the
+// ScalingGroup elements, so an embedded component can resolve a group name.
+func TestIntegration_DocRenderEmitsScalingGroups(t *testing.T) {
+	html := renderDocBundleArtefact(t, "refdoc")
+
+	if !strings.Contains(html, "unit-scaling='rev_abs'") {
+		t.Fatal("rendered HTML is missing the table's unit-scaling reference")
+	}
+	if !strings.Contains(html, "<bn-scaling-group name='rev_abs' value='20'></bn-scaling-group>") {
+		t.Fatal("rendered HTML is missing the rev_abs scaling group element")
+	}
+}
+
 // TestDocumentDataScopeFallback proves scoping reports ok=false (render
 // falls back to the full document set) when the artefact has no graph node.
 func TestDocumentDataScopeFallback(t *testing.T) {

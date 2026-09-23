@@ -223,6 +223,16 @@ func collectScalingGroups(docs []config.Document) ([]scalingGroup, error) {
 	return groups, nil
 }
 
+// ScalingGroupElements returns the bn-scaling-group elements for the
+// ScalingGroup documents, for pages built outside this package.
+func ScalingGroupElements(docs []config.Document) ([]string, error) {
+	groups, err := collectScalingGroups(docs)
+	if err != nil {
+		return nil, err
+	}
+	return renderScalingGroups(groups), nil
+}
+
 // collectComponentStyles extracts component style configurations from documents.
 func collectComponentStyles(docs []config.Document) ([]componentStyle, error) {
 	var styles []componentStyle

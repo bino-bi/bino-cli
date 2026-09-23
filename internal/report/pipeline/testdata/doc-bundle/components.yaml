@@ -4,6 +4,7 @@ metadata:
   name: main_table
 spec:
   dataset: used_ds
+  unitScaling: rev_abs
 ---
 apiVersion: bino.bi/v1alpha1
 kind: Table
