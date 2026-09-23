@@ -3505,8 +3505,8 @@
         },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When set to 'auto', the sort key is detected silently; when left blank, it is detected with a warning. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
@@ -3646,8 +3646,8 @@
         },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When set to 'auto', the sort key is detected silently; when left blank, it is detected with a warning. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
@@ -4733,8 +4733,8 @@
         },
         "order": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When left blank, the table sorts by 'category'. 'auto' uses the key suggested by the dataset instead (subCategory, then category, then rowGroup); if that key is subCategory, category rows keep the dataset order and thereof rows are sorted by subCategory in the opposite direction. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",
