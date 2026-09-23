@@ -480,8 +480,8 @@ type tableSpec struct {
 	Variances               reportspec.StringOrSlice     `json:"variances"`
 	BarColumns              reportspec.StringOrSlice     `json:"barColumns"`
 	BarColumnWidth          string                       `json:"barColumnWidth"`
-	UnitScaling             *float64                     `json:"unitScaling"`
-	PercentageScaling       *float64                     `json:"percentageScaling"`
+	UnitScaling             reportspec.StringOrFloat     `json:"unitScaling"`
+	PercentageScaling       reportspec.StringOrFloat     `json:"percentageScaling"`
 	Scale                   reportspec.StringOrFloat     `json:"scale,omitempty"`
 	Thereof                 reportspec.ThereofList       `json:"thereof"`
 	Partof                  reportspec.PartofList        `json:"partof"`
@@ -515,8 +515,8 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "variances", s.Variances.String())
 	writeAttr(b, "bar-columns", s.BarColumns.String())
 	writeAttr(b, "bar-column-width", s.BarColumnWidth)
-	writeFloatAttr(b, "unit-scaling", s.UnitScaling)
-	writeFloatAttr(b, "percentage-scaling", s.PercentageScaling)
+	writeAttr(b, "unit-scaling", s.UnitScaling.String())
+	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "thereof", s.Thereof.String())
 	writeAttr(b, "partof", s.Partof.String())

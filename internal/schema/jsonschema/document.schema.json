@@ -4837,14 +4837,20 @@
           "description": "Maximum width of inline bar/pin chart columns in em. Default: w10."
         },
         "unitScaling": {
-          "type": "number",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" }
+          ],
           "default": 100,
-          "description": "Data units per em of bar length for absolute variance bars (d_ prefix columns). Map-scale semantics: a larger value means smaller bars."
+          "description": "Name of a scaling-group, 'auto', or the number of data units per em of bar length for absolute variance bars (d_ prefix columns). Map-scale semantics: a larger value means smaller bars."
         },
         "percentageScaling": {
-          "type": "number",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" }
+          ],
           "default": 2,
-          "description": "Percentage points per em of pin length for relative variance pins (dr_ prefix columns). A larger value means shorter pins."
+          "description": "Name of a scaling-group, 'auto', or the number of percentage points per em of pin length for relative variance pins (dr_ prefix columns). A larger value means shorter pins."
         },
         "scale": {
           "oneOf": [

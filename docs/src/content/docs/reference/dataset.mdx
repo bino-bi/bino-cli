@@ -604,7 +604,7 @@ The target field's schema type decides how a cell is read:
 | Field type | Accepted cell |
 | :--- | :--- |
 | string or enum (`measureUnit`, `type`, `level`) | the string |
-| number (`percentageScaling`, `limit`) | a numeric cell or a numeric string |
+| number (`limit`, `dataFormatDigitsDecimal`) | a numeric cell or a numeric string |
 | boolean (`grouped`, `showMeasureScale`) | a boolean cell, `true`/`false`, `1`/`0` |
 | list of strings (`barColumns`, `scenarios`, `variances`) | a comma list (`ac1,pl1`) or a JSON array string |
 | object or list of objects (`thereof`, `attributes`, `stack`) | a JSON cell, index columns, or a row marker; see [Object-valued fields](#object-valued-fields) |
@@ -618,7 +618,7 @@ Every problem is a dataset warning attributed to the DataSet, never a failed bui
 - `measureUnit: 2 distinct values (kEUR, EUR) in dataset sales` — a scalar field disagrees between rows
 - `_spec_tabel_barColumns: unknown kind token "tabel"; …` — the kind token is not one of the eight
 - `_spec_table_barColumnz: Table has no spec field "barColumnz"` — the field does not exist on that kind (for `any`: on no kind)
-- `_spec_table_percentageScaling: cannot parse "lots" as number` — the cell does not fit the field's type
+- `_spec_table_dataFormatDigitsDecimal: cannot parse "lots" as number` — the cell does not fit the field's type
 
 `bino serve --live` renders per request, so dataset defaults follow the route parameters like the rows do. Component embeds inside a DocumentArtefact's markdown do not receive dataset defaults.
 

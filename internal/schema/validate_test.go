@@ -624,6 +624,34 @@ spec:
 	}
 }
 
+// Table accepts the same scaling values as the charts.
+func TestValidate_TableScaling(t *testing.T) {
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"50", false},
+		{"0.53", false},
+		{"auto", false},
+		{"sg_units", false},
+		{"true", true},
+	}
+	for _, field := range []string{"unitScaling", "percentageScaling"} {
+		for _, tt := range tests {
+			t.Run(field+"/"+tt.value, func(t *testing.T) {
+				yaml := "apiVersion: bino.bi/v1alpha1\nkind: Table\nmetadata:\n  name: t\nspec:\n  dataset: d\n  barColumns: [dac1_pp1_pos]\n  " + field + ": " + tt.value + "\n"
+				err := Validate([]byte(yaml))
+				if tt.wantErr && err == nil {
+					t.Error("expected validation error, got nil")
+				}
+				if !tt.wantErr && err != nil {
+					t.Errorf("expected valid, got: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestValidate_WrongType(t *testing.T) {
 	tests := []struct {
 		name        string
