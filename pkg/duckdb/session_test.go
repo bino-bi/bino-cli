@@ -2,8 +2,13 @@ package duckdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -152,6 +157,186 @@ func TestSession_Close(t *testing.T) {
 
 	if err := session.Close(); err != nil {
 		t.Errorf("Close() error = %v", err)
+	}
+}
+
+// recheckCwd makes cwdWritableOnce evaluate again in the test's cwd.
+func recheckCwd(t *testing.T) {
+	t.Helper()
+	orig := cwdWritableOnce
+	cwdWritableOnce = sync.OnceValue(cwdWritable)
+	t.Cleanup(func() { cwdWritableOnce = orig })
+}
+
+func tempDirectorySetting(ctx context.Context, t *testing.T, s *Session) string {
+	t.Helper()
+	var got string
+	if err := s.DB().QueryRowContext(ctx, "SELECT current_setting('temp_directory')").Scan(&got); err != nil {
+		t.Fatalf("read temp_directory: %v", err)
+	}
+	return got
+}
+
+func TestOpenSession_SpillsOutsideReadOnlyCwd(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a unix non-root user so a 0o555 dir is not writable")
+	}
+	dir := t.TempDir()
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Errorf("restore dir mode: %v", err)
+		}
+	})
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Chdir(dir)
+	// Resolved so the check below holds even if DuckDB reports a real path (macOS /var).
+	tmp, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", tmp)
+	recheckCwd(t)
+
+	ctx := context.Background()
+	s, err := OpenSession(ctx, Options{CacheDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("OpenSession() error = %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// A sort far larger than the memory limit must spill to disk.
+	mustExec(ctx, t, s, "SET memory_limit='40MB'; SET threads=1; SET preserve_insertion_order=false;")
+	var n int
+	q := "SELECT count(*) FROM (SELECT i, md5(i::VARCHAR) h FROM range(6000000) t(i) ORDER BY h)"
+	if err := s.DB().QueryRowContext(ctx, q).Scan(&n); err != nil {
+		t.Fatalf("spilling query: %v", err)
+	}
+	if n != 6000000 {
+		t.Errorf("count = %d, want 6000000", n)
+	}
+
+	spillDir := tempDirectorySetting(ctx, t, s)
+	if filepath.Dir(spillDir) != tmp || !strings.HasPrefix(filepath.Base(spillDir), "bino-duckdb-") {
+		t.Fatalf("temp_directory = %q, want a bino-duckdb-* dir in %q", spillDir, tmp)
+	}
+	if _, err := os.Stat(spillDir); err != nil {
+		t.Errorf("spill dir after query: %v", err)
+	}
+
+	other, err := OpenSession(ctx, Options{CacheDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("second OpenSession() error = %v", err)
+	}
+	otherDir := tempDirectorySetting(ctx, t, other)
+	if err := other.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	if otherDir == spillDir || filepath.Dir(otherDir) != tmp {
+		t.Errorf("second session temp_directory = %q, want its own dir in %q (first: %q)", otherDir, tmp, spillDir)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	left, err := filepath.Glob(filepath.Join(tmp, "bino-duckdb-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Errorf("spill dirs left after Close: %v", left)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("session wrote into the read-only cwd: %v", entries)
+	}
+}
+
+func TestOpenSession_KeepsDefaultSpillDirInWritableCwd(t *testing.T) {
+	t.Chdir(t.TempDir())
+	recheckCwd(t)
+
+	ctx, s := openTestSession(t)
+	if got := tempDirectorySetting(ctx, t, s); got != ".tmp" {
+		t.Errorf("temp_directory = %q, want .tmp", got)
+	}
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("session wrote into the cwd: %v", entries)
+	}
+}
+
+func TestSession_ScratchDir(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	s := &Session{}
+
+	dir, err := s.ScratchDir()
+	if err != nil {
+		t.Fatalf("ScratchDir() error = %v", err)
+	}
+	again, err := s.ScratchDir()
+	if err != nil {
+		t.Fatalf("second ScratchDir() error = %v", err)
+	}
+	if again != dir {
+		t.Errorf("second ScratchDir() = %q, want %q", again, dir)
+	}
+	if filepath.Dir(dir) != os.TempDir() {
+		t.Errorf("ScratchDir() = %q, want a dir in %q", dir, os.TempDir())
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		t.Fatalf("scratch dir missing: %v", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("scratch dir after Close: stat err = %v, want not exist", err)
+	}
+
+	if late, err := s.ScratchDir(); err == nil {
+		t.Errorf("ScratchDir() after Close = %q, want an error", late)
+	}
+	if entries, err := os.ReadDir(os.TempDir()); err != nil || len(entries) != 0 {
+		t.Errorf("temp dir after Close: entries %v, err %v", entries, err)
+	}
+}
+
+func TestSession_ScratchDirConcurrent(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	s := &Session{}
+
+	dirs := make([]string, 8)
+	var wg sync.WaitGroup
+	for i := range dirs {
+		wg.Go(func() {
+			dir, err := s.ScratchDir()
+			if err != nil {
+				t.Errorf("ScratchDir() error = %v", err)
+			}
+			dirs[i] = dir
+		})
+	}
+	wg.Wait()
+	for _, dir := range dirs {
+		if dir != dirs[0] {
+			t.Fatalf("ScratchDir() returned different dirs: %v", dirs)
+		}
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if entries, err := os.ReadDir(os.TempDir()); err != nil || len(entries) != 0 {
+		t.Errorf("temp dir after Close: entries %v, err %v", entries, err)
 	}
 }
 

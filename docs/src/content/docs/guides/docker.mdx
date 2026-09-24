@@ -82,8 +82,19 @@ These reach both the `${VAR}` substitution in your manifests and the `*FromEnv` 
 `ConnectionSecret` — see [Using database data](/guides/data-from-databases/).
 
 <Aside type="note">
-`/work` must be writable. `bino build` writes `dist/` and a `.bino/cache/` directory inside the
-bundle, so a read-only mount will fail.
+A read-only `/work` works when `--out-dir` points at a writable path, such as a second mount:
+
+```bash
+mkdir -p out
+docker run --rm \
+  -v "$PWD:/work:ro" \
+  -v "$PWD/out:/out" \
+  ghcr.io/bino-bi/bino-cli:latest build --out-dir /out
+```
+
+bino then builds without its dataset cache and keeps scratch files in `/tmp`, which must stay
+writable. Pass `--out-dir` as an absolute path like `/out`: a relative one such as `dist/` resolves
+inside `/work`.
 </Aside>
 
 ### File ownership

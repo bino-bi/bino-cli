@@ -5,12 +5,15 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -185,59 +188,7 @@ var serveDatasetRe = regexp.MustCompile(`<bn-dataset[^>]*name='filtered_revenue'
 func TestServeRoutes_ParallelParamDivergentRequests(t *testing.T) {
 	ctx := context.Background()
 	workdir := writeServeRaceFixture(t)
-
-	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{})
-	if err != nil {
-		t.Fatalf("load docs: %v", err)
-	}
-
-	liveArtefacts, err := config.CollectLiveArtefacts(docs)
-	if err != nil {
-		t.Fatalf("collect live artefacts: %v", err)
-	}
-	liveArtefact := config.FindLiveArtefact(liveArtefacts, "race-dash")
-	if liveArtefact == nil {
-		t.Fatal("live artefact race-dash not found")
-	}
-
-	artifacts, err := config.CollectArtefacts(docs)
-	if err != nil {
-		t.Fatalf("collect artefacts: %v", err)
-	}
-	artefactMap := make(map[string]config.Artifact, len(artifacts))
-	for _, a := range artifacts {
-		artefactMap[a.Document.Name] = a
-	}
-
-	opts, err := duckdb.DefaultOptions()
-	if err != nil {
-		t.Fatalf("duckdb options: %v", err)
-	}
-	session, err := duckdb.OpenSession(ctx, opts)
-	if err != nil {
-		t.Fatalf("open duckdb session: %v", err)
-	}
-	defer session.Close()
-
-	logger := logx.Nop()
-	routeSetup, err := setupServeRoutes(serveRouteConfig{
-		LiveArtefact:  *liveArtefact,
-		ArtefactMap:   artefactMap,
-		HookRunner:    hooks.NewRunner(hooks.Resolve(nil, nil, logger), logger, workdir),
-		HookEnv:       hooks.HookEnv{Mode: "serve", Workdir: workdir},
-		Logger:        logger,
-		Workdir:       workdir,
-		BaseDocs:      docs,
-		EngineVersion: "v1.0.0",
-		Session:       session,
-	})
-	if err != nil {
-		t.Fatalf("setup serve routes: %v", err)
-	}
-	fn := routeSetup.RouteMap["/"]
-	if fn == nil {
-		t.Fatal("route / not registered")
-	}
+	fn, _ := serveRaceRoute(t, workdir)
 
 	regions := []struct {
 		name  string // also the category value in this request's view rows
@@ -309,4 +260,149 @@ func TestServeRoutes_ParallelParamDivergentRequests(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+// serveRaceRoute loads the fixture in workdir and returns its "/" route and
+// the shared session it renders on. The session is closed on cleanup.
+func serveRaceRoute(t *testing.T, workdir string) (httpserver.ContentFunc, *duckdb.Session) {
+	t.Helper()
+	ctx := context.Background()
+
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+
+	liveArtefacts, err := config.CollectLiveArtefacts(docs)
+	if err != nil {
+		t.Fatalf("collect live artefacts: %v", err)
+	}
+	liveArtefact := config.FindLiveArtefact(liveArtefacts, "race-dash")
+	if liveArtefact == nil {
+		t.Fatal("live artefact race-dash not found")
+	}
+
+	artifacts, err := config.CollectArtefacts(docs)
+	if err != nil {
+		t.Fatalf("collect artefacts: %v", err)
+	}
+	artefactMap := make(map[string]config.Artifact, len(artifacts))
+	for _, a := range artifacts {
+		artefactMap[a.Document.Name] = a
+	}
+
+	opts, err := duckdb.DefaultOptions()
+	if err != nil {
+		t.Fatalf("duckdb options: %v", err)
+	}
+	session, err := duckdb.OpenSession(ctx, opts)
+	if err != nil {
+		t.Fatalf("open duckdb session: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	logger := logx.Nop()
+	routeSetup, err := setupServeRoutes(serveRouteConfig{
+		LiveArtefact:  *liveArtefact,
+		ArtefactMap:   artefactMap,
+		HookRunner:    hooks.NewRunner(hooks.Resolve(nil, nil, logger), logger, workdir),
+		HookEnv:       hooks.HookEnv{Mode: "serve", Workdir: workdir},
+		Logger:        logger,
+		Workdir:       workdir,
+		BaseDocs:      docs,
+		EngineVersion: "v1.0.0",
+		Session:       session,
+	})
+	if err != nil {
+		t.Fatalf("setup serve routes: %v", err)
+	}
+	fn := routeSetup.RouteMap["/"]
+	if fn == nil {
+		t.Fatal("route / not registered")
+	}
+	return fn, session
+}
+
+// TestServeRoutes_ReadOnlyProject serves a project the process cannot write,
+// like a read-only mount. Each request must render its own data on the shared
+// session, nothing may land in the project, and closing the session must
+// leave no temp files.
+func TestServeRoutes_ReadOnlyProject(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("read-only dirs need a non-root user on unix")
+	}
+	ctx := context.Background()
+	workdir := writeServeRaceFixture(t)
+	// Registered after the fixture's t.TempDir, so it runs before the removal.
+	t.Cleanup(func() {
+		if err := os.Chmod(workdir, 0o755); err != nil {
+			t.Errorf("restore %s: %v", workdir, err)
+		}
+	})
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	fn, session := serveRaceRoute(t, workdir)
+	if err := os.Chmod(workdir, 0o555); err != nil {
+		t.Fatalf("chmod %s: %v", workdir, err)
+	}
+
+	// Each request has its own params, so neither hits the render cache.
+	regions := []struct{ name, other string }{
+		{name: "DACH", other: "Nordics"},
+		{name: "Nordics", other: "DACH"},
+	}
+	for i, region := range regions {
+		salt := fmt.Sprint(i + 1)
+		reqCtx := httpserver.WithRequestInfo(ctx, httpserver.RequestInfo{
+			Path:     "/",
+			RawQuery: "REGION=" + region.name + "&SALT=" + salt,
+			Query:    url.Values{"REGION": {region.name}, "SALT": {salt}},
+		})
+
+		body, contentType, err := fn(reqCtx)
+		if err != nil {
+			t.Fatalf("region %s: %v", region.name, err)
+		}
+		if !strings.Contains(contentType, "text/html") {
+			t.Fatalf("region %s: content type %q", region.name, contentType)
+		}
+		contextHTML, err := decodeServeContext(string(body))
+		if err != nil {
+			t.Fatalf("region %s: %v", region.name, err)
+		}
+		combined := string(body) + contextHTML
+
+		if !strings.Contains(combined, "Region marker: "+region.name) {
+			t.Errorf("region %s: own region marker missing", region.name)
+		}
+		if strings.Contains(combined, "Region marker: "+region.other) {
+			t.Errorf("region %s: response contains region marker %s", region.name, region.other)
+		}
+		m := serveDatasetRe.FindStringSubmatch(combined)
+		if m == nil {
+			t.Fatalf("region %s: filtered_revenue dataset element missing", region.name)
+		}
+		payload, err := decodeServeInlinePayload(m[1])
+		if err != nil {
+			t.Fatalf("region %s: %v", region.name, err)
+		}
+		if !strings.Contains(payload, region.name) || strings.Contains(payload, region.other) {
+			t.Errorf("region %s: dataset payload holds wrong category: %s", region.name, payload)
+		}
+	}
+
+	if _, err := os.Lstat(filepath.Join(workdir, ".bino")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf(".bino in read-only workdir: %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+	left, err := filepath.Glob(filepath.Join(tmp, "bino-*"))
+	if err != nil {
+		t.Fatalf("glob temp dir: %v", err)
+	}
+	if len(left) != 0 {
+		t.Errorf("temp entries left after close: %v", left)
+	}
 }

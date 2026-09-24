@@ -1,17 +1,24 @@
 package dataset
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
 	reportspec "bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 func TestExecute_CachesResults(t *testing.T) {
@@ -1395,4 +1402,284 @@ spec:
 	if !reflect.DeepEqual(cached[0].Defaults, want) {
 		t.Fatalf("cached defaults = %v", cached[0].Defaults)
 	}
+}
+
+// A read-only project, e.g. a read-only mount, still runs: the dataset cache
+// is off and inline CSVs go to a temp dir that is removed afterwards.
+func TestExecute_ReadOnlyProject(t *testing.T) {
+	workdir, docs := writeInlineProject(t)
+	makeReadOnly(t, workdir)
+	requireCwdUntouched(t)
+	tmp := isolateTempDir(t)
+
+	ctx, logs := captureLogs()
+	results, warnings, err := Execute(ctx, workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	requireProductPrices(t, results, warnings)
+
+	if n := strings.Count(logs.String(), "cache off"); n != 1 {
+		t.Errorf("cache off logged %d times, want 1:\n%s", n, logs)
+	}
+	requireNoBinoDir(t, workdir)
+	if left := globIn(t, tmp, "bino-*"); len(left) != 0 {
+		t.Errorf("temp entries left behind: %v", left)
+	}
+}
+
+// A shared session on a read-only project keeps inline CSVs in its scratch
+// dir, so the views work on every call until the session is closed.
+func TestExecute_ReadOnlyProjectSharedSession(t *testing.T) {
+	workdir, docs := writeInlineProject(t)
+	makeReadOnly(t, workdir)
+	requireCwdUntouched(t)
+	extDir := t.TempDir()
+	tmp := isolateTempDir(t)
+
+	ctx := context.Background()
+	s, err := duckdb.OpenSession(ctx, duckdb.Options{CacheDir: extDir})
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	t.Cleanup(func() { s.Close() }) // on early failure; Close is idempotent
+
+	opts := &ExecuteOptions{Session: s}
+	for i := 1; i <= 2; i++ {
+		results, warnings, err := Execute(ctx, workdir, docs, opts)
+		if err != nil {
+			t.Fatalf("execute %d: %v", i, err)
+		}
+		requireProductPrices(t, results, warnings)
+		if dirs := globIn(t, tmp, "bino-inline-*"); len(dirs) != 1 {
+			t.Fatalf("after execute %d: inline dirs = %v, want one", i, dirs)
+		}
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+	requireNoBinoDir(t, workdir)
+	if left := globIn(t, tmp, "bino-*"); len(left) != 0 {
+		t.Errorf("temp entries left after close: %v", left)
+	}
+}
+
+// A read-only checkout that already has the cache dirs must not use them:
+// MkdirAll succeeds there, so only a real write shows they are read-only.
+func TestExecute_ReadOnlyProjectWithCacheDirs(t *testing.T) {
+	workdir, docs := writeInlineProject(t)
+	requireCwdUntouched(t)
+	tmp := isolateTempDir(t)
+
+	// Fill the cache while writable, then make its entry stale: a read-only
+	// run must query again instead of reading it.
+	if _, _, err := Execute(context.Background(), workdir, docs, nil); err != nil {
+		t.Fatalf("writable execute: %v", err)
+	}
+	binoDir := filepath.Join(workdir, ".bino")
+	cacheDir := filepath.Join(binoDir, "cache", "datasets")
+	inlineDir := filepath.Join(binoDir, "cache", "datasources")
+	cached := globIn(t, cacheDir, "*")
+	if len(cached) != 1 {
+		t.Fatalf("cache entries = %v, want one", cached)
+	}
+	stale := []byte(`[{"name":"Stale","price":0}]`)
+	if err := os.WriteFile(cached[0], stale, 0o600); err != nil {
+		t.Fatalf("write stale cache: %v", err)
+	}
+	if err := os.MkdirAll(inlineDir, 0o755); err != nil {
+		t.Fatalf("create %s: %v", inlineDir, err)
+	}
+	makeReadOnly(t, workdir, binoDir, filepath.Join(binoDir, "cache"), cacheDir, inlineDir)
+
+	results, warnings, err := Execute(context.Background(), workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	requireProductPrices(t, results, warnings)
+
+	if got := globIn(t, cacheDir, "*"); len(got) != 1 || got[0] != cached[0] {
+		t.Errorf("cache entries = %v, want only %s", got, cached[0])
+	}
+	if got, err := os.ReadFile(cached[0]); err != nil || !bytes.Equal(got, stale) {
+		t.Errorf("cache entry changed: %q, err %v", got, err)
+	}
+	if got := globIn(t, inlineDir, "*"); len(got) != 0 {
+		t.Errorf("%s: unexpected entries %v", inlineDir, got)
+	}
+	if left := globIn(t, tmp, "bino-*"); len(left) != 0 {
+		t.Errorf("temp entries left behind: %v", left)
+	}
+}
+
+// A writable project keeps inline CSVs in .bino/cache/datasources, also on a
+// shared session.
+func TestExecute_WritableProjectSharedSession(t *testing.T) {
+	workdir, docs := writeInlineProject(t)
+	extDir := t.TempDir()
+	tmp := isolateTempDir(t)
+
+	ctx := context.Background()
+	s, err := duckdb.OpenSession(ctx, duckdb.Options{CacheDir: extDir})
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	results, warnings, err := Execute(ctx, workdir, docs, &ExecuteOptions{Session: s})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	requireProductPrices(t, results, warnings)
+
+	if csvs := globIn(t, filepath.Join(workdir, ".bino", "cache", "datasources"), "*.csv"); len(csvs) != 1 {
+		t.Errorf("inline CSVs in project = %v, want one", csvs)
+	}
+	if dirs := globIn(t, tmp, "bino-*"); len(dirs) != 0 {
+		t.Errorf("temp entries for a writable project: %v", dirs)
+	}
+}
+
+// Any probe error turns the cache off, not only a permission error: a
+// read-only mount gives EROFS. A file named .bino gives ENOTDIR.
+func TestExecute_UnusableCacheDir(t *testing.T) {
+	workdir, docs := writeInlineProject(t)
+	requireCwdUntouched(t)
+	tmp := isolateTempDir(t)
+	binoFile := filepath.Join(workdir, ".bino")
+	if err := os.WriteFile(binoFile, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	results, warnings, err := Execute(context.Background(), workdir, docs, nil)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	requireProductPrices(t, results, warnings)
+	if info, err := os.Stat(binoFile); err != nil || info.IsDir() {
+		t.Errorf(".bino changed: %v", err)
+	}
+	if left := globIn(t, tmp, "bino-*"); len(left) != 0 {
+		t.Errorf("temp entries left behind: %v", left)
+	}
+}
+
+// writeInlineProject writes the inline fixture of TestExecute_InlineDataSource
+// into a new workdir and loads it.
+func writeInlineProject(t *testing.T) (string, []config.Document) {
+	t.Helper()
+	workdir := t.TempDir()
+	writeTestFile(t, workdir, "datasource.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: inline_products
+spec:
+  type: inline
+  content:
+    - name: Coffee
+      price: 3.50
+    - name: Tea
+      price: 2.50
+    - name: Water
+      price: 1.00
+`)
+	writeTestFile(t, workdir, "dataset.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: product_prices
+spec:
+  query: SELECT * FROM inline_products ORDER BY price
+  dependencies:
+    - inline_products
+`)
+	docs, err := config.LoadDir(context.Background(), workdir)
+	if err != nil {
+		t.Fatalf("load docs: %v", err)
+	}
+	return workdir, docs
+}
+
+// requireProductPrices checks for the three inline rows ordered by price and
+// no warnings.
+func requireProductPrices(t *testing.T, results []Result, warnings []Warning) {
+	t.Helper()
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if len(results) != 1 || results[0].Name != "product_prices" {
+		t.Fatalf("results = %+v, want one product_prices result", results)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(results[0].Data, &rows); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if len(rows) != 3 || rows[0]["name"] != "Water" || rows[2]["name"] != "Coffee" {
+		t.Fatalf("rows = %v, want Water, Tea, Coffee", rows)
+	}
+}
+
+// makeReadOnly makes dirs read-only for the test, like a read-only mount.
+func makeReadOnly(t *testing.T, dirs ...string) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("read-only dirs need a non-root user on unix")
+	}
+	for _, dir := range dirs {
+		// Registered after t.TempDir, so it runs before the removal.
+		t.Cleanup(func() {
+			if err := os.Chmod(dir, 0o755); err != nil {
+				t.Errorf("restore %s: %v", dir, err)
+			}
+		})
+		if err := os.Chmod(dir, 0o555); err != nil {
+			t.Fatalf("chmod %s: %v", dir, err)
+		}
+	}
+}
+
+// requireCwdUntouched runs the test in a fresh cwd and fails if anything is
+// written there, e.g. a cache file from a cwd-relative path.
+func requireCwdUntouched(t *testing.T) {
+	t.Helper()
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	t.Cleanup(func() {
+		if entries, err := os.ReadDir(cwd); err != nil || len(entries) != 0 {
+			t.Errorf("cwd after test: entries %v, err %v", entries, err)
+		}
+	})
+}
+
+// isolateTempDir points os.TempDir at a fresh dir and returns it.
+func isolateTempDir(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	return tmp
+}
+
+// globIn returns the entries in dir that match pattern.
+func globIn(t *testing.T, dir, pattern string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, pattern))
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	return matches
+}
+
+func requireNoBinoDir(t *testing.T, workdir string) {
+	t.Helper()
+	if _, err := os.Lstat(filepath.Join(workdir, ".bino")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf(".bino in read-only workdir: %v", err)
+	}
+}
+
+func captureLogs() (context.Context, *bytes.Buffer) {
+	buf := &bytes.Buffer{}
+	log := logx.NewTerminalWithColor(buf, buf, false, true)
+	return logx.WithLogger(context.Background(), log), buf
 }

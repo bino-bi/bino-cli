@@ -3,7 +3,9 @@
 // A DataSet executes a SQL query against DuckDB, referencing DataSource
 // manifests which are registered as views. Results are cached under .bino/cache/datasets/
 // in the working directory and invalidated when the dataset definition changes
-// or when any dependent datasource files are modified.
+// or when any dependent datasource files are modified. When that dir is not
+// writable, e.g. on a read-only project mount, the cache is off and every
+// DataSet runs.
 //
 // DataSources are materialized as DuckDB views via datasource.RegisterViews,
 // so DataSet queries can simply SELECT FROM <datasource_name>.
@@ -24,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/datasource"
@@ -77,6 +80,8 @@ type ExecuteOptions struct {
 	// Session is an optional pre-existing DuckDB session to reuse.
 	// When set, dataset execution skips opening a new session and reuses this one.
 	// The caller is responsible for closing the session.
+	// When the project is not writable, the session also owns the temp dir
+	// for inline DataSource files; closing it removes the dir.
 	// Extension loading and view registration are idempotent on a reused session.
 	Session *duckdb.Session
 }
@@ -116,7 +121,8 @@ func (s dataSetSpec) effectiveDependencies() []string {
 // Execute evaluates all DataSet documents, using cached results when available.
 // Results are cached under workdir/.bino/cache/datasets/ and invalidated when the
 // dataset definition (query or dependencies) changes, or when any dependent
-// datasource files are modified.
+// datasource files are modified. When that dir is not writable the cache is
+// skipped and every DataSet runs.
 //
 // DataSources are registered as DuckDB views via datasource.RegisterViews,
 // so DataSet queries can simply `SELECT * FROM <datasource_name>`.
@@ -134,8 +140,9 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 	}
 
 	cacheDir := filepath.Join(workdir, ".bino", "cache", "datasets")
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		return nil, nil, fmt.Errorf("create cache dir: %w", err)
+	if err := probeWritable(cacheDir); err != nil {
+		logx.FromContext(ctx).Channel("dataset").Infof("cache off, cannot write cache dir: %v", err)
+		cacheDir = ""
 	}
 
 	// Build index of DataSource documents by name for dependency lookup
@@ -208,14 +215,7 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 			digest, depWarnings := computeDigestWithDeps(doc, spec, dataSourceIndex)
 			result.warnings = append(result.warnings, depWarnings...)
 
-			cachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%s.json", doc.Name, digest[:16]))
-			result.cachePath = cachePath
-
-			// Try reading from cache
-			if data, err := os.ReadFile(cachePath); err == nil {
-				result.cached = true
-				result.data = data
-			}
+			result.cachePath, result.data, result.cached = readCache(cacheDir, doc.Name, digest)
 
 			resultCh <- result
 		})
@@ -293,6 +293,30 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 	results = append(results, execResults...)
 	warnings = append(warnings, execWarnings...)
 	return results, warnings, nil
+}
+
+// probeWritable creates dir and writes a probe file in it. MkdirAll alone
+// succeeds on an existing read-only dir.
+func probeWritable(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".probe-*")
+	if err != nil {
+		return err
+	}
+	return errors.Join(f.Close(), os.Remove(f.Name()))
+}
+
+// readCache returns the cache file path for a dataset and its cached rows.
+// An empty cacheDir means the cache is off: no path, no read.
+func readCache(cacheDir, name, digest string) (path string, data json.RawMessage, ok bool) {
+	if cacheDir == "" {
+		return "", nil, false
+	}
+	path = filepath.Join(cacheDir, fmt.Sprintf("%s-%s.json", name, digest[:16]))
+	data, err := os.ReadFile(path)
+	return path, data, err == nil
 }
 
 type dataSetJob struct {
@@ -440,16 +464,11 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		warnings []Warning
 	)
 
-	// Create temp directory for inline datasource CSV files.
-	// When reusing a shared session the temp dir must persist (the views reference it),
-	// so we only remove it for one-shot sessions.
-	tempDir := filepath.Join(workdir, ".bino", "cache", "datasources")
-	if err := os.MkdirAll(tempDir, 0o755); err != nil {
-		return nil, nil, fmt.Errorf("create datasources temp dir: %w", err)
+	tempDir, cleanup, err := inlineScratchDir(workdir, opts)
+	if err != nil {
+		return nil, nil, err
 	}
-	if opts == nil || opts.Session == nil {
-		defer os.RemoveAll(tempDir)
-	}
+	defer cleanup()
 
 	// Names starting with the view prefix would collide with the views a
 	// derive/assert dataset is built on.
@@ -544,6 +563,29 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 	}
 
 	return results, warnings, nil
+}
+
+// inlineScratchDir returns the dir for inline DataSource CSV files and its
+// cleanup. It is .bino/cache/datasources when the project is writable, else a
+// temp dir: the session's scratch dir when shared, a new one per run otherwise.
+// Only a one-shot run removes the dir; a shared session's views keep reading it.
+func inlineScratchDir(workdir string, opts *ExecuteOptions) (dir string, cleanup func(), err error) {
+	shared := opts != nil && opts.Session != nil
+	dir = filepath.Join(workdir, ".bino", "cache", "datasources")
+	if probeWritable(dir) != nil {
+		if shared {
+			dir, err = opts.Session.ScratchDir()
+		} else {
+			dir, err = os.MkdirTemp("", "bino-inline-*")
+		}
+		if err != nil {
+			return "", nil, fmt.Errorf("create datasources temp dir: %w", err)
+		}
+	}
+	if shared {
+		return dir, func() {}, nil
+	}
+	return dir, func() { os.RemoveAll(dir) }, nil
 }
 
 // executeDataSet runs one dataset and returns its rows as a JSON array, with
