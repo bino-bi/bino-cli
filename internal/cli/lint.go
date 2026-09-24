@@ -45,7 +45,7 @@ fail to load, when a rule is raised to "error" in bino.toml's [lint] table, or
 with --fail-on-warnings.`),
 		Example: strings.TrimSpace(`  bino lint
   bino lint --work-dir ./reports
-  bino lint --log-format json`),
+  bino lint --lint-log-format json`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("lint")
