@@ -31,6 +31,71 @@ Common flags:
 3. **Serves on-demand** – renders reports when requested, using caches for efficiency.
 4. **Nvigation** – enables smooth client-side navigation without full page reloads.
 
+## Data sent to the browser
+
+A served page carries the rows of the DataSets and DataSources that its rendered components bind with `dataset`. A DataSource is bound as `$name`. This includes components pulled in with `ref` and components inside cards, grids and tree nodes. It is the same for both `--data-mode` values. A route with several LayoutPages carries the data of all of them. Other DataSets and DataSources of the project are not sent to that page.
+
+The value and label columns of a DataSet used for the options of a `select` parameter are also sent to the page.
+
+A component `filter` runs in the viewer's browser. Every row of the component's dataset reaches the viewer. The filter only decides which rows are drawn.
+
+To restrict the rows a page carries, filter in the DataSet SQL with the route's query parameter, and bind the component to that DataSet:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: region_sales
+spec:
+  query: |
+    SELECT * FROM sales
+    WHERE region = '${REGION}'
+  dependencies:
+    - sales
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: region-page
+spec:
+  children:
+    - kind: Table
+      spec:
+        dataset: region_sales
+---
+apiVersion: bino.bi/v1alpha1
+kind: LiveReportArtefact
+metadata:
+  name: sales-dashboard
+spec:
+  title: "Sales Dashboard"
+  routes:
+    "/":
+      layoutPages: region-page
+      queryParams:
+        - name: REGION
+```
+
+With `?REGION=EU`, the page carries only the `EU` rows of `sales`. The LayoutPage below draws the same rows, but its Table binds `$sales` directly, so every row of `sales` reaches the browser:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: region-page
+spec:
+  children:
+    - kind: Table
+      spec:
+        dataset: $sales
+        filter: "region = '${REGION}'"
+```
+
+Filtering in the DataSet limits the rows per viewer only when a layer in front of `bino serve`, for example a proxy, sets the parameter and the viewer cannot change it.
+
+See [Query parameter substitution](/reference/live-report-artefact/#query-parameter-substitution) for how parameters are substituted.
+
 ## Query parameters
 
 Each route in a `LiveReportArtefact` can define its own query parameters that are substituted into report documents using `${VAR}` syntax. This allows dynamic filtering and customization of reports on a per-route basis.
