@@ -1068,7 +1068,7 @@ func RenderHTMLFrameAndContext(ctx context.Context, docs []config.Document, opts
 		}
 	}
 
-	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.SelectedStyle, opts.I18nNamespace)
+	result, renderDiags, err := render.GenerateFrameAndContext(ctx, docs, datasetResults, opts.Language, opts.Format, opts.Mode, diags, opts.ConstraintContext, opts.EngineVersion, opts.AllDocs, opts.PluginOptions, opts.SelectedStyle, opts.I18nNamespace)
 	if err != nil {
 		return FrameRenderResult{Diagnostics: append(diags, renderDiags...)}, err
 	}

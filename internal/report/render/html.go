@@ -414,7 +414,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 // The artefactNamespace parameter is the artefact-level i18n namespace; it is written as the
 // i18n-namespace attribute on <bn-context>, from which the engine resolves it at runtime for
 // every component without a nearer provider.
-func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions, artefactStyle string, artefactNamespace string) (FrameResult, []datasource.Diagnostic, error) {
+// In ModeServe the context carries only the DataSets and DataSources that the
+// rendered components bind; other modes keep every DataSet.
+func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datasetResults []dataset.Result, locale string, renderFormat string, mode Mode, existingDiags []datasource.Diagnostic, constraintCtx *spec.ConstraintContext, engineVersion string, allDocs []config.Document, pluginOpts *PluginOptions, artefactStyle string, artefactNamespace string) (FrameResult, []datasource.Diagnostic, error) {
 	if locale == "" {
 		locale = defaultLocale
 	}
@@ -477,19 +479,6 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	if sg := renderScalingGroups(scalingGroups); len(sg) > 0 {
 		segments = append(segments, sg...)
 	}
-	// Filter datasources to only include those directly referenced by components via $ prefix.
-	referencedSources := collectReferencedDatasources(docs, allDocs)
-	sources = filterDatasourcesByRefs(sources, referencedSources)
-
-	var emitted []EmittedData
-	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
-		segments = append(segments, ds...)
-		emitted = append(emitted, em...)
-	}
-	if ds, em := renderDatasets(datasetResults, dataMode, dataBaseURL); len(ds) > 0 {
-		segments = append(segments, ds...)
-		emitted = append(emitted, em...)
-	}
 
 	// Build asset URL map for resolving asset: image references in markdown.
 	assetURLMap := make(map[string]string, len(assetComponents))
@@ -501,7 +490,12 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
 	rc.withDatasetDefaults(datasetResults)
+	if mode == ModeServe {
+		rc.dataRefs = map[string]bool{}
+	}
 
+	// Pages render before the data so serve knows which data they bind.
+	var pages []string
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
@@ -512,7 +506,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 			if !include {
 				continue
 			}
-			segments = append(segments, htmlContent)
+			pages = append(pages, htmlContent)
 		default:
 			// Root-renderable kinds are skipped silently here — they render
 			// when referenced via ref in a LayoutPage. (embed.IsRootRenderable
@@ -521,8 +515,31 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		}
 	}
 
+	sets := datasetResults
+	hadData := false
+	if rc.dataRefs != nil {
+		hadData = len(datasetResults) > 0 || len(sources) > 0
+		sets, sources = keepBoundData(rc.dataRefs, datasetResults, sources)
+	} else {
+		// Filter datasources to only include those directly referenced by components via $ prefix.
+		referencedSources := collectReferencedDatasources(docs, allDocs)
+		sources = filterDatasourcesByRefs(sources, referencedSources)
+	}
+
+	var emitted []EmittedData
+	if ds, em := renderDatasources(sources, dataMode, dataBaseURL); len(ds) > 0 {
+		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
+	}
+	if ds, em := renderDatasets(sets, dataMode, dataBaseURL); len(ds) > 0 {
+		segments = append(segments, ds...)
+		emitted = append(emitted, em...)
+	}
+	segments = append(segments, pages...)
+
 	var body strings.Builder
-	if len(segments) == 0 {
+	// A page-less serve context whose data is all unbound stays blank, without the placeholder.
+	if len(segments) == 0 && !hadData {
 		body.WriteString("<section class='empty-state'>Define a LayoutPage or Text manifest to see the preview.</section>")
 	} else {
 		for _, segment := range segments {

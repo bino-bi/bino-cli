@@ -277,6 +277,8 @@ WHERE year = 2024
 AND region = 'EU'
 ```
 
+When a route must deliver only some rows, filter in the DataSet query as `filtered_sales` does. Do not use a component `filter` for this: it runs in the browser, so every row of the component's dataset reaches the viewer. Filtering in the DataSet limits the rows per viewer only when a layer in front of `bino serve`, for example a proxy, sets the parameters and the viewer cannot change them. See [Data sent to the browser](/cli/serve/#data-sent-to-the-browser).
+
 ### Using labels in display text
 
 For select parameters with static items, use `${PARAM_LABEL}` to show the human-readable label:

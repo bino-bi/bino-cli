@@ -74,6 +74,10 @@ type renderCtx struct {
 	// warnings collects render-time warnings for the build log; nil when the
 	// caller has no use for them (they are always logged).
 	warnings *[]string
+	// dataRefs collects the spec.dataset names of every rendered component
+	// ("$" marks a DataSource); nil means no recording. A map, so the copies
+	// made by withInheritedStyle share it.
+	dataRefs map[string]bool
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
@@ -144,6 +148,25 @@ func (rc *renderCtx) warn(msg string) {
 	logx.FromContext(rc.ctx).Channel("render").Warnf("%s", msg)
 	if rc.warnings != nil {
 		*rc.warnings = append(*rc.warnings, msg)
+	}
+}
+
+// recordDataRefs notes the data a rendered component binds. It splits the
+// joined list the way the engine splits the datasets attribute.
+func (rc *renderCtx) recordDataRefs(specRaw json.RawMessage) {
+	if rc.dataRefs == nil {
+		return
+	}
+	var p struct {
+		Dataset spec.DatasetList `json:"dataset"`
+	}
+	if json.Unmarshal(specRaw, &p) != nil {
+		return
+	}
+	for _, name := range strings.Split(p.Dataset.Join(","), ",") {
+		if name != "" {
+			rc.dataRefs[name] = true
+		}
 	}
 }
 
@@ -410,6 +433,22 @@ func filterDatasourcesByRefs(results []datasource.Result, referenced map[string]
 		}
 	}
 	return filtered
+}
+
+// keepBoundData returns the results the rendered components bind. The engine
+// reads "$x" and "x" from one table namespace, so "$x" also keeps a DataSet x.
+func keepBoundData(refs map[string]bool, sets []dataset.Result, sources []datasource.Result) (keptSets []dataset.Result, keptSources []datasource.Result) {
+	for _, r := range sets {
+		if refs[r.Name] || refs["$"+r.Name] {
+			keptSets = append(keptSets, r)
+		}
+	}
+	for _, r := range sources {
+		if refs["$"+r.Name] {
+			keptSources = append(keptSources, r)
+		}
+	}
+	return keptSets, keptSources
 }
 
 // renderDatasources generates bn-datasource elements for collected data.
@@ -883,6 +922,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 			return "", false, fmt.Errorf("apply dataset defaults to %s child: %w", child.Kind, err)
 		}
 	}
+	rc.recordDataRefs(effectiveSpec)
 
 	var component string
 	switch child.Kind {
@@ -1218,6 +1258,7 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("apply dataset defaults to %s node: %w", node.Kind, err)
 	}
+	rc.recordDataRefs(effectiveSpec)
 
 	switch node.Kind {
 	case "Label":
@@ -1392,6 +1433,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("apply dataset defaults to %s grid child: %w", child.Kind, err)
 	}
+	rc.recordDataRefs(effectiveSpec)
 
 	switch child.Kind {
 	case "Text":
