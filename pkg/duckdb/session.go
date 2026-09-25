@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -73,9 +74,11 @@ type Session struct {
 	queryLogger     QueryLogger
 	queryExecLogger QueryExecLogger
 
-	mu          sync.Mutex          // guards loadedExts and attachedDBs
+	mu          sync.Mutex          // guards loadedExts, attachedDBs, scratchDir and closed
 	loadedExts  map[string]struct{} // tracks loaded extensions for idempotent reloading
 	attachedDBs map[string]struct{} // tracks ATTACHed databases for session reuse
+	scratchDir  string              // created on first ScratchDir call, removed by Close
+	closed      bool                // set by Close, so ScratchDir cannot leak a new dir
 }
 
 // Options capture how a DuckDB session should be created.
@@ -99,6 +102,10 @@ func DefaultOptions() (Options, error) {
 
 	return Options{CacheDir: cache}, nil
 }
+
+// cwdWritableOnce checks the cwd once per process. A var so tests can re-run
+// the check.
+var cwdWritableOnce = sync.OnceValue(cwdWritable)
 
 // OpenSession bootstraps DuckDB, configures extension caching, and validates connectivity.
 func OpenSession(ctx context.Context, opts Options) (*Session, error) {
@@ -132,6 +139,16 @@ func OpenSession(ctx context.Context, opts Options) (*Session, error) {
 		return nil, err
 	}
 
+	// An in-memory DB spills to ".tmp" in the cwd by default, which fails on a
+	// read-only mount. Each session gets its own random dir: DuckDB instances
+	// that share one crash on concurrent spills.
+	if opts.Path == "" && !cwdWritableOnce() {
+		if err := s.setTempDirectory(ctx, filepath.Join(os.TempDir(), "bino-duckdb-"+rand.Text())); err != nil {
+			db.Close() //nolint:errcheck // best-effort teardown on the init error path
+			return nil, err
+		}
+	}
+
 	if err := s.registerBuiltinUDFs(ctx); err != nil {
 		db.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
@@ -158,12 +175,54 @@ func (s *Session) configureExtensionDirectory(ctx context.Context) error {
 	return nil
 }
 
-// Close releases the underlying DuckDB connection.
+// setTempDirectory points DuckDB's spill files at dir. The dir must not exist
+// yet: DuckDB creates it on the first spill and removes it on close.
+func (s *Session) setTempDirectory(ctx context.Context, dir string) error {
+	escaped := strings.ReplaceAll(dir, "'", "''")
+	query := fmt.Sprintf("SET temp_directory='%s';", escaped)
+	if _, err := s.db.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("set temp directory: %w", err)
+	}
+	return nil
+}
+
+// ScratchDir returns a private temp dir that lives until Close.
+func (s *Session) ScratchDir() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return "", errors.New("scratch dir: session closed")
+	}
+	if s.scratchDir == "" {
+		dir, err := os.MkdirTemp("", "bino-inline-*")
+		if err != nil {
+			return "", fmt.Errorf("create scratch dir: %w", err)
+		}
+		s.scratchDir = dir
+	}
+	return s.scratchDir, nil
+}
+
+// Close releases the underlying DuckDB connection and removes the scratch dir.
 func (s *Session) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
-	return s.db.Close()
+	s.mu.Lock()
+	dir := s.scratchDir
+	s.scratchDir = ""
+	s.closed = true
+	s.mu.Unlock()
+
+	// Close the DB first: its views may still read files in the scratch dir.
+	var dbErr, dirErr error
+	if s.db != nil {
+		dbErr = s.db.Close()
+	}
+	if dir != "" {
+		dirErr = os.RemoveAll(dir)
+	}
+	return errors.Join(dbErr, dirErr)
 }
 
 // DB exposes the raw sql.DB for downstream components that need advanced access.
