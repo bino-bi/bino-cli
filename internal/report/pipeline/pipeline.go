@@ -1365,7 +1365,20 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		Session:              opts.Session,
 		ContinueOnQueryError: opts.ContinueOnQueryError,
 	}
-	datasetResults, _, err := dataset.Execute(ctx, workdir, execDocs, execOpts)
+	datasetResults, warnings, err := dataset.Execute(ctx, workdir, execDocs, execOpts)
+	// The TOC pass repeats the content pass, so it would log every line twice.
+	// A canceled run reports the interrupted query as failed; that is not a finding.
+	if !opts.TOCOnly && ctx.Err() == nil {
+		datasetDiags := make([]datasource.Diagnostic, 0, len(warnings))
+		for _, w := range warnings {
+			datasetDiags = append(datasetDiags, datasource.Diagnostic{
+				Datasource: w.DataSet,
+				Stage:      "dataset",
+				Err:        fmt.Errorf("%s", w.Message),
+			})
+		}
+		LogDiagnostics(logger, datasetDiags)
+	}
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: execute datasets: %w", artifact.Document.Name, err)
 	}
@@ -1391,7 +1404,10 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 	if scoped {
 		collectDocs = filterDataDocs(docs, scope.dataSets, scope.dataSources)
 	}
-	datasourceResults, _, err := datasource.Collect(ctx, collectDocs, collectOpts)
+	datasourceResults, diags, err := datasource.Collect(ctx, collectDocs, collectOpts)
+	if !opts.TOCOnly {
+		LogDiagnostics(logger, diags)
+	}
 	if err != nil {
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: collect datasources: %w", artifact.Document.Name, err)
 	}

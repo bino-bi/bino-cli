@@ -4,6 +4,7 @@ import './components/bino-error-panel.js';
 import './components/bino-search.js';
 import './components/bino-assets-modal.js';
 import './components/bino-graph-modal.js';
+import './components/bino-pdf-modal.js';
 import './components/bino-data-explorer.js';
 import './components/bino-inspector.js';
 
@@ -15,7 +16,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
   // Bumped on each user-visible runtime change so a quick devtools check
   // confirms whether the page is on the latest preview-app.js. Increment
   // when fixing a hot-reload bug here.
-  console.info('bn preview runtime v12 (doc routes live-reload)');
+  console.info('bn preview runtime v13 (pdf preview)');
 
   var parser = new DOMParser();
   var basePrefix = appBase();

@@ -211,6 +211,7 @@ func buildPreviewHeader(artifacts []previewArtefactInfo, documents []previewDocu
 	b.WriteString(`<bino-error-panel></bino-error-panel>`)
 	b.WriteString(`<bino-assets-modal></bino-assets-modal>`)
 	b.WriteString(`<bino-graph-modal></bino-graph-modal>`)
+	b.WriteString(`<bino-pdf-modal></bino-pdf-modal>`)
 	b.WriteString(`<bino-data-explorer></bino-data-explorer>`)
 	b.WriteString(`<bino-inspector></bino-inspector>`)
 

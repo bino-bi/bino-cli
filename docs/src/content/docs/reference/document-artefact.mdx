@@ -223,13 +223,16 @@ The preview is exact for content and approximate for print geometry:
 - **Approximated**: the page width follows `format` and `orientation`; page breaks
   between sources show as dashed markers; with `displayHeaderFooter` the reserved
   margin bands appear as labeled placeholders sized by `marginTop`/`marginBottom`.
-- **Only in `bino build`**: real pagination, the page numbers in the table of contents,
-  and the separately paginated TOC pages with Roman numerals (the preview shows the TOC
-  inline, without page numbers), the actual header/footer templates, and signing.
+- **Only in a PDF** (the toolbar's PDF button or `bino build`): real pagination, the
+  page numbers in the table of contents, the separately paginated TOC pages with Roman
+  numerals (the preview page shows the TOC inline, without page numbers), and the actual
+  header/footer templates. Signing happens only in `bino build`.
 
 The toolbar shows the document's settings (format, orientation, locale, chapter count,
-TOC, header/footer), the search box jumps to headings, and the Build PDF button copies
-the `bino build --artefact <name>` command for the real thing.
+TOC, header/footer), the search box jumps to headings, and the PDF button builds the
+document as a PDF marked `PREVIEW` and shows it in the browser (see
+[PDF preview](/cli/preview/#pdf-preview)). Run `bino build --artefact <name>` for the
+final file.
 
 In the VS Code preview, Cmd/Ctrl+click on prose opens the markdown source file it came
 from; on an embedded component it opens the component's YAML manifest.
