@@ -248,7 +248,7 @@ description: Legal information and imprint for BinoBI CLI.
                     Informationen über die Herkunft der Daten
                 </li>
                 <li>das Bestehen einer automatisierten Entscheidungsfindung einschließlich Profiling gemäß Artikel 22
-                    Abs.1 und 4 DS-GVO und — zumindest in diesen Fällen — aussagekräftige Informationen über die
+                    Abs.1 und 4 DSGVO und - zumindest in diesen Fällen - aussagekräftige Informationen über die
                     involvierte Logik sowie die Tragweite und die angestrebten Auswirkungen einer derartigen
                     Verarbeitung für die betroffene Person
                 </li>
@@ -265,7 +265,7 @@ description: Legal information and imprint for BinoBI CLI.
                 und Verordnungsgeber gewährte Recht, die unverzügliche Berichtigung sie betreffender unrichtiger
                 personenbezogener Daten zu verlangen. Ferner steht der betroffenen Person das Recht zu, unter
                 Berücksichtigung der Zwecke der Verarbeitung, die Vervollständigung unvollständiger personenbezogener
-                Daten — auch mittels einer ergänzenden Erklärung — zu verlangen.</p>
+                Daten - auch mittels einer ergänzenden Erklärung - zu verlangen.</p>
             <p>Möchte eine betroffene Person dieses Berichtigungsrecht in Anspruch nehmen, kann sie sich hierzu
                 jederzeit an einen Mitarbeiter des für die Verarbeitung Verantwortlichen wenden.</p></li>
         <li>
@@ -382,8 +382,8 @@ description: Legal information and imprint for BinoBI CLI.
         </li>
         <li><h4>h)    Automatisierte Entscheidungen im Einzelfall einschließlich Profiling</h4>
             <p>Jede von der Verarbeitung personenbezogener Daten betroffene Person hat das vom Europäischen Richtlinien-
-                und Verordnungsgeber gewährte Recht, nicht einer ausschließlich auf einer automatisierten Verarbeitung —
-                einschließlich Profiling — beruhenden Entscheidung unterworfen zu werden, die ihr gegenüber rechtliche
+                und Verordnungsgeber gewährte Recht, nicht einer ausschließlich auf einer automatisierten Verarbeitung -
+                einschließlich Profiling - beruhenden Entscheidung unterworfen zu werden, die ihr gegenüber rechtliche
                 Wirkung entfaltet oder sie in ähnlicher Weise erheblich beeinträchtigt, sofern die Entscheidung (1)
                 nicht für den Abschluss oder die Erfüllung eines Vertrags zwischen der betroffenen Person und dem
                 Verantwortlichen erforderlich ist, oder (2) aufgrund von Rechtsvorschriften der Union oder der

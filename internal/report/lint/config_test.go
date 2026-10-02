@@ -151,7 +151,7 @@ func TestRunnerApplyDatasetDependencyRules(t *testing.T) {
 }
 
 // TestRunnerApplyPluginRuleID: a plugin-prefixed id is not merely accepted by
-// ConfigWarnings — Apply really drops it and really re-grades it.
+// ConfigWarnings - Apply really drops it and really re-grades it.
 func TestRunnerApplyPluginRuleID(t *testing.T) {
 	runner := NewProjectRunner(lintProject(t,
 		"[lint]\ndisable = [\"myplugin/dropped\"]\n\n[lint.severity]\n\"myplugin/regraded\" = \"error\"\n"))

@@ -407,7 +407,7 @@
         "name": {
           "type": "string",
           "pattern": "^(@[a-z0-9][a-z0-9_-]*/([a-z0-9][a-z0-9_-]*/)?)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$",
-          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'), optionally prefixed with a registry scope '@scope/' (e.g. '@acme/revenue-table') for documents pulled from a bino registry. A scoped name may carry one optional package segment, giving the '@scope/package/definition' form (e.g. '@acme/kit/waterfall') for a definition published as part of a registry package; the package segment uses lowercase letters, digits, hyphen and underscore, and at most one is allowed, so '@acme/kit/sub/deep' is invalid, as is a package segment without a scope (e.g. 'kit/waterfall'). For DataSource documents the name is additionally constrained: either a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$), or a full '@scope/name' registry identity — because it becomes the DuckDB view name, a '@scope/name' DataSource must be double-quoted when referenced in a DataSet's raw SQL query, e.g. FROM \"@acme/revenue-table\". A DataSource can therefore never carry a package segment; keep DataSource manifests out of a package's include set."
+          "description": "Name of this document. Must be unique per kind within each ReportArtefact after applying constraints. Used for references from other manifests (for example a DataSet query or LayoutPage child). Allowed characters: letters, digits, hyphen and underscore (e.g. 'coffee_sales_daily'), optionally prefixed with a registry scope '@scope/' (e.g. '@acme/revenue-table') for documents pulled from a bino registry. A scoped name may carry one optional package segment, giving the '@scope/package/definition' form (e.g. '@acme/kit/waterfall') for a definition published as part of a registry package; the package segment uses lowercase letters, digits, hyphen and underscore, and at most one is allowed, so '@acme/kit/sub/deep' is invalid, as is a package segment without a scope (e.g. 'kit/waterfall'). For DataSource documents the name is additionally constrained: either a lowercase SQL identifier (matching ^[a-z_][a-z0-9_]*$), or a full '@scope/name' registry identity - because it becomes the DuckDB view name, a '@scope/name' DataSource must be double-quoted when referenced in a DataSet's raw SQL query, e.g. FROM \"@acme/revenue-table\". A DataSource can therefore never carry a package segment; keep DataSource manifests out of a package's include set."
         },
         "labels": {
           "type": "object",
@@ -518,7 +518,7 @@
     "sqlIdentifier": {
       "type": "string",
       "pattern": "^([a-z_][a-z0-9_]*|@[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*)$",
-      "description": "Name of the DuckDB view created from this DataSource. Either a valid unquoted SQL identifier in lowercase (letter or underscore followed by lowercase letters, digits, or underscores), for example 'coffee_sales_daily' — use this form directly (unquoted) in DataSet queries — or, for a DataSource pulled from a bino registry, its full '@scope/name' identity, for example '@acme/revenue-table'; reference this form double-quoted in DataSet queries, e.g. FROM \"@acme/revenue-table\"."
+      "description": "Name of the DuckDB view created from this DataSource. Either a valid unquoted SQL identifier in lowercase (letter or underscore followed by lowercase letters, digits, or underscores), for example 'coffee_sales_daily' - use this form directly (unquoted) in DataSet queries - or, for a DataSource pulled from a bino registry, its full '@scope/name' identity, for example '@acme/revenue-table'; reference this form double-quoted in DataSet queries, e.g. FROM \"@acme/revenue-table\"."
     },
     "dataFileFormat": {
       "type": "string",
@@ -1837,7 +1837,7 @@
               "description": "Array of LayoutPage references. Each item can be a string (name or glob pattern) or an object with page name and params."
             }
           ],
-          "description": "One or more LayoutPage documents to render. Optional — when omitted, pages are auto-discovered from refs. Can use parameterized refs with page and params."
+          "description": "One or more LayoutPage documents to render. Optional - when omitted, pages are auto-discovered from refs. Can use parameterized refs with page and params."
         },
         "format": {
           "type": "string",
@@ -4119,7 +4119,7 @@
     "scenarioSlotToken": {
       "type": "string",
       "pattern": "^(ac|pp|fc|pl)[1-4]$",
-      "description": "Plain scenario slot (ac1-ac4, pp1-pp4, fc1-fc4, pl1-pl4). Variance tokens are not allowed here — the bullet variance is implicit (actual vs target). Examples: ac1, pl1."
+      "description": "Plain scenario slot (ac1-ac4, pp1-pp4, fc1-fc4, pl1-pl4). Variance tokens are not allowed here - the bullet variance is implicit (actual vs target). Examples: ac1, pl1."
     },
     "bulletMeasureMapping": {
       "description": "Bullet measure mapping. Either a bare scenario slot (shorthand for { measure: slot }) or an object with the measure plus an optional label and unit.",
@@ -4920,7 +4920,7 @@
         "interval": {
           "type": "string",
           "enum": ["none", "setname", "year", "quarter", "month", "week", "day", "hour", "minute", "second", "millisecond", "auto"],
-          "description": "Repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band (e.g. '2023 | 2024 | 2025'). 'none' (default) disables the feature. 'setname' groups by the dataset's setname column (blank setnames are grouped under '—'). Date values ('year'..'millisecond') bucket rows by the date column; 'auto' detects the granularity from the date span. Cannot be combined with columnthereof (columnthereof wins)."
+          "description": "Repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band (e.g. '2023 | 2024 | 2025'). 'none' (default) disables the feature. 'setname' groups by the dataset's setname column (blank setnames are grouped under '-'). Date values ('year'..'millisecond') bucket rows by the date column; 'auto' detects the granularity from the date span. Cannot be combined with columnthereof (columnthereof wins)."
         },
         "attributes": {
           "description": "Computed attribute columns rendered between the category and scenario columns, in list order. Maps a column header label to an aggregate expression over the rows behind each table row. Functions: set, first, last, min, max, avg, sum (dataset field or custom '_'-prefixed field) and lit (constant). Use the ordered array form, or a JSON object string whose key order defines column order. Example: [{\"label\": \"Verkaufsleiter\", \"expression\": \"set(_leiter)\"}]",

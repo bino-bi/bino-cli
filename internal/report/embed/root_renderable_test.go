@@ -24,7 +24,7 @@ func TestIsRootRenderable(t *testing.T) {
 }
 
 // Every root-renderable kind except the layout-child-only Image must be a
-// known built-in kind — the set cannot drift ahead of the registry.
+// known built-in kind - the set cannot drift ahead of the registry.
 func TestRootRenderableKindsAreKnown(t *testing.T) {
 	known := AllBuiltinKinds()
 	for _, kind := range RootRenderableKinds() {

@@ -52,7 +52,7 @@ type published struct {
 }
 
 // TestAnalyzer_BackendErrorClearsDiagnostics: a failed ValidateDraft must
-// publish an empty set for the analyzed version — a silent return leaves the
+// publish an empty set for the analyzed version - a silent return leaves the
 // previous squiggles anchored to text that no longer exists.
 func TestAnalyzer_BackendErrorClearsDiagnostics(t *testing.T) {
 	docs := NewDocumentStore()
@@ -77,7 +77,7 @@ func TestAnalyzer_BackendErrorClearsDiagnostics(t *testing.T) {
 			t.Fatalf("clearing publish must carry the analyzed version 1, got %d", p.version)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("no publish after a backend error — stale diagnostics would linger")
+		t.Fatal("no publish after a backend error - stale diagnostics would linger")
 	}
 }
 
@@ -112,7 +112,7 @@ func TestBackfillDiagnostics_HintSuffix(t *testing.T) {
 }
 
 // TestAnalyzer_SupersededRunDoesNotPublish: when a newer keystroke cancels an
-// in-flight run, only the newer run may publish — and it must, exactly once.
+// in-flight run, only the newer run may publish - and it must, exactly once.
 func TestAnalyzer_SupersededRunDoesNotPublish(t *testing.T) {
 	docs := NewDocumentStore()
 	u := uri.File("/proj/report.yaml")

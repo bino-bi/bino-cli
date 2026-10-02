@@ -1,18 +1,18 @@
 function getNonce(): string {
-    let text = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return text;
+  let text = '';
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return text;
 }
 
 /** Returns the full HTML for the wizard webview. The webview is self-contained:
  *  it holds the editable state and talks to the host via postMessage. */
 export function getWizardHtml(): string {
-    const nonce = getNonce();
-    const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
-    return `<!DOCTYPE html>
+  const nonce = getNonce();
+  const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -44,13 +44,13 @@ export function getWizardHtml(): string {
     </div>
     <div id="dataset-section">
       <div class="card">
-        <div class="card-title">Map to the dataset schema <span class="muted">— fill each dataset column from a source column, a constant, or an expression</span></div>
+        <div class="card-title">Map to the dataset schema <span class="muted">- fill each dataset column from a source column, a constant, or an expression</span></div>
         <div id="columns" class="scroll"></div>
         <div id="map-warn" class="warn hidden"></div>
         <div class="row"><button id="add-custom-col" type="button">+ Add custom (_) column</button></div>
       </div>
       <div class="card" id="sql-card">
-        <div class="card-title">Generated DataSet SQL <span class="muted">— read-only; edit the mapping above to change it</span></div>
+        <div class="card-title">Generated DataSet SQL <span class="muted">- read-only; edit the mapping above to change it</span></div>
         <pre id="sql" class="sql"></pre>
         <div class="row">
           <button id="preview-dataset" type="button">▶ Preview dataset</button>
@@ -73,7 +73,7 @@ export function getWizardHtml(): string {
 }
 
 function styles(): string {
-    return `
+  return `
   * { box-sizing: border-box; }
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 12px; font-size: var(--vscode-font-size); }
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
@@ -124,7 +124,7 @@ function styles(): string {
 }
 
 function script(): string {
-    return `
+  return `
   const vscode = acquireVsCodeApi();
   const TYPES = ['VARCHAR','BIGINT','INTEGER','DOUBLE','DECIMAL(18,2)','DECIMAL(10,2)','DATE','TIMESTAMP','TIME','BOOLEAN'];
   // Fallback dataset schema (raw: name/kind/group/pair) mirroring
@@ -226,7 +226,7 @@ function script(): string {
         opts = \`<label>Sheet <select id="o-sheet">\${sheetOpts || '<option value="">(default)</option>'}</select></label>
           <button id="reintrospect">Re-introspect</button>\`;
       } else {
-        opts = '<span class="muted">Parquet schema is read directly — no options.</span>';
+        opts = '<span class="muted">Parquet schema is read directly - no options.</span>';
       }
       el.innerHTML = '<div class="card-title">File: ' + esc(s.fileName) + ' <span class="muted">(' + s.format + ')</span></div><div class="row">' + opts + '</div>';
     } else {
@@ -339,7 +339,7 @@ function script(): string {
   }
 
   function kindOptions(sel) {
-    return [['none','—'],['source','Source column'],['const','Constant'],['expr','Expression']]
+    return [['none','-'],['source','Source column'],['const','Constant'],['expr','Expression']]
       .map(o => '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + '>' + o[1] + '</option>').join('');
   }
 

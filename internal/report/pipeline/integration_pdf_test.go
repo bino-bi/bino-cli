@@ -18,7 +18,7 @@ import (
 // output under SOURCE_DATE_EPOCH.
 //
 // This file is gated behind the `integration` build tag: a missing Chrome is a
-// hard failure here, not a skip — the integration CI job installs it via
+// hard failure here, not a skip - the integration CI job installs it via
 // `bino setup`, and anyone running `go test -tags=integration` locally is
 // expected to have done the same.
 func TestIntegration_BuildSampleBundlePDF(t *testing.T) {

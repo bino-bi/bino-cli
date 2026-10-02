@@ -236,7 +236,7 @@ func TestHealthAdvertisesRegistryCapabilities(t *testing.T) {
 }
 
 // A package is a file tree, so the served shape lists every file it installs
-// and reports "installed" only when all of them are on disk — stat-ing the
+// and reports "installed" only when all of them are on disk - stat-ing the
 // package directory would succeed on an empty one. A single-document package
 // with bundled resources must list each of them once, not its document three
 // times.

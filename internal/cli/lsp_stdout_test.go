@@ -22,7 +22,7 @@ spec:
 
 // runLSPHelperGraphDeps executes `bino lsp-helper graph-deps` through the real
 // root command (so the root PersistentPreRunE binds the logger exactly as in
-// production) against a bundle whose optional layout ref is missing — the
+// production) against a bundle whose optional layout ref is missing - the
 // case that makes graph.Build log a skip message.
 func runLSPHelperGraphDeps(t *testing.T, extraArgs ...string) bytes.Buffer {
 	t.Helper()
@@ -46,7 +46,7 @@ func runLSPHelperGraphDeps(t *testing.T, extraArgs ...string) bytes.Buffer {
 }
 
 // Regression: lsp-helper subcommands emit machine-consumed JSON on stdout,
-// but the root command bound an stdout-writing logger into the context — a
+// but the root command bound an stdout-writing logger into the context - a
 // bundle with an optional missing layout ref made graph.Build log an Info
 // line into the JSON stream, and the extension's JSON.parse of the whole
 // stdout failed.

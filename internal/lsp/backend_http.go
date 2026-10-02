@@ -33,7 +33,7 @@ type HTTPBackend struct {
 // NewHTTPBackend builds a proxy backend and verifies the daemon answers
 // /health AND actually serves the endpoints the LSP depends on. A stale daemon
 // (spawned from an older binary) previously passed the bare health check and
-// then 404'd /validate-draft — diagnostics silently vanished; erroring here
+// then 404'd /validate-draft - diagnostics silently vanished; erroring here
 // makes the caller fall back to a working standalone backend instead.
 func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBackend, error) {
 	b := &HTTPBackend{
@@ -62,7 +62,7 @@ func NewHTTPBackend(ctx context.Context, base string, log logx.Logger) (*HTTPBac
 		if v == "" {
 			v = "unknown"
 		}
-		return nil, fmt.Errorf("daemon (version %s) predates /validate-draft — restart it with the current binary", v)
+		return nil, fmt.Errorf("daemon (version %s) predates /validate-draft - restart it with the current binary", v)
 	}
 	if health.Version != "" && health.Version != version.Version {
 		log.Warnf("daemon version %s differs from bino %s; restart the daemon if behavior looks stale", health.Version, version.Version)

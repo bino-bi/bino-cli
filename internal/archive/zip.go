@@ -244,7 +244,7 @@ func sanitizeArchivePath(dest, name string) (string, error) {
 }
 
 // verifyResolvedParent re-checks, after MkdirAll, that the entry's parent
-// directory still resolves inside the destination — defeating a pre-existing
+// directory still resolves inside the destination - defeating a pre-existing
 // symlink that redirects a write outside destDir.
 func verifyResolvedParent(resolvedDest, parentDir string) error {
 	resolved, err := filepath.EvalSymlinks(parentDir)

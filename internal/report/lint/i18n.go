@@ -96,7 +96,7 @@ var i18nCodeUnused = Rule{
 // named namespace that no component points at.
 //
 // Components only consult the namespace named by their (possibly inherited)
-// i18nNamespace — or titleNamespace for page/card titles — and fall back to
+// i18nNamespace - or titleNamespace for page/card titles - and fall back to
 // '_system'. Content stored under any other namespace is never read.
 var i18nNamespaceUnreferenced = Rule{
 	ID:   "i18n-namespace-unreferenced",

@@ -210,7 +210,7 @@ export class WorkspaceIndexer {
      */
     /**
      * The workspace's bino project root, independent of which editor happens
-     * to be active — the deterministic root for long-lived services (the
+     * to be active - the deterministic root for long-lived services (the
      * language server). Terminal commands keep the active-editor preference
      * of getProjectRootForUri.
      */

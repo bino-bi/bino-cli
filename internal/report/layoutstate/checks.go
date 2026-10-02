@@ -71,7 +71,7 @@ const fontScaleEpsilon = 0.001
 //
 // It never fails: a malformed or partial snapshot yields fewer findings, not
 // an error. A snapshot whose version this package does not understand yields
-// none — see SupportedVersion.
+// none - see SupportedVersion.
 func Analyze(snap Snapshot) []Finding {
 	if !SupportedVersion(snap.State.Version) {
 		return nil
@@ -96,7 +96,7 @@ func Analyze(snap Snapshot) []Finding {
 // engine snapshot.
 func SupportedVersion(v int) bool { return v == Version }
 
-// checkEmpty flags a component that rendered but has nothing in it — the
+// checkEmpty flags a component that rendered but has nothing in it - the
 // signature of a dataset or SQL wiring mistake, which otherwise just looks
 // like an empty box in the preview.
 //
@@ -122,7 +122,7 @@ func checkEmpty(c Component, src Source) (Finding, bool) {
 	}
 
 	return newFinding(c, src, RuleEmptyComponent, SeverityWarning,
-		"rendered empty — "+reason,
+		"rendered empty - "+reason,
 		"check the dataset reference and that its query returns rows"), true
 }
 
@@ -143,7 +143,7 @@ func checkOverflow(c Component, src Source) []Finding {
 			msg = "content overflows the component box"
 		}
 		if by := overflowExtent(c); by != "" {
-			msg = strings.TrimSuffix(msg, ".") + " — content exceeds the box by " + by
+			msg = strings.TrimSuffix(msg, ".") + " - content exceeds the box by " + by
 		}
 		out = append(out, newFinding(c, src, RuleOverflow, severityOf(d), msg,
 			"give the component more space, or pin a larger unitScaling so the content shrinks"))
@@ -176,7 +176,7 @@ func overflowExtent(c Component) string {
 const autoScaleDiagnosticID = "auto_scale"
 
 // checkFontShrunk reports a component whose font was auto-fitted down. It
-// still renders, so nothing else surfaces it — but it is a silent typography
+// still renders, so nothing else surfaces it - but it is a silent typography
 // regression, and it breaks font consistency across pages.
 //
 // Two signals, because only the rich components compute a factor: components
@@ -200,7 +200,7 @@ func checkFontShrunk(c Component, src Source) (Finding, bool) {
 		}
 		msg := "font auto-fitted down to make the content fit"
 		if d.Message != "" {
-			msg += " — " + d.Message
+			msg += " - " + d.Message
 		}
 		return newFinding(c, src, RuleFontShrunk, SeverityWarning, msg, hint), true
 	}
@@ -221,7 +221,7 @@ type scaleMember struct {
 
 // checkScaleMismatch compares the resolved units-per-em of components showing
 // the same measure. IBCS requires a uniform scale so bars stay comparable, and
-// the engine auto-fits each component independently — so two charts of the
+// the engine auto-fits each component independently - so two charts of the
 // same measure silently end up with different scales, and nothing says so.
 //
 // Grouping needs a measure identity the engine does not report, so it uses the

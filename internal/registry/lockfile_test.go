@@ -189,7 +189,7 @@ func TestLockfileUpsertRemove(t *testing.T) {
 }
 
 // A version-1 lock predates the format marker. Loading it must classify every
-// entry as a single-document package, and must not touch the file on disk —
+// entry as a single-document package, and must not touch the file on disk -
 // an install against an old lock has to produce no diff.
 func TestLockfileV1UpgradesInMemoryOnly(t *testing.T) {
 	dir := t.TempDir()

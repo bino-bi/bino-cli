@@ -5,7 +5,7 @@ description: Register images, fonts, and files for use in layouts.
 
 `Asset` manifests declare binary resources such as logos, pictograms, and fonts.
 Layouts refer to assets by `metadata.name` so that paths and URLs are centralized.
-Image assets also serve as the icon sources for installable web apps — see
+Image assets also serve as the icon sources for installable web apps - see
 [`spec.pwa.icons`](/reference/live-report-artefact/#specpwaicons) on `LiveReportArtefact`.
 
 ## Minimal definition
@@ -99,11 +99,11 @@ You can reference any non-font asset from Markdown content using the `asset:` UR
 
 At build time bino resolves `asset:brandLogo` to the actual URL based on the asset's source type:
 
-| Source type    | Resolved URL                          |
-|----------------|---------------------------------------|
-| `localPath`    | `/assets/files/brandLogo`             |
-| `remoteURL`    | The URL as-is                         |
-| `inlineBase64` | `data:image/png;base64,…`             |
+| Source type    | Resolved URL              |
+| -------------- | ------------------------- |
+| `localPath`    | `/assets/files/brandLogo` |
+| `remoteURL`    | The URL as-is             |
+| `inlineBase64` | `data:image/png;base64,…` |
 
 If the name does not match any asset the image renders as a broken link (`#asset-not-found:name`). The [`asset-reference-undefined`](/appendix/lint-rules/#asset-reference-undefined) lint rule reports this before you build.
 
@@ -155,13 +155,13 @@ spec:
 
 Three properties take an image directly, rather than through Markdown:
 
-| Property | Kind |
-|----------|------|
-| `spec.messageImage` | [LayoutPage](/reference/layout-page/) — the message row logo |
-| `spec.titleImage` | [LayoutCard](/reference/layout-card/) — the card title logo |
-| `spec.source` | Image component |
+| Property            | Kind                                                         |
+| ------------------- | ------------------------------------------------------------ |
+| `spec.messageImage` | [LayoutPage](/reference/layout-page/) - the message row logo |
+| `spec.titleImage`   | [LayoutCard](/reference/layout-card/) - the card title logo  |
+| `spec.source`       | Image component                                              |
 
-Each takes the **`metadata.name` of an asset** — with or without the `asset:` prefix — or an absolute URL:
+Each takes the **`metadata.name` of an asset** - with or without the `asset:` prefix - or an absolute URL:
 
 ```yaml
 spec:
@@ -176,24 +176,23 @@ Unresolvable references are reported by the [`asset-reference-undefined`](/appen
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `Asset`. |
-| `metadata.name` | string | yes | — | Unique asset identifier. Used to reference this asset from layouts. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description of this asset. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `Asset`.                                                                         |
+| `metadata.name`        | string | yes      | -       | Unique asset identifier. Used to reference this asset from layouts.                      |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description of this asset.                                                     |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.type` | string | yes | — | Asset type. Values: `image`, `file`, `font`. | `type: image` |
-| `spec.mediaType` | string | yes | — | MIME type of the asset. | `mediaType: image/png` |
-| `spec.source` | object | yes | — | Asset source. Exactly one of `inlineBase64`, `localPath`, or `remoteURL`. | see below |
-| `spec.source.inlineBase64` | string | conditional | — | Base64-encoded content embedded in the manifest. | `inlineBase64: iVBORw0KGgo...` |
-| `spec.source.localPath` | string | conditional | — | Relative or absolute file path to the asset. | `localPath: ./assets/logo.png` |
-| `spec.source.remoteURL` | string | conditional | — | HTTP/HTTPS URL pointing to a remote asset. | `remoteURL: https://example.com/logo.png` |
-
+| Attribute                  | Type   | Required    | Default | Description                                                               | Sample                                    |
+| -------------------------- | ------ | ----------- | ------- | ------------------------------------------------------------------------- | ----------------------------------------- |
+| `spec.type`                | string | yes         | -       | Asset type. Values: `image`, `file`, `font`.                              | `type: image`                             |
+| `spec.mediaType`           | string | yes         | -       | MIME type of the asset.                                                   | `mediaType: image/png`                    |
+| `spec.source`              | object | yes         | -       | Asset source. Exactly one of `inlineBase64`, `localPath`, or `remoteURL`. | see below                                 |
+| `spec.source.inlineBase64` | string | conditional | -       | Base64-encoded content embedded in the manifest.                          | `inlineBase64: iVBORw0KGgo...`            |
+| `spec.source.localPath`    | string | conditional | -       | Relative or absolute file path to the asset.                              | `localPath: ./assets/logo.png`            |
+| `spec.source.remoteURL`    | string | conditional | -       | HTTP/HTTPS URL pointing to a remote asset.                                | `remoteURL: https://example.com/logo.png` |

@@ -9,7 +9,7 @@ import (
 
 // tableTypesWithTotalRow lists the Table spec.type values that render a
 // grand-total row at the bottom of the table. Only for those does spec.sumTitle
-// — the label of that row — appear anywhere in the output.
+// - the label of that row - appear anywhere in the output.
 var tableTypesWithTotalRow = map[string]bool{
 	"sum": true,
 	"opt": true,

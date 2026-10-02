@@ -11,7 +11,7 @@ export class PackageItem extends vscode.TreeItem {
         if (!pkg.installed) {
             this.description = `${pkg.version || pkg.declaredRef || ''} (not installed)`.trim();
             this.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
-            this.tooltip = `${pkg.name} is declared but not installed — run "Bino: Install Dependencies from Lockfile".`;
+            this.tooltip = `${pkg.name} is declared but not installed - run "Bino: Install Dependencies from Lockfile".`;
         } else {
             this.description = pkg.tag ? `${pkg.version} (${pkg.tag})` : `${pkg.version} (pinned)`;
             this.iconPath = new vscode.ThemeIcon('package');
@@ -61,7 +61,7 @@ export class DependenciesTreeProvider implements vscode.TreeDataProvider<DepsTre
     private _onDidChangeTreeData = new vscode.EventEmitter<DepsTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    constructor(private readonly daemonClient: () => DaemonClient | undefined) {}
+    constructor(private readonly daemonClient: () => DaemonClient | undefined) { }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
@@ -78,10 +78,10 @@ export class DependenciesTreeProvider implements vscode.TreeDataProvider<DepsTre
 
         const client = this.daemonClient();
         if (!client || !client.isConnected) {
-            return [new InfoItem('Daemon not connected — dependencies unavailable', 'plug', 'bino.restartDaemon')];
+            return [new InfoItem('Daemon not connected - dependencies unavailable', 'plug', 'bino.restartDaemon')];
         }
         if (!client.hasCapability('registry-packages')) {
-            return [new InfoItem('Registry view needs a newer daemon — click to restart', 'warning', 'bino.restartDaemon')];
+            return [new InfoItem('Registry view needs a newer daemon - click to restart', 'warning', 'bino.restartDaemon')];
         }
 
         const result = await client.getRegistryPackages();
@@ -92,7 +92,7 @@ export class DependenciesTreeProvider implements vscode.TreeDataProvider<DepsTre
             return [new InfoItem(`bino.lock: ${result.error}`, 'error')];
         }
         if (result.packages.length === 0) {
-            return [new InfoItem('No dependencies — search the registry to add one', 'search', 'bino.registrySearch')];
+            return [new InfoItem('No dependencies - search the registry to add one', 'search', 'bino.registrySearch')];
         }
         return result.packages.map((pkg) => new PackageItem(pkg));
     }

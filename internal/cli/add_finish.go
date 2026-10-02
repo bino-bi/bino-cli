@@ -14,7 +14,7 @@ import (
 )
 
 // finishWizardConfirm asks the final Proceed? question. It is a package
-// variable so tests can stub the interactive prompt — huh cannot run without
+// variable so tests can stub the interactive prompt - huh cannot run without
 // a terminal.
 var finishWizardConfirm = func() (bool, error) {
 	return addPromptConfirm("Proceed?", true)
@@ -26,7 +26,7 @@ var finishWizardConfirm = func() (bool, error) {
 // optionally opens the created file in $EDITOR.
 //
 // doc is either a *schema.Document (written via WriteSchemaDocument) or a
-// map[string]any (written via WriteRawDocument — the shape the parameterized
+// map[string]any (written via WriteRawDocument - the shape the parameterized
 // LayoutPage/ReportArtefact builders emit).
 //
 // Confirmation errors are checked, not swallowed: Ctrl-C (errAddCanceled) and

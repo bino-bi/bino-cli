@@ -38,7 +38,7 @@ func PageCount(filePath string) (int, error) {
 // reference the page where each heading appears.
 //
 // If no named destinations are found, an empty map is returned (graceful
-// degradation — the TOC will be rendered without page numbers).
+// degradation - the TOC will be rendered without page numbers).
 func HeadingPageMap(filePath string, headingIDs []string) (map[string]int, error) {
 	if len(headingIDs) == 0 {
 		return nil, nil

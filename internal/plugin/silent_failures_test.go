@@ -47,7 +47,7 @@ func captureContext() (context.Context, *bytes.Buffer) {
 }
 
 // Regression: a plugin whose GetSchemas RPC failed was skipped with no log at
-// any level — the user's manifests then failed validation pointing at their
+// any level - the user's manifests then failed validation pointing at their
 // YAML instead of the plugin. The failure must be logged with the plugin
 // name, and healthy plugins must still merge.
 func TestSchemaAggregatorLogsPluginFailure(t *testing.T) {

@@ -33,14 +33,14 @@ The Bino Reports VS Code extension provides schema-aware YAML editing, navigatio
 
 Beyond YAML editing, the extension also ships a schema-driven **Designer** webview,
 a **DataSource creation Wizard**, a **Tree/Table Editor**, and **PRQL** editing
-support — see sections 9–12 below.
+support - see sections 9–12 below.
 
 ### Architecture
 
-- **`bino lsp`** — a real [Language Server Protocol](/cli/lsp/) process, started
+- **`bino lsp`** - a real [Language Server Protocol](/cli/lsp/) process, started
   automatically over stdio, provides live diagnostics, completion, hover,
   go-to-definition, find-references, rename, and quick-fixes.
-- **`bino daemon`** — an optional persistent background process (enabled by
+- **`bino daemon`** - an optional persistent background process (enabled by
   default, see `bino.daemon.enabled`) that both the LSP and the extension's
   data/preview/build features share, so indexing, validation, and DuckDB
   column introspection stay warm across requests instead of paying a
@@ -126,10 +126,10 @@ If something is wrong, the command shows a detailed message.
 The **Bino Reports** activity bar container (click the Bino icon in the Activity
 Bar) holds four views:
 
-- **Documents** (`binoDocuments`) — all indexed manifests, grouped by kind.
-- **Preview & Build** (`binoPreview`) — preview/build/validate/graph action buttons.
-- **Scaffolding** (`binoActions`) — shortcuts to the `Add *` commands, grouped by category.
-- **Environment** (`binoEnvironment`) — CLI/project info, diagnostics counts, and settings shortcuts.
+- **Documents** (`binoDocuments`) - all indexed manifests, grouped by kind.
+- **Preview & Build** (`binoPreview`) - preview/build/validate/graph action buttons.
+- **Scaffolding** (`binoActions`) - shortcuts to the `Add *` commands, grouped by category.
+- **Environment** (`binoEnvironment`) - CLI/project info, diagnostics counts, and settings shortcuts.
 
 **What you see in Documents:**
 
@@ -182,7 +182,7 @@ The extension provides completions in YAML files for:
 - Inside `query:`/`prql:` blocks – suggests real DuckDB column names from the bound source.
 
 Completion, hover, diagnostics, and navigation are all served by the `bino lsp`
-[Language Server](/cli/lsp/) — a real LSP process, not the older CLI-subprocess
+[Language Server](/cli/lsp/) - a real LSP process, not the older CLI-subprocess
 model.
 
 **Screenshot placeholder:**
@@ -234,12 +234,12 @@ running) with caching (configurable TTL).
 Live diagnostics are pushed continuously by the `bino lsp` [Language
 Server](/cli/lsp/) as you type (schema errors, engine-constraint violations)
 and, on every disk change, project-wide (lint findings, missing `${VAR}`
-environment variables) — no manual step is required.
+environment variables) - no manual step is required.
 
 ### 6.1 Manual Validation
 
 Use the **Bino: Validate Workspace** command or the toolbar button in the Bino
-Views for an explicit, on-demand re-check — useful right after installing or
+Views for an explicit, on-demand re-check - useful right after installing or
 when the daemon isn't running.
 
 - Reports schema and configuration errors as VS Code diagnostics.
@@ -349,8 +349,8 @@ schema-driven property form instead of raw YAML.
   purpose-built pickers instead of free-text input.
 - A dataset/column picker is wired to live DuckDB column introspection.
 - Edits are applied as scoped YAML patches (via the same authoring path as
-  quick-fixes and the Add-Element flow), so the rest of the file — comments,
-  formatting, unrelated fields — is left untouched.
+  quick-fixes and the Add-Element flow), so the rest of the file - comments,
+  formatting, unrelated fields - is left untouched.
 
 ---
 
@@ -374,8 +374,8 @@ The wizard:
 - **Bino: Open Tree Editor** (button in the editor title bar for `Tree`-kind
   manifests) opens a spreadsheet-like grid/property editor for hierarchical
   `Tree` documents, instead of editing nested YAML by hand.
-- **Bino: Preview Rows (100 rows)** — also available as a CodeLens directly
-  above `DataSource`/`DataSet` manifests — opens a webview showing a live
+- **Bino: Preview Rows (100 rows)** - also available as a CodeLens directly
+  above `DataSource`/`DataSet` manifests - opens a webview showing a live
   100-row data sample for that source.
 
 ---
@@ -399,12 +399,12 @@ adds richer PRQL-native editing on top of this.
 
 All settings live under the **Bino Reports** section in VS Code Settings.
 
-| Setting                     | Type    | Default | Description                                                                 |
+| Setting                      | Type    | Default | Description                                                                  |
 | ---------------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
-| `bino.binPath`               | string  | `""`    | Path to the `bino` CLI executable. If not set, uses `bino` from `PATH`.       |
+| `bino.binPath`               | string  | `""`    | Path to the `bino` CLI executable. If not set, uses `bino` from `PATH`.      |
 | `bino.columnCacheTTL`        | number  | 60000   | Column cache TTL (ms) for hover/completion column lookups.                   |
 | `bino.validateOnSave`        | boolean | true    | Fallback validation on save when the daemon isn't running (see 6.2).         |
-| `bino.previewPort`           | number  | 3000    | Port number for the `bino preview` server.                                    |
+| `bino.previewPort`           | number  | 3000    | Port number for the `bino preview` server.                                   |
 | `bino.daemon.enabled`        | boolean | true    | Enable the persistent background daemon for faster indexing/validation/data. |
 | `bino.wizard.sampleRowLimit` | number  | 100     | Max sample rows the DataSource wizard fetches when introspecting a source.   |
 
@@ -415,7 +415,7 @@ Example configuration:
   "bino.columnCacheTTL": 120000,
   "bino.validateOnSave": true,
   "bino.previewPort": 3100,
-  "bino.daemon.enabled": true
+  "bino.daemon.enabled": true,
 }
 ```
 

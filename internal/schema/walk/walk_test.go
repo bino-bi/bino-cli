@@ -175,7 +175,7 @@ func TestResolveAt_LayoutChildKindEnum(t *testing.T) {
 		t.Fatalf("layout child kind enum unreachable, got %v", vals)
 	}
 	// The same resolution with a partially-typed child kind ("Ta") must still
-	// reach the enum — the conditional simply matches no branch.
+	// reach the enum - the conditional simply matches no branch.
 	kinds["spec.children.0"] = "Ta"
 	vals = m.ResolveAt([]string{"spec", "children", "0", "kind"}, kinds).EnumValues()
 	if !hasString(vals, "Table") {
@@ -203,7 +203,7 @@ func TestResolveAt_LayoutChildKeys(t *testing.T) {
 
 func TestResolveAt_NestedChildSpecUnionsConditional(t *testing.T) {
 	// The child's spec resolves through the nested non-kind conditional (ref
-	// present vs not) — both branches union, so tableBase fields appear.
+	// present vs not) - both branches union, so tableBase fields appear.
 	m := miniModel(t)
 	kinds := map[string]string{"": "LayoutPage", "spec.children.0": "Table"}
 	props := m.ResolveAt([]string{"spec", "children", "0", "spec"}, kinds).Props()
@@ -240,7 +240,7 @@ func TestResolveAt_BoolAndCycleSafety(t *testing.T) {
 	_ = cyclic.ResolveAt([]string{"x", "y"}, nil)
 }
 
-// TestResolveAt_RealSchema locks the resolver to the shipped document schema —
+// TestResolveAt_RealSchema locks the resolver to the shipped document schema -
 // the shapes the fixtures mirror must actually hold in the real file.
 func TestResolveAt_RealSchema(t *testing.T) {
 	m := Parse(schema.DocumentSchemaBytes())

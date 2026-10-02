@@ -56,7 +56,7 @@ func resolveLayoutChildren(names []string, manifests []ManifestInfo) ([]schema.L
 	return children, nil
 }
 
-func newAddLayoutPageCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddLayoutPageCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagChildren   []string
 		flagConstraint []string
@@ -281,7 +281,7 @@ populate with component references later.
 	return cmd
 }
 
-func newAddLayoutCardCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddLayoutCardCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagTitle      string
 		flagChildren   []string

@@ -12,7 +12,7 @@ import (
 	"bino.bi/bino/internal/logx"
 )
 
-// ExitCodeSkip is the exit code that means "skip" — the hook succeeded but
+// ExitCodeSkip is the exit code that means "skip" - the hook succeeded but
 // opted out. It is logged at info level and treated as success.
 const ExitCodeSkip = 78
 
@@ -90,7 +90,7 @@ func (r *Runner) execCommand(ctx context.Context, cmdStr string, extraEnv []stri
 	cmd.Stderr = stderr
 
 	err := cmd.Run()
-	// A final line without a trailing newline is still buffered — often the
+	// A final line without a trailing newline is still buffered - often the
 	// one explaining why the hook failed.
 	stdout.Flush()
 	stderr.Flush()

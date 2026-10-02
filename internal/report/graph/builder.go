@@ -164,7 +164,7 @@ func (b *builder) categorize() {
 			}
 			// Config/resource kinds (ScalingGroup, ComponentStyle, RuleSet,
 			// Internationalization, ConnectionSecret, SigningProfile) get no
-			// graph node — they are collected during rendering.
+			// graph node - they are collected during rendering.
 		}
 	}
 }
@@ -435,7 +435,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 		Index: b.docIndex,
 		// The builder receives the unfiltered document set, so the global
 		// index equals the primary one and constraint-filtered skips can
-		// never fire here — matching the renderer's semantics.
+		// never fire here - matching the renderer's semantics.
 		GlobalIndex: b.docIndex,
 		IsPage: func(name string) bool {
 			_, ok := b.docIndex["LayoutPage:"+name]
@@ -686,7 +686,7 @@ func (b *builder) buildDocumentArtefacts() error {
 		}
 
 		// Resolve each source to concrete markdown files so node File values
-		// match the absolute paths the watcher reports — that exact match is
+		// match the absolute paths the watcher reports - that exact match is
 		// what makes selective refresh work for markdown edits. Resolution
 		// failures (missing file, glob with zero matches) degrade to an
 		// unresolved pattern node, never a Build error: a failed Build would
@@ -732,7 +732,7 @@ func (b *builder) buildDocumentArtefacts() error {
 // addMarkdownFileNode registers (or reuses) the node for a resolved markdown
 // file and returns its ID. The file content is hashed into the node digest
 // and scanned for :ref[Kind:name] component references, which become
-// dependencies — so edits to an embedded component (or its data) propagate
+// dependencies - so edits to an embedded component (or its data) propagate
 // to every document embedding it. Two artefacts sharing a file share the node.
 func (b *builder) addMarkdownFileNode(manifestDir, file string) string {
 	id := makeNodeID(NodeMarkdownFile, file)
@@ -754,7 +754,7 @@ func (b *builder) addMarkdownFileNode(manifestDir, file string) string {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		// File vanished between glob and read; keep a path-hashed node with
-		// no ref edges — the next refresh rebuilds the graph anyway.
+		// no ref edges - the next refresh rebuilds the graph anyway.
 		node.baseDigest = hashBytes([]byte(file))
 		b.nodes[id] = node
 		return id
@@ -790,7 +790,7 @@ func (b *builder) addMarkdownFileNode(manifestDir, file string) string {
 // that could not be resolved to files. Keyed on the manifest-dir-joined path
 // so identical source strings in different directories stay distinct. Its
 // File value never matches a watcher path, so edits under an unresolved
-// pattern keep falling back to a full rebuild — today's safe behavior.
+// pattern keep falling back to a full rebuild - today's safe behavior.
 func (b *builder) addUnresolvedMarkdownNode(manifestDir, src string) string {
 	pattern := src
 	if !filepath.IsAbs(pattern) {

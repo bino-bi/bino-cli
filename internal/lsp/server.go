@@ -51,7 +51,7 @@ type Server struct {
 	// PublishDiagnostics fully replaces a document's diagnostic set per call:
 	// draftDiags comes from the per-keystroke Analyzer (ValidateDraft, open
 	// buffers only); projectDiags comes from refreshProjectDiagnostics
-	// (ValidateProject, whole project on disk — lint/env-var/engine-compat
+	// (ValidateProject, whole project on disk - lint/env-var/engine-compat
 	// findings that ValidateDraft never sees).
 	draftDiags   map[string][]protocol.Diagnostic
 	projectDiags map[string][]protocol.Diagnostic
@@ -76,7 +76,7 @@ func (s *Server) Serve(ctx context.Context, stream jsonrpc2.Stream) error {
 	defer cancel()
 	// Wire read-loop-visible state BEFORE protocol.NewServer spawns the read
 	// goroutine. A client request (e.g. didOpen → s.analyzer.Schedule) can
-	// otherwise arrive before these fields are assigned — a data race, and a nil
+	// otherwise arrive before these fields are assigned - a data race, and a nil
 	// dereference if the analyzer is not set yet. These writes happen-before the
 	// spawned goroutine, so handlers observe them without locking.
 	s.ctx = ctx
@@ -152,7 +152,7 @@ func (s *Server) publishDraft(u uri.URI, ver int32, diags []protocol.Diagnostic)
 // file. PublishDiagnostics fully replaces a document's diagnostic set per
 // call, so callers must always go through this rather than publishing either
 // source directly. While a draft entry exists for the file, project
-// diagnostics of the classes ValidateDraft reproduces are dropped — an
+// diagnostics of the classes ValidateDraft reproduces are dropped - an
 // open-and-saved invalid file must not show every schema error twice.
 func (s *Server) publishFile(path string, ver int32) {
 	s.mu.RLock()
@@ -199,7 +199,7 @@ func (s *Server) clearDraft(u uri.URI) {
 
 // refreshProjectDiagnostics re-validates the whole project on disk (schema,
 // lint rules, missing ${VAR}, engine-compat) and publishes the result for
-// every affected file — not just currently open buffers — since these
+// every affected file - not just currently open buffers - since these
 // findings are invisible to the per-keystroke, draft-only Analyzer. Intended
 // to run off the hot path (see onProjectChange).
 func (s *Server) refreshProjectDiagnostics() {

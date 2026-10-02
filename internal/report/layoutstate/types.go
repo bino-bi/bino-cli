@@ -5,8 +5,8 @@
 // descendant) since v1.0.0-next.24. It reports what actually reached the
 // screen: box geometry, resolved auto-scaling, render metadata and the
 // components' has-error diagnostics. Three classes of defect are invisible
-// without it — a component that rendered empty, a silently auto-fitted scale,
-// and overflow without a magnitude — so the checks here run over a snapshot
+// without it - a component that rendered empty, a silently auto-fitted scale,
+// and overflow without a magnitude - so the checks here run over a snapshot
 // rather than over the manifests.
 //
 // The same analysis backs the preview inspector (via POST /__bino/layout-state),
@@ -134,7 +134,7 @@ type Region struct {
 
 // Metadata mirrors the engine's ComponentMetadata. Counts are pointers so an
 // absent count (a bn-text has no rows) is distinguishable from a zero one (a
-// table that rendered no rows) — the difference the empty-component check
+// table that rendered no rows) - the difference the empty-component check
 // turns on.
 type Metadata struct {
 	Title          string   `json:"title,omitempty"`
@@ -152,7 +152,7 @@ type Metadata struct {
 	HasNoData      *bool    `json:"hasNoData,omitempty"`
 }
 
-// Diagnostic mirrors the engine's LayoutDiagnosticItem — the same items the
+// Diagnostic mirrors the engine's LayoutDiagnosticItem - the same items the
 // component publishes in its has-error attribute.
 type Diagnostic struct {
 	ID          string `json:"id,omitempty"`

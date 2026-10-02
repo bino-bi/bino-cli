@@ -58,7 +58,7 @@ export interface RemoveRequest {
  * An append request: grow the sequence at `path` by one element. A missing
  * sequence (and its intermediate maps) is created, so appending to an absent
  * array yields a one-element sequence. This is the only mutation that grows a
- * sequence past its end — an operation the set-only edit op cannot express.
+ * sequence past its end - an operation the set-only edit op cannot express.
  */
 export interface AppendRequest {
     file: string;
@@ -79,15 +79,15 @@ export interface AppendRequest {
  *   engine's `full` text (one undo step, no "file changed on disk" prompt);
  * - file CLOSED -> atomic write via the helper, picked up by the watcher.
  *
- * It also owns manifest creation (`create`), so every Design surface — the
- * Add-element palette included — reaches disk through this one client and the
+ * It also owns manifest creation (`create`), so every Design surface - the
+ * Add-element palette included - reaches disk through this one client and the
  * Go engine, never a second TS YAML transform or a shelled-out terminal.
  *
  * Both paths refuse an edit the engine rejects (schema diagnostics) and surface
  * the diagnostic instead of writing.
  */
 export class AuthoringClient {
-    constructor(private readonly indexer: WorkspaceIndexer) {}
+    constructor(private readonly indexer: WorkspaceIndexer) { }
 
     /** Apply a dotted-path patch to a manifest document. */
     async edit(req: EditRequest): Promise<EditResult> {
@@ -107,7 +107,7 @@ export class AuthoringClient {
     /**
      * Create a new manifest of any kind. The Go create path builds the
      * apiVersion/kind/metadata/spec envelope, validates it against the schema,
-     * and writes it atomically — auto-placing the file by project convention
+     * and writes it atomically - auto-placing the file by project convention
      * unless `file` is given. On a schema failure (or duplicate name) nothing is
      * written and the diagnostics/error are returned for the caller to surface.
      */
@@ -184,7 +184,7 @@ export class AuthoringClient {
 
     /**
      * Run the edit helper and split its result into a failure (error or
-     * diagnostics — nothing was written) or the raw success payload.
+     * diagnostics - nothing was written) or the raw success payload.
      */
     private async computeOrFail(
         payload: Record<string, unknown>

@@ -13,9 +13,9 @@ Three rules determine whether your translations are used:
 
 1. **The locale code must match exactly.** Components look up
    `store[namespace][locale][key]` where `locale` is the artefact's
-   `spec.language` — `de` or `en`. There is no BCP 47 normalization: a manifest
+   `spec.language` - `de` or `en`. There is no BCP 47 normalization: a manifest
    with `code: de-DE` passes schema validation but is **never** consulted when
-   the report renders with `language: de` — only the `i18n-code-unused` lint
+   the report renders with `language: de` - only the `i18n-code-unused` lint
    points it out. Always use plain `de` or `en`.
 2. **The default namespace is `_system`.** That is the namespace every component
    reads, and where the engine's built-in labels live. When `spec.namespace` is
@@ -24,7 +24,7 @@ Three rules determine whether your translations are used:
    components whose [`i18nNamespace`](#scoped-overrides-with-i18nnamespace)
    points at it (missing keys still fall back to `_system` per key).
 3. **Keys are fixed, dotted strings.** The built-in vocabulary below is what
-   components actually request — a key like `global.ac1` is a literal string,
+   components actually request - a key like `global.ac1` is a literal string,
    not a path. Write the map flat; a nested `global:` block is rejected. Every
    value must be a string, so quote anything YAML would otherwise read as a
    number or a boolean (`report.year: "2024"`). Free-form keys are only useful
@@ -75,10 +75,10 @@ A file scaffolded this way by bino v0.97.0 or earlier still sets the old `no-dat
 labels, wrapped in `==` markers; update or delete those keys. The
 `i18n-no-data-markers` lint reports them.
 
-### Scenario labels (`global.` prefix — read by tables, charts, and titles)
+### Scenario labels (`global.` prefix - read by tables, charts, and titles)
 
-| Key | de | en |
-|-----|----|----|
+| Key                         | de                | en                |
+| --------------------------- | ----------------- | ----------------- |
 | `global.ac1` … `global.ac4` | AC, AC2, AC3, AC4 | AC, AC2, AC3, AC4 |
 | `global.pp1` … `global.pp4` | PY, PY2, PY3, PY4 | PY, PY2, PY3, PY4 |
 | `global.fc1` … `global.fc4` | FC, FC2, FC3, FC4 | FC, FC2, FC3, FC4 |
@@ -86,46 +86,46 @@ labels, wrapped in `==` markers; update or delete those keys. The
 
 ### Sort indicators and variance symbols (`global.` prefix)
 
-| Key | Value | Description |
-|-----|-------|-------------|
-| `global.ORDER_asc` / `global.ORDER_desc` | ↑ / ↓ | Sort direction indicators |
-| `global.ibcssymbol_delta_ac` | `Δ{%}` | Absolute variance symbol (e.g. ΔPY) |
-| `global.ibcssymbol_delta_generic` | `Δ({%})` | Absolute variance, generic form |
-| `global.ibcssymbol_delta_ac_relative` | `Δ{%}%` | Relative variance symbol (e.g. ΔPY%) |
-| `global.ibcssymbol_delta_generic_relative` | `Δ({%})%` | Relative variance, generic form |
+| Key                                        | Value     | Description                          |
+| ------------------------------------------ | --------- | ------------------------------------ |
+| `global.ORDER_asc` / `global.ORDER_desc`   | ↑ / ↓     | Sort direction indicators            |
+| `global.ibcssymbol_delta_ac`               | `Δ{%}`    | Absolute variance symbol (e.g. ΔPY)  |
+| `global.ibcssymbol_delta_generic`          | `Δ({%})`  | Absolute variance, generic form      |
+| `global.ibcssymbol_delta_ac_relative`      | `Δ{%}%`   | Relative variance symbol (e.g. ΔPY%) |
+| `global.ibcssymbol_delta_generic_relative` | `Δ({%})%` | Relative variance, generic form      |
 
 The `{%}` token is replaced at render time with the comparison scenario's abbreviation.
 
 ### Table labels (`bn-table.` prefix)
 
-| Key | de | en | What it labels |
-|-----|----|----|----------------|
-| `bn-table.there_of` | davon | there of | Row-header prefix for rows drilled out of their parent |
-| `bn-table.part_of` | in % von | in % of | Row-header prefix for rows shown as a share of their parent |
-| `bn-table.SUM_TOTAL` | ❖ | ❖ | The grand-total row, when `spec.sumTitle` is not set |
-| `bn-table.REST` | REST | REST | The row aggregating everything beyond `spec.limit` |
-| `bn-table.in` | in | in | Prefix before the measure scale and unit, as in `in k€` |
-| `bn-table.category` | `" "` | `" "` | Header above the category column (a single space by default) |
-| `bn-table.operation` | `" "` | `" "` | Header above the operation (+/−) column |
-| `bn-table.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
+| Key                  | de          | en       | What it labels                                               |
+| -------------------- | ----------- | -------- | ------------------------------------------------------------ |
+| `bn-table.there_of`  | davon       | there of | Row-header prefix for rows drilled out of their parent       |
+| `bn-table.part_of`   | in % von    | in % of  | Row-header prefix for rows shown as a share of their parent  |
+| `bn-table.SUM_TOTAL` | ❖           | ❖        | The grand-total row, when `spec.sumTitle` is not set         |
+| `bn-table.REST`      | REST        | REST     | The row aggregating everything beyond `spec.limit`           |
+| `bn-table.in`        | in          | in       | Prefix before the measure scale and unit, as in `in k€`      |
+| `bn-table.category`  | `" "`       | `" "`    | Header above the category column (a single space by default) |
+| `bn-table.operation` | `" "`       | `" "`    | Header above the operation (+/−) column                      |
+| `bn-table.no-data`   | Keine Daten | No Data  | Placeholder when the dataset yields no rows                  |
 
 ### Title connectors (`bn-title.` prefix)
 
-| Key | de | en |
-|-----|----|----|
-| `bn-title.SEPERATOR_WS` | `, ` | `, ` |
-| `bn-title.CONNECTOR_WS` | ` und ` | ` and ` |
-| `bn-title.in` | in | in |
+| Key                     | de    | en    |
+| ----------------------- | ----- | ----- |
+| `bn-title.SEPERATOR_WS` | `, `  | `, `  |
+| `bn-title.CONNECTOR_WS` | `und` | `and` |
+| `bn-title.in`           | in    | in    |
 
 Note the key really is spelled `SEPERATOR_WS`.
 
 ### Time and structure charts (`bn-chart-time.`, `bn-chart-structure.` prefixes)
 
-| Key | de | en | What it labels |
-|-----|----|----|----------------|
-| `bn-chart-time.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
-| `bn-chart-structure.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows |
-| `bn-chart-structure.REST` | REST | REST | The bar aggregating everything beyond `spec.limit` |
+| Key                          | de          | en      | What it labels                                     |
+| ---------------------------- | ----------- | ------- | -------------------------------------------------- |
+| `bn-chart-time.no-data`      | Keine Daten | No Data | Placeholder when the dataset yields no rows        |
+| `bn-chart-structure.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows        |
+| `bn-chart-structure.REST`    | REST        | REST    | The bar aggregating everything beyond `spec.limit` |
 
 :::note
 These three keys need a template engine that reads them. On older engines the
@@ -135,16 +135,16 @@ engine's old built-in placeholder in place.
 
 ### Chart labels (`bn-chart-scatter.`, `bn-chart-bubble.`, `bn-chart-bullet.` prefixes)
 
-| Key | de | en | Read by |
-|-----|----|----|---------|
-| `<chart>.no-data` | Keine Daten | No Data | scatter, bubble, bullet |
-| `<chart>.axis.in` | in | in | scatter, bubble, bullet |
-| `<chart>.legend.title` | — | — | scatter, bubble — empty by default, which hides the heading |
-| `bn-chart-bubble.legend.size` | Größe | Size | Heading for the bubble-size scale |
-| `bn-chart-bubble.legend.compare` | Szenarien | Scenarios | Heading for the `compareWith` series |
-| `bn-chart-bullet.target` | Ziel | Target | Legend label for the target marker |
+| Key                              | de          | en        | Read by                                                     |
+| -------------------------------- | ----------- | --------- | ----------------------------------------------------------- |
+| `<chart>.no-data`                | Keine Daten | No Data   | scatter, bubble, bullet                                     |
+| `<chart>.axis.in`                | in          | in        | scatter, bubble, bullet                                     |
+| `<chart>.legend.title`           | -           | -         | scatter, bubble - empty by default, which hides the heading |
+| `bn-chart-bubble.legend.size`    | Größe       | Size      | Heading for the bubble-size scale                           |
+| `bn-chart-bubble.legend.compare` | Szenarien   | Scenarios | Heading for the `compareWith` series                        |
+| `bn-chart-bullet.target`         | Ziel        | Target    | Legend label for the target marker                          |
 
-Replace `<chart>` with the component's own prefix — the scatter chart reads
+Replace `<chart>` with the component's own prefix - the scatter chart reads
 `bn-chart-scatter.no-data`, the bullet chart `bn-chart-bullet.no-data`, and so on.
 
 ### Chart diagnostics
@@ -161,55 +161,55 @@ interchangeable.
 #### Shared XY diagnostics
 
 The scatter and bubble charts raise the same ten messages with identical text.
-Prefix each suffix with the chart you are overriding — for example
+Prefix each suffix with the chart you are overriding - for example
 `bn-chart-bubble.xy-point-budget`.
 
-| Suffix | en default | When it fires |
-|--------|-----------|---------------|
-| `xy-prop-json` | `{{prop}}: invalid JSON.` | An axis or label property did not parse |
-| `xy-measure-invalid` | `{{prop}}: '{{measure}}' is neither a scenario column nor a variance token.` | A measure name is not recognised |
-| `xy-family-mixed` | `All measures must share one scenario family (found: {{families}}).` | Measures span more than one scenario family |
-| `xy-level-order` | `Facet, series, and point levels must strictly descend in the hierarchy ({{detail}}).` | Levels do not descend the hierarchy |
-| `xy-duplicate-point` | `{{count}} duplicate point identitie(s) dropped (first row wins): {{names}}. Aggregate in the DataSet SQL.` | Two rows share a point identity |
-| `xy-point-clipped` | `{{count}} point(s) outside the explicit min/max excluded.` | Points fall outside an explicit axis range |
-| `xy-variance-nodata` | `{{count}} row(s) without variance data excluded.` | Rows lack the data a variance measure needs |
-| `xy-label-unknown` | `Unknown label name(s): {{names}}.` | A configured label names no known column |
-| `xy-series-overflow` | `More series than palette colors; colors repeat with a tint step.` | More series than the palette has colours |
-| `xy-point-budget` | `{{count}} points exceed the 5000-point budget; consider 'limit'.` | The point budget is exceeded |
+| Suffix               | en default                                                                                                  | When it fires                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `xy-prop-json`       | `{{prop}}: invalid JSON.`                                                                                   | An axis or label property did not parse     |
+| `xy-measure-invalid` | `{{prop}}: '{{measure}}' is neither a scenario column nor a variance token.`                                | A measure name is not recognised            |
+| `xy-family-mixed`    | `All measures must share one scenario family (found: {{families}}).`                                        | Measures span more than one scenario family |
+| `xy-level-order`     | `Facet, series, and point levels must strictly descend in the hierarchy ({{detail}}).`                      | Levels do not descend the hierarchy         |
+| `xy-duplicate-point` | `{{count}} duplicate point identitie(s) dropped (first row wins): {{names}}. Aggregate in the DataSet SQL.` | Two rows share a point identity             |
+| `xy-point-clipped`   | `{{count}} point(s) outside the explicit min/max excluded.`                                                 | Points fall outside an explicit axis range  |
+| `xy-variance-nodata` | `{{count}} row(s) without variance data excluded.`                                                          | Rows lack the data a variance measure needs |
+| `xy-label-unknown`   | `Unknown label name(s): {{names}}.`                                                                         | A configured label names no known column    |
+| `xy-series-overflow` | `More series than palette colors; colors repeat with a tint step.`                                          | More series than the palette has colours    |
+| `xy-point-budget`    | `{{count}} points exceed the 5000-point budget; consider 'limit'.`                                          | The point budget is exceeded                |
 
 #### Scatter chart (`bn-chart-scatter.`)
 
-| Key | en default | When it fires |
-|-----|-----------|---------------|
+| Key                              | en default                                                         | When it fires                                                    |
+| -------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | `bn-chart-scatter.xy-iso-domain` | `Iso-lines need a strictly positive domain on both axes; skipped.` | Iso-lines are requested but an axis domain includes zero or less |
 
 #### Bubble chart (`bn-chart-bubble.`)
 
-| Key | en default | When it fires |
-|-----|-----------|---------------|
-| `bn-chart-bubble.xy-compare-variance` | `compareWith cannot be combined with variance measures on the axes.` | `compareWith` is set alongside variance measures |
-| `bn-chart-bubble.bubble-size-negative` | `{{count}} bubble(s) with a negative size value excluded.` | The size measure is negative |
-| `bn-chart-bubble.bubble-share-range` | `{{count}} share value(s) outside [0,1] were clamped.` | A share value falls outside 0–1 |
-| `bn-chart-bubble.bubble-scale-group-unknown` | `size.group '{{group}}' names no bn-scaling-group in scope.` | `size.group` names no [ScalingGroup](/reference/scaling-group/) |
-| `bn-chart-bubble.bubble-scale-overflow` | `{{count}} group-scaled bubble(s) exceed the panel; rendered true-size.` | Group scaling would push bubbles past the panel |
+| Key                                          | en default                                                               | When it fires                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `bn-chart-bubble.xy-compare-variance`        | `compareWith cannot be combined with variance measures on the axes.`     | `compareWith` is set alongside variance measures                |
+| `bn-chart-bubble.bubble-size-negative`       | `{{count}} bubble(s) with a negative size value excluded.`               | The size measure is negative                                    |
+| `bn-chart-bubble.bubble-share-range`         | `{{count}} share value(s) outside [0,1] were clamped.`                   | A share value falls outside 0–1                                 |
+| `bn-chart-bubble.bubble-scale-group-unknown` | `size.group '{{group}}' names no bn-scaling-group in scope.`             | `size.group` names no [ScalingGroup](/reference/scaling-group/) |
+| `bn-chart-bubble.bubble-scale-overflow`      | `{{count}} group-scaled bubble(s) exceed the panel; rendered true-size.` | Group scaling would push bubbles past the panel                 |
 
 #### Bullet chart (`bn-chart-bullet.`)
 
-| Key | en default | When it fires |
-|-----|-----------|---------------|
-| `bn-chart-bullet.bullet-prop-json` | `{{prop}}: invalid JSON.` | A property did not parse |
-| `bn-chart-bullet.bullet-measure-invalid` | `{{prop}}: '{{measure}}' is not a scenario column (ac1…pl4).` | A measure is not a scenario column |
-| `bn-chart-bullet.bullet-measure-same` | `actual and target must map different scenarios ('{{measure}}').` | `actual` and `target` name the same scenario |
-| `bn-chart-bullet.bullet-target-none` | `No target scenario found (pl1/pp1/fc1); rendering actual bars only.` | No target scenario is present |
-| `bn-chart-bullet.bullet-target-missing` | `{{count}} row(s) without a target value; variance and marker omitted.` | A row has no target value |
-| `bn-chart-bullet.bullet-target-invalid` | `{{count}} row(s) with target ≤ 0 cannot be normalized; bar omitted.` | A target is zero or negative |
-| `bn-chart-bullet.bullet-mixed-operation` | `{{count}} KPI group(s) mix '+' and '-' rows; sentiment defaults to '+'.` | A KPI group mixes `+` and `-` rows |
-| `bn-chart-bullet.bullet-ranges-ignored` | `ranges: ignored in normalized (IBCS) mode; set normalize="none".` | `ranges` is set while normalization is on |
-| `bn-chart-bullet.bullet-ranges-invalid` | `ranges: expected up to 2 ascending positive fractions of the target ({{detail}}).` | `ranges` is not up to two ascending positive fractions |
+| Key                                      | en default                                                                          | When it fires                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `bn-chart-bullet.bullet-prop-json`       | `{{prop}}: invalid JSON.`                                                           | A property did not parse                               |
+| `bn-chart-bullet.bullet-measure-invalid` | `{{prop}}: '{{measure}}' is not a scenario column (ac1…pl4).`                       | A measure is not a scenario column                     |
+| `bn-chart-bullet.bullet-measure-same`    | `actual and target must map different scenarios ('{{measure}}').`                   | `actual` and `target` name the same scenario           |
+| `bn-chart-bullet.bullet-target-none`     | `No target scenario found (pl1/pp1/fc1); rendering actual bars only.`               | No target scenario is present                          |
+| `bn-chart-bullet.bullet-target-missing`  | `{{count}} row(s) without a target value; variance and marker omitted.`             | A row has no target value                              |
+| `bn-chart-bullet.bullet-target-invalid`  | `{{count}} row(s) with target ≤ 0 cannot be normalized; bar omitted.`               | A target is zero or negative                           |
+| `bn-chart-bullet.bullet-mixed-operation` | `{{count}} KPI group(s) mix '+' and '-' rows; sentiment defaults to '+'.`           | A KPI group mixes `+` and `-` rows                     |
+| `bn-chart-bullet.bullet-ranges-ignored`  | `ranges: ignored in normalized (IBCS) mode; set normalize="none".`                  | `ranges` is set while normalization is on              |
+| `bn-chart-bullet.bullet-ranges-invalid`  | `ranges: expected up to 2 ascending positive fractions of the target ({{detail}}).` | `ranges` is not up to two ascending positive fractions |
 
 ## Overriding labels globally
 
-Omit `spec.namespace` and override only the keys you need — everything else
+Omit `spec.namespace` and override only the keys you need - everything else
 keeps its built-in label:
 
 ```yaml
@@ -234,11 +234,11 @@ With `language: de` on the artefact, every table and chart now shows "Ist",
 To apply a translation set only to part of a report, store it under a named
 namespace and point components at it with `i18nNamespace`. The property is
 available on `ReportArtefact` (applies to everything), `LayoutPage`,
-`LayoutCard`, `Grid`, `Tree`, and the leaf components that render labels —
+`LayoutCard`, `Grid`, `Tree`, and the leaf components that render labels -
 `Table`, `Text`, `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`,
 and `ChartBullet`. `Image` has no `i18nNamespace`. Inheritance is resolved
 by the engine at render time: a component without its own value uses the nearest
-ancestor that has one — card, then page, then tree/grid containers, then the
+ancestor that has one - card, then page, then tree/grid containers, then the
 artefact. To opt a component out of an inherited namespace, pin it explicitly
 with `i18nNamespace: _system`.
 
@@ -259,7 +259,7 @@ kind: LayoutPage
 metadata:
   name: audited_page
 spec:
-  i18nNamespace: audited      # this page's title and all children use it
+  i18nNamespace: audited # this page's title and all children use it
   children:
     - kind: Table
       spec:
@@ -302,29 +302,29 @@ An unknown key renders as the key itself (it never breaks the component).
 
 ## Lint rules
 
-- `i18n-code-unused` — warns when `spec.code` matches no artefact language (catches `de-DE`).
-- `i18n-namespace-unreferenced` — warns when a named namespace is never referenced by any `i18nNamespace`.
-- `i18n-title-namespace-deprecated` — warns on `titleNamespace` usage.
-- `i18n-no-data-markers` — warns when a `*.no-data` label is still `==No Data==` or `==Keine Daten==`.
+- `i18n-code-unused` - warns when `spec.code` matches no artefact language (catches `de-DE`).
+- `i18n-namespace-unreferenced` - warns when a named namespace is never referenced by any `i18nNamespace`.
+- `i18n-title-namespace-deprecated` - warns on `titleNamespace` usage.
+- `i18n-no-data-markers` - warns when a `*.no-data` label is still `==No Data==` or `==Keine Daten==`.
 
 ## Attribute Reference
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `Internationalization`. |
-| `metadata.name` | string | yes | — | Unique identifier for this translation set. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `Internationalization`.                                                          |
+| `metadata.name`        | string | yes      | -       | Unique identifier for this translation set.                                              |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.code` | string | yes | — | Language code, pattern `^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$`. Only a code that exactly equals an artefact `spec.language` (`de` or `en`) takes effect; `de-DE` validates but never matches and is reported by `i18n-code-unused`. | `code: de` |
-| `spec.namespace` | string | no | `_system` | Storage namespace, at least 1 character. The default merges into the bundle every component reads, on top of the built-in labels; a named namespace is only consulted via `i18nNamespace`. | `namespace: audited` |
-| `spec.content` | object, or string of at least 2 characters | yes | — | Flat map of dotted keys to label strings, or a JSON string holding the same map. Nested blocks and non-string values are rejected. | `global.ac1: Ist`, `global.pp1: VJ`, `bn-table.there_of: davon` |
+| Attribute        | Type                                       | Required | Default   | Description                                                                                                                                                                                                                          | Sample                                                          |
+| ---------------- | ------------------------------------------ | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `spec.code`      | string                                     | yes      | -         | Language code, pattern `^[a-zA-Z]{2,3}([_-][a-zA-Z0-9]{2,8})*$`. Only a code that exactly equals an artefact `spec.language` (`de` or `en`) takes effect; `de-DE` validates but never matches and is reported by `i18n-code-unused`. | `code: de`                                                      |
+| `spec.namespace` | string                                     | no       | `_system` | Storage namespace, at least 1 character. The default merges into the bundle every component reads, on top of the built-in labels; a named namespace is only consulted via `i18nNamespace`.                                           | `namespace: audited`                                            |
+| `spec.content`   | object, or string of at least 2 characters | yes      | -         | Flat map of dotted keys to label strings, or a JSON string holding the same map. Nested blocks and non-string values are rejected.                                                                                                   | `global.ac1: Ist`, `global.pp1: VJ`, `bn-table.there_of: davon` |

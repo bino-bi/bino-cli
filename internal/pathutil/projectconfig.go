@@ -102,7 +102,7 @@ type RegistryConfig struct {
 
 // PackageConfig is the [package] table in bino.toml. Its presence marks the
 // project as a predef project: one that authors a reusable registry package.
-// There is deliberately no type= key and no separate predef.toml — the table
+// There is deliberately no type= key and no separate predef.toml - the table
 // itself is the marker. A project may carry both report-id and [package].
 type PackageConfig struct {
 	Name         string   `toml:"name"`

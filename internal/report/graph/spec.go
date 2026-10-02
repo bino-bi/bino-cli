@@ -114,7 +114,7 @@ func parseDataSetSpec(raw json.RawMessage) (dataSetSpec, error) {
 // extractDatasets parses the dataset field from a component spec. It accepts
 // either a bare spec fragment (layout children pass the resolved spec) or a
 // full manifest with a spec wrapper (standalone component documents pass
-// doc.Raw) — before the wrapper was handled, standalone component nodes
+// doc.Raw) - before the wrapper was handled, standalone component nodes
 // silently carried no data edges at all.
 // For Tree components, it also extracts datasets from nodes.
 // For Grid components, it also extracts datasets from children.

@@ -1,7 +1,7 @@
 // Package ref implements component-reference resolution: the one rule for
 // how a {kind, ref, params, spec} child resolves against the document index.
 // The renderer's layout children, tree nodes, and grid children and the graph
-// builder's layout children all share this implementation — it existed four
+// builder's layout children all share this implementation - it existed four
 // times before and the copies had diverged (nil-context guards, LayoutPage
 // misuse detection, constraint-filter handling, and error wrapping each
 // differed by call site).
@@ -40,7 +40,7 @@ type Options struct {
 	// present here but absent from Index was filtered by constraints and is
 	// skipped gracefully. Callers without constraint filtering pass Index.
 	GlobalIndex map[string]config.Document
-	// IsPage reports whether name identifies a LayoutPage — referencing one
+	// IsPage reports whether name identifies a LayoutPage - referencing one
 	// as a child is explicitly disallowed and gets a dedicated error.
 	IsPage func(name string) bool
 	// Log receives the skip messages (Debug level). Nil means logx.Nop.
@@ -87,7 +87,7 @@ func Resolve(r Ref, opt Options) (Result, error) {
 		}
 
 		// Present in the unfiltered set but not in the filtered one: the ref
-		// was filtered by constraints — skip gracefully.
+		// was filtered by constraints - skip gracefully.
 		if opt.GlobalIndex != nil {
 			if _, existsGlobally := opt.GlobalIndex[key]; existsGlobally {
 				log.Debugf("%sref %q of kind %q filtered by constraints, skipping", opt.prefix(), r.Name, r.Kind)

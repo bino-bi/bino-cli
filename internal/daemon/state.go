@@ -179,7 +179,7 @@ func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 // would produce false positives against a single draft). This is the agent's
 // pre-write guardrail.
 func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnostic, error) {
-	// Foreign buffers (docker-compose etc. — the editor attaches to every YAML
+	// Foreign buffers (docker-compose etc. - the editor attaches to every YAML
 	// file) validate to nothing, and skip the per-keystroke strict load
 	// entirely. Empty buffers are foreign too: a brand-new file must not open
 	// with a wall of missing-property errors.
@@ -251,7 +251,7 @@ func (s *State) draftIsBino(yamlBytes []byte) bool {
 }
 
 // sniffKnownKind scans a syntax-broken buffer line-wise for a `kind:` whose
-// value bino recognizes — a half-typed bino manifest must keep its yaml-syntax
+// value bino recognizes - a half-typed bino manifest must keep its yaml-syntax
 // diagnostic even before apiVersion exists.
 func sniffKnownKind(yamlBytes []byte, kp config.KindProvider) bool {
 	for line := range strings.SplitSeq(string(yamlBytes), "\n") {

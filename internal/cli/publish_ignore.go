@@ -10,14 +10,14 @@ import (
 
 // publishIgnore applies the project's .bnignore to the publish walk. A file
 // bino itself never loads must never be published, so publish honors the same
-// list the manifest loader does — mirrored here rather than shared, because
+// list the manifest loader does - mirrored here rather than shared, because
 // the loader's helpers are unexported and its walk is out of scope.
 type publishIgnore struct {
 	rules *gitignore.GitIgnore
 }
 
 // loadPublishIgnore compiles <projectRoot>/.bnignore. A missing or unparsable
-// file ignores nothing, exactly as in the loader — publish must not start
+// file ignores nothing, exactly as in the loader - publish must not start
 // refusing to run over a file the rest of the CLI tolerates.
 func loadPublishIgnore(projectRoot string) *publishIgnore {
 	path := filepath.Join(projectRoot, ".bnignore")

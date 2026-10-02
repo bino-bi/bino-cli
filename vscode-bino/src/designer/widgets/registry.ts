@@ -21,7 +21,7 @@ export interface Binding {
 /**
  * The render context handed to a widget: the current YAML value for the field,
  * the (optional) data binding, and the edit callback. `onChange` is the single
- * sink every widget reports through — the host wires it to the brief-01
+ * sink every widget reports through - the host wires it to the brief-01
  * AuthoringClient, so a widget never talks to VS Code or the engine directly.
  */
 export interface WidgetContext<T = unknown> {

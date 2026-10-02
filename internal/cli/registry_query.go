@@ -192,7 +192,7 @@ file does not fail verification.`,
 			}
 			w.Flush()
 			if bad > 0 {
-				return RuntimeErrorf("%d of %d package(s) failed verification — run 'bino registry install' to re-materialize from %s", bad, len(lock.Packages), registry.LockfileName)
+				return RuntimeErrorf("%d of %d package(s) failed verification - run 'bino registry install' to re-materialize from %s", bad, len(lock.Packages), registry.LockfileName)
 			}
 			p.Out.Success(fmt.Sprintf("Verified %d package(s)", len(lock.Packages)))
 			return nil
@@ -221,8 +221,8 @@ func entryKinds(e registry.Entry) string {
 // first problem it finds. The digest rule is chosen by the entry's format, so
 // a single-document package keeps verifying under the rule it was published
 // with while a tree verifies file by file. Files the lock does not record are
-// reported too: without that, an injected document — which the build's second
-// pass would happily load — verifies clean.
+// reported too: without that, an injected document - which the build's second
+// pass would happily load - verifies clean.
 func verifyPackage(projectRoot string, e registry.Entry) string {
 	files := e.TreeFiles()
 	if len(files) == 0 {

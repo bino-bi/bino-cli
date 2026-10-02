@@ -1,6 +1,6 @@
 ---
-description: Co-author a bino report end-to-end — from your data and a goal to a built PDF, step by step.
-argument-hint: "<data/source hint> \"<what the report should show>\""
+description: Co-author a bino report end-to-end - from your data and a goal to a built PDF, step by step.
+argument-hint: '<data/source hint> "<what the report should show>"'
 ---
 
 The user wants to co-author a bino report with you. Their data/goal: **$ARGUMENTS**
@@ -12,11 +12,11 @@ component choice, narrative). Confirm direction at each major step instead of ru
 
 1. **Orient.** `describe_project()` to see what already exists. If there is no bundle yet, offer
    `/bino:new` first. Restate the goal in IBCS terms (audience, the primary message **as a full
-   sentence** — IBCS SAY, which scenarios and period, the variance, the granularity) and confirm it
+   sentence** - IBCS SAY, which scenarios and period, the variance, the granularity) and confirm it
    with the human.
 2. **Data.** For each input the report needs, probe and scaffold it (`introspect_source` →
    `scaffold_source`, or `/bino:add-source`). Model the typed `DataSet`s with `get_columns` first.
-   For a credentialed source, write only the `*FromEnv` skeleton — never an inline secret — and have
+   For a credentialed source, write only the `*FromEnv` skeleton - never an inline secret - and have
    the human set the env vars.
 3. **Model (IBCS).** Map the raw columns onto scenario codes (`ac/pp/fc/pl`) and derive the variances
    the message needs (`d_`/`dr_`, correct direction). Ask if a favorable sign is ambiguous.
@@ -26,4 +26,4 @@ component choice, narrative). Confirm direction at each major step instead of ru
 5. **Layout + artefact.** Wire leaves-first: embeddables → `LayoutPage` → `ReportArtefact`. Confirm
    references resolve with `graph_deps`.
 6. **Validate + build.** `validate_project()` to green, then `build`. Finally, **ask the human to open
-   the PDF and review it** — "validates + builds" is not "correct."
+   the PDF and review it** - "validates + builds" is not "correct."

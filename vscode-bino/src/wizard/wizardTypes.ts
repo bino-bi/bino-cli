@@ -55,7 +55,7 @@ export interface IntrospectResult {
     error?: string;
 }
 
-/** A generated output column for the DataSet SELECT — a mapped source column,
+/** A generated output column for the DataSet SELECT - a mapped source column,
  *  a constant, or a raw expression (the schema-driven mapper builds these). */
 export interface MappedColumn {
     /** Source column to read from. Omitted for constant/expression columns. */

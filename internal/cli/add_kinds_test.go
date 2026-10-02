@@ -45,7 +45,7 @@ func TestKindConfigRoundTripForSelectorKinds(t *testing.T) {
 	for _, name := range allKindNames() {
 		kind, ok := kindForName[name]
 		if !ok {
-			t.Errorf("no manifest-kind mapping for selector entry %q — extend this test", name)
+			t.Errorf("no manifest-kind mapping for selector entry %q - extend this test", name)
 			continue
 		}
 		cfg := &AddConfig{}

@@ -45,8 +45,8 @@ func newPublishCommand() *cobra.Command {
 immutable version.
 
 The project must be a predef project: a bino project whose bino.toml carries a
-[package] table. The files it ships are the ones [package].include selects —
-YAML manifests plus resources — and the version is minted by the registry from
+[package] table. The files it ships are the ones [package].include selects -
+YAML manifests plus resources - and the version is minted by the registry from
 the requested --bump.
 
 The registry validates the package before it accepts it. 'bino lint' runs first
@@ -104,7 +104,7 @@ func runPublish(cmd *cobra.Command, opts publishOptions) error {
 		return ConfigErrorf("compute package digest: %w", err)
 	}
 
-	p.Out.Info(fmt.Sprintf("%s — %d file(s), digest %s", pkg.Name, len(files), digest))
+	p.Out.Info(fmt.Sprintf("%s - %d file(s), digest %s", pkg.Name, len(files), digest))
 	for _, f := range files {
 		p.Out.List(fmt.Sprintf("%s (%s)", f.TreePath, f.Type))
 	}
@@ -204,7 +204,7 @@ func buildPublishManifest(ctx context.Context, client *registry.Client, p regist
 // publishVisibility decides whether to declare a visibility at all.
 //
 // The registry only honors it when the package is created, and rejects a
-// value that differs from an existing package's — so sending bino.toml's
+// value that differs from an existing package's - so sending bino.toml's
 // visibility on every publish would break the moment someone changed it in the
 // web UI. The package is probed first, and an inconclusive answer is fatal
 // rather than "send nothing": a first publish that silently lands with the
@@ -255,7 +255,7 @@ func publishManifestEntries(files []collectedFile) []registry.FileEntry {
 }
 
 // warnPreviewOutsidePackage reports a [package].preview that names a file the
-// package does not ship — most often one under mocks/, which is excluded from
+// package does not ship - most often one under mocks/, which is excluded from
 // every package by design.
 func warnPreviewOutsidePackage(p registryProject, pkg *pathutil.PackageConfig, files []collectedFile) {
 	if pkg.Preview == "" {
@@ -267,7 +267,7 @@ func warnPreviewOutsidePackage(p registryProject, pkg *pathutil.PackageConfig, f
 			return
 		}
 	}
-	p.Out.Warning(fmt.Sprintf("[package].preview points at %q, which this package does not ship — the registry will fall back to its own choice", target))
+	p.Out.Warning(fmt.Sprintf("[package].preview points at %q, which this package does not ship - the registry will fall back to its own choice", target))
 }
 
 // publishError renders a registry rejection. A validation failure carries the
@@ -357,9 +357,9 @@ func emitPublishOutcome(cmd *cobra.Command, outcome publishOutcome, jsonOut bool
 	switch {
 	case outcome.DryRun:
 		p.Out.Success(fmt.Sprintf("%s would publish as %s (digest %s)", outcome.Package, outcome.Version, outcome.Digest))
-		p.Out.Info("No version was created — drop --dry-run to publish.")
+		p.Out.Info("No version was created - drop --dry-run to publish.")
 	case outcome.Unchanged:
-		p.Out.Success(fmt.Sprintf("%s is unchanged — already published as %s", outcome.Package, outcome.Version))
+		p.Out.Success(fmt.Sprintf("%s is unchanged - already published as %s", outcome.Package, outcome.Version))
 	default:
 		p.Out.Success(fmt.Sprintf("Published %s@%s (digest %s)", outcome.Package, outcome.Version, outcome.Digest))
 		if len(outcome.Kinds) > 0 {

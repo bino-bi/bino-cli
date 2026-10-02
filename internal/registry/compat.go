@@ -10,7 +10,7 @@ import (
 // ranges that exclude the running CLI or the project's engine. The ranges come
 // from the registry's resolve response (and are recorded in bino.lock so
 // 'bino registry install', which works from the lock alone, can still report
-// them). Unparsable ranges or versions are skipped silently — compat is
+// them). Unparsable ranges or versions are skipped silently - compat is
 // warn-only and the server already validated the syntax at publish.
 func CompatWarnings(pkg, version, compatEngine, compatCLI, cliVersion, engineVersion string) []string {
 	var warnings []string

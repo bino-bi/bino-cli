@@ -51,7 +51,7 @@ type SigningProfileManifestData struct {
 	SignerName      string
 }
 
-func newAddReportArtefactCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func newAddReportArtefactCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity - refactor before extending
 	var (
 		flagFilename    string
 		flagTitle       string
@@ -340,7 +340,7 @@ including the filename, format, orientation, and which LayoutPages to include.
 	return cmd
 }
 
-func newAddLiveReportArtefactCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddLiveReportArtefactCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagTitle       string
 		flagArtefact    string
@@ -430,7 +430,7 @@ or at least one LayoutPage.
 				Routes:      make(map[string]LiveRoute),
 			}
 
-			// Root route from flags (both modes) — the schema rejects a
+			// Root route from flags (both modes) - the schema rejects a
 			// route that references neither an artefact nor layout pages.
 			if flagArtefact != "" {
 				data.Routes["/"] = LiveRoute{Artifact: flagArtefact}
@@ -473,7 +473,7 @@ or at least one LayoutPage.
 				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
-			// Title — required by the schema.
+			// Title - required by the schema.
 			if data.Title == "" {
 				data.Title, err = addPromptRequiredString("Application title")
 				if err != nil {
@@ -606,7 +606,7 @@ func promptLiveRootRoute(out io.Writer, manifests []ManifestInfo) (LiveRoute, er
 	}
 }
 
-func newAddSigningProfileCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddSigningProfileCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagCertificate string
 		flagPrivateKey  string
@@ -726,7 +726,7 @@ digitally sign PDF reports.
 				data.Description, _ = addPromptString("Description (optional)", "")
 			}
 
-			// Certificate, key, and signer — all required by the schema.
+			// Certificate, key, and signer - all required by the schema.
 			if data.CertificatePath == "" {
 				data.CertificatePath, err = addPromptRequiredString("Certificate file path")
 				if err != nil {
@@ -1001,7 +1001,7 @@ func buildSigningProfileDocument(data SigningProfileManifestData) *schema.Docume
 
 	spec := &schema.SigningProfileSpec{}
 
-	// Certificate and key are referenced by path — key material is never
+	// Certificate and key are referenced by path - key material is never
 	// inlined into the manifest.
 	if data.CertificatePath != "" {
 		spec.Certificate = &schema.PEMSource{Path: data.CertificatePath}

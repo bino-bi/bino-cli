@@ -28,7 +28,7 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 ## Fields
 
 - `value` – required. A positive number. The unit depends on the consumer
-  attribute — all of them are **map-scale semantics**: a larger value means more
+  attribute - all of them are **map-scale semantics**: a larger value means more
   data per em, i.e. smaller bars.
   - When referenced by `unitScaling` – **data units per 1 em of bar length**
     (`250000` → 1 em of bar represents 250 000 units).
@@ -205,10 +205,10 @@ spec:
 
 ## Scaling group vs. numeric value
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Numeric (`unitScaling: 250000`) | Simple, self-contained | Must update every component individually when tuning the scale |
-| Scaling group (`unitScaling: cost_scale`) | Single source of truth; all consumers stay in sync | Requires an extra manifest |
+| Approach                                  | Pros                                               | Cons                                                           |
+| ----------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| Numeric (`unitScaling: 250000`)           | Simple, self-contained                             | Must update every component individually when tuning the scale |
+| Scaling group (`unitScaling: cost_scale`) | Single source of truth; all consumers stay in sync | Requires an extra manifest                                     |
 
 Use scaling groups when two or more components should be visually comparable.
 Use a plain number when a component stands alone.
@@ -216,14 +216,14 @@ Use a plain number when a component stands alone.
 Group members agree in **em-space**: bars match relative to each component's
 effective font size. If consumers use different `scale` factors (or auto-scale
 to different sizes), their bars match proportionally to their own typography,
-not in absolute pixels — give them the same fixed `scale` when pixel-identical
+not in absolute pixels - give them the same fixed `scale` when pixel-identical
 bars are required.
 
 ## Naming rules and diagnostics
 
 - Avoid the name `auto`. It passes validation, but consumer attributes read
   `auto` as the auto-fit keyword, so the group can never be referenced.
-- Avoid names that would parse as a number — including SI-suffixed forms like
+- Avoid names that would parse as a number - including SI-suffixed forms like
   `1M` or `250k`. They pass validation too, but they are ambiguous with a
   literal scaling value on the consumer attribute.
 - Two groups with the same name are a hard error: validation reports
@@ -233,18 +233,18 @@ bars are required.
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `ScalingGroup`. |
-| `metadata.name` | string | yes | — | Unique identifier. Referenced by consumer components in `unitScaling`, `percentageScaling` or `size.group`. Duplicate names are a validation error. Avoid `auto` and names that parse as a number (e.g. `1M`) — consumers read those as literal values. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                                                                                                                                                                                             |
+| ---------------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                                                                                                                                                                                             |
+| `kind`                 | string | yes      | -       | Must be `ScalingGroup`.                                                                                                                                                                                                                                 |
+| `metadata.name`        | string | yes      | -       | Unique identifier. Referenced by consumer components in `unitScaling`, `percentageScaling` or `size.group`. Duplicate names are a validation error. Avoid `auto` and names that parse as a number (e.g. `1M`) - consumers read those as literal values. |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                                                                                                                                                                                             |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                                                                                                                                                                                   |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                                                                                                                                                                                  |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/).                                                                                                                                                                |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.value` | number | yes | — | Scaling value, greater than `0`. Meaning depends on context: data units per em of bar (for `unitScaling`), percentage points per em of pin (for `percentageScaling`), or data units per em² of bubble area (for `size.group`). Larger value = smaller bars. | `value: 250000` |
+| Attribute    | Type   | Required | Default | Description                                                                                                                                                                                                                                                 | Sample          |
+| ------------ | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `spec.value` | number | yes      | -       | Scaling value, greater than `0`. Meaning depends on context: data units per em of bar (for `unitScaling`), percentage points per em of pin (for `percentageScaling`), or data units per em² of bubble area (for `size.group`). Larger value = smaller bars. | `value: 250000` |

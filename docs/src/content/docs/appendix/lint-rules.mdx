@@ -7,43 +7,43 @@ This appendix lists all lint rules that `bino lint` and `bino build` apply to yo
 Lint rules check the **content** of your documents (semantic/business rules), while schema validation checks the **structure**.
 
 The **Severity** column below is the severity a rule reports: it picks the colour of the squiggle in the editor.
-No lint finding blocks a build, and none of them changes the exit code of `bino lint` on its own — only a severity you set yourself in `bino.toml` does that, and `bino lint` prints that one in front of the finding; see [Disabling and re-grading rules](#disabling-and-re-grading-rules).
+No lint finding blocks a build, and none of them changes the exit code of `bino lint` on its own - only a severity you set yourself in `bino.toml` does that, and `bino lint` prints that one in front of the finding; see [Disabling and re-grading rules](#disabling-and-re-grading-rules).
 
-The last five rules only run on a **predef project** — a project whose `bino.toml` carries a `[package]` table (see [Predef packages](/concepts/project-configuration/#predef-packages)). A project without that table never sees them.
+The last five rules only run on a **predef project** - a project whose `bino.toml` carries a `[package]` table (see [Predef packages](/concepts/project-configuration/#predef-packages)). A project without that table never sees them.
 
 ## Rules
 
-| ID                             | Name                         | Severity | Description                                                                                    |
-| ------------------------------ | ---------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `report-artefact-required`     | Report Artefact Required     | Warning  | At least one ReportArtefact document must be defined.                                          |
-| `artefact-layoutpage-required` | Artefact LayoutPage Required | Warning  | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format. |
-| `text-content-required`        | Text Content Required        | Warning  | Text components must have a non-empty `spec.value` field.                                      |
-| `dataset-required`             | Dataset Required             | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
-| `table-sum-title-unused`       | Table Sum Title Unused       | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.            |
-| `missing-required-reference`   | Missing Required Reference   | Error    | Required child references (`ref`) must point to existing documents.                            |
-| `page-layout-slots-used`       | Page Layout Slots Used       | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                  |
-| `card-layout-slots-used`       | Card Layout Slots Used       | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                  |
-| `asset-reference-undefined`    | Asset Reference Undefined    | Warning  | Image references must name a declared Asset document or a reachable URL.                       |
-| `asset-source-missing`         | Asset Source Missing         | Warning  | An Asset's `spec.source.localPath` must point at an existing file.                             |
-| `inline-ref-bounds`            | Inline Reference Bounds      | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                 |
-| `dataset-source-exclusive`     | DataSet Source Exclusive     | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.             |
-| `inline-naming-conflict`       | Inline Naming Conflict       | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                      |
-| `ref-params`                   | Ref Params                   | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match. |
-| `dataset-derive-conflict`      | DataSet Derive Conflict      | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                      |
-| `reserved-name-prefix`         | Reserved Name Prefix         | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                          |
-| `dataset-dependency-undeclared` | DataSet Dependency Undeclared | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                 |
-| `dataset-dependency-unused`    | DataSet Dependency Unused    | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                |
-| `dataset-constants-spec`       | DataSet Constants Spec       | Warning  | `constants.spec.<kind>.<field>` must name a known kind token and a field of that kind's spec.  |
-| `duplicate-name`               | Duplicate Name               | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied. |
-| `i18n-code-unused`             | Internationalization Code Unused | Warning | An Internationalization `spec.code` must exactly match an artefact `spec.language`.        |
-| `i18n-namespace-unreferenced`  | Internationalization Namespace Unreferenced | Warning | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it. |
-| `i18n-title-namespace-deprecated` | titleNamespace Deprecated | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.          |
-| `i18n-no-data-markers`         | No-Data Label Markers        | Warning  | A `*.no-data` label set to `==No Data==` or `==Keine Daten==` prints the `==` markers.         |
-| `package-config-invalid`       | Package Config Invalid       | Error    | The `[package]` table in `bino.toml` must satisfy the constraints a registry publish enforces.  |
-| `predef-name-namespace`        | Predef Name Namespace        | Error    | Documents inside the package include set must be named after the package.                      |
-| `predef-forbidden-kind`        | Predef Forbidden Kind        | Error    | Artefact kinds and credential kinds must not be inside the package include set.                |
-| `predef-asset-absolute-path`   | Predef Asset Absolute Path   | Error    | A packaged Asset's `spec.source.localPath` must be relative to its manifest.                    |
-| `predef-external-ref`          | Predef External Reference    | Error    | Structural and presentational references must resolve inside the package or a declared dependency. |
+| ID                                | Name                                        | Severity | Description                                                                                                                 |
+| --------------------------------- | ------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `report-artefact-required`        | Report Artefact Required                    | Warning  | At least one ReportArtefact document must be defined.                                                                       |
+| `artefact-layoutpage-required`    | Artefact LayoutPage Required                | Warning  | Each ReportArtefact must have at least one LayoutPage that matches its constraints and format.                              |
+| `text-content-required`           | Text Content Required                       | Warning  | Text components must have a non-empty `spec.value` field.                                                                   |
+| `dataset-required`                | Dataset Required                            | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
+| `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
+| `missing-required-reference`      | Missing Required Reference                  | Error    | Required child references (`ref`) must point to existing documents.                                                         |
+| `page-layout-slots-used`          | Page Layout Slots Used                      | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                                               |
+| `card-layout-slots-used`          | Card Layout Slots Used                      | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                                               |
+| `asset-reference-undefined`       | Asset Reference Undefined                   | Warning  | Image references must name a declared Asset document or a reachable URL.                                                    |
+| `asset-source-missing`            | Asset Source Missing                        | Warning  | An Asset's `spec.source.localPath` must point at an existing file.                                                          |
+| `inline-ref-bounds`               | Inline Reference Bounds                     | Warning  | `@inline(N)` references must have valid indices within the dependencies array.                                              |
+| `dataset-source-exclusive`        | DataSet Source Exclusive                    | Warning  | The `source` field is mutually exclusive with `query` and `prql` in DataSet specs.                                          |
+| `inline-naming-conflict`          | Inline Naming Conflict                      | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                                                   |
+| `ref-params`                      | Ref Params                                  | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match.                          |
+| `dataset-derive-conflict`         | DataSet Derive Conflict                     | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                                                   |
+| `reserved-name-prefix`            | Reserved Name Prefix                        | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                                                       |
+| `dataset-dependency-undeclared`   | DataSet Dependency Undeclared               | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                                              |
+| `dataset-dependency-unused`       | DataSet Dependency Unused                   | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                                             |
+| `dataset-constants-spec`          | DataSet Constants Spec                      | Warning  | `constants.spec.<kind>.<field>` must name a known kind token and a field of that kind's spec.                               |
+| `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
+| `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
+| `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
+| `i18n-title-namespace-deprecated` | titleNamespace Deprecated                   | Warning  | `titleNamespace` is deprecated; use `i18nNamespace`, which also inherits to children.                                       |
+| `i18n-no-data-markers`            | No-Data Label Markers                       | Warning  | A `*.no-data` label set to `==No Data==` or `==Keine Daten==` prints the `==` markers.                                      |
+| `package-config-invalid`          | Package Config Invalid                      | Error    | The `[package]` table in `bino.toml` must satisfy the constraints a registry publish enforces.                              |
+| `predef-name-namespace`           | Predef Name Namespace                       | Error    | Documents inside the package include set must be named after the package.                                                   |
+| `predef-forbidden-kind`           | Predef Forbidden Kind                       | Error    | Artefact kinds and credential kinds must not be inside the package include set.                                             |
+| `predef-asset-absolute-path`      | Predef Asset Absolute Path                  | Error    | A packaged Asset's `spec.source.localPath` must be relative to its manifest.                                                |
+| `predef-external-ref`             | Predef External Reference                   | Error    | Structural and presentational references must resolve inside the package or a declared dependency.                          |
 
 ## Rule details
 
@@ -66,8 +66,8 @@ spec:
 
 Each `ReportArtefact` must have at least one `LayoutPage` that:
 
-1. **Passes constraints** — The page's `metadata.constraints` must match the artefact's context (labels, spec, or mode). The linter checks both `build` and `preview` modes; a page is valid if it matches in either mode.
-2. **Matches format** — The page's `spec.pageFormat` must match the artefact's `spec.format`. Both default to `xga` if not specified.
+1. **Passes constraints** - The page's `metadata.constraints` must match the artefact's context (labels, spec, or mode). The linter checks both `build` and `preview` modes; a page is valid if it matches in either mode.
+2. **Matches format** - The page's `spec.pageFormat` must match the artefact's `spec.format`. Both default to `xga` if not specified.
 
 **Example problem:**
 
@@ -161,7 +161,7 @@ spec:
   sumTitle: Total # leave empty to use the IBCS ❖ symbol
 ```
 
-The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Grid` children, and in `Tree` nodes. A child that inherits its type from a referenced Table via `ref` is checked against the *effective* type, so overriding only `sumTitle` on a `type: sum` component does not warn.
+The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Grid` children, and in `Tree` nodes. A child that inherits its type from a referenced Table via `ref` is checked against the _effective_ type, so overriding only `sumTitle` on a `type: sum` component does not warn.
 
 ### missing-required-reference
 
@@ -179,7 +179,7 @@ spec:
   pageLayout: 2x2
   children:
     - kind: ChartTime
-      ref: revnue_chart  # Typo! Should be "revenue_chart"
+      ref: revnue_chart # Typo! Should be "revenue_chart"
 ```
 
 **Error message:**
@@ -190,17 +190,17 @@ required reference "revnue_chart" of kind "ChartTime" not found (use optional: t
 
 **Fixes:**
 
-1. **Correct the typo** — Fix the reference name to match the target document's `metadata.name`.
+1. **Correct the typo** - Fix the reference name to match the target document's `metadata.name`.
 
-2. **Create the missing document** — Add the referenced manifest to your project.
+2. **Create the missing document** - Add the referenced manifest to your project.
 
-3. **Mark as optional** — If the reference is legitimately optional (e.g., debug-only component), add `optional: true`:
+3. **Mark as optional** - If the reference is legitimately optional (e.g., debug-only component), add `optional: true`:
 
 ```yaml
 children:
   - kind: ChartTime
     ref: debug_chart
-    optional: true  # Won't error if missing
+    optional: true # Won't error if missing
 ```
 
 **Note:** References that exist but are filtered out by constraints (e.g., `mode == "preview"`) do **not** trigger this error. Only genuinely missing references cause failures.
@@ -211,9 +211,9 @@ See also: [Optional references](/reference/layout-page/#optional-references)
 
 Each `LayoutPage` must have exactly the number of children that match its `pageLayout` slot count. This rule is evaluated **per artefact**, counting only children that:
 
-1. **Pass constraints** — Children with `metadata.constraints` must match the artefact's context.
-2. **Have valid refs** — Children with `ref` must point to an existing document (or be marked `optional: true`). Missing required refs trigger the `missing-required-reference` error. Optional refs that are missing don't count as slots.
-3. **Are renderable** — Children must have either a `ref` or inline `spec`.
+1. **Pass constraints** - Children with `metadata.constraints` must match the artefact's context.
+2. **Have valid refs** - Children with `ref` must point to an existing document (or be marked `optional: true`). Missing required refs trigger the `missing-required-reference` error. Optional refs that are missing don't count as slots.
+3. **Are renderable** - Children must have either a `ref` or inline `spec`.
 
 **Slot counts for predefined layouts:**
 
@@ -287,7 +287,7 @@ spec:
 
 Images are referenced by the **name of an `Asset` document**, not by file path. This rule checks every image reference and warns when it cannot resolve, which otherwise fails silently: the name is passed through to the browser as if it were a URL, and you get a broken image with no error.
 
-It covers `messageImage` (LayoutPage), `titleImage` (LayoutCard), `source` (Image) — including components defined inline in `children` or `nodes` — and `asset:` image references inside Markdown (`messageText`, `titleBusinessUnit`, and a Text component's `value`).
+It covers `messageImage` (LayoutPage), `titleImage` (LayoutCard), `source` (Image) - including components defined inline in `children` or `nodes` - and `asset:` image references inside Markdown (`messageText`, `titleBusinessUnit`, and a Text component's `value`).
 
 **Example problem:**
 
@@ -320,7 +320,7 @@ A reference resolves when it is one of:
 - the `metadata.name` of an `Asset` document (`messageImage: logo`), optionally with the `asset:` prefix (`messageImage: asset:logo`);
 - an absolute URL or data URI the browser can fetch (`https://…`, `data:image/png;base64,…`).
 
-A value that looks like a file path (`images/logo.png`) is checked against the filesystem, relative to the manifest, and warns when the file is absent. Note that bino serves **only** declared Assets — a bare path is not served even when the file exists, so prefer declaring an `Asset`.
+A value that looks like a file path (`images/logo.png`) is checked against the filesystem, relative to the manifest, and warns when the file is absent. Note that bino serves **only** declared Assets - a bare path is not served even when the file exists, so prefer declaring an `Asset`.
 
 Font Assets do not count: they are not available to image references.
 
@@ -389,7 +389,7 @@ metadata:
   name: conflicting_dataset
 spec:
   source: sales_csv
-  query: |  # Can't have both source and query!
+  query: | # Can't have both source and query!
     SELECT * FROM sales_csv
 ```
 
@@ -418,7 +418,7 @@ Document names starting with `_inline_` are reserved for generated inline defini
 ```yaml
 kind: DataSource
 metadata:
-  name: _inline_my_data  # Reserved prefix!
+  name: _inline_my_data # Reserved prefix!
 spec:
   type: csv
   path: ./data.csv
@@ -453,16 +453,16 @@ spec:
   layoutPages:
     - ref: region_page
       params:
-        regoin: North   # misspelled, and the required 'region' is missing
+        regoin: North # misspelled, and the required 'region' is missing
 ```
 
 **Fix:** Pass exactly the declared parameters:
 
 ```yaml
-  layoutPages:
-    - ref: region_page
-      params:
-        region: North
+layoutPages:
+  - ref: region_page
+    params:
+      region: North
 ```
 
 ### dataset-derive-conflict
@@ -482,7 +482,7 @@ spec:
   derive:
     pp1: { from: ac1, shift: 1 year, grain: month }
   assert:
-    pp1: { from: ac1, shift: 1 year, grain: month }  # pp1 is also derived!
+    pp1: { from: ac1, shift: 1 year, grain: month } # pp1 is also derived!
 ```
 
 **Fix:** Keep the slot in one map. Use `assert` when the query already returns the column, `derive` when it does not:
@@ -505,7 +505,7 @@ Names starting with `bino_` are reserved for the functions and macros the CLI re
 ```yaml
 kind: DataSource
 metadata:
-  name: bino_sales  # Reserved prefix!
+  name: bino_sales # Reserved prefix!
 spec:
   type: csv
   path: ./sales.csv
@@ -535,7 +535,7 @@ spec:
     JOIN regions_csv r USING (region_id)
     GROUP BY r.region
   dependencies:
-    - sales_csv  # regions_csv is read but not listed!
+    - sales_csv # regions_csv is read but not listed!
 ```
 
 **Fix:** List every DataSource the query reads:
@@ -569,7 +569,7 @@ spec:
   query: SELECT region, SUM(amount) AS ac1 FROM sales_csv GROUP BY region
   dependencies:
     - sales_csv
-    - regions_csv  # Never read by the query!
+    - regions_csv # Never read by the query!
 ```
 
 **Fix:** Remove the entry, but only after checking that the query really does not read the source. The rule has the same limits as [`dataset-dependency-undeclared`](#dataset-dependency-undeclared), and a read it cannot see, for example through a CTE named like the source, looks like no read at all.
@@ -603,10 +603,10 @@ spec:
   query: SELECT ...
   constants:
     spec:
-      tabel:                 # unknown kind token
+      tabel: # unknown kind token
         barColumns: ac1,pl1
       table:
-        barColumnz: ac1,pl1  # Table has no spec field "barColumnz"
+        barColumnz: ac1,pl1 # Table has no spec field "barColumnz"
 ```
 
 **Fix:** Use the lowercase manifest kind and the field name as written in the component's spec:
@@ -636,7 +636,7 @@ spec:
 ---
 kind: LayoutPage
 metadata:
-  name: mainPage  # Same kind and name, and nothing keeps them apart!
+  name: mainPage # Same kind and name, and nothing keeps them apart!
 spec:
   children: [...]
 ```
@@ -665,7 +665,7 @@ spec:
 
 ### i18n-code-unused
 
-Locale lookup is an exact string match against the artefact's `spec.language`. An `Internationalization` document whose `spec.code` matches no artefact language is loaded into the browser store and then never read — most often because the code carries a region subtag.
+Locale lookup is an exact string match against the artefact's `spec.language`. An `Internationalization` document whose `spec.code` matches no artefact language is loaded into the browser store and then never read - most often because the code carries a region subtag.
 
 **Example problem:**
 
@@ -711,7 +711,7 @@ spec:
     global.ac1: Ist (geprüft)
 ```
 
-**Fix:** Point a component, card, page or the artefact at it — or drop `spec.namespace` so the content merges into `_system`, the bundle every component reads.
+**Fix:** Point a component, card, page or the artefact at it - or drop `spec.namespace` so the content merges into `_system`, the bundle every component reads.
 
 ```yaml
 kind: LayoutPage
@@ -777,7 +777,7 @@ spec:
 
 ### package-config-invalid
 
-The `[package]` table is not checked when `bino.toml` is loaded — an unrelated command must not fail over a field only `bino publish` reads. `bino lint` checks it instead and reports the first problem it finds as one finding on `bino.toml`.
+The `[package]` table is not checked when `bino.toml` is loaded - an unrelated command must not fail over a field only `bino publish` reads. `bino lint` checks it instead and reports the first problem it finds as one finding on `bino.toml`.
 
 **Example problem:**
 
@@ -801,7 +801,7 @@ When this rule fires, the four content rules below do not run: the include set a
 
 ### predef-name-namespace
 
-Every document a package publishes carries the package name, so a consumer who installs two kits never gets a name collision. One document — the package's main definition — may be named exactly like the package; every other one needs a `<package>/<definition>` name.
+Every document a package publishes carries the package name, so a consumer who installs two kits never gets a name collision. One document - the package's main definition - may be named exactly like the package; every other one needs a `<package>/<definition>` name.
 
 **Example problem:**
 
@@ -819,20 +819,20 @@ metadata:
   name: "@acme/starter-kit/revenue_table"
 ```
 
-A `DataSource` is the exception: its name becomes a DuckDB view name and is limited to two segments (`@scope/name`), so it cannot carry a package segment at all. Either name it exactly like the package (as the main definition) or keep it out of the include set — `mocks/` is the conventional place.
+A `DataSource` is the exception: its name becomes a DuckDB view name and is limited to two segments (`@scope/name`), so it cannot carry a package segment at all. Either name it exactly like the package (as the main definition) or keep it out of the include set - `mocks/` is the conventional place.
 
 ### predef-forbidden-kind
 
 Two groups of kinds must never be published.
 
-- **Artefacts** (`ReportArtefact`, `LiveReportArtefact`, `ScreenshotArtefact`, `DocumentArtefact`) render *a* report. They are the harness that previews your package, not package content. Keep them in `reports/` or `mocks/`, both of which are excluded from every package.
-- **Credentials** (`ConnectionSecret`, `SigningProfile`) must never leave your machine. `secrets/` and `signing/` *are* part of the default include set, on purpose: if they were excluded the rule could never fire on the one layout where credentials actually live.
+- **Artefacts** (`ReportArtefact`, `LiveReportArtefact`, `ScreenshotArtefact`, `DocumentArtefact`) render _a_ report. They are the harness that previews your package, not package content. Keep them in `reports/` or `mocks/`, both of which are excluded from every package.
+- **Credentials** (`ConnectionSecret`, `SigningProfile`) must never leave your machine. `secrets/` and `signing/` _are_ part of the default include set, on purpose: if they were excluded the rule could never fire on the one layout where credentials actually live.
 
 **Fix:** Move the manifest out of the include set, or write an explicit `include` list in `[package]` that leaves its folder out.
 
 ### predef-asset-absolute-path
 
-A published package is unpacked on someone else's machine, so an `Asset` inside it must find its file relative to its own manifest. An absolute path — `/home/you/logo.svg`, or a `C:\` drive path — resolves to nothing there.
+A published package is unpacked on someone else's machine, so an `Asset` inside it must find its file relative to its own manifest. An absolute path - `/home/you/logo.svg`, or a `C:\` drive path - resolves to nothing there.
 
 **Example problem:**
 
@@ -865,7 +865,7 @@ The rule inspects **structural and presentational** references only:
 - `spec.selectedStyle` (a `ComponentStyle`)
 - `spec.ruleset` (a `RuleSet`)
 
-**Data bindings are deliberately exempt.** `spec.dataset` is the seam a predef exists for: a packaged `Table` binds to a dataset the *consumer* supplies, so it points outside the package by construction. Flagging it would make the primary use case unlintable. The same reasoning covers a `DataSet`'s `spec.dependencies` and `spec.source`, and `spec.i18nNamespace` names a namespace rather than a document. Raw SQL in `spec.query` is never parsed.
+**Data bindings are deliberately exempt.** `spec.dataset` is the seam a predef exists for: a packaged `Table` binds to a dataset the _consumer_ supplies, so it points outside the package by construction. Flagging it would make the primary use case unlintable. The same reasoning covers a `DataSet`'s `spec.dependencies` and `spec.source`, and `spec.i18nNamespace` names a namespace rather than a document. Raw SQL in `spec.query` is never parsed.
 
 **Example problem:**
 
@@ -875,11 +875,11 @@ kind: Table
 metadata:
   name: "@acme/starter-kit/revenue_table"
 spec:
-  dataset: ${DATASET} # fine — the consumer binds this
-  selectedStyle: mock_theme # not fine — mock_theme lives in mocks/
+  dataset: ${DATASET} # fine - the consumer binds this
+  selectedStyle: mock_theme # not fine - mock_theme lives in mocks/
 ```
 
-**Fix:** Move the style into the package and namespace it, or — when it belongs to someone else's package — declare that package as a dependency.
+**Fix:** Move the style into the package and namespace it, or - when it belongs to someone else's package - declare that package as a dependency.
 
 ```toml
 [dependencies]
@@ -912,26 +912,26 @@ text-content-required = "error"
 i18n-code-unused = "info"
 ```
 
-`disable` hides a rule's findings everywhere — CLI output, lint log and editor.
+`disable` hides a rule's findings everywhere - CLI output, lint log and editor.
 `severity` re-grades them everywhere: `bino lint` prints the finding under its
 new severity and the editor squiggles it in the matching colour.
 
 Only a severity you set in `bino.toml` affects an exit code: a rule you raise to
 `"error"` fails `bino lint` on its own, a rule you lower to `"info"` no longer
 counts for `--fail-on-warnings`. The Severity column above changes no exit code
-by itself, and no lint finding fails `bino build` — `[lint]` changes neither.
+by itself, and no lint finding fails `bino build` - `[lint]` changes neither.
 
 Besides the rule IDs above you can name four more IDs, which findings carry
 although no rule of that name declares them:
 
-| ID | Covers |
-| -- | ------ |
-| `schema-validation` | A manifest that failed schema validation. |
-| `manifest-load` | A manifest that could not be loaded at all. |
-| `engine-version-incompatible` | The `engine-version` pin check in `bino.toml`. |
-| `missing-required-reference` | The dangling-reference finding above, which [`page-layout-slots-used`](#page-layout-slots-used) emits while it walks the children. |
+| ID                            | Covers                                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `schema-validation`           | A manifest that failed schema validation.                                                                                          |
+| `manifest-load`               | A manifest that could not be loaded at all.                                                                                        |
+| `engine-version-incompatible` | The `engine-version` pin check in `bino.toml`.                                                                                     |
+| `missing-required-reference`  | The dangling-reference finding above, which [`page-layout-slots-used`](#page-layout-slots-used) emits while it walks the children. |
 
-Disabling `schema-validation` or `manifest-load` hides the lines only — `bino lint`
+Disabling `schema-validation` or `manifest-load` hides the lines only - `bino lint`
 still exits non-zero on a bundle it could not load, because the load really
 failed. Disabling `engine-version-incompatible`, in contrast, drops the finding
 and the exit code it forced together.

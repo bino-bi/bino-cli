@@ -136,8 +136,8 @@ func (c *Client) DownloadFile(ctx context.Context, scope, name, version, filePat
 }
 
 // PackageExists reports whether a package already exists in the registry.
-// known is false when the answer is inconclusive — a transport failure, a 5xx,
-// or a permission error — so callers that must not guess (publish, deciding
+// known is false when the answer is inconclusive - a transport failure, a 5xx,
+// or a permission error - so callers that must not guess (publish, deciding
 // whether to send a visibility that only takes effect on creation) can refuse
 // rather than proceed on a default.
 func (c *Client) PackageExists(ctx context.Context, scope, name string) (exists, known bool) {

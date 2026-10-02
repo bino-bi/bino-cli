@@ -91,7 +91,7 @@ func ResourcePath(projectRoot, name, resourceName string) (abs, rel string, err 
 
 // WritePackage atomically writes a package document into the store and
 // returns its project-relative path. Digest verification is the caller's
-// responsibility — the store is plain I/O.
+// responsibility - the store is plain I/O.
 func WritePackage(projectRoot, name string, body []byte) (rel string, err error) {
 	abs, rel, err := StorePath(projectRoot, name)
 	if err != nil {
@@ -107,7 +107,7 @@ func WritePackage(projectRoot, name string, body []byte) (rel string, err error)
 }
 
 // WriteResource atomically writes one of a package's bundled resources into
-// the store. Digest verification is the caller's responsibility — the store
+// the store. Digest verification is the caller's responsibility - the store
 // is plain I/O.
 func WriteResource(projectRoot, name, resourceName string, body []byte) error {
 	abs, rel, err := ResourcePath(projectRoot, name, resourceName)
@@ -123,8 +123,8 @@ func WriteResource(projectRoot, name, resourceName string, body []byte) error {
 	return nil
 }
 
-// RemovePackage deletes a package's entire directory — its document and any
-// bundled resources — from the store, and prunes the scope directory when it
+// RemovePackage deletes a package's entire directory - its document and any
+// bundled resources - from the store, and prunes the scope directory when it
 // becomes empty. A missing directory is not an error.
 func RemovePackage(projectRoot, name string) error {
 	abs, rel, err := PackageDir(projectRoot, name)
@@ -166,7 +166,7 @@ func TreeFilePath(projectRoot, name, treePath string) (abs, rel string, err erro
 }
 
 // WriteTreeFile atomically writes one file of a package's tree, creating its
-// directory. Digest verification is the caller's responsibility — the store is
+// directory. Digest verification is the caller's responsibility - the store is
 // plain I/O.
 func WriteTreeFile(projectRoot, name, treePath string, body []byte) (rel string, err error) {
 	abs, rel, err := TreeFilePath(projectRoot, name, treePath)
@@ -248,7 +248,7 @@ func pruneEmptyParents(start, stop string) {
 
 // mkdirAllContained creates dir and then re-checks, with symlinks resolved,
 // that it is still inside the store. storeContain is purely lexical, and
-// MkdirAll happily traverses an existing symlinked component — so a planted
+// MkdirAll happily traverses an existing symlinked component - so a planted
 // ".bino/registry/acme/kit/models -> /etc" would otherwise make the store
 // write outside the project. Mirrors internal/archive/zip.go's
 // verifyResolvedParent, which guards the same hazard for extracted archives.

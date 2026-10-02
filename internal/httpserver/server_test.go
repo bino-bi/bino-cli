@@ -1222,7 +1222,7 @@ func TestBroadcastContent(t *testing.T) {
 			if !strings.Contains(s, `"path":"/page"`) {
 				t.Errorf("message should contain normalized path: %s", s)
 			}
-			// HTML body must NOT be sent over SSE — keeps messages tiny so
+			// HTML body must NOT be sent over SSE - keeps messages tiny so
 			// the per-client channel buffer can absorb a full refresh
 			// cycle without dropping refresh-done.
 			if strings.Contains(s, "htmlBase64") || strings.Contains(s, "some long body") {

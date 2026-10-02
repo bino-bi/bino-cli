@@ -17,7 +17,7 @@ import (
 
 type layoutStateInput struct {
 	Artefact  string `json:"artefact,omitempty" jsonschema:"metadata.name of the ReportArtefact to inspect (default: the only one, or an error when the project has several)"`
-	Component string `json:"component,omitempty" jsonschema:"component id or manifest name to describe in full — omit for the whole-report summary"`
+	Component string `json:"component,omitempty" jsonschema:"component id or manifest name to describe in full - omit for the whole-report summary"`
 }
 
 // layoutComponent is the compact per-component view returned to an agent.
@@ -51,10 +51,10 @@ type layoutStateOutput struct {
 func (h *handlers) registerLayoutTool(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name: "get_layout_state",
-		Description: "Inspect what a report ACTUALLY rendered, by building it with a layout capture (runs headless Chrome — slow, writes files). " +
+		Description: "Inspect what a report ACTUALLY rendered, by building it with a layout capture (runs headless Chrome - slow, writes files). " +
 			"Reports per component the box, row/bar counts, resolved scaling and diagnostics, plus findings: components that rendered empty, " +
 			"content that overflows, fonts auto-fitted down, and charts of the same measure left on diverging scales. " +
-			"Use it to verify a report after build — validate_project only checks the manifests, not the rendered result. " +
+			"Use it to verify a report after build - validate_project only checks the manifests, not the rendered result. " +
 			"Requires template engine v1.0.0-next.24 or newer.",
 	}, h.runLayoutState)
 }
@@ -164,7 +164,7 @@ func readLayoutSnapshot(outDir, artefact string) (string, layoutstate.Snapshot, 
 		matches, _ := filepath.Glob(filepath.Join(outDir, "*.layout.json")) //nolint:errcheck // constant pattern; Glob errors only on malformed patterns
 		if len(matches) != 1 {
 			return "", layoutstate.Snapshot{}, fmt.Errorf(
-				"no layout capture for %q — the template engine must be v1.0.0-next.24 or newer", artefact)
+				"no layout capture for %q - the template engine must be v1.0.0-next.24 or newer", artefact)
 		}
 		candidate = matches[0]
 		data, err = os.ReadFile(candidate) //nolint:gosec // G304: path from our own out-dir glob

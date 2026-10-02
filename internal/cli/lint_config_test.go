@@ -107,7 +107,7 @@ func runLintCommand(t *testing.T, dir string, extraArgs ...string) (string, erro
 }
 
 // TestLintCommand_NoLintTable: the baseline every other case is measured
-// against — a project without a [lint] table reports its finding and exits 0.
+// against - a project without a [lint] table reports its finding and exits 0.
 func TestLintCommand_NoLintTable(t *testing.T) {
 	dir := writeLintProject(t, "report-id = \"t\"\n", map[string]string{
 		"report.yaml": lintCfgReportA4,
@@ -126,7 +126,7 @@ func TestLintCommand_NoLintTable(t *testing.T) {
 }
 
 // TestLintCommand_SeverityShownInReport: the printed body must agree with the
-// exit code — a rule raised to "error" is counted and labeled as one, and a
+// exit code - a rule raised to "error" is counted and labeled as one, and a
 // rule lowered to "info" is not counted as a warning.
 func TestLintCommand_SeverityShownInReport(t *testing.T) {
 	cases := []struct {
@@ -281,7 +281,7 @@ func TestLintCommand_DisableEngineCompat(t *testing.T) {
 
 // TestLintCommand_DisableSchemaValidationStaysFatal: disable hides the
 // finding lines, but lint must never claim success on a bundle it could not
-// read — and the reported issue count stays the honest pre-filter one.
+// read - and the reported issue count stays the honest pre-filter one.
 func TestLintCommand_DisableSchemaValidationStaysFatal(t *testing.T) {
 	cases := []struct {
 		name       string

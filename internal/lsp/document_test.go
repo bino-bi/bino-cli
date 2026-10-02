@@ -26,7 +26,7 @@ func TestPositionToLineCol_UTF16(t *testing.T) {
 		wantCol  int
 	}{
 		{"ascii line", protocol.Position{Line: 0, Character: 6}, 1, 7},
-		// "  name: über_text": cursor after "ü" — 1 UTF-16 unit, 1 rune.
+		// "  name: über_text": cursor after "ü" - 1 UTF-16 unit, 1 rune.
 		{"after umlaut", protocol.Position{Line: 2, Character: 9}, 3, 10},
 		// value line: "  value: Überschrift 🙂 Quartal"
 		// cursor after the emoji: UTF-16 counts it as 2 units, runes as 1.
@@ -98,7 +98,7 @@ func TestEnvVarDiagnostics_AfterUmlaut(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("expected 1 anchored diagnostic, got %d", len(out))
 	}
-	// "  value: Ü " before ${ — 11 runes, 11 UTF-16 units (Ü is BMP), but 12 bytes.
+	// "  value: Ü " before ${ - 11 runes, 11 UTF-16 units (Ü is BMP), but 12 bytes.
 	if got := out[0].Range.Start.Character; got != 11 {
 		t.Fatalf("env-var anchor character = %d, want 11 (UTF-16, not bytes)", got)
 	}

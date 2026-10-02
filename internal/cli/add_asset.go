@@ -63,7 +63,7 @@ type AssetManifestData struct {
 	InlineData  string // Base64 inline data
 }
 
-func newAddAssetCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func newAddAssetCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity - refactor before extending
 	var (
 		flagType       string
 		flagMediaType  string

@@ -34,7 +34,7 @@ func (c *connCounter) active() int64 { return c.n.Load() }
 
 const defaultInactivityTimeout = 5 * time.Minute
 
-func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		port            int
 		workdir         string

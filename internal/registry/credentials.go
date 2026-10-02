@@ -10,7 +10,7 @@ import (
 )
 
 // credentialsFileName is the per-user credential store under ~/.bino. It is
-// written 0600 — it holds personal access tokens. `bino cache clean --global`
+// written 0600 - it holds personal access tokens. `bino cache clean --global`
 // deliberately spares it.
 const credentialsFileName = "credentials.json"
 

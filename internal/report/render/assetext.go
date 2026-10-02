@@ -49,7 +49,7 @@ func (t *assetTransformer) Transform(node *ast.Document, reader text.Reader, pc 
 // CollectAssetRefs returns the asset names referenced by "asset:" image
 // destinations in a Markdown string, in document order and without duplicates.
 // It parses with goldmark, so references inside code spans or fenced blocks are
-// not reported — the same input the renderer's assetTransformer acts on.
+// not reported - the same input the renderer's assetTransformer acts on.
 func CollectAssetRefs(source string) []string {
 	if !strings.Contains(source, assetURLPrefix) {
 		return nil

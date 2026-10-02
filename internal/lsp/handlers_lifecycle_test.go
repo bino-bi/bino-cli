@@ -13,7 +13,7 @@ import (
 
 // noopClient satisfies protocol.Client for the transport test. PublishDiagnostics
 // MUST return nil: the same jsonrpc2 rule that motivates the fix applies to the
-// client end too — a non-nil error from a notification handler tears down the
+// client end too - a non-nil error from a notification handler tears down the
 // connection (the server pushes diagnostics on didOpen).
 type noopClient struct{ protocol.UnimplementedClient }
 
@@ -59,7 +59,7 @@ func TestServer_LifecycleNotificationsReturnNil(t *testing.T) {
 // to end. vscode-languageclient sends $/setTrace on every editor configuration
 // change; before the lifecycle no-op handlers existed it fell through to
 // UnimplementedServer, whose errNotImplemented made jsonrpc2 fail the connection
-// — silencing every later request. This is the editor-only failure that no
+// - silencing every later request. This is the editor-only failure that no
 // direct-handler test (which never sends notifications over the wire) caught.
 func TestServer_SetTraceDoesNotKillConnection(t *testing.T) {
 	ctx := t.Context()
@@ -103,6 +103,6 @@ func TestServer_SetTraceDoesNotKillConnection(t *testing.T) {
 	// Regression: the connection must still answer. Pre-fix this hung until the
 	// per-call deadline and returned an error.
 	if err := completion(); err != nil {
-		t.Fatalf("completion after $/setTrace failed — the notification killed the connection: %v", err)
+		t.Fatalf("completion after $/setTrace failed - the notification killed the connection: %v", err)
 	}
 }

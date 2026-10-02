@@ -115,7 +115,7 @@ func cleanCacheDir(logger logx.Logger, dir, label string) error {
 }
 
 // cleanGlobalCacheDir removes everything under ~/.bino except
-// credentials.json and config.toml — login credentials and user
+// credentials.json and config.toml - login credentials and user
 // configuration are not cache: credentials are not regenerable without
 // re-entering a password (and the server-side token would be orphaned),
 // and config.toml holds deliberate user settings.

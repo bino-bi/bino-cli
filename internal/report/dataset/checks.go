@@ -212,7 +212,7 @@ func allNullDerivedSlots(name string, data json.RawMessage, derive map[string]Sh
 		if allNull {
 			warnings = append(warnings, Warning{
 				DataSet: name,
-				Message: fmt.Sprintf("%s derived from %s is null on every row — the query window has no prior period", slot, derive[slot].From),
+				Message: fmt.Sprintf("%s derived from %s is null on every row - the query window has no prior period", slot, derive[slot].From),
 			})
 		}
 	}

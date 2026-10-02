@@ -12,7 +12,7 @@ function esc(str: string): string {
 
 /**
  * The reference DesignerWidget: renders any enum field as a native select. It
- * exists to prove the registry — the form renderer selects this over the generic
+ * exists to prove the registry - the form renderer selects this over the generic
  * control whenever a field carries `enumValues` (including the string variant of
  * a oneOf). Brief 04's bespoke IBCS widgets register ahead of it and claim their
  * specific fields first.

@@ -685,7 +685,7 @@ func buildMarkdownDataURL(baseURL, kind, name, hash string) string {
 }
 
 // dedupeDatasetResultsByName collapses duplicate-name entries to the last
-// occurrence (mirrors render.dedupeDatasetResultsByName — see comment there).
+// occurrence (mirrors render.dedupeDatasetResultsByName - see comment there).
 func dedupeDatasetResultsByName(results []dataset.Result) []dataset.Result {
 	if len(results) <= 1 {
 		return results

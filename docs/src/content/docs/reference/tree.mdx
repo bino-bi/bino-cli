@@ -40,7 +40,7 @@ spec:
 ```
 
 Instead of a `Label`, a node can hold a `Table`, a chart or a `LayoutCard`, inline or by
-`ref` — see [Node kinds](#node-kinds).
+`ref` - see [Node kinds](#node-kinds).
 All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 ## Fields
@@ -125,15 +125,15 @@ nodes:
     kind: Label
     spec:
       value: "<strong>ROI</strong><br/>12.5%"
-      dataset: metrics_dataset  # optional for template interpolation
-      scale: auto               # optional font-size scaling
+      dataset: metrics_dataset # optional for template interpolation
+      scale: auto # optional font-size scaling
 ```
 
-| Property | Type | Required | Default | Description | Sample |
-|----------|------|----------|---------|-------------|--------|
-| `nodes[].spec.value` | string | yes | — | Text or HTML content to display in the label. | `value: "<strong>ROI</strong>"` |
-| `nodes[].spec.dataset` | string or object | no | — | Dataset binding for template interpolation in the value. | `dataset: metrics_dataset` |
-| `nodes[].spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `none` disables scaling, `auto` auto-scales silently, a positive number sets an explicit factor. | `scale: 0.8` |
+| Property               | Type             | Required | Default                 | Description                                                                                                              | Sample                          |
+| ---------------------- | ---------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `nodes[].spec.value`   | string           | yes      | -                       | Text or HTML content to display in the label.                                                                            | `value: "<strong>ROI</strong>"` |
+| `nodes[].spec.dataset` | string or object | no       | -                       | Dataset binding for template interpolation in the value.                                                                 | `dataset: metrics_dataset`      |
+| `nodes[].spec.scale`   | string or number | no       | auto-scale with warning | Font-size scaling mode. `none` disables scaling, `auto` auto-scales silently, a positive number sets an explicit factor. | `scale: 0.8`                    |
 
 ### Table
 
@@ -173,7 +173,7 @@ nodes:
     kind: ChartStructure
     ref: base_revenue_chart
     spec:
-      filter: "region = 'EMEA'"  # Override filter
+      filter: "region = 'EMEA'" # Override filter
 ```
 
 ### ChartTime
@@ -373,7 +373,7 @@ edges:
     style:
       color: "#ff0000"
       width: 2
-      dasharray: "5,5"  # dashed line
+      dasharray: "5,5" # dashed line
   - from: "root"
     to: "child2"
     style:
@@ -387,7 +387,7 @@ The tree chart supports directed acyclic graphs (DAGs), where a node can have mu
 ```yaml
 edges:
   - { from: "a", to: "c" }
-  - { from: "b", to: "c" }  # 'c' has two parents
+  - { from: "b", to: "c" } # 'c' has two parents
   - { from: "c", to: "d" }
 ```
 
@@ -426,36 +426,36 @@ spec:
       kind: Table
       ref: cost_breakdown_table
       spec:
-        limit: 5  # Override: show only top 5
+        limit: 5 # Override: show only top 5
 ```
 
 ## Attribute Reference
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `Tree`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `Tree`.                                                                          |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                       |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.edges` | array or string | yes | — | Edge definitions connecting nodes. JSON string or YAML array. | see below |
-| `spec.direction` | string | no | `ltr` | Tree layout direction. Values: `ltr` (left-to-right), `rtl` (right-to-left), `ttb` (top-to-bottom), `btt` (bottom-to-top). | `direction: ttb` |
-| `spec.levelSpacing` | number | no | `60` | Spacing between hierarchy levels in pixels. Minimum: 0. | `levelSpacing: 80` |
-| `spec.nodeSpacing` | number | no | `20` | Spacing between sibling nodes in pixels. Minimum: 0. | `nodeSpacing: 30` |
-| `spec.edgeStyle` | string | no | `orthogonal` | Style of connection lines. Values: `straight`, `orthogonal`, `curved`. | `edgeStyle: curved` |
-| `spec.showOperators` | boolean | no | `true` | Display operator symbols between sibling nodes. | `showOperators: true` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.i18nNamespace` | string | no | inherited | [I18n](/reference/internationalization/#scoped-overrides-with-i18nnamespace) namespace inherited by the node components; their own `i18nNamespace` wins. Resolved from the enclosing artefact, page or card when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: finance` |
-| `spec.nodes` | array | no | — | Node definitions specifying what component to render at each position. | see below |
+| Attribute            | Type            | Required | Default      | Description                                                                                                                                                                                                                                                            | Sample                           |
+| -------------------- | --------------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `spec.edges`         | array or string | yes      | -            | Edge definitions connecting nodes. JSON string or YAML array.                                                                                                                                                                                                          | see below                        |
+| `spec.direction`     | string          | no       | `ltr`        | Tree layout direction. Values: `ltr` (left-to-right), `rtl` (right-to-left), `ttb` (top-to-bottom), `btt` (bottom-to-top).                                                                                                                                             | `direction: ttb`                 |
+| `spec.levelSpacing`  | number          | no       | `60`         | Spacing between hierarchy levels in pixels. Minimum: 0.                                                                                                                                                                                                                | `levelSpacing: 80`               |
+| `spec.nodeSpacing`   | number          | no       | `20`         | Spacing between sibling nodes in pixels. Minimum: 0.                                                                                                                                                                                                                   | `nodeSpacing: 30`                |
+| `spec.edgeStyle`     | string          | no       | `orthogonal` | Style of connection lines. Values: `straight`, `orthogonal`, `curved`.                                                                                                                                                                                                 | `edgeStyle: curved`              |
+| `spec.showOperators` | boolean         | no       | `true`       | Display operator symbols between sibling nodes.                                                                                                                                                                                                                        | `showOperators: true`            |
+| `spec.selectedStyle` | string          | no       | -            | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                             | `selectedStyle: corporate-style` |
+| `spec.i18nNamespace` | string          | no       | inherited    | [I18n](/reference/internationalization/#scoped-overrides-with-i18nnamespace) namespace inherited by the node components; their own `i18nNamespace` wins. Resolved from the enclosing artefact, page or card when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: finance`         |
+| `spec.nodes`         | array           | no       | -            | Node definitions specifying what component to render at each position.                                                                                                                                                                                                 | see below                        |
 
 #### Edge object
 
@@ -464,21 +464,21 @@ spec:
   edges:
     - from: "roi"
       to: "ros"
-      operator: "x"        # * | / | + | - | x | ÷ | none
-      label: ""             # optional custom label instead of operator
-      style:                # optional custom styling
+      operator: "x" # * | / | + | - | x | ÷ | none
+      label: "" # optional custom label instead of operator
+      style: # optional custom styling
         color: "#ff0000"
         width: 2
         dasharray: "5,5"
 ```
 
-| Property | Type | Required | Default | Description | Sample |
-|----------|------|----------|---------|-------------|--------|
-| `edges[].from` | string | yes | — | Source node ID. | `from: "roi"` |
-| `edges[].to` | string | yes | — | Target node ID. | `to: "ros"` |
-| `edges[].operator` | string | no | — | Operator symbol. Values: `*`, `/`, `+`, `-`, `x`, `÷`, `none`. | `operator: "x"` |
-| `edges[].label` | string | no | — | Custom label displayed instead of operator. | `label: "per unit"` |
-| `edges[].style` | object | no | — | Custom edge styling: `color` (string), `width` (number), `dasharray` (string). | `style: { color: "#ff0000", width: 2, dasharray: "5,5" }` |
+| Property           | Type   | Required | Default | Description                                                                    | Sample                                                    |
+| ------------------ | ------ | -------- | ------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `edges[].from`     | string | yes      | -       | Source node ID.                                                                | `from: "roi"`                                             |
+| `edges[].to`       | string | yes      | -       | Target node ID.                                                                | `to: "ros"`                                               |
+| `edges[].operator` | string | no       | -       | Operator symbol. Values: `*`, `/`, `+`, `-`, `x`, `÷`, `none`.                 | `operator: "x"`                                           |
+| `edges[].label`    | string | no       | -       | Custom label displayed instead of operator.                                    | `label: "per unit"`                                       |
+| `edges[].style`    | object | no       | -       | Custom edge styling: `color` (string), `width` (number), `dasharray` (string). | `style: { color: "#ff0000", width: 2, dasharray: "5,5" }` |
 
 #### Node object
 
@@ -486,22 +486,21 @@ spec:
 spec:
   nodes:
     - id: roi
-      kind: Label           # see the node kind enum in the table below
+      kind: Label # see the node kind enum in the table below
       spec:
         value: "<strong>ROI</strong><br/>12.5%"
     - id: detail
       kind: Table
-      ref: my_table         # reference to standalone document
+      ref: my_table # reference to standalone document
       spec:
-        limit: 5            # optional override
+        limit: 5 # optional override
 ```
 
-| Property | Type | Required | Default | Description | Sample |
-|----------|------|----------|---------|-------------|--------|
-| `nodes[].id` | string | yes | — | Unique identifier matching `from`/`to` values in edges. | `id: roi` |
-| `nodes[].kind` | string | yes | — | Component type. Values: `Label`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Image`, `LayoutCard`. | `kind: Label` |
-| `nodes[].ref` | string | no | — | Reference to standalone document by name (not supported for Label). | `ref: my_table` |
-| `nodes[].params` | object | no | — | Parameter values (string map) passed to the referenced document. Only valid together with `ref`. | `params: { region: EMEA }` |
-| `nodes[].optional` | boolean | no | `false` | When `true` and the `ref` is missing, the node is skipped gracefully instead of erroring. | `optional: true` |
-| `nodes[].spec` | object | conditional | — | Inline component spec, or overrides for the referenced document. Required if no `ref` is provided. For `Label` see [Label](#label), otherwise the spec of the referenced kind. | see [Node kinds](#node-kinds) |
-
+| Property           | Type    | Required    | Default | Description                                                                                                                                                                    | Sample                        |
+| ------------------ | ------- | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| `nodes[].id`       | string  | yes         | -       | Unique identifier matching `from`/`to` values in edges.                                                                                                                        | `id: roi`                     |
+| `nodes[].kind`     | string  | yes         | -       | Component type. Values: `Label`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Image`, `LayoutCard`.                                  | `kind: Label`                 |
+| `nodes[].ref`      | string  | no          | -       | Reference to standalone document by name (not supported for Label).                                                                                                            | `ref: my_table`               |
+| `nodes[].params`   | object  | no          | -       | Parameter values (string map) passed to the referenced document. Only valid together with `ref`.                                                                               | `params: { region: EMEA }`    |
+| `nodes[].optional` | boolean | no          | `false` | When `true` and the `ref` is missing, the node is skipped gracefully instead of erroring.                                                                                      | `optional: true`              |
+| `nodes[].spec`     | object  | conditional | -       | Inline component spec, or overrides for the referenced document. Required if no `ref` is provided. For `Label` see [Label](#label), otherwise the spec of the referenced kind. | see [Node kinds](#node-kinds) |

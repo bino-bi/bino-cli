@@ -263,7 +263,7 @@ spec:
 		{name: "dotted key with underscore", path: "spec.content.bn-table.there_of", wantLine: 6},
 		{name: "free-form dotted key", path: "spec.content.report.title", wantLine: 7},
 		// A fully resolved path returns the value node, and a mapping value
-		// begins on its first entry's line — pre-existing behavior.
+		// begins on its first entry's line - pre-existing behavior.
 		{name: "the content mapping itself", path: "spec.content", wantLine: 5},
 		{name: "unknown key falls back to the content key", path: "spec.content.bn-table.nope", wantLine: 4},
 		{name: "plain nested path still resolves", path: "spec.code", wantLine: 3},

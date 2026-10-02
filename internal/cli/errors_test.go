@@ -12,7 +12,7 @@ import (
 )
 
 // Regression: FormatError kept only the last two ": "-separated fragments of
-// the message, so a deeply wrapped error lost the outer frames — the ones
+// the message, so a deeply wrapped error lost the outer frames - the ones
 // naming the artefact and dataset the user can actually act on.
 func TestFormatErrorKeepsAllFrames(t *testing.T) {
 	InitStyle(true)

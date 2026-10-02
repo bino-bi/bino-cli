@@ -22,7 +22,7 @@ func (f *failingBackend) Index(context.Context) ([]IndexDoc, error) {
 }
 
 // Regression: schema/index fetch failures were logged at Debug, which an
-// editor-spawned server (no --verbose) never shows — completion silently
+// editor-spawned server (no --verbose) never shows - completion silently
 // returned nothing with no trail. They must be visible without verbose.
 func TestSchemaAndIndexFailuresLoggedWithoutVerbose(t *testing.T) {
 	var out, errOut bytes.Buffer

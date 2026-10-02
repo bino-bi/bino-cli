@@ -33,7 +33,7 @@ Found a bug or running into unexpected behavior? Please let us know by opening a
 
 ## Commercial Support & Licensing
 
-BinoBI CLI is available under the AGPL-3.0, which permits all use — including commercial and SaaS — as long as you comply with its terms (notably, sharing modifications with your users). If you need AGPL-free licensing terms or enterprise support, we offer commercial options.
+BinoBI CLI is available under the AGPL-3.0, which permits all use - including commercial and SaaS - as long as you comply with its terms (notably, sharing modifications with your users). If you need AGPL-free licensing terms or enterprise support, we offer commercial options.
 
 Please contact us at [sven@bino.bi](mailto:sven@bino.bi) to:
 

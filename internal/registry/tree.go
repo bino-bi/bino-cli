@@ -83,7 +83,7 @@ var resourceExts = []string{".png", ".jpg", ".jpeg", ".webp", ".gif", ".csv", ".
 
 // FileTypeForPath derives a file's type the way the server does: from the
 // extension alone. A .yaml file that does not parse as a bino manifest is
-// still a document — the server recomputes this and rejects a manifest entry
+// still a document - the server recomputes this and rejects a manifest entry
 // that disagrees, so content-based classification would be a 400.
 func FileTypeForPath(p string) string {
 	ext := strings.ToLower(path.Ext(p))
@@ -158,7 +158,7 @@ func SplitDocuments(raw []byte) ([][]byte, error) {
 // documents: every element of the "---" stream is canonicalized on its own
 // (registrydigest.Canonicalize rejects multi-document input) and the canonical
 // objects are joined into "[a,b,c]" in stream order. That join IS the
-// canonical JSON array, so it is hashed verbatim — never over a re-parse of
+// canonical JSON array, so it is hashed verbatim - never over a re-parse of
 // it. A one-document file is digested as a ONE-ELEMENT ARRAY; it is
 // deliberately not registrydigest.Digest(raw), because the unit is the file,
 // not the document.
@@ -201,8 +201,8 @@ func DocumentDigest(raw []byte) (digest string, docs [][]byte, err error) {
 // Resources are opaque binaries with no canonical form.
 func ResourceDigest(raw []byte) string { return sha256Digest(raw) }
 
-// ManifestDigest returns a version's digest — sha256 over the JCS canonical
-// JSON of the entries sorted by path — plus those canonical bytes. Sorting is
+// ManifestDigest returns a version's digest - sha256 over the JCS canonical
+// JSON of the entries sorted by path - plus those canonical bytes. Sorting is
 // by path only, over a copy, so the caller's slice keeps its order and
 // shuffling the manifest cannot change the digest.
 func ManifestDigest(entries []FileEntry) (digest string, canonical []byte, err error) {
@@ -224,8 +224,8 @@ func ManifestDigest(entries []FileEntry) (digest string, canonical []byte, err e
 // VerifyFile recomputes a downloaded file's digest and compares it with the
 // one the lock (or the resolve response) pins. format selects the document
 // rule: a tree's documents are digested as a canonical JSON array, while a v1
-// document — which the server also serves through the v2 file route, as a
-// one-file tree — keeps the single-document digest it was published with.
+// document - which the server also serves through the v2 file route, as a
+// one-file tree - keeps the single-document digest it was published with.
 // The rule is never guessed: trying both would give a hostile server two
 // chances to satisfy one check.
 func VerifyFile(format, fileType string, body []byte, want string) error {

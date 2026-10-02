@@ -57,7 +57,7 @@ func (d *Document) positionFor(line, col int) protocol.Position {
 }
 
 // rangeToProtocolIn converts a rune-column spec.Range against arbitrary source
-// text — for ranges targeting files that are not the current buffer (the name
+// text - for ranges targeting files that are not the current buffer (the name
 // index's cross-file definitions/references).
 func rangeToProtocolIn(text string, r reportspec.Range) protocol.Range {
 	lines := strings.Split(text, "\n")

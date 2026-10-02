@@ -4,7 +4,7 @@ import "fmt"
 
 // DocumentError locates a loader failure in a manifest file. Editor
 // diagnostic converters unwrap it with errors.As to position squiggles
-// without parsing the error message text — rewording a loader message can
+// without parsing the error message text - rewording a loader message can
 // then never silently downgrade diagnostics to unpositioned.
 //
 // Error() reproduces the exact strings the loader has always emitted

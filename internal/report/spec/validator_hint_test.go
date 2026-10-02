@@ -10,7 +10,7 @@ func TestFriendlyDescription(t *testing.T) {
 		{"got null, want string", "no value provided (expected string)"},
 		{"got null, want array", "no value provided (expected array)"},
 		{"got null, want object", "no value provided (expected object)"},
-		// Everything else passes through verbatim — downstream parsers depend on it.
+		// Everything else passes through verbatim - downstream parsers depend on it.
 		{"missing property 'spec'", "missing property 'spec'"},
 		{"got number, want string", "got number, want string"},
 		{"additional properties 'foo' not allowed", "additional properties 'foo' not allowed"},

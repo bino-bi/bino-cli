@@ -94,7 +94,7 @@ func TestChartBullet_AutoDetectOmitsAttrs(t *testing.T) {
 		t.Fatalf("ComponentFromSpec failed: %v", err)
 	}
 
-	// Omitted actual/target auto-detect in the engine — no attributes emitted.
+	// Omitted actual/target auto-detect in the engine - no attributes emitted.
 	for _, absent := range []string{"actual=", "target="} {
 		if strings.Contains(html, absent) {
 			t.Errorf("expected no %s attribute, got:\n%s", absent, html)

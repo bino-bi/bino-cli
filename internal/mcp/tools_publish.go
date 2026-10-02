@@ -50,7 +50,7 @@ func (h *handlers) registerPublishTool(srv *mcpsdk.Server) {
 	}
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_publish",
-		Description: "Publish this project's [package] to the registry by running `bino publish --json` — this is IRREVERSIBLE: it mints an immutable version that cannot be deleted, and a first publish with visibility=public makes the package public. Only available because the human started the server with --allow-publish. Use dry_run=true first: the registry runs its validation gate without minting anything. bump (patch|minor|major) is required unless dry_run. Republishing unchanged content succeeds with unchanged=true. When the registry rejects the package, `output` carries its gate findings — fix those, not the local lint. Needs a credential; if none resolves the human must run `bino registry login` (never try to obtain one).",
+		Description: "Publish this project's [package] to the registry by running `bino publish --json` - this is IRREVERSIBLE: it mints an immutable version that cannot be deleted, and a first publish with visibility=public makes the package public. Only available because the human started the server with --allow-publish. Use dry_run=true first: the registry runs its validation gate without minting anything. bump (patch|minor|major) is required unless dry_run. Republishing unchanged content succeeds with unchanged=true. When the registry rejects the package, `output` carries its gate findings - fix those, not the local lint. Needs a credential; if none resolves the human must run `bino registry login` (never try to obtain one).",
 	}, h.runPublish)
 }
 

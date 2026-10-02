@@ -1,7 +1,7 @@
 // Package embed is the single source of truth for which manifest kinds render
-// standalone as a component — i.e. can be shown on their own (the preview's
+// standalone as a component - i.e. can be shown on their own (the preview's
 // /__embedding endpoint, the designer's live canvas, the bino://kinds
-// `embeddable` flag) — and for each built-in kind's capability category. Keeping
+// `embeddable` flag) - and for each built-in kind's capability category. Keeping
 // these here, free of render/pipeline/plugin imports, lets the preview
 // rebuilder, the MCP server, the daemon `/kinds` endpoint, and `lsp-helper
 // kinds` all read one authority instead of maintaining divergent copies. The

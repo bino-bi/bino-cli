@@ -40,7 +40,7 @@ type Deps struct {
 	// broadcast the registry-changed SSE event to editors; standalone leaves it nil.
 	RegistryChanged func()
 	// AllowPublish, when true, enables registry_publish, which mints an
-	// immutable — possibly public — version on the registry. Off by default;
+	// immutable - possibly public - version on the registry. Off by default;
 	// only the human's `bino mcp --allow-publish` / `bino daemon
 	// --mcp-allow-publish` flag sets it.
 	AllowPublish bool
@@ -77,7 +77,7 @@ write_manifest -> build. bino's schema and validation are your guardrails.`
 func NewServer(deps Deps) *mcpsdk.Server {
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "bino",
-		Title:   "bino — Report-as-Code",
+		Title:   "bino - Report-as-Code",
 		Version: version.Version,
 	}, &mcpsdk.ServerOptions{
 		Instructions: serverInstructions,
@@ -309,7 +309,7 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_kind",
-		Description: "Full spec JSON Schema for one manifest kind (self-contained, with $defs). Large — up to ~20k tokens for layout kinds. Prefer outline_kind first and scaffold_kind to start a document; use this only for a shape the outline leaves ambiguous.",
+		Description: "Full spec JSON Schema for one manifest kind (self-contained, with $defs). Large - up to ~20k tokens for layout kinds. Prefer outline_kind first and scaffold_kind to start a document; use this only for a shape the outline leaves ambiguous.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in describeKindInput) (*mcpsdk.CallToolResult, describeKindOutput, error) {
 		raw, ok, err := h.specSchemaForKind(ctx, in.Kind)
 		if err != nil {

@@ -14,8 +14,8 @@ const MAX_RETRIES = 3;
  * manifest.
  *
  * The DOM alone already gives geometry, so this deliberately does not compete
- * with browser devtools. It shows what only the engine knows — resolved
- * auto-scaling, the font auto-fit factor, data reachability and diagnostics —
+ * with browser devtools. It shows what only the engine knows - resolved
+ * auto-scaling, the font auto-fit factor, data reachability and diagnostics -
  * and the findings the CLI derives from them.
  */
 class BinoInspector extends LitElement {
@@ -307,7 +307,7 @@ class BinoInspector extends LitElement {
       return html`
         <p class="notice">
           This template engine does not expose layout state. The inspector needs
-          <code>bn-template-engine v1.0.0-next.24</code> or newer — pin it with
+          <code>bn-template-engine v1.0.0-next.24</code> or newer - pin it with
           <code>engine-version</code> in <code>bino.toml</code>.
         </p>
       `;
@@ -350,7 +350,7 @@ class BinoInspector extends LitElement {
     return html`
       <li class="finding ${finding.severity === 'error' ? 'error' : ''}"
         @click=${() => this._select(finding.componentId)}>
-        <span class="finding-label">${label}</span> — ${finding.message}
+        <span class="finding-label">${label}</span> - ${finding.message}
         ${finding.hint ? html`<span class="finding-hint">${finding.hint}</span>` : nothing}
       </li>
     `;

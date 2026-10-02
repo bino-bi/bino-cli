@@ -18,7 +18,7 @@ function chosenScenarios(spec: Record<string, unknown> | undefined): string[] {
 /**
  * The variance widget: a row builder over the grammar `d|dr_B_A_sentiment`. Each
  * row picks the prefix (absolute/relative), a base and compare slot constrained
- * to the component's chosen `scenarios`, and a sentiment — with a live preview of
+ * to the component's chosen `scenarios`, and a sentiment - with a live preview of
  * the token and its decoded meaning. Emits an array of tokens (or the raw-JSON
  * tab, which the authoring edit re-validates).
  */
@@ -37,7 +37,7 @@ export const varianceWidget: DesignerWidget<VarianceValue> = {
         const structured = `
             <div class="dw-rows" data-dw-role="rows" data-slots="${jsonAttr(slotChoices)}" data-sentiments="${jsonAttr(SENTIMENTS)}">${rows}</div>
             <button type="button" class="dw-add" data-dw-role="add-row">+ variance</button>
-            ${slots.length === 0 ? '<div class="dw-warn">No scenario slots chosen — pick scenarios first, or use JSON.</div>' : ''}`;
+            ${slots.length === 0 ? '<div class="dw-warn">No scenario slots chosen - pick scenarios first, or use JSON.</div>' : ''}`;
 
         return { html: widgetShell({ kind: 'variance', value, structuredHtml: structured }) };
     },
@@ -54,7 +54,7 @@ function renderRow(token: string, slots: readonly string[]): string {
 
     const slotOpts = (sel: string) =>
         slots.map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}</option>`).join('') ||
-        `<option value="${esc(sel)}" selected>${esc(sel || '—')}</option>`;
+        `<option value="${esc(sel)}" selected>${esc(sel || '-')}</option>`;
     const sentOpts = SENTIMENTS.map(s => `<option value="${esc(s)}"${s === sentiment ? ' selected' : ''}>${esc(s)}</option>`).join('');
 
     return `<div class="dw-row" data-dw-role="row">

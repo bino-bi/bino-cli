@@ -228,7 +228,7 @@ func TestCollect_YAMLSyntaxPositioned(t *testing.T) {
 }
 
 // TestCollect_NeverNil: a bundle with nothing to report must yield an empty,
-// non-nil slice — callers serialize it directly and [] vs null is contract.
+// non-nil slice - callers serialize it directly and [] vs null is contract.
 func TestCollect_NeverNil(t *testing.T) {
 	dir := t.TempDir()
 	report := `apiVersion: bino.bi/v1alpha1
@@ -413,7 +413,7 @@ func TestCollect_LintConfigSeverity(t *testing.T) {
 
 // TestCollect_LintConfigDisablesSchemaValidation: disable removes a finding
 // from every report, the editor's included, so a disabled schema-validation
-// stops squiggling. It does not repair the bundle —
+// stops squiggling. It does not repair the bundle -
 // TestLintCommand_DisableSchemaValidationStaysFatal (internal/cli) pins that
 // `bino lint` still exits non-zero on the same project.
 func TestCollect_LintConfigDisablesSchemaValidation(t *testing.T) {

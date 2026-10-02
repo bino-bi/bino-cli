@@ -50,8 +50,8 @@ func TestRegistryAddRejectsMaliciousResourceName(t *testing.T) {
 			}
 
 			// Simulate where a naive (unsafe) implementation would have
-			// written this resource — joined straight onto the package
-			// dir with no containment check — and confirm nothing landed
+			// written this resource - joined straight onto the package
+			// dir with no containment check - and confirm nothing landed
 			// there, whether inside or outside the project directory.
 			naive := filepath.Clean(filepath.Join(dir, ".bino", "registry", "acme", "revenue", name))
 			sep := string(filepath.Separator)

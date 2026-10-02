@@ -33,7 +33,7 @@ func writeServeRaceFixture(t *testing.T) string {
 
 	files := map[string]string{
 		// The ${REGION} variable lands in the DATASOURCE content, i.e. in the
-		// shared session's view definition for "revenue_data" — the exact
+		// shared session's view definition for "revenue_data" - the exact
 		// cross-request collision surface of Gap #2. ephemeral: true plus the
 		// declared dependency below force the dataset cache to be skipped, so
 		// every request re-creates the view and re-executes the query.

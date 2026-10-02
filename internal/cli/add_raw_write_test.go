@@ -12,7 +12,7 @@ import (
 )
 
 // Regression: the parameterized LayoutPage/ReportArtefact write paths were
-// the only wizard paths that skipped ValidateName and schema.Validate — an
+// the only wizard paths that skipped ValidateName and schema.Validate - an
 // invalid manifest landed on disk and surfaced later as a build error in a
 // file the user did not write.
 

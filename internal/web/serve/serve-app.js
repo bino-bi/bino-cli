@@ -16,7 +16,7 @@ var initialContextBase64 = config.initialContextBase64 || '';
  *
  * The shell owns the responsive state: >=1024px the panel is pinned in-flow
  * (collapsible), below that it becomes an off-canvas drawer with a scrim.
- * The document never scrolls — #outlet owns all report scrolling.
+ * The document never scrolls - #outlet owns all report scrolling.
  */
 class BinoServeShell extends LitElement {
   static properties = {

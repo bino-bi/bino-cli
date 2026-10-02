@@ -2,7 +2,7 @@ apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
   name: welcome-page
-  description: Narrative page bound to the inline DataSet. Not part of the report artefact — open it with 'bino preview'.
+  description: Narrative page bound to the inline DataSet. Not part of the report artefact - open it with 'bino preview'.
 spec:
   children:
     - kind: Text
@@ -16,7 +16,7 @@ apiVersion: bino.bi/v1alpha1
 kind: LayoutPage
 metadata:
   name: {{ .LayoutName }}
-  description: The page rendered by the report artefact — an IBCS table over the CSV data.
+  description: The page rendered by the report artefact - an IBCS table over the CSV data.
 spec:
   i18nNamespace: global
   children:

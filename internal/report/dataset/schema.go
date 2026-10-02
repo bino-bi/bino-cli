@@ -8,7 +8,7 @@ const (
 	ColumnString ColumnKind = "string"
 )
 
-// StandardColumn describes one column of the canonical dataset schema — the
+// StandardColumn describes one column of the canonical dataset schema - the
 // structure charts and tables understand (scenarios, dimensions, metadata).
 type StandardColumn struct {
 	Name string `json:"name"`
@@ -17,7 +17,7 @@ type StandardColumn struct {
 	// Group buckets the column for presentation: Measures, Dimensions, Metadata.
 	Group string `json:"group"`
 	// Pair, when set, names the partner column that must accompany this one (and
-	// vice versa) — e.g. category <-> categoryIndex.
+	// vice versa) - e.g. category <-> categoryIndex.
 	Pair string `json:"pair,omitempty"`
 }
 

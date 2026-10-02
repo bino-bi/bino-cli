@@ -40,7 +40,7 @@ type PreviewResult struct {
 
 // PreviewDataSet registers a draft DataSource as a view named req.SourceName on
 // the session, then runs req.SQL against it and returns a sample of the result.
-// Like Probe, it never touches the shared session — the caller passes a fresh,
+// Like Probe, it never touches the shared session - the caller passes a fresh,
 // ephemeral session so the preview cannot pollute live state.
 func PreviewDataSet(ctx context.Context, session *duckdb.Session, req PreviewRequest) (*PreviewResult, error) {
 	limit := req.Limit

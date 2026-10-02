@@ -16,7 +16,7 @@ import (
 
 // TestRefRendererWithContext_SourceAttrs proves resolved :ref components
 // carry the data-bino-* attributes the preview's search, inspector, and
-// cmd/ctrl-click reveal-source key on — and that unresolved refs carry none.
+// cmd/ctrl-click reveal-source key on - and that unresolved refs carry none.
 func TestRefRendererWithContext_SourceAttrs(t *testing.T) {
 	t.Parallel()
 

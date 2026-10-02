@@ -185,7 +185,7 @@ func TestManifestDigestMatchesServerGolden(t *testing.T) {
 }
 
 // The digest is over the path-sorted manifest, so the order the caller
-// assembled it in cannot change the version identity — and the caller's slice
+// assembled it in cannot change the version identity - and the caller's slice
 // must come back untouched.
 func TestManifestDigestIgnoresEntryOrder(t *testing.T) {
 	shuffled := []FileEntry{manifestEntries[2], manifestEntries[0], manifestEntries[3], manifestEntries[1]}
@@ -212,7 +212,7 @@ func TestManifestDigestOfEmptySetIsNotNull(t *testing.T) {
 }
 
 func TestResourceDigestIsRawSHA256(t *testing.T) {
-	// sha256("") — a resource has no canonical form, so the raw bytes are the digest.
+	// sha256("") - a resource has no canonical form, so the raw bytes are the digest.
 	const want = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	if got := ResourceDigest(nil); got != want {
 		t.Errorf("digest = %s, want %s", got, want)

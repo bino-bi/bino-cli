@@ -100,7 +100,7 @@ func newLSPCommand() *cobra.Command {
 		Hidden: true,
 		// Every subcommand prints machine-consumed JSON on stdout. The root
 		// PersistentPreRunE routes all logging to stderr for commands carrying
-		// this annotation, mirroring `bino lsp` and `bino mcp` — a stray Info
+		// this annotation, mirroring `bino lsp` and `bino mcp` - a stray Info
 		// line on stdout breaks the extension's JSON.parse.
 		Annotations: map[string]string{annotationStdoutIsData: "true"},
 	}
@@ -287,7 +287,7 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 	}
 
 	// Load plugins if declared, best-effort. lsp-helper emits pure JSON on
-	// stdout, so the plugin manager gets a stderr-only logger — its Infof
+	// stdout, so the plugin manager gets a stderr-only logger - its Infof
 	// lines must not corrupt the stream.
 	projectCfg, cfgErr := pathutil.LoadProjectConfig(dir)
 	if cfgErr == nil && len(projectCfg.Plugins) > 0 {

@@ -108,7 +108,7 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 }
 
 // quoteAtValueAction offers to quote an unquoted `@...` value on the cursor
-// line — a YAML parse error (`@` is a reserved indicator) that every hand-typed
+// line - a YAML parse error (`@` is a reserved indicator) that every hand-typed
 // registry ref hits.
 func (s *Server) quoteAtValueAction(u uri.URI, rng protocol.Range) *protocol.CodeAction {
 	doc, ok := s.docs.Get(u)

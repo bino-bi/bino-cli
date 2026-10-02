@@ -190,7 +190,7 @@ func (a *cliAuthoring) ScaffoldSource(ctx context.Context, payload json.RawMessa
 // Unlike the `bino init` CLI (which a human runs in their shell and which
 // defaults to a ./rainbow-report subfolder), the agent-facing tool scaffolds in
 // place at the project root by default, and resolves a relative directory
-// against the project root rather than the process working directory — so it
+// against the project root rather than the process working directory - so it
 // stays consistent with the other authoring tools regardless of the server's cwd.
 //
 // A bare call (no source) renders the built-in minimal scaffold with zero

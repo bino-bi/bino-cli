@@ -60,10 +60,30 @@ spec:
   type: inline
   inline:
     content:
-      - { period: "Q4-2024", category: "Revenue", amount: 12500000, currency: "EUR" }
-      - { period: "Q4-2024", category: "COGS", amount: 7800000, currency: "EUR" }
-      - { period: "Q4-2024", category: "OpEx", amount: 2100000, currency: "EUR" }
-      - { period: "Q4-2024", category: "EBIT", amount: 2600000, currency: "EUR" }
+      - {
+          period: "Q4-2024",
+          category: "Revenue",
+          amount: 12500000,
+          currency: "EUR",
+        }
+      - {
+          period: "Q4-2024",
+          category: "COGS",
+          amount: 7800000,
+          currency: "EUR",
+        }
+      - {
+          period: "Q4-2024",
+          category: "OpEx",
+          amount: 2100000,
+          currency: "EUR",
+        }
+      - {
+          period: "Q4-2024",
+          category: "EBIT",
+          amount: 2600000,
+          currency: "EUR",
+        }
 ---
 # Production: Postgres data warehouse
 apiVersion: bino.bi/v1alpha1
@@ -141,7 +161,7 @@ spec:
     FROM adjusted_financials
 ```
 
-## Layout pages — A4 portrait
+## Layout pages - A4 portrait
 
 ```yaml
 # manifests/pages.yaml
@@ -155,7 +175,7 @@ spec:
   pageLayout: full
   pageFormat: a4
   pageOrientation: portrait
-  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerText: "CONFIDENTIAL - ${REPORT_PERIOD}"
   footerDisplayPageNumber: false
   children:
     - kind: Text
@@ -178,7 +198,7 @@ spec:
   pageLayout: split-vertical
   pageFormat: a4
   pageOrientation: portrait
-  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerText: "CONFIDENTIAL - ${REPORT_PERIOD}"
   footerDisplayPageNumber: true
   children:
     - kind: Table
@@ -198,7 +218,7 @@ spec:
   pageLayout: full
   pageFormat: a4
   pageOrientation: portrait
-  footerText: "CONFIDENTIAL — ${REPORT_PERIOD}"
+  footerText: "CONFIDENTIAL - ${REPORT_PERIOD}"
   footerDisplayPageNumber: true
   children:
     - kind: Table
@@ -207,7 +227,11 @@ spec:
         type: list
 ```
 
-<img src={textImg.src} alt="A compliance report page with text content and financial summary" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={textImg.src}
+  alt="A compliance report page with text content and financial summary"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Report artefact with digital signing
 
@@ -243,7 +267,7 @@ spec:
     - compliance-financials
     - compliance-adjustments
   filename: "compliance-${REPORT_PERIOD}.pdf"
-  title: "Quarterly Compliance Report — ${REPORT_PERIOD}"
+  title: "Quarterly Compliance Report - ${REPORT_PERIOD}"
   subject: "Regulatory quarterly filing"
   author: "Group Compliance"
   keywords: ["compliance", "quarterly", "regulatory"]
@@ -253,16 +277,16 @@ spec:
 ## Development vs. production builds
 
 ```bash
-# Development — uses inline mock data
+# Development - uses inline mock data
 REPORT_ENV=dev REPORT_PERIOD=Q4-2024 REPORT_DATE=2025-01-15 bino build
 
-# Production — uses real database
+# Production - uses real database
 REPORT_ENV=prod REPORT_PERIOD=Q4-2024 REPORT_DATE=2025-01-15 \
   DWH_HOST=dwh.internal DWH_PASSWORD=secret \
   bino build --out-dir dist/
 ```
 
-The `labels.env` on the `ReportArtefact` activates the matching `DataSource` constraint. Development builds use inline data; production builds hit the data warehouse — same manifests, same layout, different data.
+The `labels.env` on the `ReportArtefact` activates the matching `DataSource` constraint. Development builds use inline data; production builds hit the data warehouse - same manifests, same layout, different data.
 
 ## Build logs for audit trail
 
@@ -275,7 +299,9 @@ bino build --verbose --log-sql 2>&1 | tee "build-log-${REPORT_PERIOD}.txt"
 The log records which data sources were loaded, which queries ran, and how long each step took. Store it alongside the PDF for audit purposes.
 
 <Aside type="caution">
-Keep private keys (`compliance-key.pem`) out of Git. Store them as CI secrets or in a secure vault. Only the certificate (`compliance-cert.pem`) needs to be in the repository.
+  Keep private keys (`compliance-key.pem`) out of Git. Store them as CI secrets
+  or in a secure vault. Only the certificate (`compliance-cert.pem`) needs to be
+  in the repository.
 </Aside>
 
 ---

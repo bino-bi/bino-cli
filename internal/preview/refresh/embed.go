@@ -123,7 +123,7 @@ func resolveEmbedTarget(name, kind string, artefacts []config.Artifact, docArts 
 }
 
 // EmbedByName resolves a name (optionally disambiguated by kind) and renders the
-// matching document as standalone HTML — equivalent to what `bino build` feeds
+// matching document as standalone HTML - equivalent to what `bino build` feeds
 // to Chrome. Supported kinds are ReportArtefact, DocumentArtefact, LayoutPage
 // and the standalone component kinds; LayoutPages and components are rendered by
 // synthesizing a one-page artefact. When kind is empty the lookup falls back to
@@ -142,7 +142,7 @@ func resolveEmbedTarget(name, kind string, artefacts []config.Artifact, docArts 
 //     reset on every refresh.
 //   - Override path (one or more live overrides set): performs a FRESH lenient
 //     load with the buffer overlay, resolves from THOSE docs, renders only the
-//     requested target, and bypasses embeddingCache entirely — so the previewed
+//     requested target, and bypasses embeddingCache entirely - so the previewed
 //     component reflects unsaved editor edits without a disk write or a full
 //     report refresh.
 func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mutex, state *State, cfg *Config, server *httpserver.Server) ([]byte, error) {
@@ -248,7 +248,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 	switch {
 	case target.reportArt != nil:
 		// resolveEmbedTarget's pointers alias into state.artefacts, so the
-		// language override goes on a copy — writing through would poison the
+		// language override goes on a copy - writing through would poison the
 		// shared refresh snapshot for every later render.
 		art := *target.reportArt
 		if language != "" {

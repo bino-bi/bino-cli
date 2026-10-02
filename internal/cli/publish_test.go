@@ -286,7 +286,7 @@ func TestPublishRefusesCredentialsAndUnpublishableFiles(t *testing.T) {
 		},
 		{
 			// The kind check only sees YAML, so the directory itself has to
-			// be the marker — secrets/ is in the default include set.
+			// be the marker - secrets/ is in the default include set.
 			name:  "a non-YAML file under secrets/",
 			files: map[string]string{"secrets/keys.csv": "user,token\na,b\n"},
 			want:  "credentials",
@@ -333,7 +333,7 @@ func TestPublishRefusesASymlink(t *testing.T) {
 }
 
 // Visibility only takes effect when a package is created, and the registry
-// rejects a value that differs from an existing package's — so it must not be
+// rejects a value that differs from an existing package's - so it must not be
 // sent for a package that already exists.
 func TestPublishOmitsVisibilityForAnExistingPackage(t *testing.T) {
 	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {

@@ -186,7 +186,7 @@ func detachUserDatabases(ctx context.Context, db *sql.DB) error {
 
 	for _, name := range names {
 		if _, err := db.ExecContext(ctx, fmt.Sprintf("DETACH %s", name)); err != nil {
-			// Log but continue — some databases may fail to detach
+			// Log but continue - some databases may fail to detach
 			continue
 		}
 	}

@@ -75,16 +75,16 @@ spec:
 When the default auto-detection does not produce the right result, add CSV reader options to `spec`.
 Any option that is set switches bino from `read_csv_auto` to `read_csv` with explicit parameters.
 
-| Field | Type | DuckDB parameter | Description |
-|---|---|---|---|
-| `delimiter` | string | `delim` | Field delimiter character (for example `";"` or `"\|"`). |
-| `header` | boolean | `header` | Whether the first row defines column names. Default `true`. |
-| `skipRows` | integer | `skip` | Number of lines to skip before reading data. |
-| `thousands` | string | `thousands` | Thousands separator in numeric values (for example `"."`). |
-| `decimalSeparator` | string | `decimal_separator` | Decimal point character (for example `","`). |
-| `dateFormat` | string | `dateformat` | Date format using DuckDB strftime specifiers (for example `"%d/%m/%Y"`). |
-| `columns` | object | `columns` | Map of column name to DuckDB type. Mutually exclusive with `columnNames`. |
-| `columnNames` | string[] | `names` | Explicit column names. Mutually exclusive with `columns`. |
+| Field              | Type     | DuckDB parameter    | Description                                                               |
+| ------------------ | -------- | ------------------- | ------------------------------------------------------------------------- |
+| `delimiter`        | string   | `delim`             | Field delimiter character (for example `";"` or `"\|"`).                  |
+| `header`           | boolean  | `header`            | Whether the first row defines column names. Default `true`.               |
+| `skipRows`         | integer  | `skip`              | Number of lines to skip before reading data.                              |
+| `thousands`        | string   | `thousands`         | Thousands separator in numeric values (for example `"."`).                |
+| `decimalSeparator` | string   | `decimal_separator` | Decimal point character (for example `","`).                              |
+| `dateFormat`       | string   | `dateformat`        | Date format using DuckDB strftime specifiers (for example `"%d/%m/%Y"`).  |
+| `columns`          | object   | `columns`           | Map of column name to DuckDB type. Mutually exclusive with `columnNames`. |
+| `columnNames`      | string[] | `names`             | Explicit column names. Mutually exclusive with `columns`.                 |
 
 ### European number format
 
@@ -219,11 +219,11 @@ The `sample` property lets you load only a subset of rows from a datasource usin
 
 `sample` accepts three forms:
 
-| Form | Example | DuckDB clause |
-|---|---|---|
-| integer | `sample: 1000` | `USING SAMPLE 1000` |
-| string | `sample: "10%"` | `USING SAMPLE 10%` |
-| object | `sample: { size: 1000, method: reservoir }` | `USING SAMPLE 1000 (reservoir)` |
+| Form    | Example                                     | DuckDB clause                   |
+| ------- | ------------------------------------------- | ------------------------------- |
+| integer | `sample: 1000`                              | `USING SAMPLE 1000`             |
+| string  | `sample: "10%"`                             | `USING SAMPLE 10%`              |
+| object  | `sample: { size: 1000, method: reservoir }` | `USING SAMPLE 1000 (reservoir)` |
 
 ### Sampling methods
 
@@ -303,6 +303,7 @@ spec:
   type: parquet
   path: ./warehouse/fact_sales/*.parquet
   sample: "5%"
+
 
 # Production: full dataset
 ---
@@ -469,8 +470,8 @@ You can combine inline definitions with references to standalone DataSource docu
 ```yaml
 spec:
   dependencies:
-    - existing_datasource     # Named reference
-    - type: csv               # Inline definition
+    - existing_datasource # Named reference
+    - type: csv # Inline definition
       path: ./data/extra.csv
   query: |
     SELECT * FROM existing_datasource
@@ -486,46 +487,46 @@ For more details on inline definitions and the `@inline(N)` syntax, see [DataSet
 
 All document kinds share these metadata fields.
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `DataSource`. |
-| `metadata.name` | string | yes | — | Unique identifier and name of the created view. Must match the `sqlIdentifier` pattern: a lowercase SQL identifier such as `sales_daily`, or a registry identity such as `@acme/revenue-table`. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                                                                                                                                     |
+| ---------------------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                                                                                                                                     |
+| `kind`                 | string | yes      | -       | Must be `DataSource`.                                                                                                                                                                           |
+| `metadata.name`        | string | yes      | -       | Unique identifier and name of the created view. Must match the `sqlIdentifier` pattern: a lowercase SQL identifier such as `sales_daily`, or a registry identity such as `@acme/revenue-table`. |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                                                                                                                                     |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                                                                                                                           |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                                                                                                                          |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/).                                                                                                        |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.type` | string | yes | — | Data source type. Values: `inline`, `excel`, `csv`, `parquet`, `postgres_query`, `mysql_query`. | `type: csv` |
-| `spec.inline` | object | conditional | — | Inline data container holding a single `content` property. Required when `type: inline` and `spec.content` is not set. | see below |
-| `spec.inline.content` | array or string | yes | — | Inline rows as a YAML array of objects, or a JSON array encoded as a string. Required inside `spec.inline`. | see below |
-| `spec.content` | array or string | conditional | — | Inline data as a YAML array of objects or a JSON array encoded as a string. Required when `type: inline` and `spec.inline` is not set. | see below |
-| `spec.path` | string | conditional | — | File path, directory, glob pattern, or URL. Required when type is `excel`, `csv`, or `parquet`. | `path: ./data/*.csv` |
-| `spec.sheet` | string | no | first sheet | Worksheet name to read for `type: excel`. When omitted, the first worksheet is used. | `sheet: "Q1 2024"` |
-| `spec.connection` | object | conditional | — | Database connection details (no credentials). Required when type is `postgres_query` or `mysql_query`. | see below |
-| `spec.connection.host` | string | yes | — | Database server hostname or IP address. Required inside `spec.connection`. | `host: db.example.com` |
-| `spec.connection.port` | integer | yes | — | Database server port, 1–65535. Required inside `spec.connection`. | `port: 5432` |
-| `spec.connection.database` | string | yes | — | Name of the database to connect to. Required inside `spec.connection`. | `database: analytics` |
-| `spec.connection.user` | string | yes | — | Username for database authentication. Required inside `spec.connection`. | `user: reporting` |
-| `spec.connection.schema` | string | no | `public` (PostgreSQL) | Database schema name. | `schema: public` |
-| `spec.connection.secret` | string | no | — | Name of a [`ConnectionSecret`](/reference/connection-secret/) that holds the password. Its type must match the datasource type. | `secret: postgresCredentials` |
-| `spec.query` | string | conditional | — | SQL query executed against the remote database; its result populates the view. Required when type is `postgres_query` or `mysql_query`. | `query: SELECT * FROM sales` |
-| `spec.ephemeral` | boolean | no | derived from the source type | Controls caching between builds. When unset, database queries and remote URLs count as changing, inline content and in-project files as stable. Set to `false` to cache a remote or database source. | `ephemeral: false` |
-| `spec.sample` | integer, string, or object | no | — | Row sampling via DuckDB `USING SAMPLE`. An integer (≥ 1) samples rows, a string samples a percentage (`"10%"`), an object also picks the method. | `sample: 1000` |
-| `spec.sample.size` | integer or string | yes | — | Number of rows (integer ≥ 1) or percentage (`"10%"`) to sample. Required inside the object form. | `size: 10000` |
-| `spec.sample.method` | string | no | DuckDB default (`system` for percentages, `reservoir` for row counts) | Sampling method. Values: `bernoulli`, `reservoir`, `system`. | `method: reservoir` |
-| `spec.delimiter` | string | no | auto | CSV field delimiter (max 4 chars). | `delimiter: ";"` |
-| `spec.header` | boolean | no | `true` | Whether the first row defines column names (CSV only). | `header: false` |
-| `spec.skipRows` | integer | no | `0` | Number of lines to skip before reading data (minimum `0`). | `skipRows: 2` |
-| `spec.thousands` | string | no | — | Thousands separator in numeric values (max 1 char). | `thousands: "."` |
-| `spec.decimalSeparator` | string | no | — | Decimal point character (max 1 char). | `decimalSeparator: ","` |
-| `spec.dateFormat` | string | no | — | Date format using DuckDB strftime specifiers. | `dateFormat: "%d/%m/%Y"` |
-| `spec.columnNames` | string[] | no | — | Explicit column names, at least one. For `type: csv` mutually exclusive with `columns`. | `columnNames: [date, region, amount]` |
-| `spec.columns` | object | no | — | Column name to DuckDB type mapping. For `type: csv` mutually exclusive with `columnNames`. | see below |
+| Attribute                  | Type                       | Required    | Default                                                               | Description                                                                                                                                                                                          | Sample                                |
+| -------------------------- | -------------------------- | ----------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `spec.type`                | string                     | yes         | -                                                                     | Data source type. Values: `inline`, `excel`, `csv`, `parquet`, `postgres_query`, `mysql_query`.                                                                                                      | `type: csv`                           |
+| `spec.inline`              | object                     | conditional | -                                                                     | Inline data container holding a single `content` property. Required when `type: inline` and `spec.content` is not set.                                                                               | see below                             |
+| `spec.inline.content`      | array or string            | yes         | -                                                                     | Inline rows as a YAML array of objects, or a JSON array encoded as a string. Required inside `spec.inline`.                                                                                          | see below                             |
+| `spec.content`             | array or string            | conditional | -                                                                     | Inline data as a YAML array of objects or a JSON array encoded as a string. Required when `type: inline` and `spec.inline` is not set.                                                               | see below                             |
+| `spec.path`                | string                     | conditional | -                                                                     | File path, directory, glob pattern, or URL. Required when type is `excel`, `csv`, or `parquet`.                                                                                                      | `path: ./data/*.csv`                  |
+| `spec.sheet`               | string                     | no          | first sheet                                                           | Worksheet name to read for `type: excel`. When omitted, the first worksheet is used.                                                                                                                 | `sheet: "Q1 2024"`                    |
+| `spec.connection`          | object                     | conditional | -                                                                     | Database connection details (no credentials). Required when type is `postgres_query` or `mysql_query`.                                                                                               | see below                             |
+| `spec.connection.host`     | string                     | yes         | -                                                                     | Database server hostname or IP address. Required inside `spec.connection`.                                                                                                                           | `host: db.example.com`                |
+| `spec.connection.port`     | integer                    | yes         | -                                                                     | Database server port, 1–65535. Required inside `spec.connection`.                                                                                                                                    | `port: 5432`                          |
+| `spec.connection.database` | string                     | yes         | -                                                                     | Name of the database to connect to. Required inside `spec.connection`.                                                                                                                               | `database: analytics`                 |
+| `spec.connection.user`     | string                     | yes         | -                                                                     | Username for database authentication. Required inside `spec.connection`.                                                                                                                             | `user: reporting`                     |
+| `spec.connection.schema`   | string                     | no          | `public` (PostgreSQL)                                                 | Database schema name.                                                                                                                                                                                | `schema: public`                      |
+| `spec.connection.secret`   | string                     | no          | -                                                                     | Name of a [`ConnectionSecret`](/reference/connection-secret/) that holds the password. Its type must match the datasource type.                                                                      | `secret: postgresCredentials`         |
+| `spec.query`               | string                     | conditional | -                                                                     | SQL query executed against the remote database; its result populates the view. Required when type is `postgres_query` or `mysql_query`.                                                              | `query: SELECT * FROM sales`          |
+| `spec.ephemeral`           | boolean                    | no          | derived from the source type                                          | Controls caching between builds. When unset, database queries and remote URLs count as changing, inline content and in-project files as stable. Set to `false` to cache a remote or database source. | `ephemeral: false`                    |
+| `spec.sample`              | integer, string, or object | no          | -                                                                     | Row sampling via DuckDB `USING SAMPLE`. An integer (≥ 1) samples rows, a string samples a percentage (`"10%"`), an object also picks the method.                                                     | `sample: 1000`                        |
+| `spec.sample.size`         | integer or string          | yes         | -                                                                     | Number of rows (integer ≥ 1) or percentage (`"10%"`) to sample. Required inside the object form.                                                                                                     | `size: 10000`                         |
+| `spec.sample.method`       | string                     | no          | DuckDB default (`system` for percentages, `reservoir` for row counts) | Sampling method. Values: `bernoulli`, `reservoir`, `system`.                                                                                                                                         | `method: reservoir`                   |
+| `spec.delimiter`           | string                     | no          | auto                                                                  | CSV field delimiter (max 4 chars).                                                                                                                                                                   | `delimiter: ";"`                      |
+| `spec.header`              | boolean                    | no          | `true`                                                                | Whether the first row defines column names (CSV only).                                                                                                                                               | `header: false`                       |
+| `spec.skipRows`            | integer                    | no          | `0`                                                                   | Number of lines to skip before reading data (minimum `0`).                                                                                                                                           | `skipRows: 2`                         |
+| `spec.thousands`           | string                     | no          | -                                                                     | Thousands separator in numeric values (max 1 char).                                                                                                                                                  | `thousands: "."`                      |
+| `spec.decimalSeparator`    | string                     | no          | -                                                                     | Decimal point character (max 1 char).                                                                                                                                                                | `decimalSeparator: ","`               |
+| `spec.dateFormat`          | string                     | no          | -                                                                     | Date format using DuckDB strftime specifiers.                                                                                                                                                        | `dateFormat: "%d/%m/%Y"`              |
+| `spec.columnNames`         | string[]                   | no          | -                                                                     | Explicit column names, at least one. For `type: csv` mutually exclusive with `columns`.                                                                                                              | `columnNames: [date, region, amount]` |
+| `spec.columns`             | object                     | no          | -                                                                     | Column name to DuckDB type mapping. For `type: csv` mutually exclusive with `columnNames`.                                                                                                           | see below                             |
 
 #### Inline content
 
@@ -566,6 +567,5 @@ spec:
 spec:
   sample:
     size: 10000
-    method: reservoir  # bernoulli | system | reservoir
+    method: reservoir # bernoulli | system | reservoir
 ```
-

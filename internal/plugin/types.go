@@ -33,7 +33,7 @@ func (c KindCategory) CapabilityCategory() string {
 type KindRegistration struct {
 	KindName       string       // e.g., "SalesforceDataSource"
 	Category       KindCategory // How bino routes this kind
-	DataSourceType string       // Only for KindCategoryDataSource — the spec.type value
+	DataSourceType string       // Only for KindCategoryDataSource - the spec.type value
 	PluginName     string       // Which plugin owns this kind
 }
 

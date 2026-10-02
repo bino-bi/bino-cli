@@ -6,7 +6,7 @@ import "sort"
 // translation bundles (the "_system" namespace), flattened to the dotted key
 // form the engine stores them in.
 //
-// Source of truth: bn-template-engine/src/stores/internationalization.ts —
+// Source of truth: bn-template-engine/src/stores/internationalization.ts -
 // keep this file in sync when the engine's default bundles change.
 // TestDefaultI18nTokensMatchPinnedEngine compares it with the Dockerfile pin.
 var defaultI18nTokens = map[string]map[string]string{

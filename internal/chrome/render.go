@@ -37,7 +37,7 @@ type PDFOptions struct {
 	MarginBottom        string
 	// OnLayoutState, when set, receives a getLayoutState() capture taken after
 	// the page settles and before printing. It is not called when the engine
-	// predates the API or the capture fails — a missing snapshot never fails a
+	// predates the API or the capture fails - a missing snapshot never fails a
 	// build.
 	OnLayoutState func(snapshot []byte)
 }
@@ -121,7 +121,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 			// Custom formats define landscape dimensions (width > height).
 			// Orientation is handled by swapping dimensions rather than using
 			// the Landscape flag, because Chrome swaps Width/Height when
-			// Landscape is set — which would invert the intended orientation.
+			// Landscape is set - which would invert the intended orientation.
 			if strings.EqualFold(opts.Orientation, "portrait") {
 				w, h = h, w
 			}

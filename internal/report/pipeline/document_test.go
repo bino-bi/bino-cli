@@ -50,7 +50,7 @@ func TestTOCFooterTemplate(t *testing.T) {
 	if !strings.Contains(got, `class="date"`) {
 		t.Errorf("tocFooterTemplate() missing date class")
 	}
-	// Roman numerals are stamped by pdfcpu — the Chrome footer must not
+	// Roman numerals are stamped by pdfcpu - the Chrome footer must not
 	// render its own page numbers.
 	if strings.Contains(got, "pageNumber") {
 		t.Errorf("tocFooterTemplate() must not contain a pageNumber span")

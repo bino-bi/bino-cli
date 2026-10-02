@@ -1,4 +1,4 @@
-// Package pipeline — builder.go provides the Builder type that decouples
+// Package pipeline - builder.go provides the Builder type that decouples
 // CLI commands from the internal report orchestration packages (chrome,
 // signing, httpserver). CLI commands create a Builder once with session-level
 // configuration and call its methods instead of importing and orchestrating
@@ -79,7 +79,7 @@ func (b *Builder) logger() logx.Logger {
 }
 
 // ---------------------------------------------------------------------------
-// Render helpers — convenience wrappers that use the Builder's session config
+// Render helpers - convenience wrappers that use the Builder's session config
 // ---------------------------------------------------------------------------
 
 // RenderArtefactHTML generates HTML for a specific ReportArtefact.
@@ -407,7 +407,7 @@ func (b *Builder) SignPDF(ctx context.Context, pdfPath string, profile config.Si
 }
 
 // ---------------------------------------------------------------------------
-// Ephemeral server — internal helper for Builder methods
+// Ephemeral server - internal helper for Builder methods
 // ---------------------------------------------------------------------------
 
 // ephemeralServer is a short-lived HTTP server used to serve rendered HTML

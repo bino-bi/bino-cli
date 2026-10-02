@@ -1,6 +1,6 @@
 /**
  * Shared HTML helpers for the bespoke IBCS widgets. Each widget renders a pure
- * HTML fragment (no inline script — the designer webview's static script wires
+ * HTML fragment (no inline script - the designer webview's static script wires
  * interactions by `data-widget-kind`, so the CSP needs no `unsafe-eval`). These
  * helpers keep the fragments terse and the structured/raw-JSON tab layout uniform.
  */
@@ -72,7 +72,7 @@ export function widgetShell(opts: {
         ${structuredPane}
         <div class="dw-pane dw-pane-raw${rawActive}" data-dw-pane="raw">
             <textarea class="dw-raw" data-dw-role="raw" rows="4" spellcheck="false">${esc(rawText)}</textarea>
-            <div class="dw-raw-hint">JSON for this field — saved as-is and re-validated on write.</div>
+            <div class="dw-raw-hint">JSON for this field - saved as-is and re-validated on write.</div>
         </div>
     </div>`;
 }

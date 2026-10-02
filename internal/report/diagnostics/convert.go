@@ -80,7 +80,7 @@ func FromLoadError(err error) []Diagnostic {
 
 // yamlErrorLine extracts the anchoring line number from a yaml.v3 error tail
 // (the text after "yaml: "). A yaml.TypeError embeds several "line N:"
-// fragments — the first one anchors the diagnostic and the full message is
+// fragments - the first one anchors the diagnostic and the full message is
 // kept; a single-error message ("line N: <msg>") is stripped to <msg>.
 func yamlErrorLine(tail string) (msg string, line int) {
 	msg = tail
@@ -103,7 +103,7 @@ func yamlErrorLine(tail string) (msg string, line int) {
 // parseYAMLSyntaxError destructures a stringified decode failure
 // ("decode <path>: yaml: line N: <msg>", or without a line) into a positioned
 // diagnostic. Splitting on ": yaml: " keeps Windows drive colons in the path
-// intact. Legacy fallback — typed *config.DocumentError decode failures are
+// intact. Legacy fallback - typed *config.DocumentError decode failures are
 // handled in FromLoadError without touching the message text.
 func parseYAMLSyntaxError(errStr string) (Diagnostic, bool) {
 	rest, ok := strings.CutPrefix(errStr, "decode ")

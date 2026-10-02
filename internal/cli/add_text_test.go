@@ -36,7 +36,7 @@ func TestBuildTextDocument(t *testing.T) {
 	})
 
 	// The wizard now always collects a value (bn-text renders only the value
-	// template — a dataset alone produces an empty block), and the write gate
+	// template - a dataset alone produces an empty block), and the write gate
 	// backstops that: a dataset-only Text must never land on disk. If this
 	// starts failing, textSpec no longer requires value.
 	t.Run("dataset-only text is rejected at write time", func(t *testing.T) {

@@ -217,7 +217,7 @@ func TestRunLSPEditComputeDoesNotWrite(t *testing.T) {
 
 // When the IDE supplies the open buffer's `content` (unsaved/dirty edits),
 // compute must derive the rewritten file from that buffer, not from the stale
-// on-disk copy — otherwise a Design edit would clobber the user's unsaved work.
+// on-disk copy - otherwise a Design edit would clobber the user's unsaved work.
 func TestRunLSPEditComputeUsesSuppliedContent(t *testing.T) {
 	dir, manifest := seedEditProject(t)
 	diskBefore, _ := os.ReadFile(manifest)

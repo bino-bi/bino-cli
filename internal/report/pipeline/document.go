@@ -55,7 +55,7 @@ func DefaultDocumentFooterTemplate() string {
 }
 
 // tocFooterTemplate creates the footer template for the TOC PDF.
-// It shows only the date — Roman numeral page numbers are stamped
+// It shows only the date - Roman numeral page numbers are stamped
 // separately by pdfcpu after PDF generation.
 func tocFooterTemplate() string {
 	return `<div style="width: 100%; font-size: 9px; font-family: Arial, sans-serif; padding: 0 10mm; display: flex; justify-content: space-between; color: #666;">
@@ -130,7 +130,7 @@ func (b *Builder) BuildDocumentPDFWithTOC(ctx context.Context, docs []config.Doc
 	}
 
 	tocPDFOpts := opts.PDFOptions
-	// TOC uses a footer without page numbers — Roman numerals are stamped by pdfcpu.
+	// TOC uses a footer without page numbers - Roman numerals are stamped by pdfcpu.
 	if tocPDFOpts.DisplayHeaderFooter {
 		tocPDFOpts.FooterTemplate = tocFooterTemplate()
 	}

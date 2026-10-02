@@ -1511,7 +1511,7 @@ type docDataScope struct {
 // the datasets and datasources reachable through its markdown :ref component
 // embeds. ok=false means the scope could not be computed (graph build failed
 // or the artefact has no node) and the caller must fall back to the full
-// document set — rendering must never fail because scoping failed.
+// document set - rendering must never fail because scoping failed.
 func documentDataScope(ctx context.Context, logger logx.Logger, docs []config.Document, name string) (docDataScope, bool) {
 	g, err := reportgraph.Build(ctx, docs)
 	if err != nil {
@@ -1535,14 +1535,14 @@ func documentDataScope(ctx context.Context, logger logx.Logger, docs []config.Do
 			scope.dataSources[node.Name] = struct{}{}
 		default:
 			// Markdown files, components, layouts: structural nodes on the
-			// way down — only the data leaves matter for scoping.
+			// way down - only the data leaves matter for scoping.
 		}
 	}
 	return scope, true
 }
 
-// filterDataDocs drops DataSet documents not in sets and — when sources is
-// non-nil — DataSource documents not in sources. Every other kind passes
+// filterDataDocs drops DataSet documents not in sets and - when sources is
+// non-nil - DataSource documents not in sources. Every other kind passes
 // through unchanged.
 func filterDataDocs(docs []config.Document, sets, sources map[string]struct{}) []config.Document {
 	filtered := make([]config.Document, 0, len(docs))

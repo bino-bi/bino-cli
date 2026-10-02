@@ -108,7 +108,7 @@ export class TreeTableEditorManager {
         // Check if it's a YAML file
         if (target.document.languageId !== 'yaml') {
             if (this.currentEditor?.document.languageId === 'yaml') {
-                // Switched away from a YAML file — show placeholder
+                // Switched away from a YAML file - show placeholder
                 this.currentEditor = undefined;
                 this.panel.webview.html = getPlaceholderHtml();
             }
@@ -450,7 +450,7 @@ function getDefaultValueForType(fieldType: string): unknown {
 //
 // The webview renders a CST-preserving *read* of the manifest into TreeDocument
 // models; all *writes* go through the AuthoringClient / Go engine. This is not a
-// second YAML-fidelity write engine — it only feeds the renderer and column
+// second YAML-fidelity write engine - it only feeds the renderer and column
 // lookups below.
 
 /**
@@ -552,7 +552,7 @@ function valueToTreeNode(key: string, value: unknown, path: string[], keyNode?: 
     if (isScalar(keyNode)) {
         const range = (keyNode as any).range;
         if (range) {
-            // range is [start, valueEnd, nodeEnd] offsets — but we don't have the text here
+            // range is [start, valueEnd, nodeEnd] offsets - but we don't have the text here
             // We'll use a simplified approach and store the range offsets
             line = range[0]; // Will be converted later
             column = 0;

@@ -83,10 +83,10 @@ func editDependencies(projectRoot, name string, edit func(string) string, check 
 		Dependencies map[string]string `toml:"dependencies"`
 	}
 	if err := toml.Unmarshal([]byte(next), &parsed); err != nil {
-		return fmt.Errorf("cannot safely edit %s (dependency %q): %w — edit the [dependencies] table manually", path, name, err)
+		return fmt.Errorf("cannot safely edit %s (dependency %q): %w - edit the [dependencies] table manually", path, name, err)
 	}
 	if err := check(parsed.Dependencies); err != nil {
-		return fmt.Errorf("cannot safely edit %s (dependency %q): %w — edit the [dependencies] table manually", path, name, err)
+		return fmt.Errorf("cannot safely edit %s (dependency %q): %w - edit the [dependencies] table manually", path, name, err)
 	}
 	if err := writeFileAtomic(path, []byte(next)); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)

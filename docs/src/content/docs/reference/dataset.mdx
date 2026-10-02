@@ -260,34 +260,34 @@ To work correctly with visualization components like [Charts](/reference/chart-s
 
 The schema supports four parallel sets of scenario columns for comparative analysis (e.g., Actual vs Plan).
 
-| Column          | Description                                                   |
-| :-------------- | :------------------------------------------------------------ |
-| `ac1` ... `ac4` | **Actual** values (current measurements)                      |
+| Column          | Description                                                                                                                                                                                     |
+| :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ac1` ... `ac4` | **Actual** values (current measurements)                                                                                                                                                        |
 | `pp1` ... `pp4` | **Previous Period** values. What a slot compares against (prior month, prior year, …) is declared per dataset with `derive`/`assert`, see [Deriving previous period](#deriving-previous-period) |
-| `fc1` ... `fc4` | **Forecast** values (predictions)                             |
-| `pl1` ... `pl4` | **Plan/Budget** values (targets)                              |
+| `fc1` ... `fc4` | **Forecast** values (predictions)                                                                                                                                                               |
+| `pl1` ... `pl4` | **Plan/Budget** values (targets)                                                                                                                                                                |
 
 ### Grouping Dimensions
 
 These fields determine how data is hierarchically organized and sorted.
 
-| Dimension     | Index Column       | Description                                                 |
-| :------------ | :----------------- | :---------------------------------------------------------- |
-| `rowGroup`    | `rowGroupIndex`    | Top-level row grouping (e.g., "Revenue", "Costs").          |
-| `category`    | `categoryIndex`    | Primary data dimension (e.g., "Product A", "Region North"). |
-| `subCategory` | `subCategoryIndex` | Detail dimension for drill-down (creates "thereOf" rows).   |
-| `columnGroup` | `columnGroupIndex` | Column-level grouping for breaking down measures.           |
-| `columnSubGroup` | `columnSubGroupIndex` | Second column level underneath `columnGroup`.         |
+| Dimension        | Index Column          | Description                                                 |
+| :--------------- | :-------------------- | :---------------------------------------------------------- |
+| `rowGroup`       | `rowGroupIndex`       | Top-level row grouping (e.g., "Revenue", "Costs").          |
+| `category`       | `categoryIndex`       | Primary data dimension (e.g., "Product A", "Region North"). |
+| `subCategory`    | `subCategoryIndex`    | Detail dimension for drill-down (creates "thereOf" rows).   |
+| `columnGroup`    | `columnGroupIndex`    | Column-level grouping for breaking down measures.           |
+| `columnSubGroup` | `columnSubGroupIndex` | Second column level underneath `columnGroup`.               |
 
-**Note**: The two columns of a pair depend on each other in both directions. Provide the index (e.g., `rowGroupIndex`) whenever you provide the dimension string (e.g., `rowGroup`) to ensure consistent sort ordering — and likewise, an index column without its dimension string is reported by data validation.
+**Note**: The two columns of a pair depend on each other in both directions. Provide the index (e.g., `rowGroupIndex`) whenever you provide the dimension string (e.g., `rowGroup`) to ensure consistent sort ordering - and likewise, an index column without its dimension string is reported by data validation.
 
 ### Metadata & Control Fields
 
-| Column      | Type     | Description                                                                                                                       |
-| :---------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| Column      | Type     | Description                                                                                                                                              |
+| :---------- | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `date`      | `string` | **Required for TimeCharts**. ISO 8601 date (e.g., `2024-01-15`) or datetime (e.g., `2024-01-15T08:30:00Z`). Used for time-series axes and normalization. |
-| `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals. |
-| `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results.                                                    |
+| `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals.                        |
+| `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results.                                                                           |
 
 ### Custom `_` columns
 
@@ -314,19 +314,19 @@ GROUP BY product_name, product_rank
 
 ## Built-in SQL functions
 
-bino registers a few helper functions on the DuckDB engine — two scalar functions and one table macro — so they are available in every DataSet (and DataSource) query without any import or extension.
+bino registers a few helper functions on the DuckDB engine - two scalar functions and one table macro - so they are available in every DataSet (and DataSource) query without any import or extension.
 
-### `op(value)` — sign as an operator
+### `op(value)` - sign as an operator
 
 `op` reduces a numeric value to its sign as a string, the shape the `operation` control field (documented above) expects.
-Note that `operation` only accepts `'+'` and `'-'`, so the empty string returned for `0` is reported by [data validation](#data-validation) — wrap the call (for example `nullif(op(x), '')`) when zero values can occur.
+Note that `operation` only accepts `'+'` and `'-'`, so the empty string returned for `0` is reported by [data validation](#data-validation) - wrap the call (for example `nullif(op(x), '')`) when zero values can occur.
 
-| Input       | Result                |
-| :---------- | :-------------------- |
-| `value > 0` | `'+'`                 |
-| `value < 0` | `'-'`                 |
-| `value = 0` | `''` (empty string)   |
-| `NULL`      | `NULL`                |
+| Input       | Result              |
+| :---------- | :------------------ |
+| `value > 0` | `'+'`               |
+| `value < 0` | `'-'`               |
+| `value = 0` | `''` (empty string) |
+| `NULL`      | `NULL`              |
 
 It accepts any numeric type (INTEGER, BIGINT, DECIMAL, DOUBLE, …) and returns `VARCHAR`.
 
@@ -339,9 +339,9 @@ FROM ledger
 GROUP BY account_name
 ```
 
-### `iop(value)` — inverse sign
+### `iop(value)` - inverse sign
 
-`iop` is the inverse of `op` (`+` becomes `-` and vice versa; `0` stays `''`). Use it for **inverted** measures, where an increase is unfavorable — costs, headcount, error rates, churn — so a rising value reads as a negative signal.
+`iop` is the inverse of `op` (`+` becomes `-` and vice versa; `0` stays `''`). Use it for **inverted** measures, where an increase is unfavorable - costs, headcount, error rates, churn - so a rising value reads as a negative signal.
 
 | Input       | `op`  | `iop` |
 | :---------- | :---- | :---- |
@@ -351,7 +351,7 @@ GROUP BY account_name
 
 ### Absolute value
 
-There is no bino-specific helper for absolute values — DuckDB's built-in `abs()` already does it (`abs(-500)` → `500`). Combine it with `op` to render a signed magnitude as text:
+There is no bino-specific helper for absolute values - DuckDB's built-in `abs()` already does it (`abs(-500)` → `500`). Combine it with `op` to render a signed magnitude as text:
 
 ```sql
 SELECT op(variance) || abs(variance)::VARCHAR AS signed_variance
@@ -359,18 +359,18 @@ SELECT op(variance) || abs(variance)::VARCHAR AS signed_variance
 -- variance =  500  ->  '+500'
 ```
 
-### `bino_shift(src, source, shift, grain)` — previous period as a table macro
+### `bino_shift(src, source, shift, grain)` - previous period as a table macro
 
 `bino_shift` is the table macro behind [`derive` and `assert`](#deriving-previous-period). It returns every row and column of `src` plus one column named `shifted`: the value of `source` on the row with the same identity one `shift` earlier, or `NULL` when there is none.
 
-| Parameter | Value                                                                 |
-| :-------- | :-------------------------------------------------------------------- |
+| Parameter | Value                                                                                                          |
+| :-------- | :------------------------------------------------------------------------------------------------------------- |
 | `src`     | Name of a view or table in the session (a DataSource or DataSet name). A macro parameter cannot be a subquery. |
-| `source`  | The slot to read from the earlier row: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4` |
-| `shift`   | `'<n> <unit>'`, e.g. `'1 year'`, `'1 month'`, `'2 week'`, `'3 day'`, `'1 quarter'` |
-| `grain`   | The period one row stands for: `'day'`, `'week'`, `'month'`, `'quarter'` or `'year'` |
+| `source`  | The slot to read from the earlier row: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4`               |
+| `shift`   | `'<n> <unit>'`, e.g. `'1 year'`, `'1 month'`, `'2 week'`, `'3 day'`, `'1 quarter'`                             |
+| `grain`   | The period one row stands for: `'day'`, `'week'`, `'month'`, `'quarter'` or `'year'`                           |
 
-The identity of a row is every column except `date` and the sixteen slot columns; two rows match when their identities are equal and the period of the earlier one (`date` truncated to `grain`) equals the period of the later one minus `shift`. The extra column is always called `shifted` — a macro cannot name an output column from a parameter — so alias it to the slot you want:
+The identity of a row is every column except `date` and the sixteen slot columns; two rows match when their identities are equal and the period of the earlier one (`date` truncated to `grain`) equals the period of the later one minus `shift`. The extra column is always called `shifted` - a macro cannot name an output column from a parameter - so alias it to the slot you want:
 
 ```sql
 SELECT * EXCLUDE (shifted), shifted AS pp2
@@ -394,19 +394,19 @@ spec:
   dependencies:
     - sales
   derive:
-    pp1: { from: ac1, shift: 1 month, grain: month }   # previous month
-    pp2: { from: ac1, shift: 1 year,  grain: month }   # same month last year
+    pp1: { from: ac1, shift: 1 month, grain: month } # previous month
+    pp2: { from: ac1, shift: 1 year, grain: month } # same month last year
   assert:
-    pp3: { from: pl1, shift: 1 year,  grain: month }   # pp3 comes from the query; bino checks it
+    pp3: { from: pl1, shift: 1 year, grain: month } # pp3 comes from the query; bino checks it
 ```
 
 Each declaration has three attributes, all required:
 
-| Attribute | Value | Meaning |
-| :-------- | :---- | :------ |
-| `from`    | one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4` | The slot whose value is copied from the earlier row. |
-| `shift`   | `<n> <unit>`, `n` ≥ 1, unit `day`, `week`, `month`, `quarter` or `year` | How far back the earlier row lies. |
-| `grain`   | `day`, `week`, `month`, `quarter` or `year` | The period one row of the dataset stands for. It is declared, never inferred from the dates. |
+| Attribute | Value                                                                   | Meaning                                                                                      |
+| :-------- | :---------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| `from`    | one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4`               | The slot whose value is copied from the earlier row.                                         |
+| `shift`   | `<n> <unit>`, `n` ≥ 1, unit `day`, `week`, `month`, `quarter` or `year` | How far back the earlier row lies.                                                           |
+| `grain`   | `day`, `week`, `month`, `quarter` or `year`                             | The period one row of the dataset stands for. It is declared, never inferred from the dates. |
 
 Grain says what a row is, shift says which earlier row to compare against: on a monthly table, `shift: 1 month` is the previous month and `shift: 1 year` the same month last year.
 
@@ -416,19 +416,19 @@ The declarations work with `query`, `prql` and `source` alike. A slot may appear
 
 For every row bino computes two keys:
 
-- **identity** — the values of every column except `date` and the sixteen slot columns, so all dimension columns with their index twins, `operation` and `setname`;
-- **period** — `date` truncated to the grain (`date_trunc(grain, date::DATE)`; a week starts on Monday).
+- **identity** - the values of every column except `date` and the sixteen slot columns, so all dimension columns with their index twins, `operation` and `setname`;
+- **period** - `date` truncated to the grain (`date_trunc(grain, date::DATE)`; a week starts on Monday).
 
 The slot receives the `from` value of the row that has the same identity and whose period equals this row's period minus `shift`, provided that period plus `shift` gives this row's period again. Without such a row the slot is `NULL`. With `from: ac1, shift: 1 month, grain: month` and `region` as the only dimension:
 
-| `region` | `date`       | `ac1` | period    | period − shift | `pp1`  |
-| :------- | :----------- | ----: | :-------- | :------------- | -----: |
-| North    | `2024-01-31` |   100 | `2024-01` | `2023-12`      | `NULL` — no such row |
-| North    | `2024-02-29` |   110 | `2024-02` | `2024-01`      |    100 |
-| North    | `2024-03-31` |   120 | `2024-03` | `2024-02`      |    110 |
-| South    | `2024-03-31` |    80 | `2024-03` | `2024-02`      | `NULL` — South has no February row |
-| West     | `2024-02-29` |    70 | `2024-02` | `2024-01`      | `NULL` — West is new in February |
-| West     | `2024-03-31` | `NULL` | `2024-03` | `2024-02`      | 70 — added: West has no March row, its February value is kept visible |
+| `region` | `date`       |  `ac1` | period    | period − shift |                                                                 `pp1` |
+| :------- | :----------- | -----: | :-------- | :------------- | --------------------------------------------------------------------: |
+| North    | `2024-01-31` |    100 | `2024-01` | `2023-12`      |                                                  `NULL` - no such row |
+| North    | `2024-02-29` |    110 | `2024-02` | `2024-01`      |                                                                   100 |
+| North    | `2024-03-31` |    120 | `2024-03` | `2024-02`      |                                                                   110 |
+| South    | `2024-03-31` |     80 | `2024-03` | `2024-02`      |                                    `NULL` - South has no February row |
+| West     | `2024-02-29` |     70 | `2024-02` | `2024-01`      |                                      `NULL` - West is new in February |
+| West     | `2024-03-31` | `NULL` | `2024-03` | `2024-02`      | 70 - added: West has no March row, its February value is kept visible |
 
 What follows from the rule:
 
@@ -444,15 +444,15 @@ What follows from the rule:
 
 ### Checks and diagnostics
 
-After the query runs, bino checks **every row** — not the [validation sample](#sample-size) — and reports through the same channel as data validation. Four of the checks are errors that fail `bino build` regardless of `--data-validation`, because a declared expectation is not a sampled type check:
+After the query runs, bino checks **every row** - not the [validation sample](#sample-size) - and reports through the same channel as data validation. Four of the checks are errors that fail `bino build` regardless of `--data-validation`, because a declared expectation is not a sampled type check:
 
-| Check                        | Message                                                                                   | Outcome |
-| :--------------------------- | :---------------------------------------------------------------------------------------- | :------ |
-| Derived slot supplied        | `slot pp2 is already in the query result; use assert: for a supplied slot`                 | error, fails the build even under `--data-validation warn` |
+| Check                        | Message                                                                                                                                                               | Outcome                                                    |
+| :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------- |
+| Derived slot supplied        | `slot pp2 is already in the query result; use assert: for a supplied slot`                                                                                            | error, fails the build even under `--data-validation warn` |
 | Source column missing        | `slot ac1 (from of pp2) is missing from the query result`, `column "date" is missing from the query result`, `slot pp3 is asserted but missing from the query result` | error, fails the build even under `--data-validation warn` |
-| Duplicate identity in period | `duplicate rows for identity region=North in period 2024-03-01 (grain month)`             | error, fails the build even under `--data-validation warn` |
-| Assert mismatch              | `assert pp3: 4 row(s) differ from pl1 shifted by 1 year (grain month); first at identity region=North, period 2024-03-01` | error, fails the build even under `--data-validation warn` |
-| Derived slot empty           | `pp2 derived from ac1 is null on every row — the query window has no prior period`        | warning |
+| Duplicate identity in period | `duplicate rows for identity region=North in period 2024-03-01 (grain month)`                                                                                         | error, fails the build even under `--data-validation warn` |
+| Assert mismatch              | `assert pp3: 4 row(s) differ from pl1 shifted by 1 year (grain month); first at identity region=North, period 2024-03-01`                                             | error, fails the build even under `--data-validation warn` |
+| Derived slot empty           | `pp2 derived from ac1 is null on every row - the query window has no prior period`                                                                                    | warning                                                    |
 
 The assert comparison tolerates relative noise below `1e-9`; rows whose shifted value is `NULL` have nothing to compare and are skipped. `--warn-on-query-errors` downgrades the four errors like any other query failure, so preview and `bino lint --execute-queries` show them as warnings.
 
@@ -462,13 +462,13 @@ bino can validate query results against the standard schema at build time. This 
 
 ### Validation checks
 
-| Check                     | Description                                                         |
-| :------------------------ | :------------------------------------------------------------------ |
-| Type validation           | String fields (`category`, `rowGroup`, etc.) must be strings        |
-| Type validation           | Number fields (`ac1`, `categoryIndex`, etc.) must be numbers        |
-| Enum validation           | `operation` must be `"+"` or `"-"`                                  |
-| Date format               | `date` must be ISO 8601 (`YYYY-MM-DD`, or `YYYY-MM-DDThh:mm:ss` with an optional `Z` or `±hh:mm` offset) |
-| Dependent required        | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup` |
+| Check              | Description                                                                                                                                                                                                          |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Type validation    | String fields (`category`, `rowGroup`, etc.) must be strings                                                                                                                                                         |
+| Type validation    | Number fields (`ac1`, `categoryIndex`, etc.) must be numbers                                                                                                                                                         |
+| Enum validation    | `operation` must be `"+"` or `"-"`                                                                                                                                                                                   |
+| Date format        | `date` must be ISO 8601 (`YYYY-MM-DD`, or `YYYY-MM-DDThh:mm:ss` with an optional `Z` or `±hh:mm` offset)                                                                                                             |
+| Dependent required | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup` |
 
 The [`derive`/`assert` checks](#checks-and-diagnostics) are not part of this sampled validation: they run on every row, and their four error cases fail the build in every validation mode.
 
@@ -505,7 +505,7 @@ Default sample size is 10 rows.
 
 ## Constant columns
 
-A value that is the same on every row — a unit, a note, a setting — does not have to be typed into the `SELECT`. Declare it under `spec.constants` and bino adds it as a [`_` column](#custom-_-columns) to every row after the query has run:
+A value that is the same on every row - a unit, a note, a setting - does not have to be typed into the `SELECT`. Declare it under `spec.constants` and bino adds it as a [`_` column](#custom-_-columns) to every row after the query has run:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -516,12 +516,12 @@ spec:
   query: SELECT region AS category, revenue AS ac1, plan AS pl1 FROM sales_fact
   dependencies: [sales_fact]
   constants:
-    unit: kEUR                       # → _unit = "kEUR"
+    unit: kEUR # → _unit = "kEUR"
     spec:
       table:
-        barColumns: ac1,pl1          # → _spec_table_barColumns = "ac1,pl1"
-        thereof:                     # → _spec_table_thereof_0_rowGroup = "Revenue"
-          - rowGroup: Revenue        #   _spec_table_thereof_0_category = "Applications"
+        barColumns: ac1,pl1 # → _spec_table_barColumns = "ac1,pl1"
+        thereof: # → _spec_table_thereof_0_rowGroup = "Revenue"
+          - rowGroup: Revenue #   _spec_table_thereof_0_category = "Applications"
             category: Applications
 ```
 
@@ -529,17 +529,17 @@ A Table bound to `sales` can then show the unit with `attributes: [{label: Unit,
 
 ### Flattening rules
 
-| In `constants` | Column(s) on the row |
-| :--- | :--- |
-| Top-level key `unit` | `_unit` |
-| Nested keys `spec.table.barColumns` | keys joined with `_`: `_spec_table_barColumns` |
-| Scalar (`kEUR`, `1000`, `true`) | one column, the value keeps its type |
-| List of scalars (`[ac1, pl1]`) | one column holding the comma-joined string `ac1,pl1` (the string `"ac1,pl1"` stays as it is) |
-| Object, or list of objects (`thereof: [{rowGroup: Revenue}]`) | one column per leaf, list items by zero-based index: `_spec_table_thereof_0_rowGroup` |
+| In `constants`                                                | Column(s) on the row                                                                         |
+| :------------------------------------------------------------ | :------------------------------------------------------------------------------------------- |
+| Top-level key `unit`                                          | `_unit`                                                                                      |
+| Nested keys `spec.table.barColumns`                           | keys joined with `_`: `_spec_table_barColumns`                                               |
+| Scalar (`kEUR`, `1000`, `true`)                               | one column, the value keeps its type                                                         |
+| List of scalars (`[ac1, pl1]`)                                | one column holding the comma-joined string `ac1,pl1` (the string `"ac1,pl1"` stays as it is) |
+| Object, or list of objects (`thereof: [{rowGroup: Revenue}]`) | one column per leaf, list items by zero-based index: `_spec_table_thereof_0_rowGroup`        |
 
 Keys must be camelCase without underscores (`^[a-z][A-Za-z0-9]*$`), because `_` is the path separator of the column name; the schema rejects anything else. `${NAME}` substitution applies as everywhere in a spec.
 
-Constants work the same for `query`, `prql` and `source` datasets, and for [inline DataSet definitions](#inline-dataset-definitions). They are materialized in Go after the query has run, so the cached rows carry them (a changed constant invalidates the cache), and every path that shows a dataset's rows — `bino build`, the daemon behind the VS Code wizard, and the MCP tools `get_columns` / `get_rows` — lists the same columns. The preview's SQL explorer runs the dataset SQL itself and therefore does not show constant columns.
+Constants work the same for `query`, `prql` and `source` datasets, and for [inline DataSet definitions](#inline-dataset-definitions). They are materialized in Go after the query has run, so the cached rows carry them (a changed constant invalidates the cache), and every path that shows a dataset's rows - `bino build`, the daemon behind the VS Code wizard, and the MCP tools `get_columns` / `get_rows` - lists the same columns. The preview's SQL explorer runs the dataset SQL itself and therefore does not show constant columns.
 
 If the query already produces a column of the same name, the constant wins and the build reports a dataset warning: `constants.unit shadows query column _unit`.
 
@@ -561,9 +561,9 @@ spec:
   constants:
     spec:
       any:
-        scenarios: ac1,pl1           # → every bound component with a scenarios field
+        scenarios: ac1,pl1 # → every bound component with a scenarios field
       table:
-        barColumns: ac1,pl1          # → Tables only
+        barColumns: ac1,pl1 # → Tables only
         measureUnit: kEUR
 ---
 apiVersion: bino.bi/v1alpha1
@@ -571,7 +571,7 @@ kind: Table
 metadata:
   name: sales_table
 spec:
-  dataset: sales                     # every other setting comes from the rows
+  dataset: sales # every other setting comes from the rows
 ```
 
 The Table renders with `scenarios="ac1,pl1"`, `bar-columns="ac1,pl1"` and `measure-unit="kEUR"`, exactly as if they had been written on the Table.
@@ -587,13 +587,13 @@ The Table renders with `scenarios="ac1,pl1"`, `bar-columns="ac1,pl1"` and `measu
 
 Anything written in YAML beats anything the data says. Lowest first:
 
-| Level | Set by |
-| :--- | :--- |
-| engine default and auto-detection | the template engine |
-| `ComponentStyle` | the selected style |
-| **dataset default** | the rows of the component's primary dataset |
-| inherited value | `selectedStyle` on the page or card |
-| the component's own spec | the manifest, including a `ref` override |
+| Level                             | Set by                                      |
+| :-------------------------------- | :------------------------------------------ |
+| engine default and auto-detection | the template engine                         |
+| `ComponentStyle`                  | the selected style                          |
+| **dataset default**               | the rows of the component's primary dataset |
+| inherited value                   | `selectedStyle` on the page or card         |
+| the component's own spec          | the manifest, including a `ref` override    |
 
 A dataset default only fills a field nobody wrote. Leaving a field unset is the opt-in; a field the author set to anything, even an empty list, stays as written. A component that binds several datasets takes defaults from its **primary** dataset, the first entry of `dataset`; `_spec_` columns on any other bound dataset are ignored with a build warning. Components bound directly to a DataSource (`dataset: $name`) get no defaults.
 
@@ -601,12 +601,12 @@ A dataset default only fills a field nobody wrote. Leaving a field unset is the 
 
 The target field's schema type decides how a cell is read:
 
-| Field type | Accepted cell |
-| :--- | :--- |
-| string or enum (`measureUnit`, `type`, `level`) | the string |
-| number (`limit`, `dataFormatDigitsDecimal`) | a numeric cell or a numeric string |
-| boolean (`grouped`, `showMeasureScale`) | a boolean cell, `true`/`false`, `1`/`0` |
-| list of strings (`barColumns`, `scenarios`, `variances`) | a comma list (`ac1,pl1`) or a JSON array string |
+| Field type                                                   | Accepted cell                                                                                  |
+| :----------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| string or enum (`measureUnit`, `type`, `level`)              | the string                                                                                     |
+| number (`limit`, `dataFormatDigitsDecimal`)                  | a numeric cell or a numeric string                                                             |
+| boolean (`grouped`, `showMeasureScale`)                      | a boolean cell, `true`/`false`, `1`/`0`                                                        |
+| list of strings (`barColumns`, `scenarios`, `variances`)     | a comma list (`ac1,pl1`) or a JSON array string                                                |
 | object or list of objects (`thereof`, `attributes`, `stack`) | a JSON cell, index columns, or a row marker; see [Object-valued fields](#object-valued-fields) |
 
 Across rows, NULL and empty cells are ignored, so filling one row of a sheet is enough. A list field merges the distinct values of all rows in row order (`ac1` on one row and `pl1` on another become `ac1,pl1`). Any other field must hold the same value on every filled row.
@@ -615,16 +615,16 @@ Across rows, NULL and empty cells are ignored, so filling one row of a sheet is 
 
 Every problem is a dataset warning attributed to the DataSet, never a failed build. It appears in `bino build` output and in `bino lint --execute-queries`, the daemon and the MCP `validate_project` tool as a `data-validation` diagnostic. The setting is dropped and the field falls back to the next level:
 
-- `measureUnit: 2 distinct values (kEUR, EUR) in dataset sales` — a scalar field disagrees between rows
-- `_spec_tabel_barColumns: unknown kind token "tabel"; …` — the kind token is not one of the eight
-- `_spec_table_barColumnz: Table has no spec field "barColumnz"` — the field does not exist on that kind (for `any`: on no kind)
-- `_spec_table_dataFormatDigitsDecimal: cannot parse "lots" as number` — the cell does not fit the field's type
+- `measureUnit: 2 distinct values (kEUR, EUR) in dataset sales` - a scalar field disagrees between rows
+- `_spec_tabel_barColumns: unknown kind token "tabel"; …` - the kind token is not one of the eight
+- `_spec_table_barColumnz: Table has no spec field "barColumnz"` - the field does not exist on that kind (for `any`: on no kind)
+- `_spec_table_dataFormatDigitsDecimal: cannot parse "lots" as number` - the cell does not fit the field's type
 
 `bino serve --live` renders per request, so dataset defaults follow the route parameters like the rows do. Component embeds inside a DocumentArtefact's markdown do not receive dataset defaults.
 
 ### Object-valued fields
 
-An object-valued field — the Table's `thereof`, `partof`, `columnthereof` and `attributes`, a chart's `stack`, the axis objects of scatter and bubble charts — can be filled in one of three forms. **One form per field per dataset**: a dataset that carries two forms for the same field raises the warning `thereof: two forms (marker, index) in dataset sales` and the field is dropped.
+An object-valued field - the Table's `thereof`, `partof`, `columnthereof` and `attributes`, a chart's `stack`, the axis objects of scatter and bubble charts - can be filled in one of three forms. **One form per field per dataset**: a dataset that carries two forms for the same field raises the warning `thereof: two forms (marker, index) in dataset sales` and the field is dropped.
 
 **1. JSON cell.** The `_spec_table_thereof` cell holds the value as JSON, told by its first character `[` or `{`:
 
@@ -645,9 +645,9 @@ constants:
           category: Applications
         - rowGroup: Revenue
           category: Services
-          subCategory: Consulting     # narrows the drill to one detail row
+          subCategory: Consulting # narrows the drill to one detail row
     chartstructure:
-      stack: { by: scenarios }      # → _spec_chartstructure_stack_by
+      stack: { by: scenarios } # → _spec_chartstructure_stack_by
 ```
 
 or, in SQL, `'Revenue' AS _spec_table_thereof_0_rowGroup, 'Applications' AS _spec_table_thereof_0_category, …`. Indices must be contiguous from 0 (`thereof: index columns must be contiguous from 0 (missing 1)` otherwise), every key must exist on the entry, a required key must be present (`stack` needs `by`), and each column follows the across-rows rule of a scalar. A `subGroups` column takes a comma list.
@@ -661,11 +661,11 @@ SELECT 'Revenue' AS rowGroup, region AS category, product AS subCategory,
 FROM sales_fact
 ```
 
-| rowGroup | category | subCategory | `_spec_table_thereof` | entry |
-| :--- | :--- | :--- | :--- | :--- |
-| Revenue | Applications | Applications-A | `category` | `{rowGroup: Revenue, category: Applications}` |
-| Revenue | Applications | Applications-B | `category` | same entry, deduplicated |
-| Revenue | Services | Consulting | `subCategory` | `{rowGroup: Revenue, category: Services, subCategory: Consulting}` |
+| rowGroup | category     | subCategory    | `_spec_table_thereof` | entry                                                              |
+| :------- | :----------- | :------------- | :-------------------- | :----------------------------------------------------------------- |
+| Revenue  | Applications | Applications-A | `category`            | `{rowGroup: Revenue, category: Applications}`                      |
+| Revenue  | Applications | Applications-B | `category`            | same entry, deduplicated                                           |
+| Revenue  | Services     | Consulting     | `subCategory`         | `{rowGroup: Revenue, category: Services, subCategory: Consulting}` |
 
 Rows without a marker contribute nothing; entries keep row order. A level the entry does not have (`subCategory` on `partof`) and a marked row without the needed dimension value are warnings that drop the field. A marker set through `constants` marks every row and expands every group.
 
@@ -877,40 +877,40 @@ User-defined document names must **not** start with `_inline_` as this prefix is
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `DataSet`. |
-| `metadata.name` | string | yes | — | Unique identifier, and the table name the query is registered under. Pattern: `^(@[a-z0-9][a-z0-9_-]*/([a-z0-9][a-z0-9_-]*/)?)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$` — a plain name, optionally prefixed with a registry scope such as `@acme/` or `@acme/kit/`. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                                                                                                                                                                                                            |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                                                                                                                                                                                                            |
+| `kind`                 | string | yes      | -       | Must be `DataSet`.                                                                                                                                                                                                                                                     |
+| `metadata.name`        | string | yes      | -       | Unique identifier, and the table name the query is registered under. Pattern: `^(@[a-z0-9][a-z0-9_-]*/([a-z0-9][a-z0-9_-]*/)?)?[A-Za-z0-9_]([-A-Za-z0-9_]*[A-Za-z0-9_])?$` - a plain name, optionally prefixed with a registry scope such as `@acme/` or `@acme/kit/`. |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                                                                                                                                                                                                            |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                                                                                                                                                                                                  |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                                                                                                                                                                                                 |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/).                                                                                                                                                                               |
 
 ### Spec Attributes
 
 At least one of `query`, `prql`, or `source` is required.
-`source` is mutually exclusive with `query` and `prql` — combining them is rejected by the lint rule `dataset-source-exclusive`.
+`source` is mutually exclusive with `query` and `prql` - combining them is rejected by the lint rule `dataset-source-exclusive`.
 Setting `query` and `prql` together is accepted by the schema, but only `prql` is executed (the precedence is `source` before `prql` before `query`).
 `derive` and `assert` combine with any of the three; the same slot in both is rejected by the lint rule `dataset-derive-conflict`.
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.query` | string or object | conditional | — | SQL query executed against DuckDB, inline or from an external file. DataSource and DataSet names are the table names; inline dependencies are addressed as `@inline(N)`. Required if `prql` and `source` are not set. | `query: SELECT * FROM sales` |
-| `spec.query.$file` | string | conditional | — | Path to an external `.sql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files). | `$file: ./queries/sales_summary.sql` |
-| `spec.prql` | string or object | conditional | — | [PRQL](https://prql-lang.org) query, inline or from an external file, compiled to SQL by DuckDB's prql extension. Required if `query` and `source` are not set. | `prql: from sales_csv` |
-| `spec.prql.$file` | string | conditional | — | Path to an external `.prql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files). | `$file: ./queries/customer_orders.prql` |
-| `spec.source` | string or object | conditional | — | Direct DataSource pass-through, equivalent to `SELECT * FROM <name>`. A string name or an inline DataSource definition. Required if `query` and `prql` are not set. See [Direct source pass-through](#direct-source-pass-through). | `source: sales_csv` |
-| `spec.dependencies` | array | no | — | List of DataSource dependencies. Feeds the dependency graph and the cache digest, so a changed input file invalidates the dataset. | see below |
-| `spec.dependencies[]` | string or object | no | — | Either the `metadata.name` of a DataSource, or an inline DataSource definition referenced in the query as `@inline(N)` with `N` the zero-based index. | `- sales_csv` |
-| `spec.derive` | object | no | — | Previous-period slots bino produces from another slot shifted back in time, keyed by `pp1`…`pp4`. The query must not return the slot. See [Deriving previous period](#deriving-previous-period). | `derive: { pp2: { from: ac1, shift: 1 year, grain: month } }` |
-| `spec.derive.<pp>.from` | string | yes | — | Slot the earlier row is read from: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4`. | `from: ac1` |
-| `spec.derive.<pp>.shift` | string | yes | — | How far back, `<n> <unit>` with the unit `day`, `week`, `month`, `quarter` or `year`. A year shift keeps the `PY` caption, any other unit is captioned `PP`. | `shift: 1 month` |
-| `spec.derive.<pp>.grain` | string | yes | — | The period one row stands for: `day`, `week`, `month`, `quarter` or `year`. Never inferred. | `grain: month` |
-| `spec.assert` | object | no | — | Previous-period slots the query supplies and bino checks, same shape as `derive`. A mismatch on any row with a prior period fails the build even under `--data-validation warn`. | `assert: { pp3: { from: pl1, shift: 1 year, grain: month } }` |
-| `spec.constants` | object | no | — | Values added as `_`-prefixed columns to every row after the query has run. Keys are camelCase without underscores; nested keys join with `_`, lists of scalars become a comma string, objects and lists of objects flatten by key and index. See [Constant columns](#constant-columns). | `constants: { unit: kEUR, spec: { table: { barColumns: ac1,pl1 } } }` |
+| Attribute                | Type             | Required    | Default | Description                                                                                                                                                                                                                                                                             | Sample                                                                |
+| ------------------------ | ---------------- | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `spec.query`             | string or object | conditional | -       | SQL query executed against DuckDB, inline or from an external file. DataSource and DataSet names are the table names; inline dependencies are addressed as `@inline(N)`. Required if `prql` and `source` are not set.                                                                   | `query: SELECT * FROM sales`                                          |
+| `spec.query.$file`       | string           | conditional | -       | Path to an external `.sql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files).                                                                                                                                | `$file: ./queries/sales_summary.sql`                                  |
+| `spec.prql`              | string or object | conditional | -       | [PRQL](https://prql-lang.org) query, inline or from an external file, compiled to SQL by DuckDB's prql extension. Required if `query` and `source` are not set.                                                                                                                         | `prql: from sales_csv`                                                |
+| `spec.prql.$file`        | string           | conditional | -       | Path to an external `.prql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files).                                                                                                                               | `$file: ./queries/customer_orders.prql`                               |
+| `spec.source`            | string or object | conditional | -       | Direct DataSource pass-through, equivalent to `SELECT * FROM <name>`. A string name or an inline DataSource definition. Required if `query` and `prql` are not set. See [Direct source pass-through](#direct-source-pass-through).                                                      | `source: sales_csv`                                                   |
+| `spec.dependencies`      | array            | no          | -       | List of DataSource dependencies. Feeds the dependency graph and the cache digest, so a changed input file invalidates the dataset.                                                                                                                                                      | see below                                                             |
+| `spec.dependencies[]`    | string or object | no          | -       | Either the `metadata.name` of a DataSource, or an inline DataSource definition referenced in the query as `@inline(N)` with `N` the zero-based index.                                                                                                                                   | `- sales_csv`                                                         |
+| `spec.derive`            | object           | no          | -       | Previous-period slots bino produces from another slot shifted back in time, keyed by `pp1`…`pp4`. The query must not return the slot. See [Deriving previous period](#deriving-previous-period).                                                                                        | `derive: { pp2: { from: ac1, shift: 1 year, grain: month } }`         |
+| `spec.derive.<pp>.from`  | string           | yes         | -       | Slot the earlier row is read from: one of `ac1`…`ac4`, `pp1`…`pp4`, `fc1`…`fc4`, `pl1`…`pl4`.                                                                                                                                                                                           | `from: ac1`                                                           |
+| `spec.derive.<pp>.shift` | string           | yes         | -       | How far back, `<n> <unit>` with the unit `day`, `week`, `month`, `quarter` or `year`. A year shift keeps the `PY` caption, any other unit is captioned `PP`.                                                                                                                            | `shift: 1 month`                                                      |
+| `spec.derive.<pp>.grain` | string           | yes         | -       | The period one row stands for: `day`, `week`, `month`, `quarter` or `year`. Never inferred.                                                                                                                                                                                             | `grain: month`                                                        |
+| `spec.assert`            | object           | no          | -       | Previous-period slots the query supplies and bino checks, same shape as `derive`. A mismatch on any row with a prior period fails the build even under `--data-validation warn`.                                                                                                        | `assert: { pp3: { from: pl1, shift: 1 year, grain: month } }`         |
+| `spec.constants`         | object           | no          | -       | Values added as `_`-prefixed columns to every row after the query has run. Keys are camelCase without underscores; nested keys join with `_`, lists of scalars become a comma string, objects and lists of objects flatten by key and index. See [Constant columns](#constant-columns). | `constants: { unit: kEUR, spec: { table: { barColumns: ac1,pl1 } } }` |
 
-An inline DataSource — as `spec.source` or as an item of `spec.dependencies` — takes the full DataSource spec (`type` with the values `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`, plus `path`, `content`, `columns`, `connection`, `delimiter`, `sample`, …). Those attributes are documented in the [DataSource reference](/reference/datasource/).
+An inline DataSource - as `spec.source` or as an item of `spec.dependencies` - takes the full DataSource spec (`type` with the values `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`, plus `path`, `content`, `columns`, `connection`, `delimiter`, `sample`, …). Those attributes are documented in the [DataSource reference](/reference/datasource/).
 
 #### External file reference
 
@@ -925,12 +925,11 @@ spec:
 ```yaml
 spec:
   dependencies:
-    - sales_csv                    # named reference
-    - type: csv                    # inline definition
+    - sales_csv # named reference
+    - type: csv # inline definition
       path: ./data/extra.csv
   query: |
     SELECT * FROM sales_csv
     UNION ALL
     SELECT * FROM @inline(1)
 ```
-

@@ -93,17 +93,17 @@ spec:
     - kind: Table
       ref: revenue_table
       spec:
-        ruleset: inherited-page  # resolves to corporateRules
+        ruleset: inherited-page # resolves to corporateRules
 ```
 
 ## Rule-set structure
 
 The rule-set object has two top-level sections, both optional:
 
-| Section | Description |
-|---------|-------------|
+| Section     | Description                                                  |
+| ----------- | ------------------------------------------------------------ |
 | `scenarios` | Per-scenario-prefix rule overrides, keyed by scenario prefix |
-| `fallback` | Rules applied to scenario names not covered by `scenarios` |
+| `fallback`  | Rules applied to scenario names not covered by `scenarios`   |
 
 ### Scenario rules (`scenarios`)
 
@@ -112,11 +112,11 @@ scenarios (`ac`, `fc`, `pl`, `bu`, `pp`, `py`), the absolute variances
 (`dac` ... `dpy`), and the relative variances (`drac` ... `drpy`); user-defined
 prefixes are allowed too. Each entry supports:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | string | Display base name. Variants get `1`..`4` appended (e.g. `AC` → `AC1`). |
+| Property     | Type   | Description                                                                                 |
+| ------------ | ------ | ------------------------------------------------------------------------------------------- |
+| `name`       | string | Display base name. Variants get `1`..`4` appended (e.g. `AC` → `AC1`).                      |
 | `colorIndex` | number | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. |
-| `sortIndex` | number | Base sort index for column ordering. Variant `n` adds `n*10`. |
+| `sortIndex`  | number | Base sort index for column ordering. Variant `n` adds `n*10`.                               |
 
 Each prefix expands into four variants (`ac` → `ac1`..`ac4`) that inherit the
 base values, with the variant number appended to `name` and `n*10` added to
@@ -126,25 +126,25 @@ base values, with the variant number appended to `name` and `n*10` added to
 
 Applied to scenario names that have no `scenarios` entry:
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `name` | string | `Series` | Display name for unmatched scenarios. |
-| `group` | string | `Series` | Group label for unmatched scenarios. |
-| `colorIndex` | number | `10` | IBCS color encoding (see above). |
-| `sortIndex` | number | `120` | Sort index for unmatched scenarios. |
+| Property     | Type   | Default  | Description                           |
+| ------------ | ------ | -------- | ------------------------------------- |
+| `name`       | string | `Series` | Display name for unmatched scenarios. |
+| `group`      | string | `Series` | Group label for unmatched scenarios.  |
+| `colorIndex` | number | `10`     | IBCS color encoding (see above).      |
+| `sortIndex`  | number | `120`    | Sort index for unmatched scenarios.   |
 
 ### Built-in defaults (`_system`)
 
-| Prefix | Name | colorIndex | sortIndex |
-|--------|------|-----------|-----------|
-| `ac` | AC | 10 | 400 |
-| `fc` | FC | 30 | 300 |
-| `pl` | PL | 50 | 200 |
-| `bu` | BU | 50 | 200 |
-| `pp` | PP | 20 | 100 |
-| `py` | PY | 20 | 100 |
-| `dac`..`dpy` | dAC..dPY | as base | base + 1000 |
-| `drac`..`drpy` | drAC..drPY | as base | base + 2000 |
+| Prefix         | Name       | colorIndex | sortIndex   |
+| -------------- | ---------- | ---------- | ----------- |
+| `ac`           | AC         | 10         | 400         |
+| `fc`           | FC         | 30         | 300         |
+| `pl`           | PL         | 50         | 200         |
+| `bu`           | BU         | 50         | 200         |
+| `pp`           | PP         | 20         | 100         |
+| `py`           | PY         | 20         | 100         |
+| `dac`..`dpy`   | dAC..dPY   | as base    | base + 1000 |
+| `drac`..`drpy` | drAC..drPY | as base    | base + 2000 |
 
 ## Complete example
 
@@ -187,31 +187,31 @@ spec:
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `RuleSet`. |
-| `metadata.name` | string | yes | — | Unique rule-set identifier. Use `_default` for global overrides. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `RuleSet`.                                                                       |
+| `metadata.name`        | string | yes      | -       | Unique rule-set identifier. Use `_default` for global overrides.                         |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.content` | object or string | yes | — | Rule-set overrides as a YAML object or as a JSON string (at least 2 characters). Deep-merged over the `_system` and `_default` layers. Rendered as the JSON body of a `bn-ruleset` element. | `content: { scenarios: { pl: { name: PLAN } } }` |
-| `spec.content.scenarios` | object | no | — | Per-scenario-prefix rule overrides, keyed by scenario prefix (`ac`, `fc`, `pl`, `bu`, `pp`, `py`, `dac`..`dpy`, `drac`..`drpy`, or a user-defined prefix). See [Scenario rules](#scenario-rules-scenarios). | `scenarios: { pl: { name: PLAN } }` |
-| `spec.content.scenarios.<prefix>` | object | no | built-in `_system` rule of that prefix | Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values. See [Built-in defaults](#built-in-defaults-_system). | `pl: { name: PLAN, colorIndex: 50, sortIndex: 900 }` |
-| `spec.content.scenarios.<prefix>.name` | string | no | — | Display base name; variants get `1`..`4` appended (e.g. `AC` → `AC1`). | `name: PLAN` |
-| `spec.content.scenarios.<prefix>.colorIndex` | number | no | — | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. | `colorIndex: 50` |
-| `spec.content.scenarios.<prefix>.sortIndex` | number | no | — | Base sort index for column ordering; variant `n` adds `n*10`. | `sortIndex: 900` |
-| `spec.content.fallback` | object | no | — | Style applied to scenario names not present in `scenarios`. See [Fallback rules](#fallback-rules-fallback). | `fallback: { name: Other, colorIndex: 20 }` |
-| `spec.content.fallback.name` | string | no | see [Fallback rules](#fallback-rules-fallback) | Display name for unmatched scenarios. | `name: Other` |
-| `spec.content.fallback.group` | string | no | see [Fallback rules](#fallback-rules-fallback) | Group label for unmatched scenarios. | `group: Other` |
-| `spec.content.fallback.colorIndex` | number | no | see [Fallback rules](#fallback-rules-fallback) | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined. | `colorIndex: 20` |
-| `spec.content.fallback.sortIndex` | number | no | see [Fallback rules](#fallback-rules-fallback) | Sort index for column ordering. | `sortIndex: 500` |
+| Attribute                                    | Type             | Required | Default                                        | Description                                                                                                                                                                                                 | Sample                                               |
+| -------------------------------------------- | ---------------- | -------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `spec.content`                               | object or string | yes      | -                                              | Rule-set overrides as a YAML object or as a JSON string (at least 2 characters). Deep-merged over the `_system` and `_default` layers. Rendered as the JSON body of a `bn-ruleset` element.                 | `content: { scenarios: { pl: { name: PLAN } } }`     |
+| `spec.content.scenarios`                     | object           | no       | -                                              | Per-scenario-prefix rule overrides, keyed by scenario prefix (`ac`, `fc`, `pl`, `bu`, `pp`, `py`, `dac`..`dpy`, `drac`..`drpy`, or a user-defined prefix). See [Scenario rules](#scenario-rules-scenarios). | `scenarios: { pl: { name: PLAN } }`                  |
+| `spec.content.scenarios.<prefix>`            | object           | no       | built-in `_system` rule of that prefix         | Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values. See [Built-in defaults](#built-in-defaults-_system).                                                                 | `pl: { name: PLAN, colorIndex: 50, sortIndex: 900 }` |
+| `spec.content.scenarios.<prefix>.name`       | string           | no       | -                                              | Display base name; variants get `1`..`4` appended (e.g. `AC` → `AC1`).                                                                                                                                      | `name: PLAN`                                         |
+| `spec.content.scenarios.<prefix>.colorIndex` | number           | no       | -                                              | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined.                                                                                                                 | `colorIndex: 50`                                     |
+| `spec.content.scenarios.<prefix>.sortIndex`  | number           | no       | -                                              | Base sort index for column ordering; variant `n` adds `n*10`.                                                                                                                                               | `sortIndex: 900`                                     |
+| `spec.content.fallback`                      | object           | no       | -                                              | Style applied to scenario names not present in `scenarios`. See [Fallback rules](#fallback-rules-fallback).                                                                                                 | `fallback: { name: Other, colorIndex: 20 }`          |
+| `spec.content.fallback.name`                 | string           | no       | see [Fallback rules](#fallback-rules-fallback) | Display name for unmatched scenarios.                                                                                                                                                                       | `name: Other`                                        |
+| `spec.content.fallback.group`                | string           | no       | see [Fallback rules](#fallback-rules-fallback) | Group label for unmatched scenarios.                                                                                                                                                                        | `group: Other`                                       |
+| `spec.content.fallback.colorIndex`           | number           | no       | see [Fallback rules](#fallback-rules-fallback) | IBCS color encoding: `10` = solid dark, `20` = light gray, `30` = hatched, `50` = outlined.                                                                                                                 | `colorIndex: 20`                                     |
+| `spec.content.fallback.sortIndex`            | number           | no       | see [Fallback rules](#fallback-rules-fallback) | Sort index for column ordering.                                                                                                                                                                             | `sortIndex: 500`                                     |
 
 Components reference a named rule set through their own `spec.ruleset`
 attribute; see [Using named rule sets](#using-named-rule-sets).

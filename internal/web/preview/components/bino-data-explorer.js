@@ -29,7 +29,7 @@ function lsSet(key, value) {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    /* private mode or quota — layout just won't persist */
+    /* private mode or quota - layout just won't persist */
   }
 }
 

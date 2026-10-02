@@ -10,7 +10,11 @@ Unlike `ReportArtefact` which generates full-page PDFs, `ScreenshotArtefact` ext
 
 Here is an example of a screenshot captured by ScreenshotArtefact:
 
-<img src={chartStructureImg.src} alt="Screenshot of a ChartStructure component captured by ScreenshotArtefact" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={chartStructureImg.src}
+  alt="Screenshot of a ChartStructure component captured by ScreenshotArtefact"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Use Cases
 
@@ -119,7 +123,7 @@ spec:
   children:
     - kind: ChartStructure
       metadata:
-        name: sales_chart      # targetable as ChartStructure/sales_chart
+        name: sales_chart # targetable as ChartStructure/sales_chart
       spec:
         dataset: sales_data
         chartTitle: Sales by Region
@@ -131,7 +135,7 @@ spec:
 # components/kpi_table.yaml
 kind: Table
 metadata:
-  name: kpi_table              # targetable as Table/kpi_table
+  name: kpi_table # targetable as Table/kpi_table
 spec:
   dataset: kpi_data
 ```
@@ -141,9 +145,9 @@ Both work identically in `refs`:
 ```yaml
 refs:
   - kind: ChartStructure
-    name: sales_chart          # found on dashboard page
+    name: sales_chart # found on dashboard page
   - kind: Table
-    name: kpi_table            # standalone, auto-wrapped
+    name: kpi_table # standalone, auto-wrapped
 ```
 
 ## Examples
@@ -202,6 +206,7 @@ spec:
 ```
 
 Output:
+
 - `q4-presentation-sales_overview.png`
 - `q4-presentation-monthly_trend.png`
 - `q4-presentation-kpi_summary.png`
@@ -287,17 +292,17 @@ spec:
 
 ## Supported Component Kinds
 
-| Kind | Description |
-|------|-------------|
+| Kind             | Description                                          |
+| ---------------- | ---------------------------------------------------- |
 | `ChartStructure` | Structural/categorical charts (bar, waterfall, etc.) |
-| `ChartTime` | Time-series charts |
-| `ChartScatter` | Scatter plots |
-| `ChartBubble` | Bubble charts |
-| `ChartBullet` | Bullet charts |
-| `Tree` | Hierarchical tree diagrams |
-| `Table` | Data tables |
-| `LayoutCard` | Card containers |
-| `Text` | Text components |
+| `ChartTime`      | Time-series charts                                   |
+| `ChartScatter`   | Scatter plots                                        |
+| `ChartBubble`    | Bubble charts                                        |
+| `ChartBullet`    | Bullet charts                                        |
+| `Tree`           | Hierarchical tree diagrams                           |
+| `Table`          | Data tables                                          |
+| `LayoutCard`     | Card containers                                      |
+| `Text`           | Text components                                      |
 
 ## Notes
 
@@ -310,32 +315,32 @@ spec:
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `ScreenshotArtefact`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `ScreenshotArtefact`.                                                            |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                       |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.filenamePrefix` | string | yes | — | Prefix of every generated screenshot filename. | `filenamePrefix: quarterly-report` |
-| `spec.refs` | array | yes | — | Components to capture, at least one. Each entry is targeted by `kind` + `metadata.name`; see [Component Targeting](#component-targeting). | `refs: [{ kind: Table, name: summary_table }]` |
-| `spec.refs[].kind` | string | yes | — | Kind of the component to capture. Values: `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Table`, `LayoutCard`, `Text`. | `kind: ChartStructure` |
-| `spec.refs[].name` | string | yes | — | `metadata.name` of the component to capture. | `name: sales_by_region` |
-| `spec.format` | string | no | `xga` | Logical viewport size. Resolved sizes: `xga` (1024x768), `hd` (1280x720), `full-hd` / `full_hd` (1920x1080), `4k` (3840x2160), `4k2k` (4096x2160). Any other lowercase value (paper sizes such as `a4`) is accepted but falls back to the XGA viewport. | `format: full-hd` |
-| `spec.orientation` | string | no | `landscape` | Viewport orientation. Values: `portrait`, `landscape`. Portrait swaps the format's width and height. | `orientation: landscape` |
-| `spec.scale` | string | no | — (behaves like `css`) | Screenshot resolution. `css` renders at 1x CSS pixels, `device` at 2x for sharp HiDPI output. | `scale: device` |
-| `spec.language` | string | no | `de` | Language code passed to the renderer. Values: `de`, `en`. | `language: de` |
-| `spec.filenamePattern` | string | no | `ref` | Filename pattern. `ref` produces `{prefix}-{component_name}.png`, `index` produces `{prefix}-001.png`, `{prefix}-002.png`, … | `filenamePattern: ref` |
-| `spec.imageFormat` | string | no | `png` | Image format. Values: `png`, `jpeg`. Currently ignored — the renderer always writes PNG. | `imageFormat: png` |
-| `spec.quality` | integer | no | — | JPEG quality, `1`–`100`. Only meaningful with `imageFormat: jpeg`, and currently ignored by the renderer. | `quality: 85` |
-| `spec.omitBackground` | boolean | no | `false` | Capture with a transparent background (PNG only). Currently ignored by the renderer. | `omitBackground: true` |
-| `spec.layoutPages` | string or array | no | — (auto-discovered from `refs`) | Pages to render: a single page name, or a list whose items are page names, glob patterns, or `page` + `params` objects. See [How Components Are Resolved](#how-components-are-resolved). | `layoutPages: regional_dashboard` |
-| `spec.layoutPages[].page` | string | yes (in object form) | — | Exact name of the `LayoutPage` to render, no glob pattern. | `page: regional_dashboard` |
-| `spec.layoutPages[].params` | object | no | — | Parameter values passed to the page. Keys must match the parameter names declared in the page's `metadata.params`. | `params: { REGION: EU }` |
+| Attribute                   | Type            | Required             | Default                         | Description                                                                                                                                                                                                                                             | Sample                                         |
+| --------------------------- | --------------- | -------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `spec.filenamePrefix`       | string          | yes                  | -                               | Prefix of every generated screenshot filename.                                                                                                                                                                                                          | `filenamePrefix: quarterly-report`             |
+| `spec.refs`                 | array           | yes                  | -                               | Components to capture, at least one. Each entry is targeted by `kind` + `metadata.name`; see [Component Targeting](#component-targeting).                                                                                                               | `refs: [{ kind: Table, name: summary_table }]` |
+| `spec.refs[].kind`          | string          | yes                  | -                               | Kind of the component to capture. Values: `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Table`, `LayoutCard`, `Text`.                                                                                           | `kind: ChartStructure`                         |
+| `spec.refs[].name`          | string          | yes                  | -                               | `metadata.name` of the component to capture.                                                                                                                                                                                                            | `name: sales_by_region`                        |
+| `spec.format`               | string          | no                   | `xga`                           | Logical viewport size. Resolved sizes: `xga` (1024x768), `hd` (1280x720), `full-hd` / `full_hd` (1920x1080), `4k` (3840x2160), `4k2k` (4096x2160). Any other lowercase value (paper sizes such as `a4`) is accepted but falls back to the XGA viewport. | `format: full-hd`                              |
+| `spec.orientation`          | string          | no                   | `landscape`                     | Viewport orientation. Values: `portrait`, `landscape`. Portrait swaps the format's width and height.                                                                                                                                                    | `orientation: landscape`                       |
+| `spec.scale`                | string          | no                   | - (behaves like `css`)          | Screenshot resolution. `css` renders at 1x CSS pixels, `device` at 2x for sharp HiDPI output.                                                                                                                                                           | `scale: device`                                |
+| `spec.language`             | string          | no                   | `de`                            | Language code passed to the renderer. Values: `de`, `en`.                                                                                                                                                                                               | `language: de`                                 |
+| `spec.filenamePattern`      | string          | no                   | `ref`                           | Filename pattern. `ref` produces `{prefix}-{component_name}.png`, `index` produces `{prefix}-001.png`, `{prefix}-002.png`, …                                                                                                                            | `filenamePattern: ref`                         |
+| `spec.imageFormat`          | string          | no                   | `png`                           | Image format. Values: `png`, `jpeg`. Currently ignored - the renderer always writes PNG.                                                                                                                                                                | `imageFormat: png`                             |
+| `spec.quality`              | integer         | no                   | -                               | JPEG quality, `1`–`100`. Only meaningful with `imageFormat: jpeg`, and currently ignored by the renderer.                                                                                                                                               | `quality: 85`                                  |
+| `spec.omitBackground`       | boolean         | no                   | `false`                         | Capture with a transparent background (PNG only). Currently ignored by the renderer.                                                                                                                                                                    | `omitBackground: true`                         |
+| `spec.layoutPages`          | string or array | no                   | - (auto-discovered from `refs`) | Pages to render: a single page name, or a list whose items are page names, glob patterns, or `page` + `params` objects. See [How Components Are Resolved](#how-components-are-resolved).                                                                | `layoutPages: regional_dashboard`              |
+| `spec.layoutPages[].page`   | string          | yes (in object form) | -                               | Exact name of the `LayoutPage` to render, no glob pattern.                                                                                                                                                                                              | `page: regional_dashboard`                     |
+| `spec.layoutPages[].params` | object          | no                   | -                               | Parameter values passed to the page. Keys must match the parameter names declared in the page's `metadata.params`.                                                                                                                                      | `params: { REGION: EU }`                       |

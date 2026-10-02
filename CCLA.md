@@ -12,7 +12,7 @@ This CCLA is adapted from the [Apache Software Foundation CCLA v2.0](https://www
 
 ## Summary of what your company grants
 
-Identical grants to the [ICLA](CLA.md) — copyright license, patent license, and representations — but made by the Corporation on behalf of all employees listed in Schedule A of the signed CCLA. The grants **permit the Project Owner to relicense Contributions under any terms, including proprietary/commercial terms**.
+Identical grants to the [ICLA](CLA.md) - copyright license, patent license, and representations - but made by the Corporation on behalf of all employees listed in Schedule A of the signed CCLA. The grants **permit the Project Owner to relicense Contributions under any terms, including proprietary/commercial terms**.
 
 ## How to sign
 

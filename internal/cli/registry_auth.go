@@ -168,7 +168,7 @@ func newRegistryLogoutCommand() *cobra.Command {
 				}
 			}
 			if !revoked {
-				out.Warning("Could not revoke the token server-side — it may still be active; revoke it in the registry web UI")
+				out.Warning("Could not revoke the token server-side - it may still be active; revoke it in the registry web UI")
 			}
 
 			creds.Delete(url)

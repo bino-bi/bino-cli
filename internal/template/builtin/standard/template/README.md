@@ -15,18 +15,18 @@ bino graph      # visualise the dependency graph
 
 ## What is in here
 
-| Folder | Contents |
-| --- | --- |
-| `datasources/` | Where data comes from: `new_cities` reads the CSV under `resources/data/`, `{{ .DataSourceName }}` is an inline example. |
-| `datasets/` | SQL over the datasources. `revenue_by_city` aggregates the CSV; `{{ .DataSetName }}` is a passthrough. |
-| `pages/` | `LayoutPage` documents. `{{ .LayoutName }}` holds the IBCS table the report renders; `welcome-page` is a narrative `Text` page you can open in preview. |
-| `components/` | Reusable visuals — `example_chart` is a `ChartStructure` referenced from `docs/`. |
-| `reports/` | The deliverables: a PDF (`{{ .ReportName }}`), a served app (`live`), and a Markdown-driven document (`documentation`). |
-| `styles/` | `ComponentStyle` documents. `corporateTheme` is applied by the table and the chart. |
-| `i18n/` | Label translations. `{{ .Language }}.yaml` matches this report's `language`; add one document per further locale. |
-| `resources/` | Non-manifest payloads: the CSV, image and flag `Asset` declarations, signing key placeholders. |
-| `docs/` | Markdown chapters compiled into `documentation.pdf` by `reports/document.yaml`. |
-| `scripts/` | Example build hook. Run `chmod +x scripts/log_hook.sh` before wiring it into `bino.toml`. |
+| Folder         | Contents                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `datasources/` | Where data comes from: `new_cities` reads the CSV under `resources/data/`, `{{ .DataSourceName }}` is an inline example.                                |
+| `datasets/`    | SQL over the datasources. `revenue_by_city` aggregates the CSV; `{{ .DataSetName }}` is a passthrough.                                                  |
+| `pages/`       | `LayoutPage` documents. `{{ .LayoutName }}` holds the IBCS table the report renders; `welcome-page` is a narrative `Text` page you can open in preview. |
+| `components/`  | Reusable visuals - `example_chart` is a `ChartStructure` referenced from `docs/`.                                                                       |
+| `reports/`     | The deliverables: a PDF (`{{ .ReportName }}`), a served app (`live`), and a Markdown-driven document (`documentation`).                                 |
+| `styles/`      | `ComponentStyle` documents. `corporateTheme` is applied by the table and the chart.                                                                     |
+| `i18n/`        | Label translations. `{{ .Language }}.yaml` matches this report's `language`; add one document per further locale.                                       |
+| `resources/`   | Non-manifest payloads: the CSV, image and flag `Asset` declarations, signing key placeholders.                                                          |
+| `docs/`        | Markdown chapters compiled into `documentation.pdf` by `reports/document.yaml`.                                                                         |
+| `scripts/`     | Example build hook. Run `chmod +x scripts/log_hook.sh` before wiring it into `bino.toml`.                                                               |
 
 ## Next steps
 

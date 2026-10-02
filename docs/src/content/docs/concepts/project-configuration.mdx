@@ -34,7 +34,7 @@ engine-version = "v0.37.0"
 
 | Field            | Type   | Description                                                                                                                     |
 | ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `report-id`      | string | A unique identifier for this reporting project. Generated as a UUID by `bino init`.                                            |
+| `report-id`      | string | A unique identifier for this reporting project. Generated as a UUID by `bino init`.                                             |
 | `engine-version` | string | Optional. The template engine version to use (e.g., `v0.37.0`). If not specified, the latest locally installed version is used. |
 
 ## Template engine versioning
@@ -89,13 +89,13 @@ text-content-required = "error"
 i18n-code-unused = "info"
 ```
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `lint.disable` | array | Rule IDs whose findings are never reported. |
+| Field           | Type  | Description                                           |
+| --------------- | ----- | ----------------------------------------------------- |
+| `lint.disable`  | array | Rule IDs whose findings are never reported.           |
 | `lint.severity` | table | Rule ID mapped to `"error"`, `"warning"` or `"info"`. |
 
 **`disable`** removes a finding from everything bino prints, writes to the lint
-log, or sends to the editor — `bino lint`, `bino build`, `bino preview --lint`
+log, or sends to the editor - `bino lint`, `bino build`, `bino preview --lint`
 and the LSP alike. It hides the finding; it does not repair what the finding
 was about.
 
@@ -109,7 +109,7 @@ Only a severity you set here affects an exit code.
 
 - `"error"` makes `bino lint` exit non-zero on its own, without `--fail-on-warnings`.
 - `"info"` keeps the finding visible but exempts it from `--fail-on-warnings`.
-- A rule that reports `Error` in the [rules table](/appendix/lint-rules/) by itself stays advisory and changes no exit code. That has always been true, and `[lint]` does not change it — name the rule in `[lint.severity]` if you want it to fail the command.
+- A rule that reports `Error` in the [rules table](/appendix/lint-rules/) by itself stays advisory and changes no exit code. That has always been true, and `[lint]` does not change it - name the rule in `[lint.severity]` if you want it to fail the command.
 
 `bino build` is not affected at all. It prints the findings that survive
 `[lint]`, but no lint finding has ever failed a build, and `[lint]` neither
@@ -126,12 +126,12 @@ finding you can switch off.
 Every rule in the [lint rules appendix](/appendix/lint-rules/), plus four IDs
 that findings carry although no rule of that name declares them:
 
-| ID | Covers |
-| -- | ------ |
-| `schema-validation` | One finding per manifest that failed schema validation. |
-| `manifest-load` | One finding per manifest that could not be loaded at all. |
-| `engine-version-incompatible` | The `engine-version` pin check. |
-| `missing-required-reference` | The dangling-reference finding, which [`page-layout-slots-used`](/appendix/lint-rules/#page-layout-slots-used) emits while it walks the children of a page. The appendix documents it under its own heading. |
+| ID                            | Covers                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema-validation`           | One finding per manifest that failed schema validation.                                                                                                                                                      |
+| `manifest-load`               | One finding per manifest that could not be loaded at all.                                                                                                                                                    |
+| `engine-version-incompatible` | The `engine-version` pin check.                                                                                                                                                                              |
+| `missing-required-reference`  | The dangling-reference finding, which [`page-layout-slots-used`](/appendix/lint-rules/#page-layout-slots-used) emits while it walks the children of a page. The appendix documents it under its own heading. |
 
 Disabling `engine-version-incompatible` turns that check off completely: the
 finding disappears and so does the non-zero exit it forced, in `bino lint` and
@@ -158,14 +158,14 @@ bino.toml: invalid severity "fatal" for rule id "text-content-required" in [lint
 bino.toml: severity is not configurable for "schema-validation"; use [lint] disable to silence it
 ```
 
-Such an entry is never silently honoured — it disables nothing and re-grades
+Such an entry is never silently honoured - it disables nothing and re-grades
 nothing.
 
 <Aside>
-Bino checks your entries against the rules that really run in *this* project.
-The `predef-*` rules and `package-config-invalid` only exist in a project with a
-`[package]` table, so naming one of them in an ordinary report project is
-reported as an unknown rule ID.
+  Bino checks your entries against the rules that really run in *this* project.
+  The `predef-*` rules and `package-config-invalid` only exist in a project with
+  a `[package]` table, so naming one of them in an ordinary report project is
+  reported as an unknown rule ID.
 </Aside>
 
 ### Not covered by `[lint]`
@@ -189,11 +189,11 @@ token = "${ACME_REGISTRY_TOKEN}"    # optional; literal or ${ENV_VAR}
 "@acme/base-layout"      = "latest" # a tag name = follows the tag
 ```
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `registry.url` | string | Optional. Registry base URL; overrides `BINO_REGISTRY_URL` and the global `~/.bino/config.toml`; defaults to the public registry. |
-| `registry.token` | string | Optional. Access token, either literal or a `${ENV_VAR}` reference expanded at runtime. |
-| `dependencies.*` | string | One entry per package (`@scope/name`), mapping to an exact version or a tag. |
+| Field            | Type   | Description                                                                                                                       |
+| ---------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `registry.url`   | string | Optional. Registry base URL; overrides `BINO_REGISTRY_URL` and the global `~/.bino/config.toml`; defaults to the public registry. |
+| `registry.token` | string | Optional. Access token, either literal or a `${ENV_VAR}` reference expanded at runtime.                                           |
+| `dependencies.*` | string | One entry per package (`@scope/name`), mapping to an exact version or a tag.                                                      |
 
 The `[dependencies]` table is normally maintained by `bino registry add` and
 `bino registry remove`; resolved versions are pinned in `bino.lock` next to
@@ -204,7 +204,7 @@ and the [bino registry](/cli/registry/) command reference.
 
 A `[package]` table turns an ordinary project into a **predef project**: a project
 that not only renders reports, but also authors a reusable package other projects
-can install. The table itself is the marker — there is no `type` key and no second
+can install. The table itself is the marker - there is no `type` key and no second
 config file. `report-id` and `[package]` coexist, so a project can keep rendering
 its own reports while it publishes a kit.
 
@@ -222,17 +222,17 @@ include = ["components", "styles", "resources"]
 preview = "mocks/preview.yaml#starter-kit-preview"
 ```
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | string | Required. The package name, `@scope/name`, with lowercase `a-z0-9_-` segments. |
-| `description` | string | Optional. One-line summary shown in the registry. |
-| `tags` | array | Optional. Free-form keywords for registry search. |
-| `category` | string | Optional. Registry category. |
-| `visibility` | string | Optional. `public` or `private`; defaults to `private`. |
-| `compat-engine` | string | Optional. Semver range of template engine versions this package works with. |
-| `compat-cli` | string | Optional. Semver range of bino CLI versions this package works with. |
-| `include` | array | Optional. Project-relative files and directories that make up the package. Defaults to every canonical manifest folder. |
-| `preview` | string | Optional. `path#definition-name` — the artefact or page that demonstrates the package. |
+| Field           | Type   | Description                                                                                                             |
+| --------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `name`          | string | Required. The package name, `@scope/name`, with lowercase `a-z0-9_-` segments.                                          |
+| `description`   | string | Optional. One-line summary shown in the registry.                                                                       |
+| `tags`          | array  | Optional. Free-form keywords for registry search.                                                                       |
+| `category`      | string | Optional. Registry category.                                                                                            |
+| `visibility`    | string | Optional. `public` or `private`; defaults to `private`.                                                                 |
+| `compat-engine` | string | Optional. Semver range of template engine versions this package works with.                                             |
+| `compat-cli`    | string | Optional. Semver range of bino CLI versions this package works with.                                                    |
+| `include`       | array  | Optional. Project-relative files and directories that make up the package. Defaults to every canonical manifest folder. |
+| `preview`       | string | Optional. `path#definition-name` - the artefact or page that demonstrates the package.                                  |
 
 ### The include set
 
@@ -250,26 +250,27 @@ whole `components/` tree plus one style manifest.
 
 Three directories are **never** part of a package, whatever `include` says:
 
-- `mocks/` — the sample data and the preview harness that make the package
+- `mocks/` - the sample data and the preview harness that make the package
   demonstrable locally. This is where the artefact and the mock `DataSource`
   belong.
-- `reports/` — the artefacts that render *your* reports.
-- `.bino/` — machine-managed state, including the packages you installed
+- `reports/` - the artefacts that render _your_ reports.
+- `.bino/` - machine-managed state, including the packages you installed
   yourself.
 
 ### Naming inside a package
 
 Documents in the include set carry the package name: exactly `@acme/starter-kit`
 for the single main definition, or `@acme/starter-kit/<definition>` for every
-other one. A `DataSource` is the exception — its name becomes a DuckDB view name
-and is limited to two segments — so mock data sources belong in `mocks/`.
+other one. A `DataSource` is the exception - its name becomes a DuckDB view name
+and is limited to two segments - so mock data sources belong in `mocks/`.
 
 <Aside>
-The `[package]` table is **not** validated when `bino.toml` is loaded. An
-unrelated command such as `bino plugin list` must not fail over a field only a
-publish reads. `bino lint` checks it instead and reports problems as
-[`package-config-invalid`](/appendix/lint-rules/#package-config-invalid), together
-with the four `predef-*` content rules that only run on a predef project.
+  The `[package]` table is **not** validated when `bino.toml` is loaded. An
+  unrelated command such as `bino plugin list` must not fail over a field only a
+  publish reads. `bino lint` checks it instead and reports problems as
+  [`package-config-invalid`](/appendix/lint-rules/#package-config-invalid),
+  together with the four `predef-*` content rules that only run on a predef
+  project.
 </Aside>
 
 Run `bino init predef` to scaffold a project that already carries a `[package]`

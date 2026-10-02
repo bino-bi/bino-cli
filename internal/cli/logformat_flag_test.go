@@ -11,7 +11,7 @@ import (
 // Regression: build and lint registered a LOCAL --log-format flag with a
 // different meaning (build-log file format). pflag skips duplicate names when
 // merging persistent flags, so the root's --log-format (logger format) never
-// reached these commands — `bino build --log-format json` was accepted and
+// reached these commands - `bino build --log-format json` was accepted and
 // did nothing for logging, and the root's validation never fired.
 func TestBuildLogFormatReachesRootLogger(t *testing.T) {
 	t.Setenv("CI", "1")

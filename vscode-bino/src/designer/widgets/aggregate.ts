@@ -4,10 +4,10 @@ import { esc, jsonAttr, widgetShell } from './widgetHtml';
 
 /**
  * The aggregate-expression widget family: the four Table fields that are an
- * ordered array of small objects — `thereof`, `partof`, `columnthereof`,
+ * ordered array of small objects - `thereof`, `partof`, `columnthereof`,
  * `attributes`. One widget renders the row shape for whichever field claimed it.
  * Emits the array-of-objects (or the raw-JSON tab the edit re-validates). Array
- * order is column order; rows append/replace today — reorder lands with brief 05b.
+ * order is column order; rows append/replace today - reorder lands with brief 05b.
  */
 
 /** The Table fields this widget owns, each with its row shape. */
@@ -93,9 +93,9 @@ function renderAttributeRow(item: Record<string, unknown>, columns: readonly str
         <input class="dw-input dw-sm" type="text" data-dw-role="label" placeholder="label" value="${esc(label)}">
         <select class="dw-select dw-sm" data-dw-role="fn">
             ${['lit', ...AGG_FUNCTIONS].map(f => {
-                const sel = (isLit ? f === 'lit' : f === fn) ? ' selected' : '';
-                return `<option value="${esc(f)}"${sel}>${esc(f)}</option>`;
-            }).join('')}
+        const sel = (isLit ? f === 'lit' : f === fn) ? ' selected' : '';
+        return `<option value="${esc(f)}"${sel}>${esc(f)}</option>`;
+    }).join('')}
         </select>
         <input class="dw-input dw-sm" type="text" data-dw-role="arg" list="${esc(listId)}" placeholder="${isLit ? 'constant' : 'field or _custom'}" value="${esc(arg)}">
         <datalist id="${esc(listId)}">${columns.map(c => `<option value="${esc(c)}">`).join('')}</datalist>

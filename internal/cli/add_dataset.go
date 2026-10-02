@@ -16,7 +16,7 @@ import (
 	"bino.bi/bino/internal/schema"
 )
 
-func newAddDataSetCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func newAddDataSetCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity - refactor before extending
 	var (
 		flagSQL        string
 		flagSQLFile    string

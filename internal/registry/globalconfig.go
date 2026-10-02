@@ -19,7 +19,7 @@ type GlobalConfig struct {
 }
 
 // GlobalRegistry is the [registry] table of the global config. It holds only
-// the URL — tokens belong in credentials.json or BINO_REGISTRY_TOKEN.
+// the URL - tokens belong in credentials.json or BINO_REGISTRY_TOKEN.
 type GlobalRegistry struct {
 	URL string `toml:"url,omitempty"`
 }
@@ -34,7 +34,7 @@ func GlobalConfigPath() (string, error) {
 }
 
 // LoadGlobalConfig reads the global config. A missing file yields a zero
-// config; any other failure (unreadable, malformed TOML) is an error — a
+// config; any other failure (unreadable, malformed TOML) is an error - a
 // broken global config must not silently redirect to the public registry.
 func LoadGlobalConfig() (GlobalConfig, error) {
 	var cfg GlobalConfig

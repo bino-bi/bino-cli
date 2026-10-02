@@ -47,7 +47,7 @@ const defaultPreviewPort = 45678
 //   - The file watcher stops processing events
 //   - The HTTP server performs graceful shutdown (5s timeout)
 //   - The refresh goroutine exits
-func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathered complexity - refactor before extending
 	var (
 		port           int
 		addr           string
@@ -107,7 +107,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 
 			queryLogger := newQueryLogger(ctx, logger, logSQL)
 
-			// Resolve data validation mode early — must happen before the boot
+			// Resolve data validation mode early - must happen before the boot
 			// goroutine starts, since refreshCfg captures it.
 			dataValidation = env.Resolver.ResolveString("data-validation", "data-validation", dataValidation)
 			dataValidationMode, err := resolveDataValidationMode(dataValidation)
@@ -328,7 +328,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				// Wire the buffer-override endpoint so the VS Code extension can
 				// push unsaved editor content for a manifest. EmbedByName then
 				// renders that file's component straight from the buffer (a fresh
-				// overlaid load) instead of disk — no auto-save, no full refresh.
+				// overlaid load) instead of disk - no auto-save, no full refresh.
 				projectRoot := env.ProjectRoot
 				server.SetEmbeddingOverrideFunc(func(file, content string, remove bool) error {
 					if !pathWithinRoot(projectRoot, file) {
@@ -365,7 +365,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return nil
 				}
 
-				// 3. Initial refresh — failure no longer aborts the server,
+				// 3. Initial refresh - failure no longer aborts the server,
 				// the loading page surfaces the error and the watcher will
 				// retry once the user fixes the source.
 				var visitedDirs []string
@@ -379,7 +379,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					reporter.End(bootstatus.PhaseReady)
 				}
 
-				// 4. Explorer session — kept off the cold-start critical path
+				// 4. Explorer session - kept off the cold-start critical path
 				// by initializing AFTER the first refresh (so it doesn't add
 				// to the "time to first paint"). Self-populates from the docs
 				// the first refresh already loaded; failure is non-fatal.
@@ -462,7 +462,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			}()
 
 			// Wait for either the server goroutine to exit (shutdown) or the
-			// outer context to cancel. We do not block on bootDone — the
+			// outer context to cancel. We do not block on bootDone - the
 			// server should keep accepting requests even if boot is mid-flight
 			// when Ctrl+C arrives.
 			err = <-serverErrCh

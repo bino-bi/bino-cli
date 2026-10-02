@@ -445,7 +445,7 @@ func updateArtefactLayoutPages(artefactPath string, pageRef LayoutPageRefData) e
 	// Parse multi-document YAML. Any decode failure aborts the update: this
 	// function rewrites the user's file from the parsed documents, so a
 	// document that fails to decode would be silently dropped by the
-	// re-encode. Only io.EOF is the clean end — after any other error the
+	// re-encode. Only io.EOF is the clean end - after any other error the
 	// yaml.v3 parser is not reliably positioned at the next document.
 	var documents []map[string]any
 	decoder := yaml.NewDecoder(strings.NewReader(string(content)))

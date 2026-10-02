@@ -6,17 +6,17 @@ import "strings"
 // knowledge the LSP carries; it powers hover and completion documentation for
 // scenario/variance tokens.
 var scenarioDoc = map[string]string{
-	"ac": "Actual — measured/realized values.",
-	"pp": "Previous Period — the comparable prior period. What a pp slot compares against (shift and grain) is declared per DataSet in derive:/assert:; captioned PY by default, PP when the shift unit is not year.",
-	"fc": "Forecast — expected values for the remaining horizon.",
-	"pl": "Plan — budgeted/target values.",
+	"ac": "Actual - measured/realized values.",
+	"pp": "Previous Period - the comparable prior period. What a pp slot compares against (shift and grain) is declared per DataSet in derive:/assert:; captioned PY by default, PP when the shift unit is not year.",
+	"fc": "Forecast - expected values for the remaining horizon.",
+	"pl": "Plan - budgeted/target values.",
 }
 
 // varianceSentiment documents the sentiment suffix of the variance grammar.
 var varianceSentiment = map[string]string{
-	"pos": "positive sentiment — more is better (e.g. revenue).",
-	"neg": "negative sentiment — more is worse (e.g. cost).",
-	"neu": "neutral sentiment — no inherent good/bad direction.",
+	"pos": "positive sentiment - more is better (e.g. revenue).",
+	"neg": "negative sentiment - more is worse (e.g. cost).",
+	"neu": "neutral sentiment - no inherent good/bad direction.",
 }
 
 // scenarioMeaning returns hover documentation for a scenario slot like "ac1" or

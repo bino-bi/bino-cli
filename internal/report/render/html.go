@@ -508,7 +508,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 			}
 			pages = append(pages, htmlContent)
 		default:
-			// Root-renderable kinds are skipped silently here — they render
+			// Root-renderable kinds are skipped silently here - they render
 			// when referenced via ref in a LayoutPage. (embed.IsRootRenderable
 			// is the shared authority with the build-side switch above.)
 			continue

@@ -32,7 +32,7 @@ type Metadata struct {
 }
 
 // Spec is the template's declarative configuration. There is no hook or command
-// surface by design — the parser rejects unknown keys (fail-closed) so a
+// surface by design - the parser rejects unknown keys (fail-closed) so a
 // speculative hooks:/run: key in an untrusted manifest can never be honored.
 type Spec struct {
 	MinBinoVersion string   `yaml:"min-bino-version,omitempty"`

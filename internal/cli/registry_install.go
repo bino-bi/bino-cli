@@ -56,7 +56,7 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 		if len(p.Cfg.Dependencies) == 0 {
 			return mcp.RegistryMutationResult{Changes: []mcp.RegistryChange{}}, nil
 		}
-		return mcp.RegistryMutationResult{}, ConfigErrorf("bino.toml declares dependencies but %s has no packages — run 'bino registry update' to create it", registry.LockfileName)
+		return mcp.RegistryMutationResult{}, ConfigErrorf("bino.toml declares dependencies but %s has no packages - run 'bino registry update' to create it", registry.LockfileName)
 	}
 	if err := checkLockDrift(p, lock); err != nil {
 		return mcp.RegistryMutationResult{}, err
@@ -77,7 +77,7 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 		}
 		plans = append(plans, pp)
 	}
-	// The lock is authoritative here — it is not rewritten, so a v1
+	// The lock is authoritative here - it is not rewritten, so a v1
 	// lock stays a v1 lock on disk and re-installing produces no diff.
 	if err := materialize(p, plans, false); err != nil {
 		return mcp.RegistryMutationResult{}, err
@@ -97,7 +97,7 @@ func registryInstall(ctx context.Context, p registryProject) (mcp.RegistryMutati
 // declarations, so install never silently materializes a stale closure.
 func checkLockDrift(p registryProject, lock *registry.Lockfile) error {
 	drift := func(format string, args ...any) error {
-		return ConfigErrorf("%s is out of date with bino.toml (%s) — run 'bino registry update'", registry.LockfileName, fmt.Sprintf(format, args...))
+		return ConfigErrorf("%s is out of date with bino.toml (%s) - run 'bino registry update'", registry.LockfileName, fmt.Sprintf(format, args...))
 	}
 	direct := map[string]bool{}
 	for _, e := range lock.Packages {
@@ -108,7 +108,7 @@ func checkLockDrift(p registryProject, lock *registry.Lockfile) error {
 		// so an empty one here means the file claims version 2 while an older
 		// bino rewrote it and dropped the fields this CLI needs.
 		if e.Format == "" {
-			return ConfigErrorf("%s records %s without a package format — it was probably rewritten by an older bino; run 'bino registry update'", registry.LockfileName, e.Name)
+			return ConfigErrorf("%s records %s without a package format - it was probably rewritten by an older bino; run 'bino registry update'", registry.LockfileName, e.Name)
 		}
 	}
 	for name, ref := range p.Cfg.Dependencies {

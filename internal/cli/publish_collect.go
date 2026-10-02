@@ -37,7 +37,7 @@ var (
 
 // credentialDirs are never publishable, whatever the include list says.
 // secrets/ and signing/ are in the default include set, and the predef lint
-// rule that flags credential kinds only sees YAML — so a secrets/*.csv would
+// rule that flags credential kinds only sees YAML - so a secrets/*.csv would
 // otherwise pass the resource allow-list and be uploaded. The directory is the
 // marker here, independently of what the files contain.
 var credentialDirs = []string{"secrets", "signing"}
@@ -50,7 +50,7 @@ var credentialKinds = []string{"ConnectionSecret", "SigningProfile"}
 //
 // The walk is deliberately stricter than the loader's: it refuses symlinks
 // rather than following them (an included symlink is an exfiltration primitive
-// — the file the author sees is not the file that would be uploaded), refuses
+// - the file the author sees is not the file that would be uploaded), refuses
 // credentials, and refuses anything the registry's path grammar or resource
 // allow-list would reject, so a mistake costs a local error instead of a
 // rejected upload.
@@ -135,7 +135,7 @@ func collectOneFile(abs, slashRel string) (collectedFile, error) {
 		return collectedFile{}, fmt.Errorf("%s cannot be published: %w", slashRel, err)
 	}
 	if isCredentialPath(slashRel) {
-		return collectedFile{}, fmt.Errorf("%w: %s — exclude it with [package].include", errPublishCredential, slashRel)
+		return collectedFile{}, fmt.Errorf("%w: %s - exclude it with [package].include", errPublishCredential, slashRel)
 	}
 	body, err := os.ReadFile(abs)
 	if err != nil {
@@ -149,7 +149,7 @@ func collectOneFile(abs, slashRel string) (collectedFile, error) {
 	}
 	if f.Type == registry.FileResource {
 		if !registry.ResourceExtAllowed(slashRel) {
-			return collectedFile{}, fmt.Errorf("%w: %s — the registry accepts %s",
+			return collectedFile{}, fmt.Errorf("%w: %s - the registry accepts %s",
 				registry.ErrUnsupportedType, slashRel, strings.Join(registry.ResourceExtensions(), ", "))
 		}
 		f.Digest = registry.ResourceDigest(body)

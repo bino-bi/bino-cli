@@ -9,7 +9,7 @@ import (
 
 // Canonical introspection result shapes, shared by the HTTP daemon handlers and
 // the MCP server. The JSON tags match the stable lsp-helper contract that VS
-// Code and sandbox already consume — do not invent new shapes for the same data.
+// Code and sandbox already consume - do not invent new shapes for the same data.
 
 // IndexDocument is a single entry in the project index.
 type IndexDocument struct {

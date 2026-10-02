@@ -1,6 +1,6 @@
 ---
 title: When to use bino
-description: Real-world B2B scenarios where bino excels — and where it does not.
+description: Real-world B2B scenarios where bino excels - and where it does not.
 sidebar:
   order: 2
 ---
@@ -17,11 +17,11 @@ With bino, you define one report bundle: a Postgres `DataSource` pointing at you
 
 A financial services company files quarterly reports with detailed formatting requirements: A4 portrait, specific header and footer text, page numbers, and a digital signature from the compliance officer. Source data comes from both a Postgres data warehouse and Excel files provided by auditors.
 
-bino handles multiple data source types in the same bundle. `DataSource` manifests for Postgres and Excel feed into `DataSet` queries that join and aggregate across sources. `LayoutPage` manifests control the A4 formatting precisely — headers, footers, page breaks, margins. A `SigningProfile` applies a digital signature to every output PDF. Constraints separate development data (inline mock rows) from production data (real database connections), so the same bundle works in both environments.
+bino handles multiple data source types in the same bundle. `DataSource` manifests for Postgres and Excel feed into `DataSet` queries that join and aggregate across sources. `LayoutPage` manifests control the A4 formatting precisely - headers, footers, page breaks, margins. A `SigningProfile` applies a digital signature to every output PDF. Constraints separate development data (inline mock rows) from production data (real database connections), so the same bundle works in both environments.
 
 ## Multi-region operational dashboards
 
-A logistics company operates in 12 countries and publishes a weekly performance dashboard for each regional manager. The content is the same — delivery times, warehouse throughput, exception rates — but filtered by region.
+A logistics company operates in 12 countries and publishes a weekly performance dashboard for each regional manager. The content is the same - delivery times, warehouse throughput, exception rates - but filtered by region.
 
 One parameterized `LayoutPage` template serves all 12 regions. The `ReportArtefact` lists the same page 12 times, each with a different `REGION` parameter. A single `bino build` produces 12 PDFs (or one combined PDF with 12 sections). Add a new region by adding one line to the artefact manifest and one row to the region reference table. No layout work required.
 
@@ -29,7 +29,7 @@ One parameterized `LayoutPage` template serves all 12 regions. The `ReportArtefa
 
 A marketing agency manages campaigns for 20 clients. Each client gets a monthly performance report with their own logo, colour palette, and KPI selection. The underlying data comes from a shared analytics platform exported as CSV.
 
-bino's `ComponentStyle` and `Asset` manifests handle per-client branding. Constraints and labels on manifests select which styles, logos, and data filters apply to each client's artefact. The agency maintains one set of layout templates and one set of data queries. Client-specific overrides live in small, focused manifest files. When the agency signs a new client, they add a few YAML files — no copy-paste of an entire report project.
+bino's `ComponentStyle` and `Asset` manifests handle per-client branding. Constraints and labels on manifests select which styles, logos, and data filters apply to each client's artefact. The agency maintains one set of layout templates and one set of data queries. Client-specific overrides live in small, focused manifest files. When the agency signs a new client, they add a few YAML files - no copy-paste of an entire report project.
 
 ## Internal management and controlling reports
 
@@ -47,7 +47,7 @@ The controlling team defines the full report as a bino bundle: `DataSource` mani
 
 **One-off reports.** If you need a single report once and never again, the setup cost of YAML manifests and SQL queries may not pay off. bino's value compounds with repetition.
 
-**Pixel-level graphic design.** bino gives you precise control over page layout, typography, and charts. But if your report is primarily a design piece — think magazine layouts or marketing collateral — a design tool like Figma or InDesign is more appropriate.
+**Pixel-level graphic design.** bino gives you precise control over page layout, typography, and charts. But if your report is primarily a design piece - think magazine layouts or marketing collateral - a design tool like Figma or InDesign is more appropriate.
 
 ---
 

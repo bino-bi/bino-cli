@@ -12,7 +12,7 @@ import (
 // without ever blocking the publish.
 //
 // The registry's validation gate is the authority on whether a package is
-// acceptable — it runs its own bino against the uploaded tree — so a local
+// acceptable - it runs its own bino against the uploaded tree - so a local
 // finding is advice, not a verdict, and a local failure to even load the
 // project is not a reason to refuse to publish. What must not ship is
 // enforced by the collector instead (credentials, path grammar, resource
@@ -31,7 +31,7 @@ func runPublishLint(ctx context.Context, p registryProject) {
 		return
 	}
 	out := diagnosticsOutput()
-	out.Warning(fmt.Sprintf("%d lint finding(s) — the registry's own validation decides whether they block:", len(findings)))
+	out.Warning(fmt.Sprintf("%d lint finding(s) - the registry's own validation decides whether they block:", len(findings)))
 	for _, f := range findings {
 		out.List(formatLintFinding(f))
 	}

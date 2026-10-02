@@ -12,7 +12,7 @@ import (
 	"bino.bi/bino/internal/report/config"
 )
 
-// makeDocAt is makeDoc with an explicit manifest file path — DocumentArtefact
+// makeDocAt is makeDoc with an explicit manifest file path - DocumentArtefact
 // tests need a real directory because markdown sources resolve relative to it.
 func makeDocAt(kind, name, file string, raw json.RawMessage) config.Document {
 	doc := makeDoc(kind, name, raw)
@@ -186,7 +186,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 }
 
 // TestBuildDocumentArtefactRefEdges proves :ref[Kind:name] references in
-// markdown sources become dependencies of the markdown file node — the edge
+// markdown sources become dependencies of the markdown file node - the edge
 // that lets component and data edits propagate to embedding documents.
 func TestBuildDocumentArtefactRefEdges(t *testing.T) {
 	t.Parallel()
@@ -275,7 +275,7 @@ func TestAffectedArtefactsFromMarkdownAndComponentEdits(t *testing.T) {
 // TestStandaloneComponentDatasetEdge proves a standalone component document
 // depends on the dataset its spec binds. extractDatasets only understood the
 // bare spec fragment layout children pass, so standalone nodes (built from
-// the full manifest) carried no data edges — the link markdown :ref edges
+// the full manifest) carried no data edges - the link markdown :ref edges
 // rely on to propagate data edits into documents.
 func TestStandaloneComponentDatasetEdge(t *testing.T) {
 	t.Parallel()

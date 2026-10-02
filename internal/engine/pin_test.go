@@ -8,7 +8,7 @@ import (
 
 // The template engine baked into the container image is pinned in two files no
 // Go code ever reads, so nothing stopped them drifting below
-// SupportedEngineRanges — which is what happened when the alpha.19 floor landed
+// SupportedEngineRanges - which is what happened when the alpha.19 floor landed
 // in v0.91.0 and neither pin moved. Every image published from then on shipped
 // an engine its own CLI rejects at render time. This test is the guard.
 var (
@@ -23,7 +23,7 @@ func TestDockerEngineVersionPin(t *testing.T) {
 	}
 
 	// The workflow passes its value as a build-arg, so the Dockerfile default is
-	// only the local-build fallback — the two diverge silently.
+	// only the local-build fallback - the two diverge silently.
 	if pins[0].version != pins[1].version {
 		t.Errorf("ENGINE_VERSION differs: %s has %q, %s has %q",
 			pins[0].where, pins[0].version, pins[1].where, pins[1].version)

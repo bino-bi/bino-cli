@@ -23,7 +23,7 @@ Flags:
 
 ## What is published
 
-The files `[package].include` selects — by default every canonical manifest
+The files `[package].include` selects - by default every canonical manifest
 folder plus `resources/`, minus `mocks/`, `reports/` and `.bino/`. Manifests
 (`.yaml`/`.yml`, each possibly a `---` stream) ship as documents; the rest ship
 as resources, limited to `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.csv`,
@@ -38,7 +38,7 @@ Publishing refuses, before uploading anything: symbolic links, anything under
 
 ## Validation
 
-`bino lint` runs first and its findings are printed, but they never block —
+`bino lint` runs first and its findings are printed, but they never block -
 the registry validates the uploaded package with its own bino and engine and is
 the authority. A rejection prints the findings together with both sides'
 versions, so a skew between your CLI and the registry's is visible.
@@ -71,7 +71,7 @@ export BINO_REGISTRY_TOKEN="bino_pat_..."
 bino publish --bump minor --json
 ```
 
-Republishing unchanged content is not an error — the registry recognises the
+Republishing unchanged content is not an error - the registry recognises the
 identical package and reports the version that already carries it, so a re-run
 of a job is safe.
 

@@ -11,9 +11,9 @@ Build logs capture detailed information about each `bino build` run, including t
 
 Every build produces at least a human-readable text log. When JSON features are enabled, a machine-readable JSON log is also generated:
 
-| File                        | Format | When Generated                                         |
-| --------------------------- | ------ | ------------------------------------------------------ |
-| `dist/bino-build-<id>.log`  | Text   | Always                                                 |
+| File                        | Format | When Generated                                               |
+| --------------------------- | ------ | ------------------------------------------------------------ |
+| `dist/bino-build-<id>.log`  | Text   | Always                                                       |
 | `dist/bino-build-<id>.json` | JSON   | When `--build-log-format=json` or `--embed-data-csv` is used |
 
 The `<id>` is a unique identifier (hash) for each build run.
@@ -50,8 +50,8 @@ The JSON log (`*.json`) provides structured, machine-readable build data suitabl
 
 The JSON log is written when you use:
 
-- `--build-log-format=json` — Explicitly request JSON output
-- `--embed-data-csv` — CSV embedding requires JSON format
+- `--build-log-format=json` - Explicitly request JSON output
+- `--embed-data-csv` - CSV embedding requires JSON format
 
 ### JSON Schema Overview
 
@@ -234,7 +234,7 @@ This adds an `execution_plan` array to the JSON log.
 
 | Flag                        | Type   | Default  | Description                             |
 | --------------------------- | ------ | -------- | --------------------------------------- |
-| `--build-log-format`              | string | `"text"` | Build log format: `"text"` or `"json"`  |
+| `--build-log-format`        | string | `"text"` | Build log format: `"text"` or `"json"`  |
 | `--detailed-execution-plan` | bool   | `false`  | Include step-by-step timing in JSON log |
 
 ### CSV Embedding Flags
@@ -259,7 +259,7 @@ bino build --build-log-format=json
 
 ### Full Debugging Output
 
-Capture everything—JSON format, embedded data previews, and execution timing:
+Capture everything-JSON format, embedded data previews, and execution timing:
 
 ```bash
 bino build --build-log-format=json --embed-data-csv --detailed-execution-plan

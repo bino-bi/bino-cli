@@ -80,7 +80,11 @@ bino build --artefact regional-report
 
 This generates a PDF with two pages: one for Europe and one for North America.
 
-<img src={dashboardImg.src} alt="A parameterized dashboard page rendered with region-specific data" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={dashboardImg.src}
+  alt="A parameterized dashboard page rendered with region-specific data"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Parameter definition reference
 
@@ -89,12 +93,12 @@ This generates a PDF with two pages: one for Europe and one for North America.
 ```yaml
 metadata:
   params:
-    - name: PARAM_NAME          # Required: unique identifier
-      type: string              # Optional: data type (default: string)
-      description: "..."        # Optional: human-readable description
-      default: "value"          # Optional: default if not provided
-      required: true            # Optional: must be provided if no default
-      options:                  # Optional: type-specific options
+    - name: PARAM_NAME # Required: unique identifier
+      type: string # Optional: data type (default: string)
+      description: "..." # Optional: human-readable description
+      default: "value" # Optional: default if not provided
+      required: true # Optional: must be provided if no default
+      options: # Optional: type-specific options
         ...
 ```
 
@@ -156,6 +160,7 @@ params:
 ```
 
 For select parameters, you can access both the value and the label:
+
 - `${REGION}` – returns the value (e.g., `"EU"`)
 - `${REGION_LABEL}` – returns the label (e.g., `"Europe"`)
 
@@ -217,7 +222,7 @@ The `_LABEL` suffix is available for any `select` type parameter with defined op
 
 ## Parameters on referenced components
 
-Standalone component documents (Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, Image) declare parameters in `metadata.params` exactly like a LayoutPage. Anything that references such a document with `ref` — a layout child, grid child, or tree node — passes values via `params`:
+Standalone component documents (Text, Table, ChartStructure, ChartTime, Tree, Grid, LayoutCard, Image) declare parameters in `metadata.params` exactly like a LayoutPage. Anything that references such a document with `ref` - a layout child, grid child, or tree node - passes values via `params`:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -243,7 +248,7 @@ spec:
         REGION: US
 ```
 
-Precedence, defaults, required params, and `${NAME_LABEL}` work identically to LayoutPage params. This is especially useful for predef packages installed from a registry — see [Registry and dependencies](/guides/registry-and-dependencies/).
+Precedence, defaults, required params, and `${NAME_LABEL}` work identically to LayoutPage params. This is especially useful for predef packages installed from a registry - see [Registry and dependencies](/guides/registry-and-dependencies/).
 
 ## Practical examples
 
@@ -571,8 +576,8 @@ Parameter values can reference environment variables:
 layoutPages:
   - page: sales-summary
     params:
-      REGION: ${DEFAULT_REGION}        # From environment
-      YEAR: ${REPORT_YEAR:2024}        # With fallback
+      REGION: ${DEFAULT_REGION} # From environment
+      YEAR: ${REPORT_YEAR:2024} # With fallback
       MANAGER: ${MANAGER_NAME:Unknown}
 ```
 
@@ -618,10 +623,10 @@ params:
 params:
   - name: YEAR
     type: number
-    default: "2024"        # Most common value
+    default: "2024" # Most common value
   - name: SHOW_DETAILS
     type: boolean
-    default: "false"       # Simpler default view
+    default: "false" # Simpler default view
 ```
 
 ### 3. Document your parameters
@@ -705,6 +710,7 @@ params:
 **Symptom:** `${PARAM}` appears literally in the output instead of the value.
 
 **Causes:**
+
 1. Parameter name mismatch (case-sensitive)
 2. Parameter not passed in the ReportArtefact
 3. Typo in parameter name

@@ -480,7 +480,7 @@ function getScript(): string {
         const parts = rest.replace(/^_/, '').split('_');
         if (parts.length !== 3) { return ''; }
         const kind = prefix === 'dr' ? 'relative (%)' : 'absolute';
-        const phrase = { pos: 'positive sentiment — more is better', neg: 'negative sentiment — more is worse', neu: 'neutral sentiment' }[parts[2]] || '';
+        const phrase = { pos: 'positive sentiment - more is better', neg: 'negative sentiment - more is worse', neu: 'neutral sentiment' }[parts[2]] || '';
         return kind + ' variance of ' + parts[1] + ' vs ' + parts[0] + (phrase ? '; ' + phrase : '');
     }
 

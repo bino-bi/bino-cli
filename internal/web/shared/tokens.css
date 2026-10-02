@@ -2,7 +2,7 @@
    Two layers: DS primitives, then the semantic --bino-* tokens the
    components consume. Report content (bn-*) is never styled from here. */
 :root {
-  /* Primitives — BinoBI DS */
+  /* Primitives - BinoBI DS */
   --bino-gray-50: #f6f8f9;
   --bino-gray-100: #eef2f3;
   --bino-gray-200: #e0e6e9;
@@ -105,7 +105,7 @@
   --bino-surface-subtle: var(--bino-gray-50);
   --bino-surface-inset: var(--bino-gray-100);
 
-  /* Accent / CTA (celeste can't carry white text — pair with on-accent) */
+  /* Accent / CTA (celeste can't carry white text - pair with on-accent) */
   --bino-accent: var(--bino-celeste-500);
   --bino-accent-strong: var(--bino-celeste-600);
   --bino-on-accent: var(--bino-gray-900);

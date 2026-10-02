@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Two targets:
-#   --target slim   bino without Chromium — serve, lint, graph, lsp, mcp (~250 MB)
+#   --target slim   bino without Chromium - serve, lint, graph, lsp, mcp (~250 MB)
 #   --target full   adds Chromium + fonts for build and preview (default, ~900 MB)
 #
 # Both are fully offline after `docker pull`: the template engine and every
@@ -15,7 +15,7 @@ FROM golang:1.27-bookworm AS builder
 
 WORKDIR /src
 
-# Dependency layer — only invalidated when go.mod/go.sum change.
+# Dependency layer - only invalidated when go.mod/go.sum change.
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -54,7 +54,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Every bino cache lives under $HOME/.bino via os.UserHomeDir(), which on Unix
-# reads $HOME and never consults /etc/passwd — so an explicit HOME makes the
+# reads $HOME and never consults /etc/passwd - so an explicit HOME makes the
 # baked caches resolve for any runtime UID, including the arbitrary UIDs that
 # OpenShift and hardened Kubernetes assign.
 ENV HOME=/opt/bino \

@@ -447,7 +447,7 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 	s.previewMu.Lock()
 	defer s.previewMu.Unlock()
 
-	// Already running — return current state
+	// Already running - return current state
 	if s.previewCmd != nil && s.previewStatus != "stopped" {
 		s.writeJSON(w, map[string]any{
 			"status": s.previewStatus,

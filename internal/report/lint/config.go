@@ -23,7 +23,7 @@ var nonRuleFindingIDs = []string{
 // of the bundle, not by a severity: a manifest that will not load and an
 // incompatible engine pin are fatal because nothing downstream can run. A
 // [lint.severity] entry on them could only lie about the exit code, so it is
-// rejected instead of silently doing nothing. disable still applies — it
+// rejected instead of silently doing nothing. disable still applies - it
 // suppresses the report, never the fatal condition behind it.
 var fixedSeverityIDs = []string{
 	"schema-validation",

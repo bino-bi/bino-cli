@@ -92,7 +92,7 @@ func newRootCommand() *cobra.Command {
 
 			// Check if setup has been completed for commands that need it.
 			// Skip for: setup, version, update, help, completion, about, and
-			// publish — publishing talks to the registry and needs no engine
+			// publish - publishing talks to the registry and needs no engine
 			// or browser, so the setup banner would only be noise.
 			cmdName := cmd.Name()
 			skipSetupCheck := cmdName == "setup" || cmdName == "version" || cmdName == "update" ||

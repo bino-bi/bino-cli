@@ -12,7 +12,7 @@ import (
 
 // NewProjectRunner creates a Runner with the default rules plus, when the
 // project's bino.toml declares a [package] table, the predef package rules.
-// A project without [package] — or without a readable bino.toml — gets exactly
+// A project without [package] - or without a readable bino.toml - gets exactly
 // the default rule set, so nothing changes for an ordinary report project.
 // The runner also carries the project's [lint] table, which callers enforce on
 // the findings with Apply.
@@ -107,7 +107,7 @@ func predefNameNamespace(pkgName string, inc *pathutil.IncludeSet) Rule {
 						continue
 					}
 					message = fmt.Sprintf(
-						"a package may declare at most one main definition named %q; %s %q also uses it — "+
+						"a package may declare at most one main definition named %q; %s %q also uses it - "+
 							"give it a %q prefixed name instead",
 						pkgName, doc.Kind, name, pkgName+"/",
 					)
@@ -119,7 +119,7 @@ func predefNameNamespace(pkgName string, inc *pathutil.IncludeSet) Rule {
 					message = fmt.Sprintf(
 						"DataSource %q cannot be namespaced under package %q: a DataSource name becomes a DuckDB "+
 							"view name and is limited to two segments (\"@scope/name\"). Move this manifest out of "+
-							"the package include set — mocks/ is the conventional place — or name it exactly %q as "+
+							"the package include set - mocks/ is the conventional place - or name it exactly %q as "+
 							"the package's main definition.",
 						name, pkgName, pkgName,
 					)
@@ -163,12 +163,12 @@ func predefForbiddenKind(inc *pathutil.IncludeSet) Rule {
 				case "ReportArtefact", "LiveReportArtefact", "ScreenshotArtefact", "DocumentArtefact":
 					message = fmt.Sprintf(
 						"%s %q is inside the package include set; artefacts render a report and are not "+
-							"publishable package content — move it to reports/ or mocks/",
+							"publishable package content - move it to reports/ or mocks/",
 						doc.Kind, doc.Name,
 					)
 				case "ConnectionSecret", "SigningProfile":
 					message = fmt.Sprintf(
-						"%s %q is inside the package include set; credentials must never be published — move it "+
+						"%s %q is inside the package include set; credentials must never be published - move it "+
 							"out of the include set (secrets/ and signing/ are included by default, so add an "+
 							"explicit [package] include list or relocate the manifest)",
 						doc.Kind, doc.Name,
@@ -252,7 +252,7 @@ func isAbsoluteAssetPath(localPath string) bool {
 // published package cannot reach.
 //
 // Deliberately out of scope, and not to be "fixed" later: 'spec.dataset' (the
-// binding seam — a packaged Table exists precisely so the consumer supplies
+// binding seam - a packaged Table exists precisely so the consumer supplies
 // their own dataset), a DataSet's 'spec.dependencies'/'spec.source',
 // 'spec.i18nNamespace' (names a namespace, not a metadata.name), Markdown
 // ':ref[Kind:name]' and 'asset:' destinations (which cannot express a
@@ -263,8 +263,8 @@ func predefExternalRef(pkgName string, inc *pathutil.IncludeSet, deps map[string
 	return Rule{
 		ID:   "predef-external-ref",
 		Name: "Predef External Reference",
-		Description: "Structural and presentational references inside the package include set — {kind, ref} " +
-			"children, 'spec.selectedStyle' and 'spec.ruleset' — must resolve inside the package or to a declared " +
+		Description: "Structural and presentational references inside the package include set - {kind, ref} " +
+			"children, 'spec.selectedStyle' and 'spec.ruleset' - must resolve inside the package or to a declared " +
 			"dependency. Data bindings are exempt: 'spec.dataset', a DataSet's 'spec.dependencies'/'spec.source' " +
 			"and 'spec.i18nNamespace' are the seam the consumer rebinds, and raw SQL is not parsed.",
 		Check: func(_ context.Context, docs []Document) []Finding {

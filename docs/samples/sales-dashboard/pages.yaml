@@ -324,7 +324,7 @@ spec:
         name: inherited_table
       spec:
         dataset: financial_summary
-        # Same inheritance — no need to duplicate scenario config:
+        # Same inheritance - no need to duplicate scenario config:
         scenarios: inherited-page
         variances: inherited-page
         order: inherited-page

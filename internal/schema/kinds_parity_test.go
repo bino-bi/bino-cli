@@ -11,7 +11,7 @@ import (
 
 // kindConstants lists every Kind* constant declared in types.go. When a kind
 // is added to document.schema.json's kind enum it must also be added to
-// types.go, to embed's builtinCategory, and to this list — otherwise
+// types.go, to embed's builtinCategory, and to this list - otherwise
 // TestKindRegistryParity fails.
 var kindConstants = []string{
 	KindDataSet,

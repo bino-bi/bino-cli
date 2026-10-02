@@ -235,7 +235,7 @@ func completeVariances(scenarios []string, snippets bool) []protocol.CompletionI
 	return items
 }
 
-// completeColumns offers raw column names — used inside a DataSet query/prql
+// completeColumns offers raw column names - used inside a DataSet query/prql
 // block scalar to complete the upstream source's columns.
 func completeColumns(cols []string) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(cols))
@@ -395,7 +395,7 @@ func rulesetKeywordItems() []protocol.CompletionItem {
 }
 
 // scenarioSlots returns the scenario slot names (ac1..pl4) present in a column
-// set, preserving canonical order — the input to the variance builder.
+// set, preserving canonical order - the input to the variance builder.
 func scenarioSlots(available map[string]bool) []string {
 	var out []string
 	for _, c := range dataset.StandardColumns() {

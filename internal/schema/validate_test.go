@@ -542,7 +542,7 @@ spec:
 
 // tableTitle was renamed to sumTitle. Because tableSpecBase sets
 // additionalProperties:false, the old name must now be rejected everywhere a
-// Table spec can appear — standalone, as a layout child, and as a tree node.
+// Table spec can appear - standalone, as a layout child, and as a tree node.
 func TestValidate_TableSumTitle(t *testing.T) {
 	standalone := func(prop string) string {
 		return `

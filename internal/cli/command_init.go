@@ -100,7 +100,7 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		pluginMgr.SetVerbose(logx.DebugEnabled(ctx))
 		if err := pluginMgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
 			logger.Warnf("Failed to load plugins: %v", err)
-			// Continue without plugins — don't block the command.
+			// Continue without plugins - don't block the command.
 			pluginMgr = nil
 		} else {
 			pluginReg = pluginMgr.Registry()

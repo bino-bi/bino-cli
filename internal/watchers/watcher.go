@@ -252,11 +252,11 @@ func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
 	}
 	rel = filepath.ToSlash(rel)
 
-	// Always ignore .bino state (cache, daemon state, plugins, config —
+	// Always ignore .bino state (cache, daemon state, plugins, config -
 	// built-in, not configurable), except .bino/registry: installed registry
 	// packages live there and must trigger refreshes. .bino itself stays
 	// watchable so creating .bino/registry mid-session is observed. The
-	// registry paths also bypass the user's .bnignore below — installed
+	// registry paths also bypass the user's .bnignore below - installed
 	// packages are lock-managed content, and a project ignoring `.bino/`
 	// (mirroring the recommended .gitignore) must not lose refreshes for its
 	// dependencies (same contract as the loader's registry second pass).

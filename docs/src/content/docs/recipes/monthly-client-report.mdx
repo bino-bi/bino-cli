@@ -153,7 +153,7 @@ kind: LayoutPage
 metadata:
   name: usage-dashboard
 spec:
-  titleBusinessUnit: "${CLIENT_NAME} — Usage Dashboard"
+  titleBusinessUnit: "${CLIENT_NAME} - Usage Dashboard"
   pageLayout: 2x2
   children:
     - kind: Text
@@ -176,9 +176,17 @@ spec:
         type: list
 ```
 
-<img src={dashboardImg.src} alt="A 2x2 client usage dashboard with KPIs, trend chart, feature adoption, and data table" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={dashboardImg.src}
+  alt="A 2x2 client usage dashboard with KPIs, trend chart, feature adoption, and data table"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
-<img src={chartStructureImg.src} alt="A ChartStructure showing feature adoption breakdown" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={chartStructureImg.src}
+  alt="A ChartStructure showing feature adoption breakdown"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Report artefact
 
@@ -197,7 +205,7 @@ spec:
     - cover
     - usage-dashboard
   filename: "${CLIENT_ID}-usage-${REPORT_MONTH}.pdf"
-  title: "${CLIENT_NAME} — Monthly Usage Report"
+  title: "${CLIENT_NAME} - Monthly Usage Report"
   author: "Acme Analytics"
 ```
 
@@ -264,7 +272,8 @@ aws s3 cp "$BINO_OUTPUT_DIR"/*.pdf \
 ```
 
 <Aside type="tip">
-Combine this with the [CI/CD pipeline recipe](/recipes/ci-cd-pipeline/) to run the client loop on a monthly schedule.
+  Combine this with the [CI/CD pipeline recipe](/recipes/ci-cd-pipeline/) to run
+  the client loop on a monthly schedule.
 </Aside>
 
 ---

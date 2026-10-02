@@ -122,8 +122,8 @@ var serveURLModeDatasetRe = regexp.MustCompile(`<bn-dataset[^>]*name='filtered_r
 
 // TestServeRoutes_URLModeEmitsRelativeDataURLs is the regression test for the
 // bind-address data-URL bug: serve pinned url-mode dataset bodies to its bind
-// address (http://127.0.0.1:<port>/...), so a client browsing via localhost —
-// a different origin, and the data route sends no CORS headers — failed every
+// address (http://127.0.0.1:<port>/...), so a client browsing via localhost -
+// a different origin, and the data route sends no CORS headers - failed every
 // data fetch and every chart showed "No Data". The plugin options serve wires
 // into its routes (applyServeDataMode) must leave the base empty so bodies
 // come out as relative, same-origin paths.

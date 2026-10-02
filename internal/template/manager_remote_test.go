@@ -129,7 +129,7 @@ func TestResolveExplicitSHASkipsAPICall(t *testing.T) {
 	if _, err := m.Resolve(context.Background(), src, false); err != nil {
 		t.Fatal(err)
 	}
-	// An explicit SHA needs no API call — only the archive download.
+	// An explicit SHA needs no API call - only the archive download.
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Errorf("expected 1 request for explicit SHA, got %d", got)
 	}

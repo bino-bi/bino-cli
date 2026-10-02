@@ -40,7 +40,7 @@ func prefetchDuckDBExtensions(ctx context.Context, opts duckdb.Options) error {
 	return session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions())
 }
 
-func newSetupCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newSetupCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		dryRun           bool
 		quiet            bool

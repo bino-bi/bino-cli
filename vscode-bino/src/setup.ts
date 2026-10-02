@@ -49,7 +49,7 @@ export async function checkBinoSetup(): Promise<SetupCheckResult> {
             result.hasValidate = false;
         }
 
-        // Check the language server (bino lsp) — the editor's primary integration.
+        // Check the language server (bino lsp) - the editor's primary integration.
         try {
             await execCommand(binPath, ['lsp', '--help']);
             result.hasLsp = true;

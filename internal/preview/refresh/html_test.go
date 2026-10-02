@@ -38,7 +38,7 @@ func TestDocSourceCount(t *testing.T) {
 }
 
 // TestDocArtefactInfo asserts the doc meta fields reach the toolbar JSON
-// payload — and that report artefacts (zero values) omit them entirely.
+// payload - and that report artefacts (zero values) omit them entirely.
 func TestDocArtefactInfo(t *testing.T) {
 	t.Parallel()
 

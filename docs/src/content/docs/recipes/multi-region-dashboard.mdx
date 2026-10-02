@@ -1,6 +1,6 @@
 ---
 title: "Recipe: Multi-region dashboard"
-description: One layout template, multiple regions, one PDF — using parameterized LayoutPages.
+description: One layout template, multiple regions, one PDF - using parameterized LayoutPages.
 sidebar:
   order: 3
 ---
@@ -129,7 +129,7 @@ metadata:
           - value: "LATAM"
             label: "Latin America"
 spec:
-  titleBusinessUnit: "Operations — ${REGION}"
+  titleBusinessUnit: "Operations - ${REGION}"
   titleDateStart: 2024-01-01
   titleDateEnd: 2024-12-31
   titleDateFormat: week
@@ -138,7 +138,7 @@ spec:
   pageFormat: xga
   pageOrientation: landscape
   footerDisplayPageNumber: true
-  footerText: "Confidential — ${REGION} Operations"
+  footerText: "Confidential - ${REGION} Operations"
   children:
     - kind: Text
       spec:
@@ -160,7 +160,7 @@ spec:
         type: list
 ```
 
-## Report artefact — one page per region
+## Report artefact - one page per region
 
 ```yaml
 # manifests/report.yaml
@@ -194,15 +194,20 @@ spec:
   author: "Central Operations"
 ```
 
-A single `bino build` produces one PDF with five pages — one per region.
+A single `bino build` produces one PDF with five pages - one per region.
 
-<img src={dashboardImg.src} alt="A multi-region operations dashboard with KPIs, trend chart, and data table" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={dashboardImg.src}
+  alt="A multi-region operations dashboard with KPIs, trend chart, and data table"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Adding a new region
 
 To add a sixth region (say, Middle East):
 
 1. Add the option to the LayoutPage params:
+
    ```yaml
    - value: "ME"
      label: "Middle East"
@@ -252,7 +257,8 @@ spec:
 Create a second `ReportArtefact` with `language: de` to produce a German version from the same data and layout.
 
 <Aside>
-For full i18n documentation, see [Internationalization reference](/reference/internationalization/).
+  For full i18n documentation, see [Internationalization
+  reference](/reference/internationalization/).
 </Aside>
 
 ---

@@ -84,7 +84,7 @@ func TestShouldIgnorePathAllowsRegistry(t *testing.T) {
 func TestShouldIgnorePathRegistryBypassesBnignore(t *testing.T) {
 	// Installed packages are lock-managed content: a .bnignore ignoring
 	// `.bino/` (the recommended .gitignore entry, commonly mirrored) or a
-	// specific scope must not suppress refreshes for dependencies — this
+	// specific scope must not suppress refreshes for dependencies - this
 	// mirrors the loader's registry second pass.
 	tmp := t.TempDir()
 	watcher := &Watcher{cfg: Config{Root: tmp}}

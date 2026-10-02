@@ -24,7 +24,7 @@ spec:
 ```
 
 `spec.content` can also be written as a JSON string instead of a YAML object,
-which is useful when copying from front-end configuration — see
+which is useful when copying from front-end configuration - see
 [JSON string style](#json-string-style).
 All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
@@ -72,9 +72,9 @@ component's own selectedStyle
   > ReportArtefact
 ```
 
-Set it once on the `ReportArtefact` and every page and component in that artefact uses it — unless a page, card, grid, tree, or leaf component sets its own `selectedStyle`, which then applies to that element and its descendants. Tree `Label` nodes inherit the style too (they cannot set their own).
+Set it once on the `ReportArtefact` and every page and component in that artefact uses it - unless a page, card, grid, tree, or leaf component sets its own `selectedStyle`, which then applies to that element and its descendants. Tree `Label` nodes inherit the style too (they cannot set their own).
 
-To exclude a single component from inheritance, set `selectedStyle: ""` explicitly — it falls back to `_system` + `_default` styling.
+To exclude a single component from inheritance, set `selectedStyle: ""` explicitly - it falls back to `_system` + `_default` styling.
 
 Inheritance is resolved at build time per artefact. `bino preview` shows the artefact-level style only when previewing through an artefact; the plain all-pages preview has no artefact context (page-level inheritance still applies).
 
@@ -82,14 +82,14 @@ Inheritance is resolved at build time per artefact. `bino preview` shows the art
 
 The style object has the following top-level sections:
 
-| Section | Description |
-|---------|-------------|
-| `global` | Global typography and color settings applied to all components |
-| `bn-text` | Style settings for text components (extensible) |
-| `bn-chart-time` | Style settings for time/column charts |
-| `bn-chart-structure` | Style settings for structure/bar charts |
-| `bn-tree` | Style settings for hierarchical tree diagrams |
-| `bn-grid` | Style settings for grid layouts with row/column headers (not part of the schema, see below) |
+| Section              | Description                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `global`             | Global typography and color settings applied to all components                              |
+| `bn-text`            | Style settings for text components (extensible)                                             |
+| `bn-chart-time`      | Style settings for time/column charts                                                       |
+| `bn-chart-structure` | Style settings for structure/bar charts                                                     |
+| `bn-tree`            | Style settings for hierarchical tree diagrams                                               |
+| `bn-grid`            | Style settings for grid layouts with row/column headers (not part of the schema, see below) |
 
 The style object accepts additional keys beyond these sections, so unknown or
 misspelled style keys pass validation without a diagnostic.
@@ -100,12 +100,12 @@ misspelled style keys pass validation without a diagnostic.
 
 Global settings are inherited by all components.
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `fontSizePx` | number | `13.3333` | Base font size in pixels. Scale factors multiply this value. |
-| `fontFamily` | string | `'Noto Sans', sans-serif` | CSS font-family value |
-| `fontColor` | string | `#000000` | Primary text color (CSS color) |
-| `fontBackgroundColor` | string | `#ffffff` | Background color for text elements (CSS color) |
+| Property              | Type   | Default                   | Description                                                  |
+| --------------------- | ------ | ------------------------- | ------------------------------------------------------------ |
+| `fontSizePx`          | number | `13.3333`                 | Base font size in pixels. Scale factors multiply this value. |
+| `fontFamily`          | string | `'Noto Sans', sans-serif` | CSS font-family value                                        |
+| `fontColor`           | string | `#000000`                 | Primary text color (CSS color)                               |
+| `fontBackgroundColor` | string | `#ffffff`                 | Background color for text elements (CSS color)               |
 
 ```yaml
 global:
@@ -127,36 +127,36 @@ Reserved for future text component styling. Currently accepts any properties.
 
 Style settings for vertical column charts (time series visualizations).
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `scaleFactors` | object | Scale factors for element sizing |
-| `axisStyles` | object | SVG styles for axis elements by scenario |
-| `barStyles` | object | SVG styles for bar/column elements by scenario |
-| `varianceStyles` | object | SVG styles for variance indicators |
-| `stackColors` | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
-| `padding` | object | Padding around the chart area |
+| Property         | Type     | Description                                                                            |
+| ---------------- | -------- | -------------------------------------------------------------------------------------- |
+| `scaleFactors`   | object   | Scale factors for element sizing                                                       |
+| `axisStyles`     | object   | SVG styles for axis elements by scenario                                               |
+| `barStyles`      | object   | SVG styles for bar/column elements by scenario                                         |
+| `varianceStyles` | object   | SVG styles for variance indicators                                                     |
+| `stackColors`    | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
+| `padding`        | object   | Padding around the chart area                                                          |
 
 ### Scale factors (time chart)
 
 All scale factors are multiplied by `global.fontSizePx` to calculate pixel values.
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `scenarioOffset` | `0.3` | Horizontal offset between scenario bars |
-| `scenarioLabelToColumn` | `0.3` | Gap between scenario label and column |
-| `labelToColumn` | `0.3` | Gap between category label and column |
-| `labelToAxis` | `0.3` | Gap between label and axis |
-| `needleWidth` | `0.3` | Width of needle indicators |
-| `needleHeadWidth` | `0.6` | Width of needle head (arrow) |
-| `columnWidth` | `2.0` | Width of data columns |
-| `varianceAxisLineWidth` | `0.3` | Width of variance axis lines |
-| `axisLineWidth` | `0.1` | Width of main axis lines |
-| `auxiliaryLineWidth` | `0.1` | Width of auxiliary/grid lines |
-| `scenarioLineWidth` | `0.2` | Width of scenario indicator lines |
-| `markerWidth` | `0.7` | Width of data point markers |
-| `markerOffset` | `0.0` | Offset of markers from data points |
-| `categoryWidth` | `3.0` | Width allocated per category |
-| `axisTickLength` | `0.3` | Length of axis tick marks |
+| Property                | Default | Description                             |
+| ----------------------- | ------- | --------------------------------------- |
+| `scenarioOffset`        | `0.3`   | Horizontal offset between scenario bars |
+| `scenarioLabelToColumn` | `0.3`   | Gap between scenario label and column   |
+| `labelToColumn`         | `0.3`   | Gap between category label and column   |
+| `labelToAxis`           | `0.3`   | Gap between label and axis              |
+| `needleWidth`           | `0.3`   | Width of needle indicators              |
+| `needleHeadWidth`       | `0.6`   | Width of needle head (arrow)            |
+| `columnWidth`           | `2.0`   | Width of data columns                   |
+| `varianceAxisLineWidth` | `0.3`   | Width of variance axis lines            |
+| `axisLineWidth`         | `0.1`   | Width of main axis lines                |
+| `auxiliaryLineWidth`    | `0.1`   | Width of auxiliary/grid lines           |
+| `scenarioLineWidth`     | `0.2`   | Width of scenario indicator lines       |
+| `markerWidth`           | `0.7`   | Width of data point markers             |
+| `markerOffset`          | `0.0`   | Offset of markers from data points      |
+| `categoryWidth`         | `3.0`   | Width allocated per category            |
+| `axisTickLength`        | `0.3`   | Length of axis tick marks               |
 
 ---
 
@@ -164,36 +164,36 @@ All scale factors are multiplied by `global.fontSizePx` to calculate pixel value
 
 Style settings for horizontal bar charts (structure visualizations).
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `scaleFactors` | object | Scale factors for element sizing |
-| `axisStyles` | object | SVG styles for axis elements by scenario |
-| `barStyles` | object | SVG styles for bar elements by scenario |
-| `varianceStyles` | object | SVG styles for variance indicators |
-| `stackColors` | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
-| `padding` | object | Padding around the chart area |
+| Property         | Type     | Description                                                                            |
+| ---------------- | -------- | -------------------------------------------------------------------------------------- |
+| `scaleFactors`   | object   | Scale factors for element sizing                                                       |
+| `axisStyles`     | object   | SVG styles for axis elements by scenario                                               |
+| `barStyles`      | object   | SVG styles for bar elements by scenario                                                |
+| `varianceStyles` | object   | SVG styles for variance indicators                                                     |
+| `stackColors`    | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
+| `padding`        | object   | Padding around the chart area                                                          |
 
 ### Scale factors (structure chart)
 
 All scale factors are multiplied by `global.fontSizePx` to calculate pixel values.
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `scenarioOffset` | `0.3` | Vertical offset between scenario bars |
-| `scenarioLabelToBar` | `0.1` | Gap between scenario label and bar |
-| `labelToBar` | `0.3` | Gap between category label and bar |
-| `labelToAxis` | `0.3` | Gap between label and axis |
-| `needleWidth` | `0.3` | Width of needle indicators |
-| `needleHeadWidth` | `0.6` | Width of needle head (arrow) |
-| `barWidth` | `1.2` | Height of horizontal bars |
-| `varianceAxisLineWidth` | `0.3` | Width of variance axis lines |
-| `axisLineWidth` | `0.1` | Width of main axis lines |
-| `auxiliaryLineWidth` | `0.1` | Width of auxiliary/grid lines |
-| `scenarioLineWidth` | `0.2` | Width of scenario indicator lines |
-| `markerWidth` | `0.7` | Width of data point markers |
-| `markerOffset` | `0.0` | Offset of markers from data points |
-| `categoryWidth` | `1.9` | Height allocated per category row |
-| `axisTickLength` | `0.3` | Length of axis tick marks |
+| Property                | Default | Description                           |
+| ----------------------- | ------- | ------------------------------------- |
+| `scenarioOffset`        | `0.3`   | Vertical offset between scenario bars |
+| `scenarioLabelToBar`    | `0.1`   | Gap between scenario label and bar    |
+| `labelToBar`            | `0.3`   | Gap between category label and bar    |
+| `labelToAxis`           | `0.3`   | Gap between label and axis            |
+| `needleWidth`           | `0.3`   | Width of needle indicators            |
+| `needleHeadWidth`       | `0.6`   | Width of needle head (arrow)          |
+| `barWidth`              | `1.2`   | Height of horizontal bars             |
+| `varianceAxisLineWidth` | `0.3`   | Width of variance axis lines          |
+| `axisLineWidth`         | `0.1`   | Width of main axis lines              |
+| `auxiliaryLineWidth`    | `0.1`   | Width of auxiliary/grid lines         |
+| `scenarioLineWidth`     | `0.2`   | Width of scenario indicator lines     |
+| `markerWidth`           | `0.7`   | Width of data point markers           |
+| `markerOffset`          | `0.0`   | Offset of markers from data points    |
+| `categoryWidth`         | `1.9`   | Height allocated per category row     |
+| `axisTickLength`        | `0.3`   | Length of axis tick marks             |
 
 ---
 
@@ -201,13 +201,13 @@ All scale factors are multiplied by `global.fontSizePx` to calculate pixel value
 
 Style settings for hierarchical tree diagrams.
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `edgeColor` | string | `#404040` | Color for tree edges/connections (CSS color) |
-| `edgeWidth` | number | `1` | Width of tree edges in pixels |
-| `operatorCircleRadius` | number | `10` | Radius of operator node circles in pixels |
-| `operatorFontSizeScale` | number | `0.9` | Scale factor for operator font size relative to `global.fontSizePx` |
-| `operatorColor` | string | `#404040` | Color for operator nodes (CSS color) |
+| Property                | Type   | Default   | Description                                                         |
+| ----------------------- | ------ | --------- | ------------------------------------------------------------------- |
+| `edgeColor`             | string | `#404040` | Color for tree edges/connections (CSS color)                        |
+| `edgeWidth`             | number | `1`       | Width of tree edges in pixels                                       |
+| `operatorCircleRadius`  | number | `10`      | Radius of operator node circles in pixels                           |
+| `operatorFontSizeScale` | number | `0.9`     | Scale factor for operator font size relative to `global.fontSizePx` |
+| `operatorColor`         | string | `#404040` | Color for operator nodes (CSS color)                                |
 
 ```yaml
 bn-tree:
@@ -228,12 +228,12 @@ This section is not described by the manifest schema. It is accepted because the
 style object allows extra keys, so its properties and defaults are not validated
 and a typo in a key stays silent.
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
+| Property           | Type   | Default         | Description                                             |
+| ------------------ | ------ | --------------- | ------------------------------------------------------- |
 | `headerBackground` | string | `"transparent"` | Background color for row and column headers (CSS color) |
-| `borderColor` | string | `"#A6A6A6"` | Color of cell border/divider lines (CSS color) |
-| `borderWidth` | number | `1` | Width of cell borders in pixels |
-| `cellPadding` | number | `4` | Padding inside cells in pixels |
+| `borderColor`      | string | `"#A6A6A6"`     | Color of cell border/divider lines (CSS color)          |
+| `borderWidth`      | number | `1`             | Width of cell borders in pixels                         |
+| `cellPadding`      | number | `4`             | Padding inside cells in pixels                          |
 
 ```yaml
 bn-grid:
@@ -249,12 +249,12 @@ bn-grid:
 
 Both `axisStyles` and `barStyles` use scenario-based grouping following IBCS notation:
 
-| Key | Description |
-|-----|-------------|
-| `ac` | Style for **Actual** values |
-| `fc` | Style for **Forecast** values |
+| Key  | Description                       |
+| ---- | --------------------------------- |
+| `ac` | Style for **Actual** values       |
+| `fc` | Style for **Forecast** values     |
 | `pp` | Style for **Prior Period** values |
-| `pl` | Style for **Plan** values |
+| `pl` | Style for **Plan** values         |
 
 Each scenario key contains an SVG style object. Further scenario keys are allowed
 and take the same SVG style object.
@@ -265,11 +265,11 @@ and take the same SVG style object.
 
 The `varianceStyles` property groups styles by variance direction:
 
-| Key | Description |
-|-----|-------------|
-| `pos` | Style for **positive** variances (favorable) |
+| Key   | Description                                    |
+| ----- | ---------------------------------------------- |
+| `pos` | Style for **positive** variances (favorable)   |
 | `neg` | Style for **negative** variances (unfavorable) |
-| `neu` | Style for **neutral/zero** variances |
+| `neu` | Style for **neutral/zero** variances           |
 
 Further variance keys are allowed and take the same SVG style object.
 
@@ -279,13 +279,13 @@ Further variance keys are allowed and take the same SVG style object.
 
 Individual SVG style properties:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `stroke` | string | SVG stroke color (CSS color) |
-| `fill` | string | SVG fill color (CSS color) |
-| `width` | number | Stroke width in pixels |
-| `dasharray` | string | SVG stroke-dasharray pattern (e.g., `"10 5 5 5"` for dashed lines) |
-| `fillpattern` | string | Reference to a fill pattern (e.g., `"fc"` for forecast hatching) |
+| Property      | Type   | Description                                                        |
+| ------------- | ------ | ------------------------------------------------------------------ |
+| `stroke`      | string | SVG stroke color (CSS color)                                       |
+| `fill`        | string | SVG fill color (CSS color)                                         |
+| `width`       | number | Stroke width in pixels                                             |
+| `dasharray`   | string | SVG stroke-dasharray pattern (e.g., `"10 5 5 5"` for dashed lines) |
+| `fillpattern` | string | Reference to a fill pattern (e.g., `"fc"` for forecast hatching)   |
 
 ```yaml
 axisStyles:
@@ -301,12 +301,12 @@ axisStyles:
 
 Padding configuration for chart areas:
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `top` | number | `10` | Top padding in pixels |
-| `left` | number | `10` | Left padding in pixels |
-| `right` | number | `10` | Right padding in pixels |
-| `bottom` | number | `10` | Bottom padding in pixels |
+| Property | Type   | Default | Description              |
+| -------- | ------ | ------- | ------------------------ |
+| `top`    | number | `10`    | Top padding in pixels    |
+| `left`   | number | `10`    | Left padding in pixels   |
+| `right`  | number | `10`    | Right padding in pixels  |
+| `bottom` | number | `10`    | Bottom padding in pixels |
 
 ---
 
@@ -332,12 +332,19 @@ spec:
         categoryWidth: 3.5
       axisStyles:
         ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
-        fc: { stroke: "#000000", fill: "#ffffff", width: 0.1, dasharray: "10 5 5 5" }
+        fc:
+          {
+            stroke: "#000000",
+            fill: "#ffffff",
+            width: 0.1,
+            dasharray: "10 5 5 5",
+          }
         pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
         pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
-        fc: { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        fc:
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:
@@ -357,12 +364,19 @@ spec:
         categoryWidth: 2.0
       axisStyles:
         ac: { stroke: "#000000", fill: "#000000", width: 0.1 }
-        fc: { stroke: "#000000", fill: "#ffffff", width: 0.1, dasharray: "10 5 5 5" }
+        fc:
+          {
+            stroke: "#000000",
+            fill: "#ffffff",
+            width: 0.1,
+            dasharray: "10 5 5 5",
+          }
         pp: { stroke: "#666666", fill: "#666666", width: 0.1 }
         pl: { stroke: "#000000", fill: "#ffffff", width: 0.1 }
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
-        fc: { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+        fc:
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:
@@ -404,27 +418,27 @@ spec:
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `ComponentStyle`. |
-| `metadata.name` | string | yes | — | Unique style identifier. Use `_default` for global defaults. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `ComponentStyle`.                                                                |
+| `metadata.name`        | string | yes      | -       | Unique style identifier. Use `_default` for global defaults.                             |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.content` | object or string | yes | — | Style definitions as a YAML object or a JSON string (at least 2 characters). Contains the component-specific style sections below; unknown keys are accepted. | `content: '{"global":{"fontSizePx":12}}'` |
-| `spec.content.global` | object | no | — | Global typography and color settings, inherited by all components. See [Global style](#global-style). | `global: { fontSizePx: 14 }` |
-| `spec.content.bn-text` | object | no | — | Style settings for text components. Reserved for future use, accepts any properties. See [Text style](#text-style-bn-text). | `bn-text: {}` |
-| `spec.content.bn-chart-time` | object | no | — | Style settings for time/column charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Time chart style](#time-chart-style-bn-chart-time). | `bn-chart-time: { scaleFactors: { columnWidth: 2.5 } }` |
-| `spec.content.bn-chart-structure` | object | no | — | Style settings for structure/bar charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Structure chart style](#structure-chart-style-bn-chart-structure). | `bn-chart-structure: { scaleFactors: { barWidth: 1.5 } }` |
-| `spec.content.bn-tree` | object | no | — | Style settings for hierarchical tree diagrams. See [Tree chart style](#tree-chart-style-bn-tree). | `bn-tree: { edgeColor: "#606060" }` |
-| `spec.content.bn-grid` | object | no | — | Style settings for grid layouts. Not described by the schema, so it is neither validated nor completed. See [Grid style](#grid-style-bn-grid). | `bn-grid: { cellPadding: 8 }` |
+| Attribute                         | Type             | Required | Default | Description                                                                                                                                                                                             | Sample                                                    |
+| --------------------------------- | ---------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `spec.content`                    | object or string | yes      | -       | Style definitions as a YAML object or a JSON string (at least 2 characters). Contains the component-specific style sections below; unknown keys are accepted.                                           | `content: '{"global":{"fontSizePx":12}}'`                 |
+| `spec.content.global`             | object           | no       | -       | Global typography and color settings, inherited by all components. See [Global style](#global-style).                                                                                                   | `global: { fontSizePx: 14 }`                              |
+| `spec.content.bn-text`            | object           | no       | -       | Style settings for text components. Reserved for future use, accepts any properties. See [Text style](#text-style-bn-text).                                                                             | `bn-text: {}`                                             |
+| `spec.content.bn-chart-time`      | object           | no       | -       | Style settings for time/column charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Time chart style](#time-chart-style-bn-chart-time).                  | `bn-chart-time: { scaleFactors: { columnWidth: 2.5 } }`   |
+| `spec.content.bn-chart-structure` | object           | no       | -       | Style settings for structure/bar charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Structure chart style](#structure-chart-style-bn-chart-structure). | `bn-chart-structure: { scaleFactors: { barWidth: 1.5 } }` |
+| `spec.content.bn-tree`            | object           | no       | -       | Style settings for hierarchical tree diagrams. See [Tree chart style](#tree-chart-style-bn-tree).                                                                                                       | `bn-tree: { edgeColor: "#606060" }`                       |
+| `spec.content.bn-grid`            | object           | no       | -       | Style settings for grid layouts. Not described by the schema, so it is neither validated nor completed. See [Grid style](#grid-style-bn-grid).                                                          | `bn-grid: { cellPadding: 8 }`                             |
 
 Components reference a named style through their own `spec.selectedStyle` attribute; see [Using named styles](#using-named-styles).
 
@@ -432,21 +446,20 @@ Components reference a named style through their own `spec.selectedStyle` attrib
 
 Both `bn-chart-time` and `bn-chart-structure` take the same properties.
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `scaleFactors` | object | no | per property | Scale factors for element sizing, multiplied by `global.fontSizePx`. Defaults differ per chart: see [time chart](#scale-factors-time-chart) and [structure chart](#scale-factors-structure-chart). | `scaleFactors: { columnWidth: 2.5 }` |
-| `axisStyles` | object | no | — | SVG styles for axis elements, keyed by scenario. See [SVG style group](#svg-style-group). | `axisStyles: { ac: { stroke: "#000000" } }` |
-| `barStyles` | object | no | — | SVG styles for bar/column elements, keyed by scenario. See [SVG style group](#svg-style-group). | `barStyles: { ac: { fill: "#333333" } }` |
-| `varianceStyles` | object | no | — | SVG styles for variance indicators, keyed by direction. See [SVG variance style group](#svg-variance-style-group). | `varianceStyles: { neg: { fill: "#ff0000" } }` |
-| `stackColors` | array of strings | no | `["#000000", "#c0c0c0", "#808080"]` | Ordered CSS colors for stacked segments. Segments cycle through these colors. | `stackColors: ["#000000", "#c0c0c0"]` |
-| `padding` | object | no | `10` per side | Padding around the chart area. See [Padding](#padding). | `padding: { top: 15 }` |
+| Attribute        | Type             | Required | Default                             | Description                                                                                                                                                                                        | Sample                                         |
+| ---------------- | ---------------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `scaleFactors`   | object           | no       | per property                        | Scale factors for element sizing, multiplied by `global.fontSizePx`. Defaults differ per chart: see [time chart](#scale-factors-time-chart) and [structure chart](#scale-factors-structure-chart). | `scaleFactors: { columnWidth: 2.5 }`           |
+| `axisStyles`     | object           | no       | -                                   | SVG styles for axis elements, keyed by scenario. See [SVG style group](#svg-style-group).                                                                                                          | `axisStyles: { ac: { stroke: "#000000" } }`    |
+| `barStyles`      | object           | no       | -                                   | SVG styles for bar/column elements, keyed by scenario. See [SVG style group](#svg-style-group).                                                                                                    | `barStyles: { ac: { fill: "#333333" } }`       |
+| `varianceStyles` | object           | no       | -                                   | SVG styles for variance indicators, keyed by direction. See [SVG variance style group](#svg-variance-style-group).                                                                                 | `varianceStyles: { neg: { fill: "#ff0000" } }` |
+| `stackColors`    | array of strings | no       | `["#000000", "#c0c0c0", "#808080"]` | Ordered CSS colors for stacked segments. Segments cycle through these colors.                                                                                                                      | `stackColors: ["#000000", "#c0c0c0"]`          |
+| `padding`        | object           | no       | `10` per side                       | Padding around the chart area. See [Padding](#padding).                                                                                                                                            | `padding: { top: 15 }`                         |
 
 #### Global style properties
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `global.fontSizePx` | number | `13.3333` | Base font size in pixels. Scale factors multiply this value. |
-| `global.fontFamily` | string | `'Noto Sans', sans-serif` | CSS font-family value. |
-| `global.fontColor` | string | `#000000` | Primary text color (CSS color). |
-| `global.fontBackgroundColor` | string | `#ffffff` | Background color for text elements (CSS color). |
-
+| Property                     | Type   | Default                   | Description                                                  |
+| ---------------------------- | ------ | ------------------------- | ------------------------------------------------------------ |
+| `global.fontSizePx`          | number | `13.3333`                 | Base font size in pixels. Scale factors multiply this value. |
+| `global.fontFamily`          | string | `'Noto Sans', sans-serif` | CSS font-family value.                                       |
+| `global.fontColor`           | string | `#000000`                 | Primary text color (CSS color).                              |
+| `global.fontBackgroundColor` | string | `#ffffff`                 | Background color for text elements (CSS color).              |

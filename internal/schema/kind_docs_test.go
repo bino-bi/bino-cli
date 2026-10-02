@@ -43,7 +43,7 @@ func TestKindSpecDescriptions(t *testing.T) {
 		checked++
 	}
 	if checked < 20 {
-		t.Fatalf("only %d kind blocks checked — did the schema shape change?", checked)
+		t.Fatalf("only %d kind blocks checked - did the schema shape change?", checked)
 	}
 }
 

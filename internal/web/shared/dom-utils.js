@@ -89,7 +89,7 @@ export function waitForEngine() {
  */
 export function swapContext(html, parser) {
   if (!html) {
-    console.debug('bino: swapContext skipped — empty html');
+    console.debug('bino: swapContext skipped - empty html');
     return false;
   }
   if (!parser) parser = new DOMParser();
@@ -97,18 +97,18 @@ export function swapContext(html, parser) {
   var nextCtx = doc.querySelector('bn-context');
   var currentCtx = document.querySelector('bn-context');
   if (!nextCtx) {
-    console.debug('bino: swapContext skipped — incoming HTML has no <bn-context>');
+    console.debug('bino: swapContext skipped - incoming HTML has no <bn-context>');
     return false;
   }
   if (!currentCtx) {
-    console.debug('bino: swapContext skipped — live DOM has no <bn-context>');
+    console.debug('bino: swapContext skipped - live DOM has no <bn-context>');
     return false;
   }
 
   // Sync attributes on the <bn-context> element itself (e.g. data-page-meta, locale)
   syncAttributes(currentCtx, nextCtx);
 
-  // Morph light DOM children in-place — preserves scroll, focus, and unchanged nodes.
+  // Morph light DOM children in-place - preserves scroll, focus, and unchanged nodes.
   // Pass innerHTML string so idiomorph sees the children, not nextCtx itself as a child.
   Idiomorph.morph(currentCtx, nextCtx.innerHTML, {
     morphStyle: 'innerHTML',
@@ -133,7 +133,7 @@ export function swapContext(html, parser) {
  * @param {Element} src
  */
 function syncAttributes(dst, src) {
-  // Skip 'class' — the live element has runtime classes (e.g. "hydrated" from Stencil)
+  // Skip 'class' - the live element has runtime classes (e.g. "hydrated" from Stencil)
   // that the parsed HTML won't have; removing them hides the component.
   // Add/update attributes from src
   for (var i = 0; i < src.attributes.length; i++) {

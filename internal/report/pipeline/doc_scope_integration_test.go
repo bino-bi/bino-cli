@@ -62,7 +62,7 @@ func renderDocBundleArtefact(t *testing.T, name string) string {
 // TestIntegration_DocRenderExecutesOnlyReferencedData proves a document
 // executes and embeds exactly the data its :ref components reach in the
 // dependency graph: the directly bound dataset, the source-alias dataset,
-// and their datasource — but not the unreferenced dataset.
+// and their datasource - but not the unreferenced dataset.
 func TestIntegration_DocRenderExecutesOnlyReferencedData(t *testing.T) {
 	html := renderDocBundleArtefact(t, "refdoc")
 
@@ -71,7 +71,7 @@ func TestIntegration_DocRenderExecutesOnlyReferencedData(t *testing.T) {
 	}
 
 	// The referenced dataset is embedded with real rows that flowed through
-	// DuckDB — the canary that scoping never starves an embedded component.
+	// DuckDB - the canary that scoping never starves an embedded component.
 	datasetRe := regexp.MustCompile(`<bn-dataset[^>]*name='used_ds'[^>]*>([^<]*)</bn-dataset>`)
 	m := datasetRe.FindStringSubmatch(html)
 	if m == nil {

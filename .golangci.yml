@@ -29,7 +29,7 @@ linters:
   settings:
     # Complexity linters act as a backstop against pathological growth, not a
     # style gate: thresholds are deliberately loose, and pre-existing offenders
-    # carry //nolint:gocognit markers. Don't add new ones — refactor instead.
+    # carry //nolint:gocognit markers. Don't add new ones - refactor instead.
     funlen:
       lines: 250
       statements: -1

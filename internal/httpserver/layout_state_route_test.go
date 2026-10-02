@@ -49,7 +49,7 @@ func postLayoutState(t *testing.T, srv *Server, body string) *http.Response {
 }
 
 // emptyChartSnapshot is a minimal version-1 capture of one chart that rendered
-// no bars — enough to produce exactly one finding.
+// no bars - enough to produce exactly one finding.
 const emptyChartSnapshot = `{
   "state": {
     "version": 1,

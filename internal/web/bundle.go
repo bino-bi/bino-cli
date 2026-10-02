@@ -20,7 +20,7 @@ func main() {
 
 	if _, err := os.Stat(filepath.Join(wd, "node_modules")); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr,
-			"web/bundle: node_modules missing — skipping bundle regeneration. "+
+			"web/bundle: node_modules missing - skipping bundle regeneration. "+
 				"Run 'npm ci' inside internal/web/ to enable.")
 		return
 	}
@@ -51,7 +51,7 @@ func main() {
 	// The layout capture is also injected into headless Chrome by `bino build`,
 	// which evaluates a plain expression and cannot import a module. Building
 	// the same source a second time as an IIFE keeps the preview inspector and
-	// the build capture on one implementation — the selector list and the id
+	// the build capture on one implementation - the selector list and the id
 	// rule must match the engine exactly, and two hand-kept copies would drift.
 	iife := api.Build(api.BuildOptions{
 		EntryPointsAdvanced: []api.EntryPoint{
@@ -100,7 +100,7 @@ func copyFonts(wd string) {
 // embedded. The document template links the stylesheet when math is enabled;
 // without it the server-rendered math shows both the KaTeX HTML and the
 // MathML fallback. The npm pin MUST match the KaTeX version vendored inside
-// goldmark-qjs-katex (0.11.1 — check its katex.mjs on upgrades): 0.12 renamed
+// goldmark-qjs-katex (0.11.1 - check its katex.mjs on upgrades): 0.12 renamed
 // emitted CSS classes (mathdefault → mathnormal), so a mismatched stylesheet
 // silently unstyles glyphs. The fonts/ subdirectory is kept because
 // katex.min.css references fonts via relative url(fonts/...) paths.

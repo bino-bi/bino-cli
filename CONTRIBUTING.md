@@ -67,4 +67,4 @@ Under the CLA, you retain copyright in your Contributions and grant the Project 
 
 ## License
 
-bino-cli is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** — see the [LICENCE](LICENCE) file.
+bino-cli is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** - see the [LICENCE](LICENCE) file.

@@ -41,8 +41,8 @@ var markdownFieldsByKind = map[string][]string{
 var urlSchemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.\-]*://`)
 
 // assetReferenceUndefined warns when an image reference cannot resolve: it names
-// no Asset document, is not a URL the browser can fetch, and — for values that
-// look like a file path — points at a file that is not on disk.
+// no Asset document, is not a URL the browser can fetch, and - for values that
+// look like a file path - points at a file that is not on disk.
 //
 // Nothing validates these today. The renderer copies the value straight into the
 // HTML attribute, and the template engine falls back to using an unresolved name
@@ -245,7 +245,7 @@ func assetNames(docs []Document) map[string]bool {
 // walkNodes visits every object in a decoded document, passing the path that
 // locates it. Path segments are dot-separated with bare numeric indices
 // ("spec.children.1"), the only form spec.ResolvePathPosition can resolve back
-// to a line and column — that is what anchors the editor diagnostic on the
+// to a line and column - that is what anchors the editor diagnostic on the
 // offending key. Map keys are visited in sorted order so findings come out
 // deterministically.
 func walkNodes(node any, path string, visit func(obj map[string]any, path string)) {

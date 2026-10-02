@@ -2,7 +2,7 @@
 // CST that serves completion, hover, diagnostics, and (phase 2) navigation and
 // refactors for bino manifests. The heavy project state (DuckDB session, file
 // watcher, schema) is reached through the Backend interface, which is satisfied
-// either in-process (own ManagedState) or by proxying a running bino daemon —
+// either in-process (own ManagedState) or by proxying a running bino daemon -
 // so the handler code is identical in both modes.
 package lsp
 

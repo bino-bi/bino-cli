@@ -25,7 +25,7 @@ import (
 
 // newLintCommand creates the lint subcommand.
 // It loads and validates manifests, then runs lint rules and reports findings.
-func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newLintCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		workdir        string
 		outDir         string
@@ -102,7 +102,7 @@ with --fail-on-warnings.`),
 			}
 
 			// Engine version compatibility check. Runs before manifest loading so
-			// the finding is reported even when YAML manifests fail to parse —
+			// the finding is reported even when YAML manifests fail to parse -
 			// the engine pin is the more actionable problem in that case. Forces
 			// a non-zero exit independent of --fail-on-warnings.
 			var compatFatal bool
@@ -319,7 +319,7 @@ func schemaFindingsFromErrors(loadErrors []error) []lint.Finding {
 
 // countByLintSeverity splits findings by the severity the project set in
 // bino.toml's [lint] table. A rule without an override counts as a warning
-// whatever severity it emits natively — that is what the exit code has always
+// whatever severity it emits natively - that is what the exit code has always
 // keyed on.
 func countByLintSeverity(runner *lint.Runner, findings []lint.Finding) (errCount, warnCount, infoCount int) {
 	for _, f := range findings {

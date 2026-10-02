@@ -24,13 +24,13 @@
 <br />
 
 <p align="center">
-  <img src=".github/assets/hero.png" alt="bino — YAML manifest to PDF report" width="720" />
+  <img src=".github/assets/hero.png" alt="bino - YAML manifest to PDF report" width="720" />
 </p>
 
 <br />
 
 > [!WARNING]
-> bino is under active development. Configuration and CLI APIs are not yet stable — expect breaking changes between releases.
+> bino is under active development. Configuration and CLI APIs are not yet stable - expect breaking changes between releases.
 
 > [!NOTE]
 > bino is currently tightly coupled to [bn-template-engine](https://github.com/bino-bi/bn-template-engine) as its visualization engine. This coupling will be removed in a future release, making the Viz Engine pluggable.
@@ -43,12 +43,12 @@ For full documentation, visit **[cli.bino.bi](https://cli.bino.bi)**.
 
 ## Highlights
 
-- **Declarative reports** — Define data sources, queries, layouts, and artefacts in YAML. No imperative code required.
-- **SQL-native** — Query CSV, Excel, Parquet, and databases using DuckDB's full SQL dialect.
-- **Pixel-perfect PDFs** — Chrome headless shell renders HTML templates to PDF with precise control over layout, pagination, and styling.
-- **Live preview** — `bino preview` watches for changes and hot-reloads in the browser via SSE.
-- **Validation & linting** — `bino lint` catches manifest errors before build. JSON Schemas power IDE auto-completion.
-- **VS Code extension** — YAML validation and auto-completion for bino manifests, available in `vscode-bino/`.
+- **Declarative reports** - Define data sources, queries, layouts, and artefacts in YAML. No imperative code required.
+- **SQL-native** - Query CSV, Excel, Parquet, and databases using DuckDB's full SQL dialect.
+- **Pixel-perfect PDFs** - Chrome headless shell renders HTML templates to PDF with precise control over layout, pagination, and styling.
+- **Live preview** - `bino preview` watches for changes and hot-reloads in the browser via SSE.
+- **Validation & linting** - `bino lint` catches manifest errors before build. JSON Schemas power IDE auto-completion.
+- **VS Code extension** - YAML validation and auto-completion for bino manifests, available in `vscode-bino/`.
 
 ## Quick Start
 
@@ -98,7 +98,7 @@ Each `bino` release declares the range of `bn-template-engine` versions it suppo
 
 Range syntax follows npm conventions (comparators, hyphen ranges, x-ranges, tilde, caret, AND within an entry, OR across entries) with npm pre-release inclusion semantics: a pre-release version satisfies a range only when at least one comparator in that range explicitly mentions a pre-release of the same `MAJOR.MINOR.PATCH`.
 
-Current supported ranges: `>=1.0.0-alpha, <2.0.0-0` — any 1.x release or pre-release is accepted; 0.x and 2.0.0+ are rejected. To use a specific engine version, pin it in `bino.toml`:
+Current supported ranges: `>=1.0.0-alpha, <2.0.0-0` - any 1.x release or pre-release is accepted; 0.x and 2.0.0+ are rejected. To use a specific engine version, pin it in `bino.toml`:
 
 ```toml
 engine-version = "v1.0.0-alpha.15"
@@ -132,7 +132,7 @@ docs/                    Documentation website (cli.bino.bi)
 
 - Go 1.25 or later
 - CGO enabled (required for DuckDB)
-- Chrome headless shell (for PDF rendering — `bino setup` downloads it automatically)
+- Chrome headless shell (for PDF rendering - `bino setup` downloads it automatically)
 
 ### Build
 
@@ -164,7 +164,7 @@ go test -v -race -coverprofile=coverage.out ./...  # test with coverage
 | `BNR_MAX_MANIFEST_FILES`    | 500     | Max manifest files to scan         |
 | `BNR_MAX_QUERY_ROWS`        | 100,000 | Max rows returned per query        |
 | `BNR_MAX_QUERY_DURATION_MS` | 60,000  | Query timeout in milliseconds      |
-| `CI`                        | —       | Set to `1` to disable update check |
+| `CI`                        | -       | Set to `1` to disable update check |
 
 </details>
 
@@ -182,7 +182,7 @@ To report a vulnerability, please see our [Security Policy](SECURITY.md).
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** — see the [LICENCE](LICENCE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)** - see the [LICENCE](LICENCE) file for details.
 
 ### Commercial licensing
 

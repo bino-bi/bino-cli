@@ -13,7 +13,7 @@ export interface RegistryCommandDeps {
 /**
  * Registers the package-registry commands. Read operations go through the
  * daemon's /registry routes; mutations (add/update/remove/install/login) run
- * the CLI in the integrated terminal — auth prompts and progress output live
+ * the CLI in the integrated terminal - auth prompts and progress output live
  * there, and the daemon's registry-changed SSE event refreshes the tree.
  */
 export function registerRegistryCommands(context: vscode.ExtensionContext, deps: RegistryCommandDeps): void {
@@ -84,9 +84,9 @@ async function publishPackage(deps: RegistryCommandDeps): Promise<void> {
     const choice = await vscode.window.showQuickPick(
         [
             { label: 'Dry run', description: 'Validate against the registry without publishing', args: '--dry-run' },
-            { label: 'patch', description: 'Bug fixes — 1.2.3 becomes 1.2.4', args: '--bump patch' },
-            { label: 'minor', description: 'New definitions, still compatible — 1.2.3 becomes 1.3.0', args: '--bump minor' },
-            { label: 'major', description: 'Breaking changes — 1.2.3 becomes 2.0.0', args: '--bump major' },
+            { label: 'patch', description: 'Bug fixes - 1.2.3 becomes 1.2.4', args: '--bump patch' },
+            { label: 'minor', description: 'New definitions, still compatible - 1.2.3 becomes 1.3.0', args: '--bump minor' },
+            { label: 'major', description: 'Breaking changes - 1.2.3 becomes 2.0.0', args: '--bump major' },
         ],
         { placeHolder: 'How should this publish bump the version?', title: 'Publish package' }
     );

@@ -12,7 +12,7 @@ package cli
 // Contract:
 //   - Input: a self-contained report YAML read from the positional <file>
 //     argument, or from stdin when the argument is "-" or omitted.
-//   - Output: the raw artifact bytes on stdout — a PDF (default, --format pdf)
+//   - Output: the raw artifact bytes on stdout - a PDF (default, --format pdf)
 //     or a PNG (--format png). Nothing else is written to stdout.
 //   - Errors: a single JSON object {"code":"...","message":"..."} on stderr and
 //     a non-zero exit code. The code is drawn from a stable set so callers can

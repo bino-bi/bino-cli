@@ -668,7 +668,7 @@ func TestUpdate(t *testing.T) {
 
 		assetName := getAssetName()
 		// Archive deliberately lacks the binary so the update aborts at the
-		// extraction step — after checksum verification but before the test
+		// extraction step - after checksum verification but before the test
 		// binary would be replaced.
 		archive := writePlatformArchive(t, map[string]string{"README.md": "no binary"})
 		sum := sha256.Sum256(archive)

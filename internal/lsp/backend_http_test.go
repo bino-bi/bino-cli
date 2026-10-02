@@ -31,7 +31,7 @@ func healthServer(t *testing.T, capabilities []string) *httptest.Server {
 
 // TestNewHTTPBackend_CapabilityHandshake: a daemon that health-checks fine but
 // predates /validate-draft must be rejected so the caller falls back to a
-// standalone backend — previously the 404s made diagnostics silently vanish.
+// standalone backend - previously the 404s made diagnostics silently vanish.
 func TestNewHTTPBackend_CapabilityHandshake(t *testing.T) {
 	log := logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test")
 

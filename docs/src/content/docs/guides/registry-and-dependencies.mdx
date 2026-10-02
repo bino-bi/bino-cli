@@ -3,7 +3,7 @@ title: Registry and dependencies
 description: Reuse predef packages from a bino registry with pinned, verified dependencies.
 ---
 
-A bino registry hosts reusable predef packages — layouts, styles, rule sets and
+A bino registry hosts reusable predef packages - layouts, styles, rule sets and
 the resources they need, published under scoped names like `@acme/base-layout`.
 A package is a small file tree, so one package can ship a page, the components
 it embeds, a style and a dataset together.
@@ -16,11 +16,11 @@ The full command reference lives at [bino registry](/cli/registry/).
 
 ## The moving parts
 
-| File / directory | Role | In git? |
-|------------------|------|---------|
-| `bino.toml` `[dependencies]` | What you depend on (name → version or tag) | yes |
-| `bino.lock` | Exact resolved versions and digests | yes — commit it |
-| `.bino/registry/` | Materialized package files, one directory per package | no — gitignore it |
+| File / directory             | Role                                                  | In git?           |
+| ---------------------------- | ----------------------------------------------------- | ----------------- |
+| `bino.toml` `[dependencies]` | What you depend on (name → version or tag)            | yes               |
+| `bino.lock`                  | Exact resolved versions and digests                   | yes - commit it   |
+| `.bino/registry/`            | Materialized package files, one directory per package | no - gitignore it |
 
 The build, preview, serve, and LSP all include `.bino/registry/` in the
 manifest set automatically, so installed packages behave like local documents.
@@ -38,10 +38,10 @@ Dependencies live in `bino.toml`:
 ```
 
 Package names are always `@scope/name`. Values are either an exact version
-(`1.2.3` — held until you change it) or a tag (`latest`, `stable`, ... —
+(`1.2.3` - held until you change it) or a tag (`latest`, `stable`, ... -
 moves when you run `bino registry update`). There are no version ranges.
 
-You rarely edit this table by hand — `bino registry add` and
+You rarely edit this table by hand - `bino registry add` and
 `bino registry remove` maintain it:
 
 ```bash
@@ -50,7 +50,7 @@ bino registry add @acme/quarterly-report@1.2.3 # pins the version
 bino registry remove @acme/base-layout
 ```
 
-`add` resolves the transitive closure (exactly one version per package — a
+`add` resolves the transitive closure (exactly one version per package - a
 conflicting pin fails with a dependency-conflict error), downloads every file
 of every package, verifies each file's digest, and only then writes anything.
 A package's files land verbatim under `.bino/registry/<scope>/<name>/`, keeping
@@ -69,7 +69,7 @@ A package published as a single document occupies the same shape with one
 file, `<name>.yml`. Everything is then pinned in `bino.lock`.
 
 Installed packages keep their scoped name as `metadata.name`, which is why
-`@scope/name` is a valid document name — see
+`@scope/name` is a valid document name - see
 [Name scoping](/concepts/constraints-and-scoped-names/).
 
 ## The lockfile workflow
@@ -85,7 +85,7 @@ raw bytes.
 
 - `bino registry install` – re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
 - `bino registry update` – re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
-- `bino registry verify` – re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification — content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
+- `bino registry verify` – re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification - content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
 
 A typical CI job:
 
@@ -99,7 +99,7 @@ bino build
 
 Component packages (Text, Table, ChartStructure, ChartTime, Tree, Grid,
 LayoutCard, Image) are consumed with `ref` on a layout child, grid child, or
-tree node — the scoped package name is the document name:
+tree node - the scoped package name is the document name:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -136,7 +136,7 @@ which beat an environment variable of the same name. `select` params expose a
 `${NAME_LABEL}` companion. Param values must be quoted strings (`YEAR: "2024"`).
 Inline `spec` fields on the child still act as overrides and are merged after
 the params are expanded. Only `${NAME}` placeholders for parameters declared in
-`metadata.params` are preserved for expansion — any other `${VAR}` in a package
+`metadata.params` are preserved for expansion - any other `${VAR}` in a package
 is resolved from the environment at load time.
 
 ## Configuring the registry
@@ -144,9 +144,9 @@ is resolved from the environment at load time.
 The registry URL is resolved in this order:
 
 1. The `--registry` flag (auth commands only).
-2. `bino.toml` `[registry].url` — the per-project setting, committed with the project.
+2. `bino.toml` `[registry].url` - the per-project setting, committed with the project.
 3. The `BINO_REGISTRY_URL` environment variable.
-4. `~/.bino/config.toml` `[registry].url` — the per-user (global) setting.
+4. `~/.bino/config.toml` `[registry].url` - the per-user (global) setting.
 5. The public registry, `https://registry.bino.bi`.
 
 Per project, in `bino.toml`:
@@ -167,7 +167,7 @@ url = "https://registry.corp.example.com"
 ```
 
 A project's `bino.toml` always wins over the environment variable and the
-global config. The global config holds only the URL — tokens live in
+global config. The global config holds only the URL - tokens live in
 `~/.bino/credentials.json` (via `bino registry login`) or
 `BINO_REGISTRY_TOKEN`. A malformed `~/.bino/config.toml` is an error, not
 silently ignored. Like `credentials.json`, it is spared by
@@ -190,7 +190,7 @@ are exchanged for a short-lived session token per invocation.
 
 The token used for a request is resolved in this order:
 
-1. `bino.toml` `[registry].token` — a `${ENV_VAR}` value is expanded from the environment; an unset variable is an error.
+1. `bino.toml` `[registry].token` - a `${ENV_VAR}` value is expanded from the environment; an unset variable is an error.
 2. The `BINO_REGISTRY_TOKEN` environment variable.
 3. The credential stored by `bino registry login` for that URL.
 4. Anonymous.

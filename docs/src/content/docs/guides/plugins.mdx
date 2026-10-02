@@ -3,7 +3,14 @@ title: Plugins
 description: Extend bino with custom data sources, components, lint rules, and more using the plugin system.
 ---
 
-import { Aside, Steps, Tabs, TabItem, Card, CardGrid } from "@astrojs/starlight/components";
+import {
+  Aside,
+  Steps,
+  Tabs,
+  TabItem,
+  Card,
+  CardGrid,
+} from "@astrojs/starlight/components";
 
 <Aside type="caution" title="Early access">
   The plugin system is in early access and subject to change. There is no plugin
@@ -24,12 +31,12 @@ and SQL queries can express. A single plugin binary can provide any combination 
     or layout elements.
   </Card>
   <Card title="Lint Rules" icon="warning">
-    Validate manifests with domain-specific rules. Lint rules can access datasets
-    and query the host's DuckDB.
+    Validate manifests with domain-specific rules. Lint rules can access
+    datasets and query the host's DuckDB.
   </Card>
   <Card title="Pipeline Hooks" icon="setting">
-    React to pipeline events (post-load, post-dataset, post-render) to
-    transform data, inject content, or collect telemetry.
+    React to pipeline events (post-load, post-dataset, post-render) to transform
+    data, inject content, or collect telemetry.
   </Card>
 </CardGrid>
 
@@ -59,12 +66,12 @@ for Go.
 
    bino searches for plugins in this order:
 
-   | Priority | Location | Example |
-   |----------|----------|---------|
-   | 1 | Explicit path in `bino.toml` | `path = "./bin/bino-plugin-myplugin"` |
-   | 2 | Project-local | `<project>/.bino/plugins/bino-plugin-myplugin` |
-   | 3 | User-global | `~/.bino/plugins/bino-plugin-myplugin` |
-   | 4 | System PATH | Any directory in `$PATH` |
+   | Priority | Location                     | Example                                        |
+   | -------- | ---------------------------- | ---------------------------------------------- |
+   | 1        | Explicit path in `bino.toml` | `path = "./bin/bino-plugin-myplugin"`          |
+   | 2        | Project-local                | `<project>/.bino/plugins/bino-plugin-myplugin` |
+   | 3        | User-global                  | `~/.bino/plugins/bino-plugin-myplugin`         |
+   | 4        | System PATH                  | Any directory in `$PATH`                       |
 
    The binary **must** be named `bino-plugin-<name>` where `<name>` matches the
    key in `bino.toml`.
@@ -91,17 +98,17 @@ for Go.
 <Aside type="tip" title="Windows users">
   On Windows, plugin binaries must have the `.exe` extension. bino automatically
   appends `.exe` when searching for plugins. If you provide an explicit `path` in
-  `bino.toml`, you can omit the extension — bino will try both `<path>` and
+  `bino.toml`, you can omit the extension - bino will try both `<path>` and
   `<path>.exe`.
 </Aside>
 
 Since plugins are native executables, you need a separate binary per
 platform. The naming convention is:
 
-| Platform | Binary name |
-|----------|-------------|
-| macOS / Linux | `bino-plugin-myplugin` |
-| Windows | `bino-plugin-myplugin.exe` |
+| Platform      | Binary name                |
+| ------------- | -------------------------- |
+| macOS / Linux | `bino-plugin-myplugin`     |
+| Windows       | `bino-plugin-myplugin.exe` |
 
 On macOS, you may need to sign the binary before it can run:
 
@@ -136,7 +143,7 @@ plugin's `CollectDataSource` RPC to fetch data.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
-kind: SalesforceDataSource          # provided by plugin
+kind: SalesforceDataSource # provided by plugin
 metadata:
   name: opportunities
 spec:
@@ -153,7 +160,7 @@ Plugins can ship Web Components and render custom HTML for visual kinds:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
-kind: ExampleChart                  # provided by plugin
+kind: ExampleChart # provided by plugin
 metadata:
   name: revenue_chart
 spec:
@@ -180,10 +187,10 @@ bino lint
 
 Plugins subscribe to pipeline checkpoints:
 
-- `post-load` — after manifests are loaded
-- `post-dataset-execute` — after SQL queries run
-- `post-render-html` — after HTML is generated
-- `post-render-pdf` — after PDF is rendered
+- `post-load` - after manifests are loaded
+- `post-dataset-execute` - after SQL queries run
+- `post-render-html` - after HTML is generated
+- `post-render-pdf` - after PDF is rendered
 
 Hooks can inspect and modify the pipeline payload (e.g., transform HTML,
 validate datasets, collect metrics).
@@ -201,10 +208,10 @@ bino plugin exec salesforce:sync --object Account
 
 Plugin callbacks can query the host's state:
 
-- **QueryDuckDB** — run SQL against the host's DuckDB engine
-- **GetDocument** — fetch a specific manifest document
-- **GetDatasetResult** — retrieve pre-computed dataset results
-- **ListDocuments** — list all loaded documents
+- **QueryDuckDB** - run SQL against the host's DuckDB engine
+- **GetDocument** - fetch a specific manifest document
+- **GetDatasetResult** - retrieve pre-computed dataset results
+- **ListDocuments** - list all loaded documents
 
 This enables data-aware plugins that make decisions based on the current
 report's data and configuration.

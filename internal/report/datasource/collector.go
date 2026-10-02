@@ -105,7 +105,7 @@ func Collect(ctx context.Context, docs []config.Document, opts *CollectOptions) 
 						continue
 					}
 					if result.DuckDBExpression != "" {
-						// Plugin returned a SQL expression — needs DuckDB to resolve.
+						// Plugin returned a SQL expression - needs DuckDB to resolve.
 						needsDuckDB = true
 						pluginExprResults = append(pluginExprResults, pluginExprResult{
 							name:       result.Name,

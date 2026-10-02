@@ -20,7 +20,7 @@ func TestWriteAndReadPortFile(t *testing.T) {
 		t.Fatalf("port file should exist: %v", err)
 	}
 
-	// Read it back — the PID is the current process, so it should be alive
+	// Read it back - the PID is the current process, so it should be alive
 	pf, err := ReadPortFile(dir)
 	if err != nil {
 		t.Fatalf("ReadPortFile: %v", err)
@@ -59,7 +59,7 @@ func TestReadPortFile_NonExistent(t *testing.T) {
 func TestReadPortFile_StalePID(t *testing.T) {
 	dir := t.TempDir()
 
-	// Write a port file with PID 1 (init — can't be killed) vs a dead PID
+	// Write a port file with PID 1 (init - can't be killed) vs a dead PID
 	// Use a very high PID that is almost certainly not running
 	stalePath := PortFilePath(dir)
 	if err := os.MkdirAll(filepath.Dir(stalePath), 0o755); err != nil {

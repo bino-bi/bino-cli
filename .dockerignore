@@ -1,6 +1,6 @@
 # Keep the build context to the Go module and its embedded assets. Every
 # //go:embed in this repo reads from internal/ or claude-plugin/, so docs/ and
-# vscode-bino/ are safe to drop — together with dist/ and .git they are most of
+# vscode-bino/ are safe to drop - together with dist/ and .git they are most of
 # the context.
 
 .git
@@ -25,7 +25,7 @@ dist
 Dockerfile
 .dockerignore
 
-# Node dependency trees — gitignored, but COPY . . would still pick them up
+# Node dependency trees - gitignored, but COPY . . would still pick them up
 **/node_modules
 
 # Not needed to compile or run the CLI

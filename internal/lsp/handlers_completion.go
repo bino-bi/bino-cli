@@ -37,7 +37,7 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 }
 
 // padAfterColon prefixes the insert text with a space when the cursor sits
-// immediately after a ':' — with the colon as a trigger character, accepting a
+// immediately after a ':' - with the colon as a trigger character, accepting a
 // value completion must produce `key: value`, not `key:value`. Items carrying
 // an explicit TextEdit manage their own replacement range and are left alone.
 func padAfterColon(doc *Document, pos protocol.Position, items []protocol.CompletionItem) {
@@ -116,7 +116,7 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 	case reportspec.PosKindValue:
 		schema := s.getSchema(ctx)
 		if pc.Path == "kind" {
-			// The document root `kind:` — the schema's full kind enum, which
+			// The document root `kind:` - the schema's full kind enum, which
 			// includes plugin kinds the nested layoutChild enum excludes.
 			return completeKinds(schema), schema.Empty()
 		}
@@ -163,7 +163,7 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 	case reportspec.PosQueryScalar:
 		cols := s.unionColumns(ctx, pc.BoundDatasets)
 		if cols == nil {
-			return nil, true // not warm yet — re-query once introspection lands
+			return nil, true // not warm yet - re-query once introspection lands
 		}
 		return completeColumns(cols), false
 	case reportspec.PosFreeValue:
@@ -176,9 +176,9 @@ func (s *Server) assembleCompletion(ctx context.Context, doc *Document, pc repor
 			return completeEnum([]string{"true", "false"}), false
 		}
 		if node.IsObject() {
-			// An object-shaped position typed as a scalar so far — e.g. a bare
+			// An object-shaped position typed as a scalar so far - e.g. a bare
 			// `- ` slot under `children:`, or the first key being typed under a
-			// still-empty `spec:` — offer the object's keys, plus child
+			// still-empty `spec:` - offer the object's keys, plus child
 			// scaffolds when the slot is a layout child.
 			items := completeFields(node.Props(), nil)
 			items = append(items, childScaffolds(node, s.snippetSupport)...)
@@ -201,7 +201,7 @@ func pathSegments(dotted string) []string {
 
 // applyRefTextEdits pins each ref candidate to the resolved value range so
 // clients replace the exact scalar, quoting names YAML reserves (`@scope/...`)
-// when the buffer carries no quotes yet — a plain scalar cannot start with `@`,
+// when the buffer carries no quotes yet - a plain scalar cannot start with `@`,
 // so a prefix already starting with `@` implies existing quotes, UNLESS the
 // resolve went through the unquoted-`@` repair (rawValue).
 func applyRefTextEdits(items []protocol.CompletionItem, doc *Document, pc reportspec.PositionContext, rawValue bool) {
@@ -334,7 +334,7 @@ func (s *Server) hoverText(ctx context.Context, pc reportspec.PositionContext) s
 		return schema.ResolveAt(pathSegments(pc.Path), pc.KindsByPath).Doc()
 	case reportspec.PosKey:
 		// pc.Path is the enclosing MAPPING's path; the hovered key token is
-		// pc.Prefix (empty on a blank line — nothing to document).
+		// pc.Prefix (empty on a blank line - nothing to document).
 		node := s.getSchema(ctx).ResolveAt(pathSegments(pc.Path), pc.KindsByPath)
 		if p, ok := node.Prop(pc.Prefix); ok {
 			return propHover(p)
@@ -363,7 +363,7 @@ func kindHover(m *walk.Model, kind string) string {
 func propHover(p walk.PropInfo) string {
 	var parts []string
 	if d := propDetail(p); d != "" {
-		parts = append(parts, "`"+p.Name+"` — "+d)
+		parts = append(parts, "`"+p.Name+"` - "+d)
 	}
 	if p.Description != "" {
 		parts = append(parts, p.Description)
@@ -401,7 +401,7 @@ func (s *Server) refTargetHover(ctx context.Context, pc reportspec.PositionConte
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**%s** — %s", name, def.Kind)
+	fmt.Fprintf(&b, "**%s** - %s", name, def.Kind)
 	if o, ok := s.packageOrigins()[normPath(def.File)]; ok {
 		fmt.Fprintf(&b, " · registry %s", o.Version)
 		if o.Tag != "" {
@@ -420,7 +420,7 @@ func (s *Server) refTargetHover(ctx context.Context, pc reportspec.PositionConte
 // paramDefaultCell renders a declaration's default for the hover table.
 func paramDefaultCell(p config.LayoutPageParamSpec) string {
 	if p.Default == nil {
-		return "—"
+		return "-"
 	}
 	return "`" + *p.Default + "`"
 }
@@ -431,7 +431,7 @@ func paramDeclMarkdown(p *config.LayoutPageParamSpec) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**%s** — %s", p.Name, paramDetail(*p))
+	fmt.Fprintf(&b, "**%s** - %s", p.Name, paramDetail(*p))
 	if p.Description != "" {
 		fmt.Fprintf(&b, "\n\n%s", p.Description)
 	}
@@ -441,7 +441,7 @@ func paramDeclMarkdown(p *config.LayoutPageParamSpec) string {
 			for _, o := range p.Options.Items {
 				fmt.Fprintf(&b, "\n- `%s`", o.Value)
 				if o.Label != "" {
-					fmt.Fprintf(&b, " — %s", o.Label)
+					fmt.Fprintf(&b, " - %s", o.Label)
 				}
 			}
 		}

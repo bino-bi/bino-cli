@@ -44,7 +44,7 @@ Fields:
 The `value` field accepts Markdown. The Markdown is converted to HTML at build time
 and the resulting HTML is placed in the `bn-text` element's `value` attribute.
 
-Plain strings still work — they are wrapped in a `<p>` tag automatically.
+Plain strings still work - they are wrapped in a `<p>` tag automatically.
 
 ### Examples
 
@@ -100,7 +100,11 @@ spec:
     > Data as of Q4 2025
 ```
 
-<img src={textImg.src} alt="Text component rendering markdown with bold text, bullet lists, and regional performance summary" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={textImg.src}
+  alt="Text component rendering markdown with bold text, bullet lists, and regional performance summary"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Template expressions
 
@@ -125,7 +129,7 @@ spec:
 
 ### Security
 
-Template evaluation is **sandboxed** — only `data` and `t` are accessible.
+Template evaluation is **sandboxed** - only `data` and `t` are accessible.
 Global objects (`window`, `document`, `fetch`, etc.) are blocked.
 The HTML output is **sanitized** against XSS: only safe tags
 (`br`, `b`, `i`, `strong`, `em`, `span`, `p`, `div`, `table`, `a`, etc.) and
@@ -135,14 +139,14 @@ Event handlers (`onclick`, `onerror`, …) and `javascript:` URIs are stripped.
 ## Scaling
 
 The `scale` field controls how the text component scales its font size
-to fit within the available parent space. Scaling considers **both width and height** —
+to fit within the available parent space. Scaling considers **both width and height** -
 the tighter constraint wins.
 
-| `scale` value | Behavior |
-|---|---|
-| _(not set)_ | Auto-scale to fit; emits an `AUTO_scale` warning with the applied factor |
-| `"none"` | No scaling; emits `WARN_overflow` warning if content overflows |
-| `"auto"` | Auto-scale to fit, silently (no warning) |
+| `scale` value                | Behavior                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| _(not set)_                  | Auto-scale to fit; emits an `AUTO_scale` warning with the applied factor        |
+| `"none"`                     | No scaling; emits `WARN_overflow` warning if content overflows                  |
+| `"auto"`                     | Auto-scale to fit, silently (no warning)                                        |
 | `"0.5"`, `"0.8"`, `"1.2"`, … | Apply `baseFontSize × factor`; emits `WARN_overflow` if content still overflows |
 
 Other values (negative or zero factors, non-numeric strings, unrecognized keywords) are
@@ -193,23 +197,22 @@ spec:
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `Text`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `Text`.                                                                          |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                       |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.value` | string | yes | — | Text content. Supports Markdown syntax and template expressions `${data.<dataset>[0].field}` and `${t('key')}`. | `value: "**Revenue** grew by *12%*"` |
-| `spec.dataset` | string, object, or array | no | — | Dataset reference for template interpolation: a [`DataSet`](/reference/dataset/) name, an inline `DataSet` definition, or an array of either. Provided by the **withDataset** mixin. | `dataset: kpi_summary` |
-| `spec.scale` | string or number | no | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. A positive number or numeric string (e.g. `0.5`, `"0.8"`, `1.2`): explicit `baseFontSize × factor`. When omitted, auto-scales and emits an `AUTO_scale` warning. See [Scaling](#scaling). | `scale: auto` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. The effective style merges `_system`, then `_default`, then the named style. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
-
+| Attribute            | Type                     | Required | Default                 | Description                                                                                                                                                                                                                                                            | Sample                               |
+| -------------------- | ------------------------ | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `spec.value`         | string                   | yes      | -                       | Text content. Supports Markdown syntax and template expressions `${data.<dataset>[0].field}` and `${t('key')}`.                                                                                                                                                        | `value: "**Revenue** grew by *12%*"` |
+| `spec.dataset`       | string, object, or array | no       | -                       | Dataset reference for template interpolation: a [`DataSet`](/reference/dataset/) name, an inline `DataSet` definition, or an array of either. Provided by the **withDataset** mixin.                                                                                   | `dataset: kpi_summary`               |
+| `spec.scale`         | string or number         | no       | auto-scale with warning | Font-size scaling mode. `"none"`: no scaling. `"auto"`: auto-scale silently. A positive number or numeric string (e.g. `0.5`, `"0.8"`, `1.2`): explicit `baseFontSize × factor`. When omitted, auto-scales and emits an `AUTO_scale` warning. See [Scaling](#scaling). | `scale: auto`                        |
+| `spec.selectedStyle` | string                   | no       | -                       | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. The effective style merges `_system`, then `_default`, then the named style. Maps to the `selected-style` HTML attribute.                                                                 | `selectedStyle: corporate-style`     |
+| `spec.i18nNamespace` | string                   | no       | -                       | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                       | `i18nNamespace: audited`             |

@@ -177,7 +177,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     // The bino Language Server provides completion, hover, navigation, rename,
-    // and diagnostics — server-side over a YAML CST. It is gated on a binary
+    // and diagnostics - server-side over a YAML CST. It is gated on a binary
     // capability: when `bino lsp` is missing (an old binary) the user is prompted
     // to update and no language features are registered. The legacy heuristic
     // providers and the redhat schema contributor have been removed; the LSP now
@@ -188,12 +188,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { language: 'yaml', scheme: 'untitled' }
     ];
 
-    // Root the LSP deterministically at the workspace's bino project — the
+    // Root the LSP deterministically at the workspace's bino project - the
     // active editor at activation instant is arbitrary in multi-folder windows
     // (terminal commands keep the active-editor preference). Start it after
     // the daemon connect settles, off the activation path: a language-server
     // failure must not reject activate() and silently kill every command and
-    // tree view — features degrade with a visible warning instead.
+    // tree view - features degrade with a visible warning instead.
     const lspProjectRoot = indexer.getWorkspaceProjectRoot();
     if (lspProjectRoot) {
         void daemonReady
@@ -201,7 +201,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             .catch(err => {
                 outputChannel.appendLine(`[LSP] failed to start: ${err}`);
                 vscode.window.showWarningMessage(
-                    'bino language server failed to start — completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
+                    'bino language server failed to start - completion and diagnostics are unavailable. See the "Bino Reports" output for details.'
                 );
             });
     }
@@ -273,7 +273,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Register Dependencies tree (registry packages) — refreshes on the
+    // Register Dependencies tree (registry packages) - refreshes on the
     // daemon's registry-changed SSE event and on connection changes.
     const dependenciesTreeProvider = new DependenciesTreeProvider(() => daemonClient);
     context.subscriptions.push(
@@ -515,7 +515,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // "Add element" palette — the single entry point that supersedes the static
+    // "Add element" palette - the single entry point that supersedes the static
     // `bino add` command list. Sources kinds (and their categories) from the live
     // backend list (plugin kinds appear automatically) and creates each pick
     // through the one authoring path: DataSource/DataSet open the wizard, every
@@ -554,7 +554,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 return;
             }
             const ok = await daemonClient.restart(root);
-            vscode.window.showInformationMessage(ok ? 'Bino daemon restarted.' : 'Bino daemon failed to restart — check the output channel.');
+            vscode.window.showInformationMessage(ok ? 'Bino daemon restarted.' : 'Bino daemon failed to restart - check the output channel.');
         })
     );
 
@@ -647,7 +647,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Build specific artefact — QuickPick from indexed ReportArtefact names
+    // Build specific artefact - QuickPick from indexed ReportArtefact names
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.buildArtefact', async () => {
             const artefacts = indexer?.getDocuments(['ReportArtefact', 'LiveReportArtefact', 'DocumentArtefact']) ?? [];
@@ -1142,7 +1142,7 @@ function updateDaemonStatusBar(): void {
 }
 
 export function deactivate(): void {
-    // Send SIGTERM to daemon — synchronous, guaranteed to run before VS Code exits.
+    // Send SIGTERM to daemon - synchronous, guaranteed to run before VS Code exits.
     // The daemon's Go signal handler cleans up: removes port file, stops preview, closes DuckDB.
     daemonClient?.shutdown();
     designerPanel?.dispose();

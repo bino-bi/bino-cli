@@ -7,7 +7,7 @@ description: Run a Model Context Protocol server so AI agents can introspect, va
 stdio, exposing bino's introspection, validation, authoring, and build surface to AI agent
 clients such as Claude Code, Claude Desktop, and Cursor.
 
-Because a bino report is plain-text YAML + SQL, an agent can author it directly — and bino's
+Because a bino report is plain-text YAML + SQL, an agent can author it directly - and bino's
 schema and validation become the guardrails that tell the agent precisely whether what it
 wrote is correct.
 
@@ -17,14 +17,14 @@ wrote is correct.
 bino mcp [--work-dir DIR]
 ```
 
-Most agent clients are configured with a *command*, so `bino mcp` is the entrypoint you
+Most agent clients are configured with a _command_, so `bino mcp` is the entrypoint you
 register once. Under the hood:
 
-- **Proxy mode** — if a `bino daemon` is already running for the project (for example because
+- **Proxy mode** - if a `bino daemon` is already running for the project (for example because
   VS Code is open), `bino mcp` connects to that daemon's `/mcp` endpoint and forwards to it, so
   the agent reuses the daemon's already-loaded DuckDB session and file watcher instead of
   starting a second one.
-- **Standalone mode** — with no daemon running, `bino mcp` loads the project itself and serves
+- **Standalone mode** - with no daemon running, `bino mcp` loads the project itself and serves
   the MCP directly.
 
 Flags:
@@ -36,7 +36,7 @@ Flags:
 
 Clients that speak MCP over HTTP can instead point straight at a running daemon's endpoint
 (`http://127.0.0.1:<port>/mcp`; the port is recorded in `.bino/daemon.json`). The daemon mounts
-`/mcp` by default on loopback — pass `bino daemon --mcp=false` to disable it.
+`/mcp` by default on loopback - pass `bino daemon --mcp=false` to disable it.
 
 ## Configure your client
 
@@ -66,16 +66,16 @@ Add an entry to the client's MCP config (Claude Desktop:
 
 Read-only context an agent can pull in:
 
-| URI | Contents |
-| --- | --- |
-| `bino://schema` | The full merged JSON Schema for all manifest kinds (built-in + plugin). |
-| `bino://schema/{kind}` | The self-contained spec schema for one kind (e.g. `bino://schema/Table`). |
-| `bino://kinds` | Every manifest kind and its capability category (`data` / `layout` / `embeddable` / `artefact` / `config`). |
-| `bino://documents` | The project index: every document → `{kind, name, file, position}`. |
-| `bino://packages` | The project's registry packages: `bino.lock` merged with `bino.toml` `[dependencies]`, with installed state. |
-| `bino://templates` | The built-in and curated templates `init_bundle` can scaffold from. |
-| `bino://skills` | Index of the knowledge skills below: name and description of each, as JSON. |
-| `bino://skills/{name}` | One skill as markdown (e.g. `bino://skills/bino-ibcs`), the same text the prompt of that name carries. |
+| URI                    | Contents                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bino://schema`        | The full merged JSON Schema for all manifest kinds (built-in + plugin).                                      |
+| `bino://schema/{kind}` | The self-contained spec schema for one kind (e.g. `bino://schema/Table`).                                    |
+| `bino://kinds`         | Every manifest kind and its capability category (`data` / `layout` / `embeddable` / `artefact` / `config`).  |
+| `bino://documents`     | The project index: every document → `{kind, name, file, position}`.                                          |
+| `bino://packages`      | The project's registry packages: `bino.lock` merged with `bino.toml` `[dependencies]`, with installed state. |
+| `bino://templates`     | The built-in and curated templates `init_bundle` can scaffold from.                                          |
+| `bino://skills`        | Index of the knowledge skills below: name and description of each, as JSON.                                  |
+| `bino://skills/{name}` | One skill as markdown (e.g. `bino://skills/bino-ibcs`), the same text the prompt of that name carries.       |
 
 ## Prompts
 
@@ -84,13 +84,13 @@ the Claude Code plugin ships, embedded in the binary, so any client that can run
 them without a copy of the plugin. Each prompt takes no arguments and returns one user message with
 the skill text; the same text is readable as `bino://skills/{name}`.
 
-| Prompt | What it teaches |
-| --- | --- |
-| `bino-concepts` | bino's mental model: the manifest envelope, the DataSource → DataSet → LayoutPage → artefact pipeline, dependencies, standard columns, params, constraints, `bino.toml`. Read first. |
-| `bino-authoring` | The authoring loop through this server: outline, scaffold, learn columns, draft, `validate_draft`, write, `validate_project`, build. |
-| `bino-ibcs` | The IBCS rubric: SUCCESS rules, scenarios (`ac`/`pp`/`fc`/`pl`), variances, notations, choosing a component, data-aware commentary. Includes the full IBCS standard reference and the engine data model. |
-| `bino-data-modeling` | Mapping raw source columns onto scenario slots, deriving variances, choosing the grain, writing typed DataSet SQL. |
-| `bino-validation-loop` | The four-layer check (schema, IBCS, build-readiness, acceptance) and the bounded fix loop. |
+| Prompt                 | What it teaches                                                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bino-concepts`        | bino's mental model: the manifest envelope, the DataSource → DataSet → LayoutPage → artefact pipeline, dependencies, standard columns, params, constraints, `bino.toml`. Read first.                     |
+| `bino-authoring`       | The authoring loop through this server: outline, scaffold, learn columns, draft, `validate_draft`, write, `validate_project`, build.                                                                     |
+| `bino-ibcs`            | The IBCS rubric: SUCCESS rules, scenarios (`ac`/`pp`/`fc`/`pl`), variances, notations, choosing a component, data-aware commentary. Includes the full IBCS standard reference and the engine data model. |
+| `bino-data-modeling`   | Mapping raw source columns onto scenario slots, deriving variances, choosing the grain, writing typed DataSet SQL.                                                                                       |
+| `bino-validation-loop` | The four-layer check (schema, IBCS, build-readiness, acceptance) and the bounded fix loop.                                                                                                               |
 
 The plugin's `bino-orchestration` and `bino-requirements` skills are not served: they drive Claude
 Code specific machinery (subagents, questions to the human) and mean nothing to other clients.
@@ -99,61 +99,61 @@ Code specific machinery (subagents, questions to the human) and mean nothing to 
 
 ### Understand & inspect
 
-| Tool | What it does |
-| --- | --- |
-| `list_kinds` | Every manifest kind with its capability category. |
-| `outline_kind(kind)` | A compact outline of one kind's spec: every field with its path, type, required flag, enum, default and description. Layout kinds report the allowed child kinds as `childKinds`. Start here. |
-| `scaffold_kind(kind)` | A minimal YAML document for one kind with every required spec field pre-filled. |
-| `describe_kind(kind)` | The full spec JSON Schema for one kind. Large (up to ~20k tokens for layout kinds); prefer `outline_kind`. |
-| `describe_project()` | All documents in the project. |
-| `describe_document(file)` | The documents declared in one file. |
-| `get_columns(name)` | Column names of a DataSet or DataSource (prefix `$` to force a DataSource). |
-| `get_rows(name, limit?)` | A sample of rows from a DataSet or DataSource. |
-| `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`. |
+| Tool                                             | What it does                                                                                                                                                                                  |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_kinds`                                     | Every manifest kind with its capability category.                                                                                                                                             |
+| `outline_kind(kind)`                             | A compact outline of one kind's spec: every field with its path, type, required flag, enum, default and description. Layout kinds report the allowed child kinds as `childKinds`. Start here. |
+| `scaffold_kind(kind)`                            | A minimal YAML document for one kind with every required spec field pre-filled.                                                                                                               |
+| `describe_kind(kind)`                            | The full spec JSON Schema for one kind. Large (up to ~20k tokens for layout kinds); prefer `outline_kind`.                                                                                    |
+| `describe_project()`                             | All documents in the project.                                                                                                                                                                 |
+| `describe_document(file)`                        | The documents declared in one file.                                                                                                                                                           |
+| `get_columns(name)`                              | Column names of a DataSet or DataSource (prefix `$` to force a DataSource).                                                                                                                   |
+| `get_rows(name, limit?)`                         | A sample of rows from a DataSet or DataSource.                                                                                                                                                |
+| `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`.                                                                                                                                           |
 
 ### Validate
 
-| Tool | What it does |
-| --- | --- |
-| `validate_project(execute_queries?)` | Validate the project on disk; optionally execute datasets for data-validation warnings. |
-| `validate_draft(yaml)` | Validate manifest YAML **in memory** (no disk write) — the pre-write guardrail. |
+| Tool                                      | What it does                                                                                        |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `validate_project(execute_queries?)`      | Validate the project on disk; optionally execute datasets for data-validation warnings.             |
+| `validate_draft(yaml)`                    | Validate manifest YAML **in memory** (no disk write) - the pre-write guardrail.                     |
 | `introspect_source(spec, sheet?, limit?)` | Probe a not-yet-registered CSV/Excel/DB source: columns, sample rows, sheets, detected CSV options. |
 
 ### Author
 
-| Tool | What it does |
-| --- | --- |
-| `create_manifest(kind, name, spec, ...)` | Create any manifest from a spec object; validated and written atomically, auto-placed by project convention. |
-| `write_manifest(file, yaml, append?)` | Persist a full manifest document, validated before writing. |
-| `edit_manifest(file, position, patch)` | Edit one document in place via dotted-path edits, preserving comments and key order. |
-| `remove_manifest_fields(file, position, paths, dryRun?)` | Delete dotted paths from one document in place; a trailing `[index]` removes a sequence element. Validated before the atomic write; `dryRun` returns the rewritten file instead. |
-| `reorder_manifest_sequence(file, position, path, from, to, dryRun?)` | Move an element within a sequence (e.g. `spec.columns`) from one 0-based index to another, in place and validated. |
-| `scaffold_source(dataSource, dataSet?)` | Scaffold a DataSource and an optional typed DataSet in one step. |
-| `init_bundle(...)` | Bootstrap a new starter report bundle. |
+| Tool                                                                 | What it does                                                                                                                                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_manifest(kind, name, spec, ...)`                             | Create any manifest from a spec object; validated and written atomically, auto-placed by project convention.                                                                     |
+| `write_manifest(file, yaml, append?)`                                | Persist a full manifest document, validated before writing.                                                                                                                      |
+| `edit_manifest(file, position, patch)`                               | Edit one document in place via dotted-path edits, preserving comments and key order.                                                                                             |
+| `remove_manifest_fields(file, position, paths, dryRun?)`             | Delete dotted paths from one document in place; a trailing `[index]` removes a sequence element. Validated before the atomic write; `dryRun` returns the rewritten file instead. |
+| `reorder_manifest_sequence(file, position, path, from, to, dryRun?)` | Move an element within a sequence (e.g. `spec.columns`) from one 0-based index to another, in place and validated.                                                               |
+| `scaffold_source(dataSource, dataSet?)`                              | Scaffold a DataSource and an optional typed DataSet in one step.                                                                                                                 |
+| `init_bundle(...)`                                                   | Bootstrap a new starter report bundle.                                                                                                                                           |
 
 Every write validates against the merged JSON Schema before persisting, so an agent cannot
 write a structurally invalid manifest. Writes are atomic (temp file + rename).
 
 ### Build
 
-| Tool | What it does |
-| --- | --- |
-| `build(artefacts?, out_dir?)` | Render artefacts by running `bino build` — streams progress and returns the exit code, output, and produced artefacts. Subject to the usual engine-compatibility check. |
+| Tool                                      | What it does                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build(artefacts?, out_dir?)`             | Render artefacts by running `bino build` - streams progress and returns the exit code, output, and produced artefacts. Subject to the usual engine-compatibility check.                                                                                                                            |
 | `get_layout_state(artefact?, component?)` | Build with a layout capture and report what actually rendered: per component the box, row/bar counts, resolved scaling and diagnostics, plus findings (empty components, overflow, auto-fitted fonts, diverging scales). Slow (headless Chrome). Requires template engine v1.0.0-next.24 or newer. |
 
 ### Registry
 
-| Tool | What it does |
-| --- | --- |
-| `registry_packages()` | The project's dependencies, offline: `bino.lock` merged with `bino.toml` `[dependencies]`, whether each is installed under `.bino/registry/`, and the params each package declares. |
-| `registry_search(query, kinds?, scopes?, tags?, page?, per_page?)` | Search the registry for published packages (network). Use it before authoring a component from scratch. |
-| `registry_info(spec)` | Resolve one package spec (`@scope/name`, optionally `@version` or `@tag`): version, kinds, files, dependencies, and the installed version when the project already locks it. |
-| `registry_auth_status()` | The resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token. |
-| `registry_add(specs)` | Add packages as dependencies: resolves the transitive closure, verifies every download, then writes `bino.toml`, `bino.lock` and `.bino/registry/`. Reports name collisions with local documents. |
-| `registry_update(packages?)` | Re-resolve tag-following dependencies to their newest versions and rewrite `bino.lock`; exact pins are held. |
-| `registry_remove(packages)` | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline). |
-| `registry_install()` | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving. |
-| `registry_publish(bump?, dry_run?, visibility?)` | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag — see [Security](#security). |
+| Tool                                                               | What it does                                                                                                                                                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `registry_packages()`                                              | The project's dependencies, offline: `bino.lock` merged with `bino.toml` `[dependencies]`, whether each is installed under `.bino/registry/`, and the params each package declares.               |
+| `registry_search(query, kinds?, scopes?, tags?, page?, per_page?)` | Search the registry for published packages (network). Use it before authoring a component from scratch.                                                                                           |
+| `registry_info(spec)`                                              | Resolve one package spec (`@scope/name`, optionally `@version` or `@tag`): version, kinds, files, dependencies, and the installed version when the project already locks it.                      |
+| `registry_auth_status()`                                           | The resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token.                                                                          |
+| `registry_add(specs)`                                              | Add packages as dependencies: resolves the transitive closure, verifies every download, then writes `bino.toml`, `bino.lock` and `.bino/registry/`. Reports name collisions with local documents. |
+| `registry_update(packages?)`                                       | Re-resolve tag-following dependencies to their newest versions and rewrite `bino.lock`; exact pins are held.                                                                                      |
+| `registry_remove(packages)`                                        | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline).                                                                                               |
+| `registry_install()`                                               | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving.                                                                                                          |
+| `registry_publish(bump?, dry_run?, visibility?)`                   | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag - see [Security](#security).                                            |
 
 ## The authoring loop
 
@@ -177,7 +177,7 @@ require additional hardening.
 
 `registry_publish` is **off by default**. It is only registered when a human starts the server with
 `bino mcp --allow-publish`, or `bino daemon --mcp-allow-publish` when `bino mcp` proxies to a running
-daemon. Publishing is irreversible — it mints an immutable version that cannot be deleted — and a
+daemon. Publishing is irreversible - it mints an immutable version that cannot be deleted - and a
 first publish with `visibility: public` makes the package public, so an agent must not be able to
 trigger it by accident. The other registry tools only change the local project and never return a
 credential; when `registry_auth_status` reports none, the human runs `bino registry login`.

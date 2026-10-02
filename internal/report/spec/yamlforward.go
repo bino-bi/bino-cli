@@ -27,7 +27,7 @@ const (
 	// PosUnknown means the cursor is outside any document body (on a separator,
 	// past EOF, or in unparseable content).
 	PosUnknown PositionKind = iota
-	// PosKey is a mapping key position — suggest field names from the schema.
+	// PosKey is a mapping key position - suggest field names from the schema.
 	PosKey
 	// PosKindValue is the value of the top-level `kind:` field.
 	PosKindValue
@@ -43,7 +43,7 @@ const (
 	// PosFreeValue is a scalar value with no special completion semantics; the
 	// completion layer may upgrade it to an enum when the schema says so.
 	PosFreeValue
-	// PosParamKey is a key position inside a ref child's `params:` mapping —
+	// PosParamKey is a key position inside a ref child's `params:` mapping -
 	// suggest the target document's declared param names.
 	PosParamKey
 	// PosParamValue is a value position inside a ref child's `params:` mapping.
@@ -84,7 +84,7 @@ var refFieldKinds = map[string]string{
 }
 
 // ResolvePositionPath maps a 1-based cursor (line, col) within raw multi-document
-// YAML to a PositionContext. It parses the RAW buffer — never env-expanded text —
+// YAML to a PositionContext. It parses the RAW buffer - never env-expanded text -
 // so positions stay honest (see loader's ${VAR} expansion).
 //
 // Typing resilience: documents are isolated per `---` slice, so a syntax error
@@ -100,7 +100,7 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 
 	// The whole-buffer parse is authoritative where it succeeds: its nodes
 	// carry absolute lines and define the DocIndex ordinals (which skip empty
-	// sections — the edit pipeline counts documents the same way). A parse
+	// sections - the edit pipeline counts documents the same way). A parse
 	// error keeps the prefix nodes.
 	nodes, _ := ParseYAMLNodes(content) //nolint:errcheck // lenient parse; the comment above documents the fallback
 	var root *yaml.Node
@@ -230,7 +230,7 @@ func sliceIndexFor(slices []docSlice, line int) int {
 }
 
 // RepairUnquotedAt scans the cursor line for an unquoted `@...` scalar value
-// (`ref: @scope/name`) — invalid YAML, since `@` is a reserved indicator, so
+// (`ref: @scope/name`) - invalid YAML, since `@` is a reserved indicator, so
 // the whole document fails to parse and position resolution goes dark exactly
 // while an author types a registry ref. It returns the content with that token
 // quoted, the token itself, and the token's raw (1-based, end-exclusive) span
@@ -248,7 +248,7 @@ func RepairUnquotedAt(content string, line int) (repaired, token string, raw Ran
 	start, end := m[2], m[3] // the @token submatch, 0-based byte offsets
 	token = src[start:end]
 	lines[line-1] = src[:start] + `"` + token + `"` + src[end:]
-	// Ranges are rune columns (the yaml.v3 unit) — convert the byte offsets.
+	// Ranges are rune columns (the yaml.v3 unit) - convert the byte offsets.
 	startCol := utf8.RuneCountInString(src[:start]) + 1
 	raw = Range{StartLine: line, StartCol: startCol, EndLine: line, EndCol: startCol + utf8.RuneCountInString(token)}
 	return strings.Join(lines, "\n"), token, raw, true
@@ -328,7 +328,7 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 		if w.cursorLine == key.Line {
 			// On the key's line: decide key-side vs value-side by the colon column.
 			if val.Line == key.Line && w.cursorCol >= val.Column {
-				// A flow container value (e.g. scenarios: ["ac1", ...]) — descend so
+				// A flow container value (e.g. scenarios: ["ac1", ...]) - descend so
 				// the cursor lands on the right item context, not a free value.
 				if isContainer(val) {
 					return w.descend(val, childPath, upper)
@@ -368,7 +368,7 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 			}, true
 		}
 		// The same shape generally: any empty value with the cursor indented
-		// beneath its key is the FIRST key inside that (still null) mapping —
+		// beneath its key is the FIRST key inside that (still null) mapping -
 		// e.g. a blank line under `spec:` invites spec fields, not root keys.
 		if isEmptyScalar(val) && w.cursorCol > key.Column {
 			return PositionContext{
@@ -383,7 +383,7 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 		return w.keyContext(node, path), true
 	}
 	// Cursor falls in the mapping's body but on no pair (empty mapping or a blank
-	// line before the first key) — a new-key position.
+	// line before the first key) - a new-key position.
 	return w.keyContext(node, path), true
 }
 
@@ -622,7 +622,7 @@ func docKind(root *yaml.Node) string {
 // a component's `dataset` (string or sequence) for scenario/variance completion,
 // and a DataSet's `source` + `dependencies` for in-query column completion. It is
 // called on each mapping along the descent, so the nearest enclosing binding wins
-// — `dataset` lives beside `scenarios` whether at the document root (a top-level
+// - `dataset` lives beside `scenarios` whether at the document root (a top-level
 // Table) or inside a layout child's `spec`.
 func bindingDatasets(node *yaml.Node) []string {
 	out := make([]string, 0, 4)
@@ -696,7 +696,7 @@ func joinPath(path []string) string {
 }
 
 // kindsKey is the KindsByPath key for a mapping path: "" for the root, else
-// the dotted path (no "(root)" sentinel — resolvers index by plain paths).
+// the dotted path (no "(root)" sentinel - resolvers index by plain paths).
 func kindsKey(path []string) string {
 	return strings.Join(path, ".")
 }

@@ -16,7 +16,7 @@ import (
 
 // TestStandardRendersValidManifests is the regression gate for the scaffold's
 // content: every YAML document the standard template produces must validate
-// against the embedded schema. Rendering first is the point — the sources hold
+// against the embedded schema. Rendering first is the point - the sources hold
 // template actions, so only the output can be validated, and that is also what
 // the user actually gets.
 //

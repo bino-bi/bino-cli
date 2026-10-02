@@ -4,13 +4,13 @@
  * Report pages (bn-layout-page) are fixed-size boxes (e.g. 1024px XGA). The
  * scaler measures each page and writes --bino-fit-scale/-w/-h as inline
  * custom properties; serve.css applies the transform + margin compensation.
- * Scale is capped at 1 (no upscaling — pinch-zoom covers that).
+ * Scale is capped at 1 (no upscaling - pinch-zoom covers that).
  *
  * offsetWidth/offsetHeight report the layout size, which a transform does
  * not change, so re-applying is idempotent.
  *
  * Invariant: content swaps replace the bn-context without firing the
- * ResizeObservers — every swap site in serve-app.js must call rebind().
+ * ResizeObservers - every swap site in serve-app.js must call rebind().
  */
 export function createFitScaler(outlet) {
   var pending = false;

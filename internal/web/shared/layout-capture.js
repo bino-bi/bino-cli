@@ -63,7 +63,7 @@ const QUIET_MS = 250;
 
 /**
  * Default settle budget. Generous because a heavy report keeps re-measuring
- * for several seconds — charts render collapsed and without a canvas until
+ * for several seconds - charts render collapsed and without a canvas until
  * their auto-fit pass completes, and a capture taken in that window reports
  * zero bars for a chart that is about to render fine.
  */
@@ -73,7 +73,7 @@ const SETTLE_TIMEOUT_MS = 8000;
  * Wait until the rendered report stops moving.
  *
  * `componentRegisterIsRenderedResult` is the engine's documented trigger, but
- * it is a 500 ms debounce on component status — it goes true while charts are
+ * it is a 500 ms debounce on component status - it goes true while charts are
  * still auto-fitting, and a capture taken then reports collapsed boxes and
  * zero bars for a chart that is about to render fine. So the flag only opens
  * the gate; the capture waits for two identical geometry samples after it.
@@ -159,7 +159,7 @@ export function collectSources(hosts) {
  *
  * `settled` false means the report was still moving when the budget ran out.
  * Such a snapshot describes a real moment but not the finished report, so
- * callers must not derive findings from it — an unfinished chart reports zero
+ * callers must not derive findings from it - an unfinished chart reports zero
  * bars and would be flagged as "rendered empty".
  *
  * @param {{settleTimeoutMs?: number}} [options]

@@ -43,8 +43,8 @@ func newInitCommand() *cobra.Command {
 bino preview immediately.
 
 With no SOURCE it renders the built-in 'minimal' scaffold; 'standard' renders a full
-reference bundle — CSV data source, dataset, IBCS table, chart, style, translations and
-assets — in the canonical folder layout; 'predef' renders a predef project, a reusable
+reference bundle - CSV data source, dataset, IBCS table, chart, style, translations and
+assets - in the canonical folder layout; 'predef' renders a predef project, a reusable
 registry package with an active [package] table and mock data to preview it against.
 A SOURCE may also be a remote template: owner/repo[/subdir]#ref, a full archive URL,
 or a local ./path. Remote templates are fetched from GitHub, cached by commit SHA,
@@ -808,7 +808,7 @@ func parseSetFlags(sets []string) (map[string]string, error) {
 
 // resolveRemoteDir resolves the target directory for a remote template. Unlike
 // built-ins there is no implicit default, so a target is required (prompted when
-// interactive, an error in headless mode) — never silently scaffolding into CWD.
+// interactive, an error in headless mode) - never silently scaffolding into CWD.
 func resolveRemoteDir(cmd *cobra.Command, dir string, yes bool) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {

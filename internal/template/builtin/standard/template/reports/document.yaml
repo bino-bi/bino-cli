@@ -7,7 +7,7 @@ spec:
   orientation: portrait
   locale: {{ .Language }}
   filename: documentation.pdf
-  title: {{ printf "%s — Documentation" .ReportTitle | yaml }}
+  title: {{ printf "%s - Documentation" .ReportTitle | yaml }}
   tableOfContents: true
   displayHeaderFooter: true
   marginTop: "20mm"

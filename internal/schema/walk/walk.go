@@ -77,7 +77,7 @@ func (m *Model) KindDoc(kind string) (desc string, required []string) {
 	}
 	sort.Strings(required)
 	// The description must come from the kind's own spec def, not the generic
-	// root `spec` envelope the ResolveAt variants list first — read the
+	// root `spec` envelope the ResolveAt variants list first - read the
 	// discriminated branch directly.
 	for _, block := range m.allOf() {
 		if kindConst(block) != kind {
@@ -100,7 +100,7 @@ func (m *Model) KindDoc(kind string) (desc string, required []string) {
 
 // Node is the resolver's verdict for a path: the set of raw schema
 // objects that could describe the position. Multiple variants arise from
-// oneOf/anyOf and from allOf members, which are kept flat — helpers union
+// oneOf/anyOf and from allOf members, which are kept flat - helpers union
 // across them, which is exactly the candidate semantics completion wants.
 type Node struct {
 	m        *Model
@@ -174,7 +174,7 @@ func (m *Model) normalize(node any, kind string, depth int, seen map[string]bool
 			expand(mo)
 		}
 	}
-	// An object-level conditional (if/then/else beside other keys) — the shape
+	// An object-level conditional (if/then/else beside other keys) - the shape
 	// layoutChild uses to switch a child's spec on `ref` presence.
 	if _, isCond := obj["if"]; isCond {
 		m.expandConditional(obj, kind, expand)
@@ -191,7 +191,7 @@ func (m *Model) normalize(node any, kind string, depth int, seen map[string]bool
 
 // expandConditional applies one if/then/else block: a kind-discriminated
 // condition contributes `then` only when the document kind matches (nothing
-// when the kind is unknown — offering every kind's fields would be noise); any
+// when the kind is unknown - offering every kind's fields would be noise); any
 // other condition cannot be decided statically, so both branches are unioned.
 func (m *Model) expandConditional(obj map[string]any, kind string, expand func(any)) {
 	if kc := kindConst(obj); kc != "" {

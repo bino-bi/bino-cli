@@ -577,7 +577,7 @@ func writeStackAttr(b *strings.Builder, name string, s *stackConfig) {
 }
 
 // writeMeasureAttr writes a dual-form measure mapping attribute: a JSON string
-// scalar is emitted as its bare token (x='ac1' — the engine treats any value
+// scalar is emitted as its bare token (x='ac1' - the engine treats any value
 // not starting with '{' as shorthand for {"measure": value}), a JSON object is
 // emitted compacted. Other JSON values are dropped; the schema rejects them.
 func writeMeasureAttr(b *strings.Builder, name string, raw json.RawMessage) {

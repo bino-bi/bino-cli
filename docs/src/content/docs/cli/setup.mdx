@@ -76,7 +76,7 @@ Multiple versions can be installed side by side. By default, bino uses the lates
 
 ## DuckDB extensions
 
-bino queries data through DuckDB, which loads extensions on demand — `excel` and `httpfs` for file and URL sources, `postgres` and `mysql` for databases, `prql` for PRQL datasets, and `webdavfs` for WebDAV secrets. They are normally downloaded the first time they are needed and cached in `~/.bino/cache/duckdb/extensions/`.
+bino queries data through DuckDB, which loads extensions on demand - `excel` and `httpfs` for file and URL sources, `postgres` and `mysql` for databases, `prql` for PRQL datasets, and `webdavfs` for WebDAV secrets. They are normally downloaded the first time they are needed and cached in `~/.bino/cache/duckdb/extensions/`.
 
 `bino setup --duckdb-extensions` downloads all of them up front. Use it to prepare an air-gapped machine, or to warm a CI cache so builds never block on an extension download:
 
@@ -87,7 +87,8 @@ bino setup --duckdb-extensions
 Extensions are version- and platform-specific, so the cache from one machine only transfers to another with the same OS, architecture, and bino release.
 
 <Aside type="note">
-The [container image](/guides/docker/) already has all of these baked in — you never run `bino setup` there.
+  The [container image](/guides/docker/) already has all of these baked in - you
+  never run `bino setup` there.
 </Aside>
 
 ## Troubleshooting

@@ -1,6 +1,6 @@
 ---
-import { Card, CardGrid } from '@astrojs/starlight/components';
-import ReportShowcase from './ReportShowcase.astro';
+import { Card, CardGrid } from "@astrojs/starlight/components";
+import ReportShowcase from "./ReportShowcase.astro";
 ---
 
 <div class="landing-section">
@@ -9,27 +9,39 @@ import ReportShowcase from './ReportShowcase.astro';
   <section class="features-section">
     <h2 class="section-title">Why Bino?</h2>
     <p class="section-subtitle">The developer-first reporting engine.</p>
-    
+
     <div class="feature-grid">
       <div class="feature-card">
         <div class="icon">📄</div>
         <h3>Declarative & Git-Ready</h3>
-        <p>Reports as code. YAML & SQL. Commit, diff, and review your reporting pipeline just like your application code.</p>
+        <p>
+          Reports as code. YAML & SQL. Commit, diff, and review your reporting
+          pipeline just like your application code.
+        </p>
       </div>
       <div class="feature-card">
         <div class="icon">🔌</div>
         <h3>Data Agnostic</h3>
-        <p>Powered by DuckDB. Query Postgres, MySQL, Parquet, CSV, and JSON directly. No ETL required.</p>
+        <p>
+          Powered by DuckDB. Query Postgres, MySQL, Parquet, CSV, and JSON
+          directly. No ETL required.
+        </p>
       </div>
       <div class="feature-card">
         <div class="icon">✨</div>
         <h3>Pixel-Perfect PDFs</h3>
-        <p>Typesetting-quality output. Control every margin, header, and page break with absolute precision.</p>
+        <p>
+          Typesetting-quality output. Control every margin, header, and page
+          break with absolute precision.
+        </p>
       </div>
       <div class="feature-card">
         <div class="icon">⚡</div>
         <h3>Dev Experience</h3>
-        <p>Instant hot-reloading, TypeScript-like schema validation, and a CLI that gets out of your way.</p>
+        <p>
+          Instant hot-reloading, TypeScript-like schema validation, and a CLI
+          that gets out of your way.
+        </p>
       </div>
     </div>
   </section>
@@ -41,27 +53,42 @@ import ReportShowcase from './ReportShowcase.astro';
       <a href="/why/use-cases/" class="persona-card">
         <div class="persona-icon">💰</div>
         <h3>Finance & Controlling</h3>
-        <p>Monthly management reports, P&L summaries, board decks — versioned and reproducible.</p>
+        <p>
+          Monthly management reports, P&L summaries, board decks - versioned and
+          reproducible.
+        </p>
       </a>
       <a href="/why/use-cases/" class="persona-card">
         <div class="persona-icon">📊</div>
         <h3>SaaS Companies</h3>
-        <p>Branded client usage reports generated automatically from your analytics database.</p>
+        <p>
+          Branded client usage reports generated automatically from your
+          analytics database.
+        </p>
       </a>
       <a href="/why/use-cases/" class="persona-card">
         <div class="persona-icon">🏢</div>
         <h3>Agencies</h3>
-        <p>White-label analytics for multiple clients. One template, per-client branding.</p>
+        <p>
+          White-label analytics for multiple clients. One template, per-client
+          branding.
+        </p>
       </a>
       <a href="/why/use-cases/" class="persona-card">
         <div class="persona-icon">🚚</div>
         <h3>Operations</h3>
-        <p>Multi-region dashboards and operational KPIs distributed on a weekly schedule.</p>
+        <p>
+          Multi-region dashboards and operational KPIs distributed on a weekly
+          schedule.
+        </p>
       </a>
       <a href="/why/use-cases/" class="persona-card">
         <div class="persona-icon">🔧</div>
         <h3>Data Engineers</h3>
-        <p>Add PDF output to existing pipelines. No BI platform needed — just YAML and SQL.</p>
+        <p>
+          Add PDF output to existing pipelines. No BI platform needed - just
+          YAML and SQL.
+        </p>
       </a>
     </div>
   </section>
@@ -70,16 +97,20 @@ import ReportShowcase from './ReportShowcase.astro';
     <h2 class="section-title">Start Building</h2>
     <CardGrid>
       <Card title="Getting Started" icon="rocket">
-        <a href="/getting-started/installation/">Install CLI</a>, scaffold your first report, and see it live in seconds.
+        <a href="/getting-started/installation/">Install CLI</a>, scaffold your
+        first report, and see it live in seconds.
       </Card>
       <Card title="Core Concepts" icon="layers">
-        Master <a href="/concepts/workdir/">workdirs & manifests</a>. Learn how datasources and layouts compose together.
+        Master <a href="/concepts/workdir/">workdirs & manifests</a>. Learn how
+        datasources and layouts compose together.
       </Card>
       <Card title="Guides" icon="open-book">
-        Deep dives into <a href="/guides/">data connection</a>, advanced styling, i18n, and digital signing.
+        Deep dives into <a href="/guides/">data connection</a>, advanced
+        styling, i18n, and digital signing.
       </Card>
       <Card title="Reference" icon="document">
-        Complete <a href="/reference/">schema reference</a>. Every field, every type, every option documented.
+        Complete <a href="/reference/">schema reference</a>. Every field, every
+        type, every option documented.
       </Card>
     </CardGrid>
   </section>
@@ -87,27 +118,43 @@ import ReportShowcase from './ReportShowcase.astro';
   <section class="commercial-section">
     <div class="commercial-content">
       <h2>Go Further with Enterprise</h2>
-      <p>Scale your reporting infrastructure with expert support and custom solutions.</p>
-      
+      <p>
+        Scale your reporting infrastructure with expert support and custom
+        solutions.
+      </p>
+
       <div class="services-grid">
         <div class="service-item">
           <h3>🌟 Enterprise Support</h3>
-          <p>Dedicated SLAs, architectural reviews, and priority troubleshooting for mission-critical pipelines.</p>
+          <p>
+            Dedicated SLAs, architectural reviews, and priority troubleshooting
+            for mission-critical pipelines.
+          </p>
         </div>
         <div class="service-item">
           <h3>🧩 Custom Development</h3>
-          <p>Bespoke data connectors, specialized layout components, and custom rendering logic built for you.</p>
+          <p>
+            Bespoke data connectors, specialized layout components, and custom
+            rendering logic built for you.
+          </p>
         </div>
         <div class="service-item">
           <h3>🎓 Training</h3>
-          <p>Accelerate team adoption with workshops on declarative reporting patterns and data engineering.</p>
+          <p>
+            Accelerate team adoption with workshops on declarative reporting
+            patterns and data engineering.
+          </p>
         </div>
         <div class="service-item">
           <h3>🔒 Commercial Licensing</h3>
-          <p>Need AGPL-free terms for your product? <a href="mailto:sven@bino.bi">Contact us</a> for commercial licensing options.</p>
+          <p>
+            Need AGPL-free terms for your product? <a href="mailto:sven@bino.bi"
+              >Contact us</a
+            > for commercial licensing options.
+          </p>
         </div>
       </div>
-      
+
       <div class="cta-container">
         <a href="mailto:sven@bino.bi" class="primary-cta">Talk to Sales</a>
       </div>

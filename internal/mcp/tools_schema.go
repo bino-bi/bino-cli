@@ -143,8 +143,8 @@ type outliner struct {
 
 // walk emits the properties of the node at spec + segs (prefix is the
 // rendered path of that node) and descends into object properties and array
-// items until outlineMaxDepth. A children slot — array items that carry a kind
-// enum and a spec — is emitted one level deep and recorded in childKinds.
+// items until outlineMaxDepth. A children slot - array items that carry a kind
+// enum and a spec - is emitted one level deep and recorded in childKinds.
 func (o *outliner) walk(segs []string, prefix string) {
 	props := o.m.ResolveAt(specPath(segs), o.kinds).Props()
 	sortProps(props)

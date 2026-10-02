@@ -405,7 +405,7 @@ func TestLoadDirAcceptsScopedNames(t *testing.T) {
 
 // TestLoadDirSkipForeign: with SkipForeign, strict loading must silently skip
 // YAML that is not a bino manifest (docker-compose, k8s, CI files) instead of
-// collecting missing-apiVersion walls — while a bino document that merely
+// collecting missing-apiVersion walls - while a bino document that merely
 // forgot its apiVersion (known kind) is still validated. Without the flag,
 // today's strict semantics stay intact.
 func TestLoadDirSkipForeign(t *testing.T) {
@@ -571,7 +571,7 @@ func TestBnignoreDoesNotExcludeRegistryDocs(t *testing.T) {
 	// Installed packages are lock-managed content: a .bnignore ignoring
 	// `.bino/` (the recommended .gitignore entry, commonly mirrored) or a
 	// specific scope must not silently drop dependencies from the manifest
-	// set — that surfaces as a baffling "required reference not found" at
+	// set - that surfaces as a baffling "required reference not found" at
 	// build time. Excluding a package goes through `bino registry remove`.
 	for _, pattern := range []string{".bino/\n", ".bino/registry/acme/\n"} {
 		t.Run(strings.TrimSpace(pattern), func(t *testing.T) {

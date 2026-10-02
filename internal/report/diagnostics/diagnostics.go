@@ -18,7 +18,7 @@ import (
 
 // Diagnostic represents a single diagnostic message for a file/document. The
 // JSON tags are the daemon's stable HTTP/SSE contract (and the lsp-helper
-// stdout contract) — do not change them.
+// stdout contract) - do not change them.
 type Diagnostic struct {
 	File     string `json:"file"`
 	Position int    `json:"position"` // 1-based document index within multi-doc YAML
@@ -61,7 +61,7 @@ type Options struct {
 func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	// The runner carries the project's [lint] table. disable governs every
 	// report, the editor's included: a rule the project silenced must not
-	// squiggle. It never repairs the bundle — `bino lint` and `bino build`
+	// squiggle. It never repairs the bundle - `bino lint` and `bino build`
 	// still fail on manifests they cannot read, only the rendering is hidden.
 	runner := lint.NewProjectRunner(dir)
 
@@ -112,7 +112,7 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 		}
 	}
 
-	// Run lint rules. DocumentsFromConfig carries metadata.params too — the
+	// Run lint rules. DocumentsFromConfig carries metadata.params too - the
 	// ref-params rule is inert without the declarations.
 	lintDocs := lint.DocumentsFromConfig(docs)
 	findings := runner.Run(ctx, lintDocs)

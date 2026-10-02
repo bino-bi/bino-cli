@@ -35,7 +35,7 @@ this command proxies to that daemon's HTTP routes so the editor reuses the
 already-loaded DuckDB session and file watcher instead of starting a second one.
 With no daemon running, it serves standalone from its own project state.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// stdout is the JSON-RPC channel — route ALL logging to stderr.
+			// stdout is the JSON-RPC channel - route ALL logging to stderr.
 			verbose := logx.DebugEnabled(cmd.Context())
 			logger := logx.NewTerminalWithColor(cmd.ErrOrStderr(), cmd.ErrOrStderr(), verbose, true).Channel("lsp")
 			ctx := logx.WithLogger(cmd.Context(), logger)

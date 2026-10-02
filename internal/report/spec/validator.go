@@ -94,7 +94,7 @@ func formatSchemaError(err SchemaError) string {
 }
 
 // Hint returns the guidance line for a schema error. It is the same text the
-// CLI formatter appends as "hint:" — exported so the structured diagnostic
+// CLI formatter appends as "hint:" - exported so the structured diagnostic
 // path (daemon → LSP/MCP) can carry it as a field.
 func Hint(err SchemaError) string { return getSuggestion(err) }
 
@@ -166,7 +166,7 @@ func getSuggestion(err SchemaError) string {
 // friendlyDescription rewrites the one raw jsonschema message that reads as
 // gibberish while typing: a key with no value yet unmarshals to null, and
 // "got null, want string" says nothing about the fix. Every other message
-// passes through verbatim — "missing property 'x'" in particular is parsed
+// passes through verbatim - "missing property 'x'" in particular is parsed
 // downstream by the editor's quick-fix pipeline.
 func friendlyDescription(msg string) string {
 	if rest, ok := strings.CutPrefix(msg, "got null, want "); ok {

@@ -40,7 +40,7 @@ type InternationalizationManifestData struct {
 	Content     map[string]string // Translation key-value pairs
 }
 
-func newAddTextCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddTextCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagValue      string
 		flagDataset    string
@@ -63,7 +63,7 @@ Text components can display:
   - Static text content
   - Dynamic text interpolating a bound DataSet via ` + "`${data...}`" + ` templates
 
-The value is always required — a bound DataSet only feeds the template.
+The value is always required - a bound DataSet only feeds the template.
 `),
 		Example: strings.TrimSpace(`
   # Interactive wizard
@@ -205,7 +205,7 @@ The value is always required — a bound DataSet only feeds the template.
 				}
 			}
 
-			// Value — always required: the component renders only the value
+			// Value - always required: the component renders only the value
 			// template; a bound dataset alone produces an empty text block.
 			if data.Value == "" {
 				label := "Text value"

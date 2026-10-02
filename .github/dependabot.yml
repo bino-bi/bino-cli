@@ -12,7 +12,7 @@ updates:
       go-minor-patch:
         update-types: [minor, patch]
     ignore:
-      # Pin duckdb-go to v2.5.5 — later versions require matching DuckDB
+      # Pin duckdb-go to v2.5.5 - later versions require matching DuckDB
       # native libraries and extension compatibility (see release.yml).
       - dependency-name: "github.com/duckdb/duckdb-go/v2"
       - dependency-name: "github.com/duckdb/duckdb-go-bindings"
@@ -54,7 +54,7 @@ updates:
     open-pull-requests-limit: 3
 
   # CLI image. The builder and runtime stages must stay on the same Debian
-  # release, and the golang tag must not outpace go.mod — review both together.
+  # release, and the golang tag must not outpace go.mod - review both together.
   - package-ecosystem: docker
     directory: /
     schedule:

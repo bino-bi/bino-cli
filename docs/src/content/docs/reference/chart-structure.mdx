@@ -56,7 +56,7 @@ and `orderDirection` can be inherited from the surrounding layout (see
 - `scenarios` – list of scenarios (up to 4); values are `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`. When omitted, they are detected from the dataset with a warning.
 - `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
 - `scale` – proportional scaling of the chart (font size, spacings, and bar lengths all scale together). Scaling triggers on **height** overflow (vertical category labels cut off).
-  - *omitted* – auto-scale to fit the parent height; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value.
+  - _omitted_ – auto-scale to fit the parent height; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value.
   - `"none"` – no scaling; render at the base font size regardless of available space.
   - `"auto"` – auto-scale to fit the parent height silently (no warning).
   - `"0.5"`, `"1.2"`, … – fixed factor applied to the base font size. All dimensions scale proportionally.
@@ -89,7 +89,11 @@ spec:
   showMeasureScale: true
 ```
 
-<img src={chartStructureImg.src} alt="ChartStructure showing revenue by region with absolute and relative variance bars" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={chartStructureImg.src}
+  alt="ChartStructure showing revenue by region with absolute and relative variance bars"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Example: Stacked bars by scenario
 
@@ -150,7 +154,7 @@ spec:
   level: category
   order: category
   orderDirection: asc
-  unitScaling: 0.09    # relative mode: each bar is normalized to 1.0, so ~11 em per full bar
+  unitScaling: 0.09 # relative mode: each bar is normalized to 1.0, so ~11 em per full bar
   scenarios: ["ac1", "pp1", "fc1"]
   stack:
     by: scenarios
@@ -161,10 +165,10 @@ spec:
 
 Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
 
-| Value | Resolves from |
-|-------|---------------|
+| Value               | Resolves from                                                                  |
+| ------------------- | ------------------------------------------------------------------------------ |
 | `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage` (whichever is closer in the DOM) |
-| `inherited-page` | Nearest ancestor `LayoutPage` only (skips cards) |
+| `inherited-page`    | Nearest ancestor `LayoutPage` only (skips cards)                               |
 
 The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. If no ancestor is found, the component falls back to its normal auto-detection logic.
 
@@ -213,66 +217,65 @@ children:
           spec:
             dataset: revenue_data
             level: category
-            scenarios: inherited-closest   # resolves to ac1,pp1 from the card
-            variances: inherited-closest   # resolves to dac1_pp1_pos
+            scenarios: inherited-closest # resolves to ac1,pp1 from the card
+            variances: inherited-closest # resolves to dac1_pp1_pos
 ```
 
 ## Attribute Reference
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `ChartStructure`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `ChartStructure`.                                                                |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                       |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Provided by the **withDataset** mixin in the template engine. | `dataset: revenue_by_region` |
-| `spec.chartTitle` | string | no | `""` | Custom chart title. | `chartTitle: "Revenue by region"` |
-| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "region_group = 'EMEA'"` |
-| `spec.level` | string | no | auto-detect with warning | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`. The index variants keep the original dataset order. When `auto`, detected silently. When omitted, detected with a warning. | `level: category` |
-| `spec.order` | string | no | auto-detect with warning | Sort key. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently. When omitted, detected with a warning. A scenario used here must also appear in `scenarios`. | `order: ac1` |
-| `spec.orderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`. | `orderDirection: desc` |
-| `spec.measureScale` | string | no | — | SI prefix for measure scaling; the original values are converted. `_` means no prefix, `GREATEST` picks the largest and `LEAST` the smallest value in the dataset. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST` (case-sensitive). | `measureScale: M` |
-| `spec.measureUnit` | string | no | `""` | Unit string for the chart axis. | `measureUnit: "EUR"` |
-| `spec.unitScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or data units per em of bar width (larger value = smaller bars). Numeric values enable overdrive bars on overflow. | `unitScaling: 250000` |
-| `spec.percentageScaling` | string or number | no | auto-fit with warning | Name of a scaling group, `auto`, or percentage points per em of bar length. | `percentageScaling: 10` |
-| `spec.pixelPerUnit` | number | no | — | Explicit pixels-per-unit override (minimum 0). | `pixelPerUnit: 0.1` |
-| `spec.showCategories` | boolean | no | `true` | Show category labels on bars. | `showCategories: true` |
-| `spec.showMeasureScale` | boolean | no | `false` | Show measure unit in chart header. | `showMeasureScale: true` |
-| `spec.limit` | integer | no | `0` | Maximum bars per group. Extra rows are cumulated as REST. `0` means unlimited. | `limit: 10` |
-| `spec.scenarios` | string or array | no | auto-detect with warning | Scenario measures (up to 4), as a YAML array or a JSON/CSV string. Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`. The string form also accepts `inherited-closest` or `inherited-page`. | `scenarios: ["ac1", "pp1"]` |
-| `spec.variances` | string or array | no | — | Variance definitions calculated from the given scenarios. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, with `dr…` for the relative variance. The string form also accepts `inherited-closest` or `inherited-page`. | `variances: ["dac1_pp1_pos"]` |
-| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. Omitted: auto-scale to fit parent height with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number, as a number or a numeric string: fixed factor. An empty string is rejected. | `scale: auto` |
-| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
-| `spec.stack` | object | no | — | Stacked bar rendering configuration. When set, bars are stacked instead of shown side-by-side. See [Stack configuration](#stack-configuration). | see below |
-| `spec.stack.by` | string | yes (inside `stack`) | — | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives the stack column from `level` (`rowGroup`→`category`, `category`→`subCategory`). | `by: scenarios` |
-| `spec.stack.mode` | string | no | `absolute` | Stacking mode. Values: `absolute` (additive), `relative` (100% stacked), `absolute-relative` (absolute height with percentage labels). | `mode: relative` |
-| `spec.stack.order` | string | no | `dataset` | Segment order within each stack. Values: `asc`, `desc`, `dataset`. | `order: dataset` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+| Attribute                | Type                     | Required             | Default                  | Description                                                                                                                                                                                                                                                                                                 | Sample                            |
+| ------------------------ | ------------------------ | -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `spec.dataset`           | string, object, or array | yes                  | -                        | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Provided by the **withDataset** mixin in the template engine.                                                                                                                        | `dataset: revenue_by_region`      |
+| `spec.chartTitle`        | string                   | no                   | `""`                     | Custom chart title.                                                                                                                                                                                                                                                                                         | `chartTitle: "Revenue by region"` |
+| `spec.filter`            | string                   | no                   | `""`                     | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                                                                | `filter: "region_group = 'EMEA'"` |
+| `spec.level`             | string                   | no                   | auto-detect with warning | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`. The index variants keep the original dataset order. When `auto`, detected silently. When omitted, detected with a warning.                                                  | `level: category`                 |
+| `spec.order`             | string                   | no                   | auto-detect with warning | Sort key. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently. When omitted, detected with a warning. A scenario used here must also appear in `scenarios`. | `order: ac1`                      |
+| `spec.orderDirection`    | string                   | no                   | `asc`                    | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`.                                                                                                                                                                                                                               | `orderDirection: desc`            |
+| `spec.measureScale`      | string                   | no                   | -                        | SI prefix for measure scaling; the original values are converted. `_` means no prefix, `GREATEST` picks the largest and `LEAST` the smallest value in the dataset. Values: `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST` (case-sensitive).       | `measureScale: M`                 |
+| `spec.measureUnit`       | string                   | no                   | `""`                     | Unit string for the chart axis.                                                                                                                                                                                                                                                                             | `measureUnit: "EUR"`              |
+| `spec.unitScaling`       | string or number         | no                   | auto-fit with warning    | Name of a scaling group, `auto`, or data units per em of bar width (larger value = smaller bars). Numeric values enable overdrive bars on overflow.                                                                                                                                                         | `unitScaling: 250000`             |
+| `spec.percentageScaling` | string or number         | no                   | auto-fit with warning    | Name of a scaling group, `auto`, or percentage points per em of bar length.                                                                                                                                                                                                                                 | `percentageScaling: 10`           |
+| `spec.pixelPerUnit`      | number                   | no                   | -                        | Explicit pixels-per-unit override (minimum 0).                                                                                                                                                                                                                                                              | `pixelPerUnit: 0.1`               |
+| `spec.showCategories`    | boolean                  | no                   | `true`                   | Show category labels on bars.                                                                                                                                                                                                                                                                               | `showCategories: true`            |
+| `spec.showMeasureScale`  | boolean                  | no                   | `false`                  | Show measure unit in chart header.                                                                                                                                                                                                                                                                          | `showMeasureScale: true`          |
+| `spec.limit`             | integer                  | no                   | `0`                      | Maximum bars per group. Extra rows are cumulated as REST. `0` means unlimited.                                                                                                                                                                                                                              | `limit: 10`                       |
+| `spec.scenarios`         | string or array          | no                   | auto-detect with warning | Scenario measures (up to 4), as a YAML array or a JSON/CSV string. Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`. The string form also accepts `inherited-closest` or `inherited-page`.                                                                                                        | `scenarios: ["ac1", "pp1"]`       |
+| `spec.variances`         | string or array          | no                   | -                        | Variance definitions calculated from the given scenarios. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, with `dr…` for the relative variance. The string form also accepts `inherited-closest` or `inherited-page`.                                                                                  | `variances: ["dac1_pp1_pos"]`     |
+| `spec.scale`             | string or number         | no                   | auto-scale with warning  | Proportional scaling. Omitted: auto-scale to fit parent height with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number, as a number or a numeric string: fixed factor. An empty string is rejected.                                                                              | `scale: auto`                     |
+| `spec.i18nNamespace`     | string                   | no                   | -                        | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                                                            | `i18nNamespace: audited`          |
+| `spec.stack`             | object                   | no                   | -                        | Stacked bar rendering configuration. When set, bars are stacked instead of shown side-by-side. See [Stack configuration](#stack-configuration).                                                                                                                                                             | see below                         |
+| `spec.stack.by`          | string                   | yes (inside `stack`) | -                        | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives the stack column from `level` (`rowGroup`→`category`, `category`→`subCategory`).                                                                                                                              | `by: scenarios`                   |
+| `spec.stack.mode`        | string                   | no                   | `absolute`               | Stacking mode. Values: `absolute` (additive), `relative` (100% stacked), `absolute-relative` (absolute height with percentage labels).                                                                                                                                                                      | `mode: relative`                  |
+| `spec.stack.order`       | string                   | no                   | `dataset`                | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                                                                                                                                                                                                          | `order: dataset`                  |
+| `spec.selectedStyle`     | string                   | no                   | -                        | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                                                                  | `selectedStyle: corporate-style`  |
+| `spec.ruleset`           | string                   | no                   | -                        | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute.                                                             | `ruleset: corporate-rules`        |
 
 #### Stack configuration
 
 ```yaml
 spec:
   stack:
-    by: scenarios       # scenarios | dimensions
-    mode: absolute      # absolute | relative | absolute-relative
-    order: dataset      # asc | desc | dataset
+    by: scenarios # scenarios | dimensions
+    mode: absolute # absolute | relative | absolute-relative
+    order: dataset # asc | desc | dataset
 ```
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `stack.by` | string | yes | — | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives from `level` prop. |
-| `stack.mode` | string | no | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
-| `stack.order` | string | no | `dataset` | Segment order within each stack. Values: `asc`, `desc`, `dataset`. |
-
+| Property      | Type   | Required | Default    | Description                                                                                                                 |
+| ------------- | ------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `stack.by`    | string | yes      | -          | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives from `level` prop.            |
+| `stack.mode`  | string | no       | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
+| `stack.order` | string | no       | `dataset`  | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                          |

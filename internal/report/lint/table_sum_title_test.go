@@ -110,8 +110,8 @@ func TestTableSumTitleUnused_MessageNamesTheType(t *testing.T) {
 	}
 }
 
-// Inline Table children live inside their parent's Raw — they are never
-// materialized as documents — so the rule has to find them by descending.
+// Inline Table children live inside their parent's Raw - they are never
+// materialized as documents - so the rule has to find them by descending.
 func TestTableSumTitleUnused_InlineChildren(t *testing.T) {
 	page := json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
@@ -169,7 +169,7 @@ func TestTableSumTitleUnused_TreeNode(t *testing.T) {
 }
 
 // A child that only carries a ref inherits the referenced Table's spec, so the
-// referenced document is what gets checked — reporting the child too would
+// referenced document is what gets checked - reporting the child too would
 // double-report the same mistake.
 func TestTableSumTitleUnused_RefChildWithoutOverride(t *testing.T) {
 	page := json.RawMessage(`{

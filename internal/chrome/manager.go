@@ -89,7 +89,7 @@ func platformKey() (string, error) {
 	case "linux/amd64":
 		return "linux64", nil
 	case "linux/arm64":
-		return "", fmt.Errorf("chrome-headless-shell has no official linux/arm64 build — set CHROME_PATH to a compatible binary")
+		return "", fmt.Errorf("chrome-headless-shell has no official linux/arm64 build - set CHROME_PATH to a compatible binary")
 	case "windows/amd64":
 		return "win64", nil
 	case "windows/386":
@@ -329,7 +329,7 @@ func (m *Manager) ListLocalVersions() ([]VersionInfo, error) {
 		})
 	}
 
-	// Sort by version string descending (lexicographic — Chrome versions sort correctly this way)
+	// Sort by version string descending (lexicographic - Chrome versions sort correctly this way)
 	sort.Slice(versions, func(i, j int) bool {
 		return versions[i].Version > versions[j].Version
 	})
@@ -344,7 +344,7 @@ func (m *Manager) LatestLocalVersion() (VersionInfo, error) {
 		return VersionInfo{}, err
 	}
 	if len(versions) == 0 {
-		return VersionInfo{}, fmt.Errorf("no chrome-headless-shell versions installed — run 'bino setup' to download")
+		return VersionInfo{}, fmt.Errorf("no chrome-headless-shell versions installed - run 'bino setup' to download")
 	}
 	return versions[0], nil
 }

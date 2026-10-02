@@ -304,7 +304,7 @@ func atoiOrZero(s string) int {
 }
 
 // RegistryReason reports whether any watcher refresh reason touches registry
-// state (bino.lock, bino.toml, or the .bino/registry store) — the trigger for
+// state (bino.lock, bino.toml, or the .bino/registry store) - the trigger for
 // the registry-changed SSE event.
 func RegistryReason(reasons []string) bool {
 	for _, r := range reasons {

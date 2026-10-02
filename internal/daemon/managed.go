@@ -36,7 +36,7 @@ type ManagedStateConfig struct {
 
 // NewManagedState opens a shared DuckDB session, loads the standard extensions,
 // constructs a State, and wires plugin kind/linter providers. It does NOT call
-// Refresh — callers decide when to load (so they can log the initial-load error
+// Refresh - callers decide when to load (so they can log the initial-load error
 // without aborting startup).
 func NewManagedState(ctx context.Context, cfg ManagedStateConfig) (*ManagedState, error) {
 	if cfg.Logger == nil {

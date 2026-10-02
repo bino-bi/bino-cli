@@ -73,7 +73,7 @@ func (h *handlers) registerPackagesTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "registry_add",
-		Description: "Add registry packages as project dependencies (network; writes bino.toml, bino.lock and .bino/registry/). Each spec is @scope/name[@version|@tag]; a bare name follows the latest tag. Resolves the transitive closure, verifies every download before writing anything, and reloads the project before returning. The result lists every package in the closure with its locked version before and after, non-blocking compat warnings, and nameCollisions: an installed document that shares kind and name with a local document fails the build's duplicate-name check — rename the local document.",
+		Description: "Add registry packages as project dependencies (network; writes bino.toml, bino.lock and .bino/registry/). Each spec is @scope/name[@version|@tag]; a bare name follows the latest tag. Resolves the transitive closure, verifies every download before writing anything, and reloads the project before returning. The result lists every package in the closure with its locked version before and after, non-blocking compat warnings, and nameCollisions: an installed document that shares kind and name with a local document fails the build's duplicate-name check - rename the local document.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in registryAddInput) (*mcpsdk.CallToolResult, RegistryMutationResult, error) {
 		if len(in.Specs) == 0 {
 			return errorResult(errors.New("specs is required")), RegistryMutationResult{}, nil

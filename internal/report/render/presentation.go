@@ -321,7 +321,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 	rc.withDatasetDefaults(datasetResults)
 
-	// Render each LayoutPage as a slide — the page is embedded as-is inside a <section>.
+	// Render each LayoutPage as a slide - the page is embedded as-is inside a <section>.
 	var slides strings.Builder
 	for _, doc := range docs {
 		if doc.Kind != "LayoutPage" {

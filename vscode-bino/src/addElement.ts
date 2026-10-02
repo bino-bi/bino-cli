@@ -41,7 +41,7 @@ interface ChildPick extends vscode.QuickPickItem {
  * The "Add element" palette: a single entry point that lists every live manifest
  * kind grouped by its served capability category and creates the chosen kind
  * through the one authoring path. Data kinds (DataSource/DataSet) open the
- * introspect→typed-SELECT wizard; every other kind — built-in or plugin — runs a
+ * introspect→typed-SELECT wizard; every other kind - built-in or plugin - runs a
  * schema-driven guided form and is created via the AuthoringClient (the Go
  * create path: envelope build → schema validation → atomic write), then the
  * index refreshes and the new file opens. The kind list and its categories are
@@ -74,7 +74,7 @@ export class AddElementCommand {
         }
 
         const picked = await vscode.window.showQuickPick(this.buildItems(kinds), {
-            placeHolder: 'Add element — pick a manifest kind',
+            placeHolder: 'Add element - pick a manifest kind',
             title: 'Bino: Add Element',
             matchOnDescription: true,
             matchOnDetail: true,
@@ -136,12 +136,12 @@ export class AddElementCommand {
         // Kinds whose schema requires an object/array field the scalar form cannot
         // fill (e.g. LayoutPage.children, SigningProfile.certificate, Asset.source)
         // can't be completed by the guided form, so the form+create would always
-        // fail with schema diagnostics. Route them to `bino add <kind>` — the
-        // interactive CLI scaffolder — as the escape hatch instead.
+        // fail with schema diagnostics. Route them to `bino add <kind>` - the
+        // interactive CLI scaffolder - as the escape hatch instead.
         const fields = this.schemaLoaded ? this.schema.getFieldsForKind(kind) : [];
         if (this.needsGuidedWidgets(fields)) {
             vscode.window.showInformationMessage(
-                `Bino: ${kind} needs the interactive wizard — running \`bino add ${kind.toLowerCase()}\` in the terminal.`
+                `Bino: ${kind} needs the interactive wizard - running \`bino add ${kind.toLowerCase()}\` in the terminal.`
             );
             this.runAdd(kind);
             return;
@@ -212,12 +212,12 @@ export class AddElementCommand {
 
         const result = await this.authoring.create({ kind, name, spec });
         if (!result.ok) {
-            // The guided form couldn't produce a schema-valid spec — typically a
+            // The guided form couldn't produce a schema-valid spec - typically a
             // conditional requirement the flat field list can't express (e.g.
             // ConnectionSecret type:postgres needs a `postgres` object). Fall back
             // to `bino add <kind>` rather than dead-ending on the diagnostics.
             vscode.window.showWarningMessage(
-                `Bino: could not create ${kind} (${formatEditDiagnostics(result)}) — continuing with \`bino add ${kind.toLowerCase()}\` in the terminal.`
+                `Bino: could not create ${kind} (${formatEditDiagnostics(result)}) - continuing with \`bino add ${kind.toLowerCase()}\` in the terminal.`
             );
             this.runAdd(kind);
             return;
@@ -265,13 +265,13 @@ export class AddElementCommand {
         const items: vscode.QuickPickItem[] = [
             ...datasets.map(label => ({ label, description: 'DataSet' })),
             ...sources.map(label => ({ label, description: 'DataSource' })),
-            { label: '$(circle-slash) Skip — bind later', description: '' },
+            { label: '$(circle-slash) Skip - bind later', description: '' },
         ];
         const picked = await vscode.window.showQuickPick(items, {
             title: 'Bind data',
             placeHolder: datasets.length + sources.length > 0
                 ? 'Pick a dataset or datasource to bind'
-                : 'No datasets yet — skip and bind later',
+                : 'No datasets yet - skip and bind later',
         });
         if (!picked) {
             return null;
@@ -281,8 +281,8 @@ export class AddElementCommand {
 
     /**
      * Prompt for existing components to reference as children of a new layout
-     * container. Returns `{kind, ref}` entries — empty when the pick is skipped
-     * (confirmed with nothing selected) or no components exist yet — or null
+     * container. Returns `{kind, ref}` entries - empty when the pick is skipped
+     * (confirmed with nothing selected) or no components exist yet - or null
      * when the user cancels.
      */
     private async promptChildren(kind: string): Promise<Array<{ kind: string; ref: string }> | null> {
@@ -316,7 +316,7 @@ export class AddElementCommand {
      * field is left empty, or undefined when cancelled.
      */
     private async promptField(kind: string, field: FieldDef): Promise<unknown> {
-        const detail = field.description ? ` — ${field.description}` : '';
+        const detail = field.description ? ` - ${field.description}` : '';
 
         if (field.enumValues && field.enumValues.length > 0) {
             const picked = await vscode.window.showQuickPick(field.enumValues, {

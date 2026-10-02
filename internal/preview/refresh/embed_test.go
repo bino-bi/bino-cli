@@ -65,7 +65,7 @@ func TestResolveEmbedTargetComponent(t *testing.T) {
 }
 
 // TestResolveEmbedTargetScopedName confirms registry-style scoped names
-// ("@scope/name") resolve like any other component name — reference matching
+// ("@scope/name") resolve like any other component name - reference matching
 // is exact string comparison, direct and container kinds alike.
 func TestResolveEmbedTargetScopedName(t *testing.T) {
 	t.Parallel()
@@ -116,7 +116,7 @@ func TestSyntheticComponentPageScopedName(t *testing.T) {
 // TestEmbedByNameOverrideBypassesCache proves the override path: when a live
 // override is set, EmbedByName ignores embeddingCache and renders from a FRESH
 // overlaid load of the workdir. The override here removes the embeddable target
-// (an empty document), so embedFromOverlay returns 404 BEFORE any render —
+// (an empty document), so embedFromOverlay returns 404 BEFORE any render -
 // evidence that the overlaid load (not the cache, not state.lastDocs) drove the
 // result. A pre-seeded cache entry is neither returned nor mutated.
 func TestEmbedByNameOverrideBypassesCache(t *testing.T) {
@@ -292,7 +292,7 @@ func TestLiveOverrideLifecycle(t *testing.T) {
 // 127.0.0.1 data base would make the engine's cross-origin fetch fail ("No
 // Data"). preview.go therefore leaves PluginOptions.DataBaseURL empty in url
 // mode. This test asserts the embed option builders propagate that empty base
-// (with DataMode still "url") so it reaches render.buildDataURL — which, given
+// (with DataMode still "url") so it reaches render.buildDataURL - which, given
 // an empty base, produces a relative "/__bino/data/..." path (see
 // render.TestRenderDatasetsURLMode).
 func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
@@ -418,7 +418,7 @@ func TestSyntheticPageArtefactAdoptsPageFormat(t *testing.T) {
 }
 
 // TestSyntheticPageArtefactLanguage covers the LayoutPage/container preview path,
-// which used to hardcode the default language — so an authored Internationalization
+// which used to hardcode the default language - so an authored Internationalization
 // bundle could never be previewed in anything but German.
 func TestSyntheticPageArtefactLanguage(t *testing.T) {
 	t.Parallel()

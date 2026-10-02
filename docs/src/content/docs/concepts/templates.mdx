@@ -11,16 +11,16 @@ experience is identical online and offline.
 
 Three templates are compiled into the binary and always work with **zero network**:
 
-- **`minimal`** — a flat starter bundle (`bino.toml`, `report.yaml`, `data.yaml`,
+- **`minimal`** - a flat starter bundle (`bino.toml`, `report.yaml`, `data.yaml`,
   `pages.yaml`, ignore files). This is the default and the non-interactive (`-y`) choice.
-- **`predef`** — a publishable **predef package**: a `bino.toml` carrying a `[package]`
+- **`predef`** - a publishable **predef package**: a `bino.toml` carrying a `[package]`
   table, a parameterized `Table` under `components/`, a `ComponentStyle`, an `Asset`, and a
   `mocks/` folder with sample data and a report page so `bino preview` works out of the box.
   `mocks/` is never published. Its wizard asks for the `[package]` fields (scope, name,
   description, visibility, tags, category) instead of the report fields, and `--set` accepts
   the same names for non-interactive runs. See
   [Project configuration](/concepts/project-configuration/) for the `[package]` table.
-- **`standard`** — a complete reference bundle in the **canonical folder layout**: a CSV
+- **`standard`** - a complete reference bundle in the **canonical folder layout**: a CSV
   `DataSource` and the `DataSet` that aggregates it, an IBCS `Table` with scenarios and
   variances, a `ChartStructure`, a `ComponentStyle`, translations for the chosen locale,
   `Asset` declarations, and three deliverables (a PDF `ReportArtefact`, a
@@ -41,16 +41,16 @@ The demo data ships inside the binary, so `standard` needs no network either.
 A real project keeps one folder per manifest kind. `bino add` and the editor tooling
 place new manifests using this same map, so a `standard` project and the tooling agree:
 
-| Folder | Kinds |
-| --- | --- |
-| `datasources/` | `DataSource` |
-| `datasets/` | `DataSet` |
-| `components/` | `Table`, `Text`, `ChartStructure`, `ChartTime` |
-| `pages/` | `LayoutPage`, `LayoutCard` |
-| `reports/` | `ReportArtefact`, `LiveReportArtefact` |
-| `styles/` | `ComponentStyle` |
-| `i18n/` | `Internationalization` |
-| `resources/` | `Asset` |
+| Folder         | Kinds                                          |
+| -------------- | ---------------------------------------------- |
+| `datasources/` | `DataSource`                                   |
+| `datasets/`    | `DataSet`                                      |
+| `components/`  | `Table`, `Text`, `ChartStructure`, `ChartTime` |
+| `pages/`       | `LayoutPage`, `LayoutCard`                     |
+| `reports/`     | `ReportArtefact`, `LiveReportArtefact`         |
+| `styles/`      | `ComponentStyle`                               |
+| `i18n/`        | `Internationalization`                         |
+| `resources/`   | `Asset`                                        |
 
 ## Remote templates
 
@@ -79,7 +79,7 @@ repeatable `--set`:
 bino init owner/repo -o ./out --set ReportName=q3 --set Language=en
 ```
 
-Unknown `--set` keys and unfilled `required` fields are hard errors — a scaffold never
+Unknown `--set` keys and unfilled `required` fields are hard errors - a scaffold never
 emits a half-filled manifest.
 
 ## Authoring a template
@@ -102,20 +102,24 @@ apiVersion: bino.bi/v1alpha1
 kind: ProjectTemplate
 metadata: { name: report-template }
 spec:
-  min-bino-version: ">=1.2.0"     # checked before rendering (skipped on dev builds)
-  engine-version: ">=1.0.0-alpha, <2.0.0-0"   # validated, stamped into bino.toml, never downloaded
+  min-bino-version: ">=1.2.0" # checked before rendering (skipped on dev builds)
+  engine-version: ">=1.0.0-alpha, <2.0.0-0" # validated, stamped into bino.toml, never downloaded
   fields:
-    - { name: ReportName,  prompt: "Report name", default: my-report }
-    - { name: ReportTitle, prompt: "Title",       default: "{{ .ReportName | title }}" }
-    - { name: Language,    prompt: "Language",     default: en }
-  verbatim: ["*.md"]              # copied as-is (literal {{ }} survive)
-  binary:   ["resources/assets/**"]   # never read as text
+    - { name: ReportName, prompt: "Report name", default: my-report }
+    - {
+        name: ReportTitle,
+        prompt: "Title",
+        default: "{{ .ReportName | title }}",
+      }
+    - { name: Language, prompt: "Language", default: en }
+  verbatim: ["*.md"] # copied as-is (literal {{ }} survive)
+  binary: ["resources/assets/**"] # never read as text
 ```
 
 ### Substitution
 
 Both file **contents and path names** render through Go `text/template` using
-`{{ .Field }}` — the one delimiter that collides with nothing in bino YAML/SQL (bino's
+`{{ .Field }}` - the one delimiter that collides with nothing in bino YAML/SQL (bino's
 own `${VAR}` expansion, `\${…}` JS template literals, and the `$dataset` sigil all pass
 through untouched). Rendering uses `missingkey=error`, so a stale variable fails loudly
 instead of writing `<no value>` into a manifest.
@@ -123,8 +127,9 @@ instead of writing `<no value>` into a manifest.
 Context-aware quoters are available so values are escaped correctly:
 
 ```yaml
-title: {{ .ReportTitle | yaml }}        # double-quoted YAML scalar
+title: { { .ReportTitle | yaml } } # double-quoted YAML scalar
 ```
+
 ```sql
 WHERE region = '{{ .Region | sqlString }}'
 ```
@@ -134,14 +139,14 @@ These variables are **always injected**, so a template never has to prompt for t
 
 ### Co-location note
 
-A remote template owns its tree verbatim. For any kind it does *not* seed, `bino add`
-falls back to the [canonical folder](#the-canonical-folder-layout) for that kind — so if
+A remote template owns its tree verbatim. For any kind it does _not_ seed, `bino add`
+falls back to the [canonical folder](#the-canonical-folder-layout) for that kind - so if
 you want `bino add` to co-locate with your layout, seed at least one manifest per kind you
 expect users to extend.
 
 ## Security model
 
-- **Declarative-only, no execution — ever.** There are no hooks and no shell-out. The
+- **Declarative-only, no execution - ever.** There are no hooks and no shell-out. The
   manifest parser **rejects unknown keys** (fail-closed), so a speculative `hooks:`/`run:`
   key in an untrusted manifest can never be honored.
 - **Typosquat defense.** Fetching from an uncurated `owner/repo` requires confirmation
@@ -153,5 +158,5 @@ expect users to extend.
 ## Reproducibility
 
 A scaffold from a remote template stamps `template = "owner/repo@<sha>"` into `bino.toml`,
-and `bino init --json` reports the resolved source, SHA, and folders — so a run is
+and `bino init --json` reports the resolved source, SHA, and folders - so a run is
 self-documenting and re-runnable.

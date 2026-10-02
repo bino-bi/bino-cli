@@ -212,7 +212,7 @@ export class BinoPreviewManager {
         // Stop daemon-managed preview
         if (this.usingDaemonPreview) {
             this.outputChannel.appendLine('[Preview] Stopping via daemon...');
-            this.daemonClient?.stopPreview().catch(() => {});
+            this.daemonClient?.stopPreview().catch(() => { });
             this.usingDaemonPreview = false;
             this.setStatus('stopped');
             return;
@@ -452,7 +452,7 @@ export class BinoPreviewManager {
     /**
      * Live preview: while the embedded preview is open, push unsaved Bino YAML
      * buffer content to the preview server so the previewed component renders
-     * straight from the editor — both raw typing and designer form edits (which
+     * straight from the editor - both raw typing and designer form edits (which
      * land as unsaved WorkspaceEdits). No file is written; on success we ask the
      * embedded webview to reload the (component-scoped) iframe.
      *
@@ -529,7 +529,7 @@ export class BinoPreviewManager {
         }
     }
 
-    /** Push every currently-dirty Bino manifest as an override (no reload spam — caller reloads once). */
+    /** Push every currently-dirty Bino manifest as an override (no reload spam - caller reloads once). */
     private async pushAllDirtyOverrides(): Promise<void> {
         for (const doc of vscode.workspace.textDocuments) {
             if (doc.isUntitled || !doc.isDirty || !this.isBinoManifest(doc)) {
@@ -688,7 +688,7 @@ export class BinoPreviewManager {
     /** Handle reveal source message from preview webview */
     private async handleRevealSource(msg: { kind?: string; name?: string; ref?: string; file?: string }): Promise<void> {
         // Markdown source sections carry a project-root-relative file path
-        // (no manifest to index) — open the file directly.
+        // (no manifest to index) - open the file directly.
         if (msg.file) {
             const root = this.getWorkspaceRoot();
             const abs = path.isAbsolute(msg.file) ? msg.file : path.join(root ?? '', msg.file);

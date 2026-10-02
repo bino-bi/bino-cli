@@ -65,14 +65,14 @@ func ReadPortFile(projectRoot string) (*PortFile, error) {
 
 	var pf PortFile
 	if err := json.Unmarshal(data, &pf); err != nil {
-		// Corrupt file — remove and treat as absent (intentionally discard err).
+		// Corrupt file - remove and treat as absent (intentionally discard err).
 		_ = os.Remove(path)
 		return nil, nil //nolint:nilerr // corrupt port file is treated the same as missing
 	}
 
 	// Check if the process is still alive
 	if !processAlive(pf.PID) {
-		// Stale port file — remove it
+		// Stale port file - remove it
 		_ = os.Remove(path)
 		return nil, nil
 	}

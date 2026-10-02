@@ -185,11 +185,11 @@ function renderMergedChildren(
     for (const field of schemaFields) {
         const yamlNode = yamlMap.get(field.key);
         if (yamlNode) {
-            // Present in YAML — render actual node with schema info
+            // Present in YAML - render actual node with schema info
             html += renderNode(yamlNode, depth, docIndex, field, false);
             // Recurse into children
             if (yamlNode.type === 'array' && yamlNode.children && field.children) {
-                // Array with item schema — render each item, merging object items with item schema
+                // Array with item schema - render each item, merging object items with item schema
                 html += renderArrayItems(yamlNode.children, field.children, depth + 1, docIndex);
             } else if (yamlNode.children && field.children) {
                 html += renderMergedChildren(yamlNode.children, field.children, depth + 1, docIndex, [...parentPath, field.key]);
@@ -198,7 +198,7 @@ function renderMergedChildren(
             }
             yamlMap.delete(field.key);
         } else {
-            // Absent from YAML — render ghost row
+            // Absent from YAML - render ghost row
             html += renderGhostRow(field, depth, docIndex, parentPath);
         }
     }
@@ -281,7 +281,7 @@ function renderGhostRow(field: FieldDef, depth: number, docIndex: number, parent
     } else if (field.type === 'array') {
         const itemKindField = field.children?.find(f => f.key === 'kind' && f.required && f.enumValues);
         if (itemKindField) {
-            // Typed array (children) — use kind picker flow
+            // Typed array (children) - use kind picker flow
             const kindEnumJson = escapeHtml(JSON.stringify(JSON.stringify(itemKindField.enumValues)));
             valueCell = `<button class="ghost-btn ghost-btn-array" onclick="addTypedArrayItem(${docIndex}, ${escapedPath}, ${kindEnumJson})" title="Add child component"><span class="ghost-btn-icon">[&thinsp;]</span> Add</button>`;
         } else {
@@ -355,7 +355,7 @@ function renderNode(
     if (node.type === 'array') {
         const itemKindField = fieldDef?.children?.find(f => f.key === 'kind' && f.required && f.enumValues);
         if (itemKindField) {
-            // Typed array (children) — use kind picker flow
+            // Typed array (children) - use kind picker flow
             const kindEnumJson = escapeHtml(JSON.stringify(JSON.stringify(itemKindField.enumValues)));
             actionBtns = `<button class="add-btn" onclick="event.stopPropagation(); addTypedArrayItem(${docIndex}, ${escapeHtml(JSON.stringify(JSON.stringify(node.path)))}, ${kindEnumJson})" title="Add child component">+</button>`;
         } else {
@@ -404,7 +404,7 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
     const pathJson = JSON.stringify(node.path);
     const escapedPath = escapeHtml(JSON.stringify(pathJson));
 
-    // Clear button — shown for non-required, non-top-level fields that have a value
+    // Clear button - shown for non-required, non-top-level fields that have a value
     const isArrayItem = /^\[\d+\]$/.test(node.key);
     const canClear = !isRequired && !isTopLevelRequired(node.key) && !isArrayItem;
     const clearBtn = canClear
@@ -422,7 +422,7 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
         return `<div class="value-cell-wrap"><span class="value-multiline" title="${escapeHtml(String(node.value))}">${escapeHtml(node.displayValue)}</span>${clearBtn}</div>`;
     }
 
-    // Enum fields — render as select
+    // Enum fields - render as select
     if (fieldDef?.enumValues) {
         const options = fieldDef.enumValues
             .map(v => `<option value="${escapeHtml(v)}"${v === String(node.value) ? ' selected' : ''}>${escapeHtml(v)}</option>`)
@@ -430,7 +430,7 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
         return `<div class="value-cell-wrap"><select class="value-select" onchange="editValue(${docIndex}, ${escapedPath}, this.value)">${options}</select>${clearBtn}</div>`;
     }
 
-    // Boolean fields — checkbox
+    // Boolean fields - checkbox
     if (node.type === 'boolean') {
         const checked = node.value ? ' checked' : '';
         return `<div class="value-cell-wrap"><label class="value-checkbox"><input type="checkbox"${checked} onchange="editValue(${docIndex}, ${escapedPath}, this.checked)"><span>${node.value ? 'true' : 'false'}</span></label>${clearBtn}</div>`;
@@ -441,7 +441,7 @@ function renderValueCell(node: TreeNode, docIndex: number, fieldDef: FieldDef | 
         return `<div class="value-cell-wrap"><span class="value-null">null</span>${clearBtn}</div>`;
     }
 
-    // String / number — editable input
+    // String / number - editable input
     const inputType = node.type === 'number' ? 'number' : 'text';
     const valueStr = node.value === null || node.value === undefined ? '' : String(node.value);
 
@@ -619,7 +619,7 @@ function getStyles(): string {
             text-overflow: ellipsis;
         }
 
-        /* Value cell wrapper — flex for input + clear button */
+        /* Value cell wrapper - flex for input + clear button */
         .value-cell-wrap {
             display: flex;
             align-items: center;
@@ -802,7 +802,7 @@ function getStyles(): string {
             font-size: 1.1em;
         }
 
-        /* Array item row — remove button */
+        /* Array item row - remove button */
         .remove-item-btn {
             border: none;
             background: transparent;
@@ -825,7 +825,7 @@ function getStyles(): string {
             opacity: 1 !important;
         }
 
-        /* Clear (x) button — right-aligned in value column */
+        /* Clear (x) button - right-aligned in value column */
         .clear-btn {
             flex-shrink: 0;
             border: none;

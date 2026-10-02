@@ -102,7 +102,7 @@ spec:
 
 // requireRenderStack fails the test when Chrome or the template engine are not
 // available. Stateless rendering needs both. This file is gated behind the
-// `integration` build tag, so a missing dependency is a hard failure — the
+// `integration` build tag, so a missing dependency is a hard failure - the
 // integration CI job installs both via `bino setup`, and anyone running
 // `go test -tags=integration` locally is expected to have done the same.
 func requireRenderStack(t *testing.T) {

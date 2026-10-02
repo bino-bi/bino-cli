@@ -14,9 +14,9 @@ This ICLA is adapted from the [Apache Software Foundation ICLA v2.2](https://www
 
 By signing, you grant the Project Owner:
 
-1. **Copyright license** — a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute your Contributions and such derivative works **under any license terms, including proprietary/commercial terms** and including as part of a dual-licensed or commercial distribution of bino.
-2. **Patent license** — a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated below) patent license covering patent claims you own or control that are necessarily infringed by your Contribution alone or in combination with bino.
-3. **Representations** — that each Contribution is your original work, that you have the legal right to make the grant, and that your employer (if any) has waived rights in your Contributions or you have permission to make the Contribution on its behalf.
+1. **Copyright license** - a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute your Contributions and such derivative works **under any license terms, including proprietary/commercial terms** and including as part of a dual-licensed or commercial distribution of bino.
+2. **Patent license** - a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated below) patent license covering patent claims you own or control that are necessarily infringed by your Contribution alone or in combination with bino.
+3. **Representations** - that each Contribution is your original work, that you have the legal right to make the grant, and that your employer (if any) has waived rights in your Contributions or you have permission to make the Contribution on its behalf.
 
 You retain ownership of the copyright in your Contributions. This CLA grants the Project Owner the rights needed to distribute bino under AGPLv3 **and** under separate commercial/SaaS licenses.
 

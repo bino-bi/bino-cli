@@ -19,21 +19,21 @@ YAML manifests  →  Validation  →  Data collection  →  SQL execution  →  
 
 3. **Data collection.** `DataSource` manifests are resolved: CSV and Excel files are read from disk, Parquet files are loaded, and database queries are sent to Postgres or MySQL. Each source becomes a named view in the embedded query engine.
 
-4. **SQL execution.** `DataSet` manifests run SQL queries on top of data sources (and other datasets). The query engine is DuckDB — a fast, in-process analytical database. Results are held in memory for the rendering step.
+4. **SQL execution.** `DataSet` manifests run SQL queries on top of data sources (and other datasets). The query engine is DuckDB - a fast, in-process analytical database. Results are held in memory for the rendering step.
 
 5. **HTML rendering.** `LayoutPage` manifests define the visual structure: page grids, charts, tables, and text blocks. bino's renderer turns these specs and their bound data into HTML pages.
 
-6. **PDF generation.** Chrome headless shell converts the rendered HTML into PDF. This gives you the full power of CSS for typography, colours, and layout — with guaranteed cross-platform consistency. Optional digital signatures are applied via `SigningProfile` manifests.
+6. **PDF generation.** Chrome headless shell converts the rendered HTML into PDF. This gives you the full power of CSS for typography, colours, and layout - with guaranteed cross-platform consistency. Optional digital signatures are applied via `SigningProfile` manifests.
 
 ## Why YAML?
 
-YAML is a plain-text format that is easy to read, write, and diff. It works naturally with Git, code review tools, and text editors. bino uses multi-document YAML files (separated by `---`) so you can group related manifests in a single file or split them across many files — whatever makes sense for your project.
+YAML is a plain-text format that is easy to read, write, and diff. It works naturally with Git, code review tools, and text editors. bino uses multi-document YAML files (separated by `---`) so you can group related manifests in a single file or split them across many files - whatever makes sense for your project.
 
 Each document starts with:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
-kind: DataSource        # or DataSet, LayoutPage, ReportArtefact, etc.
+kind: DataSource # or DataSet, LayoutPage, ReportArtefact, etc.
 metadata:
   name: my_source
 spec:
@@ -47,19 +47,19 @@ The `kind` field is the key: it tells bino how to interpret the `spec` block. Th
 bino embeds DuckDB as its analytical SQL engine. This means:
 
 - **No external database required.** Queries run in-process. You can build reports from CSV files on a laptop with zero infrastructure.
-- **Full analytical SQL.** Window functions, CTEs, aggregations, joins — everything you expect from a modern SQL engine.
+- **Full analytical SQL.** Window functions, CTEs, aggregations, joins - everything you expect from a modern SQL engine.
 - **Multi-source queries.** DuckDB natively reads CSV, Parquet, and Excel. Its extension system adds Postgres and MySQL connectors. You can join a local CSV with a remote database table in a single query.
 - **Fast.** DuckDB is columnar and vectorised. Even multi-million-row datasets aggregate quickly.
 
 ## Why Chrome headless shell?
 
-Rendering HTML to PDF is a solved problem — browsers do it every day. By using Chrome headless shell as the rendering engine, bino gets:
+Rendering HTML to PDF is a solved problem - browsers do it every day. By using Chrome headless shell as the rendering engine, bino gets:
 
-- **Full CSS support.** Flexbox, Grid, custom fonts, SVG, media queries — if CSS can express it, bino can render it.
+- **Full CSS support.** Flexbox, Grid, custom fonts, SVG, media queries - if CSS can express it, bino can render it.
 - **Cross-platform consistency.** The same HTML produces the same PDF on macOS, Linux, and Windows. No platform-specific rendering quirks.
 - **Proven quality.** Chrome's text rendering and page layout engine handle edge cases that custom PDF libraries struggle with.
 
-You install Chrome headless shell once with `bino setup`. It runs as a subprocess during builds — no browser window appears.
+You install Chrome headless shell once with `bino setup`. It runs as a subprocess during builds - no browser window appears.
 
 ---
 

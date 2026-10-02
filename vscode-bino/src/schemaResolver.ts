@@ -11,9 +11,9 @@ export interface FieldDef {
     required: boolean;
     defaultValue?: unknown;
     children?: FieldDef[];
-    /** For oneOf/anyOf — expose superset of possible properties */
+    /** For oneOf/anyOf - expose superset of possible properties */
     isOneOf?: boolean;
-    /** For $ref fields — the ref name (e.g. "datasetRef") */
+    /** For $ref fields - the ref name (e.g. "datasetRef") */
     refName?: string;
 }
 
@@ -35,7 +35,7 @@ export class SchemaResolver {
     private kindFieldsCache: Map<string, FieldDef[]> = new Map();
     private recursionGuard: Set<string> = new Set();
 
-    constructor(private extensionPath: string) {}
+    constructor(private extensionPath: string) { }
 
     /** Load and parse the schema. Call once at startup. */
     load(): boolean {

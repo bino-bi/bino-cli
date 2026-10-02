@@ -45,12 +45,12 @@ Prefer the two-step flow if you want to review the script before execution.
 
 ### Windows (PowerShell)
 
-<Aside type="note">
-  Requires Windows 10 or later with PowerShell 5.1+.
-</Aside>
+<Aside type="note">Requires Windows 10 or later with PowerShell 5.1+.</Aside>
 
 <Aside type="caution">
-  PostgreSQL and MySQL database connections are not available on Windows. The required DuckDB extensions are currently not supported on that platform. CSV, Excel, and other file-based data sources work normally.
+  PostgreSQL and MySQL database connections are not available on Windows. The
+  required DuckDB extensions are currently not supported on that platform. CSV,
+  Excel, and other file-based data sources work normally.
 </Aside>
 
 Run directly in PowerShell (one-liner):
@@ -78,6 +78,7 @@ For a graphical installation experience, download the setup wizard:
 [bino-cli_Windows_x86_64_setup.exe](https://github.com/bino-bi/bino-cli-releases/releases/latest/download/bino-cli_Windows_x86_64_setup.exe)
 
 The installer will:
+
 1. Show the license agreement
 2. Let you choose the install directory (default: `%LOCALAPPDATA%\bino`)
 3. Install `bino.exe` and `duckdb.dll`
@@ -87,7 +88,8 @@ The installer will:
 To uninstall, use **Add or Remove Programs** in Windows Settings.
 
 <Aside type="tip">
-  The installer also supports silent mode for scripted deployments: `bino-cli_Windows_x86_64_setup.exe /SILENT`
+  The installer also supports silent mode for scripted deployments:
+  `bino-cli_Windows_x86_64_setup.exe /SILENT`
 </Aside>
 
 ## Install via Homebrew (macOS and Linux)
@@ -118,7 +120,8 @@ brew upgrade bino-cli
 ```
 
 <Aside type="tip">
-  Using Homebrew is convenient because it handles updates alongside your other packages.
+  Using Homebrew is convenient because it handles updates alongside your other
+  packages.
 </Aside>
 
 ## Install from GitHub Releases
@@ -159,8 +162,8 @@ brew upgrade bino-cli
 
 ## Run bino in a container
 
-If you would rather not install anything, the official image already contains bino *and* its
-rendering engine — there is no `bino setup` step:
+If you would rather not install anything, the official image already contains bino _and_ its
+rendering engine - there is no `bino setup` step:
 
 ```bash
 docker run --rm -v "$PWD:/work" ghcr.io/bino-bi/bino-cli:latest build --out-dir dist/

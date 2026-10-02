@@ -82,7 +82,7 @@ func NewState() *State {
 
 // LastDocs returns the most recent successfully-loaded manifest set. Callers
 // must hold the same mutex that guards Run, but may keep using the returned
-// slice after releasing it — refreshes replace the slice, never mutate it.
+// slice after releasing it - refreshes replace the slice, never mutate it.
 func (s *State) LastDocs() []config.Document {
 	return s.lastDocs
 }
@@ -136,7 +136,7 @@ func liveOverrideKey(file string) string {
 }
 
 // MergeRequests collapses a debounce window into a single (reason, files)
-// pair. If any input had nil files, the result is nil (full rebuild) —
+// pair. If any input had nil files, the result is nil (full rebuild) -
 // mixing partial signals with a full-rebuild signal must not lose
 // information.
 func MergeRequests(reqs []Request) (reason string, files []string) {
@@ -249,10 +249,10 @@ func logLintFindings(ctx context.Context, logger logx.Logger, watchDir string, l
 // dependency graph, only the artefacts that transitively depend on those
 // files are re-rendered; unaffected routes keep their cached content. The
 // returned slice lists every route that received a fresh content broadcast
-// so the caller can forward it to BroadcastRefreshDone — clients viewing a
+// so the caller can forward it to BroadcastRefreshDone - clients viewing a
 // path not in the slice know their view was not part of this refresh
 // (failure or simply unaffected).
-func Run(ctx context.Context, reason string, changed []string, server *httpserver.Server, explorerSession *explorer.Session, cfg *Config, state *State) ([]string, error) { //nolint:gocognit,funlen // grandfathered complexity — refactor before extending
+func Run(ctx context.Context, reason string, changed []string, server *httpserver.Server, explorerSession *explorer.Session, cfg *Config, state *State) ([]string, error) { //nolint:gocognit,funlen // grandfathered complexity - refactor before extending
 	logger := cfg.Logger
 	watchDir := cfg.Workdir
 	report := cfg.Reporter
@@ -368,7 +368,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 
 	// Decide selective vs full. Selective requires: changed != nil, the graph
 	// built successfully, and every changed file maps to at least one graph
-	// node. Anything else falls back to full rebuild — safe behavior for
+	// node. Anything else falls back to full rebuild - safe behavior for
 	// new files, deletions, .bnignore changes, plugin assets, etc. Note: on
 	// the first refresh state.allPagesFrameHTML is empty, so even if changed
 	// is non-nil we must do a full rebuild.
@@ -573,7 +573,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	// of them (the previous closures captured stale docs). On a selective
 	// rebuild we only re-register the affected ones; unaffected /pres/X
 	// routes still serve cached output keyed on docs that were correct at
-	// last full rebuild — fine because nothing in their dependency tree
+	// last full rebuild - fine because nothing in their dependency tree
 	// changed.
 	for _, art := range artifacts {
 		if selective {
@@ -586,7 +586,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	}
 
 	// Rebuild the asset union and push it to the server. SetLocalAssets
-	// replaces the table, so we always send the full union — selective
+	// replaces the table, so we always send the full union - selective
 	// refreshes preserve unchanged entries via the per-artefact cache.
 	allAssets := make([]httpserver.LocalAsset, 0, len(state.allPagesAssets)+len(state.perArtefactAssets)*4)
 	allAssets = append(allAssets, state.allPagesAssets...)
@@ -608,7 +608,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 }
 
 // needsAllPagesRerender returns true when any seed node is a LayoutPage, a
-// ReportArtefact, or a DocumentArtefact — the first two affect what the
+// ReportArtefact, or a DocumentArtefact - the first two affect what the
 // "All Pages" view shows, and DocumentArtefact manifests feed its Documents
 // strip (title/format/sources). Other kinds (DataSource, DataSet, Component,
 // MarkdownFile, LayoutCard) only change content within artefacts, so the

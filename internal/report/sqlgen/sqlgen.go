@@ -41,7 +41,7 @@ type Column struct {
 	TargetType string `json:"targetType,omitempty"`
 	// Expr, when non-empty, is a raw SQL expression emitted verbatim as the
 	// column's source (e.g. a constant '+' or an expression sum("amount")).
-	// It takes precedence over Name/TargetType — no quoting or cast is applied —
+	// It takes precedence over Name/TargetType - no quoting or cast is applied -
 	// and is always aliased. Used by the schema-driven mapper for constant and
 	// expression columns.
 	Expr string `json:"expr,omitempty"`

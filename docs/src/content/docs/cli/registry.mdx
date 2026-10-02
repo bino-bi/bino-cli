@@ -6,7 +6,7 @@ description: Consume predef packages from a bino registry - add, install, update
 `bino registry` manages packages consumed from a bino registry.
 Dependencies are declared in `bino.toml`'s `[dependencies]` table, resolved
 versions are pinned in `bino.lock` (commit it), and package files are
-materialized under `.bino/registry/` (gitignore it — `bino registry install`
+materialized under `.bino/registry/` (gitignore it - `bino registry install`
 re-creates it from `bino.lock`).
 
 See the [Registry and dependencies guide](/guides/registry-and-dependencies/)
@@ -15,7 +15,7 @@ lockfile, and authentication. The registry URL resolution order (project
 config, environment, global `~/.bino/config.toml`, public default) is
 described there as well.
 
-The same operations are available to AI agents through the [MCP server](/cli/mcp/#registry) —
+The same operations are available to AI agents through the [MCP server](/cli/mcp/#registry) -
 `registry_search`, `registry_info`, `registry_packages`, `registry_add`, `registry_update`,
 `registry_remove` and `registry_install` mirror the commands below.
 
@@ -49,7 +49,7 @@ bino registry install
 Re-materializes `.bino/registry/` from `bino.lock` without re-resolving
 anything, so CI and fresh checkouts reproduce the exact locked versions.
 
-- Errors when `bino.toml` declares dependencies but no `bino.lock` exists, or when the lockfile drifted from `[dependencies]` — run `bino registry update` in both cases.
+- Errors when `bino.toml` declares dependencies but no `bino.lock` exists, or when the lockfile drifted from `[dependencies]` - run `bino registry update` in both cases.
 
 ## bino registry update
 
@@ -131,7 +131,7 @@ Subsequent registry commands use the stored token automatically unless
 `bino.toml` or `BINO_REGISTRY_TOKEN` provides one.
 
 Personal access tokens are created and managed in the registry web UI
-(Settings → Tokens) — create one there first, then paste it when prompted.
+(Settings → Tokens) - create one there first, then paste it when prompted.
 
 - `--registry` – registry URL (overrides `bino.toml`, `BINO_REGISTRY_URL`, and `~/.bino/config.toml`; default `https://registry.bino.bi`).
 - `--with-token` – read the personal access token from stdin instead of prompting.
@@ -151,4 +151,4 @@ bino registry logout [--registry <url>]
 ```
 
 Removes the stored credential for the registry and revokes it server-side
-(best effort — the local credential is always removed).
+(best effort - the local credential is always removed).

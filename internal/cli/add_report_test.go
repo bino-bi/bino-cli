@@ -171,7 +171,7 @@ func TestAddLiveReportArtefactNoPrompt(t *testing.T) {
 }
 
 func TestBuildSigningProfileDocument(t *testing.T) {
-	// The wizard must reference certificate and key files by path — never
+	// The wizard must reference certificate and key files by path - never
 	// pull key material into the manifest.
 	dir := t.TempDir()
 	keyPEM := "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc=\n-----END PRIVATE KEY-----\n"

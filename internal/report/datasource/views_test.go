@@ -11,7 +11,7 @@ import (
 // correctly quoted ATTACH statement rather than a broken one. Before this
 // fix, postgresAttachName/mysqlAttachName spliced the name straight into
 // "AS <name>" unquoted, which only stayed safe because the schema forbade
-// hyphens, '@', and '/' in a DataSource name — now that scoped names are
+// hyphens, '@', and '/' in a DataSource name - now that scoped names are
 // allowed, the AS clause must be quoted.
 func TestBuildAttachSQLQuotesSpecialNames(t *testing.T) {
 	tests := []struct {

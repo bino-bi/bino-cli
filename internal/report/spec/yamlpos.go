@@ -200,7 +200,7 @@ func ReorderYAMLSequence(content string, position int, path string, from, to int
 // AppendYAMLSequence appends value to the end of the sequence at the dotted path
 // in a single document (1-based position), preserving the comments, key order,
 // and formatting of every other document and of the untouched keys. Missing
-// intermediate mappings — and the sequence itself — are created, so appending to
+// intermediate mappings - and the sequence itself - are created, so appending to
 // an absent array yields a one-element sequence. It returns the rewritten full
 // content and the edited document on its own (for validation).
 //
@@ -460,8 +460,8 @@ func encodeDocuments(docs []*yaml.Node) (string, error) {
 // encodeValueNode turns a caller-supplied value into the yaml.Node to splice
 // into the tree. A *yaml.Node is used as-is so its key order and scalar styles
 // survive verbatim (DecodeJSONValue produces such order-preserving nodes for the
-// JSON edit boundary); any other Go value is normalized and encoded, which —
-// for a map[string]any — alphabetizes keys, so callers that must preserve object
+// JSON edit boundary); any other Go value is normalized and encoded, which -
+// for a map[string]any - alphabetizes keys, so callers that must preserve object
 // key order pass a *yaml.Node, not a Go map.
 func encodeValueNode(value any) (*yaml.Node, error) {
 	if n, ok := value.(*yaml.Node); ok {
@@ -687,8 +687,8 @@ func ParseYAMLNodes(content string) ([]*yaml.Node, error) {
 // exist under "spec"), the position of the last matched key is returned, so the user
 // sees the parent where the missing field should be added.
 //
-// Mapping keys may themselves contain dots — Internationalization content is a flat
-// map of tokens like "global.ac1" — so at every mapping node the longest run of
+// Mapping keys may themselves contain dots - Internationalization content is a flat
+// map of tokens like "global.ac1" - so at every mapping node the longest run of
 // remaining segments that matches a literal key wins before falling back to a single
 // segment. Without that, "spec.content.global.ac1" would look for a "global" mapping
 // under "content", miss, and report the "content:" line instead of the offending key.
@@ -735,7 +735,7 @@ func ResolvePathPosition(node *yaml.Node, path string) (line, col int, ok bool) 
 		}
 
 		if consumed == 0 {
-			// Path segment not found — return the position of the last matched key.
+			// Path segment not found - return the position of the last matched key.
 			// This gives the user the location of the parent where the field should exist.
 			return lastKeyLine, lastKeyCol, true
 		}

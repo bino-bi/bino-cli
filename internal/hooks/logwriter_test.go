@@ -12,7 +12,7 @@ import (
 
 // Regression: logWriter buffered until it saw a newline and was never
 // flushed, so a hook whose last output line lacked a trailing \n lost that
-// line — often the one explaining why the hook failed.
+// line - often the one explaining why the hook failed.
 func TestHookFinalUnterminatedLineIsLogged(t *testing.T) {
 	var out, errOut bytes.Buffer
 	log := logx.NewTerminalWithColor(&out, &errOut, false, true)

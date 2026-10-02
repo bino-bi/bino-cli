@@ -91,7 +91,7 @@ func TestUpdateArtefactLayoutPagesRewrite(t *testing.T) {
 			t.Fatalf("read file back: %v", err)
 		}
 		got := string(after)
-		// The rewrite re-encodes, so exact formatting is not guaranteed —
+		// The rewrite re-encodes, so exact formatting is not guaranteed -
 		// but every key and both documents must survive, plus the new ref.
 		for _, want := range []string{
 			"kind: ReportArtefact",

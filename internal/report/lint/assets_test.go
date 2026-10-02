@@ -182,7 +182,7 @@ func TestAssetReferenceUndefined_InlineChildren(t *testing.T) {
 }
 
 // A child that only carries a ref inherits the referenced document's image, so
-// the finding belongs to that document — it must not be reported twice.
+// the finding belongs to that document - it must not be reported twice.
 func TestAssetReferenceUndefined_RefChildReportedOnce(t *testing.T) {
 	page := componentDoc("LayoutPage", "p", map[string]any{
 		"children": []any{map[string]any{"kind": "LayoutCard", "ref": "card"}},

@@ -197,7 +197,7 @@ func TestCompletion_RefQuotesRegistryNamesInPlainContext(t *testing.T) {
 
 func TestCompletion_UnquotedAtRefStillCompletes(t *testing.T) {
 	s, root := newRegistryTestServer(t)
-	// The unquoted @ makes the whole document unparseable — exactly while the
+	// The unquoted @ makes the whole document unparseable - exactly while the
 	// author types a registry ref. Completion must repair, resolve with the
 	// sibling kind, and replace the raw token with a QUOTED value.
 	const doc = `kind: LayoutPage

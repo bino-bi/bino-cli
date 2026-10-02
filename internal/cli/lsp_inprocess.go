@@ -17,7 +17,7 @@ import (
 // query never hangs an LSP request (IntrospectColumns has no built-in timeout).
 const columnIntrospectDeadline = 800 * time.Millisecond
 
-// lspInProcessBackend satisfies lsp.Backend over a local daemon.ManagedState — the
+// lspInProcessBackend satisfies lsp.Backend over a local daemon.ManagedState - the
 // standalone path (no daemon running). It is the LSP analog of runMCPStandalone.
 type lspInProcessBackend struct {
 	managed  *daemon.ManagedState
@@ -33,7 +33,7 @@ func newLSPInProcessBackend(managed *daemon.ManagedState, reg *plugin.PluginRegi
 
 func (b *lspInProcessBackend) Start(ctx context.Context) error {
 	if err := b.managed.State.Refresh(ctx); err != nil {
-		// Don't fail — an invalid project should still get diagnostics — but
+		// Don't fail - an invalid project should still get diagnostics - but
 		// leave a trail: this path otherwise serves completions from empty
 		// state with nothing in the logs (stderr-bound here, safe to log).
 		logx.FromContext(ctx).Warnf("initial project refresh failed, serving from empty state: %v", err)

@@ -1730,7 +1730,7 @@ var Ve=(function(){"use strict";let s=()=>{},e={morphStyle:"outerHTML",callbacks
     `}_renderBody(){if(!this._supported)return c`
         <p class="notice">
           This template engine does not expose layout state. The inspector needs
-          <code>bn-template-engine v1.0.0-next.24</code> or newer — pin it with
+          <code>bn-template-engine v1.0.0-next.24</code> or newer - pin it with
           <code>engine-version</code> in <code>bino.toml</code>.
         </p>
       `;if(this._error)return c`<p class="notice">${this._error}</p>`;if(this._busy&&!this._state)return c`<p class="notice">Capturing…</p>`;if(!this._state)return c`<p class="notice">No snapshot yet.</p>`;var e=this._state.components||[];return c`
@@ -1749,7 +1749,7 @@ var Ve=(function(){"use strict";let s=()=>{},e={morphStyle:"outerHTML",callbacks
     `}_renderFinding(e){var t=e.name?e.kind?e.kind+" "+e.name:e.name:e.componentId;return c`
       <li class="finding ${e.severity==="error"?"error":""}"
         @click=${()=>this._select(e.componentId)}>
-        <span class="finding-label">${t}</span> — ${e.message}
+        <span class="finding-label">${t}</span> - ${e.message}
         ${e.hint?c`<span class="finding-hint">${e.hint}</span>`:k}
       </li>
     `}_renderComponent(e){var t=this._state.sources&&this._state.sources[e.id]||{},r=t.name||t.ref||e.id,n=e.id===this._selectedId;return c`

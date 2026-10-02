@@ -51,7 +51,7 @@ type PublishResult struct {
 }
 
 // DryRunResult is what a dry run gets back. It is a different shape from
-// PublishResult on the wire — no package, no unchanged — because nothing was
+// PublishResult on the wire - no package, no unchanged - because nothing was
 // minted.
 type DryRunResult struct {
 	DryRun   bool        `json:"dryRun"`
@@ -97,7 +97,7 @@ func (e *APIError) GateDetails() []GateDetail {
 }
 
 // Publish uploads a package tree and mints a version. The manifest's DryRun
-// field selects validation-only mode, which answers with a different body —
+// field selects validation-only mode, which answers with a different body -
 // use PublishDryRun for that.
 func (c *Client) Publish(ctx context.Context, m PublishManifest, files []PublishFile) (PublishResult, error) {
 	var out PublishResult
@@ -136,7 +136,7 @@ func (c *Client) publish(ctx context.Context, m PublishManifest, files []Publish
 		return nil, err
 	}
 	if auth == "" {
-		return nil, fmt.Errorf("registry: publishing requires authentication — run 'bino registry login'")
+		return nil, fmt.Errorf("registry: publishing requires authentication - run 'bino registry login'")
 	}
 	manifestJSON, err := json.Marshal(m)
 	if err != nil {

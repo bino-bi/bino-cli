@@ -11,7 +11,7 @@ import (
 
 // TestRenderArtefactHTML_I18nNamespaceInheritance verifies that an
 // artefact-level i18nNamespace is written as the i18n-namespace attribute on
-// <bn-context>, from which the engine resolves it at runtime — nothing is
+// <bn-context>, from which the engine resolves it at runtime - nothing is
 // stamped on pages or child components.
 func TestRenderArtefactHTML_I18nNamespaceInheritance(t *testing.T) {
 	ctx := context.Background()

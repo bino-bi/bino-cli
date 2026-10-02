@@ -102,7 +102,7 @@ func ExternalErrorWithHint(err error, hint string) error {
 }
 
 // ExitCodeError carries a subprocess exit code to the top of the CLI without
-// printing an additional error message — the subprocess already streamed its
+// printing an additional error message - the subprocess already streamed its
 // own output. Returning it (instead of calling os.Exit inside a RunE) lets
 // deferred cleanup such as plugin shutdown run before the process exits.
 type ExitCodeError struct {
@@ -353,7 +353,7 @@ func buildErrorChain(err error) string {
 		}
 		if multi, ok := e.(interface{ Unwrap() []error }); ok {
 			// A joined error's own message is just its branches concatenated
-			// with newlines — render each branch as its own entry instead.
+			// with newlines - render each branch as its own entry instead.
 			for _, child := range multi.Unwrap() {
 				visit(child)
 			}
@@ -365,7 +365,7 @@ func buildErrorChain(err error) string {
 		}
 		visit(errors.Unwrap(e))
 	}
-	// Skip the top-level message itself — it is already displayed.
+	// Skip the top-level message itself - it is already displayed.
 	if _, ok := err.(interface{ Unwrap() []error }); ok {
 		visit(err)
 	} else {

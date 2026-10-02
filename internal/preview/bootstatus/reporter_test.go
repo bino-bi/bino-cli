@@ -130,7 +130,7 @@ func TestSSEReporterBroadcastsAndSnapshots(t *testing.T) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	if len(bus.payloads) != 3 {
-		t.Fatalf("expected 3 broadcasts (Begin, Progress, Fail) — End is silent, got %d: %s", len(bus.payloads), bus.payloads)
+		t.Fatalf("expected 3 broadcasts (Begin, Progress, Fail) - End is silent, got %d: %s", len(bus.payloads), bus.payloads)
 	}
 	statuses := make([]Status, len(bus.payloads))
 	for i, p := range bus.payloads {

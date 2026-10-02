@@ -152,7 +152,7 @@ func (s *Spinner) StopWithError(errMsg string) {
 	if s.isTTY && s.spinner != nil {
 		s.spinner.Stop()
 	}
-	// Errors belong on stderr — `bino build > file` must not hide render
+	// Errors belong on stderr - `bino build > file` must not hide render
 	// failures, and stdout may carry machine-consumed data.
 	s.style.Red.Fprintf(s.stderr, "%s ", SymbolError)
 	fmt.Fprintln(s.stderr, errMsg)

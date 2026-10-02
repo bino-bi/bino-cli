@@ -176,7 +176,7 @@ func TestDecodeJSONValueByteEquivalentNoOp(t *testing.T) {
 			// First write: establishes the on-disk form.
 			first := editWidgetField(t, base, f.field, f.valueJSON)
 			// Read the field back into JSON exactly as a webview would (order +
-			// values preserved), then write it again — must be byte-identical.
+			// values preserved), then write it again - must be byte-identical.
 			readback := readFieldAsJSON(t, first, f.field)
 			second := editWidgetField(t, base, f.field, readback)
 			if first != second {

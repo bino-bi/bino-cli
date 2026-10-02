@@ -80,7 +80,7 @@ func fetchContext(t *testing.T, srv *httpserver.Server, path string) (int, strin
 // TestRunBroadcastsDocumentArtefactContent proves the doc loop broadcasts
 // content for /doc/* routes: the refresh returns the doc path in its
 // broadcast list and the SSE context cache serves the rendered document
-// (both were missing before — /doc/* never live-reloaded and the context
+// (both were missing before - /doc/* never live-reloaded and the context
 // endpoint 404'd forever).
 func TestRunBroadcastsDocumentArtefactContent(t *testing.T) {
 	t.Parallel()

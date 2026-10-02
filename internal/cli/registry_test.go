@@ -187,7 +187,7 @@ func fakeRegistryServer(t *testing.T, packages map[string]*fakePackage) (srv *ht
 
 // registerFakeV2Routes adds the v2 resolve and per-file routes. A package
 // without tree files is served as the synthetic one-file tree a real registry
-// renders for a v1 version — same path, same digest — so a mixed closure
+// renders for a v1 version - same path, same digest - so a mixed closure
 // exercises both formats against one server.
 func registerFakeV2Routes(t *testing.T, mux *http.ServeMux, packages map[string]*fakePackage, resolveCalls *atomic.Int64) {
 	t.Helper()
@@ -306,7 +306,7 @@ func TestRegistryGlobalConfigURL(t *testing.T) {
 	}
 	srv, _, _ := fakeRegistryServer(t, packages)
 
-	// The registry URL comes from ~/.bino/config.toml — the project's
+	// The registry URL comes from ~/.bino/config.toml - the project's
 	// bino.toml has no [registry] table.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -858,7 +858,7 @@ func TestRegistryVerifyCatchesTamperedOrMissingResource(t *testing.T) {
 // .bino/registry/<scope>/<name>/<name>.yml with the resource as a sibling
 // file. It then exercises the REAL, unmodified consuming code
 // (datasource.Collect) against that on-disk tree with a relative
-// path: "sales.csv" — proving the resource resolves via
+// path: "sales.csv" - proving the resource resolves via
 // filepath.Dir(doc.File), with zero changes to the path-resolution engine.
 func TestRegistryPulledDataSourceResourceResolves(t *testing.T) {
 	docBody, digest := fakeDoc(t, "@acme/revenue-table", "DataSource")
@@ -933,7 +933,7 @@ func fakeTree() []fakeTreeFile {
 
 // A dependency closure may mix generations. Each package must materialize
 // under the rule its own format implies, and bino.lock must record which one
-// applies — the tree's manifest digest cannot be checked with the v1 rule, or
+// applies - the tree's manifest digest cannot be checked with the v1 rule, or
 // the reverse.
 func TestRegistryAddMixedV1AndV2Closure(t *testing.T) {
 	v1Body, v1Digest := fakeDoc(t, "@bino/style_a", "ComponentStyle")

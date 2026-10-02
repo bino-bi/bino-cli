@@ -72,7 +72,7 @@ func TestBuildInitTemplateData(t *testing.T) {
 // TestStandardTemplateUsesCanonicalFolders keeps the built-in standard scaffold
 // aligned with projectlayout: every folder it seeds a *manifest* into must be a
 // canonical one, so `bino add` co-locates new manifests with the scaffold instead
-// of splitting. Non-manifest payloads (docs/*.md, scripts/*.sh) are exempt —
+// of splitting. Non-manifest payloads (docs/*.md, scripts/*.sh) are exempt -
 // projectlayout only maps manifest kinds to folders.
 func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 	tmp := t.TempDir()
@@ -93,11 +93,11 @@ func TestStandardTemplateUsesCanonicalFolders(t *testing.T) {
 	canonical := projectlayout.CanonicalFolders()
 	for _, rel := range created {
 		if filepath.Ext(rel) != ".yaml" {
-			continue // not a manifest — projectlayout has nothing to say about it
+			continue // not a manifest - projectlayout has nothing to say about it
 		}
 		dir, _, nested := strings.Cut(rel, "/")
 		if !nested {
-			continue // top-level file (bino.toml, dotfiles) — not a folder
+			continue // top-level file (bino.toml, dotfiles) - not a folder
 		}
 		if !slices.Contains(canonical, dir) {
 			t.Errorf("standard template seeds non-canonical folder %q (file %q); canonical=%v", dir, rel, canonical)
@@ -218,11 +218,11 @@ func TestPredefTemplateFolders(t *testing.T) {
 	mockYAML := 0
 	for _, rel := range created {
 		if filepath.Ext(rel) != ".yaml" {
-			continue // not a manifest — projectlayout has nothing to say about it
+			continue // not a manifest - projectlayout has nothing to say about it
 		}
 		dir, _, nested := strings.Cut(rel, "/")
 		if !nested {
-			continue // top-level file (bino.toml, dotfiles) — not a folder
+			continue // top-level file (bino.toml, dotfiles) - not a folder
 		}
 		if dir == "mocks" {
 			mockYAML++

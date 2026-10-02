@@ -70,8 +70,8 @@ spec:
 // the daemon's validation pipeline (State.Refresh → validateDocs) and
 // lsp-helper's validateDirectory must produce identical diagnostics for the
 // same bundle. Both are thin diagnostics.Collect callers now, so any future
-// divergence — kind providers, plugin linters, engine compat, severity
-// mapping, nil-vs-[] — fails this test.
+// divergence - kind providers, plugin linters, engine compat, severity
+// mapping, nil-vs-[] - fails this test.
 func TestDaemonAndHelperValidationParity(t *testing.T) {
 	// Isolate the engine cache: engineCompatDiagnostic consults
 	// $HOME/.bino, and a locally cached engine would make the fixture's
@@ -113,7 +113,7 @@ func TestDaemonAndHelperValidationParity(t *testing.T) {
 }
 
 // TestRunLSPValidate_CleanProjectSerializesEmptyArray: a clean bundle must
-// serialize diagnostics as [] — validateDirectory used to return nil, which
+// serialize diagnostics as [] - validateDirectory used to return nil, which
 // outputJSON rendered as JSON null (unlike the daemon's []).
 func TestRunLSPValidate_CleanProjectSerializesEmptyArray(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())

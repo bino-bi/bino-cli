@@ -317,8 +317,8 @@ func TestCheckFontShrunk(t *testing.T) {
 		{name: "unmeasurable", factor: 0, want: false},
 		{name: "enlarged", factor: 1.4, want: false},
 		{
-			// Components on the engine's generic layout state — bn-text among
-			// them — always report factor 1 and announce the fit through this
+			// Components on the engine's generic layout state - bn-text among
+			// them - always report factor 1 and announce the fit through this
 			// diagnostic instead. Without it the check could never fire for
 			// the component type that shrinks most often.
 			name:        "generic component reports the fit as a diagnostic",

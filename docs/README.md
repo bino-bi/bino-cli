@@ -17,7 +17,7 @@ npm run preview      # Preview build locally
 
 ## Project Structure
 
-- `src/content/docs/` — Documentation pages as `.mdx` files. Each file maps to a route based on its file name.
-- `src/assets/` — Images and other assets embedded in documentation pages.
-- `public/` — Static assets (favicons, etc.) served as-is.
-- `astro.config.mjs` — Astro and Starlight configuration.
+- `src/content/docs/` - Documentation pages as `.mdx` files. Each file maps to a route based on its file name.
+- `src/assets/` - Images and other assets embedded in documentation pages.
+- `public/` - Static assets (favicons, etc.) served as-is.
+- `astro.config.mjs` - Astro and Starlight configuration.

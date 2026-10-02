@@ -28,8 +28,8 @@ interface DesignerTarget {
  * The component designer: a schema-driven property panel for one embeddable
  * manifest with a live canvas. It generalizes the tree-table editor's webview
  * infra (singleton panel, lifecycle/guards, message plumbing) but renders a form
- * — generic controls per `FieldDef`, with custom widgets resolved through the
- * widget registry — instead of a raw property grid. Edits write through the
+ * - generic controls per `FieldDef`, with custom widgets resolved through the
+ * widget registry - instead of a raw property grid. Edits write through the
  * brief-01 AuthoringClient and the canvas re-renders on the next SSE tick.
  */
 export class DesignerPanel {
@@ -80,7 +80,7 @@ export class DesignerPanel {
         await this.bindTarget(doc);
         // The embedded preview is its own panel with its own CodeLens; the
         // designer intentionally does NOT open it here (it only refreshes an
-        // already-open preview after an edit — see reloadCanvas).
+        // already-open preview after an edit - see reloadCanvas).
         this.panel!.reveal(vscode.ViewColumn.Beside);
     }
 

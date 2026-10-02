@@ -48,7 +48,7 @@ func TestDataStoreSameHashIdempotent(t *testing.T) {
 	t.Parallel()
 	store := newDataStore(2)
 	store.Put(DataKindDataset, "x", "h1", []byte("first"))
-	// A repeat Put with the same hash must not bump the LRU window — otherwise
+	// A repeat Put with the same hash must not bump the LRU window - otherwise
 	// fast re-renders that emit identical content would evict legitimate
 	// concurrent versions.
 	store.Put(DataKindDataset, "x", "h1", []byte("ignored"))

@@ -5,7 +5,7 @@ description: Configure IBCS bullet graphs with actual bars, target markers, and 
 
 `ChartBullet` manifests describe IBCS bullet graphs: one horizontal row per
 KPI with a solid actual bar and a target marker. The default mode applies
-the IBCS improvements over the classic Stephen Few bullet graph —
+the IBCS improvements over the classic Stephen Few bullet graph -
 **normalized targets** (every row is scaled to fractions of its target, so
 one continuous target line spans all rows and KPIs become visually
 comparable) and **integrated variance bars** between actual and target in
@@ -50,9 +50,9 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 The `actual` and `target` mappings accept either a bare **scenario slot**
 or an object whose `measure` property is a slot:
 
-- **Scenario slots**: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4` —
+- **Scenario slots**: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4` -
   the row columns of the dataset.
-- **Variance tokens are not allowed** — the bullet variance is implicit
+- **Variance tokens are not allowed** - the bullet variance is implicit
   (actual vs. target), so `dac1_pl1`-style tokens have no meaning here.
 
 A bare string is shorthand for the object form: `actual: ac1` equals
@@ -117,7 +117,7 @@ delivered (no auto-SI scaling).
 
 ## Example: Minimal auto-detected bullet
 
-Everything auto-detects — actual `ac1`, target `pl1` > `pp1` > `fc1`,
+Everything auto-detects - actual `ac1`, target `pl1` > `pp1` > `fc1`,
 level and order from the dataset:
 
 ```yaml
@@ -175,46 +175,46 @@ spec:
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `ChartBullet`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
+| Attribute              | Type   | Required | Default | Description                                                                              |
+| ---------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                              |
+| `kind`                 | string | yes      | -       | Must be `ChartBullet`.                                                                   |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                       |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                              |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                    |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                   |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
 
 ### Spec Attributes
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.dataset` | string, object, or array | yes | — | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Maps to the `datasets` HTML attribute. | `dataset: kpis` |
-| `spec.actual` | string or object | no | auto (`ac1`, else the first available scenario) | Actual-value measure mapping: a bare scenario slot or the object form below. Maps to the `actual` HTML attribute. | `actual: ac1` |
-| `spec.actual.measure` | string | yes (in object form) | — | Plain scenario slot: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`. Variance tokens are not allowed. | `measure: ac1` |
-| `spec.actual.label` | string | no | — | Caption of the measure, shown above the first row. | `label: "AC"` |
-| `spec.actual.unit` | string | no | — | Unit caption, rendered once as `in EUR k` in the chart header. Values are drawn as delivered — scale in the DataSet SQL. | `unit: "EUR k"` |
-| `spec.target` | string or object | no | auto (`pl1` > `pp1` > `fc1`) | Target measure mapping: a bare scenario slot or the object form below. Without any target scenario the chart renders actual bars only. Maps to the `target` HTML attribute. | `target: { measure: pl1, label: "Plan" }` |
-| `spec.target.measure` | string | yes (in object form) | — | Plain scenario slot: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`. Variance tokens are not allowed. | `measure: pl1` |
-| `spec.target.label` | string | no | — | Caption of the measure, shown at the target line. | `label: "Plan"` |
-| `spec.target.unit` | string | no | — | Unit caption, rendered once as `in EUR k` in the chart header. | `unit: "EUR k"` |
-| `spec.ranges` | array of numbers | no | — | One or two ascending fractions of the target, each greater than `0` (classic mode gray bands); an empty array is rejected. Maps to the `ranges` HTML attribute. | `ranges: [0.6, 0.9]` |
-| `spec.ranges[]` | number | — | — | A single band boundary as a fraction of the target, greater than `0`. | `0.6` |
-| `spec.normalize` | string | no | `target` | Target normalization. Values: `target`, `none`. | `normalize: none` |
-| `spec.variances` | string | no | `auto` | Variance bars. Values: `auto`, `none`. | `variances: none` |
-| `spec.level` | string | no | `auto` | KPI row level. Values: `auto`, `rowgroup`, `category`, `subcategory`. | `level: category` |
-| `spec.order` | string | no | `auto` | Sort key of the KPI rows. Values: `auto`, `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`. `auto` uses the dataset's suggested order. | `order: ac1` |
-| `spec.orderDirection` | string | no | `asc` | Sorting direction. Values: `asc`, `desc`. Maps to the `order-direction` HTML attribute. | `orderDirection: desc` |
-| `spec.limit` | integer | no | `0` | Max KPI rows (truncates, no REST aggregate). `0` means unlimited. | `limit: 6` |
-| `spec.labels` | object | no | `show: auto`, `decimals: 1` | Value label configuration. | `labels: { show: auto, decimals: 1 }` |
-| `spec.labels.show` | string | no | `auto` | Toggles the value labels right of the bars. Values: `auto`, `none`. | `show: none` |
-| `spec.labels.decimals` | integer | no | `1` | Decimal places of the value labels, `0`–`4`. | `decimals: 0` |
-| `spec.filter` | string | no | `""` | AlaSQL WHERE clause fragment to filter rows. | `filter: "rowGroup = 'Revenue'"` |
-| `spec.chartTitle` | string | no | `""` | Custom chart title. Maps to the `chart-title` HTML attribute. | `chartTitle: "KPI overview vs. plan"` |
-| `spec.scale` | string or number | no | auto-scale with warning | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. A positive number such as `0.5` or `1.2`: fixed factor. Omitted: auto-scales and warns with the applied factor. | `scale: auto` |
-| `spec.i18nNamespace` | string | no | — | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+| Attribute              | Type                     | Required             | Default                                         | Description                                                                                                                                                                                                                                      | Sample                                    |
+| ---------------------- | ------------------------ | -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `spec.dataset`         | string, object, or array | yes                  | -                                               | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of those (at least one). Maps to the `datasets` HTML attribute.                                                                                    | `dataset: kpis`                           |
+| `spec.actual`          | string or object         | no                   | auto (`ac1`, else the first available scenario) | Actual-value measure mapping: a bare scenario slot or the object form below. Maps to the `actual` HTML attribute.                                                                                                                                | `actual: ac1`                             |
+| `spec.actual.measure`  | string                   | yes (in object form) | -                                               | Plain scenario slot: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`. Variance tokens are not allowed.                                                                                                                                        | `measure: ac1`                            |
+| `spec.actual.label`    | string                   | no                   | -                                               | Caption of the measure, shown above the first row.                                                                                                                                                                                               | `label: "AC"`                             |
+| `spec.actual.unit`     | string                   | no                   | -                                               | Unit caption, rendered once as `in EUR k` in the chart header. Values are drawn as delivered - scale in the DataSet SQL.                                                                                                                         | `unit: "EUR k"`                           |
+| `spec.target`          | string or object         | no                   | auto (`pl1` > `pp1` > `fc1`)                    | Target measure mapping: a bare scenario slot or the object form below. Without any target scenario the chart renders actual bars only. Maps to the `target` HTML attribute.                                                                      | `target: { measure: pl1, label: "Plan" }` |
+| `spec.target.measure`  | string                   | yes (in object form) | -                                               | Plain scenario slot: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`. Variance tokens are not allowed.                                                                                                                                        | `measure: pl1`                            |
+| `spec.target.label`    | string                   | no                   | -                                               | Caption of the measure, shown at the target line.                                                                                                                                                                                                | `label: "Plan"`                           |
+| `spec.target.unit`     | string                   | no                   | -                                               | Unit caption, rendered once as `in EUR k` in the chart header.                                                                                                                                                                                   | `unit: "EUR k"`                           |
+| `spec.ranges`          | array of numbers         | no                   | -                                               | One or two ascending fractions of the target, each greater than `0` (classic mode gray bands); an empty array is rejected. Maps to the `ranges` HTML attribute.                                                                                  | `ranges: [0.6, 0.9]`                      |
+| `spec.ranges[]`        | number                   | -                    | -                                               | A single band boundary as a fraction of the target, greater than `0`.                                                                                                                                                                            | `0.6`                                     |
+| `spec.normalize`       | string                   | no                   | `target`                                        | Target normalization. Values: `target`, `none`.                                                                                                                                                                                                  | `normalize: none`                         |
+| `spec.variances`       | string                   | no                   | `auto`                                          | Variance bars. Values: `auto`, `none`.                                                                                                                                                                                                           | `variances: none`                         |
+| `spec.level`           | string                   | no                   | `auto`                                          | KPI row level. Values: `auto`, `rowgroup`, `category`, `subcategory`.                                                                                                                                                                            | `level: category`                         |
+| `spec.order`           | string                   | no                   | `auto`                                          | Sort key of the KPI rows. Values: `auto`, `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`. `auto` uses the dataset's suggested order.            | `order: ac1`                              |
+| `spec.orderDirection`  | string                   | no                   | `asc`                                           | Sorting direction. Values: `asc`, `desc`. Maps to the `order-direction` HTML attribute.                                                                                                                                                          | `orderDirection: desc`                    |
+| `spec.limit`           | integer                  | no                   | `0`                                             | Max KPI rows (truncates, no REST aggregate). `0` means unlimited.                                                                                                                                                                                | `limit: 6`                                |
+| `spec.labels`          | object                   | no                   | `show: auto`, `decimals: 1`                     | Value label configuration.                                                                                                                                                                                                                       | `labels: { show: auto, decimals: 1 }`     |
+| `spec.labels.show`     | string                   | no                   | `auto`                                          | Toggles the value labels right of the bars. Values: `auto`, `none`.                                                                                                                                                                              | `show: none`                              |
+| `spec.labels.decimals` | integer                  | no                   | `1`                                             | Decimal places of the value labels, `0`–`4`.                                                                                                                                                                                                     | `decimals: 0`                             |
+| `spec.filter`          | string                   | no                   | `""`                                            | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                     | `filter: "rowGroup = 'Revenue'"`          |
+| `spec.chartTitle`      | string                   | no                   | `""`                                            | Custom chart title. Maps to the `chart-title` HTML attribute.                                                                                                                                                                                    | `chartTitle: "KPI overview vs. plan"`     |
+| `spec.scale`           | string or number         | no                   | auto-scale with warning                         | Proportional scaling. `"none"`: no scaling. `"auto"`: auto-scale silently. A positive number such as `0.5` or `1.2`: fixed factor. Omitted: auto-scales and warns with the applied factor.                                                       | `scale: auto`                             |
+| `spec.i18nNamespace`   | string                   | no                   | -                                               | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: audited`                  |
+| `spec.selectedStyle`   | string                   | no                   | -                                               | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Maps to the `selected-style` HTML attribute.                                                                                                                        | `selectedStyle: corporate-style`          |
+| `spec.ruleset`         | string                   | no                   | -                                               | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page`. Maps to the `ruleset` HTML attribute.                                                                                                   | `ruleset: corporate-rules`                |
 
 See [`ChartStructure`](/reference/chart-structure/) for general bar charts
 with explicit scenario and variance columns.

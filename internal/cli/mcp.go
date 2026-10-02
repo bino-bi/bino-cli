@@ -36,7 +36,7 @@ this command proxies to that daemon's /mcp endpoint so the agent reuses the
 already-loaded DuckDB session and file watcher instead of starting a second one.
 With no daemon running, it serves the MCP directly from its own project state.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Route ALL logging to stderr — stdout is the JSON-RPC channel and
+			// Route ALL logging to stderr - stdout is the JSON-RPC channel and
 			// must carry nothing but MCP protocol traffic.
 			verbose := logx.DebugEnabled(cmd.Context())
 			logger := logx.NewTerminalWithColor(cmd.ErrOrStderr(), cmd.ErrOrStderr(), verbose, true).Channel("mcp")
@@ -47,7 +47,7 @@ With no daemon running, it serves the MCP directly from its own project state.`,
 				return ConfigError(err)
 			}
 			if !initialized {
-				logger.Infof("No bino.toml found; starting MCP rooted at %s — not yet a bino project (use init_bundle to scaffold a bundle here)", projectRoot)
+				logger.Infof("No bino.toml found; starting MCP rooted at %s - not yet a bino project (use init_bundle to scaffold a bundle here)", projectRoot)
 			}
 
 			// Proxy to a running daemon when one exists, so the agent reuses the
@@ -148,7 +148,7 @@ func runMCPProxy(ctx context.Context, endpoint string) error {
 	}
 	defer func() { _ = upstream.Close() }() //nolint:errcheck // session teardown at proxy shutdown
 
-	local := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "bino", Title: "bino — Report-as-Code", Version: version.Version}, nil)
+	local := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "bino", Title: "bino - Report-as-Code", Version: version.Version}, nil)
 	if err := mirrorUpstream(ctx, local, upstream); err != nil {
 		return err
 	}

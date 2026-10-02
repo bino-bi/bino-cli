@@ -6,7 +6,7 @@ import (
 )
 
 // A nil registry (no plugins configured) must not panic when aggregating the
-// schema — it simply contributes no plugin kinds.
+// schema - it simply contributes no plugin kinds.
 func TestSchemaAggregatorNilRegistry(t *testing.T) {
 	agg := NewSchemaAggregator(nil)
 	if err := agg.Build(context.Background()); err != nil {

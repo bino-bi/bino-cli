@@ -18,7 +18,7 @@ import (
 // IIFE so it can be evaluated here: the component-id rule it implements has to
 // match the engine exactly, and a second hand-kept copy would drift.
 //
-// Returns nil (no error) when the loaded engine predates getLayoutState —
+// Returns nil (no error) when the loaded engine predates getLayoutState -
 // the CLI supports a far wider engine range than the API does, so an absent
 // snapshot is normal, not a failure.
 func captureLayoutState(ctx context.Context, logger logx.Logger) ([]byte, error) {

@@ -474,7 +474,7 @@ func (s *Server) handleEmbeddingOverride(w http.ResponseWriter, r *http.Request)
 const maxOverrideBytes = 10 << 20
 
 // maxLayoutStateBytes bounds a layout-state capture. The inspector posts a
-// summary snapshot — tens of components at a few hundred bytes each — so this
+// summary snapshot - tens of components at a few hundred bytes each - so this
 // leaves room for a very large report without accepting a full-detail dump.
 const maxLayoutStateBytes = 8 << 20
 
@@ -576,7 +576,7 @@ func (s *Server) SetLocalAssets(assets []LocalAsset) {
 
 // BroadcastContent caches the latest HTML for a route and notifies connected
 // SSE clients that the content has changed. The notification carries only the
-// path, not the HTML body — clients fetch fresh content via
+// path, not the HTML body - clients fetch fresh content via
 // /__preview/context?path=<path> on demand. This keeps SSE messages small
 // (one per path, dozens of bytes) so a refresh that touches many routes
 // cannot exhaust the per-client SSE channel buffer and drop the trailing

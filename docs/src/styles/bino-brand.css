@@ -1,5 +1,5 @@
 /* ============================================================
-   Bino brand accents — global overrides on top of Nova theme.
+   Bino brand accents - global overrides on top of Nova theme.
    Mirrors the visual language of https://www.bino.bi
    ============================================================ */
 
@@ -56,7 +56,7 @@
 }
 
 /* ---- 3. Teal/cyan hero accent ---- */
-/* Only the splash hero gets the glow — scoped via [data-has-hero] on <html>. */
+/* Only the splash hero gets the glow - scoped via [data-has-hero] on <html>. */
 :root[data-has-hero] .hero {
   background:
     radial-gradient(ellipse at 30% 20%, rgba(93, 211, 220, 0.18), transparent 60%),

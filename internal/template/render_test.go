@@ -270,7 +270,7 @@ func TestRenderPredefLeavesNoActions(t *testing.T) {
 
 // TestBuiltinEmbedHasNoJunk fails if editor or OS droppings ever reach the
 // embedded tree. `//go:embed all:builtin` takes dotfiles, and .DS_Store is
-// gitignored rather than impossible — a local build would otherwise ship one
+// gitignored rather than impossible - a local build would otherwise ship one
 // into every scaffolded project.
 func TestBuiltinEmbedHasNoJunk(t *testing.T) {
 	junk := map[string]bool{".DS_Store": true, "Thumbs.db": true, ".gitkeep": true}

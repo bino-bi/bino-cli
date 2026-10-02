@@ -43,8 +43,8 @@ type Client struct {
 	baseURL string
 	token   string
 	hc      *http.Client
-	// hcUpload carries publishes. It has no wall-clock Timeout — that would
-	// cap the body transfer — and is bounded by a per-attempt context deadline
+	// hcUpload carries publishes. It has no wall-clock Timeout - that would
+	// cap the body transfer - and is bounded by a per-attempt context deadline
 	// instead.
 	hcUpload *http.Client
 
@@ -54,7 +54,7 @@ type Client struct {
 
 	// v2 caches whether this registry serves the v2 routes: v2Unknown until
 	// the first v2 request answers. It is a property of the server, not of a
-	// package — a v1 version resolves through v2 as a one-file tree — so one
+	// package - a v1 version resolves through v2 as a one-file tree - so one
 	// probe per client covers every package of a closure.
 	v2 atomic.Int32
 }
@@ -284,7 +284,7 @@ func (c *Client) getWithLimit(ctx context.Context, u string, maxBytes int64) ([]
 
 // doJSON performs a request with a JSON body (nil = none), decoding a 2xx
 // response into out (nil = discard). auth is the raw Authorization value
-// ("" = anonymous) — callers choose between bearer(), an explicit session
+// ("" = anonymous) - callers choose between bearer(), an explicit session
 // JWT, or anonymous.
 func (c *Client) doJSON(ctx context.Context, method, u, auth string, reqBody, out any) error {
 	var payload []byte

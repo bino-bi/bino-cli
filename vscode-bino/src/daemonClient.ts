@@ -148,7 +148,7 @@ export class DaemonClient {
         return this.fetchJSON('/index');
     }
 
-    /** GET /kinds — every manifest kind with its capability category and render-embeddable flag */
+    /** GET /kinds - every manifest kind with its capability category and render-embeddable flag */
     async getKinds(): Promise<{ kinds: { name: string; category: string; embeddable: boolean }[]; error?: string } | undefined> {
         return this.fetchJSON('/kinds');
     }
@@ -163,7 +163,7 @@ export class DaemonClient {
         return this.fetchJSON('/validate', 'POST');
     }
 
-    /** GET /schema — returns merged JSON schema (built-in + plugin kinds) */
+    /** GET /schema - returns merged JSON schema (built-in + plugin kinds) */
     async getSchema(): Promise<string | undefined> {
         if (!this.isConnected || !this.port) {
             return undefined;
@@ -227,32 +227,32 @@ export class DaemonClient {
         return this.fetchJSON('/build', 'POST', artefact ? { artefact } : undefined);
     }
 
-    /** POST /introspect-draft — introspect a not-yet-registered data source */
+    /** POST /introspect-draft - introspect a not-yet-registered data source */
     async introspectDraft(req: { spec: any; baseDir?: string; sheet?: string; limit?: number }): Promise<any | undefined> {
         return this.fetchJSON('/introspect-draft', 'POST', req);
     }
 
-    /** POST /sqlgen/typed-select — generate a column-aware SELECT */
+    /** POST /sqlgen/typed-select - generate a column-aware SELECT */
     async typedSelect(req: { source: string; columns: any[]; pretty?: boolean; castMode?: string }): Promise<{ sql: string; aliases: string[] } | undefined> {
         return this.fetchJSON('/sqlgen/typed-select', 'POST', req);
     }
 
-    /** POST /preview-dataset — run a draft DataSet SQL against a not-yet-registered source */
+    /** POST /preview-dataset - run a draft DataSet SQL against a not-yet-registered source */
     async previewDataSet(req: { spec: any; sourceName: string; sql: string; baseDir?: string; sheet?: string; limit?: number }): Promise<any | undefined> {
         return this.fetchJSON('/preview-dataset', 'POST', req);
     }
 
-    /** GET /dataset-schema — the canonical standard dataset columns */
+    /** GET /dataset-schema - the canonical standard dataset columns */
     async datasetSchema(): Promise<{ columns: any[] } | undefined> {
         return this.fetchJSON('/dataset-schema');
     }
 
-    /** GET /registry/packages — offline dependency report (bino.lock + bino.toml + store) */
+    /** GET /registry/packages - offline dependency report (bino.lock + bino.toml + store) */
     async getRegistryPackages(): Promise<{ packages: RegistryPackage[]; error?: string } | undefined> {
         return this.fetchJSON('/registry/packages');
     }
 
-    /** GET /registry/search — proxied full-text registry search */
+    /** GET /registry/search - proxied full-text registry search */
     async searchRegistry(query: string, opts?: { kinds?: string[]; page?: number; perPage?: number }): Promise<RegistrySearchResult | undefined> {
         const params = new URLSearchParams();
         if (query) {
@@ -270,14 +270,14 @@ export class DaemonClient {
         return this.fetchJSON(`/registry/search?${params.toString()}`);
     }
 
-    /** GET /registry/info — resolve a spec ("@scope/name[@ref]") + installed version */
+    /** GET /registry/info - resolve a spec ("@scope/name[@ref]") + installed version */
     async getRegistryInfo(spec: string): Promise<any | undefined> {
         return this.fetchJSON(`/registry/info?spec=${encodeURIComponent(spec)}`);
     }
 
     /**
      * Shut down the daemon process.
-     * Sends SIGTERM directly to the daemon PID — this is synchronous and
+     * Sends SIGTERM directly to the daemon PID - this is synchronous and
      * reliable even when VS Code is closing and won't wait for HTTP requests.
      * The daemon's Go signal handler catches SIGTERM and runs deferred cleanup
      * (remove port file, stop preview child, close DuckDB).

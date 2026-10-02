@@ -20,8 +20,8 @@ import (
 )
 
 // IsBinoHeader reports whether an apiVersion/kind pair identifies a bino
-// manifest: the bino.bi/ apiVersion prefix, or — while the header is still
-// being typed (apiVersion absent) — a kind bino recognizes, built-in or
+// manifest: the bino.bi/ apiVersion prefix, or - while the header is still
+// being typed (apiVersion absent) - a kind bino recognizes, built-in or
 // plugin-provided. Everything else (docker-compose, k8s, CI YAML) is foreign.
 func IsBinoHeader(apiVersion, kind string, kindProvider KindProvider) bool {
 	if strings.HasPrefix(apiVersion, "bino.bi/") {
@@ -205,7 +205,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	// .bino/registry holds installed registry packages that must join the
 	// manifest set. Installed packages are lock-managed content, so neither
 	// name-based dir skips (a scope may legitimately be named "vendor") nor
-	// .bnignore apply here — a project ignoring `.bino/` (mirroring the
+	// .bnignore apply here - a project ignoring `.bino/` (mirroring the
 	// recommended .gitignore) must not silently lose its dependencies.
 	// Excluding a package goes through `bino registry remove`. Only the scan
 	// limits keep counting across both passes.
@@ -243,7 +243,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, skipForeign bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity — refactor before extending
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, skipForeign bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var content []byte
 	if ov, ok := overlayContent(overlay, path); ok {
 		content = []byte(ov)
@@ -299,7 +299,7 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 			// Only a *yaml.TypeError leaves the parser positioned after the
 			// failing document; any other decode error (e.g. a syntax error)
 			// leaves it stuck on the same input, so continuing to decode
-			// would loop forever — abandon the rest of the file instead.
+			// would loop forever - abandon the rest of the file instead.
 			var typeErr *yaml.TypeError
 			canContinue := errors.As(decodeErr, &typeErr)
 			if lenient {
@@ -379,7 +379,7 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 			continue
 		}
 
-		// Check if this is a plugin kind — if so, skip built-in schema validation.
+		// Check if this is a plugin kind - if so, skip built-in schema validation.
 		// Plugin kinds are validated by their own JSON Schema via the schema aggregator.
 		if kindProvider != nil {
 			var peek struct {

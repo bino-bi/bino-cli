@@ -43,8 +43,8 @@ func TestValidateDraft_SyntaxErrorSanitized(t *testing.T) {
 }
 
 // TestValidateDraft_ForeignAndBinoGate: non-bino YAML buffers (the editor
-// attaches to every yaml file) must validate to nothing; bino manifests —
-// including half-typed ones without apiVersion — keep their diagnostics.
+// attaches to every yaml file) must validate to nothing; bino manifests -
+// including half-typed ones without apiVersion - keep their diagnostics.
 func TestValidateDraft_ForeignAndBinoGate(t *testing.T) {
 	st, err := NewState(t.TempDir(), nil, logx.Nop())
 	if err != nil {
@@ -146,7 +146,7 @@ spec:
 
 // TestValidateDocs_RefParamsAndSeverity: the daemon's lint document conversion
 // must carry metadata.params (the ref-params rule is inert without the
-// declarations — and worse, mis-fires "unknown param" for legitimately passed
+// declarations - and worse, mis-fires "unknown param" for legitimately passed
 // ones), and lint findings must keep their per-rule severity instead of a
 // hardcoded "warning".
 func TestValidateDocs_RefParamsAndSeverity(t *testing.T) {
@@ -167,7 +167,7 @@ func TestValidateDocs_RefParamsAndSeverity(t *testing.T) {
 	var missingRequired, missingRef bool
 	for _, d := range diags {
 		if strings.Contains(d.Message, "unknown param") {
-			t.Errorf("declared param flagged as unknown — declarations were dropped: %q", d.Message)
+			t.Errorf("declared param flagged as unknown - declarations were dropped: %q", d.Message)
 		}
 		if d.Code == "ref-params" && strings.Contains(d.Message, `missing required param "mandatory"`) {
 			missingRequired = true

@@ -151,7 +151,7 @@ func TestExcelSheetParamSQL(t *testing.T) {
 	}
 }
 
-// writeMinimalXLSX writes a zip with just xl/workbook.xml — enough for sheetNames.
+// writeMinimalXLSX writes a zip with just xl/workbook.xml - enough for sheetNames.
 func writeMinimalXLSX(t *testing.T, path string, sheets []string) {
 	t.Helper()
 	f, err := os.Create(path)

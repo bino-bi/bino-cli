@@ -8,12 +8,16 @@ import layoutCardsImg from "../../../assets/sample-layout-cards.png";
 `LayoutCard` manifests describe card-shaped containers that can host charts, tables, and text.
 They are useful for dashboards and reusable widgets.
 
-<img src={layoutCardsImg.src} alt="LayoutCards in a 2x2 grid showing revenue overview, trend, financial summary, and executive highlights" style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;" />
+<img
+  src={layoutCardsImg.src}
+  alt="LayoutCards in a 2x2 grid showing revenue overview, trend, financial summary, and executive highlights"
+  style="max-width:100%;border:1px solid var(--sl-color-gray-5);border-radius:0.5rem;margin:1rem 0;"
+/>
 
 ## Minimal definition
 
 This is the smallest well-formed `LayoutCard`: the document envelope plus the
-fields a usable card sets in practice — a header label and at least one child
+fields a usable card sets in practice - a header label and at least one child
 component.
 
 ```yaml
@@ -33,13 +37,13 @@ spec:
 ```
 
 A child is either defined inline with `spec`, as above, or points at a
-standalone document with `ref` — see [Referencing standalone cards](#referencing-standalone-cards)
+standalone document with `ref` - see [Referencing standalone cards](#referencing-standalone-cards)
 and [Optional references](#optional-references). All attributes are listed in
 the [Attribute Reference](#attribute-reference) below.
 
 Important fields mirror `LayoutPage` but are scoped to a card:
 
-- Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`, `i18nNamespace` (which takes precedence over the deprecated `titleNamespace`). The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values. `titleBusinessUnit` supports inline Markdown and inline HTML, including `<br />` for an explicit line break — see [LayoutPage](/reference/layout-page/#formatting-the-message-and-the-business-unit).
+- Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`, `i18nNamespace` (which takes precedence over the deprecated `titleNamespace`). The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values. `titleBusinessUnit` supports inline Markdown and inline HTML, including `<br />` for an explicit line break - see [LayoutPage](/reference/layout-page/#formatting-the-message-and-the-business-unit).
 - Footer: `footerText` (plain text).
 - Layout: `cardLayout`, `cardCustomTemplate`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
 - Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the card frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner card element.
@@ -136,10 +140,10 @@ LayoutCard children support the same `optional` field as LayoutPage children. Us
 ```yaml
 children:
   - kind: ChartTime
-    ref: mainChart           # Required: fails if missing
+    ref: mainChart # Required: fails if missing
   - kind: Text
     ref: debugInfo
-    optional: true           # Optional: skips gracefully if missing
+    optional: true # Optional: skips gracefully if missing
 ```
 
 See the [LayoutPage optional references](/reference/layout-page/#optional-references) section for details on when to use this field.
@@ -208,14 +212,14 @@ spec:
     - kind: LayoutCard
       spec:
         titleBusinessUnit: "Sales"
-        titleScenarios: inherited-page     # inherits ac1,fc1 from page
-        titleVariances: inherited-page     # inherits dac1_fc1_pos from page
+        titleScenarios: inherited-page # inherits ac1,fc1 from page
+        titleVariances: inherited-page # inherits dac1_fc1_pos from page
         cardLayout: full
         children:
           - kind: Table
             spec:
               dataset: revenue_data
-              scenarios: inherited-closest  # resolves from the card
+              scenarios: inherited-closest # resolves from the card
               variances: inherited-closest
 ```
 
@@ -227,69 +231,69 @@ Child components inside a card can use `inherited-closest` to resolve from the n
 
 ### Common Metadata
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `apiVersion` | string | yes | — | Must be `bino.bi/v1alpha1`. |
-| `kind` | string | yes | — | Must be `LayoutCard`. |
-| `metadata.name` | string | yes | — | Unique identifier. |
-| `metadata.labels` | object | no | — | Key-value pairs for categorization and constraint matching. |
-| `metadata.annotations` | object | no | — | Arbitrary key-value metadata, not used by the system. |
-| `metadata.description` | string | no | — | Free-form description. |
-| `metadata.constraints` | array | no | — | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/). |
-| `metadata.params` | array | no | — | Typed parameters for card reuse, expanded as `${NAME}` in the spec when the card is referenced with `params`. See [LayoutPage Parameters](/reference/layout-page/#layoutpage-parameters). |
+| Attribute              | Type   | Required | Default | Description                                                                                                                                                                               |
+| ---------------------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`           | string | yes      | -       | Must be `bino.bi/v1alpha1`.                                                                                                                                                               |
+| `kind`                 | string | yes      | -       | Must be `LayoutCard`.                                                                                                                                                                     |
+| `metadata.name`        | string | yes      | -       | Unique identifier.                                                                                                                                                                        |
+| `metadata.labels`      | object | no       | -       | Key-value pairs for categorization and constraint matching.                                                                                                                               |
+| `metadata.annotations` | object | no       | -       | Arbitrary key-value metadata, not used by the system.                                                                                                                                     |
+| `metadata.description` | string | no       | -       | Free-form description.                                                                                                                                                                    |
+| `metadata.constraints` | array  | no       | -       | Conditional inclusion rules. See [Constraints](/concepts/constraints-and-scoped-names/).                                                                                                  |
+| `metadata.params`      | array  | no       | -       | Typed parameters for card reuse, expanded as `${NAME}` in the spec when the card is referenced with `params`. See [LayoutPage Parameters](/reference/layout-page/#layoutpage-parameters). |
 
-### Spec Attributes — Title Section
+### Spec Attributes - Title Section
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.titleImage` | string | no | `""` | Name of an [Asset](/reference/asset/) document, or an absolute URL, for the card title image. | `titleImage: "logo"` |
-| `spec.titleBusinessUnit` | string | no | `""` | Business unit name in the card header. Supports [inline Markdown and HTML](/reference/layout-page/#formatting-the-message-and-the-business-unit). | `titleBusinessUnit: "Sales"` |
-| `spec.titleScenarios` | array or string | no | — | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `inherited-page`. | `titleScenarios: ["ac1", "fc1", "pp1"]` |
-| `spec.titleVariances` | array or string | no | — | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, or `inherited-page`. | `titleVariances: ["dpp1_ac1_pos"]` |
-| `spec.titleOrder` | string | no | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-page`. | `titleOrder: ac1` |
-| `spec.titleOrderDirection` | string | no | `asc` | Sort direction. Values: `asc`, `desc`, `inherited-page`. | `titleOrderDirection: desc` |
-| `spec.titleMeasures` | array or string | no | — | Measures displayed in the card header. Array of `{name, unit}` objects or JSON string. | see below |
-| `spec.titleMeasures[].name` | string | yes | — | Measure name. | `name: "Revenue"` |
-| `spec.titleMeasures[].unit` | string | yes | — | Measure unit. | `unit: "mEUR"` |
-| `spec.titleDateStart` | string | no | — | Start date (ISO 8601 date or datetime). | `titleDateStart: 2024-01-01` |
-| `spec.titleDateEnd` | string | no | — | End date (ISO 8601 date or datetime). | `titleDateEnd: 2024-03-31` |
-| `spec.titleDateFormat` | string | no | `none` | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`. | `titleDateFormat: quarter` |
-| `spec.titleDateLink` | string | no | `none` | Date linking style. Values: `avg`, `interval`, `cum`, `start`, `end`, `ytd`, `ytg`, `mat`, `none`. | `titleDateLink: interval` |
-| `spec.titleNamespace` | string | no | — | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children. | `titleNamespace: _system` |
-| `spec.i18nNamespace` | string | no | — | I18n namespace for the card title and, via inheritance, all children (their own `i18nNamespace` wins). Takes precedence over `titleNamespace`. | `i18nNamespace: audited` |
+| Attribute                   | Type            | Required | Default    | Description                                                                                                                                                            | Sample                                  |
+| --------------------------- | --------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `spec.titleImage`           | string          | no       | `""`       | Name of an [Asset](/reference/asset/) document, or an absolute URL, for the card title image.                                                                          | `titleImage: "logo"`                    |
+| `spec.titleBusinessUnit`    | string          | no       | `""`       | Business unit name in the card header. Supports [inline Markdown and HTML](/reference/layout-page/#formatting-the-message-and-the-business-unit).                      | `titleBusinessUnit: "Sales"`            |
+| `spec.titleScenarios`       | array or string | no       | -          | Scenarios displayed in the card header. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `inherited-page`.                                               | `titleScenarios: ["ac1", "fc1", "pp1"]` |
+| `spec.titleVariances`       | array or string | no       | -          | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`, or `inherited-page`.                                                                        | `titleVariances: ["dpp1_ac1_pos"]`      |
+| `spec.titleOrder`           | string          | no       | `category` | Sort order for title elements. Values: `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-page`. | `titleOrder: ac1`                       |
+| `spec.titleOrderDirection`  | string          | no       | `asc`      | Sort direction. Values: `asc`, `desc`, `inherited-page`.                                                                                                               | `titleOrderDirection: desc`             |
+| `spec.titleMeasures`        | array or string | no       | -          | Measures displayed in the card header. Array of `{name, unit}` objects or JSON string.                                                                                 | see below                               |
+| `spec.titleMeasures[].name` | string          | yes      | -          | Measure name.                                                                                                                                                          | `name: "Revenue"`                       |
+| `spec.titleMeasures[].unit` | string          | yes      | -          | Measure unit.                                                                                                                                                          | `unit: "mEUR"`                          |
+| `spec.titleDateStart`       | string          | no       | -          | Start date (ISO 8601 date or datetime).                                                                                                                                | `titleDateStart: 2024-01-01`            |
+| `spec.titleDateEnd`         | string          | no       | -          | End date (ISO 8601 date or datetime).                                                                                                                                  | `titleDateEnd: 2024-03-31`              |
+| `spec.titleDateFormat`      | string          | no       | `none`     | Date display format. Values: `year`, `quarter`, `month`, `week`, `day`, `time`, `auto`, `none`.                                                                        | `titleDateFormat: quarter`              |
+| `spec.titleDateLink`        | string          | no       | `none`     | Date linking style. Values: `avg`, `interval`, `cum`, `start`, `end`, `ytd`, `ytg`, `mat`, `none`.                                                                     | `titleDateLink: interval`               |
+| `spec.titleNamespace`       | string          | no       | -          | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children.                                                                     | `titleNamespace: _system`               |
+| `spec.i18nNamespace`        | string          | no       | -          | I18n namespace for the card title and, via inheritance, all children (their own `i18nNamespace` wins). Takes precedence over `titleNamespace`.                         | `i18nNamespace: audited`                |
 
-### Spec Attributes — Footer
+### Spec Attributes - Footer
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.footerText` | string | no | `""` | Card footer text. | `footerText: "Quarterly overview"` |
+| Attribute         | Type   | Required | Default | Description       | Sample                             |
+| ----------------- | ------ | -------- | ------- | ----------------- | ---------------------------------- |
+| `spec.footerText` | string | no       | `""`    | Card footer text. | `footerText: "Quarterly overview"` |
 
-### Spec Attributes — Card Layout
+### Spec Attributes - Card Layout
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.cardLayout` | string | no | `full` | Grid layout preset. Values: `full`, `split-horizontal`, `split-vertical`, `2x2`, `3x3`, `4x4`, `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`, `custom-template`. | `cardLayout: split-horizontal` |
-| `spec.cardCustomTemplate` | string | no | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `cardLayout: custom-template`. | `cardCustomTemplate: '"a b" "c d"'` |
-| `spec.cardGridGap` | string | no | `"0"` | Gap between grid cells. | `cardGridGap: "0.5rem"` |
-| `spec.cardFitToContent` | boolean | no | `false` | When `true`, the card shrinks to fit its content. When `false` (default), it stretches to fill its parent. Use `false` when the card contains auto-scaling components (e.g. `unitScaling: auto`). | `cardFitToContent: false` |
-| `spec.cardShowBorder` | boolean | no | `true` | Display a border around the card. | `cardShowBorder: true` |
-| `spec.selectedStyle` | string | no | — | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute. | `selectedStyle: corporate-style` |
-| `spec.ruleset` | string | no | — | Name of a [`RuleSet`](/reference/ruleset/) manifest applied to the card title, or `inherited-page` to reuse the surrounding page's rule set. Children inherit it via `inherited-closest`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules` |
+| Attribute                 | Type    | Required | Default       | Description                                                                                                                                                                                                                     | Sample                              |
+| ------------------------- | ------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `spec.cardLayout`         | string  | no       | `full`        | Grid layout preset. Values: `full`, `split-horizontal`, `split-vertical`, `2x2`, `3x3`, `4x4`, `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`, `custom-template`.                                                               | `cardLayout: split-horizontal`      |
+| `spec.cardCustomTemplate` | string  | no       | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `cardLayout: custom-template`.                                                                                                                                                      | `cardCustomTemplate: '"a b" "c d"'` |
+| `spec.cardGridGap`        | string  | no       | `"0"`         | Gap between grid cells.                                                                                                                                                                                                         | `cardGridGap: "0.5rem"`             |
+| `spec.cardFitToContent`   | boolean | no       | `false`       | When `true`, the card shrinks to fit its content. When `false` (default), it stretches to fill its parent. Use `false` when the card contains auto-scaling components (e.g. `unitScaling: auto`).                               | `cardFitToContent: false`           |
+| `spec.cardShowBorder`     | boolean | no       | `true`        | Display a border around the card.                                                                                                                                                                                               | `cardShowBorder: true`              |
+| `spec.selectedStyle`      | string  | no       | -             | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                      | `selectedStyle: corporate-style`    |
+| `spec.ruleset`            | string  | no       | -             | Name of a [`RuleSet`](/reference/ruleset/) manifest applied to the card title, or `inherited-page` to reuse the surrounding page's rule set. Children inherit it via `inherited-closest`. Maps to the `ruleset` HTML attribute. | `ruleset: corporate-rules`          |
 
-### Spec Attributes — Children
+### Spec Attributes - Children
 
-| Attribute | Type | Required | Default | Description | Sample |
-|-----------|------|----------|---------|-------------|--------|
-| `spec.children` | array | no | — | Child components rendered in the card slots. A standalone `LayoutCard` document may omit them while scaffolding (the `card-layout-slots-used` lint rule warns when a used card does not fill its slots); a card defined inline as a child needs at least one entry. | see [Card inside a page](#card-inside-a-page) |
-| `spec.children[].kind` | string | yes | — | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `LayoutCard`, `Image`. Must match the kind of the referenced document when using `ref`. | `kind: ChartTime` |
-| `spec.children[].ref` | string | no | — | Name (`metadata.name`) of a standalone document used as the base spec. Required when `spec` is omitted. `LayoutPage` cannot be referenced. | `ref: revenue_card` |
-| `spec.children[].spec` | object | no | — | Component specification. Required for inline children (without `ref`); with `ref`, the fields given here override the referenced spec. | see [Card inside a page](#card-inside-a-page) |
-| `spec.children[].params` | object | no | — | Parameter values (string map) passed to the referenced document and expanded as `${NAME}` in its spec. Only valid together with `ref`. See [Reference with params](/reference/layout-page/#reference-with-params). | `params: { REGION: "US" }` |
-| `spec.children[].optional` | boolean | no | `false` | When `true` and the `ref` is missing, the child is skipped instead of failing. See [Optional references](#optional-references). | `optional: true` |
-| `spec.children[].metadata` | object | no | — | Metadata for an inline child: `name`, `description`, `constraints`. | see [Inline child constraints](#inline-child-constraints) |
-| `spec.children[].metadata.name` | string | no | — | Name for the inline child, used in error messages and for identification. | `name: revenue_chart` |
-| `spec.children[].metadata.description` | string | no | — | Description of the child. Documentation only; not rendered. | `description: "Revenue trend"` |
-| `spec.children[].metadata.constraints` | array | no | — | Conditional inclusion rules for the child. See [Inline child constraints](#inline-child-constraints). | `constraints: ["mode==preview"]` |
+| Attribute                              | Type    | Required | Default | Description                                                                                                                                                                                                                                                         | Sample                                                    |
+| -------------------------------------- | ------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `spec.children`                        | array   | no       | -       | Child components rendered in the card slots. A standalone `LayoutCard` document may omit them while scaffolding (the `card-layout-slots-used` lint rule warns when a used card does not fill its slots); a card defined inline as a child needs at least one entry. | see [Card inside a page](#card-inside-a-page)             |
+| `spec.children[].kind`                 | string  | yes      | -       | Component type. Values: `Text`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `LayoutCard`, `Image`. Must match the kind of the referenced document when using `ref`.                                       | `kind: ChartTime`                                         |
+| `spec.children[].ref`                  | string  | no       | -       | Name (`metadata.name`) of a standalone document used as the base spec. Required when `spec` is omitted. `LayoutPage` cannot be referenced.                                                                                                                          | `ref: revenue_card`                                       |
+| `spec.children[].spec`                 | object  | no       | -       | Component specification. Required for inline children (without `ref`); with `ref`, the fields given here override the referenced spec.                                                                                                                              | see [Card inside a page](#card-inside-a-page)             |
+| `spec.children[].params`               | object  | no       | -       | Parameter values (string map) passed to the referenced document and expanded as `${NAME}` in its spec. Only valid together with `ref`. See [Reference with params](/reference/layout-page/#reference-with-params).                                                  | `params: { REGION: "US" }`                                |
+| `spec.children[].optional`             | boolean | no       | `false` | When `true` and the `ref` is missing, the child is skipped instead of failing. See [Optional references](#optional-references).                                                                                                                                     | `optional: true`                                          |
+| `spec.children[].metadata`             | object  | no       | -       | Metadata for an inline child: `name`, `description`, `constraints`.                                                                                                                                                                                                 | see [Inline child constraints](#inline-child-constraints) |
+| `spec.children[].metadata.name`        | string  | no       | -       | Name for the inline child, used in error messages and for identification.                                                                                                                                                                                           | `name: revenue_chart`                                     |
+| `spec.children[].metadata.description` | string  | no       | -       | Description of the child. Documentation only; not rendered.                                                                                                                                                                                                         | `description: "Revenue trend"`                            |
+| `spec.children[].metadata.constraints` | array   | no       | -       | Conditional inclusion rules for the child. See [Inline child constraints](#inline-child-constraints).                                                                                                                                                               | `constraints: ["mode==preview"]`                          |
 
 #### Title measures
 
@@ -299,4 +303,3 @@ spec:
     - name: "Revenue"
       unit: "mEUR"
 ```
-

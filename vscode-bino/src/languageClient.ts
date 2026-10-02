@@ -38,7 +38,7 @@ export async function startLanguageClient(
     if (!(await probeLspCapability(binPath))) {
         const action = await vscode.window.showWarningMessage(
             'This bino binary does not support the language server (`bino lsp`). ' +
-                'Update bino to get in-editor completion, hover, navigation, and diagnostics.',
+            'Update bino to get in-editor completion, hover, navigation, and diagnostics.',
             'Update Instructions'
         );
         if (action === 'Update Instructions') {
@@ -48,7 +48,7 @@ export async function startLanguageClient(
     }
 
     // An Executable communicates over the child process's stdin/stdout by
-    // default. Do NOT set `transport: TransportKind.stdio` — that appends a
+    // default. Do NOT set `transport: TransportKind.stdio` - that appends a
     // `--stdio` arg (a client convention) which `bino lsp` does not require.
     const serverOptions: ServerOptions = {
         command: binPath,

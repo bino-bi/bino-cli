@@ -1,5 +1,5 @@
 /**
- * IBCS vocabulary shared by the bespoke designer widgets — mirrored from the
+ * IBCS vocabulary shared by the bespoke designer widgets - mirrored from the
  * engine's `bn-template-engine/src/utils/constants.ts` so the GUI offers exactly
  * the slots/enums the renderer understands. Kept here (not re-fetched per widget)
  * so scenario, variance, and stack controls cannot drift from one another.
@@ -98,8 +98,8 @@ export function parseVarianceToken(token: string): VarianceToken | undefined {
 }
 
 const SENTIMENT_PHRASE: Record<string, string> = {
-    pos: 'positive sentiment — more is better',
-    neg: 'negative sentiment — more is worse',
+    pos: 'positive sentiment - more is better',
+    neg: 'negative sentiment - more is worse',
     neu: 'neutral sentiment',
 };
 

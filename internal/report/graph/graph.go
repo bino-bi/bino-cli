@@ -129,7 +129,7 @@ func (g *Graph) NodesByFile(files map[string]struct{}) []*Node {
 // AffectedArtefacts walks reverse-dependency edges from each seed and returns
 // the names of all ReportArtefact and DocumentArtefact nodes that
 // transitively depend on any seed (including seeds that are themselves
-// artefacts). Names are sorted and de-duplicated. Cost is O(N+E) per call —
+// artefacts). Names are sorted and de-duplicated. Cost is O(N+E) per call -
 // the reverse-edge index is built on demand because each preview refresh
 // constructs a fresh Graph.
 func (g *Graph) AffectedArtefacts(seeds []*Node) (reports, docs []string) {

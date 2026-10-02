@@ -29,7 +29,7 @@ func Render(name string, src []byte, data any) ([]byte, error) {
 }
 
 // RenderTree walks srcFS (the render root), renders every file's path name and
-// — unless the file matches a verbatim/binary glob — its contents, writing the
+// - unless the file matches a verbatim/binary glob - its contents, writing the
 // results under destDir. It returns the created relative paths, sorted. The same
 // path serves both built-in (embed.FS) and remote (os.DirFS) templates.
 func RenderTree(srcFS fs.FS, manifest *ProjectTemplate, destDir string, data any, force bool) ([]string, error) {

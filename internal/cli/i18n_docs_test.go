@@ -15,7 +15,7 @@ var scenarioRangeToken = regexp.MustCompile(`^global\.(ac|pp|fc|pl)[23]$`)
 // i18nReferenceDoc is the reference page that documents the built-in token
 // vocabulary. It is the fourth hand-maintained copy of the key list (after the
 // engine bundles, defaultI18nTokens and the JSON schema), and the one that
-// silently fell behind — it covered 30 of 78 tokens before this test existed.
+// silently fell behind - it covered 30 of 78 tokens before this test existed.
 const i18nReferenceDoc = "../../docs/src/content/docs/reference/internationalization.mdx"
 
 // sharedXYTokenSuffixes are documented once, by suffix, in a table shared

@@ -27,7 +27,7 @@ func printCompatFinding(out *Output, projectRoot string, f lint.Finding) {
 // against SupportedEngineRanges from a non-downloading source: the explicit
 // pin in bino.toml if set, otherwise the latest locally cached version.
 // Returns "" with no error when nothing is resolvable (e.g., no engine
-// cached and no pin) — callers should treat that as "skip the check".
+// cached and no pin) - callers should treat that as "skip the check".
 func resolveEngineVersionForCompat(pinnedVersion string) string {
 	if pinnedVersion != "" {
 		return pinnedVersion

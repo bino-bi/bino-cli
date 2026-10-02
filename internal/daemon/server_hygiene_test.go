@@ -42,7 +42,7 @@ func TestBuildRejectsMalformedBody(t *testing.T) {
 	assertJSONError(t, w)
 }
 
-// The daemon API must answer errors as JSON — handleColumns used http.Error,
+// The daemon API must answer errors as JSON - handleColumns used http.Error,
 // which stamps text/plain onto a JSON-shaped body.
 func TestColumnsMissingNameErrorIsJSON(t *testing.T) {
 	srv := newTestServer(t)
@@ -88,7 +88,7 @@ func assertJSONError(t *testing.T, w *httptest.ResponseRecorder) {
 }
 
 // Regression: Documents()/Diagnostics() documented "returns a copy" but
-// returned the internal slice — an append by one caller wrote into the
+// returned the internal slice - an append by one caller wrote into the
 // backing array another goroutine was reading.
 func TestStateAccessorsReturnCopies(t *testing.T) {
 	s := &State{

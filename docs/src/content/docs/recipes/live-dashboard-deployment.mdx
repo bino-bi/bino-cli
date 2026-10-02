@@ -14,10 +14,10 @@ import { Aside } from "@astrojs/starlight/components";
 ## Prerequisites
 
 - A bino report bundle with at least one working `ReportArtefact`.
-- The container image — see [Running bino in Docker](/guides/docker/).
+- The container image - see [Running bino in Docker](/guides/docker/).
 - A reverse proxy for anything reachable beyond your laptop (see [TLS and access control](#tls-and-access-control)).
 
-`bino serve` renders HTML, never PDFs, so the `-slim` image variant is enough — it saves about 700 MB
+`bino serve` renders HTML, never PDFs, so the `-slim` image variant is enough - it saves about 700 MB
 per pod by leaving Chromium out.
 
 ## Define the LiveReportArtefact
@@ -66,9 +66,10 @@ A root route `"/"` is required, and every `artefact` must name a `ReportArtefact
 bundle. See the [LiveReportArtefact reference](/reference/live-report-artefact/) for all parameter types.
 
 <Aside type="note">
-Give every parameter a `default` or `optional: true` in a deployed dashboard. A parameter with
-neither is required, and a request that omits it gets an HTML form asking for the value instead of a
-report — fine for a human with a browser, confusing for a link someone shared.
+  Give every parameter a `default` or `optional: true` in a deployed dashboard.
+  A parameter with neither is required, and a request that omits it gets an HTML
+  form asking for the value instead of a report - fine for a human with a
+  browser, confusing for a link someone shared.
 </Aside>
 
 ## Run it with docker run
@@ -84,9 +85,10 @@ docker run --rm \
 ```
 
 <Aside type="caution">
-`--addr 0.0.0.0:8080` is not optional. `bino serve` binds `127.0.0.1` by default, which is the
-container's own loopback, so `-p 8080:8080` would publish a port with nothing behind it. `--addr` is
-also the one serve flag that cannot be set from `bino.toml` — it must be on the command line.
+  `--addr 0.0.0.0:8080` is not optional. `bino serve` binds `127.0.0.1` by
+  default, which is the container's own loopback, so `-p 8080:8080` would
+  publish a port with nothing behind it. `--addr` is also the one serve flag
+  that cannot be set from `bino.toml` - it must be on the command line.
 </Aside>
 
 Confirm it is up:
@@ -96,7 +98,7 @@ curl -fsS http://localhost:8080/healthz
 ```
 
 The bundle must stay mounted and readable for the whole life of the container. `serve` reloads
-manifests from disk whenever a request misses the render cache — this is not a build-once,
+manifests from disk whenever a request misses the render cache - this is not a build-once,
 ship-static model.
 
 ### Move flags into bino.toml
@@ -165,9 +167,9 @@ spec:
 ```
 
 <Aside type="note">
-The first request after startup is slow: `serve` pre-renders every route once to enumerate the assets
-it needs. Budget for that with `start_period` in a Compose `healthcheck`, and with a `startupProbe` in
-Kubernetes.
+  The first request after startup is slow: `serve` pre-renders every route once
+  to enumerate the assets it needs. Budget for that with `start_period` in a
+  Compose `healthcheck`, and with a `startupProbe` in Kubernetes.
 </Aside>
 
 ## Kubernetes
@@ -175,7 +177,7 @@ Kubernetes.
 ### Bake the bundle into an image
 
 Because `serve` reads manifests from disk at request time, the bundle has to be present in every pod
-for the pod's whole life. The cleanest way to do that is a two-line derived image — immutable,
+for the pod's whole life. The cleanest way to do that is a two-line derived image - immutable,
 identical across replicas, and no ReadWriteMany volume:
 
 ```dockerfile
@@ -190,7 +192,7 @@ docker push registry.example.com/reports/sales-dashboard:2026-07-28
 ```
 
 A ConfigMap works for a bundle of a handful of small manifests, and a git-sync sidecar works if you
-want the bundle to track a branch — but both reintroduce the question of what a given pod is serving
+want the bundle to track a branch - but both reintroduce the question of what a given pod is serving
 at any moment. A tagged image answers it.
 
 ### Deployment
@@ -273,9 +275,9 @@ spec:
 ```
 
 <Aside type="note">
-`runAsGroup: 0` matters. The image's baked caches under `/opt/bino/.bino` are owned by uid 1000 with
-group 0 and group-readable, which is what lets a cluster-assigned uid still find the template engine
-and the DuckDB extensions.
+  `runAsGroup: 0` matters. The image's baked caches under `/opt/bino/.bino` are
+  owned by uid 1000 with group 0 and group-readable, which is what lets a
+  cluster-assigned uid still find the template engine and the DuckDB extensions.
 </Aside>
 
 ### Service
@@ -301,21 +303,21 @@ kubectl create secret generic sales-dashboard-db \
   --from-literal=password="$POSTGRES_PASSWORD"
 ```
 
-Environment variables are read at request time, not only at startup — `${VAR}` substitution and the
+Environment variables are read at request time, not only at startup - `${VAR}` substitution and the
 `*FromEnv` fields of a `ConnectionSecret` are resolved per render. Everything the report needs to
 reach its data must be in the container environment, not just in the build environment.
 
 ### About the probes
 
 `GET /healthz` returns `200` with the body `ok`. It is unauthenticated and it does not render a
-report — it tells you the process is up and the HTTP mux is serving, nothing more. That makes it the
+report - it tells you the process is up and the HTTP mux is serving, nothing more. That makes it the
 right target for all three probes and the wrong tool for "is my data pipeline healthy".
 
-- **`startupProbe` — be generous.** On boot, `serve` renders every route once to enumerate assets. A
+- **`startupProbe` - be generous.** On boot, `serve` renders every route once to enumerate assets. A
   bundle with a dozen routes over a slow warehouse can take minutes. The example allows
   `60 × 5s = 5 minutes`; measure your own boot and add headroom. Liveness and readiness do not run
   until the startup probe passes, so a generous budget costs nothing at steady state.
-- **`livenessProbe` — never point it at a report route.** A slow render would trip the probe and
+- **`livenessProbe` - never point it at a report route.** A slow render would trip the probe and
   restart the pod mid-request, making the next render slower still.
 - **Data-freshness checks belong outside.** If you need to know that a route actually renders, use an
   external synthetic check against a route whose parameters all have defaults.
@@ -323,12 +325,13 @@ right target for all three probes and the wrong tool for "is my data pipeline he
 ### Scaling
 
 <Aside type="caution">
-Renders are serialised by a process-wide lock: one pod renders one report at a time, no matter how
-many CPUs it has. Scale out with `replicas`, not with a bigger CPU limit.
+  Renders are serialised by a process-wide lock: one pod renders one report at a
+  time, no matter how many CPUs it has. Scale out with `replicas`, not with a
+  bigger CPU limit.
 </Aside>
 
 - Concurrency equals replica count. Two replicas serve two simultaneous renders.
-- Each replica keeps its own render cache — an LRU of 100 entries keyed by the query parameters — so
+- Each replica keeps its own render cache - an LRU of 100 entries keyed by the query parameters - so
   the hit rate falls as you add replicas. If your users hit the same parameter combinations
   repeatedly, sticky routing recovers most of it:
 
@@ -343,9 +346,9 @@ many CPUs it has. Scale out with `replicas`, not with a bigger CPU limit.
 ### TLS and access control
 
 <Aside type="caution">
-`bino serve` has no authentication, no TLS, and no CORS handling. Anything that can reach the port can
-read every route and every query-parameter combination of your report. Never expose it directly to the
-internet.
+  `bino serve` has no authentication, no TLS, and no CORS handling. Anything
+  that can reach the port can read every route and every query-parameter
+  combination of your report. Never expose it directly to the internet.
 </Aside>
 
 Terminate TLS and enforce authentication in a reverse proxy in front of the Service:
@@ -381,8 +384,9 @@ On a single host, Caddy, nginx, or Traefik in front of the Compose service does 
 `NetworkPolicy` so only the ingress controller can reach port 8080 directly.
 
 <Aside type="note">
-`/healthz` is unauthenticated by design so kubelet can reach it. It returns nothing but `ok`, so
-leaving it open is harmless — but do not treat its presence as a secret.
+  `/healthz` is unauthenticated by design so kubelet can reach it. It returns
+  nothing but `ok`, so leaving it open is harmless - but do not treat its
+  presence as a secret.
 </Aside>
 
 ### Refreshing the data
@@ -403,11 +407,11 @@ a `pre-serve` hook if a pod needs to warm data before it takes traffic:
 pre-serve = ["./scripts/warmup.sh"]
 ```
 
-Hooks run with `BINO_MODE=serve`, `BINO_LISTEN_ADDR`, and `BINO_LIVE_ARTEFACT` set — see [Hooks](/concepts/hooks/).
+Hooks run with `BINO_MODE=serve`, `BINO_LISTEN_ADDR`, and `BINO_LIVE_ARTEFACT` set - see [Hooks](/concepts/hooks/).
 
 ## Installing the dashboard as an app
 
-If the `LiveReportArtefact` defines [`spec.pwa`](/reference/live-report-artefact/#specpwa), the deployed dashboard is installable as a Progressive Web App straight from the browser. Installation requires HTTPS, which the reverse proxy above already provides — see [bino serve: Progressive Web App](/cli/serve/#progressive-web-app) for what is served and how offline behavior works.
+If the `LiveReportArtefact` defines [`spec.pwa`](/reference/live-report-artefact/#specpwa), the deployed dashboard is installable as a Progressive Web App straight from the browser. Installation requires HTTPS, which the reverse proxy above already provides - see [bino serve: Progressive Web App](/cli/serve/#progressive-web-app) for what is served and how offline behavior works.
 
 Two deployment properties matter:
 
@@ -416,15 +420,15 @@ Two deployment properties matter:
 
 ## Troubleshooting
 
-| Symptom                                       | Cause                                                   | Fix                                                              |
-| --------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| Connection refused from outside the container | serve bound `127.0.0.1`.                                 | Pass `--addr 0.0.0.0:8080`; it cannot come from `bino.toml`.       |
-| `--live flag is required`                     | No artefact named.                                       | Pass `--live <name>` or set `live` under `[serve.args]`.           |
-| Pod restarts in a loop before serving traffic | `startupProbe` budget shorter than the boot pre-render.  | Raise `failureThreshold`.                                          |
-| A route shows a form instead of the report    | A required query parameter has no value.                 | Give it a `default` or `optional: true`, or pass it in the URL.    |
-| Renders queue up under load                   | Renders are serialised per process.                      | Add replicas.                                                      |
-| OOMKilled                                     | A large result set exceeded the memory limit.            | Raise the limit and lower `BNR_MAX_QUERY_ROWS`.                    |
-| Data never changes                            | The render cache answered the repeat request.            | Restart the pod, or roll a new image tag.                          |
+| Symptom                                       | Cause                                                   | Fix                                                             |
+| --------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| Connection refused from outside the container | serve bound `127.0.0.1`.                                | Pass `--addr 0.0.0.0:8080`; it cannot come from `bino.toml`.    |
+| `--live flag is required`                     | No artefact named.                                      | Pass `--live <name>` or set `live` under `[serve.args]`.        |
+| Pod restarts in a loop before serving traffic | `startupProbe` budget shorter than the boot pre-render. | Raise `failureThreshold`.                                       |
+| A route shows a form instead of the report    | A required query parameter has no value.                | Give it a `default` or `optional: true`, or pass it in the URL. |
+| Renders queue up under load                   | Renders are serialised per process.                     | Add replicas.                                                   |
+| OOMKilled                                     | A large result set exceeded the memory limit.           | Raise the limit and lower `BNR_MAX_QUERY_ROWS`.                 |
+| Data never changes                            | The render cache answered the repeat request.           | Restart the pod, or roll a new image tag.                       |
 
 ---
 

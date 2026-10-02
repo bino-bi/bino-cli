@@ -1,5 +1,5 @@
 ; bino CLI Windows Installer
-; Built with Inno Setup 6.x — https://jrsoftware.org/isinfo.php
+; Built with Inno Setup 6.x - https://jrsoftware.org/isinfo.php
 ;
 ; Build:
 ;   iscc /DMyAppVersion=1.0.0 installer\bino-setup.iss
@@ -27,7 +27,7 @@ AppSupportURL={#MyAppURL}
 DefaultDirName={localappdata}\bino
 DisableProgramGroupPage=yes
 LicenseFile=LICENCE
-; SourceDir is relative to this .iss file — ".." points to the repo root.
+; SourceDir is relative to this .iss file - ".." points to the repo root.
 SourceDir=..
 OutputDir=dist
 OutputBaseFilename=bino-cli_Windows_x86_64_setup

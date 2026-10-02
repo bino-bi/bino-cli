@@ -304,7 +304,7 @@ func newLSPKindsCommand() *cobra.Command {
 
 // lspCreateResult reports the outcome of `lsp-helper create`. On success it
 // names the file written (and whether it was created or appended); on a schema
-// failure it carries the per-issue diagnostics and writes nothing — mirroring
+// failure it carries the per-issue diagnostics and writes nothing - mirroring
 // the edit command so the GUI can surface the diagnostics instead of opening a
 // non-existent file.
 type lspCreateResult struct {
@@ -321,7 +321,7 @@ func newLSPCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <directory>",
 		Short: "Create a new manifest of any kind from a spec object",
-		Long:  "Reads a request {kind, name, spec, description?, file?} (from --payload-file or stdin), builds the apiVersion/kind/metadata/spec envelope, validates it against the schema, and writes it atomically — auto-placing the file by project convention unless `file` is given. A non-empty diagnostics list means the manifest was rejected and nothing was written. Used by the Design-mode Add-element palette.",
+		Long:  "Reads a request {kind, name, spec, description?, file?} (from --payload-file or stdin), builds the apiVersion/kind/metadata/spec envelope, validates it against the schema, and writes it atomically - auto-placing the file by project convention unless `file` is given. A non-empty diagnostics list means the manifest was rejected and nothing was written. Used by the Design-mode Add-element palette.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			payloadJSON, err := readFileOrStdin(cmd, payloadFile)

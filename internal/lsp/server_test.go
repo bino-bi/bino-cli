@@ -18,7 +18,7 @@ import (
 	"bino.bi/bino/internal/logx"
 )
 
-// fakeBackend is a canned Backend for handler tests — no daemon, no DuckDB.
+// fakeBackend is a canned Backend for handler tests - no daemon, no DuckDB.
 type fakeBackend struct {
 	schema  json.RawMessage
 	index   []IndexDoc
@@ -284,7 +284,7 @@ func (c *capturingClient) count() int {
 // TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean guards the
 // live-diagnostics gap: ValidateProject (lint/env-var/engine-compat, whole
 // project on disk) must actually reach the editor, and must not be clobbered
-// by — nor clobber — the per-keystroke ValidateDraft publishes, since
+// by - nor clobber - the per-keystroke ValidateDraft publishes, since
 // PublishDiagnostics fully replaces a document's diagnostic set per call.
 func TestRefreshProjectDiagnostics_MergesWithDraftAndClearsWhenClean(t *testing.T) {
 	dir := t.TempDir()
@@ -370,7 +370,7 @@ func TestCompletion_NestedChildKind(t *testing.T) {
 }
 
 // TestCompletion_NestedChildKindEmpty: the same position with nothing typed
-// yet (`- kind: `) — the exact "No suggestions." state.
+// yet (`- kind: `) - the exact "No suggestions." state.
 func TestCompletion_NestedChildKindEmpty(t *testing.T) {
 	s := newRealSchemaServer(t)
 	doc := "kind: LayoutPage\nmetadata:\n  name: page\nspec:\n  children:\n    - kind: \n"
@@ -410,7 +410,7 @@ func TestCompletion_ChildKeys(t *testing.T) {
 	}
 }
 
-// TestCompletion_RootAndMetadataKeys: key completion is depth-aware — the
+// TestCompletion_RootAndMetadataKeys: key completion is depth-aware - the
 // document root offers apiVersion/metadata/spec, and metadata offers its own
 // fields, never the component's spec fields.
 func TestCompletion_RootAndMetadataKeys(t *testing.T) {
@@ -482,7 +482,7 @@ func TestCompletion_RequiredFirstWithDetail(t *testing.T) {
 	}
 }
 
-// TestHover_NestedChildKindAndKey: hover works at depth — a child `kind:`
+// TestHover_NestedChildKindAndKey: hover works at depth - a child `kind:`
 // value explains the component slot, a spec key shows its schema metadata.
 func TestHover_NestedChildKindAndKey(t *testing.T) {
 	s := newRealSchemaServer(t)
@@ -715,7 +715,7 @@ func (b *slowSchemaBackend) MergedSchema(ctx context.Context) (json.RawMessage, 
 }
 
 // TestCompletion_ColdSchemaIncomplete: a failed schema fetch must yield an
-// incomplete list — never a cacheable complete empty result — so the client
+// incomplete list - never a cacheable complete empty result - so the client
 // re-queries once the backend warms instead of showing "No suggestions." for
 // the rest of the typing session.
 func TestCompletion_ColdSchemaIncomplete(t *testing.T) {
@@ -855,7 +855,7 @@ func projectDiagServer(t *testing.T, code string) (*Server, *capturingClient, st
 
 // TestPublishFile_DedupesDraftCoveredProjectDiags: while a draft entry exists
 // for an open file, project diagnostics of the classes ValidateDraft
-// reproduces (schema-validation etc.) must be dropped from the merge — an
+// reproduces (schema-validation etc.) must be dropped from the merge - an
 // open-and-saved invalid file otherwise shows every schema error twice.
 func TestPublishFile_DedupesDraftCoveredProjectDiags(t *testing.T) {
 	s, client, file := projectDiagServer(t, "schema-validation")

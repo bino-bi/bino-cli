@@ -16,7 +16,7 @@ import (
 //
 // It is the build-side counterpart of the preview inspector: the same snapshot
 // shape, analyzed by the same package, so a report that is clean in the
-// inspector is clean in CI. Nothing here can fail a build — a capture is extra
+// inspector is clean in CI. Nothing here can fail a build - a capture is extra
 // information about a PDF that has already rendered.
 type layoutStateCapture struct {
 	// SnapshotPath is where the raw capture is written.

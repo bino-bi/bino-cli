@@ -272,7 +272,7 @@ func buildErrorPage(message, hint string) []byte {
 		hint = "Ensure at least one LayoutPage is defined and referenced by your report artefact."
 	}
 	var b strings.Builder
-	// Standalone page — BinoBI DS values inlined (gray-50/700/900, gray-200 border, bad red, DS lg shadow).
+	// Standalone page - BinoBI DS values inlined (gray-50/700/900, gray-200 border, bad red, DS lg shadow).
 	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>bino preview</title>\n  <link rel=\"icon\" type=\"image/png\" href=\"/__bino/assets/favicon.png\">\n  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif; background:#f6f8f9; color:#333c41; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; } bn-context { display:flex; align-items:center; justify-content:center; width:100%; } .card { background:#fff; border:1px solid #e0e6e9; border-top:3px solid #c0392b; border-radius:16px; padding:2rem; max-width:520px; box-shadow:0 12px 28px rgba(17, 22, 26, 0.10), 0 4px 10px rgba(17, 22, 26, 0.05);} h1 { margin-top:0; font-size:1.5rem; color:#11161a;} p { line-height:1.5; } </style>\n</head>\n<body>\n  <bn-context>\n    <div class=\"card\">\n      <h1>Cannot render preview</h1>\n      <p>")
 	b.WriteString(html.EscapeString(message))
 	b.WriteString("</p>\n      <p>")
@@ -316,13 +316,13 @@ func withPreviewStyles(doc []byte) []byte {
 }
 
 // cssLengthPattern accepts the margin lengths the preview mirrors into CSS
-// custom properties. Anything else falls back to the Chrome print defaults —
+// custom properties. Anything else falls back to the Chrome print defaults -
 // an unvalidated value would poison the whole var() declaration.
 var cssLengthPattern = regexp.MustCompile(`^\d+(\.\d+)?(mm|cm|in|px)$`)
 
 // withDocumentPreviewMeta injects page-geometry CSS custom properties derived
 // from the DocumentArtefact spec as an inline style on the <bn-context>
-// element (not in <head>) so they survive — and update through — the
+// element (not in <head>) so they survive - and update through - the
 // attribute sync performed by swapContext on SSE content morphs. When the
 // built PDF will render a header/footer, the element is also marked with
 // data-bino-doc-hf so preview.css can show placeholder bands sized by the
@@ -384,7 +384,7 @@ func withPreviewContextStyles(ctx []byte) []byte {
 }
 
 // docSourceCount resolves a DocumentArtefact's markdown sources and returns
-// the file count — the chapter count shown in preview chrome. Returns 0 when
+// the file count - the chapter count shown in preview chrome. Returns 0 when
 // resolution fails (missing files, bad globs) so callers can omit it.
 func docSourceCount(docArt config.DocumentArtefact) int {
 	files, err := mdscan.ResolveSourceFiles(filepath.Dir(docArt.Document.File), docArt.Spec.Sources)
@@ -405,7 +405,7 @@ var emptyStateMarker = []byte("<section class='empty-state'>")
 // present) that section is replaced with a docs-aware message plus the list;
 // otherwise the list is appended before </bn-context>. The hrefs are
 // relative ("doc/<name>") so they survive reverse-proxy <base> prefixes.
-// No-op when docArts is empty — bundles without documents are untouched.
+// No-op when docArts is empty - bundles without documents are untouched.
 func withAllPagesDocuments(ctx []byte, docArts []config.DocumentArtefact) []byte {
 	if len(docArts) == 0 {
 		return ctx

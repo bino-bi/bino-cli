@@ -6,7 +6,7 @@ name: Prepare release
 #
 # Why a dedicated step: the CLI version is the git tag (injected via ldflags, no
 # version file) and the VS Code extension is stamped at publish time by
-# `vsce publish <version>`. The Claude plugin has neither — it is consumed
+# `vsce publish <version>`. The Claude plugin has neither - it is consumed
 # directly from git (marketplace `source: ./claude-plugin`), so the version users
 # see is whatever plugin.json / marketplace.json hold at the released ref. This
 # job writes that version in, commits it to main, and pushes the tag.
@@ -35,8 +35,8 @@ jobs:
           egress-policy: audit
 
       # The default GITHUB_TOKEN (contents: write) pushes the commit and tag. The
-      # tag push alone will not start the Release workflow — a tag pushed by
-      # GITHUB_TOKEN does not fire `on: push: tags` — so the final step triggers
+      # tag push alone will not start the Release workflow - a tag pushed by
+      # GITHUB_TOKEN does not fire `on: push: tags` - so the final step triggers
       # it explicitly via workflow_dispatch, which IS allowed for GITHUB_TOKEN.
       - name: Checkout main
         uses: actions/checkout@v7

@@ -69,7 +69,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
       // Server completed a refresh but didn't broadcast for this view.
       // On selective refreshes that's expected (nothing this view depends
       // on changed); genuine render failures arrive as refresh-error
-      // events. Log for debugging only — no toolbar pill.
+      // events. Log for debugging only - no toolbar pill.
       if (!matched) {
         console.warn('bn preview: refresh did not include this view', normalizedPath, 'broadcast paths:', paths);
         document.dispatchEvent(new CustomEvent('bn-preview:no-payload', { detail: { path: normalizedPath, broadcastPaths: paths } }));

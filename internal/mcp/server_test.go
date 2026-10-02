@@ -123,7 +123,7 @@ func callToolJSON(t *testing.T, cs *mcpsdk.ClientSession, name string, args map[
 func TestResourcesReadable(t *testing.T) {
 	cs := newTestClient(t)
 
-	// bino://schema — full merged schema.
+	// bino://schema - full merged schema.
 	var merged map[string]any
 	if err := json.Unmarshal([]byte(readResourceText(t, cs, "bino://schema")), &merged); err != nil {
 		t.Fatalf("schema not JSON: %v", err)
@@ -132,7 +132,7 @@ func TestResourcesReadable(t *testing.T) {
 		t.Error("merged schema missing properties")
 	}
 
-	// bino://schema/Table — built-in kind, must be self-contained (carry $defs).
+	// bino://schema/Table - built-in kind, must be self-contained (carry $defs).
 	var tableSchema map[string]any
 	if err := json.Unmarshal([]byte(readResourceText(t, cs, "bino://schema/Table")), &tableSchema); err != nil {
 		t.Fatalf("table schema not JSON: %v", err)
@@ -141,7 +141,7 @@ func TestResourcesReadable(t *testing.T) {
 		t.Error("Table schema not self-contained: missing $defs")
 	}
 
-	// bino://documents — the project index.
+	// bino://documents - the project index.
 	var docs daemon.IndexResult
 	if err := json.Unmarshal([]byte(readResourceText(t, cs, "bino://documents")), &docs); err != nil {
 		t.Fatalf("documents not JSON: %v", err)
@@ -328,7 +328,7 @@ func TestGetColumnsReturnsResult(t *testing.T) {
 	if out.Name != "revenue_by_region" {
 		t.Errorf("name = %q", out.Name)
 	}
-	// Either columns resolved or a structured error was returned — both prove the
+	// Either columns resolved or a structured error was returned - both prove the
 	// tool plumbing works without a protocol-level failure.
 	if len(out.Columns) == 0 && out.Error == "" {
 		t.Error("get_columns returned neither columns nor error")

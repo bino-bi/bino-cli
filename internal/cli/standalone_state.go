@@ -13,7 +13,7 @@ import (
 // loadStandaloneState builds a project ManagedState with plugins loaded, shared
 // by the standalone `bino mcp` and `bino lsp` paths so the two cannot drift. The
 // returned cleanup closes the state and shuts plugins down; the caller decides
-// when to Refresh/Watch. Engine compatibility is intentionally not checked —
+// when to Refresh/Watch. Engine compatibility is intentionally not checked -
 // introspection should work regardless.
 func loadStandaloneState(ctx context.Context, logger logx.Logger, projectRoot string) (managed *daemon.ManagedState, reg *plugin.PluginRegistry, cleanup func(), err error) {
 	projectCfg, err := pathutil.LoadProjectConfig(projectRoot)

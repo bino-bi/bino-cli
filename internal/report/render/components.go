@@ -465,7 +465,7 @@ func keepBoundData(refs map[string]bool, sets []dataset.Result, sources []dataso
 //
 // Duplicate names (which can happen when manifests define multiple
 // constraint-gated variants and the caller didn't filter them) collapse to a
-// single element — last definition wins, matching DuckDB cache write order.
+// single element - last definition wins, matching DuckDB cache write order.
 // In url mode the duplicate would otherwise race in the browser:
 // disconnectedCallback on one instance drops the AlaSQL table and aborts the
 // in-flight fetch of the other.
@@ -570,7 +570,7 @@ func buildDataURL(baseURL, kind, name, hash string) string {
 // dedupeDatasetResultsByName collapses duplicate-name entries to the last
 // occurrence, preserving the original ordering of unique names. Same-name
 // duplicates can arise when a manifest defines multiple constraint-gated
-// DataSet variants and the caller hasn't filtered them — every variant
+// DataSet variants and the caller hasn't filtered them - every variant
 // reaches dataset.Execute and every result reaches the renderer.
 func dedupeDatasetResultsByName(results []dataset.Result) []dataset.Result {
 	if len(results) <= 1 {
@@ -1053,7 +1053,7 @@ func (rc *renderCtx) refOptions() ref.Options {
 	}
 }
 
-// isLayoutPage reports whether name identifies a LayoutPage document —
+// isLayoutPage reports whether name identifies a LayoutPage document -
 // referencing one as a child is explicitly disallowed.
 func (rc *renderCtx) isLayoutPage(name string) bool {
 	for _, doc := range rc.docs {

@@ -16,7 +16,7 @@ import (
 // PWA serving emits only RELATIVE URLs into the manifest JSON, the service
 // worker, and the injected head tags. bino cloud hosts live artefacts behind
 // a reverse proxy at /l/<slug>/ and injects <base href="/l/<slug>/"> into
-// HTML, but does NOT rewrite manifest JSON or JS bodies — relative URLs
+// HTML, but does NOT rewrite manifest JSON or JS bodies - relative URLs
 // resolve correctly both locally and behind the proxy. Behind the proxy the
 // injected <base> makes head-tag URLs resolve on every route; served locally
 // (no <base>) they resolve against the page's directory, so on a
@@ -204,7 +204,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') {
     return;
   }
-  // Documents are credentialed and Cache-Control: no-store — never cache
+  // Documents are credentialed and Cache-Control: no-store - never cache
   // them. Offline navigations get a friendly fallback page instead.
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(() => new Response(OFFLINE_HTML, {

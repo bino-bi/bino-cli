@@ -12,8 +12,8 @@ import (
 // The engine resolves each component's namespace at runtime from its own
 // i18n-namespace attribute or the nearest ancestor carrying one (layout card,
 // layout page, tree, grid, or bn-context). The CLI therefore only emits the
-// attribute where it is authored — it never stamps inherited values on
-// children — and writes the artefact-level namespace on <bn-context>.
+// attribute where it is authored - it never stamps inherited values on
+// children - and writes the artefact-level namespace on <bn-context>.
 
 // renderDocsWithArtefactNamespace renders documents with an artefact-level
 // i18nNamespace and returns the generated HTML.

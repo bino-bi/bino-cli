@@ -315,7 +315,7 @@ func TestExecute_DerivedAllNullWarnsFreshAndCached(t *testing.T) {
   derive:
     pp2: { from: ac1, shift: 1 year, grain: month }
 `))
-	want := "pp2 derived from ac1 is null on every row — the query window has no prior period"
+	want := "pp2 derived from ac1 is null on every row - the query window has no prior period"
 	for _, run := range []string{"fresh", "cached"} {
 		results, warnings, err := Execute(context.Background(), workdir, docs, warnOpts(false))
 		if err != nil {

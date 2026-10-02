@@ -75,7 +75,7 @@ type ChartBulletManifestData struct {
 	Title       string
 }
 
-func newAddTableCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddTableCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagDataset    string
 		flagType       string
@@ -205,7 +205,7 @@ A Table component displays data from a DataSet in a formatted table.
 				data.Type, _ = addPromptString("Table type (list, sum, opt, sumnototal, optnototal)", "list")
 			}
 
-			// Sum row label — only the sum and opt types render a total row to label.
+			// Sum row label - only the sum and opt types render a total row to label.
 			if data.SumTitle == "" && (data.Type == "sum" || data.Type == "opt") {
 				data.SumTitle, _ = addPromptString("Label for the grand-total row (optional)", "")
 			}
@@ -255,7 +255,7 @@ A Table component displays data from a DataSet in a formatted table.
 	return cmd
 }
 
-func newAddChartStructureCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddChartStructureCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagDataset    string
 		flagTitle      string
@@ -429,7 +429,7 @@ variance overlays.
 	return cmd
 }
 
-func newAddChartTimeCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity — refactor before extending
+func newAddChartTimeCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var (
 		flagDataset    string
 		flagTitle      string
@@ -1168,7 +1168,7 @@ pl1 > pp1 > fc1).
 				}
 			}
 
-			// Measures (optional — empty keeps auto-detection)
+			// Measures (optional - empty keeps auto-detection)
 			if data.Actual == "" {
 				data.Actual, err = promptOptionalMeasureToken(out, "Actual measure (e.g. ac1, empty = auto)")
 				if err != nil {
@@ -1278,7 +1278,7 @@ func promptMeasureToken(out io.Writer, label string) (string, error) {
 }
 
 // scenarioSlotRegex validates plain scenario slots (ac1-ac4, pp1-pp4,
-// fc1-fc4, pl1-pl4). ChartBullet rejects variance tokens — its variance is
+// fc1-fc4, pl1-pl4). ChartBullet rejects variance tokens - its variance is
 // implicit (actual vs target).
 var scenarioSlotRegex = regexp.MustCompile(`^(ac|pp|fc|pl)[1-4]$`)
 

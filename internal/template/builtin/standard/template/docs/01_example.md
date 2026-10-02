@@ -4,7 +4,7 @@ This is a sample document for the `DocumentArtefact` kind. It demonstrates a tab
 
 ## Why a Second Rendering System?
 
-`DocumentArtefact` renders Markdown files to PDF independently of the DataSource/DataSet/LayoutPage pipeline the rest of this bundle uses. Every `.md` file in this folder becomes a chapter — see `reports/document.yaml`.
+`DocumentArtefact` renders Markdown files to PDF independently of the DataSource/DataSet/LayoutPage pipeline the rest of this bundle uses. Every `.md` file in this folder becomes a chapter - see `reports/document.yaml`.
 
 ### An Example of Mathematics
 

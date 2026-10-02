@@ -89,7 +89,7 @@ spec:
 }
 
 func TestResolvePositionPath_NestedKindValue(t *testing.T) {
-	// The `kind:` of a layout child is a kind-value position at its own path —
+	// The `kind:` of a layout child is a kind-value position at its own path -
 	// the schema (layoutChild.kind enum) decides candidates, not the root enum.
 	const doc = `kind: LayoutPage
 metadata:
@@ -193,7 +193,7 @@ spec:
 
 func TestResolvePositionPath_NewSequenceItemPath(t *testing.T) {
 	// A fresh sequence slot's path is the ELEMENT path (parent + index), not a
-	// duplicated field segment — it is the schema resolver's lookup key.
+	// duplicated field segment - it is the schema resolver's lookup key.
 	const doc = `kind: Table
 metadata:
   name: t
@@ -454,7 +454,7 @@ spec:
 
 func TestResolvePositionPath_MetadataParamsDeclaration(t *testing.T) {
 	// metadata.params declaration items (a sequence) keep their plain key/value
-	// classification — no PosParamKey false positive.
+	// classification - no PosParamKey false positive.
 	const doc = `kind: Table
 metadata:
   name: kpi
@@ -590,7 +590,7 @@ spec:
 	}
 }
 
-// TestRuneColumns: ranges are rune columns end to end — the yaml.v3 unit.
+// TestRuneColumns: ranges are rune columns end to end - the yaml.v3 unit.
 // A value after an umlaut key must span rune widths, and the @-repair must
 // convert its regex byte offsets.
 func TestRuneColumns(t *testing.T) {
@@ -640,7 +640,7 @@ func TestResolvePositionPath_OutOfBounds(t *testing.T) {
 }
 
 // TestResolvePositionPath_BrokenSiblingDocIsolated: a syntax error in one
-// document must not kill resolution in the others — previously ANY broken doc
+// document must not kill resolution in the others - previously ANY broken doc
 // darkened completion for the whole file.
 func TestResolvePositionPath_BrokenSiblingDocIsolated(t *testing.T) {
 	const doc = `kind: Table

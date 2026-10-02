@@ -45,7 +45,7 @@ type buildOutput struct {
 func (h *handlers) registerBuildTool(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "build",
-		Description: "Build report artefacts by running `bino build` (renders PDFs via headless Chrome — slow, writes files). Streams progress; returns the exit code, build output, and the produced artefacts.",
+		Description: "Build report artefacts by running `bino build` (renders PDFs via headless Chrome - slow, writes files). Streams progress; returns the exit code, build output, and the produced artefacts.",
 	}, h.runBuild)
 }
 

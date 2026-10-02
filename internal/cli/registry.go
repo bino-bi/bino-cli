@@ -31,7 +31,7 @@ func newRegistryCommand() *cobra.Command {
 
 Dependencies are declared in bino.toml's [dependencies] table, resolved
 versions are pinned in bino.lock (commit it), and package files are
-materialized under .bino/registry/ (gitignore it — 'bino registry install'
+materialized under .bino/registry/ (gitignore it - 'bino registry install'
 re-creates it from bino.lock).
 
 A package whose name collides with a local document of the same kind fails
@@ -133,7 +133,7 @@ func downloadVerified(ctx context.Context, client *registry.Client, name, ver, w
 		return nil, fmt.Errorf("download %s@%s: ETag %s does not match expected digest %s", name, ver, etag, wantDigest)
 	}
 	if err := registry.VerifyFile(registry.FormatDocument, registry.FileDocument, body, wantDigest); err != nil {
-		return nil, fmt.Errorf("download %s@%s: %w — the registry returned content that does not match its digest", name, ver, err)
+		return nil, fmt.Errorf("download %s@%s: %w - the registry returned content that does not match its digest", name, ver, err)
 	}
 	return body, nil
 }
@@ -141,7 +141,7 @@ func downloadVerified(ctx context.Context, client *registry.Client, name, ver, w
 // downloadVerifiedResource fetches one bundled resource of a single-document
 // package and verifies its bytes' own sha256 against the expected content
 // hash. Unlike documents, resources are opaque binaries with no canonical form
-// to recompute — a plain sha256 over the raw bytes is the whole check.
+// to recompute - a plain sha256 over the raw bytes is the whole check.
 func downloadVerifiedResource(ctx context.Context, client *registry.Client, name, ver, resourceName, wantHash string) ([]byte, error) {
 	scope, base, err := registry.ParseName(name)
 	if err != nil {
@@ -155,7 +155,7 @@ func downloadVerifiedResource(ctx context.Context, client *registry.Client, name
 		return nil, fmt.Errorf("%w: download resource %s of %s@%s: ETag %s does not match expected content hash %s", errResourceMismatch, resourceName, name, ver, etag, wantHash)
 	}
 	if err := registry.VerifyFile(registry.FormatDocument, registry.FileResource, body, wantHash); err != nil {
-		return nil, fmt.Errorf("%w: download resource %s of %s@%s: %w — the registry returned content that does not match its advertised hash", errResourceMismatch, resourceName, name, ver, err)
+		return nil, fmt.Errorf("%w: download resource %s of %s@%s: %w - the registry returned content that does not match its advertised hash", errResourceMismatch, resourceName, name, ver, err)
 	}
 	return body, nil
 }
@@ -177,7 +177,7 @@ func downloadVerifiedTreeFile(ctx context.Context, client *registry.Client, name
 		return nil, fmt.Errorf("download %s of %s@%s: ETag %s does not match expected digest %s", f.Path, name, ver, etag, f.Digest)
 	}
 	if err := registry.VerifyFile(registry.FormatTree, f.Type, body, f.Digest); err != nil {
-		return nil, fmt.Errorf("download %s of %s@%s: %w — the registry returned content that does not match its digest", f.Path, name, ver, err)
+		return nil, fmt.Errorf("download %s of %s@%s: %w - the registry returned content that does not match its digest", f.Path, name, ver, err)
 	}
 	return body, nil
 }
@@ -199,7 +199,7 @@ type packagePlan struct {
 const maxTreeMemoryBytes = 128 << 20
 
 // fetchPackage downloads and verifies everything one resolved package needs,
-// returning the plan to write. Nothing is written here — a failure anywhere in
+// returning the plan to write. Nothing is written here - a failure anywhere in
 // the closure must leave the store untouched.
 func fetchPackage(ctx context.Context, p registryProject, client *registry.Client, r registry.Resolved) (packagePlan, error) {
 	entry := registry.Entry{
@@ -365,9 +365,9 @@ func treeRootDocument(projectRoot, name string, files []registry.FileEntry) stri
 //
 // Order matters. Every package was verified into memory first, so this
 // function cannot fail on content. It then removes the files a package no
-// longer has before writing the ones it does — a package that changes format
+// longer has before writing the ones it does - a package that changes format
 // must not leave its old document beside the new tree, which would be a
-// duplicate-name build failure the user cannot fix from their own files —
+// duplicate-name build failure the user cannot fix from their own files -
 // and only deletes paths the previous lock recorded, so a file the CLI never
 // installed is never silently removed. bino.lock is written last, so an
 // interrupted run re-materializes cleanly instead of claiming to be done.
@@ -468,7 +468,7 @@ func registryCompatWarnings(p registryProject, entries []registry.Entry) []strin
 }
 
 // registryGitignoreHint warns once when the project is a git repo whose
-// .gitignore does not cover .bino/. Warn only — this CLI never edits a
+// .gitignore does not cover .bino/. Warn only - this CLI never edits a
 // user's .gitignore.
 func registryGitignoreHint(p registryProject) {
 	if _, err := os.Stat(filepath.Join(p.Root, ".git")); err != nil {
@@ -486,7 +486,7 @@ func registryGitignoreHint(p registryProject) {
 			}
 		}
 	}
-	p.Out.Warning("'.bino/' does not appear to be gitignored — downloaded registry files should not be committed (bino.lock should be)")
+	p.Out.Warning("'.bino/' does not appear to be gitignored - downloaded registry files should not be committed (bino.lock should be)")
 }
 
 // planEntries is the lock entries of a materialized closure, for the callers
