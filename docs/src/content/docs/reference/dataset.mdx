@@ -33,10 +33,10 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 Fields:
 
-- `spec.query` – SQL query, either inline or loaded from an external file. Required if `spec.prql` and `spec.source` are not set.
-- `spec.prql` – [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
-- `spec.source` – direct pass-through to a DataSource without transformation. Mutually exclusive with `query` and `prql`.
-- `spec.dependencies` – optional list of datasource references. Can be string names or [inline DataSource definitions](#inline-dataset-definitions). Inline definitions are referenced via `@inline(N)` syntax in queries.
+- `spec.query` - SQL query, either inline or loaded from an external file. Required if `spec.prql` and `spec.source` are not set.
+- `spec.prql` - [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
+- `spec.source` - direct pass-through to a DataSource without transformation. Mutually exclusive with `query` and `prql`.
+- `spec.dependencies` - optional list of datasource references. Can be string names or [inline DataSource definitions](#inline-dataset-definitions). Inline definitions are referenced via `@inline(N)` syntax in queries.
 
 ## External query files
 

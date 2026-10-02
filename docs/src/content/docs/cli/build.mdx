@@ -14,28 +14,28 @@ bino build [flags]
 
 Common flags:
 
-- `--work-dir` – report bundle directory (default: `.`).
-- `--out-dir` – output directory relative to workdir (default: `dist`).
-- `--artefact` – build only specified artefact names (can be repeated).
-- `--exclude-artefact` – skip specified artefact names (can be repeated).
-- `--chrome-path` – path to a Chrome or Chromium binary (default: auto-detected from cache or `CHROME_PATH` env).
-- `--no-graph` – skip writing dependency graph files.
-- `--no-lint` – skip running lint rules (lint runs by default).
-- `--log-sql` – log executed SQL queries.
-- `--layout-state` – write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. See [Layout State](/cli/layout-state/).
-- `--data-validation` – data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
-- `--warn-on-query-errors` – downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
+- `--work-dir` - report bundle directory (default: `.`).
+- `--out-dir` - output directory relative to workdir (default: `dist`).
+- `--artefact` - build only specified artefact names (can be repeated).
+- `--exclude-artefact` - skip specified artefact names (can be repeated).
+- `--chrome-path` - path to a Chrome or Chromium binary (default: auto-detected from cache or `CHROME_PATH` env).
+- `--no-graph` - skip writing dependency graph files.
+- `--no-lint` - skip running lint rules (lint runs by default).
+- `--log-sql` - log executed SQL queries.
+- `--layout-state` - write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. See [Layout State](/cli/layout-state/).
+- `--data-validation` - data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
+- `--warn-on-query-errors` - downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
 
 Build log flags:
 
-- `--build-log-format` – build log file format: `text` (default) or `json`.
-- `--log-format` – terminal logging format: `text` (default) or `json` (one JSON object per line).
-- `--embed-data-csv` – embed CSV data previews in JSON log.
-- `--embed-data-max-rows` – maximum rows to embed per query (default: `10`).
-- `--embed-data-max-bytes` – maximum bytes per embedded CSV (default: `65536`).
-- `--embed-data-base64` – base64 encode embedded CSV data (default: `true`).
-- `--embed-data-redact` – redact sensitive columns in embedded data (default: `true`).
-- `--detailed-execution-plan` – include step-by-step timing.
+- `--build-log-format` - build log file format: `text` (default) or `json`.
+- `--log-format` - terminal logging format: `text` (default) or `json` (one JSON object per line).
+- `--embed-data-csv` - embed CSV data previews in JSON log.
+- `--embed-data-max-rows` - maximum rows to embed per query (default: `10`).
+- `--embed-data-max-bytes` - maximum bytes per embedded CSV (default: `65536`).
+- `--embed-data-base64` - base64 encode embedded CSV data (default: `true`).
+- `--embed-data-redact` - redact sensitive columns in embedded data (default: `true`).
+- `--detailed-execution-plan` - include step-by-step timing.
 
 See [Build Logs](/cli/build-logs/) for full documentation on JSON logs, CSV embedding, and execution plan tracking.
 
@@ -110,9 +110,9 @@ bino can validate query results against the [DataSet schema](/reference/dataset/
 
 Validation modes:
 
-- `--data-validation=warn` (default) – log validation warnings and continue building.
-- `--data-validation=fail` – treat validation errors as fatal and exit with code 1.
-- `--data-validation=off` – skip data validation entirely.
+- `--data-validation=warn` (default) - log validation warnings and continue building.
+- `--data-validation=fail` - treat validation errors as fatal and exit with code 1.
+- `--data-validation=off` - skip data validation entirely.
 
 ### Checks that ignore the mode
 

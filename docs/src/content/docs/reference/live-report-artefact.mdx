@@ -43,13 +43,13 @@ Optional description of the application.
 
 Optional. When present, `bino serve` serves the application as an installable [Progressive Web App](/cli/serve/#progressive-web-app): it generates a web app manifest and a service worker, and injects the manifest link, the service-worker registration, and - when configured - a theme-color meta tag and an apple-touch-icon link into every page. Titled non-root routes are additionally exposed as app shortcuts (the jump list on the installed app's icon). When `spec.pwa` is absent, serving behavior is completely unchanged - no extra tags, routes, or defaults.
 
-- `name` – full application name shown during installation and on splash screens. Defaults to `spec.title`.
-- `shortName` – short name shown under the home screen icon. Defaults to `name`.
-- `description` – description shown in install prompts. Defaults to `spec.description`.
-- `themeColor` – theme color applied to the browser UI around the installed app, e.g. `"#0B5FFF"`.
-- `backgroundColor` – background color of the splash screen shown while the installed app loads, e.g. `"#FFFFFF"`.
-- `display` – display mode of the installed app. One of `standalone` (default), `fullscreen`, `minimal-ui`, `browser`.
-- `icons` (required) – installable app icons, see below.
+- `name` - full application name shown during installation and on splash screens. Defaults to `spec.title`.
+- `shortName` - short name shown under the home screen icon. Defaults to `name`.
+- `description` - description shown in install prompts. Defaults to `spec.description`.
+- `themeColor` - theme color applied to the browser UI around the installed app, e.g. `"#0B5FFF"`.
+- `backgroundColor` - background color of the splash screen shown while the installed app loads, e.g. `"#FFFFFF"`.
+- `display` - display mode of the installed app. One of `standalone` (default), `fullscreen`, `minimal-ui`, `browser`.
+- `icons` (required) - installable app icons, see below.
 
 ### spec.pwa.icons
 
@@ -57,9 +57,9 @@ Icons offered to the operating system for the installed app. At least one icon i
 
 Each icon references an [Asset](/reference/asset/) manifest:
 
-- `asset` (required) – `metadata.name` of an `Asset` with `spec.type: image` and a `source.localPath`. Icons are served from the local file; remote or inline asset sources are rejected.
-- `sizes` (required) – pixel dimensions as `WIDTHxHEIGHT`, e.g. `512x512`.
-- `purpose` – `any` (default) for a regular icon, or `maskable` for an icon designed with a safe zone so the OS may apply an adaptive mask.
+- `asset` (required) - `metadata.name` of an `Asset` with `spec.type: image` and a `source.localPath`. Icons are served from the local file; remote or inline asset sources are rejected.
+- `sizes` (required) - pixel dimensions as `WIDTHxHEIGHT`, e.g. `512x512`.
+- `purpose` - `any` (default) for a regular icon, or `maskable` for an icon designed with a safe zone so the OS may apply an adaptive mask.
 
 **Example:**
 
@@ -124,10 +124,10 @@ Map of URL paths to route configurations. The root route `/` is **mandatory**.
 
 Each route must specify **either** `artefact` **or** `layoutPages` (but not both):
 
-- `artefact` – name of a `ReportArtefact` to render for this route.
-- `layoutPages` – a single `LayoutPage` name, or an array whose entries are either a name, a glob pattern matching `LayoutPage` names, or an object with `page` and `params`, rendered directly (without a ReportArtefact wrapper).
-- `title` – optional page title override.
-- `queryParams` – array of query parameters allowed for this route.
+- `artefact` - name of a `ReportArtefact` to render for this route.
+- `layoutPages` - a single `LayoutPage` name, or an array whose entries are either a name, a glob pattern matching `LayoutPage` names, or an object with `page` and `params`, rendered directly (without a ReportArtefact wrapper).
+- `title` - optional page title override.
+- `queryParams` - array of query parameters allowed for this route.
 
 Routes are accessible at their defined paths, e.g., `/sales` renders `sales-report`.
 
@@ -168,12 +168,12 @@ Array of query parameters allowed for this specific route.
 
 Each parameter has:
 
-- `name` (required) – parameter name, used as `${name}` in documents.
-- `type` – input type for the serve UI. One of: `string` (default), `number`, `number_range`, `select`, `date`, `date_time`.
-- `default` – default value if parameter is not provided.
-- `optional` – if `true`, the parameter is optional even without a default value. The parameter will be empty if not provided.
-- `description` – human-readable description.
-- `options` – configuration for `select`, `number`, and `number_range` types: `items` for a static option list (each item requires a `value`, its `label` defaults to that value), `dataset` with `valueColumn` and `labelColumn` for options loaded from a `DataSet`, and `min`, `max`, `step` for numeric inputs.
+- `name` (required) - parameter name, used as `${name}` in documents.
+- `type` - input type for the serve UI. One of: `string` (default), `number`, `number_range`, `select`, `date`, `date_time`.
+- `default` - default value if parameter is not provided.
+- `optional` - if `true`, the parameter is optional even without a default value. The parameter will be empty if not provided.
+- `description` - human-readable description.
+- `options` - configuration for `select`, `number`, and `number_range` types: `items` for a static option list (each item requires a `value`, its `label` defaults to that value), `dataset` with `valueColumn` and `labelColumn` for options loaded from a `DataSet`, and `min`, `max`, `step` for numeric inputs.
 
 **Important:** If a parameter has no `default` and `optional` is not `true`, the server returns HTTP 400 with a JSON error listing the missing parameters.
 
@@ -211,8 +211,8 @@ queryParams:
 
 For select parameters with static items, you can access both the value and label:
 
-- `${REGION}` – the value (e.g., `"EU"`)
-- `${REGION_LABEL}` – the label (e.g., `"Europe"`)
+- `${REGION}` - the value (e.g., `"EU"`)
+- `${REGION_LABEL}` - the label (e.g., `"Europe"`)
 
 This is useful for displaying human-readable text while using the value for data filtering.
 
@@ -435,10 +435,10 @@ spec:
 
 Access patterns:
 
-- `/` – uses default YEAR=2024, but requires DEPARTMENT
-- `/?DEPARTMENT=sales` – works, uses default YEAR
-- `/?YEAR=2023&DEPARTMENT=marketing` – overrides YEAR
-- `/?YEAR=2023` – returns HTTP 400: missing DEPARTMENT
+- `/` - uses default YEAR=2024, but requires DEPARTMENT
+- `/?DEPARTMENT=sales` - works, uses default YEAR
+- `/?YEAR=2023&DEPARTMENT=marketing` - overrides YEAR
+- `/?YEAR=2023` - returns HTTP 400: missing DEPARTMENT
 
 ## Navigation
 
@@ -647,10 +647,10 @@ spec:
 
 Access patterns:
 
-- `/?DEPARTMENT=Sales` – Shows Sales department for 2024
-- `/?DEPARTMENT=Marketing&YEAR=2023` – Shows Marketing for 2023
-- `/all` – Shows all departments for 2024
-- `/all?YEAR=2022` – Shows all departments for 2022
+- `/?DEPARTMENT=Sales` - Shows Sales department for 2024
+- `/?DEPARTMENT=Marketing&YEAR=2023` - Shows Marketing for 2023
+- `/all` - Shows all departments for 2024
+- `/all?YEAR=2022` - Shows all departments for 2022
 
 ## Validation
 

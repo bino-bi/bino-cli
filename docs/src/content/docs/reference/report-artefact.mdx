@@ -43,19 +43,19 @@ Each `layoutPages` entry has two forms: a name or glob pattern as shown here
 
 Fields:
 
-- `spec.format` – logical page size, default `xga`.
-- `spec.orientation` – `portrait` or `landscape`, default `landscape`.
-- `spec.language` – current options: `de` or `en`, default `de`.
-- `spec.layoutPages` – optional list of patterns to select LayoutPages by `metadata.name`. Supports glob syntax (`*`, `?`, `[abc]`). A single pattern may also be written as a plain string (`layoutPages: cover`). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: `["*"]` (every LayoutPage in the bundle).
-- `spec.filename` – required output filename (relative to output directory).
-- `spec.title` – required human-readable title; also used in PDF metadata.
-- `spec.description` – optional description.
-- `spec.subject` – optional subject stored in PDF metadata.
-- `spec.author` – optional author name.
-- `spec.keywords` – optional list of metadata keywords.
-- `spec.signingProfile` – optional reference to a `SigningProfile` manifest.
-- `spec.selectedStyle` – optional reference to a named [`ComponentStyle`](/reference/component-style/) applied as the default style for every page and component in this artefact. A `selectedStyle` set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
-- `spec.i18nNamespace` – optional [i18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) inherited as the default by every page and component in this artefact. An `i18nNamespace` set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
+- `spec.format` - logical page size, default `xga`.
+- `spec.orientation` - `portrait` or `landscape`, default `landscape`.
+- `spec.language` - current options: `de` or `en`, default `de`.
+- `spec.layoutPages` - optional list of patterns to select LayoutPages by `metadata.name`. Supports glob syntax (`*`, `?`, `[abc]`). A single pattern may also be written as a plain string (`layoutPages: cover`). Pages appear in pattern order; within each pattern, pages are sorted alphabetically. Default: `["*"]` (every LayoutPage in the bundle).
+- `spec.filename` - required output filename (relative to output directory).
+- `spec.title` - required human-readable title; also used in PDF metadata.
+- `spec.description` - optional description.
+- `spec.subject` - optional subject stored in PDF metadata.
+- `spec.author` - optional author name.
+- `spec.keywords` - optional list of metadata keywords.
+- `spec.signingProfile` - optional reference to a `SigningProfile` manifest.
+- `spec.selectedStyle` - optional reference to a named [`ComponentStyle`](/reference/component-style/) applied as the default style for every page and component in this artefact. A `selectedStyle` set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
+- `spec.i18nNamespace` - optional [i18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) inherited as the default by every page and component in this artefact. An `i18nNamespace` set on a page, card, grid, tree, or leaf component overrides it (nearest ancestor wins).
 
 ## Default style
 

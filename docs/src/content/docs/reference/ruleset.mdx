@@ -37,8 +37,8 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 The `metadata.name` of a `RuleSet` decides how it is applied:
 
-- `_default` – applied to **all** components automatically.
-- Any other name (e.g. `corporateRules`) – a **named rule set** that individual components opt into via `spec.ruleset`.
+- `_default` - applied to **all** components automatically.
+- Any other name (e.g. `corporateRules`) - a **named rule set** that individual components opt into via `spec.ruleset`.
 
 At render time each component merges rule-set layers in this order (later wins):
 built-in `_system` defaults → `_default` → the rule set named by `ruleset`.
@@ -73,8 +73,8 @@ spec:
 Besides a rule-set name, the component kinds (`Table` and the `Chart*` kinds)
 accept two inheritance keywords:
 
-- `inherited-closest` – reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage`.
-- `inherited-page` – reuse the `ruleset` of the surrounding `LayoutPage` (cards are skipped).
+- `inherited-closest` - reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage`.
+- `inherited-page` - reuse the `ruleset` of the surrounding `LayoutPage` (cards are skipped).
 
 On `LayoutPage` and `LayoutCard` only `inherited-page` is meaningful, because a
 layout inherits from the page around it, never from itself.

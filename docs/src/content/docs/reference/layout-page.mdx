@@ -60,9 +60,9 @@ Key fields (see JSON schema for full list):
 - Title row fields: `titleBusinessUnit`, `i18nNamespace` (`titleNamespace` is deprecated), `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
-- Styling: `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
-- IBCS rules: `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) applied to the page title; child components inherit it via `ruleset: inherited-page` or `ruleset: inherited-closest`.
-- Content: `children` – array of `layoutChild` objects. May be empty or omitted while scaffolding; the `page-layout-slots-used` lint rule warns when a page referenced by an artefact does not fill its layout slots.
+- Styling: `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
+- IBCS rules: `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) applied to the page title; child components inherit it via `ruleset: inherited-page` or `ruleset: inherited-closest`.
+- Content: `children` - array of `layoutChild` objects. May be empty or omitted while scaffolding; the `page-layout-slots-used` lint rule warns when a page referenced by an artefact does not fill its layout slots.
 
 ## Formatting the message and the business unit
 
@@ -138,7 +138,7 @@ spec:
   pageFormat: a4
   pageOrientation: landscape
   footerDisplayPageNumber: true
-  footerText: "bino – internal preview"
+  footerText: "bino - internal preview"
   children:
     - kind: ChartStructure
       spec:

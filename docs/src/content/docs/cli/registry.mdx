@@ -90,11 +90,11 @@ bino registry search <query> [flags]
 
 Searches the registry for packages.
 
-- `--kind` – filter by document kind (repeatable).
-- `--scope` – filter by scope (repeatable).
-- `--tag` – filter by tag (repeatable).
-- `--page` – result page, 1-based (default 1).
-- `--per-page` – results per page (default 20).
+- `--kind` - filter by document kind (repeatable).
+- `--scope` - filter by scope (repeatable).
+- `--tag` - filter by tag (repeatable).
+- `--page` - result page, 1-based (default 1).
+- `--per-page` - results per page (default 20).
 
 ## bino registry info
 
@@ -133,8 +133,8 @@ Subsequent registry commands use the stored token automatically unless
 Personal access tokens are created and managed in the registry web UI
 (Settings → Tokens) - create one there first, then paste it when prompted.
 
-- `--registry` – registry URL (overrides `bino.toml`, `BINO_REGISTRY_URL`, and `~/.bino/config.toml`; default `https://registry.bino.bi`).
-- `--with-token` – read the personal access token from stdin instead of prompting.
+- `--registry` - registry URL (overrides `bino.toml`, `BINO_REGISTRY_URL`, and `~/.bino/config.toml`; default `https://registry.bino.bi`).
+- `--with-token` - read the personal access token from stdin instead of prompting.
 
 ```bash
 # Interactive: paste the token created in the web UI

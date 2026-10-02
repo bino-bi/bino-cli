@@ -14,11 +14,11 @@ bino lint [flags]
 
 Common flags:
 
-- `--work-dir` – report bundle directory (default: `.`).
-- `--out-dir` – output directory for lint logs (default: `dist`).
-- `--lint-log-format` – lint log file format: `text` (default) or `json`.
-- `--execute-queries` – execute dataset queries and validate data (slower but catches data issues).
-- `--fail-on-warnings` – exit with non-zero code if any warnings are found (useful for CI).
+- `--work-dir` - report bundle directory (default: `.`).
+- `--out-dir` - output directory for lint logs (default: `dist`).
+- `--lint-log-format` - lint log file format: `text` (default) or `json`.
+- `--execute-queries` - execute dataset queries and validate data (slower but catches data issues).
+- `--fail-on-warnings` - exit with non-zero code if any warnings are found (useful for CI).
 
 No lint finding fails the command on its own, whatever severity it reports - only a rule you re-grade to `"error"` in `bino.toml` does, see [Lint rules](/concepts/project-configuration/#lint-rules).
 
@@ -106,6 +106,6 @@ By default:
 
 ## See also
 
-- [Lint rules](/appendix/lint-rules/) – reference of all available lint rules.
-- [bino build](/cli/build/) – build reports (includes lint by default).
-- [bino preview](/cli/preview/) – preview reports with optional lint.
+- [Lint rules](/appendix/lint-rules/) - reference of all available lint rules.
+- [bino build](/cli/build/) - build reports (includes lint by default).
+- [bino preview](/cli/preview/) - preview reports with optional lint.

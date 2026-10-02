@@ -212,7 +212,7 @@ scenarios of the same type can coexist, each varied **within** the base notation
 
 > → in bino: the numbered slots **`ac1…ac4`, `fc1…fc4`, `pl1…pl4`, `pp1…pp4`** are the practical
 > realization - `ac1` and `ac2` are two scenarios of the _same_ type. Label/title concept must carry
-> the extra meaning. **Show at most 3–4 scenarios per visualization** for clarity.
+> the extra meaning. **Show at most 3-4 scenarios per visualization** for clarity.
 
 ---
 
@@ -324,8 +324,8 @@ author-owned items; engine-enforced ones are noted.)
 Prefixes: **SA**=Say, **UN**=Unify, **CO**=Condense, **CH**=Check, **EX**=Express, **SI**=Simplify,
 **ST**=Structure. (IBCS v1.2 numbers each headline `XX n.m`.)
 
-- **SAY:** SA 1–5 · **UNIFY:** UN 1–5 · **CONDENSE:** CO 1–5 · **CHECK:** CH 1–5
-- **EXPRESS:** EX 1–5 · **SIMPLIFY:** SI 1–5 · **STRUCTURE:** ST 1–5
+- **SAY:** SA 1-5 · **UNIFY:** UN 1-5 · **CONDENSE:** CO 1-5 · **CHECK:** CH 1-5
+- **EXPRESS:** EX 1-5 · **SIMPLIFY:** SI 1-5 · **STRUCTURE:** ST 1-5
 
 _Sources: IBCS Standards v1.2 (2022-01-28); IBCS Work Group 1, "Semantic notation concept for more
 scenarios per scenario type." IBCS® is a registered trademark of the IBCS Association; standard

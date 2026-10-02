@@ -33,11 +33,11 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 Fields:
 
-- `spec.value` – required string. Supports **Markdown** syntax (see below) and **template expressions** (see below).
-- `spec.dataset` – optional dataset reference; a single name, an array of names, or an inline [`DataSet`](/reference/dataset/) definition.
-- `spec.scale` – optional scaling mode (see [Scaling](#scaling)).
-- `spec.selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
-- `spec.i18nNamespace` – optional [i18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) for this component's labels; when unset it is inherited from the nearest ancestor that carries one.
+- `spec.value` - required string. Supports **Markdown** syntax (see below) and **template expressions** (see below).
+- `spec.dataset` - optional dataset reference; a single name, an array of names, or an inline [`DataSet`](/reference/dataset/) definition.
+- `spec.scale` - optional scaling mode (see [Scaling](#scaling)).
+- `spec.selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `spec.i18nNamespace` - optional [i18n namespace](/reference/internationalization/#scoped-overrides-with-i18nnamespace) for this component's labels; when unset it is inherited from the nearest ancestor that carries one.
 
 ## Markdown support
 
@@ -113,8 +113,8 @@ Expressions are evaluated at runtime in the browser with access to bound dataset
 
 Available variables inside `${...}`:
 
-- `data.<datasetName>` – the bound dataset rows (array of objects).
-- `t('<key>')` – looks the key up in the component's i18n namespace (set via `i18nNamespace`, otherwise inherited from the nearest ancestor carrying one; keys missing there fall back to `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
+- `data.<datasetName>` - the bound dataset rows (array of objects).
+- `t('<key>')` - looks the key up in the component's i18n namespace (set via `i18nNamespace`, otherwise inherited from the nearest ancestor carrying one; keys missing there fall back to `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
 
 ```yaml
 spec:

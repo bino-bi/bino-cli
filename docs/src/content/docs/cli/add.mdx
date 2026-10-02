@@ -8,9 +8,9 @@ It supports three interaction modes: fully interactive, semi-interactive (with p
 
 ## Subcommands
 
-- `bino add dataset` – create a DataSet manifest
-- `bino add datasource` – create a DataSource manifest
-- `bino add internationalization` (alias `i18n`) – create an Internationalization manifest
+- `bino add dataset` - create a DataSet manifest
+- `bino add datasource` - create a DataSource manifest
+- `bino add internationalization` (alias `i18n`) - create an Internationalization manifest
 
 ## Usage
 
@@ -31,6 +31,7 @@ bino add dataset
 ```
 
 The wizard guides you through:
+
 1. Name and description
 2. Query type selection (SQL, PRQL, or pass-through)
 3. Dependencies (DataSets and DataSources)
@@ -67,27 +68,27 @@ Create a new DataSet manifest with SQL or PRQL queries.
 
 Query source (one required in non-interactive mode):
 
-- `--sql` – inline SQL query
-- `--sql-file` – path to external SQL file (uses `$file()` syntax)
-- `--prql` – inline PRQL query
-- `--prql-file` – path to external PRQL file (uses `$file()` syntax)
-- `--source` – pass-through from another DataSet
+- `--sql` - inline SQL query
+- `--sql-file` - path to external SQL file (uses `$file()` syntax)
+- `--prql` - inline PRQL query
+- `--prql-file` - path to external PRQL file (uses `$file()` syntax)
+- `--source` - pass-through from another DataSet
 
 Configuration:
 
-- `--deps` – dependencies (DataSet or DataSource names), repeatable
-- `--constraint` – constraints in `field:operator:value` format, repeatable
-- `--description` – optional description
+- `--deps` - dependencies (DataSet or DataSource names), repeatable
+- `--constraint` - constraints in `field:operator:value` format, repeatable
+- `--description` - optional description
 
 Output:
 
-- `--output`, `-o` – output file path (creates new file)
-- `--append-to` – append to existing multi-document YAML file
+- `--output`, `-o` - output file path (creates new file)
+- `--append-to` - append to existing multi-document YAML file
 
 Behavior:
 
-- `--no-prompt` – disable interactive prompts (fail if required values missing)
-- `--open-editor` – open `$EDITOR` for query input
+- `--no-prompt` - disable interactive prompts (fail if required values missing)
+- `--open-editor` - open `$EDITOR` for query input
 
 ### Examples
 
@@ -138,41 +139,41 @@ Create a new DataSource manifest for databases or files.
 
 Type (required in non-interactive mode):
 
-- `--type` – source type: `postgres`, `mysql`, `csv`, `parquet`, `excel`, `json`
+- `--type` - source type: `postgres`, `mysql`, `csv`, `parquet`, `excel`, `json`
 
 Database connection (for `postgres` and `mysql` types):
 
-- `--db-host` – database host
-- `--db-port` – database port
-- `--db-database` – database name
-- `--db-schema` – database schema (optional, PostgreSQL only)
-- `--db-user` – database username
-- `--db-secret` – ConnectionSecret name for credentials
-- `--db-query` – SQL query to execute
+- `--db-host` - database host
+- `--db-port` - database port
+- `--db-database` - database name
+- `--db-schema` - database schema (optional, PostgreSQL only)
+- `--db-user` - database username
+- `--db-secret` - ConnectionSecret name for credentials
+- `--db-query` - SQL query to execute
 
 File source (for file types):
 
-- `--file` – path to source file
+- `--file` - path to source file
 
 CSV options:
 
-- `--csv-delimiter` – field delimiter (default: `,`)
-- `--csv-header` – file has header row (default: `true`)
-- `--csv-skip-rows` – rows to skip before data
+- `--csv-delimiter` - field delimiter (default: `,`)
+- `--csv-header` - file has header row (default: `true`)
+- `--csv-skip-rows` - rows to skip before data
 
 Configuration:
 
-- `--constraint` – constraints in `field:operator:value` format, repeatable
-- `--description` – optional description
+- `--constraint` - constraints in `field:operator:value` format, repeatable
+- `--description` - optional description
 
 Output:
 
-- `--output`, `-o` – output file path (creates new file)
-- `--append-to` – append to existing multi-document YAML file
+- `--output`, `-o` - output file path (creates new file)
+- `--append-to` - append to existing multi-document YAML file
 
 Behavior:
 
-- `--no-prompt` – disable interactive prompts
+- `--no-prompt` - disable interactive prompts
 
 ### Examples
 
@@ -224,23 +225,23 @@ The subcommand is also available under its full name, `bino add internationaliza
 
 Language (required in non-interactive mode):
 
-- `--code` – locale code; must exactly match a `ReportArtefact` `spec.language` (`de` or `en`)
+- `--code` - locale code; must exactly match a `ReportArtefact` `spec.language` (`de` or `en`)
 
 Configuration:
 
-- `--namespace` – storage namespace; defaults to `_system`, the bundle every component reads
-- `--defaults` – pre-fill `spec.content` with the engine's complete built-in token set for the locale
-- `--constraint` – constraints in `field:operator:value` format, repeatable
-- `--description` – optional description
+- `--namespace` - storage namespace; defaults to `_system`, the bundle every component reads
+- `--defaults` - pre-fill `spec.content` with the engine's complete built-in token set for the locale
+- `--constraint` - constraints in `field:operator:value` format, repeatable
+- `--description` - optional description
 
 Output:
 
-- `--output`, `-o` – output file path (creates new file)
-- `--append-to` – append to existing multi-document YAML file
+- `--output`, `-o` - output file path (creates new file)
+- `--append-to` - append to existing multi-document YAML file
 
 Behavior:
 
-- `--no-prompt` – disable interactive prompts (fail if required values missing)
+- `--no-prompt` - disable interactive prompts (fail if required values missing)
 
 ### Examples
 
@@ -292,8 +293,8 @@ The wizard suggests corrections for invalid names.
 
 The wizard detects your project's file organization pattern:
 
-- **Separate files** – each manifest in its own file (e.g., `datasets/sales.yaml`)
-- **Multi-document** – multiple manifests in one file separated by `---`
+- **Separate files** - each manifest in its own file (e.g., `datasets/sales.yaml`)
+- **Multi-document** - multiple manifests in one file separated by `---`
 
 Your preference is saved to `.bino/config.json` for future use.
 

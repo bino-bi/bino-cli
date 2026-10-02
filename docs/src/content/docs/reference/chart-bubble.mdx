@@ -77,23 +77,23 @@ a blocking render error. For full comparability also pin identical axis
 
 ## Fields
 
-- `dataset` – required dataset name or array.
-- `x`, `y` – required axis measure mappings (token or object with
+- `dataset` - required dataset name or array.
+- `x`, `y` - required axis measure mappings (token or object with
   `measure`, `label`, `unit`, `min`, `max`, `refLine`, `highlight`).
-- `size` – required bubble size mapping (token or object with `measure`,
+- `size` - required bubble size mapping (token or object with `measure`,
   `label`, `unit`, `group`).
-- `share` – optional pie-share mapping (token or object with `measure`).
-- `compareWith` – optional comparison scenario family: `ac`, `pp`, `fc`,
+- `share` - optional pie-share mapping (token or object with `measure`).
+- `compareWith` - optional comparison scenario family: `ac`, `pp`, `fc`,
   or `pl`.
 - `level`, `seriesLevel`, `facet`, `legend`, `aspect`, `filter`,
-  `chartTitle`, `scale`, `selectedStyle`, `ruleset` – same semantics as
+  `chartTitle`, `scale`, `selectedStyle`, `ruleset` - same semantics as
   [`ChartScatter`](/reference/chart-scatter/#fields).
-- `labels` – bubble labels; defaults differ from the scatter chart:
+- `labels` - bubble labels; defaults differ from the scatter chart:
   `points: all`, `values: true` (contrast-colored values inside the
   bubbles, hidden when they do not fit), `max: 12`.
-- `limit` – max bubbles per facet panel, keeping the **largest by size**;
+- `limit` - max bubbles per facet panel, keeping the **largest by size**;
   `0` means unlimited.
-- `i18nNamespace` – optional namespace consulted for this component's
+- `i18nNamespace` - optional namespace consulted for this component's
   labels; missing keys fall back to `_system`. When unset, it is resolved
   from the nearest ancestor carrying one.
 
@@ -191,7 +191,7 @@ spec:
 | ----------------------- | ------------------------ | -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
 | `spec.dataset`          | string, object, or array | yes                  | -                                        | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of either.                                                                                                                                   | `dataset: business_units`                      |
 | `spec.x`                | string or object         | yes                  | -                                        | Horizontal axis measure mapping: a bare measure token or an object. All plain scenario measures across `x`, `y`, `size`, and `share` must share one scenario family. Maps to the `x` HTML attribute.                                       | `x: ac1`                                       |
-| `spec.x.measure`        | string                   | yes (object form)    | -                                        | Scenario slot (`ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`) or variance token. See [Measure tokens](#measure-tokens).                                                                                                               | `measure: ac1`                                 |
+| `spec.x.measure`        | string                   | yes (object form)    | -                                        | Scenario slot (`ac1`-`ac4`, `pp1`-`pp4`, `fc1`-`fc4`, `pl1`-`pl4`) or variance token. See [Measure tokens](#measure-tokens).                                                                                                               | `measure: ac1`                                 |
 | `spec.x.label`          | string                   | no                   | -                                        | Axis title displayed next to the axis.                                                                                                                                                                                                     | `label: "Market attractiveness"`               |
 | `spec.x.unit`           | string                   | no                   | -                                        | Unit suffix displayed after the axis title. Values are drawn as delivered - scale in the DataSet SQL.                                                                                                                                      | `unit: "% of net sales"`                       |
 | `spec.x.min`            | number                   | no                   | data range                               | Lower axis domain bound. Points outside an explicit domain are clipped with a warning.                                                                                                                                                     | `min: 0`                                       |

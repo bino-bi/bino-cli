@@ -83,9 +83,9 @@ own digest: manifests over their canonical form, so reformatting or
 re-commenting a document does not change its identity, and resources over their
 raw bytes.
 
-- `bino registry install` – re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
-- `bino registry update` – re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
-- `bino registry verify` – re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification - content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
+- `bino registry install` - re-creates `.bino/registry/` exactly as pinned, without re-resolving. Use it after a fresh clone and in CI. It refuses to run when the lockfile drifted from `[dependencies]` (or is missing) and points you to `update`.
+- `bino registry update` - re-resolves tag-following entries to their newest versions and rewrites the lockfile; exact pins are held. Pass package names to update selectively.
+- `bino registry verify` - re-hashes every installed file against the locked digests. Digests cover the canonical document form, so reformatting a manifest does not fail verification - content changes do. A file inside a package directory that `bino.lock` does not record is reported too, since the build would otherwise load it.
 
 A typical CI job:
 

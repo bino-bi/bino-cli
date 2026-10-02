@@ -49,14 +49,14 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 Array of edge objects defining connections between nodes. Each edge requires:
 
-- `from` – source node ID (string, required)
-- `to` – target node ID (string, required)
-- `operator` – mathematical operator displayed between siblings: `*`, `/`, `+`, `-`, `x`, `÷`, or `none`
-- `label` – custom label to display instead of operator symbol
-- `style` – custom edge styling object:
-  - `color` – edge color (string)
-  - `width` – edge width in pixels (number)
-  - `dasharray` – SVG dash pattern (string)
+- `from` - source node ID (string, required)
+- `to` - target node ID (string, required)
+- `operator` - mathematical operator displayed between siblings: `*`, `/`, `+`, `-`, `x`, `÷`, or `none`
+- `label` - custom label to display instead of operator symbol
+- `style` - custom edge styling object:
+  - `color` - edge color (string)
+  - `width` - edge width in pixels (number)
+  - `dasharray` - SVG dash pattern (string)
 
 The tree must have exactly one root node (a node that appears only as a `from` value, never as a `to` value).
 
@@ -64,10 +64,10 @@ The tree must have exactly one root node (a node that appears only as a `from` v
 
 Layout direction of the tree:
 
-- `ltr` (default) – left to right, root on left
-- `rtl` – right to left, root on right
-- `ttb` – top to bottom, root on top
-- `btt` – bottom to top, root on bottom
+- `ltr` (default) - left to right, root on left
+- `rtl` - right to left, root on right
+- `ttb` - top to bottom, root on top
+- `btt` - bottom to top, root on bottom
 
 ### levelSpacing
 
@@ -81,9 +81,9 @@ Spacing between sibling nodes in pixels. Default: `20`.
 
 Style of connection lines between nodes:
 
-- `straight` – direct lines between nodes
-- `orthogonal` (default) – right-angle lines
-- `curved` – smooth bezier curves
+- `straight` - direct lines between nodes
+- `orthogonal` (default) - right-angle lines
+- `curved` - smooth bezier curves
 
 ### showOperators
 
@@ -103,12 +103,12 @@ Array of node definitions. Each node specifies what component to render at that 
 
 #### Node properties
 
-- `id` (required) – unique identifier matching `from`/`to` values in edges
-- `kind` (required) – type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Image`, or `LayoutCard`
-- `ref` – reference to a standalone document by name (not supported for Label)
-- `params` – parameter values (string map) passed to the referenced document; only valid together with `ref` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components))
-- `optional` – when `true` and the referenced document is missing, the node is skipped instead of failing the build (default `false`)
-- `spec` – inline component specification (required if no ref)
+- `id` (required) - unique identifier matching `from`/`to` values in edges
+- `kind` (required) - type of component: `Label`, `Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Image`, or `LayoutCard`
+- `ref` - reference to a standalone document by name (not supported for Label)
+- `params` - parameter values (string map) passed to the referenced document; only valid together with `ref` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components))
+- `optional` - when `true` and the referenced document is missing, the node is skipped instead of failing the build (default `false`)
+- `spec` - inline component specification (required if no ref)
 
 ## Node kinds
 

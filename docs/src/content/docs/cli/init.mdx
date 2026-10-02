@@ -23,19 +23,19 @@ manifest format, and security model.
 
 Common flags:
 
-- `--directory, -d` (alias `-o, --output`) – target directory (default `./rainbow-report`
+- `--directory, -d` (alias `-o, --output`) - target directory (default `./rainbow-report`
   for built-ins; required for remote templates).
-- `--name` – internal report name; for `predef` the package name segment (built-in templates).
-- `--title` – human-readable report title (built-in templates).
-- `--language` – language code, for example `en`, `de` (built-in templates).
-- `--set key=value` – set a template field value; repeatable. Remote/local templates declare
+- `--name` - internal report name; for `predef` the package name segment (built-in templates).
+- `--title` - human-readable report title (built-in templates).
+- `--language` - language code, for example `en`, `de` (built-in templates).
+- `--set key=value` - set a template field value; repeatable. Remote/local templates declare
   their own fields; `predef` accepts the `[package]` fields `Scope`, `Description`,
   `Visibility`, `Tags` (comma-separated) and `Category`.
-- `-y, --yes` – run non-interactively with defaults.
-- `--force` – overwrite existing files.
-- `--offline` – never reach the network; require a cached template (also `BINO_OFFLINE`).
-- `--trust` – skip the confirmation prompt for an uncurated remote source.
-- `--json` – emit the result (directory, files, template, resolved SHA, folders) as JSON.
+- `-y, --yes` - run non-interactively with defaults.
+- `--force` - overwrite existing files.
+- `--offline` - never reach the network; require a cached template (also `BINO_OFFLINE`).
+- `--trust` - skip the confirmation prompt for an uncurated remote source.
+- `--json` - emit the result (directory, files, template, resolved SHA, folders) as JSON.
 
 ![Sample init process](../../../assets/init.png)
 
@@ -176,15 +176,15 @@ DATABASE_URL = "postgres://localhost/dev"
 
 The configuration follows a clear priority order (highest to lowest):
 
-1. **Actual environment variables** – System or shell environment variables always take precedence
-2. **TOML environment values** – Values from `[build.env]` or `[preview.env]`
-3. **Default values** – Built-in defaults
+1. **Actual environment variables** - System or shell environment variables always take precedence
+2. **TOML environment values** - Values from `[build.env]` or `[preview.env]`
+3. **Default values** - Built-in defaults
 
 For command-line flags:
 
-1. **Explicit CLI flags** – Flags passed on the command line
-2. **TOML args values** – Values from `[build.args]` or `[preview.args]`
-3. **Default values** – Built-in defaults
+1. **Explicit CLI flags** - Flags passed on the command line
+2. **TOML args values** - Values from `[build.args]` or `[preview.args]`
+3. **Default values** - Built-in defaults
 
 ### Override Messages
 

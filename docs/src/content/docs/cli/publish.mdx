@@ -16,10 +16,10 @@ bino publish --bump <patch|minor|major> [flags]
 
 Flags:
 
-- `--bump` – how the registry increments the version: `patch`, `minor` or `major`. Required unless `--dry-run` is set.
-- `--dry-run` – run the registry's validation without creating a version.
-- `--visibility` – `public` or `private`. Only used when the package is created; ignored afterwards.
-- `--json` – print the result as JSON on stdout (progress goes to stderr).
+- `--bump` - how the registry increments the version: `patch`, `minor` or `major`. Required unless `--dry-run` is set.
+- `--dry-run` - run the registry's validation without creating a version.
+- `--visibility` - `public` or `private`. Only used when the package is created; ignored afterwards.
+- `--json` - print the result as JSON on stdout (progress goes to stderr).
 
 ## What is published
 
@@ -77,6 +77,6 @@ of a job is safe.
 
 ## Exit codes
 
-- `0` – published, or already published as an identical version.
-- `1` – configuration error: no `[package]` table, an invalid one, or a file that cannot be published.
-- `3` – the registry rejected the package, or was unreachable.
+- `0` - published, or already published as an identical version.
+- `1` - configuration error: no `[package]` table, an invalid one, or a file that cannot be published.
+- `3` - the registry rejected the package, or was unreachable.

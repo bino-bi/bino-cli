@@ -41,40 +41,40 @@ stacked columns or a stacked area with the `stack` block (see
 
 ## Fields
 
-- `dataset` – required; a dataset name, an inline `DataSet` definition, or an array of those.
-- `chartTitle` – optional title.
-- `chartMode` – rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
-- `maxBars` – threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
-- `lineFullWidth` – when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
-- `axisLabelsMode` – how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label.
-- `dateInterval` – desired time granularity; `auto` lets the renderer choose based on dataset meta.
-- `filter` – optional filter expression.
-- `level` – aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` – keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
-- `order` – sort key; if you use a scenario, it must appear in `scenarios`. When set to `auto`, it is detected silently. When left blank, it is detected with a warning.
-- `orderDirection` – sort direction (`asc` or `desc`).
-- `measureScale`, `measureUnit` – SI prefix and unit string.
-- `showCategories`, `showMeasureScale` – visibility flags.
-- `showOverlayAvg`, `showOverlayMedian` – enables overlay lines.
-- `limit` – column stack limit; 0 means unlimited. Column stacks cut by the limit are cumulated as `REST`.
-- `intervalSpanLimit` – controls how many columns drive automatic date interval selection.
-- `unitScaling` – data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
-- `percentageScaling` – percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
-- `syncSpaceLeft` – space reserved left of the axis for the scenario labels and the chart title, in px. `-1` (default) measures the widest label. Set the same value on several charts to align their axes; a value smaller than the widest label clips it.
-- `scenarios` – list of scenarios (up to 4); values like `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
-- `variances` – list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
-- `scale` – proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
-  - _not set_ – auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value; omit the key instead.
-  - `"none"` – no scaling; render at the base font size regardless of available space.
-  - `"auto"` – auto-scale to fit the parent width silently (no warning).
-  - `"0.5"`, `"1.2"`, … – fixed factor applied to the base font size. All dimensions scale proportionally.
-- `stack` – optional object to enable stacked rendering:
-  - `by` – (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
-  - `mode` – stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
-  - `order` – segment order within each stack: `asc`, `desc`, or `dataset` (default).
+- `dataset` - required; a dataset name, an inline `DataSet` definition, or an array of those.
+- `chartTitle` - optional title.
+- `chartMode` - rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
+- `maxBars` - threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
+- `lineFullWidth` - when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
+- `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label.
+- `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
+- `filter` - optional filter expression.
+- `level` - aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` - keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
+- `order` - sort key; if you use a scenario, it must appear in `scenarios`. When set to `auto`, it is detected silently. When left blank, it is detected with a warning.
+- `orderDirection` - sort direction (`asc` or `desc`).
+- `measureScale`, `measureUnit` - SI prefix and unit string.
+- `showCategories`, `showMeasureScale` - visibility flags.
+- `showOverlayAvg`, `showOverlayMedian` - enables overlay lines.
+- `limit` - column stack limit; 0 means unlimited. Column stacks cut by the limit are cumulated as `REST`.
+- `intervalSpanLimit` - controls how many columns drive automatic date interval selection.
+- `unitScaling` - data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
+- `percentageScaling` - percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
+- `syncSpaceLeft` - space reserved left of the axis for the scenario labels and the chart title, in px. `-1` (default) measures the widest label. Set the same value on several charts to align their axes; a value smaller than the widest label clips it.
+- `scenarios` - list of scenarios (up to 4); values like `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
+- `variances` - list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
+- `scale` - proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
+  - _not set_ - auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value; omit the key instead.
+  - `"none"` - no scaling; render at the base font size regardless of available space.
+  - `"auto"` - auto-scale to fit the parent width silently (no warning).
+  - `"0.5"`, `"1.2"`, … - fixed factor applied to the base font size. All dimensions scale proportionally.
+- `stack` - optional object to enable stacked rendering:
+  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
+  - `mode` - stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
+  - `order` - segment order within each stack: `asc`, `desc`, or `dataset` (default).
   - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
-- `i18nNamespace` – optional namespace consulted for this component's labels; missing keys fall back to `_system`. When not set, it is resolved from the nearest ancestor carrying one.
-- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
-- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
+- `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When not set, it is resolved from the nearest ancestor carrying one.
+- `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
 ## Example: Monthly revenue line chart
 
@@ -191,9 +191,9 @@ When `unitScaling` is set to a fixed numeric value (not `auto`), bars may exceed
 available container height. Instead of silently clipping the bars, the renderer applies
 **overdrive rendering**:
 
-1. **Base section** – the bar is drawn up to a computed cut height that fits within the container.
-2. **Break indicator** – a zigzag line across the bar width signals the axis break.
-3. **Overdrive section** – a proportionally scaled continuation above the break shows how much the bar exceeds the cut point.
+1. **Base section** - the bar is drawn up to a computed cut height that fits within the container.
+2. **Break indicator** - a zigzag line across the bar width signals the axis break.
+3. **Overdrive section** - a proportionally scaled continuation above the break shows how much the bar exceeds the cut point.
 
 Bars that fit within the available space render normally.
 Among overflowing bars, the overdrive height is proportional to the overflow amount,
@@ -322,7 +322,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.dateInterval`      | string                   | no                   | auto-detect                  | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`.                                                                                                                                                | `dateInterval: month`             |
 | `spec.filter`            | string                   | no                   | `""`                         | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                           | `filter: "region_group = 'EMEA'"` |
 | `spec.level`             | string                   | no                   | auto-detect with warning     | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`.                                                                                                                                        | `level: category`                 |
-| `spec.order`             | string                   | no                   | auto-detect with warning     | Sort key; a scenario used here must also appear in `scenarios`. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently.   | `order: ac1`                      |
+| `spec.order`             | string                   | no                   | auto-detect with warning     | Sort key; a scenario used here must also appear in `scenarios`. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently.   | `order: ac1`                      |
 | `spec.orderDirection`    | string                   | no                   | `asc`                        | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`.                                                                                                                                                                                          | `orderDirection: desc`            |
 | `spec.measureScale`      | string                   | no                   | largest value in the dataset | SI prefix for measure scaling; `_` means no prefix, `GREATEST` uses the largest and `LEAST` the smallest value in the dataset. Values (case-sensitive): `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`.      | `measureScale: M`                 |
 | `spec.measureUnit`       | string                   | no                   | `""`                         | Unit string for the chart axis.                                                                                                                                                                                                                                        | `measureUnit: "EUR"`              |
@@ -335,7 +335,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.showOverlayMedian` | boolean                  | no                   | `false`                      | Show median overlay line.                                                                                                                                                                                                                                              | `showOverlayMedian: true`         |
 | `spec.limit`             | integer                  | no                   | `0`                          | Maximum number of column stacks. `0` means unlimited. Column stacks cut by the limit are cumulated as `REST`. Minimum: 0.                                                                                                                                              | `limit: 12`                       |
 | `spec.intervalSpanLimit` | integer                  | no                   | `28`                         | Maximum number of columns used to calculate the axis date interval; only applies when `dateInterval` is `auto` or unset. Minimum: 0.                                                                                                                                   | `intervalSpanLimit: 50`           |
-| `spec.scenarios`         | string or array          | no                   | -                            | Scenario measures (up to 4). Values: `ac1`–`ac4`, `fc1`–`fc4`, `pp1`–`pp4`, `pl1`–`pl4`, `auto`, `inherited-closest`, `inherited-page`.                                                                                                                                | `scenarios: ["ac1", "fc1"]`       |
+| `spec.scenarios`         | string or array          | no                   | -                            | Scenario measures (up to 4). Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `auto`, `inherited-closest`, `inherited-page`.                                                                                                                                | `scenarios: ["ac1", "fc1"]`       |
 | `spec.variances`         | string or array          | no                   | -                            | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`.                                                                                                                                       | `variances: ["dfc1_ac1_pos"]`     |
 | `spec.scale`             | string or number         | no                   | auto-scale with warning      | Proportional scaling; font size, spacings, and bar dimensions scale together. Omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (`0.5`, `1.2`, …). An empty string is rejected. | `scale: auto`                     |
 | `spec.i18nNamespace`     | string                   | no                   | -                            | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                       | `i18nNamespace: audited`          |

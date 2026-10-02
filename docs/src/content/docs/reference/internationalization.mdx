@@ -55,9 +55,9 @@ map, and adding `spec.namespace` turns the manifest into a
 
 Fields:
 
-- `spec.code` – language code. It must equal the artefact's `spec.language` character for character, which in practice means `de` or `en`; the schema itself accepts any code of the form `de`, `de-DE` or `zh_Hans`, but a code no artefact uses is only reported by the `i18n-code-unused` lint.
-- `spec.namespace` – storage namespace, default `_system`. Only set this for [scoped overrides](#scoped-overrides-with-i18nnamespace).
-- `spec.content` – flat map of dotted keys to label strings, or a JSON string (at least 2 characters) holding the same map.
+- `spec.code` - language code. It must equal the artefact's `spec.language` character for character, which in practice means `de` or `en`; the schema itself accepts any code of the form `de`, `de-DE` or `zh_Hans`, but a code no artefact uses is only reported by the `i18n-code-unused` lint.
+- `spec.namespace` - storage namespace, default `_system`. Only set this for [scoped overrides](#scoped-overrides-with-i18nnamespace).
+- `spec.content` - flat map of dotted keys to label strings, or a JSON string (at least 2 characters) holding the same map.
 
 Multiple manifests for the same namespace and code merge in document order (later wins per key).
 When a DataSet [derives or asserts](/reference/dataset/#deriving-previous-period) a previous-period slot with a shift other than a year, bino emits a `_system` bundle for the artefact language that captions that slot `PP` instead of the built-in `PY`. It comes before your manifests, so your own `global.pp1` still wins.
@@ -189,7 +189,7 @@ Prefix each suffix with the chart you are overriding - for example
 | -------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
 | `bn-chart-bubble.xy-compare-variance`        | `compareWith cannot be combined with variance measures on the axes.`     | `compareWith` is set alongside variance measures                |
 | `bn-chart-bubble.bubble-size-negative`       | `{{count}} bubble(s) with a negative size value excluded.`               | The size measure is negative                                    |
-| `bn-chart-bubble.bubble-share-range`         | `{{count}} share value(s) outside [0,1] were clamped.`                   | A share value falls outside 0–1                                 |
+| `bn-chart-bubble.bubble-share-range`         | `{{count}} share value(s) outside [0,1] were clamped.`                   | A share value falls outside 0-1                                 |
 | `bn-chart-bubble.bubble-scale-group-unknown` | `size.group '{{group}}' names no bn-scaling-group in scope.`             | `size.group` names no [ScalingGroup](/reference/scaling-group/) |
 | `bn-chart-bubble.bubble-scale-overflow`      | `{{count}} group-scaled bubble(s) exceed the panel; rendered true-size.` | Group scaling would push bubbles past the panel                 |
 

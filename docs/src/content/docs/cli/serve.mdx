@@ -14,22 +14,22 @@ bino serve --live <name> [flags]
 
 Required flags:
 
-- `--live` – name of the `LiveReportArtefact` to serve (required).
+- `--live` - name of the `LiveReportArtefact` to serve (required).
 
 Common flags:
 
-- `--work-dir` – report bundle directory (default: `.`).
-- `--port` – HTTP port (default: `8080`).
-- `--addr` – full listen address (overrides `--port`, e.g. `0.0.0.0:8080`).
-- `--log-sql` – log executed SQL queries.
-- `--data-mode` – dataset delivery: `url` (default) fetches data over HTTP from the serve process, `inline` embeds it gzip+base64 in the HTML.
+- `--work-dir` - report bundle directory (default: `.`).
+- `--port` - HTTP port (default: `8080`).
+- `--addr` - full listen address (overrides `--port`, e.g. `0.0.0.0:8080`).
+- `--log-sql` - log executed SQL queries.
+- `--data-mode` - dataset delivery: `url` (default) fetches data over HTTP from the serve process, `inline` embeds it gzip+base64 in the HTML.
 
 ## How it works
 
-1. **Loads configuration** – reads all manifests from the work directory.
-2. **Validates routes** – ensures the selected `LiveReportArtefact` has a root route and all referenced `ReportArtefact`s exist.
-3. **Serves on-demand** – renders reports when requested, using caches for efficiency.
-4. **Nvigation** – enables smooth client-side navigation without full page reloads.
+1. **Loads configuration** - reads all manifests from the work directory.
+2. **Validates routes** - ensures the selected `LiveReportArtefact` has a root route and all referenced `ReportArtefact`s exist.
+3. **Serves on-demand** - renders reports when requested, using caches for efficiency.
+4. **Nvigation** - enables smooth client-side navigation without full page reloads.
 
 ## Data sent to the browser
 
@@ -102,12 +102,12 @@ Each route in a `LiveReportArtefact` can define its own query parameters that ar
 
 Query parameters support different input types in the serve UI sidebar:
 
-- `string` (default) – text input
-- `number` – numeric input with optional min/max/step
-- `number_range` – dual range slider for range filtering
-- `select` – dropdown with static items or options from a DataSet
-- `date` – date picker
-- `date_time` – date and time picker
+- `string` (default) - text input
+- `number` - numeric input with optional min/max/step
+- `number_range` - dual range slider for range filtering
+- `select` - dropdown with static items or options from a DataSet
+- `date` - date picker
+- `date_time` - date and time picker
 
 Parameters are **required** by default. To make a parameter optional, either:
 
@@ -209,8 +209,8 @@ manifests, and [Running bino in Docker](/guides/docker/) for the image itself.
 
 When the served `LiveReportArtefact` defines [`spec.pwa`](/reference/live-report-artefact/#specpwa), `bino serve` makes the application installable as a Progressive Web App:
 
-- `GET /manifest.webmanifest` – the web app manifest, generated from `spec.pwa` (names, colors, display mode, icons). Titled non-root routes additionally become manifest `shortcuts` - the jump list shown when long-pressing or right-clicking the installed app's icon.
-- `GET /sw.js` – the service worker.
+- `GET /manifest.webmanifest` - the web app manifest, generated from `spec.pwa` (names, colors, display mode, icons). Titled non-root routes additionally become manifest `shortcuts` - the jump list shown when long-pressing or right-clicking the installed app's icon.
+- `GET /sw.js` - the service worker.
 - Icon files come from the referenced `Asset` manifests and are served at `assets/files/<name>`.
 - Every page gets the manifest link and the service-worker registration injected into its `<head>` - plus a theme-color meta tag when `themeColor` is set, and an apple-touch-icon link when at least one icon has purpose `any`.
 

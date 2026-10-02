@@ -61,7 +61,7 @@ measure columns with these prefixes so bino applies the right notation automatic
 
 The numbered slots are **distinct scenarios of the same type** (IBCS WG1 "more scenarios per
 type"): `ac1` and `ac2` are two different actuals (e.g. two collection dates), not a typo. Keep it to
-**3–4 scenarios per visualization** for clarity, and let the title carry what each slot means.
+**3-4 scenarios per visualization** for clarity, and let the title carry what each slot means.
 
 ## Variances - comparing two scenarios
 
@@ -134,7 +134,7 @@ ${t('<i18n-key>')}                       e.g.  ${t('report.title')}
 ```
 
 - The template is evaluated in a sandbox: only `data` and `t` are in scope (no `window`/`document`).
-- A safe subset of HTML is allowed (`b`, `i`, `strong`, `em`, `span`, `p`, `br`, `table`, `ul`, `h1`–`h6`,
+- A safe subset of HTML is allowed (`b`, `i`, `strong`, `em`, `span`, `p`, `br`, `table`, `ul`, `h1`-`h6`,
   `a`, `img`, …) with `class`/`style`/`href`/`src`/… attributes; everything else is stripped.
 - **Ground every claim in the data.** Before writing a number into narrative, confirm it with
   `get_rows(<dataset>)`. Don't state a takeaway the data doesn't support.

@@ -33,7 +33,7 @@ The Bino Reports VS Code extension provides schema-aware YAML editing, navigatio
 
 Beyond YAML editing, the extension also ships a schema-driven **Designer** webview,
 a **DataSource creation Wizard**, a **Tree/Table Editor**, and **PRQL** editing
-support - see sections 9–12 below.
+support - see sections 9-12 below.
 
 ### Architecture
 
@@ -136,7 +136,7 @@ Bar) holds four views:
 - Documents grouped by kind (ReportArtefact, DataSource, DataSet, LayoutPage, LayoutCard, Table, Text, etc.).
 - Count badges on each kind group.
 - Icons that reflect the manifest kind (database for DataSource, table for DataSet, PDF icon for ReportArtefact, etc.).
-- Inline children for layouts (LayoutPage, LayoutCard) – nested Text/Table/Chart components.
+- Inline children for layouts (LayoutPage, LayoutCard) - nested Text/Table/Chart components.
 
 **Screenshot placeholder:**
 
@@ -152,17 +152,17 @@ Bar) holds four views:
 - **Click** an inline child (component) to open the parent file and focus the correct line.
 - **Refresh / Validate:**
   - Use the toolbar buttons at the top of the Bino Explorer:
-    - **Refresh Index** – `bino.refreshIndex`
-    - **Validate Workspace** – `bino.validateWorkspace`
+    - **Refresh Index** - `bino.refreshIndex`
+    - **Validate Workspace** - `bino.validateWorkspace`
 
 ### 4.2 Context Menu
 
 Right-click on a document in the Bino Explorer to access:
 
-- **Go to First Problem** – jumps to the first diagnostic in that file.
-- **Show Graph (Dependencies & Dependents)** – opens a QuickPick built from the dependency graph.
-- **Show Dependencies** – shows what this document depends on.
-- **Show Dependents (What Uses This?)** – shows what uses this document.
+- **Go to First Problem** - jumps to the first diagnostic in that file.
+- **Show Graph (Dependencies & Dependents)** - opens a QuickPick built from the dependency graph.
+- **Show Dependencies** - shows what this document depends on.
+- **Show Dependents (What Uses This?)** - shows what uses this document.
 
 ---
 
@@ -172,14 +172,14 @@ Right-click on a document in the Bino Explorer to access:
 
 The extension provides completions in YAML files for:
 
-- `dataset:` / `dependencies:` – suggests DataSet names and `$DataSource` references.
-- `source:` – suggests DataSource names.
-- `secret:` – suggests ConnectionSecret names.
-- `signingProfile:` – suggests SigningProfile names.
-- `selectedStyle:` – suggests defined ComponentStyle names.
-- `kind:` fields – suggests all known Bino kinds.
-- Scenario/variance references – suggests column names based on the referenced dataset/datasource.
-- Inside `query:`/`prql:` blocks – suggests real DuckDB column names from the bound source.
+- `dataset:` / `dependencies:` - suggests DataSet names and `$DataSource` references.
+- `source:` - suggests DataSource names.
+- `secret:` - suggests ConnectionSecret names.
+- `signingProfile:` - suggests SigningProfile names.
+- `selectedStyle:` - suggests defined ComponentStyle names.
+- `kind:` fields - suggests all known Bino kinds.
+- Scenario/variance references - suggests column names based on the referenced dataset/datasource.
+- Inside `query:`/`prql:` blocks - suggests real DuckDB column names from the bound source.
 
 Completion, hover, diagnostics, and navigation are all served by the `bino lsp`
 [Language Server](/cli/lsp/) - a real LSP process, not the older CLI-subprocess
@@ -321,9 +321,9 @@ Each entry shows:
 - Label: `kind: name` with an icon.
 - Description: relative file path.
 - Detail: relationship to the root node:
-  - `↓ dependency` – this node is a dependency (what the root uses).
-  - `↑ dependent` – this node depends on the root (what uses the root).
-  - `↕ both` – this node is both dependent and dependency.
+  - `↓ dependency` - this node is a dependency (what the root uses).
+  - `↑ dependent` - this node depends on the root (what uses the root).
+  - `↕ both` - this node is both dependent and dependency.
 
 Selecting an item:
 

@@ -10,9 +10,9 @@ Exact names and defaults may evolve; always consult the CLI help for the latest 
 
 You can reference environment variables in any string value with:
 
-- `${VAR}` – replaced with the value of `VAR`.
-- `${VAR:default}` – replaced with the value of `VAR`, or `default` if `VAR` is not set.
-- `\${VAR}` – escape sequence, produces `${VAR}` literally.
+- `${VAR}` - replaced with the value of `VAR`.
+- `${VAR:default}` - replaced with the value of `VAR`, or `default` if `VAR` is not set.
+- `\${VAR}` - escape sequence, produces `${VAR}` literally.
 
 Behavior:
 
@@ -51,9 +51,9 @@ Document any overrides in your project README and CI configuration.
 
 bino validates query results against the DataSet schema to catch data issues early. For efficiency, only a sample of rows is validated.
 
-| Variable                        | Default | Description                                          |
-| :------------------------------ | :------ | :--------------------------------------------------- |
-| `BNR_DATA_VALIDATION_SAMPLE_SIZE` | `10`    | Number of rows to validate per dataset               |
+| Variable                          | Default | Description                            |
+| :-------------------------------- | :------ | :------------------------------------- |
+| `BNR_DATA_VALIDATION_SAMPLE_SIZE` | `10`    | Number of rows to validate per dataset |
 
 Example:
 

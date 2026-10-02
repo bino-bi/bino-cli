@@ -43,7 +43,7 @@ shown above - see [Measure tokens](#measure-tokens).
 The `x` and `y` mappings accept either a bare **measure token** or an object
 whose `measure` property is a token:
 
-- **Scenario slots**: `ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4` -
+- **Scenario slots**: `ac1`-`ac4`, `pp1`-`pp4`, `fc1`-`fc4`, `pl1`-`pl4` -
   the row columns of the dataset.
 - **Variance tokens**: `d<base>_<delta>` (absolute) or `dr<base>_<delta>`
   (relative), e.g. `dac1_pp1` (AC minus PY) or `drac1_pl1` (AC vs. plan in
@@ -75,30 +75,30 @@ Iso-lines require a strictly positive domain on both axes.
 
 ## Fields
 
-- `dataset` – required dataset name, inline definition, or array of either.
-- `x`, `y` – required axis measure mappings (token or object with
+- `dataset` - required dataset name, inline definition, or array of either.
+- `x`, `y` - required axis measure mappings (token or object with
   `measure`, `label`, `unit`, `min`, `max`, `refLine`, and `highlight` with
   `from`/`to`; an open end runs to the domain edge).
-- `iso` – optional iso-line configuration (`values`, `label`, `unit`,
+- `iso` - optional iso-line configuration (`values`, `label`, `unit`,
   `highlight.from` shades the region where `x·y >= from`).
-- `level`, `seriesLevel` – point identity and series grouping levels.
-- `facet` – small-multiple configuration (`level` required, `columns`).
-- `labels` – point labels: `points` is `auto` (up to `max` collision-free
+- `level`, `seriesLevel` - point identity and series grouping levels.
+- `facet` - small-multiple configuration (`level` required, `columns`).
+- `labels` - point labels: `points` is `auto` (up to `max` collision-free
   candidates), `all`, `none`, or an explicit list of point names; `values`
   adds the measure value. Defaults: `points: auto`, `values: false`,
   `max: 12`.
-- `legend` – series legend (`show` defaults to `true`, `position` to
+- `legend` - series legend (`show` defaults to `true`, `position` to
   `right`).
-- `aspect` – plot aspect ratio `"w:h"` (default `16:9`); XY charts have no
+- `aspect` - plot aspect ratio `"w:h"` (default `16:9`); XY charts have no
   data-driven height.
-- `limit` – max points per facet panel, keeping the first rows in dataset
+- `limit` - max points per facet panel, keeping the first rows in dataset
   order; `0` means unlimited.
-- `filter` – optional AlaSQL WHERE fragment.
-- `chartTitle` – optional title.
-- `scale` – proportional font scaling, same semantics as the other charts
+- `filter` - optional AlaSQL WHERE fragment.
+- `chartTitle` - optional title.
+- `scale` - proportional font scaling, same semantics as the other charts
   (`none`, `auto`, or a fixed factor).
-- `selectedStyle` – optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
-- `ruleset` – optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set.
+- `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
+- `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set.
 
 ## Example: Basic scattergram
 
@@ -184,7 +184,7 @@ spec:
 | ------------------------- | -------------------------- | ------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
 | `spec.dataset`            | string, object, or array   | yes                       | -                                          | Dataset reference: a name, an inline [`DataSet`](/reference/dataset/) definition, or an array of either.                                                                                                                                         | `dataset: products`                  |
 | `spec.x`                  | string or object           | yes                       | -                                          | Horizontal axis measure mapping: a bare [measure token](#measure-tokens) or the object below. All plain scenario measures across `x` and `y` must share one scenario family. Maps to the `x` HTML attribute.                                     | `x: ac1`                             |
-| `spec.x.measure`          | string                     | yes (object form)         | -                                          | Scenario slot (`ac1`–`ac4`, `pp1`–`pp4`, `fc1`–`fc4`, `pl1`–`pl4`) or a variance token (`dac1_pp1`, `drac1_pl1`).                                                                                                                                | `measure: ac1`                       |
+| `spec.x.measure`          | string                     | yes (object form)         | -                                          | Scenario slot (`ac1`-`ac4`, `pp1`-`pp4`, `fc1`-`fc4`, `pl1`-`pl4`) or a variance token (`dac1_pp1`, `drac1_pl1`).                                                                                                                                | `measure: ac1`                       |
 | `spec.x.label`            | string                     | no                        | -                                          | Axis title displayed next to the axis.                                                                                                                                                                                                           | `label: "Margin"`                    |
 | `spec.x.unit`             | string                     | no                        | -                                          | Unit suffix after the axis title. Values are drawn as delivered - scale in the DataSet SQL.                                                                                                                                                      | `unit: "% of net sales"`             |
 | `spec.x.min`              | number                     | no                        | data minimum                               | Lower axis domain bound. Points outside an explicit domain are clipped with a warning.                                                                                                                                                           | `min: 0`                             |

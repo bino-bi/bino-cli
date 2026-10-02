@@ -32,12 +32,12 @@ hosted file (see [Examples](#examples)) or `inlineBase64` for a self-contained b
 
 Important fields:
 
-- `spec.type` – one of `image`, `file`, `font`.
-- `spec.mediaType` – MIME type, for example `image/png`, `image/svg+xml`, `font/woff2`.
-- `metadata.description` – optional free-form description of this asset.
-- `spec.source.inlineBase64` – base64-encoded content embedded in the manifest.
-- `spec.source.localPath` – relative or absolute path to a file in your project.
-- `spec.source.remoteURL` – HTTP/HTTPS URL pointing to a remote asset.
+- `spec.type` - one of `image`, `file`, `font`.
+- `spec.mediaType` - MIME type, for example `image/png`, `image/svg+xml`, `font/woff2`.
+- `metadata.description` - optional free-form description of this asset.
+- `spec.source.inlineBase64` - base64-encoded content embedded in the manifest.
+- `spec.source.localPath` - relative or absolute path to a file in your project.
+- `spec.source.remoteURL` - HTTP/HTTPS URL pointing to a remote asset.
 
 ## Examples
 
@@ -109,8 +109,8 @@ If the name does not match any asset the image renders as a broken link (`#asset
 
 This works in two contexts:
 
-1. **DocumentArtefact** – inside `.md` source files rendered via `spec.sources`.
-2. **Text components** – in the `spec.value` Markdown of `Text`, `LayoutPage` inline text children, and `Grid` text cells.
+1. **DocumentArtefact** - inside `.md` source files rendered via `spec.sources`.
+2. **Text components** - in the `spec.value` Markdown of `Text`, `LayoutPage` inline text children, and `Grid` text cells.
 
 ### Example
 

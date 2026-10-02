@@ -32,8 +32,8 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 The `metadata.name` of a `ComponentStyle` decides how it is applied:
 
-- `_default` – applied to **all** components automatically.
-- Any other name (e.g. `corporateTheme`) – a **named style** that individual components opt into via `spec.selectedStyle`.
+- `_default` - applied to **all** components automatically.
+- Any other name (e.g. `corporateTheme`) - a **named style** that individual components opt into via `spec.selectedStyle`.
 
 At render time each component merges style layers in this order (later wins):
 built-in `_system` defaults → `_default` → the style named by `selectedStyle`.

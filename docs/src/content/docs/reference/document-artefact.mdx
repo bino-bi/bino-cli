@@ -40,27 +40,27 @@ All attributes are listed in the [Attribute Reference](#attribute-reference) bel
 
 ### Basic settings
 
-- `spec.format` – Required page size: `a4`, `a5`, `letter`, or `legal`. A manifest without it fails
+- `spec.format` - Required page size: `a4`, `a5`, `letter`, or `legal`. A manifest without it fails
   schema validation; the loader falls back to `a4` with a warning.
-- `spec.orientation` – `portrait` or `landscape`. Default: `portrait`.
-- `spec.locale` – Document locale (e.g., `en`, `de`). Default: `de`.
-- `spec.filename` – Output filename (relative to output directory). Without it the PDF is named
+- `spec.orientation` - `portrait` or `landscape`. Default: `portrait`.
+- `spec.locale` - Document locale (e.g., `en`, `de`). Default: `de`.
+- `spec.filename` - Output filename (relative to output directory). Without it the PDF is named
   after `metadata.name` (`<name>.pdf`).
-- `spec.title` – Document title; used in PDF metadata and default header.
+- `spec.title` - Document title; used in PDF metadata and default header.
 
 ### Metadata
 
-- `spec.author` – Optional author name for PDF metadata.
-- `spec.subject` – Optional subject for PDF metadata.
-- `spec.keywords` – Optional list of keywords for PDF metadata.
+- `spec.author` - Optional author name for PDF metadata.
+- `spec.subject` - Optional subject for PDF metadata.
+- `spec.keywords` - Optional list of keywords for PDF metadata.
 
 ### Content sources
 
-- `spec.sources` – Required list of Markdown file paths or glob patterns to include in the document,
+- `spec.sources` - Required list of Markdown file paths or glob patterns to include in the document,
   at least one entry. Files matching glob patterns are sorted alphabetically for deterministic
   ordering. Supports patterns like `./docs/*.md` or `./docs/**/*.md`.
-- `spec.stylesheet` – Optional path to a custom CSS file for styling.
-- `spec.pageBreakBetweenSources` – Insert page breaks between source files. Default: `true`. With
+- `spec.stylesheet` - Optional path to a custom CSS file for styling.
+- `spec.pageBreakBetweenSources` - Insert page breaks between source files. Default: `true`. With
   more than one source the loader forces it to `true`.
 
 #### Glob patterns
@@ -78,8 +78,8 @@ Files are deduplicated if patterns overlap, and sorted alphabetically within eac
 
 ### Table of contents
 
-- `spec.tableOfContents` – Generate a table of contents from headings. Default: `false`.
-- `spec.tocNumbering` – Add hierarchical chapter numbers to TOC entries (e.g. `1`, `1.1`, `1.1.1`, `1.1.1 a`). Only applies when `tableOfContents` is enabled. Default: `true`.
+- `spec.tableOfContents` - Generate a table of contents from headings. Default: `false`.
+- `spec.tocNumbering` - Add hierarchical chapter numbers to TOC entries (e.g. `1`, `1.1`, `1.1.1`, `1.1.1 a`). Only applies when `tableOfContents` is enabled. Default: `true`.
 
 When enabled, the table of contents is automatically generated from all `h1`-`h6` headings
 that have an `id` attribute (standard Markdown headings get IDs automatically). The TOC
@@ -89,7 +89,7 @@ The TOC appears at the beginning of the document and includes a page break after
 
 ### Math rendering
 
-- `spec.math` – Enable LaTeX math rendering via KaTeX. Default: `true`.
+- `spec.math` - Enable LaTeX math rendering via KaTeX. Default: `true`.
 
 When enabled, you can include mathematical expressions in your Markdown:
 
@@ -108,11 +108,11 @@ Math is rendered server-side using KaTeX, so no JavaScript is required in the ou
 
 ### Header and footer
 
-- `spec.displayHeaderFooter` – Enable header and footer in the PDF. Default: `false`.
-- `spec.headerTemplate` – Custom HTML template for the header.
-- `spec.footerTemplate` – Custom HTML template for the footer.
-- `spec.marginTop` – Top margin reserved for the header (e.g., `20mm`). Default: `20mm`.
-- `spec.marginBottom` – Bottom margin reserved for the footer (e.g., `15mm`). Default: `15mm`.
+- `spec.displayHeaderFooter` - Enable header and footer in the PDF. Default: `false`.
+- `spec.headerTemplate` - Custom HTML template for the header.
+- `spec.footerTemplate` - Custom HTML template for the footer.
+- `spec.marginTop` - Top margin reserved for the header (e.g., `20mm`). Default: `20mm`.
+- `spec.marginBottom` - Bottom margin reserved for the footer (e.g., `15mm`). Default: `15mm`.
 
 When `displayHeaderFooter` is enabled without custom templates, default templates are used:
 
@@ -123,11 +123,11 @@ When `displayHeaderFooter` is enabled without custom templates, default template
 
 Templates use Chromium's PDF header/footer format. Available CSS classes:
 
-- `.title` – Document title
-- `.date` – Current date
-- `.pageNumber` – Current page number
-- `.totalPages` – Total page count
-- `.url` – Document URL
+- `.title` - Document title
+- `.date` - Current date
+- `.pageNumber` - Current page number
+- `.totalPages` - Total page count
+- `.url` - Document URL
 
 Example custom footer:
 
@@ -143,7 +143,7 @@ spec:
 
 ### Signing
 
-- `spec.signingProfile` – Optional reference to a `SigningProfile` manifest for digital signatures.
+- `spec.signingProfile` - Optional reference to a `SigningProfile` manifest for digital signatures.
 
 ## Markdown features
 
