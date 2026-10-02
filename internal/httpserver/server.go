@@ -133,6 +133,8 @@ type Config struct {
 	Logger          logx.Logger
 	HTTPClient      *http.Client
 	ExplorerHandler http.Handler
+	// PDFHandler builds the preview PDF of one artefact. Only `bino preview` sets it.
+	PDFHandler http.Handler
 }
 
 // maxContextCacheEntries limits the number of cached context entries to prevent
@@ -235,6 +237,9 @@ func New(cfg Config) (*Server, error) {
 	mux.Handle("/__bino/", web.Handler("/__bino/"))
 	if cfg.ExplorerHandler != nil {
 		mux.Handle("/__explorer/", cfg.ExplorerHandler)
+	}
+	if cfg.PDFHandler != nil {
+		mux.Handle("POST /__preview/pdf", cfg.PDFHandler)
 	}
 
 	srv.httpServer = &http.Server{

@@ -3,10 +3,13 @@ package pdf
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pdfcpu/pdfcpu/pkg/api"
 )
 
 // writeMinimalPDF writes a minimal but valid PDF with the given number of
@@ -215,6 +218,100 @@ func TestStampRomanPageNumbers(t *testing.T) {
 		}
 		if err := StampRomanPageNumbers(path, ""); err == nil {
 			t.Error("StampRomanPageNumbers() should error on invalid pdf")
+		}
+	})
+}
+
+// watermarkMarkers returns, per page, how many pdfcpu stamps the page content carries.
+func watermarkMarkers(t *testing.T, path string) map[int]int {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open pdf: %v", err)
+	}
+	defer f.Close() //nolint:errcheck // read-only handle
+
+	counts := map[int]int{}
+	err = api.ExtractContent(f, nil, func(r io.Reader, pageNr int) error {
+		content, rerr := io.ReadAll(r)
+		if rerr != nil {
+			return rerr
+		}
+		counts[pageNr] += bytes.Count(content, []byte("/Artifact <</Subtype /Watermark"))
+		return nil
+	}, nil)
+	if err != nil {
+		t.Fatalf("extract content: %v", err)
+	}
+	return counts
+}
+
+func TestStampWatermark(t *testing.T) {
+	t.Run("stamps every page in place", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "doc.pdf")
+		writeMinimalPDF(t, path, 3, nil)
+
+		if err := StampWatermark(path, "PREVIEW"); err != nil {
+			t.Fatalf("StampWatermark() error = %v", err)
+		}
+
+		got, err := PageCount(path)
+		if err != nil {
+			t.Fatalf("PageCount(stamped) error = %v", err)
+		}
+		if got != 3 {
+			t.Errorf("stamped page count = %d, want 3", got)
+		}
+		markers := watermarkMarkers(t, path)
+		for page := 1; page <= 3; page++ {
+			if markers[page] != 1 {
+				t.Errorf("page %d has %d watermark(s), want 1", page, markers[page])
+			}
+		}
+	})
+
+	// A document with a TOC is a merge of Roman-stamped TOC pages and content
+	// pages; the watermark must land on both.
+	t.Run("stamps merged file with roman-stamped pages", func(t *testing.T) {
+		dir := t.TempDir()
+		toc := filepath.Join(dir, "toc.pdf")
+		content := filepath.Join(dir, "content.pdf")
+		merged := filepath.Join(dir, "merged.pdf")
+		writeMinimalPDF(t, toc, 1, nil)
+		writeMinimalPDF(t, content, 2, nil)
+		if err := StampRomanPageNumbers(toc, ""); err != nil {
+			t.Fatalf("StampRomanPageNumbers() error = %v", err)
+		}
+		if err := MergeFiles([]string{toc, content}, merged); err != nil {
+			t.Fatalf("MergeFiles() error = %v", err)
+		}
+
+		if err := StampWatermark(merged, "PREVIEW"); err != nil {
+			t.Fatalf("StampWatermark() error = %v", err)
+		}
+
+		markers := watermarkMarkers(t, merged)
+		want := map[int]int{1: 2, 2: 1, 3: 1}
+		for page, n := range want {
+			if markers[page] != n {
+				t.Errorf("page %d has %d stamp(s), want %d", page, markers[page], n)
+			}
+		}
+	})
+
+	t.Run("missing file errors", func(t *testing.T) {
+		if err := StampWatermark(filepath.Join(t.TempDir(), "missing.pdf"), "PREVIEW"); err == nil {
+			t.Fatal("StampWatermark() should error on missing file")
+		}
+	})
+
+	t.Run("invalid pdf errors", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "bad.pdf")
+		if err := os.WriteFile(path, []byte("not a pdf"), 0o644); err != nil {
+			t.Fatalf("write bad file: %v", err)
+		}
+		if err := StampWatermark(path, "PREVIEW"); err == nil {
+			t.Error("StampWatermark() should error on invalid pdf")
 		}
 	})
 }

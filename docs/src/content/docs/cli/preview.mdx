@@ -33,10 +33,38 @@ artefacts: editing a markdown source re-renders only the affected document, and
 edits to an embedded component or its data propagate into the open page. The
 preview pins the page to the artefact's paper width and marks page breaks and
 header/footer bands, but real pagination and TOC page numbers appear only in
-`bino build` - see
+a PDF. Use the toolbar's **PDF** button for a quick check, or `bino build` for
+the final file. See
 [Previewing documents](/reference/document-artefact/#previewing-documents) for
 the exact contract. `--artefact` and `--exclude-artefact` filter document
 artefacts too.
+
+## PDF preview
+
+Select a report or document artefact and click **PDF** in the toolbar. bino
+builds the artefact with the same code as `bino build`, shows the PDF in the
+browser and offers **Download**. Every page is marked `PREVIEW`.
+
+The PDF preview is less strict than `bino build`:
+
+- **Warnings**: a failing dataset query, a failed data validation (reports
+  only) and an unset `${VAR}` do not stop the build. They are listed above the
+  PDF, and the affected parts of the PDF can be empty.
+- **Skipped**: build hooks, signing, the dependency graph file and lint.
+- **Errors**: a manifest that does not load, a render failure, a render
+  timeout or a missing Chrome stop the build. The message is shown instead of
+  the PDF.
+
+Things to know:
+
+- Chrome is found as in `bino build`: the `chrome-path` under `[build.args]` in
+  `bino.toml`, then `CHROME_PATH`, then the browser installed by `bino setup`.
+- The artefact is built in build mode, so `mode` constraints select the same
+  pages as `bino build`. Environment variables come from `[preview.env]`.
+- The PDF is a snapshot. It is not rebuilt on live reload; close the window and
+  click **PDF** again. Live reload waits while a PDF is being built.
+- The button needs a browser tab. Inside the VS Code preview panel it shows a
+  link to open the preview in your browser.
 
 ## Default Arguments via bino.toml
 

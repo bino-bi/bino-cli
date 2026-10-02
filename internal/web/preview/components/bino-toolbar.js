@@ -13,7 +13,6 @@ class BinoToolbar extends LitElement {
     _refreshing: { state: true },
     _refreshError: { state: true },
     _inspectorAvailable: { state: true },
-    _buildCopied: { state: true },
   };
 
   static styles = css`
@@ -101,7 +100,7 @@ class BinoToolbar extends LitElement {
       cursor: pointer;
       user-select: none;
     }
-    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover, .inspect-btn:hover:not(:disabled), .build-btn:hover {
+    .assets-btn:hover, .graph-btn:hover:not(:disabled), .explorer-btn:hover, .inspect-btn:hover:not(:disabled), .build-btn:hover:not(:disabled) {
       background: var(--bino-surface-hover);
       border-color: var(--bino-border-hover);
     }
@@ -113,7 +112,7 @@ class BinoToolbar extends LitElement {
       text-overflow: ellipsis;
       max-width: 32ch;
     }
-    .graph-btn:disabled, .present-btn:disabled, .inspect-btn:disabled {
+    .graph-btn:disabled, .present-btn:disabled, .inspect-btn:disabled, .build-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
@@ -224,7 +223,6 @@ class BinoToolbar extends LitElement {
     this._refreshError = '';
     this._panelDismissed = false;
     this._inspectorAvailable = false;
-    this._buildCopied = false;
     this._boundOnContentUpdated = this._refreshInspectorAvailability.bind(this);
     this._boundOnErrorsChanged = this._onErrorsChanged.bind(this);
     this._boundOnPanelDismissed = this._onPanelDismissed.bind(this);
@@ -278,6 +276,9 @@ class BinoToolbar extends LitElement {
 
     // The document being viewed, if the current route is a /doc/ one.
     var currentDoc = docArts.find(function(art) { return '/doc/' + art.name === currentPath; }) || null;
+
+    // The artefact the PDF button builds: the viewed document or report.
+    var pdfArt = currentDoc || reportArts.find(function(art) { return '/' + art.name === currentPath; }) || null;
 
     return html`
       <span class="title">
@@ -341,14 +342,12 @@ class BinoToolbar extends LitElement {
         <span class="present-icon">\u25B6</span>
         <span>Present</span>
       </button>
-      ${currentDoc ? html`
-        <button class="build-btn"
-          title=${'Copy "bino build --artefact ' + currentDoc.name + '" to the clipboard \u2014 pagination, TOC page numbers and headers render only in the built PDF'}
-          @click=${function() { self._onCopyBuildCmd(currentDoc.name); }}>
-          <span class="build-icon">${this._buildCopied ? '\u2713' : '\u2193'}</span>
-          <span>${this._buildCopied ? 'Copied' : 'Build PDF'}</span>
-        </button>
-      ` : ''}
+      <button class="build-btn" ?disabled=${!pdfArt}
+        title=${pdfArt ? 'Build a preview PDF to view or download' : 'PDF is only available for a single artefact'}
+        @click=${function() { self._onPdfClick(pdfArt); }}>
+        <span class="build-icon">\u2193</span>
+        <span>PDF</span>
+      </button>
       <span class="spacer"></span>
       ${this._refreshError ? html`
         <span class="refresh-error-msg" title=${this._refreshError}>
@@ -403,35 +402,10 @@ class BinoToolbar extends LitElement {
     return parts.join(' · ');
   }
 
-  // _onCopyBuildCmd copies the build command for the viewed document. The
-  // textarea fallback is load-bearing inside the VS Code preview webview,
-  // whose iframe sandbox grants no clipboard permission.
-  _onCopyBuildCmd(name) {
-    var self = this;
-    var cmd = 'bino build --artefact ' + name;
-    var markCopied = function() {
-      self._buildCopied = true;
-      setTimeout(function() { self._buildCopied = false; }, 2000);
-    };
-    var fallback = function() {
-      var ta = document.createElement('textarea');
-      ta.value = cmd;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        if (document.execCommand('copy')) markCopied();
-      } catch (err) {
-        console.warn('bino-toolbar: clipboard copy failed', err);
-      }
-      document.body.removeChild(ta);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(cmd).then(markCopied, fallback);
-    } else {
-      fallback();
-    }
+  _onPdfClick(art) {
+    document.dispatchEvent(new CustomEvent('bino-open-pdf', {
+      detail: { name: art.name, kind: art.isDoc ? 'DocumentArtefact' : 'ReportArtefact' }
+    }));
   }
 
   _refreshInspectorAvailability() {

@@ -1,7 +1,7 @@
-// Package pdf provides PDF post-processing operations for document artefact
-// rendering: merging, page counting, heading page extraction, and Roman numeral
-// page number stamping. It wraps pdfcpu to isolate PDF manipulation from the
-// rest of the pipeline.
+// Package pdf provides PDF post-processing operations for artefact rendering:
+// merging, page counting, heading page extraction, Roman numeral page number
+// stamping, and watermark stamping. It wraps pdfcpu to isolate PDF manipulation
+// from the rest of the pipeline.
 package pdf
 
 import (
@@ -212,6 +212,16 @@ func StampRomanPageNumbers(filePath string, dateStr string) error {
 		return fmt.Errorf("stamp roman: rename: %w", err)
 	}
 
+	return nil
+}
+
+// StampWatermark stamps text diagonally across every page of the PDF, in place.
+// The text is scaled relative to each page, so it fits paper and screen formats.
+func StampWatermark(filePath, text string) error {
+	// onTop: Chrome prints page backgrounds, which would hide a watermark below.
+	if err := api.AddTextWatermarksFile(filePath, "", nil, true, text, "scale:0.8 rel, opacity:0.3", nil); err != nil {
+		return fmt.Errorf("stamp watermark: %w", err)
+	}
 	return nil
 }
 

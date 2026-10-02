@@ -181,11 +181,34 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				explorer.Handler(sess).ServeHTTP(w, r)
 			})
 
+			// refreshMu serializes refreshes and preview PDF builds.
+			refreshMu := &sync.Mutex{}
+			buildChromePath, _ := env.ProjectCfg.Build.Args.GetString("chrome-path")
+
 			server, err := httpserver.New(httpserver.Config{
 				ListenAddr:      addr,
 				CacheDir:        env.CacheDir,
 				Logger:          logger.Channel("server"),
 				ExplorerHandler: lazyExplorer,
+				PDFHandler: &previewPDFHandler{
+					base:   ctx,
+					mu:     refreshMu,
+					logger: logger.Channel("pdf"),
+					builder: pipeline.Builder{
+						Workdir:                  env.ProjectRoot,
+						EngineVersion:            env.EngineVersion,
+						CacheDir:                 env.CacheDir,
+						QueryLogger:              queryLogger,
+						DataValidation:           dataValidationMode,
+						DataValidationSampleSize: dataValidationSampleSize,
+						PluginOptions:            pluginOpts,
+						PostRenderHTMLHook:       postRenderHTMLHook,
+						PostDatasetHook:          postDatasetHook,
+					},
+					kinds:      env.PluginRegistry,
+					filter:     pipeline.FilterOptions{Include: include, Exclude: exclude},
+					chromePath: buildChromePath,
+				},
 			})
 			if err != nil {
 				return RuntimeError(err)
@@ -292,7 +315,6 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				reporter.End(bootstatus.PhaseDuckDB)
 
 				// 2. Build refresh plumbing
-				refreshMu := &sync.Mutex{}
 				refreshState := refresh.NewState()
 				refreshCfg := refresh.Config{
 					Logger:                   logger,

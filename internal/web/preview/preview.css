@@ -130,7 +130,7 @@ bn-context:has(.bn-document-content) {
    margins pull the bands into the container's 2cm page padding so they read
    as margin bands, not content. */
 bn-context[data-bino-doc-hf]:has(.bn-document-content)::before {
-  content: 'header - rendered here by bino build';
+  content: 'header - rendered in the PDF';
   display: flex;
   align-items: center;
   justify-content: center;
@@ -144,7 +144,7 @@ bn-context[data-bino-doc-hf]:has(.bn-document-content)::before {
   letter-spacing: 0.04em;
 }
 bn-context[data-bino-doc-hf]:has(.bn-document-content)::after {
-  content: 'footer - rendered here by bino build';
+  content: 'footer - rendered in the PDF';
   display: flex;
   align-items: center;
   justify-content: center;
