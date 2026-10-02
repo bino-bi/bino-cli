@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -132,5 +133,69 @@ func TestDocumentDataScopeFallback(t *testing.T) {
 	_, ok := documentDataScope(context.Background(), logx.Nop(), nil, "ghost")
 	if ok {
 		t.Fatal("expected ok=false for an artefact without a graph node")
+	}
+}
+
+// errCaptureLogger records Errorf calls of the logger and its channels.
+type errCaptureLogger struct {
+	logx.Logger
+	errs *[]string
+}
+
+func (l errCaptureLogger) Errorf(format string, args ...any) {
+	*l.errs = append(*l.errs, fmt.Sprintf(format, args...))
+}
+
+func (l errCaptureLogger) Channel(string) logx.Logger { return l }
+
+// TestIntegration_DocRenderLogsDatasetWarnings proves a query that fails under
+// ContinueOnQueryError is logged for a document, and not repeated by the TOC pass.
+func TestIntegration_DocRenderLogsDatasetWarnings(t *testing.T) {
+	workdir := copyBundle(t, "doc-bundle")
+	datasets := filepath.Join(workdir, "datasets.yaml")
+	raw, err := os.ReadFile(datasets)
+	if err != nil {
+		t.Fatalf("read datasets: %v", err)
+	}
+	broken := strings.Replace(string(raw), "SELECT region, amount FROM src_a", "SELECT region FROM no_such_table", 1)
+	if err := os.WriteFile(datasets, []byte(broken), 0o600); err != nil {
+		t.Fatalf("write datasets: %v", err)
+	}
+
+	var errs []string
+	ctx := logx.WithLogger(context.Background(), errCaptureLogger{Logger: logx.Nop(), errs: &errs})
+	loadResult, err := LoadManifests(ctx, workdir, nil)
+	if err != nil {
+		t.Fatalf("load manifests: %v", err)
+	}
+	documentArtefacts, err := config.CollectDocumentArtefacts(loadResult.Documents)
+	if err != nil {
+		t.Fatalf("collect document artefacts: %v", err)
+	}
+	var artifact config.DocumentArtefact
+	for _, docArt := range documentArtefacts {
+		if docArt.Document.Name == "refdoc" {
+			artifact = docArt
+		}
+	}
+
+	for _, tocOnly := range []bool{false, true} {
+		if _, err := RenderDocumentArtefactHTML(ctx, workdir, loadResult.Documents, artifact, DocumentArtefactRenderOptions{
+			EngineVersion:        "v1.0.0",
+			ContinueOnQueryError: true,
+			TOCOnly:              tocOnly,
+		}); err != nil {
+			t.Fatalf("render document artefact html (TOCOnly=%v): %v", tocOnly, err)
+		}
+	}
+
+	var got []string
+	for _, line := range errs {
+		if strings.HasPrefix(line, "used_ds (dataset): ") {
+			got = append(got, line)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("want the used_ds failure logged once, got %d: %q", len(got), errs)
 	}
 }
