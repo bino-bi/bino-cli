@@ -65,7 +65,7 @@ func TestBuildTableDocument(t *testing.T) {
 		"name: sales_table",
 		"description: Monthly sales",
 		"mode == build",
-		"dataset: $sales_data",
+		"dataset: sales_data",
 		"type: sum",
 		"sumTitle: Total",
 	})
@@ -84,7 +84,7 @@ func TestBuildChartStructureDocument(t *testing.T) {
 	assertContainsAll(t, got, []string{
 		"kind: ChartStructure",
 		"name: sales_by_region",
-		"dataset: $region_sales",
+		"dataset: region_sales",
 		"chartTitle: Sales by Region",
 	})
 }
@@ -99,7 +99,7 @@ func TestBuildChartTimeDocument(t *testing.T) {
 	assertContainsAll(t, got, []string{
 		"kind: ChartTime",
 		"name: sales_trend",
-		"dataset: $monthly_sales",
+		"dataset: monthly_sales",
 		"chartTitle: Sales Trend",
 	})
 }
@@ -115,7 +115,7 @@ func TestBuildChartScatterDocument(t *testing.T) {
 	got := wizardRoundTrip(t, buildChartScatterDocument(data), "scatter.yaml")
 	assertContainsAll(t, got, []string{
 		"kind: ChartScatter",
-		"dataset: $products",
+		"dataset: products",
 		"x: ac1",
 		// yaml.v3 quotes the key: y is a YAML 1.1 boolean literal.
 		`"y": dac1_pp1`,
@@ -134,7 +134,7 @@ func TestBuildChartBubbleDocument(t *testing.T) {
 	got := wizardRoundTrip(t, buildChartBubbleDocument(data), "bubble.yaml")
 	assertContainsAll(t, got, []string{
 		"kind: ChartBubble",
-		"dataset: $business_units",
+		"dataset: business_units",
 		"x: ac1",
 		// yaml.v3 quotes the key: y is a YAML 1.1 boolean literal.
 		`"y": ac2`,
@@ -154,7 +154,7 @@ func TestBuildChartBulletDocument(t *testing.T) {
 		got := wizardRoundTrip(t, buildChartBulletDocument(data), "bullet.yaml")
 		assertContainsAll(t, got, []string{
 			"kind: ChartBullet",
-			"dataset: $kpis",
+			"dataset: kpis",
 			"actual: ac1",
 			"target: pl1",
 			"chartTitle: KPI overview vs. plan",

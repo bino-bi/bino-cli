@@ -25,14 +25,14 @@ func TestBuildTextDocument(t *testing.T) {
 		}
 	})
 
-	t.Run("dataset reference gets the $ prefix", func(t *testing.T) {
+	t.Run("dataset is written as given", func(t *testing.T) {
 		data := TextManifestData{
 			Name:    "total_sales",
 			Dataset: "sales_summary",
 			Value:   "Total: ${data.sales_summary[0].ac1}",
 		}
 		got := wizardRoundTrip(t, buildTextDocument(data), "text_ds.yaml")
-		assertContainsAll(t, got, []string{"dataset: $sales_summary"})
+		assertContainsAll(t, got, []string{"dataset: sales_summary"})
 	})
 
 	// The wizard now always collects a value (bn-text renders only the value
