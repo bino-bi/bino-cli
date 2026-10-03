@@ -158,7 +158,7 @@ type LayoutCardSpec struct {
 // TextSpec represents the spec section of a Text manifest.
 type TextSpec struct {
 	// Dataset is a reference to a DataSet for dynamic text.
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset,omitempty" json:"dataset,omitempty"`
 
 	// Value is the text content. Supports Markdown (converted to HTML at build
@@ -251,7 +251,7 @@ type AssetSource struct {
 // TableSpec represents the spec section of a Table manifest.
 type TableSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// Type is the table type. Only "sum" and "opt" render a grand-total row.
@@ -285,7 +285,7 @@ type StackConfig struct {
 // ChartStructureSpec represents the spec section of a ChartStructure manifest.
 type ChartStructureSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// ChartTitle is the chart title.
@@ -306,7 +306,7 @@ type ChartStructureSpec struct {
 // ChartTimeSpec represents the spec section of a ChartTime manifest.
 type ChartTimeSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// ChartTitle is the chart title.
@@ -327,7 +327,7 @@ type ChartTimeSpec struct {
 // ChartScatterSpec represents the spec section of a ChartScatter manifest.
 type ChartScatterSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// X is the horizontal axis measure token (required), e.g. "ac1" or "dac1_pp1".
@@ -352,7 +352,7 @@ type ChartScatterSpec struct {
 // ChartBubbleSpec represents the spec section of a ChartBubble manifest.
 type ChartBubbleSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// X is the horizontal axis measure token (required), e.g. "ac1" or "dac1_pp1".
@@ -381,7 +381,7 @@ type ChartBubbleSpec struct {
 // ChartBulletSpec represents the spec section of a ChartBullet manifest.
 type ChartBulletSpec struct {
 	// Dataset is a reference to a DataSet (required).
-	// Should be a reference like "$dataset_name".
+	// A bare name is a DataSet. A leading "$" marks a DataSource.
 	Dataset string `yaml:"dataset" json:"dataset"`
 
 	// Actual is the actual-value measure token (optional), e.g. "ac1".

@@ -861,13 +861,9 @@ func buildTextDocument(data TextManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.TextSpec{
-		Value: data.Value,
-		Scale: data.Scale,
-	}
-
-	// Add $ prefix to dataset for reference syntax
-	if data.Dataset != "" {
-		spec.Dataset = "$" + data.Dataset
+		Dataset: data.Dataset,
+		Value:   data.Value,
+		Scale:   data.Scale,
 	}
 
 	doc.Spec = spec

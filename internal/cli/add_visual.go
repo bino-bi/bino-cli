@@ -1349,7 +1349,7 @@ func buildTableDocument(data TableManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.TableSpec{
-		Dataset:  "$" + data.Dataset,
+		Dataset:  data.Dataset,
 		Type:     data.Type,
 		SumTitle: data.SumTitle,
 	}
@@ -1364,7 +1364,7 @@ func buildChartStructureDocument(data ChartStructureManifestData) *schema.Docume
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartStructureSpec{
-		Dataset:    "$" + data.Dataset,
+		Dataset:    data.Dataset,
 		ChartTitle: data.Title,
 	}
 
@@ -1378,7 +1378,7 @@ func buildChartTimeDocument(data ChartTimeManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartTimeSpec{
-		Dataset:    "$" + data.Dataset,
+		Dataset:    data.Dataset,
 		ChartTitle: data.Title,
 	}
 
@@ -1392,7 +1392,7 @@ func buildChartScatterDocument(data ChartScatterManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartScatterSpec{
-		Dataset:    "$" + data.Dataset,
+		Dataset:    data.Dataset,
 		X:          data.X,
 		Y:          data.Y,
 		ChartTitle: data.Title,
@@ -1408,7 +1408,7 @@ func buildChartBubbleDocument(data ChartBubbleManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartBubbleSpec{
-		Dataset:    "$" + data.Dataset,
+		Dataset:    data.Dataset,
 		X:          data.X,
 		Y:          data.Y,
 		Size:       data.Size,
@@ -1425,7 +1425,7 @@ func buildChartBulletDocument(data ChartBulletManifestData) *schema.Document {
 	doc.Metadata.Constraints = schema.ConstraintListFromStrings(data.Constraints)
 
 	spec := &schema.ChartBulletSpec{
-		Dataset:    "$" + data.Dataset,
+		Dataset:    data.Dataset,
 		Actual:     data.Actual,
 		Target:     data.Target,
 		ChartTitle: data.Title,
