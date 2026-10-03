@@ -34,7 +34,7 @@ spec:
       kind: Text
       spec:
         dataset: laptop-revenue
-        value: "${total_revenue} EUR"
+        value: "${data['laptop-revenue'][0].total_revenue} EUR"
     - row: laptops
       column: trend
       kind: ChartTime
@@ -44,7 +44,7 @@ spec:
       kind: Text
       spec:
         dataset: tablet-revenue
-        value: "${total_revenue} EUR"
+        value: "${data['tablet-revenue'][0].total_revenue} EUR"
     - row: tablets
       column: trend
       kind: ChartTime
@@ -249,13 +249,13 @@ spec:
       kind: Text
       spec:
         dataset: north-revenue
-        value: "${revenue}"
+        value: "${data['north-revenue'][0].revenue}"
     - row: 0
       column: 1
       kind: Text
       spec:
         dataset: north-units
-        value: "${units}"
+        value: "${data['north-units'][0].units}"
     # ... more children
 ```
 
@@ -346,13 +346,13 @@ spec:
       kind: Text
       spec:
         dataset: laptop-revenue
-        value: "${total_revenue} EUR"
+        value: "${data['laptop-revenue'][0].total_revenue} EUR"
     - row: laptops
       column: units
       kind: Text
       spec:
         dataset: laptop-units
-        value: "${units_sold}"
+        value: "${data['laptop-units'][0].units_sold}"
     - row: laptops
       column: trend
       kind: ChartTime
@@ -368,7 +368,7 @@ spec:
       kind: Text
       spec:
         dataset: tablet-units
-        value: "${units_sold}"
+        value: "${data['tablet-units'][0].units_sold}"
     - row: tablets
       column: trend
       kind: ChartTime
@@ -384,7 +384,7 @@ spec:
       kind: Text
       spec:
         dataset: phone-units
-        value: "${units_sold}"
+        value: "${data['phone-units'][0].units_sold}"
     - row: phones
       column: trend
       kind: ChartTime
