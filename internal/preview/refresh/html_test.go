@@ -1,13 +1,16 @@
 package refresh
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	reportgraph "bino.bi/bino/internal/report/graph"
 )
 
 // docArtefactFixture builds a DocumentArtefact named "handbook" whose
@@ -140,4 +143,65 @@ func TestWithAllPagesDocuments(t *testing.T) {
 			t.Errorf("title not escaped:\n%s", got)
 		}
 	})
+}
+
+// TestBuildPreviewGraphDataColumns asserts the graph modal payload carries the
+// columns of a component and omits the key on nodes without columns.
+func TestBuildPreviewGraphDataColumns(t *testing.T) {
+	t.Parallel()
+
+	docs := []config.Document{
+		{Kind: "DataSet", Name: "sales", File: "test.yaml", Raw: json.RawMessage(`{
+			"apiVersion": "bino.bi/v1", "kind": "DataSet", "metadata": {"name": "sales"},
+			"spec": {"query": "SELECT 1 AS ac1"}
+		}`)},
+		{Kind: "LayoutPage", Name: "page", File: "test.yaml", Raw: json.RawMessage(`{
+			"apiVersion": "bino.bi/v1", "kind": "LayoutPage", "metadata": {"name": "page"},
+			"spec": {"children": [{"kind": "Table", "spec": {"dataset": "sales", "scenarios": ["ac1"]}}]}
+		}`)},
+		{Kind: "ReportArtefact", Name: "report", File: "test.yaml", Raw: json.RawMessage(`{
+			"apiVersion": "bino.bi/v1", "kind": "ReportArtefact", "metadata": {"name": "report"},
+			"spec": {"filename": "out.pdf", "title": "Report", "layoutPages": ["page"]}
+		}`)},
+	}
+	g, err := reportgraph.Build(context.Background(), docs)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	root, ok := g.ReportArtefactByName("report")
+	if !ok {
+		t.Fatal("artefact report not found")
+	}
+
+	payload, err := json.Marshal(buildPreviewGraphData(g, root))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var data struct {
+		Nodes map[string]map[string]json.RawMessage `json:"nodes"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	component, ok := data.Nodes["Component:page#0"]
+	if !ok {
+		t.Fatalf("component node missing: %s", payload)
+	}
+	var columns []reportgraph.ColumnRef
+	if err := json.Unmarshal(component["columns"], &columns); err != nil {
+		t.Fatalf("component columns: %v: %s", err, payload)
+	}
+	want := reportgraph.ColumnRef{Dataset: "sales", Column: "ac1", Role: "scenario", Field: "scenarios"}
+	if !slices.Contains(columns, want) {
+		t.Errorf("component columns = %+v, want to contain %+v", columns, want)
+	}
+
+	dataset, ok := data.Nodes["DataSet:sales"]
+	if !ok {
+		t.Fatalf("dataset node missing: %s", payload)
+	}
+	if _, ok := dataset["columns"]; ok {
+		t.Errorf("dataset node must omit columns: %s", payload)
+	}
 }

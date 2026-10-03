@@ -32,6 +32,9 @@ type Node struct {
 	Hash       string
 	DependsOn  []string
 	Attributes map[string]string
+	// Columns are the dataset columns a component reads, grouped by dataset
+	// and then by role. Not hashed.
+	Columns []ColumnRef
 
 	baseDigest []byte
 }

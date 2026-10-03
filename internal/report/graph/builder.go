@@ -253,7 +253,7 @@ func (b *builder) buildStandaloneComponents() error {
 			if err := b.ctx.Err(); err != nil {
 				return err
 			}
-			node, err := b.buildComponentNode(kind, doc.Raw, doc.File, doc.Name, doc.Name)
+			node, err := b.buildComponentNode(kind, doc.Raw, doc.File, doc.Name, doc.Name, ancestors{})
 			if err != nil {
 				return fmt.Errorf("component %s (%s): %w", doc.Name, kind, err)
 			}
@@ -285,7 +285,12 @@ func (b *builder) buildLayouts(kind NodeKind, docs []config.Document) error {
 			Attributes: map[string]string{"componentKind": string(kind)},
 			baseDigest: hashBytes(doc.Raw),
 		}
-		children, err := b.buildLayoutChildren(doc.Name, doc.File, payload.Spec.Children, nil)
+		t := parseTitles(doc.Raw)
+		anc := ancestors{closest: &t}
+		if kind == NodeLayoutPage {
+			anc.page = &t
+		}
+		children, err := b.buildLayoutChildren(doc.Name, doc.File, payload.Spec.Children, nil, anc)
 		if err != nil {
 			return err
 		}
@@ -296,14 +301,14 @@ func (b *builder) buildLayouts(kind NodeKind, docs []config.Document) error {
 	return nil
 }
 
-func (b *builder) buildLayoutChildren(parentName, file string, children []layoutChild, indexPath []int) ([]string, error) {
+func (b *builder) buildLayoutChildren(parentName, file string, children []layoutChild, indexPath []int, anc ancestors) ([]string, error) {
 	if len(children) == 0 {
 		return nil, nil
 	}
 	deps := make([]string, 0, len(children))
 	for idx, child := range children {
 		childPath := append(append([]int(nil), indexPath...), idx)
-		id, err := b.buildLayoutChild(parentName, file, child, childPath)
+		id, err := b.buildLayoutChild(parentName, file, child, childPath, anc)
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +319,8 @@ func (b *builder) buildLayoutChildren(parentName, file string, children []layout
 	return deps, nil
 }
 
-func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, indexPath []int) (string, error) {
+// anc are the enclosing page and card, whose title fields the child can inherit.
+func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, indexPath []int, anc ancestors) (string, error) {
 	// Resolve ref to get the effective spec (base from referenced doc + overrides from child).
 	effectiveSpec, effectiveFile, err := b.resolveChildSpec(parentName, child)
 	if err != nil {
@@ -352,7 +358,8 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 			Attributes: map[string]string{"parent": parentName},
 			baseDigest: hashBytes(effectiveSpec),
 		}
-		children, err := b.buildLayoutChildren(parentName, effectiveFile, spec.Children, indexPath)
+		cardTitles := anc.resolve(parseTitles(effectiveSpec))
+		children, err := b.buildLayoutChildren(parentName, effectiveFile, spec.Children, indexPath, ancestors{closest: &cardTitles, page: anc.page})
 		if err != nil {
 			return "", err
 		}
@@ -361,7 +368,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 		return id, nil
 	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Image":
 		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(indexPath))
-		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)))
+		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)), anc)
 		if err != nil {
 			return "", err
 		}
@@ -371,7 +378,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 	case "Grid":
 		label := fmt.Sprintf("Grid %s#%s", parentName, pathKey(indexPath))
 		nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(indexPath))
-		node, err := b.buildComponentNode("Grid", effectiveSpec, effectiveFile, label, nodeName)
+		node, err := b.buildComponentNode("Grid", effectiveSpec, effectiveFile, label, nodeName, anc)
 		if err != nil {
 			return "", err
 		}
@@ -400,7 +407,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 				Params:   gc.Params,
 				Spec:     gc.Spec,
 			}
-			childID, err := b.buildLayoutChild(parentName, effectiveFile, lc, childPath)
+			childID, err := b.buildLayoutChild(parentName, effectiveFile, lc, childPath, anc)
 			if err != nil {
 				return "", err
 			}
@@ -450,7 +457,7 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.R
 	return res.Spec, res.Doc.File, nil
 }
 
-func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, label, name string) (*Node, error) {
+func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, label, name string, anc ancestors) (*Node, error) {
 	datasets, err := extractDatasets(raw)
 	if err != nil {
 		return nil, err
@@ -466,6 +473,7 @@ func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, lab
 			"componentKind": kind,
 		},
 		baseDigest: hashBytes(raw),
+		Columns:    columnRefs(kind, raw, datasets, anc),
 	}
 	if len(datasets) > 0 {
 		node.Attributes["dataset"] = strings.Join(datasets, ",")

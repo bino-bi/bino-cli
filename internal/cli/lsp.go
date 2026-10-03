@@ -63,6 +63,8 @@ type LSPGraphNode struct {
 	Name string `json:"name"`
 	File string `json:"file,omitempty"`
 	Hash string `json:"hash,omitempty"`
+	// Columns are the dataset columns a component node reads.
+	Columns []graph.ColumnRef `json:"columns,omitempty"`
 }
 
 // LSPGraphEdge represents a directed edge in the dependency graph.
@@ -627,11 +629,12 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 			continue
 		}
 		result.Nodes = append(result.Nodes, LSPGraphNode{
-			ID:   node.ID,
-			Kind: string(node.Kind),
-			Name: node.Name,
-			File: node.File,
-			Hash: node.Hash,
+			ID:      node.ID,
+			Kind:    string(node.Kind),
+			Name:    node.Name,
+			File:    node.File,
+			Hash:    node.Hash,
+			Columns: node.Columns,
 		})
 	}
 

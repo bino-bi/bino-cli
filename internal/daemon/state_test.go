@@ -4,10 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/graph"
 )
 
 // TestValidateDraft_SyntaxErrorSanitized: a draft with a YAML syntax error must
@@ -185,4 +188,31 @@ func TestValidateDocs_RefParamsAndSeverity(t *testing.T) {
 	if !missingRef {
 		t.Errorf("expected a missing-required-reference finding for the dangling ref, got %+v", diags)
 	}
+}
+
+// graph_deps nodes carry the dataset columns a component reads.
+func TestGraphDepsColumns(t *testing.T) {
+	st := &State{documents: []config.Document{{
+		Kind: "LayoutPage",
+		Name: "page",
+		File: "page.yaml",
+		Raw: []byte(`{"apiVersion":"bino.bi/v1","kind":"LayoutPage","metadata":{"name":"page"},
+			"spec":{"children":[{"kind":"Table","spec":{"dataset":"sales","scenarios":["ac1"]}}]}}`),
+	}}}
+
+	res := st.GraphDeps(context.Background(), "LayoutPage", "page", "out", 0)
+	if res.Error != "" {
+		t.Fatalf("GraphDeps: %s", res.Error)
+	}
+	for _, node := range res.Nodes {
+		if node.ID != "Component:page#0" {
+			continue
+		}
+		want := graph.ColumnRef{Dataset: "sales", Column: "ac1", Role: graph.RoleScenario, Field: "scenarios"}
+		if !slices.Contains(node.Columns, want) {
+			t.Fatalf("columns = %+v, want %+v among them", node.Columns, want)
+		}
+		return
+	}
+	t.Fatalf("component node missing in %+v", res.Nodes)
 }

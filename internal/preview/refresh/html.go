@@ -66,10 +66,11 @@ type previewPageMeta struct {
 
 // previewGraphNode is a serializable graph node for the frontend dependency graph.
 type previewGraphNode struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"`
-	Name      string   `json:"name"`
-	DependsOn []string `json:"dependsOn,omitempty"`
+	ID        string                  `json:"id"`
+	Kind      string                  `json:"kind"`
+	Name      string                  `json:"name"`
+	DependsOn []string                `json:"dependsOn,omitempty"`
+	Columns   []reportgraph.ColumnRef `json:"columns,omitempty"`
 }
 
 // previewGraphData holds the dependency subgraph for a single artifact.
@@ -98,6 +99,7 @@ func buildPreviewGraphData(g *reportgraph.Graph, root *reportgraph.Node) *previe
 			Kind:      string(node.Kind),
 			Name:      node.DisplayName(),
 			DependsOn: deps,
+			Columns:   node.Columns,
 		}
 	}
 

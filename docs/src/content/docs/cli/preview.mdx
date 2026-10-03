@@ -66,6 +66,13 @@ Things to know:
 - The button needs a browser tab. Inside the VS Code preview panel it shows a
   link to open the preview in your browser.
 
+## Dependency graph
+
+Select an artefact and click **Graph** in the toolbar. The window shows the
+dependency tree of the artefact, down to its datasets and datasources. Click a
+component to see the dataset columns it reads, grouped by dataset and role. See
+[Column references](/cli/graph/#column-references) for the roles.
+
 ## Default Arguments via bino.toml
 
 You can set default values for preview flags in your project's `bino.toml` file. These defaults are applied automatically and can be overridden by explicit command-line flags:
