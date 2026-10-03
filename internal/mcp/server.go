@@ -372,7 +372,7 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "graph_deps",
-		Description: "Traverse the dependency graph from a node. direction: 'out' (dependencies), 'in' (dependents), or 'both' (default).",
+		Description: "Traverse the dependency graph from a node. direction: 'out' (dependencies), 'in' (dependents), or 'both' (default). Component nodes list the dataset columns they read in `columns` (dataset, column, role, field); column 'auto' means the engine picks it from the data.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in graphDepsInput) (*mcpsdk.CallToolResult, daemon.GraphDepsResult, error) {
 		return nil, h.deps.State.GraphDeps(ctx, in.Kind, in.Name, in.Direction, in.MaxDepth), nil
 	})

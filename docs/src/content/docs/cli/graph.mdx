@@ -34,3 +34,63 @@ bino graph --artefact monthly_sales --view tree
 ```
 
 You can copy graph output into your docs and accompany it with a der diagram image for easier reading.
+
+## Column references
+
+Every component in the graph lists the dataset columns it reads. Check it before you rename or remove a column.
+
+Each dataset gets one entry:
+
+```text
+columns[<dataset>]=<role>:<column>,<column> <role>:<column>,...
+```
+
+`<dataset>` is the name as written in the component, `$name` for a DataSource. A component that reads several datasets gets one entry per dataset.
+
+The roles, in output order:
+
+- `scenario` - scenario columns from `scenarios`, and from `columnthereof` in a Table.
+- `variance` - the scenario columns a variance is computed from. `dac1_pp1_pos` reads `ac1` and `pp1`.
+- `measure` - value columns of ChartScatter, ChartBubble and ChartBullet, from fields such as `x`, `y` or `actual`.
+- `group` - columns the rows are grouped by, such as `rowGroup` and `rowGroupIndex` for a grouped Table, or `category` for a chart `level`.
+- `order` - columns from `order`.
+- `filter` - columns named in `filter`.
+- `attribute` - columns in Table `attributes` expressions, such as `pl1` in `max(pl1)`.
+- `template` - columns in Text values like `\${data.kpi[0].ac1}`.
+- `implicit` - columns the component always reads. A Table reads `category`, `categoryIndex` and `operation`, a ChartTime reads `date` and `operation`.
+
+The column `auto` means the engine picks the column from the data at render time. You see it when a field such as `scenarios` or `level` is empty or set to `auto`.
+
+`inherited-page` and `inherited-closest` are resolved from the title fields (`titleScenarios`, `titleVariances`, `titleOrder`) of the page and card around the component. A value that cannot be resolved, such as `inherited-page` without a page title or a `${PARAM}` placeholder, is shown as written.
+
+In the tree view each entry is an extra line under the component:
+
+```text
+sales-dashboard [ReportArtefact] hash=0904a64ef07d, file=report.yaml
+└── table-page [LayoutPage] hash=fe35c694dc2c, file=pages.yaml
+    └── Table table-page#0 [Component] hash=c7c45b5d3de5, kind=Table, dataset=financial_summary (DataSet), file=pages.yaml
+        │   columns[financial_summary]=scenario:ac1,pp1,pl1 variance:ac1,pp1,pl1 group:rowGroup,rowGroupIndex attribute:pl1 implicit:category,categoryIndex,operation
+        └── financial_summary [DataSet] hash=54beb5c30327, file=datasets.yaml
+            └── kpi_table_data [DataSource] hash=18d390f4437d, type=inline, file=data.yaml
+```
+
+In the flat view the entries are added to the `DETAILS` cell:
+
+```text
+KIND       NAME                HASH          DEPENDS ON                 DETAILS
+Component  Table table-page#0  c7c45b5d3de5  DataSet:financial_summary  hash=c7c45b5d3de5, kind=Table, dataset=financial_summary (DataSet), file=pages.yaml, columns[financial_summary]=scenario:ac1,pp1,pl1 variance:ac1,pp1,pl1 group:rowGroup,rowGroupIndex attribute:pl1 implicit:category,categoryIndex,operation
+```
+
+`bino build` writes the flat view to a `.bngraph` file next to each PDF (for example `monthly_sales.pdf.bngraph`), so the file lists the columns too.
+
+### Limits
+
+- The list is built from the manifests only. bino does not run any SQL for it.
+- The rules follow template engine v1.0.0-next.27. A newer engine or a new spec field is not detected.
+- `auto` is not resolved to a column. Dataset defaults (`_spec_*` columns) are not read, so a field set only by a dataset default shows as `auto` or not at all.
+- Fields the engine does not use to read data print nothing, for example Table `barColumns` and ChartTime `level`, `order`, `stack` and `dateInterval`.
+- A component bound to several datasets lists the same columns for each of them, even though the engine reads only one.
+- Inline datasets appear under their generated name `_inline_dataset_<hash>`.
+- `filter` and Text values are read by simple pattern matching, so an unusual expression can give a wrong list. Text placeholders are only seen when written as `\${...}`.
+- The engine finds the inherited page or card once per component, from its first inherited field. bino resolves each field on its own, so the list can differ when one component mixes `inherited-page` and `inherited-closest` inside a card.
+- Tree nodes that use `ref` list no columns. Components on a page that an artefact uses with `params` show the `${PARAM}` placeholders as written.

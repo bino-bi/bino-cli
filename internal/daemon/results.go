@@ -55,6 +55,8 @@ type GraphNode struct {
 	Name string `json:"name"`
 	File string `json:"file,omitempty"`
 	Hash string `json:"hash,omitempty"`
+	// Columns are the dataset columns a component node reads.
+	Columns []graph.ColumnRef `json:"columns,omitempty"`
 }
 
 // GraphEdge is an edge in a dependency-graph traversal result.
@@ -184,11 +186,12 @@ func (s *State) GraphDeps(ctx context.Context, kind, name, direction string, max
 			continue
 		}
 		res.Nodes = append(res.Nodes, GraphNode{
-			ID:   node.ID,
-			Kind: string(node.Kind),
-			Name: node.Name,
-			File: node.File,
-			Hash: node.Hash,
+			ID:      node.ID,
+			Kind:    string(node.Kind),
+			Name:    node.Name,
+			File:    node.File,
+			Hash:    node.Hash,
+			Columns: node.Columns,
 		})
 	}
 	res.Edges = edges

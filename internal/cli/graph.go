@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -32,7 +33,7 @@ func newGraphCommand() *cobra.Command {
 		Short: "Inspect manifest dependencies and hashes",
 		Long: strings.TrimSpace(`Load the manifest bundle, build a dependency graph across report artifacts,
 components, datasets, and datasources, and print the relationships in either
-a tree or flat table view.`),
+a tree or flat table view. Components also list the dataset columns they read.`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("graph")
@@ -178,9 +179,46 @@ func printTreeChildren(out io.Writer, g *reportgraph.Graph, node *reportgraph.No
 			continue
 		}
 		fmt.Fprintf(out, "%s%s %s\n", prefix, connector, line)
+		printColumnLines(out, g, child, nextPrefix)
 		printTreeChildren(out, g, child, nextPrefix, base, stack)
 	}
 	delete(stack, node.ID)
+}
+
+// printColumnLines prints a node's column refs under its tree line, keeping
+// the tree bar when the node has children below.
+func printColumnLines(out io.Writer, g *reportgraph.Graph, node *reportgraph.Node, prefix string) {
+	bar := "    "
+	if len(sortedChildren(g, node)) > 0 {
+		bar = "│   "
+	}
+	for _, line := range columnDetails(node) {
+		fmt.Fprintf(out, "%s%s%s\n", prefix, bar, line)
+	}
+}
+
+// columnDetails formats a node's column refs, one entry per dataset, e.g.
+// "columns[sales]=scenario:ac1,pp1 implicit:category". It relies on the refs
+// being grouped by dataset and role, as the graph builder returns them.
+func columnDetails(node *reportgraph.Node) []string {
+	var out []string
+	cols := node.Columns
+	for i := 0; i < len(cols); {
+		ds := cols[i].Dataset
+		var roles []string
+		for i < len(cols) && cols[i].Dataset == ds {
+			role := cols[i].Role
+			var names []string
+			for ; i < len(cols) && cols[i].Dataset == ds && cols[i].Role == role; i++ {
+				if !slices.Contains(names, cols[i].Column) {
+					names = append(names, cols[i].Column)
+				}
+			}
+			roles = append(roles, role+":"+strings.Join(names, ","))
+		}
+		out = append(out, fmt.Sprintf("columns[%s]=%s", ds, strings.Join(roles, " ")))
+	}
+	return out
 }
 
 func sortedChildren(g *reportgraph.Graph, node *reportgraph.Node) []*reportgraph.Node {
@@ -221,7 +259,7 @@ func printGraphFlat(out io.Writer, g *reportgraph.Graph, roots []*reportgraph.No
 	fmt.Fprintln(tw, "KIND\tNAME\tHASH\tDEPENDS ON\tDETAILS")
 	for _, node := range nodes {
 		depLabels := dependencyLabels(g, node)
-		details := strings.Join(nodeDetails(node, base), ", ")
+		details := strings.Join(append(nodeDetails(node, base), columnDetails(node)...), ", ")
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
 			node.Kind,
 			node.DisplayName(),

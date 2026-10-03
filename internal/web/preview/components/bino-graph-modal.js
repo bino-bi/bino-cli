@@ -43,6 +43,45 @@ function truncName(name, max) {
   return name.substring(0, max - 1) + '\u2026';
 }
 
+// auto and unresolved tokens are not real column names.
+function isUnresolved(column) {
+  return column === 'auto' || column.indexOf('inherited-') === 0 || column.indexOf('${') === 0;
+}
+
+function countColumns(refs) {
+  var seen = {};
+  var n = 0;
+  for (var i = 0; i < refs.length; i++) {
+    if (!seen[refs[i].column]) {
+      seen[refs[i].column] = true;
+      n++;
+    }
+  }
+  return n;
+}
+
+// Group column refs by dataset, then role. The server already sorts them,
+// so only adjacent refs are merged.
+function groupColumns(refs) {
+  var datasets = [];
+  var ds = null;
+  var group = null;
+  for (var i = 0; i < refs.length; i++) {
+    var r = refs[i];
+    if (!ds || ds.name !== r.dataset) {
+      ds = { name: r.dataset, groups: [] };
+      datasets.push(ds);
+      group = null;
+    }
+    if (!group || group.role !== r.role) {
+      group = { role: r.role, columns: [] };
+      ds.groups.push(group);
+    }
+    if (group.columns.indexOf(r.column) === -1) group.columns.push(r.column);
+  }
+  return datasets;
+}
+
 // Build tree from flat graph data, marking cycles and already-visited nodes as refs.
 function buildTree(graphData) {
   if (!graphData || !graphData.rootId) return null;
@@ -141,6 +180,7 @@ class BinoGraphModal extends LitElement {
   static properties = {
     _graphData: { state: true },
     _open: { state: true },
+    _selected: { state: true },
   };
 
   static styles = css`
@@ -218,6 +258,27 @@ class BinoGraphModal extends LitElement {
       height: 12px;
       border-radius: 3px;
     }
+    .columns {
+      padding: var(--bino-space-sm) var(--bino-space-lg);
+      border-top: 1px solid var(--bino-border);
+      flex-shrink: 0;
+      max-height: 30vh;
+      overflow: auto;
+      font-size: var(--bino-font-size-sm);
+      color: var(--bino-text);
+    }
+    .columns-title {
+      font-weight: 600;
+      margin-bottom: var(--bino-space-xs);
+    }
+    .columns-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--bino-space-xs) var(--bino-space-md);
+    }
+    .columns-dataset { font-weight: 600; }
+    .columns-role { color: var(--bino-text-secondary); }
+    .columns .muted { color: var(--bino-text-muted); font-style: italic; }
     .empty {
       padding: var(--bino-space-xl);
       text-align: center;
@@ -230,6 +291,7 @@ class BinoGraphModal extends LitElement {
     super();
     this._graphData = null;
     this._open = false;
+    this._selected = null;
     this._boundOnOpen = this._onOpen.bind(this);
     this._boundOnKeydown = this._onKeydown.bind(this);
   }
@@ -262,6 +324,7 @@ class BinoGraphModal extends LitElement {
           <div class='graph-container'>
             ${this._renderSVG(layout)}
           </div>
+          ${this._renderColumns()}
           ${this._renderLegend(layout)}
         </div>
       </div>
@@ -273,8 +336,10 @@ class BinoGraphModal extends LitElement {
       return html`<div class='empty'>No graph data available</div>`;
     }
 
+    var self = this;
     var w = layout.width;
     var h = layout.height;
+    var graphNodes = (this._graphData && this._graphData.nodes) || {};
 
     var edgePaths = layout.edges.map(function(e) {
       var midY = (e.y1 + e.y2) / 2;
@@ -285,13 +350,20 @@ class BinoGraphModal extends LitElement {
     var nodeGroups = layout.nodes.map(function(n) {
       var c = colorFor(n.kind);
       var op = (n.ref || n.cycle) ? '0.5' : '1';
+      // Looked up by id so [ref] leaves show the columns too.
+      var columns = (graphNodes[n.id] && graphNodes[n.id].columns) || [];
       var kindLabel = shortKind(n.kind);
+      if (columns.length > 0) {
+        var count = countColumns(columns);
+        kindLabel += ' \u00b7 ' + count + (count === 1 ? ' col' : ' cols');
+      }
       var nameLabel = truncName(n.name);
       var refSuffix = n.cycle ? ' [cycle]' : (n.ref ? ' [ref]' : '');
       return svg`
-        <g opacity=${op}>
+        <g opacity=${op} style=${columns.length > 0 ? 'cursor: pointer' : nothing}
+          @click=${columns.length > 0 ? function() { self._selected = n.id; } : nothing}>
           <rect x=${n.x} y=${n.y} width=${NODE_W} height=${NODE_H}
-            rx='6' fill=${c.bg} stroke=${c.stroke} stroke-width='1.5'/>
+            rx='6' fill=${c.bg} stroke=${c.stroke} stroke-width=${n.id === self._selected ? '3' : '1.5'}/>
           <text x=${n.cx} y=${n.y + 14} text-anchor='middle'
             font-size='10' font-weight='600' fill=${c.stroke}>${kindLabel}</text>
           <text x=${n.cx} y=${n.y + 28} text-anchor='middle'
@@ -305,6 +377,30 @@ class BinoGraphModal extends LitElement {
         ${edgePaths}
         ${nodeGroups}
       </svg>
+    `;
+  }
+
+  _renderColumns() {
+    var nodes = (this._graphData && this._graphData.nodes) || {};
+    var node = nodes[this._selected];
+    if (!node || !node.columns) return nothing;
+
+    return html`
+      <div class='columns'>
+        <div class='columns-title'>${node.name || node.id}</div>
+        ${groupColumns(node.columns).map(function(ds) {
+          return html`
+            <div class='columns-row'>
+              <span class='columns-dataset'>${ds.name}</span>
+              ${ds.groups.map(function(g) {
+                return html`<span><span class='columns-role'>${g.role}:</span> ${g.columns.map(function(col, i) {
+                  return html`${i > 0 ? ', ' : ''}<span class=${isUnresolved(col) ? 'muted' : ''}>${col}</span>`;
+                })}</span>`;
+              })}
+            </div>
+          `;
+        })}
+      </div>
     `;
   }
 
@@ -337,6 +433,7 @@ class BinoGraphModal extends LitElement {
 
   _onOpen(e) {
     this._graphData = (e.detail && e.detail.graph) || null;
+    this._selected = null;
     this._open = true;
   }
 

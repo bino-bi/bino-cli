@@ -109,7 +109,7 @@ Code specific machinery (subagents, questions to the human) and mean nothing to 
 | `describe_document(file)`                        | The documents declared in one file.                                                                                                                                                           |
 | `get_columns(name)`                              | Column names of a DataSet or DataSource (prefix `$` to force a DataSource).                                                                                                                   |
 | `get_rows(name, limit?)`                         | A sample of rows from a DataSet or DataSource.                                                                                                                                                |
-| `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`.                                                                                                                                           |
+| `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`. Component nodes carry a `columns` list (`dataset`, `column`, `role`, `field`) of the dataset columns they read.                           |
 
 ### Validate
 
