@@ -127,6 +127,8 @@ spec:
   value: "${t('report.title')}"
 ```
 
+Write placeholders plain: only a bare name such as `${NAME}` or `${NAME:default}` is expanded as an [environment variable](/appendix/runtime-limits/#environment-variable-substitution).
+
 ### Security
 
 Template evaluation is **sandboxed** - only `data` and `t` are accessible.

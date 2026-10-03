@@ -14,6 +14,8 @@ You can reference environment variables in any string value with:
 - `${VAR:default}` - replaced with the value of `VAR`, or `default` if `VAR` is not set.
 - `\${VAR}` - escape sequence, produces `${VAR}` literally.
 
+Only identifier names are expanded (letters, digits and `_`, not starting with a digit). Any other `${...}`, such as `${data.kpi[0].ac1}` in a Text value, is left unchanged.
+
 Behavior:
 
 - `bino preview` warns about unresolved variables and substitutes empty strings.

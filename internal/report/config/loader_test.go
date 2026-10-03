@@ -667,3 +667,23 @@ func TestLoadDirPreservesComponentParamPlaceholders(t *testing.T) {
 		load(t)
 	})
 }
+
+func TestTextPlaceholderSurvivesLoad(t *testing.T) {
+	for _, placeholder := range []string{"${data.kpi[0].ac1}", "${t('report.title')}"} {
+		dir := t.TempDir()
+		manifest := "apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: total\nspec:\n  dataset: kpi\n  value: \"Total: " + placeholder + "\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "text.yaml"), []byte(manifest), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		docs, err := LoadDir(context.Background(), dir)
+		if err != nil {
+			t.Fatalf("%s: load: %v", placeholder, err)
+		}
+		if !strings.Contains(string(docs[0].Raw), placeholder) {
+			t.Errorf("%s: placeholder was removed at load time: %s", placeholder, docs[0].Raw)
+		}
+		if err := CheckMissingEnvVars(docs); err != nil {
+			t.Errorf("%s: reported as unset environment variable: %v", placeholder, err)
+		}
+	}
+}

@@ -132,6 +132,62 @@ func TestExpandEnvVars(t *testing.T) {
 			wantExpanded:   "${VAR",
 			wantMissingLen: 0,
 		},
+		{
+			name:           "text placeholder - dataset field",
+			input:          "Total: ${data.kpi[0].ac1}",
+			env:            nil,
+			wantExpanded:   "Total: ${data.kpi[0].ac1}",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "text placeholder - datasource key",
+			input:          "${data['$kpi'][0].ac1}",
+			env:            nil,
+			wantExpanded:   "${data['$kpi'][0].ac1}",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "text placeholder - this.data",
+			input:          "${this.data['kpi'][0].name}",
+			env:            nil,
+			wantExpanded:   "${this.data['kpi'][0].name}",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "text placeholder - translation",
+			input:          "${t('a.b')}",
+			env:            nil,
+			wantExpanded:   "${t('a.b')}",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "text placeholder - translation with arguments",
+			input:          "${t('k', { name: data.kpi[0].ac1 })}",
+			env:            nil,
+			wantExpanded:   "${t('k', { name: data.kpi[0].ac1 })}",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "identifier with default",
+			input:          "${NAME:default}",
+			env:            nil,
+			wantExpanded:   "default",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "identifier with empty default",
+			input:          "${NAME:}",
+			env:            nil,
+			wantExpanded:   "",
+			wantMissingLen: 0,
+		},
+		{
+			name:           "escaped identifier",
+			input:          `\${NAME}`,
+			env:            map[string]string{"NAME": "should-not-appear"},
+			wantExpanded:   "${NAME}",
+			wantMissingLen: 0,
+		},
 	}
 
 	for _, tc := range tests {
