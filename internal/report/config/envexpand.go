@@ -6,9 +6,10 @@ import (
 	"strings"
 )
 
-// envVarPattern matches ${VAR} and ${VAR:default} syntax.
+// envVarPattern matches ${VAR} and ${VAR:default} syntax, where VAR is an identifier.
+// Any other ${...} is left alone, so browser-side placeholders like ${data.kpi[0].ac1} survive.
 // It does NOT match escaped sequences like \${VAR}.
-var envVarPattern = regexp.MustCompile(`\$\{([^}:]+)(?::([^}]*))?\}`)
+var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?\}`)
 
 // escapePlaceholder is used to temporarily replace \${ during expansion.
 const escapePlaceholder = "\x00BINO_ESC_DOLLAR_BRACE\x00"
