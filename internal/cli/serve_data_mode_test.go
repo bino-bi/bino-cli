@@ -299,3 +299,29 @@ func TestDataModeFlagDefaults(t *testing.T) {
 		t.Errorf("preview --data-mode default = %q, want %q", got, render.DataModeURL)
 	}
 }
+
+// An empty --data-mode, from a flag fed by an unset variable or from
+// bino.toml, means the default of serve. It must not fall through to url, the
+// default of preview and build.
+func TestResolveServeDataMode(t *testing.T) {
+	for _, tc := range []struct {
+		in, want string
+		wantErr  bool
+	}{
+		{in: "", want: render.DataModeInline},
+		{in: "  ", want: render.DataModeInline},
+		{in: "inline", want: render.DataModeInline},
+		{in: "url", want: render.DataModeURL},
+		{in: "URL", want: render.DataModeURL},
+		{in: "bogus", wantErr: true},
+	} {
+		got, err := resolveServeDataMode(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("resolveServeDataMode(%q) error = %v, wantErr %v", tc.in, err, tc.wantErr)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("resolveServeDataMode(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

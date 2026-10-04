@@ -25,6 +25,10 @@ import (
 
 const defaultServePort = 8080
 
+// defaultServeDataMode differs from preview and build: a served page carries
+// its rows itself, so it does not depend on a second request.
+const defaultServeDataMode = render.DataModeInline
+
 // newServeCommand creates the serve subcommand for production serving.
 // Unlike preview, serve:
 //   - Does not watch for file changes
@@ -73,7 +77,7 @@ Environment knobs:
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			live = env.Resolver.ResolveString("live", "live", live)
 			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
-			resolvedDataMode, err := normalizeDataMode(dataMode)
+			resolvedDataMode, err := resolveServeDataMode(dataMode)
 			if err != nil {
 				return RuntimeError(err)
 			}
@@ -303,7 +307,7 @@ Environment knobs:
 	cmd.Flags().StringVar(&live, "live", "", "Name of the LiveReportArtefact to serve (required)")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().StringVar(&addr, "addr", "", "Full listen address (overrides --port, e.g. 0.0.0.0:8080)")
-	cmd.Flags().StringVar(&dataMode, "data-mode", "inline",
+	cmd.Flags().StringVar(&dataMode, "data-mode", defaultServeDataMode,
 		"Dataset/datasource delivery: 'inline' embeds gzip+base64 in the HTML (default), 'url' fetches data via HTTP from the bino server")
 
 	return cmd
@@ -498,6 +502,15 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	}
 
 	return setup, nil
+}
+
+// resolveServeDataMode validates the --data-mode value of serve. An empty
+// value, from the flag or from bino.toml, means the serve default.
+func resolveServeDataMode(s string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		s = defaultServeDataMode
+	}
+	return normalizeDataMode(s)
 }
 
 // applyServeDataMode configures url-mode data emission on the serve plugin
