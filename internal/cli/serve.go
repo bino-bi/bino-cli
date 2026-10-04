@@ -346,17 +346,11 @@ func prepareServeRequest(
 	// Validate and merge query parameters
 	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
 
-	// If there are missing required params, return missing params HTML
-	if !validation.IsValid() {
-		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
-		html := serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
-		return nil, html, nil
-	}
-
 	queryParams := validation.Params
 	docs := baseDocs
 
-	// If we have query params, reload documents with query params as variables
+	// If we have query params, reload documents with query params as variables.
+	// A rejected value is not among them.
 	if len(queryParams) > 0 {
 		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
 		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
@@ -368,6 +362,14 @@ func prepareServeRequest(
 			return nil, nil, err
 		}
 		docs = reloadedDocs
+	}
+
+	// If there are missing required params, return missing params HTML. Its
+	// select options come from the reloaded documents, like those of a page.
+	if !validation.IsValid() {
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, docs, routeSpec, session)
+		html := serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
+		return nil, html, nil
 	}
 
 	return &serveRequestContext{
@@ -717,47 +719,30 @@ func serveRenderHandler(
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
 ) (body []byte, contentType string, err error) {
-	// Extract query parameters from request context
-	reqInfo := httpserver.GetRequestInfo(ctx)
-
-	// Validate and merge query parameters
-	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
-
-	// If there are missing required params, show the sidebar with error indicators
-	if !validation.IsValid() {
-		// Resolve dataset options for select parameters (needed for sidebar)
-		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
-		return serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
+	// Process query parameters and reload documents if needed
+	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)
+	if err != nil {
+		return nil, "", err
 	}
-
-	queryParams := validation.Params
+	if missingParamsHTML != nil {
+		return missingParamsHTML, "text/html; charset=utf-8", nil
+	}
+	reqInfo := reqCtx.ReqInfo
+	queryParams := reqCtx.QueryParams
+	docs := reqCtx.Docs
 
 	// Build cache key from artifact name + sorted query params
 	cacheKey := buildCacheKey(artifact.Document.Name, queryParams)
 
-	// Try cache first
+	// Try cache first. The select options are resolved per request, so they
+	// need the documents of this request, not the ones loaded at startup.
 	if entry, ok := cache.Get(cacheKey); ok {
-		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
 	}
 
-	// If we have query params, reload documents with query params as variables
-	docs := baseDocs
+	// With query params the documents were reloaded with them as variables
 	currentArtefact := artifact
 	if len(queryParams) > 0 {
-		// Create a lookup that checks query params first, then falls back to env vars
-		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
-
-		// Reload documents with the custom lookup
-		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup:       lookup,
-			KindProvider: kindProvider,
-		})
-		if err != nil {
-			logger.Errorf("Reload failed for %s with query params: %v", artifact.Document.Name, err)
-			return nil, "", err
-		}
-		docs = reloadedDocs
-
 		// Update host service with reloaded documents.
 		if hostService != nil {
 			hostService.SetDocuments(plugin.DocumentsFromConfig(docs))
@@ -855,7 +840,7 @@ func serveLayoutPagesHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 	}
 
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
