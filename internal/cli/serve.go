@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -271,6 +272,8 @@ Environment knobs:
 				HostService:        serveHostSvcRef,
 				Server:             server,
 				PWA:                pwaContent,
+
+				LayoutPageTemplates: loadLayoutPageTemplates(ctx, logger, env.ProjectRoot, env.PluginRegistry, *liveArtefact),
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -427,6 +430,10 @@ type serveRouteConfig struct {
 	// PWA holds the generated manifest and service worker; nil when the
 	// artefact has no spec.pwa block.
 	PWA *serve.PWAContent
+	// LayoutPageTemplates holds, per route path, the layoutPages with the
+	// query param references in entry params not yet filled in. See
+	// loadLayoutPageTemplates. May be nil.
+	LayoutPageTemplates map[string]config.LayoutPagesOrRefs
 }
 
 // serveRouteSetup holds the results of route setup.
@@ -474,6 +481,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 			}
 		} else {
 			routeLayoutPages := route.LayoutPages
+			routeTemplates := cfg.LayoutPageTemplates[path]
 
 			routeMap[routePath] = func(reqCtx context.Context) ([]byte, string, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
@@ -482,7 +490,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				renderMu.Lock()
 				defer renderMu.Unlock()
 				return serveLayoutPagesHandler(
-					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages, routeTemplates,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
@@ -520,6 +528,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 			}
 		} else {
 			rootLayoutPages := rootRoute.LayoutPages
+			rootTemplates := cfg.LayoutPageTemplates["/"]
 			setup.RootContent = func(reqCtx context.Context) ([]byte, string, error) {
 				if err := cfg.HookRunner.Run(reqCtx, "pre-request", cfg.HookEnv); err != nil {
 					return nil, "", err
@@ -527,7 +536,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				renderMu.Lock()
 				defer renderMu.Unlock()
 				return serveLayoutPagesHandler(
-					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
+					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages, rootTemplates,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
 					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
@@ -847,6 +856,7 @@ func serveLayoutPagesHandler(
 	workdir string,
 	baseDocs []config.Document,
 	layoutPages config.LayoutPagesOrRefs,
+	templates config.LayoutPagesOrRefs,
 	liveArtefact config.LiveArtefact,
 	routePath string,
 	routeSpec config.LiveRouteSpec,
@@ -873,24 +883,55 @@ func serveLayoutPagesHandler(
 		hostService.SetDocuments(plugin.DocumentsFromConfig(reqCtx.Docs))
 	}
 
-	// Build cache key from layout pages + sorted query params
-	cacheKey := buildLayoutPagesCacheKey(layoutPages, reqCtx.QueryParams)
+	// Build cache key from route + layout pages + sorted query params. Two
+	// routes can list the same pages and still render differently: in another
+	// order, or with entry params that take different query params.
+	cacheKey := routePath + " " + buildLayoutPagesCacheKey(layoutPages, reqCtx.QueryParams)
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
 		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 	}
 
-	// Filter documents to include only the specified LayoutPages (plus dependencies)
-	filteredDocs := filterDocsForLayoutPages(reqCtx.Docs, layoutPages)
+	// Select the route's pages like a ReportArtefact does: globs, entry params,
+	// a page listed more than once, and route order.
+	pageParams := plainQueryParams(reqCtx.QueryParams, routeSpec.GetQueryParamDefaults())
+	docs := withQueryParamDefaults(selectablePages(reqCtx.Docs, baseDocs), pageParams)
+	refs := resolveLayoutPageParams(layoutPages, templates, pageParams)
+	// An entry param has no effect on a page that declares no params, but it
+	// makes the selector expand the page. Such a page was never expanded, and
+	// its text can hold request values from the reload.
+	declaresParams := make(map[string]bool)
+	for _, doc := range docs {
+		if doc.Kind == "LayoutPage" && len(doc.Params) > 0 {
+			declaresParams[doc.Name] = true
+		}
+	}
+	for i := range refs {
+		if !declaresParams[refs[i].Page] {
+			refs[i].Params = nil
+		}
+	}
+	selectedDocs, err := pipeline.SelectLayoutPages(docs, refs)
+	if err != nil {
+		logger.Errorf("Select layoutPages failed for route %s: %v", routePath, err)
+		return nil, "", err
+	}
+	// The selector expanded the page params. Without their declarations the
+	// renderer does not expand the pages a second time. That pass would read
+	// a request value next to a "$" of the page text as a variable reference.
+	for i := range selectedDocs {
+		if selectedDocs[i].Kind == "LayoutPage" {
+			selectedDocs[i].Params = nil
+		}
+	}
 
-	// Render the layout pages directly, passing query params as LayoutPage param overrides
-	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
+	// Render the selected layout pages directly
+	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, selectedDocs, pipeline.RenderOptions{
 		Workdir:            workdir,
 		Mode:               pipeline.RenderModeServe,
 		EngineVersion:      engineVersion,
 		QueryLogger:        queryLogger,
-		LayoutPageParams:   reqCtx.QueryParams,
 		Session:            session,
 		PluginOptions:      pluginOpts,
 		PostRenderHTMLHook: postRenderHook,
@@ -918,29 +959,217 @@ func serveLayoutPagesHandler(
 	return serve.BuildHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 }
 
-// filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
-// and all other document types (DataSets, DataSources, etc.) needed for rendering.
-func filterDocsForLayoutPages(docs []config.Document, layoutPages config.LayoutPagesOrRefs) []config.Document {
-	// Build a set of requested layout page names
-	requestedPages := make(map[string]struct{})
-	for _, ref := range layoutPages {
-		requestedPages[ref.Page] = struct{}{}
-	}
-
-	// Filter documents: keep all non-LayoutPage docs, and only matching LayoutPages
-	filtered := make([]config.Document, 0, len(docs))
-	for _, doc := range docs {
-		if doc.Kind == "LayoutPage" {
-			if _, ok := requestedPages[doc.Name]; ok {
-				filtered = append(filtered, doc)
+// loadLayoutPageTemplates loads the project once more, with every reference to
+// a query param of the LiveReportArtefact kept, and returns the layoutPages of
+// each route from that load, with the references as ${NAME} text. A request
+// fills its query params into these entry params. The startup load has already
+// replaced the references. The documents reloaded for a request are not used
+// for this: request values are put into their text and could add or change
+// entries.
+// Returns nil when no entry has params or the load does not match the routes.
+// The entry params then stay as the startup load resolved them.
+func loadLayoutPageTemplates(ctx context.Context, logger logx.Logger, workdir string, kindProvider config.KindProvider, live config.LiveArtefact) map[string]config.LayoutPagesOrRefs {
+	// A marker stands in for each reference while the YAML is parsed: ${NAME}
+	// itself is not valid in a flow mapping. A name cannot hold the "." that
+	// ends the marker, so no marker starts like another.
+	markers := make(map[string]string)
+	var toReference []string
+	hasParams := false
+	for _, route := range live.Spec.Routes {
+		for _, p := range route.QueryParams {
+			for _, name := range []string{p.Name, p.Name + "_LABEL"} {
+				markers[name] = "bino-query-param." + name + "."
+				toReference = append(toReference, markers[name], "${"+name+"}")
 			}
-		} else {
-			// Keep all other document types (DataSets, DataSources, ThemeStyle, etc.)
-			filtered = append(filtered, doc)
+		}
+		for _, ref := range route.LayoutPages {
+			hasParams = hasParams || len(ref.Params) > 0
 		}
 	}
+	if !hasParams {
+		return nil
+	}
+	unavailable := func(reason any) map[string]config.LayoutPagesOrRefs {
+		logger.Warnf("LiveReportArtefact %s: query params are not passed to layoutPages entry params: %v", live.Document.Name, reason)
+		return nil
+	}
 
-	return filtered
+	// Lenient: a marker is not valid where the schema wants a number.
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
+		Lookup:       config.ChainLookup(config.MapLookup(markers), config.EnvLookup()),
+		KindProvider: kindProvider,
+		Lenient:      true,
+	})
+	if err != nil {
+		return unavailable(err)
+	}
+	i := slices.IndexFunc(docs, func(doc config.Document) bool {
+		return doc.Kind == "LiveReportArtefact" && doc.Name == live.Document.Name
+	})
+	// Only the routes are read: elsewhere a marker may sit where a number is wanted.
+	var loaded struct {
+		Spec struct {
+			Routes map[string]struct {
+				LayoutPages config.LayoutPagesOrRefs `json:"layoutPages"`
+			} `json:"routes"`
+		} `json:"spec"`
+	}
+	if i < 0 {
+		return unavailable("the second load of the manifests does not have it")
+	}
+	if err := json.Unmarshal(docs[i].Raw, &loaded); err != nil {
+		return unavailable(err)
+	}
+	references := strings.NewReplacer(toReference...)
+	templates := make(map[string]config.LayoutPagesOrRefs, len(live.Spec.Routes))
+	for path, route := range live.Spec.Routes {
+		if len(loaded.Spec.Routes[path].LayoutPages) != len(route.LayoutPages) {
+			return unavailable("the second load of the manifests does not match the routes")
+		}
+		templates[path] = loaded.Spec.Routes[path].LayoutPages
+		for _, ref := range templates[path] {
+			for name, value := range ref.Params {
+				ref.Params[name] = references.Replace(value)
+			}
+		}
+	}
+	return templates
+}
+
+// plainQueryParams returns the query params that may become page params, as
+// text for the page JSON: a page param is put into the JSON text of the page,
+// so a quote in a request value would end the string it sits in.
+// The page selector also expands entry params against the server environment.
+// A request value that such an expansion would change is not used: one with a
+// variable reference, or with the marker the expansion uses for an escaped
+// "${". The default of the query param takes its place, as if the value was
+// not sent. Query params that the reload puts into the manifest text do not
+// pass through here.
+func plainQueryParams(queryParams, defaults map[string]string) map[string]string {
+	plain := make(map[string]string, len(queryParams))
+	for name, value := range queryParams {
+		if !expandsToItself(value) {
+			var hasDefault bool
+			if value, hasDefault = defaults[name]; !hasDefault {
+				continue
+			}
+		}
+		plain[name] = jsonText(value)
+	}
+	return plain
+}
+
+// jsonText returns s as the content of a JSON string, without the quotes.
+// "&", "<" and ">" stay as they are: a select param finds its label by
+// comparing this text with the option values.
+func jsonText(s string) string {
+	var quoted strings.Builder
+	encoder := json.NewEncoder(&quoted)
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(s) //nolint:errcheck // a string always encodes
+	return strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(quoted.String()), `"`), `"`)
+}
+
+// selectablePages returns docs without the LayoutPages that a route must not
+// select.
+// A page that the startup load does not have: the reload for a request puts
+// request values into the manifest text, and a value can add a document
+// there. Such a page must not match a glob of the route.
+// A page whose constraints rule out serve mode: pages may share a name when
+// their constraints differ, and the selector keeps one page per name. A
+// constraint on labels or spec cannot be evaluated, a route has neither, so
+// such a page stays.
+func selectablePages(docs, baseDocs []config.Document) []config.Document {
+	known := make(map[string]struct{})
+	for _, doc := range baseDocs {
+		if doc.Kind == "LayoutPage" {
+			known[doc.Name] = struct{}{}
+		}
+	}
+	serveMode := &spec.ConstraintContext{Mode: spec.ModeServe}
+	return slices.DeleteFunc(slices.Clone(docs), func(doc config.Document) bool {
+		if doc.Kind != "LayoutPage" {
+			return false
+		}
+		if _, ok := known[doc.Name]; !ok {
+			return true
+		}
+		match, err := spec.EvaluateParsedConstraints(doc.Constraints, serveMode)
+		return err == nil && !match
+	})
+}
+
+// resolveLayoutPageParams returns the route entries with the params for this
+// request: the ${NAME} references of the templates are filled with the query
+// params, then the environment. Page names, count and order are always those
+// of layoutPages, the startup load. Without templates its entry params are
+// used, with the references the loader kept as text.
+func resolveLayoutPageParams(layoutPages, templates config.LayoutPagesOrRefs, queryParams map[string]string) config.LayoutPagesOrRefs {
+	noTemplates := templates == nil
+	if noTemplates {
+		templates = layoutPages
+	}
+	lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+	refs := slices.Clone(layoutPages)
+	for i, ref := range refs {
+		if len(templates[i].Params) == 0 {
+			continue
+		}
+		params := make(map[string]string, len(templates[i].Params))
+		for name, template := range templates[i].Params {
+			// A reference without a value is empty next to one that has a
+			// value. Its inline default is not known here.
+			found := false
+			value, missing := config.ExpandVars(template, func(name string) (string, bool) {
+				v, ok := lookup(name)
+				found = found || ok
+				return v, ok
+			})
+			resolved := (len(missing) == 0 || found) && expandsToItself(value)
+			if !resolved {
+				// No reference has a value, or request values join to a
+				// reference: the startup load holds the inline default.
+				value = ref.Params[name]
+			}
+			// An empty startup value can be a reference that the startup
+			// load replaced. The page default applies then.
+			if (!resolved || noTemplates) && (value == "" || !expandsToItself(value)) {
+				continue
+			}
+			params[name] = value
+		}
+		refs[i].Params = params
+	}
+	return refs
+}
+
+// expandsToItself reports whether another variable expansion leaves s as it is.
+func expandsToItself(s string) bool {
+	expanded, _ := config.ExpandVars(s, func(string) (string, bool) { return "", false })
+	return expanded == s
+}
+
+// withQueryParamDefaults makes each query param the default of the LayoutPage
+// param with the same name. The page selector then uses it wherever a
+// layoutPages entry does not set that param itself.
+func withQueryParamDefaults(docs []config.Document, queryParams map[string]string) []config.Document {
+	if len(queryParams) == 0 {
+		return docs
+	}
+	result := slices.Clone(docs)
+	for i, doc := range result {
+		if doc.Kind != "LayoutPage" || len(doc.Params) == 0 {
+			continue
+		}
+		params := slices.Clone(doc.Params)
+		for j, param := range params {
+			if value, ok := queryParams[param.Name]; ok {
+				params[j].Default = &value
+			}
+		}
+		result[i].Params = params
+	}
+	return result
 }
 
 // buildLayoutPagesCacheKey creates a cache key from layout page refs and sorted query params.

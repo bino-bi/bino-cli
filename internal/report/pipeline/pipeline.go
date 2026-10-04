@@ -998,6 +998,12 @@ func selectLayoutPagesByRefs(docs []config.Document, refs config.LayoutPagesOrRe
 	return result, nil
 }
 
+// SelectLayoutPages selects and orders LayoutPages by refs, the way a
+// ReportArtefact's layoutPages does.
+func SelectLayoutPages(docs []config.Document, refs config.LayoutPagesOrRefs) ([]config.Document, error) {
+	return selectLayoutPagesByRefs(docs, refs)
+}
+
 // selectLayoutPagesByPatterns filters and orders LayoutPage documents by name patterns.
 // Patterns are matched against metadata.name using path.Match (glob syntax).
 // Returns pages in pattern order; within each pattern, pages are sorted alphabetically by name.
