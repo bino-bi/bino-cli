@@ -265,7 +265,6 @@ kind: DataSet
 metadata:
   name: filtered_sales
 spec:
-  type: query
   query: |
     SELECT * FROM sales
     WHERE year = ${YEAR}
@@ -386,7 +385,6 @@ kind: DataSet
 metadata:
   name: year_sales
 spec:
-  type: query
   query: |
     SELECT * FROM raw_sales
     WHERE extract(year from sale_date) = ${YEAR:2024}
@@ -396,7 +394,6 @@ kind: DataSet
 metadata:
   name: department_list
 spec:
-  type: query
   query: |
     SELECT DISTINCT department_id, department_name FROM departments ORDER BY department_name
 ---
