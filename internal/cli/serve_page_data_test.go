@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,6 +160,11 @@ func TestServeRoutes_EachRouteCarriesOnlyItsPageData(t *testing.T) {
 			}
 			defer session.Close()
 
+			var srv *httpserver.Server
+			if dataMode == render.DataModeURL {
+				srv = startServeTestServer(t)
+			}
+
 			logger := logx.Nop()
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
 				LiveArtefact:  *liveArtefact,
@@ -171,6 +177,7 @@ func TestServeRoutes_EachRouteCarriesOnlyItsPageData(t *testing.T) {
 				EngineVersion: "v1.0.0",
 				Session:       session,
 				PluginOptions: applyServeDataMode(nil, dataMode),
+				Server:        srv,
 			})
 			if err != nil {
 				t.Fatalf("setup serve routes: %v", err)
@@ -215,6 +222,24 @@ func TestServeRoutes_EachRouteCarriesOnlyItsPageData(t *testing.T) {
 				for _, s := range notWant {
 					if strings.Contains(combined, s) {
 						t.Errorf("route %s: must not contain %q", route.path, s)
+					}
+				}
+
+				// The server answers the data URLs of the page, for the
+				// artefact route and for the layoutPages route.
+				if dataMode == render.DataModeURL {
+					dataURLs := serveDataURLRe.FindAllString(contextHTML, -1)
+					if len(dataURLs) == 0 {
+						t.Errorf("route %s: page has no data URL", route.path)
+					}
+					for _, dataURL := range dataURLs {
+						status, cacheControl, body := getServeData(t, srv, dataURL)
+						if status != http.StatusOK {
+							t.Errorf("route %s: GET %s = %d %s", route.path, dataURL, status, body)
+						}
+						if cacheControl != "private, no-store" {
+							t.Errorf("route %s: GET %s: Cache-Control = %q, want private, no-store", route.path, dataURL, cacheControl)
+						}
 					}
 				}
 			}

@@ -107,6 +107,11 @@ type EmbeddingFunc func(ctx context.Context, name, kind, language string) ([]byt
 // path (400/403); other errors are reported as 500.
 type EmbeddingOverrideFunc func(file, content string, remove bool) error
 
+// DataFunc returns the JSON body of the dataset or datasource (kind is
+// DataKindDataset or DataKindDatasource) registered under name and hash, and
+// whether it exists.
+type DataFunc func(kind, name, hash string) ([]byte, bool)
+
 // StaticContent returns a ContentFunc that always responds with identical bytes.
 func StaticContent(body []byte, contentType string) ContentFunc {
 	clone := append([]byte(nil), body...)
@@ -135,6 +140,9 @@ type Config struct {
 	ExplorerHandler http.Handler
 	// PDFHandler builds the preview PDF of one artefact. Only `bino preview` sets it.
 	PDFHandler http.Handler
+	// NoStore marks pages and data bodies as one viewer's result: they are
+	// sent with Cache-Control: private, no-store. Only `bino serve` sets it.
+	NoStore bool
 }
 
 // maxContextCacheEntries limits the number of cached context entries to prevent
@@ -185,6 +193,9 @@ type Server struct {
 	localAssets map[string]LocalAsset
 
 	data *dataStore
+
+	dataMu sync.RWMutex
+	dataFn DataFunc
 }
 
 // New constructs a Server ready to start accepting requests.
@@ -361,6 +372,15 @@ func (s *Server) PutDataset(name, hash string, body []byte) {
 	s.data.Put(DataKindDataset, name, hash, body)
 }
 
+// SetDataFunc installs the function the data route asks for a body instead of
+// the built-in store, so the caller decides how long a body stays available.
+// Passing nil restores the store.
+func (s *Server) SetDataFunc(fn DataFunc) {
+	s.dataMu.Lock()
+	defer s.dataMu.Unlock()
+	s.dataFn = fn
+}
+
 // handleData returns an http.HandlerFunc that serves registered JSON payloads
 // for the given kind ("datasource" or "dataset"). The "name" path segment and
 // "hash" query parameter together identify the payload; if either is missing
@@ -368,21 +388,34 @@ func (s *Server) PutDataset(name, hash string, body []byte) {
 // body.
 func (s *Server) handleData(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.NoStore {
+			// Set before the lookup so a shared cache does not keep a 404 either.
+			w.Header().Set("Cache-Control", "private, no-store")
+		}
 		name := r.PathValue("name")
 		hash := r.URL.Query().Get("hash")
 		if name == "" || hash == "" {
 			writeDataNotFound(w, "missing name or hash")
 			return
 		}
-		body, ok := s.data.Get(kind, name, hash)
+		s.dataMu.RLock()
+		lookup := s.dataFn
+		s.dataMu.RUnlock()
+		if lookup == nil {
+			lookup = s.data.Get
+		}
+		body, ok := lookup(kind, name, hash)
 		if !ok {
 			writeDataNotFound(w, fmt.Sprintf("no %s %q at hash %q", kind, name, hash))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		// The URL changes whenever the content changes, so the body at a given
-		// URL is immutable. Encourage caches to retain it indefinitely.
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		if !s.cfg.NoStore {
+			// The URL changes whenever the content changes, so the body at a given
+			// URL is immutable and the browser may retain it indefinitely. It is
+			// report data, so shared caches must not.
+			w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}
@@ -771,6 +804,10 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.NoStore {
+		// Set first so a shared cache does not keep an error response either.
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
 	fn, ok := s.lookupContentFunc(r.URL.Path)
 	if !ok || fn == nil {
 		http.NotFound(w, r)

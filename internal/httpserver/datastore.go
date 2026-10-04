@@ -13,7 +13,8 @@ const (
 // defaultDataKeep is the default number of hashes retained per (kind,name).
 // Keeping more than one absorbs the in-flight refresh case where a new
 // rendered HTML has registered a fresh hash while the previous page is still
-// fetching the old one (preview SSE refresh, two concurrent serve requests).
+// fetching the old one (preview SSE refresh). `bino serve` does not use the
+// store: its bodies differ per viewer, see Server.SetDataFunc.
 const defaultDataKeep = 3
 
 // dataKey identifies a registered payload by component kind and metadata name.

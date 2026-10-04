@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -24,6 +25,10 @@ import (
 )
 
 const defaultServePort = 8080
+
+// defaultServeDataMode differs from preview and build: a served page carries
+// its rows itself, so it does not depend on a second request.
+const defaultServeDataMode = render.DataModeInline
 
 // newServeCommand creates the serve subcommand for production serving.
 // Unlike preview, serve:
@@ -73,7 +78,7 @@ Environment knobs:
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			live = env.Resolver.ResolveString("live", "live", live)
 			dataMode = env.Resolver.ResolveString("data-mode", "data-mode", dataMode)
-			resolvedDataMode, err := normalizeDataMode(dataMode)
+			resolvedDataMode, err := resolveServeDataMode(dataMode)
 			if err != nil {
 				return RuntimeError(err)
 			}
@@ -198,11 +203,7 @@ Environment knobs:
 			}
 
 			// Create the server
-			server, err := httpserver.New(httpserver.Config{
-				ListenAddr: addr,
-				CacheDir:   env.CacheDir,
-				Logger:     logger.Channel("server"),
-			})
+			server, err := httpserver.New(serveServerConfig(addr, env.CacheDir, logger.Channel("server")))
 			if err != nil {
 				return RuntimeError(err)
 			}
@@ -302,10 +303,21 @@ Environment knobs:
 	cmd.Flags().StringVar(&live, "live", "", "Name of the LiveReportArtefact to serve (required)")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().StringVar(&addr, "addr", "", "Full listen address (overrides --port, e.g. 0.0.0.0:8080)")
-	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
-		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
+	cmd.Flags().StringVar(&dataMode, "data-mode", defaultServeDataMode,
+		"Dataset/datasource delivery: 'inline' embeds gzip+base64 in the HTML (default), 'url' fetches data via HTTP from the bino server")
 
 	return cmd
+}
+
+// serveServerConfig is the HTTP server configuration of serve. Its pages and
+// data bodies are one viewer's result, so no cache may store them.
+func serveServerConfig(addr, cacheDir string, logger logx.Logger) httpserver.Config {
+	return httpserver.Config{
+		ListenAddr: addr,
+		CacheDir:   cacheDir,
+		Logger:     logger,
+		NoStore:    true,
+	}
 }
 
 // serveRequestContext holds the result of processing query parameters for a serve request.
@@ -334,28 +346,22 @@ func prepareServeRequest(
 	// Validate and merge query parameters
 	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
 
+	queryParams := validation.Params
+
 	// If there are missing required params, return missing params HTML
 	if !validation.IsValid() {
-		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
+		if err != nil {
+			return nil, nil, err
+		}
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, optionDocs, routeSpec, session)
 		html := serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
 		return nil, html, nil
 	}
 
-	queryParams := validation.Params
-	docs := baseDocs
-
-	// If we have query params, reload documents with query params as variables
-	if len(queryParams) > 0 {
-		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
-		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup:       lookup,
-			KindProvider: kindProvider,
-		})
-		if err != nil {
-			logger.Errorf("Reload failed with query params: %v", err)
-			return nil, nil, err
-		}
-		docs = reloadedDocs
+	docs, err := reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return &serveRequestContext{
@@ -363,6 +369,39 @@ func prepareServeRequest(
 		QueryParams: queryParams,
 		Docs:        docs,
 	}, nil, nil
+}
+
+// reloadServeDocs returns the documents of a request: the project reloaded
+// with queryParams as variables, or baseDocs when there are none. A rejected
+// request value is not in queryParams.
+func reloadServeDocs(ctx context.Context, logger logx.Logger, workdir string, baseDocs []config.Document, queryParams map[string]string, kindProvider config.KindProvider) ([]config.Document, error) {
+	if len(queryParams) == 0 {
+		return baseDocs, nil
+	}
+	lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
+		Lookup:       lookup,
+		KindProvider: kindProvider,
+	})
+	if err != nil {
+		logger.Errorf("Reload failed with query params: %v", err)
+		return nil, err
+	}
+	return docs, nil
+}
+
+// selectOptionDocs returns the documents to resolve the select options of a
+// route with. Options that come from a DataSet must be resolved with the
+// params of the request, so they need the reloaded documents. A route without
+// such options never reads the documents, and the reload is skipped. This
+// keeps a cached page from reading the manifests again.
+func selectOptionDocs(ctx context.Context, logger logx.Logger, workdir string, baseDocs []config.Document, routeSpec config.LiveRouteSpec, queryParams map[string]string, kindProvider config.KindProvider) ([]config.Document, error) {
+	for _, p := range routeSpec.QueryParams {
+		if p.Options != nil && p.Options.Dataset != "" {
+			return reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+		}
+	}
+	return baseDocs, nil
 }
 
 // serveRouteConfig holds configuration for setting up serve routes.
@@ -382,8 +421,8 @@ type serveRouteConfig struct {
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	PostDatasetHook    func(ctx context.Context, datasets []pipeline.DatasetPayload) error
 	HostService        *plugin.BinoHostServer
-	// Server is used to register dataset/datasource payloads when the
-	// renderer runs in url mode. May be nil in inline mode.
+	// Server serves the dataset/datasource payloads of the rendered pages
+	// when the renderer runs in url mode. May be nil in inline mode.
 	Server *httpserver.Server
 	// PWA holds the generated manifest and service worker; nil when the
 	// artefact has no spec.pwa block.
@@ -399,6 +438,9 @@ type serveRouteSetup struct {
 // setupServeRoutes builds the route map and root content function from a LiveReportArtefact.
 func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 	renderCache := newServeRenderCache()
+	if cfg.Server != nil {
+		cfg.Server.SetDataFunc(renderCache.data)
+	}
 	routeMap := make(map[string]httpserver.ContentFunc)
 
 	// renderMu serializes request handling across the shared DuckDB session:
@@ -427,7 +469,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeArt,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		} else {
@@ -442,7 +484,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, routeLayoutPages,
 					cfg.LiveArtefact, routePath, routeSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		}
@@ -473,7 +515,7 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveRenderHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootArt,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		} else {
@@ -487,13 +529,22 @@ func setupServeRoutes(cfg serveRouteConfig) (*serveRouteSetup, error) {
 				return serveLayoutPagesHandler(
 					reqCtx, cfg.Logger, renderCache, cfg.Workdir, cfg.BaseDocs, rootLayoutPages,
 					cfg.LiveArtefact, "/", rootSpec, cfg.QueryLogger, cfg.EngineVersion, cfg.Session,
-					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService, cfg.Server,
+					cfg.KindProvider, cfg.PluginOptions, cfg.PostRenderHTMLHook, cfg.PostDatasetHook, cfg.HostService,
 				)
 			}
 		}
 	}
 
 	return setup, nil
+}
+
+// resolveServeDataMode validates the --data-mode value of serve. An empty
+// value, from the flag or from bino.toml, means the serve default.
+func resolveServeDataMode(s string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		s = defaultServeDataMode
+	}
+	return normalizeDataMode(s)
 }
 
 // applyServeDataMode configures url-mode data emission on the serve plugin
@@ -613,10 +664,9 @@ type serveRenderEntry struct {
 	frameHTML   []byte
 	contextHTML []byte
 	assets      []render.LocalAsset
-	// emitted is the set of dataset/datasource bodies that need to be
-	// registered on the httpserver.Server's data store for url-mode fetches.
-	// Re-registered on every cache hit because the store retains only the
-	// last N hashes per (kind,name).
+	// emitted is the set of dataset/datasource bodies the page fetches in url
+	// mode. The data route serves them from here (see data), so a body is
+	// available for as long as the page that points at it is cached.
 	emitted []render.EmittedData
 }
 
@@ -657,6 +707,23 @@ func (c *serveRenderCache) Set(key string, entry *serveRenderEntry) {
 	}
 }
 
+// data returns the body of a dataset/datasource payload that a cached page
+// references. A page holds few payloads and the cache is small, so it scans,
+// newest page first.
+func (c *serveRenderCache) data(kind, name, hash string) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for elem := c.lru.Back(); elem != nil; elem = elem.Prev() {
+		item, _ := elem.Value.(*serveRenderCacheItem)
+		for _, e := range item.entry.emitted {
+			if e.Kind == kind && e.Name == name && e.Hash == hash {
+				return e.Body, true
+			}
+		}
+	}
+	return nil, false
+}
+
 // serveRenderHandler handles on-demand rendering for a route with query param substitution.
 func serveRenderHandler(
 	ctx context.Context,
@@ -676,53 +743,44 @@ func serveRenderHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
-	server *httpserver.Server,
 ) (body []byte, contentType string, err error) {
 	// Extract query parameters from request context
 	reqInfo := httpserver.GetRequestInfo(ctx)
 
 	// Validate and merge query parameters
 	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
+	queryParams := validation.Params
 
 	// If there are missing required params, show the sidebar with error indicators
 	if !validation.IsValid() {
 		// Resolve dataset options for select parameters (needed for sidebar)
-		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, baseDocs, routeSpec, session)
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
+		if err != nil {
+			return nil, "", err
+		}
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, optionDocs, routeSpec, session)
 		return serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
-
-	queryParams := validation.Params
 
 	// Build cache key from artifact name + sorted query params
 	cacheKey := buildCacheKey(artifact.Document.Name, queryParams)
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		// Re-register payloads on every hit: the data store retains only the
-		// last N hashes per (kind,name), so a long-lived cached HTML can
-		// outlive its data registration.
-		pipeline.RegisterEmittedData(server, entry.emitted)
-		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
+		if err != nil {
+			return nil, "", err
+		}
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, optionDocs, session), "text/html; charset=utf-8", nil
 	}
 
 	// If we have query params, reload documents with query params as variables
-	docs := baseDocs
+	docs, err := reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+	if err != nil {
+		return nil, "", err
+	}
 	currentArtefact := artifact
 	if len(queryParams) > 0 {
-		// Create a lookup that checks query params first, then falls back to env vars
-		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
-
-		// Reload documents with the custom lookup
-		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup:       lookup,
-			KindProvider: kindProvider,
-		})
-		if err != nil {
-			logger.Errorf("Reload failed for %s with query params: %v", artifact.Document.Name, err)
-			return nil, "", err
-		}
-		docs = reloadedDocs
-
 		// Update host service with reloaded documents.
 		if hostService != nil {
 			hostService.SetDocuments(plugin.DocumentsFromConfig(docs))
@@ -765,7 +823,6 @@ func serveRenderHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource").Channel(artifact.Document.Name), renderResult.Diagnostics)
-	pipeline.RegisterEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
 	frameHTML := serve.WithStyles(renderResult.FrameHTML)
@@ -801,7 +858,6 @@ func serveLayoutPagesHandler(
 	postRenderHook func(context.Context, []byte) ([]byte, error),
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
-	server *httpserver.Server,
 ) (body []byte, contentType string, err error) {
 	// Process query parameters and reload documents if needed
 	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)
@@ -822,8 +878,7 @@ func serveLayoutPagesHandler(
 
 	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		pipeline.RegisterEmittedData(server, entry.emitted)
-		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, baseDocs, session), "text/html; charset=utf-8", nil
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 	}
 
 	// Filter documents to include only the specified LayoutPages (plus dependencies)
@@ -847,7 +902,6 @@ func serveLayoutPagesHandler(
 	}
 
 	pipeline.LogDiagnostics(logger.Channel("datasource"), renderResult.Diagnostics)
-	pipeline.RegisterEmittedData(server, renderResult.EmittedData)
 
 	// Apply serve styles
 	frameHTML := serve.WithStyles(renderResult.FrameHTML)
@@ -922,13 +976,15 @@ func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[s
 
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
+		parts = append(parts, k+"="+url.QueryEscape(params[k]))
 	}
 
 	return key + "?" + strings.Join(parts, "&")
 }
 
 // buildCacheKey creates a cache key from artifact name and sorted query params.
+// Values come from the request and are escaped, so a value cannot imitate the
+// separators of the key and collide with another parameter set.
 func buildCacheKey(artefactName string, params map[string]string) string {
 	if len(params) == 0 {
 		return artefactName
@@ -947,7 +1003,7 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 		sb.WriteByte('?')
 		sb.WriteString(k)
 		sb.WriteByte('=')
-		sb.WriteString(params[k])
+		sb.WriteString(url.QueryEscape(params[k]))
 	}
 	return sb.String()
 }
