@@ -347,29 +347,21 @@ func prepareServeRequest(
 	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
 
 	queryParams := validation.Params
-	docs := baseDocs
 
-	// If we have query params, reload documents with query params as variables.
-	// A rejected value is not among them.
-	if len(queryParams) > 0 {
-		lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
-		reloadedDocs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
-			Lookup:       lookup,
-			KindProvider: kindProvider,
-		})
+	// If there are missing required params, return missing params HTML
+	if !validation.IsValid() {
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
 		if err != nil {
-			logger.Errorf("Reload failed with query params: %v", err)
 			return nil, nil, err
 		}
-		docs = reloadedDocs
-	}
-
-	// If there are missing required params, return missing params HTML. Its
-	// select options come from the reloaded documents, like those of a page.
-	if !validation.IsValid() {
-		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, docs, routeSpec, session)
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, optionDocs, routeSpec, session)
 		html := serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions)
 		return nil, html, nil
+	}
+
+	docs, err := reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return &serveRequestContext{
@@ -377,6 +369,39 @@ func prepareServeRequest(
 		QueryParams: queryParams,
 		Docs:        docs,
 	}, nil, nil
+}
+
+// reloadServeDocs returns the documents of a request: the project reloaded
+// with queryParams as variables, or baseDocs when there are none. A rejected
+// request value is not in queryParams.
+func reloadServeDocs(ctx context.Context, logger logx.Logger, workdir string, baseDocs []config.Document, queryParams map[string]string, kindProvider config.KindProvider) ([]config.Document, error) {
+	if len(queryParams) == 0 {
+		return baseDocs, nil
+	}
+	lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{
+		Lookup:       lookup,
+		KindProvider: kindProvider,
+	})
+	if err != nil {
+		logger.Errorf("Reload failed with query params: %v", err)
+		return nil, err
+	}
+	return docs, nil
+}
+
+// selectOptionDocs returns the documents to resolve the select options of a
+// route with. Options that come from a DataSet must be resolved with the
+// params of the request, so they need the reloaded documents. A route without
+// such options never reads the documents, and the reload is skipped. This
+// keeps a cached page from reading the manifests again.
+func selectOptionDocs(ctx context.Context, logger logx.Logger, workdir string, baseDocs []config.Document, routeSpec config.LiveRouteSpec, queryParams map[string]string, kindProvider config.KindProvider) ([]config.Document, error) {
+	for _, p := range routeSpec.QueryParams {
+		if p.Options != nil && p.Options.Dataset != "" {
+			return reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+		}
+	}
+	return baseDocs, nil
 }
 
 // serveRouteConfig holds configuration for setting up serve routes.
@@ -719,28 +744,41 @@ func serveRenderHandler(
 	postDatasetHook func(context.Context, []pipeline.DatasetPayload) error,
 	hostService *plugin.BinoHostServer,
 ) (body []byte, contentType string, err error) {
-	// Process query parameters and reload documents if needed
-	reqCtx, missingParamsHTML, err := prepareServeRequest(ctx, logger, workdir, baseDocs, routeSpec, liveArtefact, routePath, session, kindProvider)
-	if err != nil {
-		return nil, "", err
+	// Extract query parameters from request context
+	reqInfo := httpserver.GetRequestInfo(ctx)
+
+	// Validate and merge query parameters
+	validation := serve.ValidateAndMergeQueryParams(routeSpec, reqInfo.Query)
+	queryParams := validation.Params
+
+	// If there are missing required params, show the sidebar with error indicators
+	if !validation.IsValid() {
+		// Resolve dataset options for select parameters (needed for sidebar)
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
+		if err != nil {
+			return nil, "", err
+		}
+		datasetOptions := serve.ResolveDatasetOptions(ctx, workdir, optionDocs, routeSpec, session)
+		return serve.BuildMissingParamsHTML(liveArtefact, routePath, routeSpec, reqInfo.RawQuery, validation.MissingNames, datasetOptions), "text/html; charset=utf-8", nil
 	}
-	if missingParamsHTML != nil {
-		return missingParamsHTML, "text/html; charset=utf-8", nil
-	}
-	reqInfo := reqCtx.ReqInfo
-	queryParams := reqCtx.QueryParams
-	docs := reqCtx.Docs
 
 	// Build cache key from artifact name + sorted query params
 	cacheKey := buildCacheKey(artifact.Document.Name, queryParams)
 
-	// Try cache first. The select options are resolved per request, so they
-	// need the documents of this request, not the ones loaded at startup.
+	// Try cache first
 	if entry, ok := cache.Get(cacheKey); ok {
-		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, docs, session), "text/html; charset=utf-8", nil
+		optionDocs, err := selectOptionDocs(ctx, logger, workdir, baseDocs, routeSpec, queryParams, kindProvider)
+		if err != nil {
+			return nil, "", err
+		}
+		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqInfo.RawQuery, workdir, optionDocs, session), "text/html; charset=utf-8", nil
 	}
 
-	// With query params the documents were reloaded with them as variables
+	// If we have query params, reload documents with query params as variables
+	docs, err := reloadServeDocs(ctx, logger, workdir, baseDocs, queryParams, kindProvider)
+	if err != nil {
+		return nil, "", err
+	}
 	currentArtefact := artifact
 	if len(queryParams) > 0 {
 		// Update host service with reloaded documents.

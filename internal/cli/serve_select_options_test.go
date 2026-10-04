@@ -197,3 +197,39 @@ func TestServeRoutes_SelectOptionsUseRequestParams(t *testing.T) {
 		}
 	}
 }
+
+// TestServeRoutes_CachedPageDoesNotReloadManifests pins the cost of a repeat
+// request. A cached page is answered from memory. The manifests are read
+// again only when a select of the route takes its options from a DataSet,
+// which the race fixture does not have. A manifest that is broken on disk
+// must therefore not turn a cached page into an error.
+func TestServeRoutes_CachedPageDoesNotReloadManifests(t *testing.T) {
+	ctx := context.Background()
+	workdir := writeServeRaceFixture(t)
+	fn, _ := serveRaceRoute(t, workdir)
+
+	query := url.Values{"REGION": {"DACH"}}
+	get := func() (string, error) {
+		body, _, err := fn(httpserver.WithRequestInfo(ctx, httpserver.RequestInfo{
+			Path:     "/",
+			RawQuery: query.Encode(),
+			Query:    query,
+		}))
+		return string(body), err
+	}
+
+	first, err := get()
+	if err != nil {
+		t.Fatalf("first render: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, "pages.yaml"), []byte("kind: [broken"), 0o644); err != nil {
+		t.Fatalf("break manifest: %v", err)
+	}
+	second, err := get()
+	if err != nil {
+		t.Fatalf("cached page read the manifests again: %v", err)
+	}
+	if second != first {
+		t.Error("cached page differs from the first render")
+	}
+}
