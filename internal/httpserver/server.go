@@ -135,6 +135,9 @@ type Config struct {
 	ExplorerHandler http.Handler
 	// PDFHandler builds the preview PDF of one artefact. Only `bino preview` sets it.
 	PDFHandler http.Handler
+	// NoStore marks data bodies as one viewer's query result: they are sent
+	// with Cache-Control: private, no-store. Only `bino serve` sets it.
+	NoStore bool
 }
 
 // maxContextCacheEntries limits the number of cached context entries to prevent
@@ -368,6 +371,10 @@ func (s *Server) PutDataset(name, hash string, body []byte) {
 // body.
 func (s *Server) handleData(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.NoStore {
+			// Set before the lookup so a shared cache does not keep a 404 either.
+			w.Header().Set("Cache-Control", "private, no-store")
+		}
 		name := r.PathValue("name")
 		hash := r.URL.Query().Get("hash")
 		if name == "" || hash == "" {
@@ -380,9 +387,12 @@ func (s *Server) handleData(kind string) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		// The URL changes whenever the content changes, so the body at a given
-		// URL is immutable. Encourage caches to retain it indefinitely.
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		if !s.cfg.NoStore {
+			// The URL changes whenever the content changes, so the body at a given
+			// URL is immutable and the browser may retain it indefinitely. It is
+			// report data, so shared caches must not.
+			w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}

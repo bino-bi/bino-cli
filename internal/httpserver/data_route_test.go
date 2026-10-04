@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -34,8 +35,52 @@ func TestDataRouteHit(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json; charset=utf-8" {
 		t.Fatalf("Content-Type = %q", ct)
 	}
-	if cc := resp.Header.Get("Cache-Control"); cc == "" {
-		t.Fatalf("Cache-Control missing; want immutable header")
+	if cc := resp.Header.Get("Cache-Control"); cc != "private, max-age=31536000, immutable" {
+		t.Fatalf("Cache-Control = %q, want private, max-age=31536000, immutable", cc)
+	}
+}
+
+// A data body is report data, on `bino serve` one viewer's query result. No
+// mode may invite a shared cache to keep it, and serve must not have it
+// stored at all, not even the 404 of a body that is gone.
+func TestDataRouteCacheControl(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		noStore bool
+		hash    string
+		status  int
+		want    string
+	}{
+		{name: "default hit", hash: "abc123", status: http.StatusOK, want: "private, max-age=31536000, immutable"},
+		{name: "no-store hit", noStore: true, hash: "abc123", status: http.StatusOK, want: "private, no-store"},
+		{name: "no-store miss", noStore: true, hash: "gone", status: http.StatusNotFound, want: "private, no-store"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv, err := New(Config{NoStore: tc.noStore})
+			if err != nil {
+				t.Fatalf("New() = %v", err)
+			}
+			srv.PutDataset("tenant_sales", "abc123", []byte(`[{"tenant":"acme"}]`))
+
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/__bino/data/dataset/tenant_sales?hash="+tc.hash, nil)
+			w := httptest.NewRecorder()
+			srv.httpServer.Handler.ServeHTTP(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+			cc := resp.Header.Get("Cache-Control")
+			if cc != tc.want {
+				t.Errorf("Cache-Control = %q, want %q", cc, tc.want)
+			}
+			if strings.Contains(cc, "public") {
+				t.Errorf("Cache-Control = %q; must not contain \"public\"", cc)
+			}
+		})
 	}
 }
 

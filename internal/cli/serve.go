@@ -202,6 +202,7 @@ Environment knobs:
 				ListenAddr: addr,
 				CacheDir:   env.CacheDir,
 				Logger:     logger.Channel("server"),
+				NoStore:    true,
 			})
 			if err != nil {
 				return RuntimeError(err)
