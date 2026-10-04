@@ -506,7 +506,7 @@ func (h *handlers) aggregator(ctx context.Context) (*plugin.SchemaAggregator, er
 // kinds come straight from the aggregator; built-in kinds are extracted from the
 // merged schema's allOf if/then block and wrapped with the merged $defs so the
 // returned schema resolves on its own.
-func (h *handlers) specSchemaForKind(ctx context.Context, kind string) (json.RawMessage, bool, error) {
+func (h *handlers) specSchemaForKind(ctx context.Context, kind string) (schema json.RawMessage, found bool, err error) {
 	agg, err := h.aggregator(ctx)
 	if err != nil {
 		return nil, false, err
