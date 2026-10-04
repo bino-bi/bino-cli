@@ -140,8 +140,8 @@ type Config struct {
 	ExplorerHandler http.Handler
 	// PDFHandler builds the preview PDF of one artefact. Only `bino preview` sets it.
 	PDFHandler http.Handler
-	// NoStore marks data bodies as one viewer's query result: they are sent
-	// with Cache-Control: private, no-store. Only `bino serve` sets it.
+	// NoStore marks pages and data bodies as one viewer's result: they are
+	// sent with Cache-Control: private, no-store. Only `bino serve` sets it.
 	NoStore bool
 }
 
@@ -837,6 +837,9 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		contentType = "text/plain; charset=utf-8"
 	}
 	w.Header().Set("Content-Type", contentType)
+	if s.cfg.NoStore {
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
 	_, _ = w.Write(body)
 }
 

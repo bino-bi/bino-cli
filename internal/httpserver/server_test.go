@@ -476,6 +476,41 @@ func TestHandleRoot(t *testing.T) {
 	}
 }
 
+// A page of `bino serve` is rendered for one viewer's parameters and can
+// carry the rows itself, so no cache may keep it. Preview pages stay without
+// a cache rule.
+func TestHandleRootNoStore(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		noStore bool
+		want    string
+	}{
+		{name: "default", want: ""},
+		{name: "no-store", noStore: true, want: "private, no-store"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, err := New(Config{NoStore: tc.noStore})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			srv.SetContentFunc(StaticContent([]byte("<html></html>"), "text/html; charset=utf-8"))
+
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+			w := httptest.NewRecorder()
+			srv.handleRoot(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+			if cc := resp.Header.Get("Cache-Control"); cc != tc.want {
+				t.Errorf("Cache-Control = %q, want %q", cc, tc.want)
+			}
+		})
+	}
+}
+
 func TestHandleEmbedding(t *testing.T) {
 	tests := []struct {
 		name       string
