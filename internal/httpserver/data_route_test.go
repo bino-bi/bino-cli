@@ -161,3 +161,44 @@ func TestDataRouteKindIsolation(t *testing.T) {
 		t.Fatalf("datasource path returned %q", got2)
 	}
 }
+
+// With a DataFunc installed the route serves what the func returns and does
+// not fall back to the store. `bino serve` relies on this: the func alone
+// decides how long a body stays available.
+func TestDataRouteDataFunc(t *testing.T) {
+	t.Parallel()
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	srv.PutDataset("sales", "stored", []byte(`["store"]`))
+
+	get := func(hash string) (int, string) {
+		t.Helper()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/__bino/data/dataset/sales?hash="+hash, nil)
+		w := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(w, req)
+		resp := w.Result()
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+
+	srv.SetDataFunc(func(kind, name, hash string) ([]byte, bool) {
+		if kind == DataKindDataset && name == "sales" && hash == "live" {
+			return []byte(`["func"]`), true
+		}
+		return nil, false
+	})
+	if status, body := get("live"); status != http.StatusOK || body != `["func"]` {
+		t.Errorf("func body: status = %d, body = %q; want 200 and the func's body", status, body)
+	}
+	if status, _ := get("stored"); status != http.StatusNotFound {
+		t.Errorf("store body with a func installed: status = %d, want 404", status)
+	}
+
+	srv.SetDataFunc(nil)
+	if status, body := get("stored"); status != http.StatusOK || body != `["store"]` {
+		t.Errorf("store body after the func was removed: status = %d, body = %q; want 200", status, body)
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/pkg/duckdb"
 )
 
@@ -266,6 +267,13 @@ func TestServeRoutes_ParallelParamDivergentRequests(t *testing.T) {
 // the shared session it renders on. The session is closed on cleanup.
 func serveRaceRoute(t *testing.T, workdir string) (httpserver.ContentFunc, *duckdb.Session) {
 	t.Helper()
+	return serveRaceRouteOn(t, workdir, nil, nil)
+}
+
+// serveRaceRouteOn is serveRaceRoute with the server and the plugin options
+// that a url data mode test needs.
+func serveRaceRouteOn(t *testing.T, workdir string, server *httpserver.Server, pluginOpts *render.PluginOptions) (httpserver.ContentFunc, *duckdb.Session) {
+	t.Helper()
 	ctx := context.Background()
 
 	docs, err := config.LoadDirWithOptions(ctx, workdir, config.LoadOptions{})
@@ -312,6 +320,8 @@ func serveRaceRoute(t *testing.T, workdir string) (httpserver.ContentFunc, *duck
 		BaseDocs:      docs,
 		EngineVersion: "v1.0.0",
 		Session:       session,
+		PluginOptions: pluginOpts,
+		Server:        server,
 	})
 	if err != nil {
 		t.Fatalf("setup serve routes: %v", err)

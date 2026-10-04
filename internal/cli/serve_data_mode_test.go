@@ -2,6 +2,9 @@ package cli
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -212,5 +215,76 @@ func TestServeRoutes_URLModeEmitsRelativeDataURLs(t *testing.T) {
 	// loading the page via any other host name got a cross-origin data fetch.
 	if strings.Contains(combined, "http://127.0.0.1") || strings.Contains(combined, "http://localhost") {
 		t.Fatalf("rendered HTML pins data URLs to the bind address:\n%s", combined)
+	}
+}
+
+var serveDataURLRe = regexp.MustCompile(`/__bino/data/(?:dataset|datasource)/[^<\s]+`)
+
+// TestServeRoutes_URLModeKeepsDataOfServedPage covers a page that lost its own
+// data: every parameter value gives a new body under the same DataSet name,
+// and the server kept only the newest few per name. A page that was already
+// delivered then got a 404 for its data URL once a few other viewers had
+// loaded the route with other values, and showed "No Data".
+func TestServeRoutes_URLModeKeepsDataOfServedPage(t *testing.T) {
+	ctx := context.Background()
+	workdir := writeServeRaceFixture(t)
+
+	srv, err := httpserver.New(httpserver.Config{NoStore: true})
+	if err != nil {
+		t.Fatalf("httpserver.New: %v", err)
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	go func() { _ = srv.Start(runCtx) }()
+
+	fn, _ := serveRaceRouteOn(t, workdir, srv, applyServeDataMode(nil, render.DataModeURL))
+	page := func(region string) string {
+		t.Helper()
+		body, _, err := fn(httpserver.WithRequestInfo(ctx, httpserver.RequestInfo{
+			Path:     "/",
+			RawQuery: "REGION=" + region,
+			Query:    url.Values{"REGION": {region}},
+		}))
+		if err != nil {
+			t.Fatalf("render REGION=%s: %v", region, err)
+		}
+		contextHTML, err := decodeServeContext(string(body))
+		if err != nil {
+			t.Fatalf("decode context of REGION=%s: %v", region, err)
+		}
+		return contextHTML
+	}
+
+	dataURLs := serveDataURLRe.FindAllString(page("DACH"), -1)
+	if len(dataURLs) == 0 {
+		t.Fatal("page has no url-mode data URL")
+	}
+	for _, region := range []string{"Nordics", "Iberia", "Benelux", "Baltics", "Alps"} {
+		page(region)
+	}
+
+	for _, dataURL := range dataURLs {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL()+dataURL, nil)
+		if err != nil {
+			t.Fatalf("build request for %s: %v", dataURL, err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", dataURL, err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("read %s: %v", dataURL, err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s = %d %s; the page that points at it was served and is still cached", dataURL, resp.StatusCode, body)
+		}
+		if !strings.Contains(string(body), "DACH") {
+			t.Errorf("GET %s returned rows of another request: %s", dataURL, body)
+		}
+		if cc := resp.Header.Get("Cache-Control"); cc != "private, no-store" {
+			t.Errorf("GET %s: Cache-Control = %q, want private, no-store", dataURL, cc)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/serve"
 )
 
@@ -150,6 +151,45 @@ func TestServeRenderCache_LRUBound(t *testing.T) {
 	entry, ok := cache.Get("key-new")
 	if !ok || string(entry.frameHTML) != "updated" {
 		t.Fatalf("key-new not updated in place: ok=%v entry=%v", ok, entry)
+	}
+}
+
+// A url-mode data body must be there for as long as the page that points at
+// it is cached, however many newer pages carry a body under the same name.
+func TestServeRenderCache_Data(t *testing.T) {
+	cache := newServeRenderCache()
+	set := func(i int) {
+		cache.Set(fmt.Sprintf("key-%d", i), &serveRenderEntry{emitted: []render.EmittedData{{
+			Kind: render.EmittedKindDataset,
+			Name: "sales",
+			Hash: fmt.Sprintf("h%d", i),
+			Body: fmt.Appendf(nil, "rows-%d", i),
+		}}})
+	}
+
+	for i := 0; i <= 5; i++ {
+		set(i)
+	}
+	body, ok := cache.data(render.EmittedKindDataset, "sales", "h0")
+	if !ok || string(body) != "rows-0" {
+		t.Fatalf("data(h0) = %q, %v; want rows-0 after 5 newer pages of the same name", body, ok)
+	}
+	if _, ok := cache.data(render.EmittedKindDatasource, "sales", "h0"); ok {
+		t.Fatal("data(h0) found under the datasource kind")
+	}
+	if _, ok := cache.data(render.EmittedKindDataset, "sales", "unknown"); ok {
+		t.Fatal("data(unknown) found")
+	}
+
+	// The body goes when its page leaves the cache.
+	for i := 6; i <= maxServeRenderCacheEntries; i++ {
+		set(i)
+	}
+	if _, ok := cache.data(render.EmittedKindDataset, "sales", "h0"); ok {
+		t.Fatal("data(h0) still found after its page was evicted")
+	}
+	if _, ok := cache.data(render.EmittedKindDataset, "sales", "h1"); !ok {
+		t.Fatal("data(h1) lost while its page is still cached")
 	}
 }
 

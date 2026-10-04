@@ -107,6 +107,11 @@ type EmbeddingFunc func(ctx context.Context, name, kind, language string) ([]byt
 // path (400/403); other errors are reported as 500.
 type EmbeddingOverrideFunc func(file, content string, remove bool) error
 
+// DataFunc returns the JSON body of the dataset or datasource (kind is
+// DataKindDataset or DataKindDatasource) registered under name and hash, and
+// whether it exists.
+type DataFunc func(kind, name, hash string) ([]byte, bool)
+
 // StaticContent returns a ContentFunc that always responds with identical bytes.
 func StaticContent(body []byte, contentType string) ContentFunc {
 	clone := append([]byte(nil), body...)
@@ -188,6 +193,9 @@ type Server struct {
 	localAssets map[string]LocalAsset
 
 	data *dataStore
+
+	dataMu sync.RWMutex
+	dataFn DataFunc
 }
 
 // New constructs a Server ready to start accepting requests.
@@ -364,6 +372,15 @@ func (s *Server) PutDataset(name, hash string, body []byte) {
 	s.data.Put(DataKindDataset, name, hash, body)
 }
 
+// SetDataFunc installs the function the data route asks for a body instead of
+// the built-in store, so the caller decides how long a body stays available.
+// Passing nil restores the store.
+func (s *Server) SetDataFunc(fn DataFunc) {
+	s.dataMu.Lock()
+	defer s.dataMu.Unlock()
+	s.dataFn = fn
+}
+
 // handleData returns an http.HandlerFunc that serves registered JSON payloads
 // for the given kind ("datasource" or "dataset"). The "name" path segment and
 // "hash" query parameter together identify the payload; if either is missing
@@ -381,7 +398,13 @@ func (s *Server) handleData(kind string) http.HandlerFunc {
 			writeDataNotFound(w, "missing name or hash")
 			return
 		}
-		body, ok := s.data.Get(kind, name, hash)
+		s.dataMu.RLock()
+		lookup := s.dataFn
+		s.dataMu.RUnlock()
+		if lookup == nil {
+			lookup = s.data.Get
+		}
+		body, ok := lookup(kind, name, hash)
 		if !ok {
 			writeDataNotFound(w, fmt.Sprintf("no %s %q at hash %q", kind, name, hash))
 			return
