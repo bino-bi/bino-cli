@@ -73,10 +73,10 @@ func TestBuildLayoutPagesCacheKey(t *testing.T) {
 			want:        "layoutPages:page1",
 		},
 		{
-			name:        "multiple pages keep route order",
+			name:        "multiple pages sorted",
 			layoutPages: config.LayoutPagesOrRefs{{Page: "page3"}, {Page: "page1"}, {Page: "page2"}},
 			params:      nil,
-			want:        "layoutPages:page3;page1;page2",
+			want:        "layoutPages:page1;page2;page3",
 		},
 		{
 			name:        "with params",
@@ -88,7 +88,7 @@ func TestBuildLayoutPagesCacheKey(t *testing.T) {
 			name:        "multiple pages with multiple params",
 			layoutPages: config.LayoutPagesOrRefs{{Page: "b"}, {Page: "a"}},
 			params:      map[string]string{"z": "3", "a": "1"},
-			want:        "layoutPages:b;a?a=1&z=3",
+			want:        "layoutPages:a;b?a=1&z=3",
 		},
 		{
 			name:        "page ref with params",
