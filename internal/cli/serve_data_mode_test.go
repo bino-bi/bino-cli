@@ -288,3 +288,14 @@ func TestServeRoutes_URLModeKeepsDataOfServedPage(t *testing.T) {
 		}
 	}
 }
+
+// `bino serve` puts the data into the page unless told otherwise, so a served
+// page does not depend on a second request. Preview keeps fetching by URL.
+func TestDataModeFlagDefaults(t *testing.T) {
+	if got := newServeCommand().Flags().Lookup("data-mode").DefValue; got != render.DataModeInline {
+		t.Errorf("serve --data-mode default = %q, want %q", got, render.DataModeInline)
+	}
+	if got := newPreviewCommand().Flags().Lookup("data-mode").DefValue; got != render.DataModeURL {
+		t.Errorf("preview --data-mode default = %q, want %q", got, render.DataModeURL)
+	}
+}

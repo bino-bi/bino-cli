@@ -22,7 +22,9 @@ Common flags:
 - `--port` - HTTP port (default: `8080`).
 - `--addr` - full listen address (overrides `--port`, e.g. `0.0.0.0:8080`).
 - `--log-sql` - log executed SQL queries.
-- `--data-mode` - dataset delivery: `url` (default) fetches data over HTTP from the serve process, `inline` embeds it gzip+base64 in the HTML.
+- `--data-mode` - dataset delivery: `inline` (default) embeds the data gzip+base64 in the HTML, `url` fetches it over HTTP from the serve process.
+
+With `url`, the browser loads each DataSet and DataSource with its own request to `/__bino/data/`. The response is sent with `Cache-Control: private, no-store`. The data is available while its page is among the 100 most recently used pages of the serve process. Behind several replicas the request must reach the process that rendered the page. `inline` has no such limits, but the page is larger.
 
 ## How it works
 

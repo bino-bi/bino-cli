@@ -303,8 +303,8 @@ Environment knobs:
 	cmd.Flags().StringVar(&live, "live", "", "Name of the LiveReportArtefact to serve (required)")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().StringVar(&addr, "addr", "", "Full listen address (overrides --port, e.g. 0.0.0.0:8080)")
-	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
-		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
+	cmd.Flags().StringVar(&dataMode, "data-mode", "inline",
+		"Dataset/datasource delivery: 'inline' embeds gzip+base64 in the HTML (default), 'url' fetches data via HTTP from the bino server")
 
 	return cmd
 }
