@@ -2,6 +2,8 @@ package serve
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -154,6 +156,168 @@ func TestValidateAndMergeQueryParams(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateAndMergeQueryParamsChecksValues(t *testing.T) {
+	yearMin, yearMax := 2000.0, 2030.0
+	priceMin, priceMax := 0.0, 1000.0
+	routeSpec := config.LiveRouteSpec{
+		QueryParams: []config.LiveQueryParamSpec{
+			{Name: "YEAR", Type: "number", Default: ptr("2024"), Options: &config.LiveQueryParamOptions{Min: &yearMin, Max: &yearMax}},
+			{Name: "REGION", Type: "select", Default: ptr("EU"), Options: &config.LiveQueryParamOptions{
+				Items: []config.LiveQueryParamOptionItem{{Value: "EU", Label: "Europe"}, {Value: "US", Label: "United States"}},
+			}},
+			{Name: "DAY", Type: "date", Optional: true},
+			{Name: "AT", Type: "date_time", Optional: true},
+			{Name: "PRICE", Type: "number_range", Optional: true, Options: &config.LiveQueryParamOptions{Min: &priceMin, Max: &priceMax}},
+			{Name: "CATEGORY", Type: "select", Optional: true, Options: &config.LiveQueryParamOptions{Dataset: "categories", ValueColumn: "id"}},
+			{Name: "NOTE", Optional: true},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		requestQuery map[string][]string
+		wantRejected string            // param expected in MissingNames, empty if the request is valid
+		wantParams   map[string]string // checked only for a valid request
+	}{
+		{
+			name:         "number: not numeric",
+			requestQuery: map[string][]string{"YEAR": {"twenty24"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: trailing text",
+			requestQuery: map[string][]string{"YEAR": {"2024 OR 1=1"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: variable reference",
+			requestQuery: map[string][]string{"YEAR": {"${YEAR}"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: below options.min",
+			requestQuery: map[string][]string{"YEAR": {"1900"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: above options.max",
+			requestQuery: map[string][]string{"YEAR": {"2031"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "select: not in options.items",
+			requestQuery: map[string][]string{"REGION": {"MARS"}},
+			wantRejected: "REGION",
+		},
+		{
+			name:         "date: not YYYY-MM-DD",
+			requestQuery: map[string][]string{"DAY": {"yesterday"}},
+			wantRejected: "DAY",
+		},
+		{
+			name:         "date_time: trailing text",
+			requestQuery: map[string][]string{"AT": {"2024-01-31T10:30' OR '1'='1"}},
+			wantRejected: "AT",
+		},
+		{
+			name:         "number_range: upper end not numeric",
+			requestQuery: map[string][]string{"PRICE": {"10"}, "PRICE_max": {"lots"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: upper end above options.max",
+			requestQuery: map[string][]string{"PRICE": {"10"}, "PRICE_max": {"1001"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: bad upper end without lower end",
+			requestQuery: map[string][]string{"PRICE_max": {"lots"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: lower end below options.min",
+			requestQuery: map[string][]string{"PRICE": {"-1"}, "PRICE_max": {"500"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name: "valid values pass",
+			requestQuery: map[string][]string{
+				"YEAR":      {"2025"},
+				"REGION":    {"US"},
+				"DAY":       {"2024-02-29"},
+				"AT":        {"2024-01-31T10:30"},
+				"PRICE":     {"10"},
+				"PRICE_max": {"500"},
+			},
+			wantParams: map[string]string{
+				"YEAR":         "2025",
+				"REGION":       "US",
+				"REGION_LABEL": "United States",
+				"DAY":          "2024-02-29",
+				"AT":           "2024-01-31T10:30",
+				"PRICE":        "10",
+			},
+		},
+		{
+			name: "string and dataset-backed select take any value",
+			requestQuery: map[string][]string{
+				"CATEGORY": {"not checked"},
+				"NOTE":     {"a ${b} c"},
+			},
+			wantParams: map[string]string{
+				"YEAR":         "2024",
+				"REGION":       "EU",
+				"REGION_LABEL": "Europe",
+				"CATEGORY":     "not checked",
+				"NOTE":         "a ${b} c",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ValidateAndMergeQueryParams(routeSpec, tt.requestQuery)
+
+			if tt.wantRejected == "" {
+				if len(result.MissingNames) != 0 {
+					t.Fatalf("missing names = %v, want none", result.MissingNames)
+				}
+				if !maps.Equal(result.Params, tt.wantParams) {
+					t.Errorf("params = %v, want %v", result.Params, tt.wantParams)
+				}
+				return
+			}
+
+			if !slices.Equal(result.MissingNames, []string{tt.wantRejected}) {
+				t.Errorf("missing names = %v, want [%s]", result.MissingNames, tt.wantRejected)
+			}
+			for name, values := range tt.requestQuery {
+				if !strings.HasPrefix(name, tt.wantRejected) {
+					continue
+				}
+				for key, got := range result.Params {
+					if strings.HasPrefix(key, tt.wantRejected) && got == values[0] {
+						t.Errorf("rejected value %q reached params[%q]", values[0], key)
+					}
+				}
+			}
+		})
+	}
+
+	t.Run("rejected required param is listed once", func(t *testing.T) {
+		required := config.LiveRouteSpec{
+			QueryParams: []config.LiveQueryParamSpec{{Name: "YEAR", Type: "number"}},
+		}
+		result := ValidateAndMergeQueryParams(required, map[string][]string{"YEAR": {"twenty24"}})
+		if !slices.Equal(result.MissingNames, []string{"YEAR"}) {
+			t.Errorf("missing names = %v, want [YEAR]", result.MissingNames)
+		}
+		if _, ok := result.Params["YEAR"]; ok {
+			t.Errorf("params[YEAR] = %q, want it absent", result.Params["YEAR"])
+		}
+	})
 }
 
 func TestQueryParamValidationResult_IsValid(t *testing.T) {

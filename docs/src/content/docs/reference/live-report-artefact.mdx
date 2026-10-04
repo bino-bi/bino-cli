@@ -188,6 +188,8 @@ Each parameter has:
 | `date`         | Date picker       | Date selection (YYYY-MM-DD format).                                             |
 | `date_time`    | DateTime picker   | Date and time selection (ISO 8601 format).                                      |
 
+The server checks each request value against the declared `type` and `options`. A `number` or `number_range` value must be a number within `min` and `max`, a `select` value must be one of the static `items`, a `date` must be `YYYY-MM-DD`, and a `date_time` must be `YYYY-MM-DDTHH:MM` (seconds optional) or RFC 3339. A value that does not match is not used: the page shows the parameter form with the field highlighted instead of the report. `string` values and `select` options loaded from a DataSet are not checked.
+
 ### Options configuration
 
 The `options` object supports different settings depending on the parameter type:

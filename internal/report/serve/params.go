@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -17,16 +18,17 @@ import (
 // QueryParamValidationResult holds the result of query parameter validation.
 type QueryParamValidationResult struct {
 	Params       map[string]string // Merged parameters (request values + defaults)
-	MissingNames []string          // Names of missing required parameters
+	MissingNames []string          // Names of missing required parameters and of parameters with a rejected value
 }
 
-// IsValid returns true if there are no missing required parameters.
+// IsValid returns true if no required parameter is missing and no value was rejected.
 func (r QueryParamValidationResult) IsValid() bool {
 	return len(r.MissingNames) == 0
 }
 
 // ValidateAndMergeQueryParams validates query parameters against route spec.
 // Returns merged params (request values + defaults) and list of missing required params.
+// A request value that breaks the declared type or options is not merged; its param is listed as missing.
 // Missing params are reported in the result, not as an error.
 // For select type params with static items, also adds {name}_LABEL with the label from the option item.
 func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) QueryParamValidationResult {
@@ -52,29 +54,62 @@ func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	}
 
 	// Override with request values (only for declared params)
-	declaredParams := make(map[string]struct{})
 	for _, p := range routeSpec.QueryParams {
-		declaredParams[p.Name] = struct{}{}
-	}
-
-	for name := range declaredParams {
-		if values, ok := requestQuery[name]; ok && len(values) > 0 {
-			result.Params[name] = values[0]
+		if !requestValuesValid(p, requestQuery) {
+			result.MissingNames = append(result.MissingNames, p.Name)
+			continue
+		}
+		if values, ok := requestQuery[p.Name]; ok && len(values) > 0 {
+			result.Params[p.Name] = values[0]
 			// Add _LABEL for select params with static items
-			if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
-				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, values[0])
+			if p.Type == "select" && p.Options != nil && len(p.Options.Items) > 0 {
+				result.Params[p.Name+"_LABEL"] = lookupLiveSelectLabel(p.Options.Items, values[0])
 			}
 		}
 	}
 
 	// Check for missing required params (params with no default)
 	for _, requiredName := range routeSpec.GetRequiredQueryParams() {
-		if _, ok := result.Params[requiredName]; !ok {
+		if _, ok := result.Params[requiredName]; !ok && !slices.Contains(result.MissingNames, requiredName) {
 			result.MissingNames = append(result.MissingNames, requiredName)
 		}
 	}
 
 	return result
+}
+
+// requestValuesValid reports whether the request values of a declared param
+// satisfy its type and options. Defaults are not checked.
+func requestValuesValid(p config.LiveQueryParamSpec, requestQuery map[string][]string) bool {
+	spec := valueCheckSpec(p)
+	names := []string{p.Name}
+	if p.Type == "number_range" {
+		names = append(names, p.Name+"_max") // upper end of the range slider
+	}
+	for _, name := range names {
+		if values, ok := requestQuery[name]; ok && len(values) > 0 {
+			if config.CheckParamValue("query", name, values[0], spec) != nil {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// valueCheckSpec adapts a query param to the spec config.CheckParamValue takes.
+// Both ends of a number_range are plain numbers.
+func valueCheckSpec(p config.LiveQueryParamSpec) config.LayoutPageParamSpec {
+	spec := config.LayoutPageParamSpec{Name: p.Name, Type: p.Type}
+	if p.Type == "number_range" {
+		spec.Type = "number"
+	}
+	if p.Options != nil {
+		spec.Options = &config.LayoutPageParamOptions{Min: p.Options.Min, Max: p.Options.Max}
+		for _, item := range p.Options.Items {
+			spec.Options.Items = append(spec.Options.Items, config.LayoutPageParamOptionItem(item))
+		}
+	}
+	return spec
 }
 
 // lookupLiveSelectLabel finds the label for a given value in a list of live select option items.
