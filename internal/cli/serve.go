@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -881,16 +882,25 @@ func serveLayoutPagesHandler(
 		return serve.BuildHTML(ctx, entry.frameHTML, entry.contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 	}
 
-	// Filter documents to include only the specified LayoutPages (plus dependencies)
-	filteredDocs := filterDocsForLayoutPages(reqCtx.Docs, layoutPages)
+	// Select the route's pages like a ReportArtefact does: globs, entry params,
+	// a page listed more than once, and route order.
+	refs, err := resolveRouteLayoutPages(reqCtx.Docs, liveArtefact.Document.Name, routePath, reqCtx.QueryParams)
+	if err != nil {
+		logger.Errorf("Resolve layoutPages failed for route %s: %v", routePath, err)
+		return nil, "", err
+	}
+	selectedDocs, err := pipeline.SelectLayoutPages(withQueryParamDefaults(reqCtx.Docs, reqCtx.QueryParams), refs)
+	if err != nil {
+		logger.Errorf("Select layoutPages failed for route %s: %v", routePath, err)
+		return nil, "", err
+	}
 
-	// Render the layout pages directly, passing query params as LayoutPage param overrides
-	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, filteredDocs, pipeline.RenderOptions{
+	// Render the selected layout pages directly
+	renderResult, err := pipeline.RenderHTMLFrameAndContext(ctx, selectedDocs, pipeline.RenderOptions{
 		Workdir:            workdir,
 		Mode:               pipeline.RenderModeServe,
 		EngineVersion:      engineVersion,
 		QueryLogger:        queryLogger,
-		LayoutPageParams:   reqCtx.QueryParams,
 		Session:            session,
 		PluginOptions:      pluginOpts,
 		PostRenderHTMLHook: postRenderHook,
@@ -918,34 +928,65 @@ func serveLayoutPagesHandler(
 	return serve.BuildHTML(ctx, frameHTML, contextHTML, liveArtefact, routePath, routeSpec, reqCtx.ReqInfo.RawQuery, workdir, reqCtx.Docs, session), "text/html; charset=utf-8", nil
 }
 
-// filterDocsForLayoutPages filters documents to include only LayoutPages with matching names
-// and all other document types (DataSets, DataSources, etc.) needed for rendering.
-func filterDocsForLayoutPages(docs []config.Document, layoutPages config.LayoutPagesOrRefs) []config.Document {
-	// Build a set of requested layout page names
-	requestedPages := make(map[string]struct{})
-	for _, ref := range layoutPages {
-		requestedPages[ref.Page] = struct{}{}
+// resolveRouteLayoutPages returns the layoutPages of a route with the
+// ${QUERY_PARAM} references in entry params resolved. It reads the route from
+// docs, the documents of the request: the loader resolved the references
+// there, except names that a LayoutPage in the same file declares as params.
+func resolveRouteLayoutPages(docs []config.Document, liveName, routePath string, queryParams map[string]string) (config.LayoutPagesOrRefs, error) {
+	liveArtefacts, err := config.CollectLiveArtefacts(docs)
+	if err != nil {
+		return nil, err
+	}
+	live := config.FindLiveArtefact(liveArtefacts, liveName)
+	if live == nil {
+		return nil, fmt.Errorf("LiveReportArtefact %s not found after reload", liveName)
+	}
+	// An empty list would select every page.
+	if len(live.Spec.Routes[routePath].LayoutPages) == 0 {
+		return nil, fmt.Errorf("route %s has no layoutPages after reload", routePath)
 	}
 
-	// Filter documents: keep all non-LayoutPage docs, and only matching LayoutPages
-	filtered := make([]config.Document, 0, len(docs))
-	for _, doc := range docs {
-		if doc.Kind == "LayoutPage" {
-			if _, ok := requestedPages[doc.Name]; ok {
-				filtered = append(filtered, doc)
-			}
-		} else {
-			// Keep all other document types (DataSets, DataSources, ThemeStyle, etc.)
-			filtered = append(filtered, doc)
+	lookup := config.ChainLookup(config.MapLookup(queryParams), config.EnvLookup())
+	refs := slices.Clone(live.Spec.Routes[routePath].LayoutPages)
+	for i, ref := range refs {
+		if len(ref.Params) == 0 {
+			continue
 		}
+		params := make(map[string]string, len(ref.Params))
+		for name, value := range ref.Params {
+			params[name], _ = config.ExpandVars(value, lookup)
+		}
+		refs[i].Params = params
 	}
+	return refs, nil
+}
 
-	return filtered
+// withQueryParamDefaults makes each query param the default of the LayoutPage
+// param with the same name. The page selector then uses it wherever a
+// layoutPages entry does not set that param itself.
+func withQueryParamDefaults(docs []config.Document, queryParams map[string]string) []config.Document {
+	if len(queryParams) == 0 {
+		return docs
+	}
+	result := slices.Clone(docs)
+	for i, doc := range result {
+		if doc.Kind != "LayoutPage" || len(doc.Params) == 0 {
+			continue
+		}
+		params := slices.Clone(doc.Params)
+		for j, param := range params {
+			if value, ok := queryParams[param.Name]; ok {
+				params[j].Default = &value
+			}
+		}
+		result[i].Params = params
+	}
+	return result
 }
 
 // buildLayoutPagesCacheKey creates a cache key from layout page refs and sorted query params.
 func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[string]string) string {
-	// Build page+params strings and sort for consistent key
+	// Build page+params strings in route order: the order is part of the render
 	pageKeys := make([]string, 0, len(layoutPages))
 	for _, ref := range layoutPages {
 		pageKey := ref.Page
@@ -960,7 +1001,6 @@ func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[s
 		}
 		pageKeys = append(pageKeys, pageKey)
 	}
-	sort.Strings(pageKeys)
 	key := "layoutPages:" + strings.Join(pageKeys, ";")
 
 	if len(params) == 0 {
