@@ -390,7 +390,6 @@ func ValidateRefParams(targetKind, targetName string, refParams map[string]strin
 }
 
 // validateParamValue validates a single param value written in a manifest against its definition.
-// The subject identifies the target document in messages, e.g. `LayoutPage "sales"`.
 func validateParamValue(subject, paramName, value string, def LayoutPageParamSpec) error {
 	// Value might contain ${VAR} which can't be validated statically
 	if containsVarReference(value) {
@@ -404,12 +403,14 @@ var dateTimeLayouts = []string{"2006-01-02T15:04", "2006-01-02T15:04:05", time.R
 
 // CheckParamValue checks a final param value against the declared type and options.
 // Unlike manifest validation it does not skip a value that contains ${VAR}.
+// The subject identifies the target document in messages, e.g. `LayoutPage "sales"`.
 func CheckParamValue(subject, paramName, value string, def LayoutPageParamSpec) error {
 	switch def.Type {
 	case "number":
-		// The whole value must be a number: a numeric prefix is not enough.
+		// The whole value must be a decimal number. ParseFloat also takes hex floats
+		// and digit underscores, which SQL reads differently.
 		num, err := strconv.ParseFloat(value, 64)
-		if err != nil || math.IsNaN(num) || math.IsInf(num, 0) {
+		if err != nil || strings.ContainsAny(value, "xXpP_") || math.IsNaN(num) || math.IsInf(num, 0) {
 			return fmt.Errorf("%s: param %q value %q is not a valid number", subject, paramName, value)
 		}
 		// Check range constraints

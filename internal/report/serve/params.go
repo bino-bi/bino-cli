@@ -28,8 +28,8 @@ func (r QueryParamValidationResult) IsValid() bool {
 
 // ValidateAndMergeQueryParams validates query parameters against route spec.
 // Returns merged params (request values + defaults) and list of missing required params.
-// A request value that breaks the declared type or options is not merged; its param is listed as missing.
 // Missing params are reported in the result, not as an error.
+// A request value that breaks the declared type or options is not merged; its param is listed as missing too.
 // For select type params with static items, also adds {name}_LABEL with the label from the option item.
 func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) QueryParamValidationResult {
 	result := QueryParamValidationResult{
@@ -55,15 +55,21 @@ func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 
 	// Override with request values (only for declared params)
 	for _, p := range routeSpec.QueryParams {
-		if !requestValuesValid(p, requestQuery) {
+		spec := valueCheckSpec(p)
+		value, sent, valid := requestValue(requestQuery, p.Name, spec)
+		if valid && p.Type == "number_range" {
+			// The range slider sends its upper end as NAME_max.
+			_, _, valid = requestValue(requestQuery, p.Name+"_max", spec)
+		}
+		if !valid {
 			result.MissingNames = append(result.MissingNames, p.Name)
 			continue
 		}
-		if values, ok := requestQuery[p.Name]; ok && len(values) > 0 {
-			result.Params[p.Name] = values[0]
+		if sent {
+			result.Params[p.Name] = value
 			// Add _LABEL for select params with static items
 			if p.Type == "select" && p.Options != nil && len(p.Options.Items) > 0 {
-				result.Params[p.Name+"_LABEL"] = lookupLiveSelectLabel(p.Options.Items, values[0])
+				result.Params[p.Name+"_LABEL"] = lookupLiveSelectLabel(p.Options.Items, value)
 			}
 		}
 	}
@@ -78,35 +84,34 @@ func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	return result
 }
 
-// requestValuesValid reports whether the request values of a declared param
-// satisfy its type and options. Defaults are not checked.
-func requestValuesValid(p config.LiveQueryParamSpec, requestQuery map[string][]string) bool {
-	spec := valueCheckSpec(p)
-	names := []string{p.Name}
-	if p.Type == "number_range" {
-		names = append(names, p.Name+"_max") // upper end of the range slider
+// requestValue returns the first request value sent under name and whether it
+// satisfies spec. An empty value that the declared type cannot hold counts as
+// not sent, so the default applies. Defaults are not checked.
+func requestValue(requestQuery map[string][]string, name string, spec config.LayoutPageParamSpec) (value string, sent, valid bool) {
+	values := requestQuery[name]
+	if len(values) == 0 {
+		return "", false, true
 	}
-	for _, name := range names {
-		if values, ok := requestQuery[name]; ok && len(values) > 0 {
-			if config.CheckParamValue("query", name, values[0], spec) != nil {
-				return false
-			}
-		}
+	if config.CheckParamValue("query", name, values[0], spec) != nil {
+		return "", false, values[0] == ""
 	}
-	return true
+	return values[0], true, true
 }
 
 // valueCheckSpec adapts a query param to the spec config.CheckParamValue takes.
 // Both ends of a number_range are plain numbers.
 func valueCheckSpec(p config.LiveQueryParamSpec) config.LayoutPageParamSpec {
-	spec := config.LayoutPageParamSpec{Name: p.Name, Type: p.Type}
+	spec := config.LayoutPageParamSpec{Type: p.Type}
 	if p.Type == "number_range" {
 		spec.Type = "number"
 	}
 	if p.Options != nil {
 		spec.Options = &config.LayoutPageParamOptions{Min: p.Options.Min, Max: p.Options.Max}
-		for _, item := range p.Options.Items {
-			spec.Options.Items = append(spec.Options.Items, config.LayoutPageParamOptionItem(item))
+		// The sidebar offers the dataset rows when a dataset is set, so the static items are not the valid set.
+		if p.Options.Dataset == "" {
+			for _, item := range p.Options.Items {
+				spec.Options.Items = append(spec.Options.Items, config.LayoutPageParamOptionItem(item))
+			}
 		}
 	}
 	return spec
