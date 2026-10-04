@@ -2,6 +2,8 @@ package serve
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -154,6 +156,230 @@ func TestValidateAndMergeQueryParams(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateAndMergeQueryParamsChecksValues(t *testing.T) {
+	yearMin, yearMax := 2000.0, 2030.0
+	priceMin, priceMax := 0.0, 1000.0
+	routeSpec := config.LiveRouteSpec{
+		QueryParams: []config.LiveQueryParamSpec{
+			{Name: "YEAR", Type: "number", Default: ptr("2024"), Options: &config.LiveQueryParamOptions{Min: &yearMin, Max: &yearMax}},
+			{Name: "REGION", Type: "select", Default: ptr("EU"), Options: &config.LiveQueryParamOptions{
+				Items: []config.LiveQueryParamOptionItem{{Value: "EU", Label: "Europe"}, {Value: "US", Label: "United States"}},
+			}},
+			{Name: "DAY", Type: "date", Optional: true},
+			{Name: "AT", Type: "date_time", Optional: true},
+			{Name: "PRICE", Type: "number_range", Optional: true, Options: &config.LiveQueryParamOptions{Min: &priceMin, Max: &priceMax}},
+			{Name: "CATEGORY", Type: "select", Optional: true, Options: &config.LiveQueryParamOptions{Dataset: "categories", ValueColumn: "id"}},
+			{Name: "CITY", Type: "select", Optional: true, Options: &config.LiveQueryParamOptions{
+				Items:   []config.LiveQueryParamOptionItem{{Value: "fallback"}},
+				Dataset: "cities", ValueColumn: "id",
+			}},
+			{Name: "NOTE", Optional: true},
+		},
+	}
+	defaults := map[string]string{"YEAR": "2024", "REGION": "EU", "REGION_LABEL": "Europe"}
+
+	tests := []struct {
+		name         string
+		requestQuery map[string][]string
+		wantRejected string            // param expected in MissingNames, empty if the request is valid
+		wantParams   map[string]string // for a valid request; a rejected one must leave only the defaults
+	}{
+		{
+			name:         "number: not numeric",
+			requestQuery: map[string][]string{"YEAR": {"twenty24"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: trailing text",
+			requestQuery: map[string][]string{"YEAR": {"2024 OR 1=1"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: variable reference",
+			requestQuery: map[string][]string{"YEAR": {"${YEAR}"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: hex float",
+			requestQuery: map[string][]string{"YEAR": {"0x7E8p0"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: digit underscore",
+			requestQuery: map[string][]string{"YEAR": {"2_024"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: below options.min",
+			requestQuery: map[string][]string{"YEAR": {"1999"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "number: above options.max",
+			requestQuery: map[string][]string{"YEAR": {"2031"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "select: not in options.items",
+			requestQuery: map[string][]string{"REGION": {"MARS"}},
+			wantRejected: "REGION",
+		},
+		{
+			name:         "date: not YYYY-MM-DD",
+			requestQuery: map[string][]string{"DAY": {"yesterday"}},
+			wantRejected: "DAY",
+		},
+		{
+			name:         "date_time: trailing text",
+			requestQuery: map[string][]string{"AT": {"2024-01-31T10:30' OR '1'='1"}},
+			wantRejected: "AT",
+		},
+		{
+			name:         "number_range: upper end not numeric",
+			requestQuery: map[string][]string{"PRICE": {"10"}, "PRICE_max": {"lots"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: upper end above options.max",
+			requestQuery: map[string][]string{"PRICE": {"10"}, "PRICE_max": {"1001"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: bad upper end without lower end",
+			requestQuery: map[string][]string{"PRICE_max": {"lots"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name:         "number_range: lower end below options.min",
+			requestQuery: map[string][]string{"PRICE": {"-1"}, "PRICE_max": {"500"}},
+			wantRejected: "PRICE",
+		},
+		{
+			name: "valid values pass",
+			requestQuery: map[string][]string{
+				"YEAR":      {"2025"},
+				"REGION":    {"US"},
+				"DAY":       {"2024-02-29"},
+				"AT":        {"2024-01-31T10:30"},
+				"PRICE":     {"10"},
+				"PRICE_max": {"500"},
+			},
+			// PRICE_max is checked but not merged: the documents never got it.
+			wantParams: map[string]string{
+				"YEAR":         "2025",
+				"REGION":       "US",
+				"REGION_LABEL": "United States",
+				"DAY":          "2024-02-29",
+				"AT":           "2024-01-31T10:30",
+				"PRICE":        "10",
+			},
+		},
+		{
+			name:         "values at options.min pass",
+			requestQuery: map[string][]string{"YEAR": {"2000"}, "PRICE": {"0"}, "PRICE_max": {"0"}},
+			wantParams:   map[string]string{"YEAR": "2000", "REGION": "EU", "REGION_LABEL": "Europe", "PRICE": "0"},
+		},
+		{
+			name:         "values at options.max pass",
+			requestQuery: map[string][]string{"YEAR": {"2030"}, "PRICE": {"1000"}, "PRICE_max": {"1000"}},
+			wantParams:   map[string]string{"YEAR": "2030", "REGION": "EU", "REGION_LABEL": "Europe", "PRICE": "1000"},
+		},
+		{
+			name:         "first of repeated values is checked and merged",
+			requestQuery: map[string][]string{"YEAR": {"2025", "x OR 1=1"}},
+			wantParams:   map[string]string{"YEAR": "2025", "REGION": "EU", "REGION_LABEL": "Europe"},
+		},
+		{
+			name:         "bad first of repeated values",
+			requestQuery: map[string][]string{"YEAR": {"x OR 1=1", "2025"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "NAME_max of a plain number is ignored",
+			requestQuery: map[string][]string{"YEAR": {"2025"}, "YEAR_max": {"lots"}},
+			wantParams:   map[string]string{"YEAR": "2025", "REGION": "EU", "REGION_LABEL": "Europe"},
+		},
+		{
+			name: "string and dataset-backed selects take any value",
+			requestQuery: map[string][]string{
+				"CATEGORY": {"not checked"},
+				"CITY":     {"Amsterdam"},
+				"NOTE":     {"a ${b} c"},
+			},
+			wantParams: map[string]string{
+				"YEAR":         "2024",
+				"REGION":       "EU",
+				"REGION_LABEL": "Europe",
+				"CATEGORY":     "not checked",
+				"CITY":         "Amsterdam",
+				"CITY_LABEL":   "Amsterdam",
+				"NOTE":         "a ${b} c",
+			},
+		},
+		{
+			name: "empty value of a checked type counts as not sent",
+			requestQuery: map[string][]string{
+				"YEAR":      {""},
+				"REGION":    {""},
+				"DAY":       {""},
+				"AT":        {""},
+				"PRICE":     {""},
+				"PRICE_max": {""},
+				"NOTE":      {""},
+			},
+			wantParams: map[string]string{"YEAR": "2024", "REGION": "EU", "REGION_LABEL": "Europe", "NOTE": ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ValidateAndMergeQueryParams(routeSpec, tt.requestQuery)
+
+			wantMissing, wantParams := []string(nil), tt.wantParams
+			if tt.wantRejected != "" {
+				wantMissing, wantParams = []string{tt.wantRejected}, defaults
+			}
+			if !slices.Equal(result.MissingNames, wantMissing) {
+				t.Errorf("missing names = %v, want %v", result.MissingNames, wantMissing)
+			}
+			if !maps.Equal(result.Params, wantParams) {
+				t.Errorf("params = %v, want %v", result.Params, wantParams)
+			}
+		})
+	}
+
+	required := config.LiveRouteSpec{
+		QueryParams: []config.LiveQueryParamSpec{{Name: "YEAR", Type: "number"}},
+	}
+	for name, value := range map[string]string{
+		"rejected required param is listed once":     "twenty24",
+		"empty value of a required param is missing": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := ValidateAndMergeQueryParams(required, map[string][]string{"YEAR": {value}})
+			if !slices.Equal(result.MissingNames, []string{"YEAR"}) {
+				t.Errorf("missing names = %v, want [YEAR]", result.MissingNames)
+			}
+			if len(result.Params) != 0 {
+				t.Errorf("params = %v, want none", result.Params)
+			}
+		})
+	}
+
+	t.Run("default is not checked", func(t *testing.T) {
+		topMin := 1.0
+		spec := config.LiveRouteSpec{
+			QueryParams: []config.LiveQueryParamSpec{
+				{Name: "TOP", Type: "number", Default: ptr("0"), Options: &config.LiveQueryParamOptions{Min: &topMin}},
+			},
+		}
+		result := ValidateAndMergeQueryParams(spec, nil)
+		if !result.IsValid() || result.Params["TOP"] != "0" {
+			t.Errorf("missing names = %v, params = %v, want the default merged", result.MissingNames, result.Params)
+		}
+	})
 }
 
 func TestQueryParamValidationResult_IsValid(t *testing.T) {

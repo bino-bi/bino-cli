@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // KindProvider provides additional kind names from plugins.
@@ -386,18 +389,28 @@ func ValidateRefParams(targetKind, targetName string, refParams map[string]strin
 	return warnings, nil
 }
 
-// validateParamValue validates a single param value against its definition.
-// The subject identifies the target document in messages, e.g. `LayoutPage "sales"`.
+// validateParamValue validates a single param value written in a manifest against its definition.
 func validateParamValue(subject, paramName, value string, def LayoutPageParamSpec) error {
+	// Value might contain ${VAR} which can't be validated statically
+	if containsVarReference(value) {
+		return nil
+	}
+	return CheckParamValue(subject, paramName, value, def)
+}
+
+// dateTimeLayouts are the accepted date_time forms: what a datetime-local input sends, and RFC 3339.
+var dateTimeLayouts = []string{"2006-01-02T15:04", "2006-01-02T15:04:05", time.RFC3339}
+
+// CheckParamValue checks a final param value against the declared type and options.
+// Unlike manifest validation it does not skip a value that contains ${VAR}.
+// The subject identifies the target document in messages, e.g. `LayoutPage "sales"`.
+func CheckParamValue(subject, paramName, value string, def LayoutPageParamSpec) error {
 	switch def.Type {
 	case "number":
-		// Value might contain ${VAR} which can't be validated statically
-		if containsVarReference(value) {
-			return nil
-		}
-		// Try to parse as number
-		var num float64
-		if _, err := fmt.Sscanf(value, "%f", &num); err != nil {
+		// The whole value must be a decimal number. ParseFloat also takes hex floats
+		// and digit underscores, which SQL reads differently.
+		num, err := strconv.ParseFloat(value, 64)
+		if err != nil || strings.ContainsAny(value, "xXpP_") || math.IsNaN(num) || math.IsInf(num, 0) {
 			return fmt.Errorf("%s: param %q value %q is not a valid number", subject, paramName, value)
 		}
 		// Check range constraints
@@ -411,17 +424,28 @@ func validateParamValue(subject, paramName, value string, def LayoutPageParamSpe
 		}
 
 	case "boolean":
-		if containsVarReference(value) {
-			return nil
-		}
 		if value != "true" && value != "false" {
 			return fmt.Errorf("%s: param %q value %q is not a valid boolean (must be 'true' or 'false')", subject, paramName, value)
 		}
 
-	case "select":
-		if containsVarReference(value) {
-			return nil
+	case "date":
+		if _, err := time.Parse(time.DateOnly, value); err != nil {
+			return fmt.Errorf("%s: param %q value %q is not a valid date (expected YYYY-MM-DD)", subject, paramName, value)
 		}
+
+	case "date_time":
+		valid := false
+		for _, layout := range dateTimeLayouts {
+			if _, err := time.Parse(layout, value); err == nil {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("%s: param %q value %q is not a valid date_time (expected YYYY-MM-DDTHH:MM, YYYY-MM-DDTHH:MM:SS or RFC 3339)", subject, paramName, value)
+		}
+
+	case "select":
 		if def.Options == nil || len(def.Options.Items) == 0 {
 			return nil // No items to validate against
 		}

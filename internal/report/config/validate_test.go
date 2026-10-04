@@ -788,3 +788,111 @@ func TestValidateLayoutPageRefParams(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckParamValue(t *testing.T) {
+	number := LayoutPageParamSpec{Name: "YEAR", Type: "number", Options: &LayoutPageParamOptions{Min: ptrFloat64(-10), Max: ptrFloat64(2030)}}
+	boolean := LayoutPageParamSpec{Name: "FLAG", Type: "boolean"}
+	choice := LayoutPageParamSpec{Name: "REGION", Type: "select", Options: &LayoutPageParamOptions{
+		Items: []LayoutPageParamOptionItem{{Value: "EU"}, {Value: "US"}},
+	}}
+	date := LayoutPageParamSpec{Name: "DAY", Type: "date"}
+	dateTime := LayoutPageParamSpec{Name: "AT", Type: "date_time"}
+
+	tests := []struct {
+		name    string
+		def     LayoutPageParamSpec
+		value   string
+		wantErr string // empty means the value is accepted
+	}{
+		{"number", number, "2024", ""},
+		{"negative number", number, "-5", ""},
+		{"decimal number", number, "12.5", ""},
+		{"number with exponent", number, "1e3", ""},
+		{"number at min", number, "-10", ""},
+		{"number at max", number, "2030", ""},
+		{"number with trailing text", number, "2024 OR 1=1", "not a valid number"},
+		{"number with unit", number, "12abc", "not a valid number"},
+		{"number as hex float", number, "0x1p4", "not a valid number"},
+		{"number as upper-case hex float", number, "0X1P4", "not a valid number"},
+		{"number with leading space", number, " 2024", "not a valid number"},
+		{"number with trailing space", number, "2024 ", "not a valid number"},
+		{"number with digit underscore", number, "1_000", "not a valid number"},
+		{"number NaN", number, "NaN", "not a valid number"},
+		{"number Inf", number, "Inf", "not a valid number"},
+		{"empty number", number, "", "not a valid number"},
+		{"number var reference", number, "${YEAR}", "not a valid number"},
+		{"number below min", number, "-11", "below minimum"},
+		{"number above max", number, "2031", "above maximum"},
+		{"boolean true", boolean, "true", ""},
+		{"boolean false", boolean, "false", ""},
+		{"boolean in words", boolean, "yes", "not a valid boolean"},
+		{"boolean var reference", boolean, "${FLAG}", "not a valid boolean"},
+		{"select item", choice, "US", ""},
+		{"select value outside items", choice, "MARS", "not a valid option"},
+		{"select var reference", choice, "${REGION}", "not a valid option"},
+		{"date", date, "2024-02-29", ""},
+		{"date not on the calendar", date, "2024-02-30", "not a valid date"},
+		{"date in words", date, "yesterday", "not a valid date"},
+		{"date without leading zeros", date, "2024-1-5", "not a valid date"},
+		{"date with time", date, "2024-01-31T10:30", "not a valid date"},
+		{"date var reference", date, "${DAY}", "not a valid date"},
+		{"date_time from picker", dateTime, "2024-01-31T10:30", ""},
+		{"date_time with seconds", dateTime, "2024-01-31T10:30:15", ""},
+		{"date_time with fraction", dateTime, "2024-01-31T10:30:15.123", ""},
+		{"date_time RFC 3339 UTC", dateTime, "2024-01-31T10:30:15Z", ""},
+		{"date_time RFC 3339 offset", dateTime, "2024-01-31T10:30:15+02:00", ""},
+		{"date_time date only", dateTime, "2024-01-31", "not a valid date_time"},
+		{"date_time with space", dateTime, "2024-01-31 10:30:15", "not a valid date_time"},
+		{"date_time zone without seconds", dateTime, "2024-01-31T10:30Z", "not a valid date_time"},
+		{"date_time with trailing text", dateTime, "2024-01-31T10:30' OR '1'='1", "not a valid date_time"},
+		{"string takes anything", LayoutPageParamSpec{Name: "NOTE"}, "a ${b} c", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckParamValue(`LayoutPage "sales"`, tt.def.Name, tt.value, tt.def)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRefParamsChecksValues(t *testing.T) {
+	declared := []LayoutPageParamSpec{
+		{Name: "YEAR", Type: "number"},
+		{Name: "FLAG", Type: "boolean"},
+		{Name: "DAY", Type: "date"},
+		{Name: "AT", Type: "date_time"},
+	}
+
+	t.Run("var references are skipped", func(t *testing.T) {
+		refParams := map[string]string{"YEAR": "${YEAR}", "FLAG": "${FLAG}", "DAY": "${DAY}", "AT": "${AT}"}
+		if _, err := ValidateRefParams("LayoutPage", "sales", refParams, declared); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("number with trailing text", func(t *testing.T) {
+		_, err := ValidateRefParams("LayoutPage", "sales", map[string]string{"YEAR": "12abc"}, declared)
+		if err == nil || !strings.Contains(err.Error(), "not a valid number") {
+			t.Fatalf("expected a not-a-number error, got %v", err)
+		}
+	})
+
+	t.Run("bad date", func(t *testing.T) {
+		_, err := ValidateRefParams("LayoutPage", "sales", map[string]string{"DAY": "yesterday"}, declared)
+		if err == nil || !strings.Contains(err.Error(), "not a valid date") {
+			t.Fatalf("expected a not-a-date error, got %v", err)
+		}
+	})
+}

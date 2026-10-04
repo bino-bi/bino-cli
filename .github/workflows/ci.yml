@@ -39,7 +39,8 @@ jobs:
           # Pinned for reproducible CI: 'latest' (v2.12.2) regressed staticcheck
           # SA5011, emitting nil-deref false positives on `if x==nil {t.Fatal}; x.Y`
           # across existing test files. Bump deliberately after verifying locally.
-          version: v2.12.1
+          # The binary must be built with at least the Go version in go.mod.
+          version: v2.14.0
 
   test:
     name: Test (${{ matrix.os }})

@@ -413,14 +413,14 @@ spec:
 
 ### Parameter Types
 
-| Type        | Description                    | Options                                |
-| ----------- | ------------------------------ | -------------------------------------- |
-| `string`    | Free-form text value           | None                                   |
-| `number`    | Numeric value                  | `min`, `max`                           |
-| `boolean`   | True/false value               | None                                   |
-| `select`    | Choice from predefined options | `items` array with `value` and `label` |
-| `date`      | Date value (YYYY-MM-DD)        | None                                   |
-| `date_time` | Date and time value (ISO 8601) | None                                   |
+| Type        | Description                                                             | Options                                |
+| ----------- | ----------------------------------------------------------------------- | -------------------------------------- |
+| `string`    | Free-form text value                                                    | None                                   |
+| `number`    | Numeric value                                                           | `min`, `max`                           |
+| `boolean`   | True/false value                                                        | None                                   |
+| `select`    | Choice from predefined options                                          | `items` array with `value` and `label` |
+| `date`      | Date value (YYYY-MM-DD)                                                 | None                                   |
+| `date_time` | Date and time value (`YYYY-MM-DDTHH:MM`, seconds optional, or RFC 3339) | None                                   |
 
 ### Parameter Fields
 
@@ -567,6 +567,8 @@ params:
 ```
 
 If you pass an invalid value (e.g., `REGION: "INVALID"`), a warning is emitted but the build continues.
+
+A `number` must be a decimal number within `min` and `max`, a `date` must be `YYYY-MM-DD`, and a `date_time` must be `YYYY-MM-DDTHH:MM` (seconds optional) or RFC 3339. A value that contains `${VAR}` is not checked.
 
 If a required parameter is missing and has no default, an error is raised.
 

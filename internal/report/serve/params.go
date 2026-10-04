@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
@@ -17,10 +18,10 @@ import (
 // QueryParamValidationResult holds the result of query parameter validation.
 type QueryParamValidationResult struct {
 	Params       map[string]string // Merged parameters (request values + defaults)
-	MissingNames []string          // Names of missing required parameters
+	MissingNames []string          // Names of missing required parameters and of parameters with a rejected value
 }
 
-// IsValid returns true if there are no missing required parameters.
+// IsValid returns true if no required parameter is missing and no value was rejected.
 func (r QueryParamValidationResult) IsValid() bool {
 	return len(r.MissingNames) == 0
 }
@@ -28,6 +29,8 @@ func (r QueryParamValidationResult) IsValid() bool {
 // ValidateAndMergeQueryParams validates query parameters against route spec.
 // Returns merged params (request values + defaults) and list of missing required params.
 // Missing params are reported in the result, not as an error.
+// A request value that breaks the declared type or options is not merged; its param is listed as missing too.
+// Defaults are not checked.
 // For select type params with static items, also adds {name}_LABEL with the label from the option item.
 func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) QueryParamValidationResult {
 	result := QueryParamValidationResult{
@@ -52,29 +55,72 @@ func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 	}
 
 	// Override with request values (only for declared params)
-	declaredParams := make(map[string]struct{})
 	for _, p := range routeSpec.QueryParams {
-		declaredParams[p.Name] = struct{}{}
-	}
-
-	for name := range declaredParams {
-		if values, ok := requestQuery[name]; ok && len(values) > 0 {
-			result.Params[name] = values[0]
+		spec := valueCheckSpec(p)
+		value, sent, valid := requestValue(requestQuery, p.Name, spec)
+		if valid && p.Type == "number_range" {
+			// The range slider sends its upper end as NAME_max.
+			_, _, valid = requestValue(requestQuery, p.Name+"_max", spec)
+		}
+		if !valid {
+			result.MissingNames = append(result.MissingNames, p.Name)
+			continue
+		}
+		if sent {
+			result.Params[p.Name] = value
 			// Add _LABEL for select params with static items
-			if s, ok := paramSpecs[name]; ok && s.Type == "select" && s.Options != nil && len(s.Options.Items) > 0 {
-				result.Params[name+"_LABEL"] = lookupLiveSelectLabel(s.Options.Items, values[0])
+			if p.Type == "select" && p.Options != nil && len(p.Options.Items) > 0 {
+				result.Params[p.Name+"_LABEL"] = lookupLiveSelectLabel(p.Options.Items, value)
 			}
 		}
 	}
 
 	// Check for missing required params (params with no default)
 	for _, requiredName := range routeSpec.GetRequiredQueryParams() {
-		if _, ok := result.Params[requiredName]; !ok {
+		if _, ok := result.Params[requiredName]; !ok && !slices.Contains(result.MissingNames, requiredName) {
 			result.MissingNames = append(result.MissingNames, requiredName)
 		}
 	}
 
 	return result
+}
+
+// requestValue returns the first request value sent under name and whether it
+// satisfies spec. An empty value that the declared type cannot hold counts as
+// not sent, so the default applies.
+func requestValue(requestQuery map[string][]string, name string, spec config.LayoutPageParamSpec) (value string, sent, valid bool) {
+	values := requestQuery[name]
+	if len(values) == 0 {
+		return "", false, true
+	}
+	err := config.CheckParamValue("query", name, values[0], spec)
+	switch {
+	case err == nil:
+		return values[0], true, true
+	case values[0] == "":
+		return "", false, true
+	default:
+		return "", false, false
+	}
+}
+
+// valueCheckSpec adapts a query param to the spec config.CheckParamValue takes.
+// Both ends of a number_range are plain numbers.
+func valueCheckSpec(p config.LiveQueryParamSpec) config.LayoutPageParamSpec {
+	spec := config.LayoutPageParamSpec{Type: p.Type}
+	if p.Type == "number_range" {
+		spec.Type = "number"
+	}
+	if p.Options != nil {
+		spec.Options = &config.LayoutPageParamOptions{Min: p.Options.Min, Max: p.Options.Max}
+		// The sidebar offers the dataset rows when a dataset is set, so the static items are not the valid set.
+		if p.Options.Dataset == "" {
+			for _, item := range p.Options.Items {
+				spec.Options.Items = append(spec.Options.Items, config.LayoutPageParamOptionItem(item))
+			}
+		}
+	}
+	return spec
 }
 
 // lookupLiveSelectLabel finds the label for a given value in a list of live select option items.

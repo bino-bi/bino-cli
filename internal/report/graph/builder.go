@@ -428,7 +428,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 // For ref children, it looks up the referenced document and merges any spec overrides.
 // Returns (nil, "", nil) if optional=true and ref is missing (skip gracefully).
 // Returns an error if a required ref is missing or points to LayoutPage (disallowed).
-func (b *builder) resolveChildSpec(parentName string, child layoutChild) (json.RawMessage, string, error) {
+func (b *builder) resolveChildSpec(parentName string, child layoutChild) (spec json.RawMessage, file string, err error) {
 	if child.Ref == "" {
 		return child.Spec, "", nil
 	}
