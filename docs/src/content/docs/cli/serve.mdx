@@ -24,7 +24,7 @@ Common flags:
 - `--log-sql` - log executed SQL queries.
 - `--data-mode` - dataset delivery: `inline` (default) embeds the data gzip+base64 in the HTML, `url` fetches it over HTTP from the serve process.
 
-With `url`, the browser loads each DataSet and DataSource with its own request to `/__bino/data/`. The response is sent with `Cache-Control: private, no-store`. The data is available while its page is among the 100 most recently used pages of the serve process. Behind several replicas the request must reach the process that rendered the page. The data URL has no query parameter, so a proxy that sets a parameter for the viewer does not restrict it: whoever knows the URL of a body gets that body. `inline` has no such limits, but the page is larger.
+With `url`, the browser loads each DataSet and DataSource with its own request to `/__bino/data/`. The response is sent with `Cache-Control: private, no-store`. The data is available while its page is among the 100 most recently used pages of the serve process. Behind several replicas the request must reach the process that rendered the page. The data URL does not carry the query parameters of the route, only a hash of the content. So a proxy that sets a parameter for the viewer does not restrict it: whoever knows the URL of a body gets that body. `inline` has no such limits, but the page is larger.
 
 ## How it works
 
