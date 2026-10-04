@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -952,13 +953,15 @@ func buildLayoutPagesCacheKey(layoutPages config.LayoutPagesOrRefs, params map[s
 
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
+		parts = append(parts, k+"="+url.QueryEscape(params[k]))
 	}
 
 	return key + "?" + strings.Join(parts, "&")
 }
 
 // buildCacheKey creates a cache key from artifact name and sorted query params.
+// Values come from the request and are escaped, so a value cannot imitate the
+// separators of the key and collide with another parameter set.
 func buildCacheKey(artefactName string, params map[string]string) string {
 	if len(params) == 0 {
 		return artefactName
@@ -977,7 +980,7 @@ func buildCacheKey(artefactName string, params map[string]string) string {
 		sb.WriteByte('?')
 		sb.WriteString(k)
 		sb.WriteByte('=')
-		sb.WriteString(params[k])
+		sb.WriteString(url.QueryEscape(params[k]))
 	}
 	return sb.String()
 }

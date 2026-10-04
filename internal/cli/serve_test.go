@@ -45,7 +45,7 @@ func TestBuildCacheKey(t *testing.T) {
 			name:         "params with special chars",
 			artefactName: "my-report",
 			params:       map[string]string{"date": "2024-01-01", "name": "hello world"},
-			want:         "my-report?date=2024-01-01?name=hello world",
+			want:         "my-report?date=2024-01-01?name=hello+world",
 		},
 	}
 
@@ -105,6 +105,23 @@ func TestBuildLayoutPagesCacheKey(t *testing.T) {
 				t.Errorf("buildLayoutPagesCacheKey() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The render cache answers for whole pages, so two different parameter sets
+// must never share a key. A request value is free text and may contain the
+// separators of the key.
+func TestServeCacheKeys_ValueCannotImitateAnotherParam(t *testing.T) {
+	pages := config.LayoutPagesOrRefs{{Page: "page1"}}
+	two := map[string]string{"REGION": "DACH", "ZONE": "1"}
+	for _, value := range []string{"DACH?ZONE=1", "DACH&ZONE=1"} {
+		one := map[string]string{"REGION": value}
+		if a, b := buildCacheKey("report", one), buildCacheKey("report", two); a == b {
+			t.Errorf("buildCacheKey: REGION=%q and REGION=DACH, ZONE=1 share the key %q", value, a)
+		}
+		if a, b := buildLayoutPagesCacheKey(pages, one), buildLayoutPagesCacheKey(pages, two); a == b {
+			t.Errorf("buildLayoutPagesCacheKey: REGION=%q and REGION=DACH, ZONE=1 share the key %q", value, a)
+		}
 	}
 }
 
