@@ -287,6 +287,21 @@ func TestValidateAndMergeQueryParamsChecksValues(t *testing.T) {
 			wantParams:   map[string]string{"YEAR": "2030", "REGION": "EU", "REGION_LABEL": "Europe", "PRICE": "1000"},
 		},
 		{
+			name:         "first of repeated values is checked and merged",
+			requestQuery: map[string][]string{"YEAR": {"2025", "x OR 1=1"}},
+			wantParams:   map[string]string{"YEAR": "2025", "REGION": "EU", "REGION_LABEL": "Europe"},
+		},
+		{
+			name:         "bad first of repeated values",
+			requestQuery: map[string][]string{"YEAR": {"x OR 1=1", "2025"}},
+			wantRejected: "YEAR",
+		},
+		{
+			name:         "NAME_max of a plain number is ignored",
+			requestQuery: map[string][]string{"YEAR": {"2025"}, "YEAR_max": {"lots"}},
+			wantParams:   map[string]string{"YEAR": "2025", "REGION": "EU", "REGION_LABEL": "Europe"},
+		},
+		{
 			name: "string and dataset-backed selects take any value",
 			requestQuery: map[string][]string{
 				"CATEGORY": {"not checked"},

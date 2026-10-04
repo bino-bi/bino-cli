@@ -169,7 +169,7 @@ Array of query parameters allowed for this specific route.
 Each parameter has:
 
 - `name` (required) - parameter name, used as `${name}` in documents.
-- `type` - input type for the serve UI. One of: `string` (default), `number`, `number_range`, `select`, `date`, `date_time`.
+- `type` - input type for the serve UI. One of: `string` (default), `number`, `number_range`, `select`, `date`, `date_time`. The server also checks request values against the type, see [Parameter types](#parameter-types).
 - `default` - default value if parameter is not provided.
 - `optional` - if `true`, the parameter is optional even without a default value. The parameter will be empty if not provided.
 - `description` - human-readable description.
@@ -186,9 +186,9 @@ Each parameter has:
 | `number_range` | Dual range slider | For min/max range filtering. Creates two parameters: `{name}` and `{name}_max`. |
 | `select`       | Dropdown          | Selection from predefined options (static or from a DataSet).                   |
 | `date`         | Date picker       | Date selection (YYYY-MM-DD format).                                             |
-| `date_time`    | DateTime picker   | Date and time selection (ISO 8601 format).                                      |
+| `date_time`    | DateTime picker   | Date and time selection (`YYYY-MM-DDTHH:MM`, seconds optional, or RFC 3339).    |
 
-The server checks each request value against the declared `type` and `options`. A `number` or `number_range` value must be a decimal number within `min` and `max`, a `select` value must be one of the static `items`, a `date` must be `YYYY-MM-DD`, and a `date_time` must be `YYYY-MM-DDTHH:MM` (seconds optional) or RFC 3339. A value that does not match is not used: the page shows the parameter form with the field highlighted instead of the report. An empty value for one of these types counts as not sent, so the default applies. `string` values and the values of a `select` that sets `options.dataset` are not checked.
+The server checks each request value against the declared `type` and `options`. A `number` or `number_range` value must be a decimal number within `min` and `max`, a `select` value must be one of the static `items`, a `date` must be `YYYY-MM-DD`, and a `date_time` must be `YYYY-MM-DDTHH:MM` (seconds optional) or RFC 3339. A value that does not match is not used: the page shows the parameter form with the field highlighted instead of the report. An empty value for one of these types counts as not sent, so the default applies. `string` values and the values of a `select` that has no static `items` or sets `options.dataset` are not checked.
 
 ### Options configuration
 

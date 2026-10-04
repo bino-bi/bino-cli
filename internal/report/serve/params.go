@@ -30,6 +30,7 @@ func (r QueryParamValidationResult) IsValid() bool {
 // Returns merged params (request values + defaults) and list of missing required params.
 // Missing params are reported in the result, not as an error.
 // A request value that breaks the declared type or options is not merged; its param is listed as missing too.
+// Defaults are not checked.
 // For select type params with static items, also adds {name}_LABEL with the label from the option item.
 func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery map[string][]string) QueryParamValidationResult {
 	result := QueryParamValidationResult{
@@ -86,16 +87,21 @@ func ValidateAndMergeQueryParams(routeSpec config.LiveRouteSpec, requestQuery ma
 
 // requestValue returns the first request value sent under name and whether it
 // satisfies spec. An empty value that the declared type cannot hold counts as
-// not sent, so the default applies. Defaults are not checked.
+// not sent, so the default applies.
 func requestValue(requestQuery map[string][]string, name string, spec config.LayoutPageParamSpec) (value string, sent, valid bool) {
 	values := requestQuery[name]
 	if len(values) == 0 {
 		return "", false, true
 	}
-	if config.CheckParamValue("query", name, values[0], spec) != nil {
-		return "", false, values[0] == ""
+	err := config.CheckParamValue("query", name, values[0], spec)
+	switch {
+	case err == nil:
+		return values[0], true, true
+	case values[0] == "":
+		return "", false, true
+	default:
+		return "", false, false
 	}
-	return values[0], true, true
 }
 
 // valueCheckSpec adapts a query param to the spec config.CheckParamValue takes.
