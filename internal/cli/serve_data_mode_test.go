@@ -220,6 +220,39 @@ func TestServeRoutes_URLModeEmitsRelativeDataURLs(t *testing.T) {
 
 var serveDataURLRe = regexp.MustCompile(`/__bino/data/(?:dataset|datasource)/[^<\s]+`)
 
+// startServeTestServer starts an HTTP server with the configuration of
+// `bino serve` on a free port. It stops on test cleanup.
+func startServeTestServer(t *testing.T) *httpserver.Server {
+	t.Helper()
+	srv, err := httpserver.New(serveServerConfig("127.0.0.1:0", "", logx.Nop()))
+	if err != nil {
+		t.Fatalf("httpserver.New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = srv.Start(ctx) }()
+	return srv
+}
+
+// getServeData fetches a url-mode data URL of a served page.
+func getServeData(t *testing.T, srv *httpserver.Server, dataURL string) (status int, cacheControl, body string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL()+dataURL, nil)
+	if err != nil {
+		t.Fatalf("build request for %s: %v", dataURL, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", dataURL, err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", dataURL, err)
+	}
+	return resp.StatusCode, resp.Header.Get("Cache-Control"), string(raw)
+}
+
 // TestServeRoutes_URLModeKeepsDataOfServedPage covers a page that lost its own
 // data: every parameter value gives a new body under the same DataSet name,
 // and the server kept only the newest few per name. A page that was already
@@ -229,14 +262,7 @@ func TestServeRoutes_URLModeKeepsDataOfServedPage(t *testing.T) {
 	ctx := context.Background()
 	workdir := writeServeRaceFixture(t)
 
-	srv, err := httpserver.New(httpserver.Config{NoStore: true})
-	if err != nil {
-		t.Fatalf("httpserver.New: %v", err)
-	}
-	runCtx, cancel := context.WithCancel(ctx)
-	t.Cleanup(cancel)
-	go func() { _ = srv.Start(runCtx) }()
-
+	srv := startServeTestServer(t)
 	fn, _ := serveRaceRouteOn(t, workdir, srv, applyServeDataMode(nil, render.DataModeURL))
 	page := func(region string) string {
 		t.Helper()
@@ -264,27 +290,15 @@ func TestServeRoutes_URLModeKeepsDataOfServedPage(t *testing.T) {
 	}
 
 	for _, dataURL := range dataURLs {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL()+dataURL, nil)
-		if err != nil {
-			t.Fatalf("build request for %s: %v", dataURL, err)
+		status, cacheControl, body := getServeData(t, srv, dataURL)
+		if status != http.StatusOK {
+			t.Fatalf("GET %s = %d %s; the page that points at it was served and is still cached", dataURL, status, body)
 		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("GET %s: %v", dataURL, err)
-		}
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			t.Fatalf("read %s: %v", dataURL, err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET %s = %d %s; the page that points at it was served and is still cached", dataURL, resp.StatusCode, body)
-		}
-		if !strings.Contains(string(body), "DACH") {
+		if !strings.Contains(body, "DACH") {
 			t.Errorf("GET %s returned rows of another request: %s", dataURL, body)
 		}
-		if cc := resp.Header.Get("Cache-Control"); cc != "private, no-store" {
-			t.Errorf("GET %s: Cache-Control = %q, want private, no-store", dataURL, cc)
+		if cacheControl != "private, no-store" {
+			t.Errorf("GET %s: Cache-Control = %q, want private, no-store", dataURL, cacheControl)
 		}
 	}
 }

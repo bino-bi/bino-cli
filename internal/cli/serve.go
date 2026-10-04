@@ -202,12 +202,7 @@ Environment knobs:
 			}
 
 			// Create the server
-			server, err := httpserver.New(httpserver.Config{
-				ListenAddr: addr,
-				CacheDir:   env.CacheDir,
-				Logger:     logger.Channel("server"),
-				NoStore:    true,
-			})
+			server, err := httpserver.New(serveServerConfig(addr, env.CacheDir, logger.Channel("server")))
 			if err != nil {
 				return RuntimeError(err)
 			}
@@ -311,6 +306,17 @@ Environment knobs:
 		"Dataset/datasource delivery: 'inline' embeds gzip+base64 in the HTML (default), 'url' fetches data via HTTP from the bino server")
 
 	return cmd
+}
+
+// serveServerConfig is the HTTP server configuration of serve. Its pages and
+// data bodies are one viewer's result, so no cache may store them.
+func serveServerConfig(addr, cacheDir string, logger logx.Logger) httpserver.Config {
+	return httpserver.Config{
+		ListenAddr: addr,
+		CacheDir:   cacheDir,
+		Logger:     logger,
+		NoStore:    true,
+	}
 }
 
 // serveRequestContext holds the result of processing query parameters for a serve request.
