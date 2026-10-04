@@ -477,16 +477,24 @@ func TestHandleRoot(t *testing.T) {
 }
 
 // A page of `bino serve` is rendered for one viewer's parameters and can
-// carry the rows itself, so no cache may keep it. Preview pages stay without
-// a cache rule.
+// carry the rows itself, so no cache may keep it. The same goes for its error
+// responses: a proxy that stored one would keep serving it after the cause is
+// gone. Preview pages stay without a cache rule.
 func TestHandleRootNoStore(t *testing.T) {
+	failing := func(context.Context) ([]byte, string, error) {
+		return nil, "", errors.New("render failed")
+	}
 	for _, tc := range []struct {
 		name    string
 		noStore bool
+		path    string
+		status  int
 		want    string
 	}{
-		{name: "default", want: ""},
-		{name: "no-store", noStore: true, want: "private, no-store"},
+		{name: "default page", path: "/", status: http.StatusOK, want: ""},
+		{name: "no-store page", noStore: true, path: "/", status: http.StatusOK, want: "private, no-store"},
+		{name: "no-store render error", noStore: true, path: "/broken", status: http.StatusInternalServerError, want: "private, no-store"},
+		{name: "no-store unknown path", noStore: true, path: "/missing", status: http.StatusNotFound, want: "private, no-store"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, err := New(Config{NoStore: tc.noStore})
@@ -494,15 +502,16 @@ func TestHandleRootNoStore(t *testing.T) {
 				t.Fatalf("New() error = %v", err)
 			}
 			srv.SetContentFunc(StaticContent([]byte("<html></html>"), "text/html; charset=utf-8"))
+			srv.SetContentRoutes(map[string]ContentFunc{"/broken": failing})
 
-			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tc.path, nil)
 			w := httptest.NewRecorder()
 			srv.handleRoot(w, req)
 
 			resp := w.Result()
 			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
 			}
 			if cc := resp.Header.Get("Cache-Control"); cc != tc.want {
 				t.Errorf("Cache-Control = %q, want %q", cc, tc.want)

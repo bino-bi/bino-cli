@@ -804,6 +804,10 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.NoStore {
+		// Set first so a shared cache does not keep an error response either.
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
 	fn, ok := s.lookupContentFunc(r.URL.Path)
 	if !ok || fn == nil {
 		http.NotFound(w, r)
@@ -837,9 +841,6 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		contentType = "text/plain; charset=utf-8"
 	}
 	w.Header().Set("Content-Type", contentType)
-	if s.cfg.NoStore {
-		w.Header().Set("Cache-Control", "private, no-store")
-	}
 	_, _ = w.Write(body)
 }
 
