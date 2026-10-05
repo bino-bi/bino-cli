@@ -241,6 +241,14 @@ func TestPredefExternalRef(t *testing.T) {
 			specData: map[string]any{"ruleset": "ibcs-*"},
 		},
 		{
+			name:     "ruleset inherited-closest names no RuleSet",
+			specData: map[string]any{"ruleset": "inherited-closest"},
+		},
+		{
+			name:     "ruleset inherited-page names no RuleSet",
+			specData: map[string]any{"ruleset": "inherited-page"},
+		},
+		{
 			name:     "unknown bare name is owned by missing-required-reference",
 			specData: map[string]any{"selectedStyle": "nowhere"},
 		},
