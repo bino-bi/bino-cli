@@ -74,7 +74,7 @@ The JSON log is written when you use:
     {
       "name": "monthly-sales",
       "pdf": "dist/monthly-sales.pdf",
-      "graph": "dist/monthly-sales.dot"
+      "graph": "dist/monthly-sales.pdf.bngraph"
     }
   ],
   "queries": [
@@ -93,6 +93,8 @@ The JSON log is written when you use:
   "execution_plan": [ ... ]
 }
 ```
+
+`graph` is the PDF path with `.bngraph` appended. The file is a plain text table of the artefact's dependency graph (columns `KIND`, `NAME`, `HASH`, `DEPENDS ON`, `DETAILS`), the flat view of [`bino graph`](/cli/graph/), not a Graphviz file.
 
 ## CSV Data Embedding
 
