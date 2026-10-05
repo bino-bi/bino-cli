@@ -21,6 +21,7 @@ func DefaultRules() []Rule {
 		textContentRequired,
 		datasetRequired,
 		tableSumTitleUnused,
+		inheritedPropUnresolved,
 		pageLayoutSlotsUsed,
 		cardLayoutSlotsUsed,
 		refParams,

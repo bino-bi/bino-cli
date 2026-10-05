@@ -20,6 +20,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `text-content-required`           | Text Content Required                       | Warning  | Text components must have a non-empty `spec.value` field.                                                                   |
 | `dataset-required`                | Dataset Required                            | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
 | `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
+| `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
 | `missing-required-reference`      | Missing Required Reference                  | Error    | Required child references (`ref`) must point to existing documents.                                                         |
 | `page-layout-slots-used`          | Page Layout Slots Used                      | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                                               |
 | `card-layout-slots-used`          | Card Layout Slots Used                      | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                                               |
@@ -162,6 +163,57 @@ spec:
 ```
 
 The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Grid` children, and in `Tree` nodes. A child that inherits its type from a referenced Table via `ref` is checked against the _effective_ type, so overriding only `sumTitle` on a `type: sum` component does not warn.
+
+### inherited-prop-unresolved
+
+`Table`, `ChartStructure` and `ChartTime` can take `scenarios`, `variances`, `order` and `orderDirection` from the layout around them. These three and `ChartScatter`, `ChartBubble` and `ChartBullet` can take `ruleset` the same way. The prop is set to `inherited-closest` or `inherited-page`, and the value comes from a field of an enclosing `LayoutCard` or of the `LayoutPage`:
+
+| Prop             | Field on the card or page |
+| ---------------- | ------------------------- |
+| `scenarios`      | `titleScenarios`          |
+| `variances`      | `titleVariances`          |
+| `order`          | `titleOrder`              |
+| `orderDirection` | `titleOrderDirection`     |
+| `ruleset`        | `ruleset`                 |
+
+When that field is not set, there is nothing to inherit and the component renders without the value you expected. The rule looks for the field like this:
+
+- `inherited-page`: the `LayoutPage` only. Cards are skipped.
+- `inherited-closest`: every enclosing `LayoutCard` from the inside out, then the `LayoutPage`. The first one that sets the field wins. A card without the field is skipped. The keyword is reported only when no card and not the page set it.
+
+A `LayoutCard` can set its own `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection` or `ruleset` to `inherited-page`. When the page does not set that field, the card is reported too, and it has no value to pass on to its children.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: sales
+spec:
+  # no titleScenarios here …
+  children:
+    - kind: Table
+      spec:
+        dataset: sales-data
+        scenarios: inherited-page # … so there is nothing to inherit
+```
+
+**Fix:** set the field where the keyword looks for it, or give the prop an explicit value.
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: sales
+spec:
+  titleScenarios: [ac1, pp1]
+  children:
+    - kind: Table
+      spec:
+        dataset: sales-data
+        scenarios: inherited-page # resolves to ac1, pp1
+```
+
+Only the plain string is a keyword. `Grid` and `Tree` are passed through: a component inside them inherits from the next card or from the page. A component used through `ref` is checked at every place it is used, with the inline `spec` merged over the referenced document, and the finding points at the key that holds the keyword. A standalone document that no page uses is not reported. A child whose `ref` names several documents is not checked, because the rule does not evaluate constraints.
 
 ### missing-required-reference
 

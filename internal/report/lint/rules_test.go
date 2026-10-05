@@ -473,6 +473,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"text-content-required",
 		"dataset-required",
 		"table-sum-title-unused",
+		"inherited-prop-unresolved",
 		"page-layout-slots-used",
 		"card-layout-slots-used",
 		"ref-params",
