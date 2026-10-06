@@ -1844,7 +1844,7 @@
           "minLength": 1,
           "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "default": "xga",
-          "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full_hd', '4k')."
+          "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full-hd', '4k')."
         },
         "orientation": {
           "type": "string",
@@ -2972,9 +2972,13 @@
           "type": "string",
           "description": "Diagnostic: rows with a target of zero or less cannot be normalized. Placeholder: {{count}}."
         },
+        "bn-chart-bullet.bullet-actual-negative": {
+          "type": "string",
+          "description": "Diagnostic: rows with a negative actual value get no bar; the value is shown as text. Placeholder: {{count}}."
+        },
         "bn-chart-bullet.bullet-mixed-operation": {
           "type": "string",
-          "description": "Diagnostic: a KPI group mixes '+' and '-' rows, so sentiment falls back to '+'. Placeholder: {{count}}."
+          "description": "Diagnostic: a KPI group mixes '+' and '-' rows; '-' rows are subtracted and the sentiment is '+'. Placeholder: {{count}}."
         },
         "bn-chart-bullet.bullet-ranges-ignored": {
           "type": "string",

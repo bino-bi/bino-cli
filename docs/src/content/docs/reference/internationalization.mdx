@@ -195,17 +195,18 @@ Prefix each suffix with the chart you are overriding - for example
 
 #### Bullet chart (`bn-chart-bullet.`)
 
-| Key                                      | en default                                                                          | When it fires                                          |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `bn-chart-bullet.bullet-prop-json`       | `{{prop}}: invalid JSON.`                                                           | A property did not parse                               |
-| `bn-chart-bullet.bullet-measure-invalid` | `{{prop}}: '{{measure}}' is not a scenario column (ac1…pl4).`                       | A measure is not a scenario column                     |
-| `bn-chart-bullet.bullet-measure-same`    | `actual and target must map different scenarios ('{{measure}}').`                   | `actual` and `target` name the same scenario           |
-| `bn-chart-bullet.bullet-target-none`     | `No target scenario found (pl1/pp1/fc1); rendering actual bars only.`               | No target scenario is present                          |
-| `bn-chart-bullet.bullet-target-missing`  | `{{count}} row(s) without a target value; variance and marker omitted.`             | A row has no target value                              |
-| `bn-chart-bullet.bullet-target-invalid`  | `{{count}} row(s) with target ≤ 0 cannot be normalized; bar omitted.`               | A target is zero or negative                           |
-| `bn-chart-bullet.bullet-mixed-operation` | `{{count}} KPI group(s) mix '+' and '-' rows; sentiment defaults to '+'.`           | A KPI group mixes `+` and `-` rows                     |
-| `bn-chart-bullet.bullet-ranges-ignored`  | `ranges: ignored in normalized (IBCS) mode; set normalize="none".`                  | `ranges` is set while normalization is on              |
-| `bn-chart-bullet.bullet-ranges-invalid`  | `ranges: expected up to 2 ascending positive fractions of the target ({{detail}}).` | `ranges` is not up to two ascending positive fractions |
+| Key                                      | en default                                                                                            | When it fires                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `bn-chart-bullet.bullet-prop-json`       | `{{prop}}: invalid JSON.`                                                                             | A property did not parse                               |
+| `bn-chart-bullet.bullet-measure-invalid` | `{{prop}}: '{{measure}}' is not a scenario column (ac1…pl4).`                                         | A measure is not a scenario column                     |
+| `bn-chart-bullet.bullet-measure-same`    | `actual and target must map different scenarios ('{{measure}}').`                                     | `actual` and `target` name the same scenario           |
+| `bn-chart-bullet.bullet-target-none`     | `No target scenario found (pl1/pp1/fc1); rendering actual bars only.`                                 | No target scenario is present                          |
+| `bn-chart-bullet.bullet-target-missing`  | `{{count}} row(s) without a target value; variance and marker omitted.`                               | A row has no target value                              |
+| `bn-chart-bullet.bullet-target-invalid`  | `{{count}} row(s) with target ≤ 0 cannot be normalized; bar omitted.`                                 | A target is zero or negative                           |
+| `bn-chart-bullet.bullet-actual-negative` | `{{count}} row(s) with a negative actual value; the bar cannot be drawn, the value is shown as text.` | A row has a negative actual value                      |
+| `bn-chart-bullet.bullet-mixed-operation` | `{{count}} KPI group(s) mix '+' and '-' rows; '-' rows are subtracted and the sentiment is '+'.`      | A KPI group mixes `+` and `-` rows                     |
+| `bn-chart-bullet.bullet-ranges-ignored`  | `ranges: ignored in normalized (IBCS) mode; set normalize="none".`                                    | `ranges` is set while normalization is on              |
+| `bn-chart-bullet.bullet-ranges-invalid`  | `ranges: expected up to 2 ascending positive fractions of the target ({{detail}}).`                   | `ranges` is not up to two ascending positive fractions |
 
 ## Overriding labels globally
 

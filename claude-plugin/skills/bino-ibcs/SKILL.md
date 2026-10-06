@@ -133,9 +133,12 @@ ${data.<dataset>[<index>].<field>}      e.g.  Revenue reached ${data.kpi[0].ac1}
 ${t('<i18n-key>')}                       e.g.  ${t('report.title')}
 ```
 
-- The template is evaluated in a sandbox: only `data` and `t` are in scope (no `window`/`document`).
+- Nothing is evaluated: a placeholder is a lookup, not JavaScript. Any other `${...}` (arithmetic,
+  method calls, conditions) is printed as written, so compute such values in the DataSet SQL.
 - A safe subset of HTML is allowed (`b`, `i`, `strong`, `em`, `span`, `p`, `br`, `table`, `ul`, `h1`-`h6`,
-  `a`, `img`, …) with `class`/`style`/`href`/`src`/… attributes; everything else is stripped.
+  `a`, `img`, …) with `class`/`href`/`src`/… attributes; `style` is kept only when it is exactly
+  `text-align: left`, `center` or `right`. An element that is not allowed is removed together with its
+  content.
 - **Ground every claim in the data.** Before writing a number into narrative, confirm it with
   `get_rows(<dataset>)`. Don't state a takeaway the data doesn't support.
 
