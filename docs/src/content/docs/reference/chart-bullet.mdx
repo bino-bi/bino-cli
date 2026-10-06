@@ -66,8 +66,9 @@ warning.
 ## Data mapping
 
 One KPI row aggregates all dataset rows sharing the same `level` value
-(plain `SUM`, so cost KPIs show positive magnitudes). Values are drawn as
-delivered (no auto-SI scaling).
+(plain `SUM`, so cost KPIs show positive magnitudes). A group that mixes
+`+` and `-` rows shows the net value: the `-` rows are subtracted, with a
+warning. Values are drawn as delivered (no auto-SI scaling).
 
 - `level` picks the hierarchy column that identifies a KPI row (`auto`
   uses the deepest populated level of `rowGroup` → `category` →
