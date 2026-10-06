@@ -108,13 +108,18 @@ spec:
 
 ## Template expressions
 
-The `value` field supports JavaScript template literal syntax for dynamic content.
-Expressions are evaluated at runtime in the browser with access to bound datasets and translations.
+The `value` field can hold placeholders for dynamic content.
+The engine replaces them in the browser with values from the bound datasets and with translations.
+Nothing is evaluated: a placeholder is a lookup, not JavaScript.
 
-Available variables inside `${...}`:
+These placeholders are replaced:
 
-- `data.<datasetName>` - the bound dataset rows (array of objects).
-- `t('<key>')` - looks the key up in the component's i18n namespace (set via `i18nNamespace`, otherwise inherited from the nearest ancestor carrying one; keys missing there fall back to `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
+- `${data.<dataset>[<row>].<field>}` - one field of one row of a bound dataset. `<row>` is the row number, starting at 0.
+- `${data['<name>'][<row>].<field>}` - the same for a dataset name that is not a plain identifier, such as `laptop-revenue`.
+- `${t('<key>')}` - looks the key up in the component's i18n namespace (set via `i18nNamespace`, otherwise inherited from the nearest ancestor carrying one; keys missing there fall back to `_system`) for the artefact's language; an unknown key renders as the key itself. See the [Internationalization reference](/reference/internationalization/).
+- `${t('<key>', { name: 'text', count: 3, value: data.kpi[0].ac1 })}` - a translation with parameters for its `{{name}}` placeholders. A parameter is a text in single quotes, a number or a dataset path.
+
+Write the strings inside a placeholder in single quotes. Double quotes in Markdown text are escaped at build time, and such a placeholder is printed as written.
 
 ```yaml
 spec:
@@ -127,16 +132,24 @@ spec:
   value: "${t('report.title')}"
 ```
 
+Any other `${...}` is printed as written. That includes arithmetic (`${data.kpi[0].ac1 / 1000}`), method calls (`${data.kpi[0].ac1.toFixed(1)}`) and conditions. Compute such values in the DataSet SQL and read the result with a placeholder.
+
+Dataset values and translations are HTML-escaped, so they are shown as text.
+A placeholder that does not resolve (unknown dataset, row or field) renders empty and sets a `WARN_value_path` warning on the component.
+
 Write placeholders plain: only a bare name such as `${NAME}` or `${NAME:default}` is expanded as an [environment variable](/appendix/runtime-limits/#environment-variable-substitution).
 
 ### Security
 
-Template evaluation is **sandboxed** - only `data` and `t` are accessible.
-Global objects (`window`, `document`, `fetch`, etc.) are blocked.
-The HTML output is **sanitized** against XSS: only safe tags
-(`br`, `b`, `i`, `strong`, `em`, `span`, `p`, `div`, `table`, `a`, etc.) and
-attributes (`class`, `style`, `href`, `title`, `colspan`, `rowspan`) are kept.
-Event handlers (`onclick`, `onerror`, …) and `javascript:` URIs are stripped.
+No code from `value` is run. The HTML output is **sanitized** against XSS:
+
+- Allowed elements: `br`, `b`, `i`, `strong`, `em`, `span`, `p`, `div`, `h1`-`h6`, `ul`, `ol`, `li`, `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td`, `sub`, `sup`, `small`, `hr`, `a`, `img`, `code`, `pre`, `blockquote` and `del`.
+  An element that is not allowed is removed together with its content.
+- Allowed attributes: `class`, `style`, `href`, `src`, `alt`, `title`, `width`, `height`, `colspan` and `rowspan`.
+  All others are removed, including event handlers (`onclick`, `onerror`, …).
+- `style` is kept only when it is exactly `text-align: left`, `text-align: center` or `text-align: right`.
+- `href` and `src` accept `http`, `https`, `mailto` and relative URLs. `src` also accepts `data:` URLs.
+  Any other scheme, such as `javascript:`, removes the attribute.
 
 ## Scaling
 
