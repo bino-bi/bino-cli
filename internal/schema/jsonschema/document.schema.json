@@ -1844,7 +1844,7 @@
           "minLength": 1,
           "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "default": "xga",
-          "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full_hd', '4k')."
+          "description": "Logical viewport size for rendering (for example 'xga', 'hd', 'full-hd', '4k')."
         },
         "orientation": {
           "type": "string",
