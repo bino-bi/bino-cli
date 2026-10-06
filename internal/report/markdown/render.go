@@ -562,9 +562,13 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 			b.WriteString("<bn-datasource")
 			writeAttr(&b, "name", res.Name)
 			if useURL {
-				b.WriteString(">")
 				hash := render.ContentHash(res.Data)
-				b.WriteString(html.EscapeString(buildMarkdownDataURL(dataBaseURL, render.EmittedKindDatasource, res.Name, hash)))
+				dataURL := buildMarkdownDataURL(dataBaseURL, render.EmittedKindDatasource, res.Name, hash)
+				writeAttr(&b, "src", dataURL)
+				b.WriteString(">")
+				// Engines before v1.0.0-next.28 fetch the body, later ones read src and ignore it.
+				// Drop the body copy when the supported engine range starts at next.28 or later.
+				b.WriteString(html.EscapeString(dataURL))
 				b.WriteString("</bn-datasource>")
 				emitted = append(emitted, render.EmittedData{
 					Kind: render.EmittedKindDatasource,
@@ -595,9 +599,13 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 			writeAttr(&b, "name", res.Name)
 			writeAttr(&b, "static", "true")
 			if useURL {
-				b.WriteString(">")
 				hash := render.ContentHash(res.Data)
-				b.WriteString(html.EscapeString(buildMarkdownDataURL(dataBaseURL, render.EmittedKindDataset, res.Name, hash)))
+				dataURL := buildMarkdownDataURL(dataBaseURL, render.EmittedKindDataset, res.Name, hash)
+				writeAttr(&b, "src", dataURL)
+				b.WriteString(">")
+				// Engines before v1.0.0-next.28 fetch the body, later ones read src and ignore it.
+				// Drop the body copy when the supported engine range starts at next.28 or later.
+				b.WriteString(html.EscapeString(dataURL))
 				b.WriteString("</bn-dataset>")
 				emitted = append(emitted, render.EmittedData{
 					Kind: render.EmittedKindDataset,

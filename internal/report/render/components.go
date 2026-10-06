@@ -29,8 +29,8 @@ import (
 const (
 	// DataModeInline embeds gzip+base64 payload bodies directly in the HTML.
 	DataModeInline = "inline"
-	// DataModeURL emits an HTTP URL body that fetches the JSON from
-	// httpserver.Server. The caller must register payloads on the server.
+	// DataModeURL emits an HTTP URL, in src and in the body, that fetches the
+	// JSON from httpserver.Server. The caller must register payloads on the server.
 	DataModeURL = "url"
 
 	// EmittedKindDatasource and EmittedKindDataset match the URL path segment
@@ -456,7 +456,7 @@ func keepBoundData(refs map[string]bool, sets []dataset.Result, sources []dataso
 // In DataModeInline, payload bodies are gzip+base64 inlined into the element
 // (raw="false" indicates compressed content).
 //
-// In DataModeURL, the body is a URL pointing at httpserver.Server (absolute
+// In DataModeURL, src and the body are a URL pointing at httpserver.Server (absolute
 // when dataBaseURL is non-empty, otherwise a same-origin path starting with
 // "/__bino/data/…"). The returned EmittedData entries must be registered on
 // the server with PutDatasource(name, hash, body) before the HTML is served.
@@ -485,9 +485,13 @@ func renderDatasources(results []datasource.Result, dataMode, dataBaseURL string
 		b.WriteString("<bn-datasource")
 		writeAttr(&b, "name", res.Name)
 		if useURL {
-			b.WriteString(">")
 			hash := ContentHash(res.Data)
-			b.WriteString(html.EscapeString(buildDataURL(dataBaseURL, EmittedKindDatasource, res.Name, hash)))
+			dataURL := buildDataURL(dataBaseURL, EmittedKindDatasource, res.Name, hash)
+			writeAttr(&b, "src", dataURL)
+			b.WriteString(">")
+			// Engines before v1.0.0-next.28 fetch the body, later ones read src and ignore it.
+			// Drop the body copy when the supported engine range starts at next.28 or later.
+			b.WriteString(html.EscapeString(dataURL))
 			b.WriteString("</bn-datasource>")
 			emitted = append(emitted, EmittedData{
 				Kind: EmittedKindDatasource,
@@ -532,9 +536,13 @@ func renderDatasets(results []dataset.Result, dataMode, dataBaseURL string) ([]s
 		writeAttr(&b, "name", res.Name)
 		writeAttr(&b, "static", "true")
 		if useURL {
-			b.WriteString(">")
 			hash := ContentHash(res.Data)
-			b.WriteString(html.EscapeString(buildDataURL(dataBaseURL, EmittedKindDataset, res.Name, hash)))
+			dataURL := buildDataURL(dataBaseURL, EmittedKindDataset, res.Name, hash)
+			writeAttr(&b, "src", dataURL)
+			b.WriteString(">")
+			// Engines before v1.0.0-next.28 fetch the body, later ones read src and ignore it.
+			// Drop the body copy when the supported engine range starts at next.28 or later.
+			b.WriteString(html.EscapeString(dataURL))
 			b.WriteString("</bn-dataset>")
 			emitted = append(emitted, EmittedData{
 				Kind: EmittedKindDataset,

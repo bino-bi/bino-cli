@@ -563,7 +563,7 @@ func resolveServeDataMode(s string) (string, error) {
 // load the page via another (localhost, a reverse-proxy hostname), and the
 // data route sends no CORS headers, so an absolute base pinned to the bind
 // address makes every data fetch fail cross-origin ("No Data"). Relative
-// bodies are fetched by every supported engine (the >=1.0.0-alpha.19 floor
+// URLs are fetched by every supported engine (the >=1.0.0-alpha.19 floor
 // postdates same-origin path support, added in alpha.14).
 func applyServeDataMode(opts *render.PluginOptions, resolvedDataMode string) *render.PluginOptions {
 	if resolvedDataMode != render.DataModeURL {

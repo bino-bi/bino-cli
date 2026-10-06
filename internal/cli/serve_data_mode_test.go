@@ -121,7 +121,7 @@ spec:
 	return workdir
 }
 
-var serveURLModeDatasetRe = regexp.MustCompile(`<bn-dataset[^>]*name='filtered_revenue'[^>]*>([^<]*)</bn-dataset>`)
+var serveURLModeDatasetRe = regexp.MustCompile(`<bn-dataset[^>]*name='filtered_revenue'[^>]* src='([^']*)'[^>]*>([^<]*)</bn-dataset>`)
 
 // TestServeRoutes_URLModeEmitsRelativeDataURLs is the regression test for the
 // bind-address data-URL bug: serve pinned url-mode dataset bodies to its bind
@@ -205,11 +205,14 @@ func TestServeRoutes_URLModeEmitsRelativeDataURLs(t *testing.T) {
 
 	m := serveURLModeDatasetRe.FindStringSubmatch(combined)
 	if m == nil {
-		t.Fatal("filtered_revenue dataset element missing from rendered HTML")
+		t.Fatal("filtered_revenue dataset element with a src attribute missing from rendered HTML")
 	}
-	payload := strings.TrimSpace(m[1])
+	payload := strings.TrimSpace(m[2])
 	if !strings.HasPrefix(payload, "/__bino/data/dataset/") {
 		t.Fatalf("url-mode dataset body must be a relative same-origin path, got %q", payload)
+	}
+	if m[1] != payload {
+		t.Fatalf("url-mode dataset src = %q, want the body URL %q", m[1], payload)
 	}
 	// The absolute bind-address base is exactly the regression: a client
 	// loading the page via any other host name got a cross-origin data fetch.
@@ -218,7 +221,8 @@ func TestServeRoutes_URLModeEmitsRelativeDataURLs(t *testing.T) {
 	}
 }
 
-var serveDataURLRe = regexp.MustCompile(`/__bino/data/(?:dataset|datasource)/[^<\s]+`)
+// The URL is in the src attribute and in the body, so a match ends at a quote too.
+var serveDataURLRe = regexp.MustCompile(`/__bino/data/(?:dataset|datasource)/[^<\s'"]+`)
 
 // startServeTestServer starts an HTTP server with the configuration of
 // `bino serve` on a free port. It stops on test cleanup.
