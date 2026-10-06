@@ -3,6 +3,10 @@ package markdown
 import (
 	"strings"
 	"testing"
+
+	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasource"
+	"bino.bi/bino/internal/report/render"
 )
 
 // TestWrapDocumentWithContext covers the full document shell: the KaTeX
@@ -62,4 +66,60 @@ func TestWrapDocumentWithContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWrapDocumentWithContextDataElements covers how the document shell
+// delivers datasource and dataset payloads in both data modes.
+func TestWrapDocumentWithContextDataElements(t *testing.T) {
+	t.Parallel()
+
+	sourceBody := []byte(`[{"v":1}]`)
+	setBody := []byte(`[{"a":1}]`)
+	wrap := func(dataMode string) (string, []render.EmittedData) {
+		html, emitted := WrapDocumentWithContext([]byte("<h1>Test</h1>"), FullDocumentOptions{
+			DocumentOptions: DocumentOptions{Title: "T", Format: "a4"},
+			Locale:          "en",
+			RenderContext: &RenderContext{
+				DatasourceResults: []datasource.Result{{Name: "events", Data: sourceBody}},
+				DatasetResults:    []dataset.Result{{Name: "sales", Data: setBody}},
+				DataMode:          dataMode,
+			},
+		})
+		return string(html), emitted
+	}
+
+	t.Run("url mode writes the URL into src and into the body", func(t *testing.T) {
+		t.Parallel()
+		got, emitted := wrap(render.DataModeURL)
+		sourceURL := "/__bino/data/datasource/events?hash=" + render.ContentHash(sourceBody)
+		setURL := "/__bino/data/dataset/sales?hash=" + render.ContentHash(setBody)
+		for _, want := range []string{
+			"<bn-datasource name='events' src='" + sourceURL + "'>" + sourceURL + "</bn-datasource>",
+			"<bn-dataset name='sales' static='true' src='" + setURL + "'>" + setURL + "</bn-dataset>",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("output missing %q", want)
+			}
+		}
+		if len(emitted) != 2 {
+			t.Errorf("emitted len = %d, want 2", len(emitted))
+		}
+	})
+
+	// The page has <script src=...>, so match the whole opening tag.
+	t.Run("inline mode sets no src", func(t *testing.T) {
+		t.Parallel()
+		got, emitted := wrap(render.DataModeInline)
+		for _, want := range []string{
+			"<bn-datasource name='events' raw='false'>",
+			"<bn-dataset name='sales' static='true' raw='false'>",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("output missing %q", want)
+			}
+		}
+		if emitted != nil {
+			t.Errorf("inline mode must not emit data bodies, got %d", len(emitted))
+		}
+	})
 }

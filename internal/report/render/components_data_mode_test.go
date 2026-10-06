@@ -23,6 +23,9 @@ func TestRenderDatasetsURLMode(t *testing.T) {
 	if !strings.Contains(segs[0], ">"+wantURL+"<") {
 		t.Fatalf("segment missing URL body %q\n  got %q", wantURL, segs[0])
 	}
+	if !strings.Contains(segs[0], " src='"+wantURL+"'") {
+		t.Fatalf("segment missing src attribute %q\n  got %q", wantURL, segs[0])
+	}
 	// Regression guard (design-mode same-origin fix): an empty base must yield a
 	// host-free relative URL. An absolute base pinned to 127.0.0.1 broke the
 	// embedded canvas when the iframe loaded the page from localhost (different
@@ -66,8 +69,31 @@ func TestRenderDatasourcesURLModeAbsolute(t *testing.T) {
 	if !strings.Contains(segs[0], ">"+wantURL+"<") {
 		t.Fatalf("segment missing absolute URL body %q\n  got %q", wantURL, segs[0])
 	}
+	if !strings.Contains(segs[0], " src='"+wantURL+"'") {
+		t.Fatalf("segment missing src attribute %q\n  got %q", wantURL, segs[0])
+	}
 	if len(emitted) != 1 || emitted[0].Kind != EmittedKindDatasource {
 		t.Fatalf("emitted = %+v, want one datasource entry", emitted)
+	}
+}
+
+func TestRenderDatasourcesInlineMode(t *testing.T) {
+	t.Parallel()
+	results := []datasource.Result{{Name: "events", Data: []byte(`[1,2,3]`)}}
+
+	segs, emitted := renderDatasources(results, "", "")
+
+	if len(emitted) != 0 {
+		t.Fatalf("emitted len = %d, want 0 in inline mode", len(emitted))
+	}
+	if len(segs) != 1 {
+		t.Fatalf("segments len = %d, want 1", len(segs))
+	}
+	if !strings.Contains(segs[0], `raw='false'`) {
+		t.Fatalf("inline mode should set raw='false'; got %q", segs[0])
+	}
+	if strings.Contains(segs[0], " src=") {
+		t.Fatalf("inline mode must not set src; got %q", segs[0])
 	}
 }
 
@@ -86,6 +112,9 @@ func TestRenderDatasetsInlineModeUnchanged(t *testing.T) {
 	}
 	if !strings.Contains(segs[0], `raw='false'`) {
 		t.Fatalf("inline mode should set raw='false'; got %q", segs[0])
+	}
+	if strings.Contains(segs[0], " src=") {
+		t.Fatalf("inline mode must not set src; got %q", segs[0])
 	}
 	if !strings.Contains(segs[0], ContentHash(body)+":") {
 		t.Fatalf("inline body missing FNV hash prefix; got %q", segs[0])
