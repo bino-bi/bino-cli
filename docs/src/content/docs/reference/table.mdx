@@ -309,12 +309,14 @@ layout), show fewer rows (`limit`), or set a smaller fixed `scale`. Setting
 
 Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
 
-| Value               | Resolves from                                    |
-| ------------------- | ------------------------------------------------ |
-| `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage`    |
-| `inherited-page`    | Nearest ancestor `LayoutPage` only (skips cards) |
+| Value               | Resolves from                                                     |
+| ------------------- | ----------------------------------------------------------------- |
+| `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage` that sets the field |
+| `inherited-page`    | Nearest ancestor `LayoutPage` only (skips cards)                  |
 
-The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. If no ancestor is found, the component falls back to its normal auto-detection logic.
+The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. With `inherited-closest`, a `LayoutCard` that does not set the field is skipped and the lookup continues outwards to the `LayoutPage`. Template engines before **v1.0.0-next.28** ask only the nearest card or page.
+
+A keyword cannot be resolved when the page (and, for `inherited-closest`, every enclosing card) does not set the matching field. From template engine **v1.0.0-next.28** on, the component then behaves as if the field were not set (scenarios are auto-detected, the default order is used) and shows a warning. Older engines keep the keyword as a literal value: nothing is auto-detected and the component renders without usable scenarios or order. `bino lint` reports this case with the rule [`inherited-prop-unresolved`](/appendix/lint-rules/#inherited-prop-unresolved).
 
 ```yaml
 children:

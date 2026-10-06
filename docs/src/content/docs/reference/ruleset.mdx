@@ -73,8 +73,13 @@ spec:
 Besides a rule-set name, the component kinds (`Table` and the `Chart*` kinds)
 accept two inheritance keywords:
 
-- `inherited-closest` - reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage`.
+- `inherited-closest` - reuse the `ruleset` of the nearest surrounding `LayoutCard` or `LayoutPage` that sets one. A card without `ruleset` is skipped and the lookup continues outwards to the page. Template engines before **v1.0.0-next.28** ask only the nearest card or page.
 - `inherited-page` - reuse the `ruleset` of the surrounding `LayoutPage` (cards are skipped).
+
+A keyword that finds no `ruleset` this way applies no named rule set: the
+component uses the `_system` and `_default` rule sets only, on every engine
+version. `bino lint` reports it with the rule
+[`inherited-prop-unresolved`](/appendix/lint-rules/#inherited-prop-unresolved).
 
 On `LayoutPage` and `LayoutCard` only `inherited-page` is meaningful, because a
 layout inherits from the page around it, never from itself.
