@@ -1424,7 +1424,8 @@ spec:
 // TestValidate_ChartLevel covers the level enum on ChartStructure and
 // ChartTime: it must accept every aggregation level the template engine
 // supports (rowGroup/category/subCategory plus index variants, and auto)
-// and reject unknown values such as the historic "rowcategory".
+// and reject unknown values such as the historic "rowcategory". On a
+// ChartTime the field has no effect any more, but its enum stays as it was.
 func TestValidate_ChartLevel(t *testing.T) {
 	kinds := []string{"ChartStructure", "ChartTime"}
 	cases := []struct {
@@ -1457,8 +1458,48 @@ func TestValidate_ChartLevel(t *testing.T) {
 	}
 }
 
+// TestValidate_ChartTimeFieldsWithoutEffect keeps level, order, orderDirection
+// and limit valid on a ChartTime. The template engine does not read them, but
+// existing reports set them and must not start to fail.
+func TestValidate_ChartTimeFieldsWithoutEffect(t *testing.T) {
+	yaml := "apiVersion: bino.bi/v1alpha1\nkind: ChartTime\nmetadata:\n  name: c\nspec:\n  dataset: d\n" +
+		"  level: category\n  order: ac1\n  orderDirection: desc\n  limit: 12\n"
+	if err := Validate([]byte(yaml)); err != nil {
+		t.Errorf("expected valid, got: %v", err)
+	}
+}
+
+// TestValidate_ComponentStyleFillpattern pins the fill pattern names. 'fc' is
+// the deprecated name of 'hatched' and stays valid.
+func TestValidate_ComponentStyleFillpattern(t *testing.T) {
+	cases := []struct {
+		pattern string
+		wantErr bool
+	}{
+		{"solid", false},
+		{"hatched", false},
+		{"outlined", false},
+		{"fc", false},
+		{"dotted", true},
+	}
+	for _, c := range cases {
+		t.Run(c.pattern, func(t *testing.T) {
+			yaml := "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: theme\nspec:\n  content:\n" +
+				"    bn-chart-time:\n      barStyles:\n        fc:\n          fillpattern: " + c.pattern + "\n"
+			err := Validate([]byte(yaml))
+			if c.wantErr && err == nil {
+				t.Errorf("fillpattern %q: expected validation error, got nil", c.pattern)
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("fillpattern %q: expected valid, got: %v", c.pattern, err)
+			}
+		})
+	}
+}
+
 // TestValidate_OrderAuto pins spec.order: auto on every kind whose template
-// engine component treats it as silent auto-detection.
+// engine component treats it as silent auto-detection, and on ChartTime, where
+// order has no effect any more but stays valid.
 func TestValidate_OrderAuto(t *testing.T) {
 	for _, kind := range []string{"Table", "ChartStructure", "ChartTime", "ChartBullet"} {
 		t.Run(kind, func(t *testing.T) {

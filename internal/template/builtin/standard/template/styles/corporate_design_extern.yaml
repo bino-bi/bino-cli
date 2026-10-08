@@ -28,7 +28,7 @@ spec:
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
         fc:
-          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "hatched" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:
@@ -59,7 +59,7 @@ spec:
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
         fc:
-          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "hatched" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:

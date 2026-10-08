@@ -2207,7 +2207,7 @@
       "properties": {
         "scenarios": {
           "type": "object",
-          "description": "Per-scenario-prefix rule overrides, keyed by scenario prefix (e.g. ac, fc, pl, bu, pp, py, dac..dpy, drac..drpy, or user-defined prefixes).",
+          "description": "Per-scenario-prefix rule overrides, keyed by scenario prefix. Data columns exist for ac, pp, fc and pl; an entry for bu or py has no effect. Of the variance prefixes (dac, drac, ...) only sortIndex is read.",
           "additionalProperties": { "$ref": "#/$defs/ruleSetScenarioRule" }
         },
         "fallback": {
@@ -2224,7 +2224,7 @@
             },
             "colorIndex": {
               "type": "number",
-              "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+              "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
             },
             "sortIndex": {
               "type": "number",
@@ -2238,15 +2238,15 @@
     },
     "ruleSetScenarioRule": {
       "type": "object",
-      "description": "Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values (e.g. name 'AC' becomes AC1..AC4, sortIndex + n*10).",
+      "description": "Rule overrides for one scenario prefix. Slots 1-4 are derived from the base values (name 'Budget' gives 'Budget', 'Budget2', 'Budget3', 'Budget4'; sortIndex + n*10).",
       "properties": {
         "name": {
           "type": "string",
-          "description": "Display base name; variants get 1..4 appended (e.g. 'AC' -> 'AC1')."
+          "description": "Display name. Slot 1 shows it as written, slots 2 to 4 with their number ('Budget', 'Budget2'). It replaces the translated labels global.<prefix>1 to global.<prefix>4 in every locale, in tables, charts and titles."
         },
         "colorIndex": {
           "type": "number",
-          "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+          "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
         },
         "sortIndex": {
           "type": "number",
@@ -2593,7 +2593,8 @@
         },
         "fillpattern": {
           "type": "string",
-          "description": "Reference to a fill pattern (e.g., 'fc' for forecast hatching)."
+          "enum": ["solid", "hatched", "outlined", "fc"],
+          "description": "Fill pattern: 'solid', 'hatched' or 'outlined'. 'fc' is the deprecated name of 'hatched'; in time and structure charts, template engines before v1.0.0-next.28 know only 'fc'."
         }
       },
       "additionalProperties": true
@@ -3656,17 +3657,20 @@
         "level": {
           "type": "string",
           "enum": ["auto", "rowgroup", "rowgroupindex", "category", "categoryindex", "subcategory", "subcategoryindex"],
-          "description": "Determines the level on which the chart is aggregated. Index variants preserve the original dataset order. When set to 'auto', the level is detected from the dataset silently; when left blank, it is detected with a warning."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "order": {
           "type": "string",
           "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When set to 'auto', the sort key is detected silently; when left blank, it is detected with a warning. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "orderDirection": {
           "type": "string",
           "enum": ["asc", "desc", "inherited-closest", "inherited-page"],
-          "description": "Sets the sorting order direction. Set to 'inherited-closest' or 'inherited-page' to inherit from an ancestor LayoutCard or LayoutPage."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "measureScale": {
           "type": "string",
@@ -3691,7 +3695,8 @@
         "limit": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum number of column stacks. 0 means no limit. Column stacks cut by the limit are cumulated as REST."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "intervalSpanLimit": {
           "type": "integer",
@@ -3770,7 +3775,7 @@
             "by": {
               "type": "string",
               "enum": ["scenarios", "dimensions"],
-              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' auto-derives the stack column from the level prop (rowGroup→category, category→subCategory)."
+              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' draws only the first scenario, one segment per period; further scenarios are dropped with a warning."
             },
             "mode": {
               "type": "string",

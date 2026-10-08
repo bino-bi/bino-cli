@@ -377,3 +377,54 @@ func TestAssetRules_MalformedSpec(t *testing.T) {
 		t.Fatalf("got %d findings %v, want none", len(got), got)
 	}
 }
+
+func TestAssetPrefixDeprecated(t *testing.T) {
+	tests := []struct {
+		name      string
+		doc       Document
+		wantPaths []string
+	}{
+		{
+			name:      "LayoutPage messageImage",
+			doc:       componentDoc("LayoutPage", "page", map[string]any{"messageImage": "asset:logo"}),
+			wantPaths: []string{"spec.messageImage"},
+		},
+		{
+			name: "LayoutCard titleImage and Image source as children",
+			doc: componentDoc("LayoutPage", "page", map[string]any{
+				"children": []any{
+					map[string]any{"kind": "LayoutCard", "spec": map[string]any{"titleImage": "asset:logo"}},
+					map[string]any{"kind": "Image", "spec": map[string]any{"source": " asset:logo "}},
+				},
+			}),
+			wantPaths: []string{"spec.children.0.spec.titleImage", "spec.children.1.spec.source"},
+		},
+		{
+			name: "plain asset name",
+			doc:  componentDoc("Image", "logo_image", map[string]any{"source": "logo"}),
+		},
+		{
+			name: "URL",
+			doc:  componentDoc("Image", "logo_image", map[string]any{"source": "https://example.com/logo.png"}),
+		},
+		{
+			// The renderer resolves asset: in Markdown itself.
+			name: "Markdown image destination",
+			doc:  componentDoc("Text", "note", map[string]any{"value": "![Logo](asset:logo)"}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := runRule(t, assetPrefixDeprecated, []Document{tt.doc})
+			got := make([]string, 0, len(findings))
+			for _, f := range findings {
+				if f.Severity != "info" {
+					t.Errorf("Severity = %q, want info", f.Severity)
+				}
+				got = append(got, f.Path)
+			}
+			assertPaths(t, got, tt.wantPaths)
+		})
+	}
+}

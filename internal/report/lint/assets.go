@@ -103,6 +103,50 @@ var assetReferenceUndefined = Rule{
 	},
 }
 
+// assetPrefixDeprecated notes image fields that still write the "asset:" prefix.
+//
+// These fields reach the HTML verbatim, and the template engine takes the plain
+// asset name there; it keeps the prefix only as a deprecated form. Markdown
+// image destinations are not covered: the renderer resolves "asset:" in them
+// itself, so the engine never sees it.
+var assetPrefixDeprecated = Rule{
+	ID:   "asset-prefix-deprecated",
+	Name: "Asset Prefix Deprecated",
+	Description: "The 'asset:' prefix in LayoutPage 'messageImage', LayoutCard 'titleImage' and Image 'source' " +
+		"is deprecated; write the plain asset name.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, doc := range docs {
+			var root any
+			if err := json.Unmarshal(doc.Raw, &root); err != nil {
+				continue // Schema validation reports malformed documents.
+			}
+			walkNodes(root, "", func(node map[string]any, path string) {
+				kind, _ := node["kind"].(string)
+				field, ok := imageFieldByKind[kind]
+				if !ok {
+					return
+				}
+				componentSpec, _ := node["spec"].(map[string]any)
+				name, ok := strings.CutPrefix(strings.TrimSpace(stringField(componentSpec, field)), assetRefPrefix)
+				if !ok {
+					return
+				}
+				findings = append(findings, Finding{
+					RuleID: "asset-prefix-deprecated",
+					Message: fmt.Sprintf("the 'asset:' prefix is deprecated; write the plain asset name %q",
+						strings.TrimSpace(name)),
+					File:     doc.File,
+					DocIdx:   doc.Position,
+					Path:     joinLintPath(path, "spec."+field),
+					Severity: "info",
+				})
+			})
+		}
+		return findings
+	},
+}
+
 // checkImageReference classifies an image reference and returns the problem with
 // it, or "" when it resolves. An empty value is fine: the renderer omits the
 // attribute and the engine renders no image element at all.

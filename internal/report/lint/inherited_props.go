@@ -29,6 +29,13 @@ var (
 		inheritedRuleset,
 	}
 
+	// A ChartTime is drawn in date order, so it has no order to inherit.
+	inheritedChartTimeProps = []inheritedProp{
+		{"scenarios", "titleScenarios"},
+		{"variances", "titleVariances"},
+		inheritedRuleset,
+	}
+
 	// A LayoutCard inherits its own title fields, under the same name.
 	inheritedCardProps = []inheritedProp{
 		{"titleScenarios", "titleScenarios"},
@@ -41,8 +48,10 @@ var (
 
 func inheritedPropsOf(kind string) []inheritedProp {
 	switch kind {
-	case "Table", "ChartStructure", "ChartTime":
+	case "Table", "ChartStructure":
 		return inheritedComponentProps
+	case "ChartTime":
+		return inheritedChartTimeProps
 	case "ChartScatter", "ChartBubble", "ChartBullet":
 		return []inheritedProp{inheritedRuleset}
 	case "LayoutCard":
