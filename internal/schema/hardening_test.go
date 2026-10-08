@@ -1502,7 +1502,14 @@ func TestValidate_Internationalization(t *testing.T) {
 	}{
 		{
 			name:    "built-in tokens accepted",
-			yaml:    doc("  code: en\n  content:\n    global.ac1: Actual\n    bn-table.there_of: of which\n"),
+			yaml:    doc("  code: en\n  content:\n    global.ac1: Actual\n    bn-table.thereof: of which\n    bn-title.SEPARATOR_WS: \"; \"\n"),
+			wantErr: false,
+		},
+		{
+			// The engine renamed these two keys and still reads the old names,
+			// so content written for an older engine must keep validating.
+			name:    "deprecated token names still accepted",
+			yaml:    doc("  code: en\n  content:\n    bn-table.there_of: of which\n    bn-title.SEPERATOR_WS: \"; \"\n"), //nolint:misspell // old engine key
 			wantErr: false,
 		},
 		{

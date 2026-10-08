@@ -2744,9 +2744,14 @@
           "type": "string",
           "description": "Relative-variance symbol, generic (parenthesised) form. '{%}' is replaced at render time with the comparison scenario's abbreviation."
         },
+        "bn-title.SEPARATOR_WS": {
+          "type": "string",
+          "description": "Separator placed between title segments."
+        },
         "bn-title.SEPERATOR_WS": {
           "type": "string",
-          "description": "Separator placed between title segments. The engine really does spell the key 'SEPERATOR_WS'."
+          "deprecated": true,
+          "description": "Deprecated: renamed to 'bn-title.SEPARATOR_WS'. Still read by template engine 1.x."
         },
         "bn-title.CONNECTOR_WS": {
           "type": "string",
@@ -2768,9 +2773,14 @@
           "type": "string",
           "description": "Header text above the operation (+/-) column."
         },
-        "bn-table.there_of": {
+        "bn-table.thereof": {
           "type": "string",
           "description": "Row-header prefix for rows drilled out of their parent."
+        },
+        "bn-table.there_of": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Deprecated: renamed to 'bn-table.thereof'. Still read by template engine 1.x."
         },
         "bn-table.part_of": {
           "type": "string",

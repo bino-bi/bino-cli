@@ -203,7 +203,7 @@ func TestCheckOverflow(t *testing.T) {
 			// A fixed scaling attribute makes the engine raise the severity;
 			// the finding must inherit it rather than flatten to warning.
 			name:        "engine reports an error",
-			diagnostics: []Diagnostic{{ID: "WARN_overflow", Type: "error", Message: "Chart overflows its container."}},
+			diagnostics: []Diagnostic{{ID: "ERR_overflow", Type: "error", Message: "Chart overflows its container."}},
 			regions:     []Region{{ID: "canvas:base", Rect: DualRect{Component: Rect{Width: 130, Height: 50}}}},
 			want:        true,
 			wantSev:     SeverityError,
@@ -235,7 +235,7 @@ func TestCheckOverflow(t *testing.T) {
 			// must still come through on their own.
 			name:        "table clipped by its slot",
 			tag:         "bn-table",
-			diagnostics: []Diagnostic{{ID: "WARN_overflow", Type: "error", Message: "Table exceeds available height (673px > 341px)."}},
+			diagnostics: []Diagnostic{{ID: "ERR_overflow", Type: "error", Message: "Table exceeds available height (673px > 341px)."}},
 			regions: []Region{
 				{ID: "header", Rect: DualRect{Component: Rect{Width: 100, Height: 10}}},
 				{ID: "body", Rect: DualRect{Component: Rect{Y: 10, Width: 100, Height: 40}}},
@@ -246,7 +246,7 @@ func TestCheckOverflow(t *testing.T) {
 		},
 		{
 			name:        "unrelated diagnostic",
-			diagnostics: []Diagnostic{{ID: "ERR_invalid_value", Type: "warning", Message: "level: invalid value."}},
+			diagnostics: []Diagnostic{{ID: "WARN_dateInterval", Type: "warning", Message: "dateInterval: invalid value."}},
 			regions:     []Region{{ID: "canvas:base", Rect: DualRect{Component: Rect{Width: 130, Height: 50}}}},
 			want:        false,
 		},

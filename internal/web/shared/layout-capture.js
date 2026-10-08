@@ -18,7 +18,7 @@ export const VISUAL_SELECTOR =
   'bn-body, bn-card, bn-chart-bubble, bn-chart-bullet, bn-chart-scatter, ' +
   'bn-chart-structure, bn-chart-time, bn-footer, bn-grid, bn-image, ' +
   'bn-layout-card, bn-layout-page, bn-message, bn-page, bn-table, ' +
-  'bn-template, bn-text, bn-title, bn-tree';
+  'bn-text, bn-title, bn-tree';
 
 /** @returns {Element|null} the report's bn-context host. */
 export function findContext() {

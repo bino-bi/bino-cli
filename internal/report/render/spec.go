@@ -219,9 +219,6 @@ type chartTimeSpec struct {
 	AxisLabelsMode    string                   `json:"axisLabelsMode"`
 	DateInterval      string                   `json:"dateInterval"`
 	Filter            string                   `json:"filter"`
-	Level             string                   `json:"level"`
-	Order             string                   `json:"order"`
-	OrderDirection    string                   `json:"orderDirection"`
 	MeasureScale      string                   `json:"measureScale"`
 	MeasureUnit       string                   `json:"measureUnit"`
 	I18nNamespace     string                   `json:"i18nNamespace"`
@@ -229,7 +226,6 @@ type chartTimeSpec struct {
 	ShowMeasureScale  *bool                    `json:"showMeasureScale"`
 	ShowOverlayAvg    *bool                    `json:"showOverlayAvg"`
 	ShowOverlayMedian *bool                    `json:"showOverlayMedian"`
-	Limit             *int                     `json:"limit"`
 	MaxBars           *int                     `json:"maxBars"`
 	LineFullWidth     *bool                    `json:"lineFullWidth"`
 	IntervalSpanLimit *int                     `json:"intervalSpanLimit"`
@@ -251,9 +247,6 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "axis-labels-mode", s.AxisLabelsMode)
 	writeAttr(b, "date-interval", s.DateInterval)
 	writeAttr(b, "filter", s.Filter)
-	writeAttr(b, "level", s.Level)
-	writeAttr(b, "order", s.Order)
-	writeAttr(b, "order-direction", s.OrderDirection)
 	writeAttr(b, "measure-scale", s.MeasureScale)
 	writeAttr(b, "measure-unit", s.MeasureUnit)
 	writeAttr(b, "i18n-namespace", s.I18nNamespace)
@@ -261,7 +254,6 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeBoolAttr(b, "show-overlay-avg", s.ShowOverlayAvg)
 	writeBoolAttr(b, "show-overlay-median", s.ShowOverlayMedian)
-	writeIntAttr(b, "limit", s.Limit)
 	writeIntAttr(b, "max-bars", s.MaxBars)
 	writeBoolAttr(b, "line-full-width", s.LineFullWidth)
 	writeIntAttr(b, "interval-span-limit", s.IntervalSpanLimit)

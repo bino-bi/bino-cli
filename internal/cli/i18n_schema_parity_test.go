@@ -35,6 +35,7 @@ func TestI18nSchemaTokensMatchDefaults(t *testing.T) {
 		Properties map[string]struct {
 			Type        string `json:"type"`
 			Description string `json:"description"`
+			Deprecated  bool   `json:"deprecated"`
 		} `json:"properties"`
 		AdditionalProperties struct {
 			Type string `json:"type"`
@@ -62,7 +63,13 @@ func TestI18nSchemaTokensMatchDefaults(t *testing.T) {
 		}
 	}
 	for key, prop := range def.Properties {
-		if !want[key] {
+		// A deprecated token is an old key name the engine still reads. It stays
+		// in the schema so old content validates, and must not be scaffolded.
+		if prop.Deprecated {
+			if want[key] {
+				t.Errorf("token %q is deprecated in the schema but still in defaultI18nTokens", key)
+			}
+		} else if !want[key] {
 			t.Errorf("$defs.internationalizationContent declares %q, which is not in defaultI18nTokens", key)
 		}
 		if prop.Type != "string" {
