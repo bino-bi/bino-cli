@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/PartofEntry"
+  },
+  "description": "The `partof` attribute of `bn-table`.",
+  "definitions": {
+    "PartofEntry": {
+      "type": "object",
+      "properties": {
+        "rowGroup": {
+          "type": "string",
+          "description": "Row group the share is taken of."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category whose share of the row group is shown."
+        },
+        "subCategory": {
+          "type": "string",
+          "description": "Accepted, not used."
+        }
+      },
+      "required": [
+        "rowGroup",
+        "category"
+      ],
+      "additionalProperties": false,
+      "description": "One entry of the `partof` attribute of `bn-table`."
+    }
+  }
+}

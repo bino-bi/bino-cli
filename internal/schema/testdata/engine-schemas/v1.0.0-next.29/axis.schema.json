@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/AxisConfig",
+  "description": "The `x` and `y` attribute of `bn-chart-scatter` and `bn-chart-bubble`, in its JSON form.",
+  "definitions": {
+    "AxisConfig": {
+      "type": "object",
+      "properties": {
+        "measure": {
+          "type": "string",
+          "description": "Scenario-column token (`ac1`…`pl4`) or variance token (`d…`/`dr…`)."
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "refLine": {
+          "type": "number"
+        },
+        "highlight": {
+          "$ref": "#/definitions/HighlightRange"
+        }
+      },
+      "required": [
+        "measure"
+      ],
+      "additionalProperties": false,
+      "description": "Parsed `x` / `y` prop."
+    },
+    "HighlightRange": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "number"
+        },
+        "to": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Shaded band on one axis; open ends run to the domain edge."
+    }
+  }
+}

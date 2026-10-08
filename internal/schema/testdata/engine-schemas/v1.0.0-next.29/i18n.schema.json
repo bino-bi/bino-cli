@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": {
+    "anyOf": [
+      {
+        "type": "string"
+      },
+      {
+        "$ref": "#/definitions/I18n"
+      }
+    ]
+  },
+  "description": "Content of `<bn-internationalization>`: texts by key. Nested objects are joined with dots (`global.ac1`).",
+  "definitions": {
+    "I18n": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/definitions/I18n"
+          }
+        ]
+      },
+      "description": "Content of `<bn-internationalization>`: texts by key. Nested objects are joined with dots (`global.ac1`)."
+    }
+  }
+}

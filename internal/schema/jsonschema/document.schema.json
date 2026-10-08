@@ -2263,7 +2263,11 @@
         "bn-text": { "$ref": "#/$defs/textStyle" },
         "bn-chart-time": { "$ref": "#/$defs/timeChartStyle" },
         "bn-chart-structure": { "$ref": "#/$defs/structureChartStyle" },
-        "bn-tree": { "$ref": "#/$defs/treeStyle" }
+        "bn-chart-scatter": { "$ref": "#/$defs/xyChartStyle" },
+        "bn-chart-bubble": { "$ref": "#/$defs/xyChartStyle" },
+        "bn-chart-bullet": { "$ref": "#/$defs/bulletChartStyle" },
+        "bn-tree": { "$ref": "#/$defs/treeStyle" },
+        "bn-grid": { "$ref": "#/$defs/gridStyle" }
       },
       "additionalProperties": true
     },
@@ -2296,7 +2300,29 @@
     },
     "textStyle": {
       "type": "object",
-      "description": "Style settings for bn-text components. Currently extensible for future use.",
+      "description": "Typography overrides for bn-text components. A font key that is not set falls back to the global style.",
+      "properties": {
+        "fontFamily": {
+          "type": "string",
+          "description": "CSS font-family value."
+        },
+        "fontSizePx": {
+          "type": "number",
+          "description": "Font size in pixels."
+        },
+        "fontColor": {
+          "type": "string",
+          "description": "Text color (CSS color)."
+        },
+        "fontBackgroundColor": {
+          "type": "string",
+          "description": "Background color (CSS color)."
+        },
+        "leading": {
+          "type": "number",
+          "description": "Leading (line spacing) factor. Template engine v1.0.0-next.29 accepts the key but does not apply it."
+        }
+      },
       "additionalProperties": true
     },
     "timeChartStyle": {
@@ -2525,6 +2551,174 @@
           "type": "number",
           "description": "Length of axis tick marks. Default: 0.3",
           "default": 0.3
+        }
+      },
+      "additionalProperties": true
+    },
+    "xyChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-scatter and bn-chart-bubble. The axisStyles slots are used as: ac = plot frame, pp = gridlines, fc = reference lines and iso-curves, pl = highlight band fill.",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsXYChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "seriesColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of CSS colors for the series. Series cycle through these colors."
+        },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "bulletChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-bullet.",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsBulletChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "rangeColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "CSS colors of the qualitative range bands, at most two. Default: [\"#D9D9D9\", \"#EFEFEF\"]."
+        },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "gridStyle": {
+      "type": "object",
+      "description": "Style settings for bn-grid (grid layouts with row and column headers).",
+      "properties": {
+        "headerBackground": {
+          "type": "string",
+          "description": "Background color for row and column headers (CSS color). Default: transparent. Template engine v1.0.0-next.29 accepts the key but does not apply it.",
+          "default": "transparent"
+        },
+        "borderColor": {
+          "type": "string",
+          "description": "Color of cell borders (CSS color). Default: #A6A6A6",
+          "default": "#A6A6A6"
+        },
+        "borderWidth": {
+          "type": "number",
+          "description": "Width of cell borders in pixels. Default: 1",
+          "default": 1
+        },
+        "cellPadding": {
+          "type": "number",
+          "description": "Padding inside each cell in pixels. Default: 4",
+          "default": 4
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsXYChart": {
+      "type": "object",
+      "description": "Scale factors for scatter and bubble chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "pointRadius": {
+          "type": "number",
+          "description": "Radius of a scatter point. Default: 0.4",
+          "default": 0.4
+        },
+        "bubbleMaxRadius": {
+          "type": "number",
+          "description": "Largest bubble radius. Default: 3.2",
+          "default": 3.2
+        },
+        "bubbleMinRadius": {
+          "type": "number",
+          "description": "Smallest visible bubble radius. Default: 0.35",
+          "default": 0.35
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.35",
+          "default": 0.35
+        },
+        "labelToMark": {
+          "type": "number",
+          "description": "Gap between a point or bubble and its name label. Default: 0.3",
+          "default": 0.3
+        },
+        "legendSwatch": {
+          "type": "number",
+          "description": "Diameter of a legend color swatch. Default: 0.9",
+          "default": 0.9
+        },
+        "panelGap": {
+          "type": "number",
+          "description": "Gap between facet panels. Default: 1.6",
+          "default": 1.6
+        },
+        "refLineWidth": {
+          "type": "number",
+          "description": "Stroke width of reference lines. Default: 0.075",
+          "default": 0.075
+        },
+        "gridLineWidth": {
+          "type": "number",
+          "description": "Stroke width of gridlines and the plot frame. Default: 0.075",
+          "default": 0.075
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsBulletChart": {
+      "type": "object",
+      "description": "Scale factors for bullet chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "rowHeight": {
+          "type": "number",
+          "description": "Height of one row. Default: 1.9",
+          "default": 1.9
+        },
+        "barHeight": {
+          "type": "number",
+          "description": "Height of the actual-value bar. Default: 0.66",
+          "default": 0.66
+        },
+        "varianceHeight": {
+          "type": "number",
+          "description": "Height of the variance bar drawn inside the row. Default: 0.4",
+          "default": 0.4
+        },
+        "targetTickHeight": {
+          "type": "number",
+          "description": "Height of a per-row target tick. Default: 1.1",
+          "default": 1.1
+        },
+        "targetLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the shared target line. Default: 0.15",
+          "default": 0.15
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the baseline axis. Default: 0.075",
+          "default": 0.075
+        },
+        "labelToBar": {
+          "type": "number",
+          "description": "Gap between a bar end and its value label. Default: 0.3",
+          "default": 0.3
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between the category labels and the baseline axis. Default: 0.3",
+          "default": 0.3
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.35",
+          "default": 0.35
+        },
+        "tickStripHeight": {
+          "type": "number",
+          "description": "Height of the per-row strip of tick labels. Default: 1.2",
+          "default": 1.2
         }
       },
       "additionalProperties": true
