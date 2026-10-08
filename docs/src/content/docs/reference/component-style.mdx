@@ -85,11 +85,14 @@ The style object has the following top-level sections:
 | Section              | Description                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------- |
 | `global`             | Global typography and color settings applied to all components                              |
-| `bn-text`            | Style settings for text components (extensible)                                             |
+| `bn-text`            | Typography overrides for text components                                                    |
 | `bn-chart-time`      | Style settings for time/column charts                                                       |
 | `bn-chart-structure` | Style settings for structure/bar charts                                                     |
+| `bn-chart-scatter`   | Style settings for scatter charts                                                           |
+| `bn-chart-bubble`    | Style settings for bubble charts                                                            |
+| `bn-chart-bullet`    | Style settings for bullet charts                                                            |
 | `bn-tree`            | Style settings for hierarchical tree diagrams                                               |
-| `bn-grid`            | Style settings for grid layouts with row/column headers (not part of the schema, see below) |
+| `bn-grid`            | Style settings for grid layouts with row/column headers                                     |
 
 The style object accepts additional keys beyond these sections, so unknown or
 misspelled style keys pass validation without a diagnostic.
@@ -119,7 +122,17 @@ global:
 
 ## Text style (`bn-text`)
 
-Reserved for future text component styling. Currently accepts any properties.
+Typography overrides for text components. A font key that is not set falls back to the [global style](#global-style).
+
+| Property              | Type   | Description                   |
+| --------------------- | ------ | ----------------------------- |
+| `fontFamily`          | string | CSS font-family value         |
+| `fontSizePx`          | number | Font size in pixels           |
+| `fontColor`           | string | Text color (CSS color)        |
+| `fontBackgroundColor` | string | Background color (CSS color)  |
+| `leading`             | number | Leading (line spacing) factor |
+
+Template engine v1.0.0-next.29 accepts `leading` but does not apply it.
 
 ---
 
@@ -224,10 +237,6 @@ bn-tree:
 
 Style settings for grid layouts with row and column headers.
 
-This section is not described by the manifest schema. It is accepted because the
-style object allows extra keys, so its properties and defaults are not validated
-and a typo in a key stays silent.
-
 | Property           | Type   | Default         | Description                                             |
 | ------------------ | ------ | --------------- | ------------------------------------------------------- |
 | `headerBackground` | string | `"transparent"` | Background color for row and column headers (CSS color) |
@@ -285,7 +294,9 @@ Individual SVG style properties:
 | `fill`        | string | SVG fill color (CSS color)                                         |
 | `width`       | number | Stroke width in pixels                                             |
 | `dasharray`   | string | SVG stroke-dasharray pattern (e.g., `"10 5 5 5"` for dashed lines) |
-| `fillpattern` | string | Reference to a fill pattern (e.g., `"fc"` for forecast hatching)   |
+| `fillpattern` | string | Fill pattern: `solid`, `hatched` or `outlined`                     |
+
+`fc` is the deprecated name of `hatched`. It still works with template engine 1.x; `bino lint` reports it with [`style-fillpattern-deprecated`](/appendix/lint-rules/#style-fillpattern-deprecated). Template engines before **v1.0.0-next.28** know only `fc` in time and structure charts, so keep `fc` in a project that is pinned to such an engine.
 
 ```yaml
 axisStyles:
@@ -344,7 +355,7 @@ spec:
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
         fc:
-          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "hatched" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:
@@ -376,7 +387,7 @@ spec:
       barStyles:
         ac: { stroke: "#333333", fill: "#333333", width: 0.1 }
         fc:
-          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "fc" }
+          { stroke: "#333333", fill: "#ffffff", width: 0.5, fillpattern: "hatched" }
         pp: { stroke: "#999999", fill: "#999999", width: 0.1 }
         pl: { stroke: "#333333", fill: "#ffffff", width: 0.1 }
       varianceStyles:
@@ -434,11 +445,14 @@ spec:
 | --------------------------------- | ---------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `spec.content`                    | object or string | yes      | -       | Style definitions as a YAML object or a JSON string (at least 2 characters). Contains the component-specific style sections below; unknown keys are accepted.                                           | `content: '{"global":{"fontSizePx":12}}'`                 |
 | `spec.content.global`             | object           | no       | -       | Global typography and color settings, inherited by all components. See [Global style](#global-style).                                                                                                   | `global: { fontSizePx: 14 }`                              |
-| `spec.content.bn-text`            | object           | no       | -       | Style settings for text components. Reserved for future use, accepts any properties. See [Text style](#text-style-bn-text).                                                                             | `bn-text: {}`                                             |
+| `spec.content.bn-text`            | object           | no       | -       | Typography overrides for text components. See [Text style](#text-style-bn-text).                                                                                                                        | `bn-text: {}`                                             |
 | `spec.content.bn-chart-time`      | object           | no       | -       | Style settings for time/column charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Time chart style](#time-chart-style-bn-chart-time).                  | `bn-chart-time: { scaleFactors: { columnWidth: 2.5 } }`   |
 | `spec.content.bn-chart-structure` | object           | no       | -       | Style settings for structure/bar charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `stackColors`, `padding`. See [Structure chart style](#structure-chart-style-bn-chart-structure). | `bn-chart-structure: { scaleFactors: { barWidth: 1.5 } }` |
+| `spec.content.bn-chart-scatter`   | object           | no       | -       | Style settings for scatter charts: `scaleFactors`, `axisStyles`, `seriesColors`, `padding`.                                                                                                             | `bn-chart-scatter: {}`                                    |
+| `spec.content.bn-chart-bubble`    | object           | no       | -       | Style settings for bubble charts: `scaleFactors`, `axisStyles`, `seriesColors`, `padding`.                                                                                                              | `bn-chart-bubble: {}`                                     |
+| `spec.content.bn-chart-bullet`    | object           | no       | -       | Style settings for bullet charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `rangeColors`, `padding`.                                                                                | `bn-chart-bullet: {}`                                     |
 | `spec.content.bn-tree`            | object           | no       | -       | Style settings for hierarchical tree diagrams. See [Tree chart style](#tree-chart-style-bn-tree).                                                                                                       | `bn-tree: { edgeColor: "#606060" }`                       |
-| `spec.content.bn-grid`            | object           | no       | -       | Style settings for grid layouts. Not described by the schema, so it is neither validated nor completed. See [Grid style](#grid-style-bn-grid).                                                          | `bn-grid: { cellPadding: 8 }`                             |
+| `spec.content.bn-grid`            | object           | no       | -       | Style settings for grid layouts. See [Grid style](#grid-style-bn-grid).                                                                                                                                 | `bn-grid: { cellPadding: 8 }`                             |
 
 Components reference a named style through their own `spec.selectedStyle` attribute; see [Using named styles](#using-named-styles).
 

@@ -41,9 +41,6 @@ spec:
           - ac1
           - pp1
           - fc1
-        level: category
-        order: category
-        orderDirection: asc
         unitScaling: 13300
         chartTitle: "Monthly Revenue Trend"
     - kind: Table
@@ -126,9 +123,6 @@ spec:
           - ac1
           - pp1
           - fc1
-        level: category
-        order: category
-        orderDirection: asc
         unitScaling: 13300
         chartTitle: "Monthly Revenue Development"
 ---
@@ -244,9 +238,6 @@ spec:
                 - ac1
                 - pp1
                 - fc1
-              level: category
-              order: category
-              orderDirection: asc
               unitScaling: 13300
     - kind: LayoutCard
       metadata:
