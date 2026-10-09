@@ -245,7 +245,7 @@ spec:
   code: de
   content:
     global.ac1: Ist
-    bn-table.there_of: davon
+    bn-table.part_of: in % von
     report.title: Umsatz`
 
 	nodes, err := ParseYAMLNodes(content)
@@ -260,7 +260,7 @@ spec:
 		wantLine int
 	}{
 		{name: "dotted key", path: "spec.content.global.ac1", wantLine: 5},
-		{name: "dotted key with underscore", path: "spec.content.bn-table.there_of", wantLine: 6},
+		{name: "dotted key with underscore", path: "spec.content.bn-table.part_of", wantLine: 6},
 		{name: "free-form dotted key", path: "spec.content.report.title", wantLine: 7},
 		// A fully resolved path returns the value node, and a mapping value
 		// begins on its first entry's line - pre-existing behavior.

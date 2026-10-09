@@ -35,13 +35,13 @@ spec:
     global.ibcssymbol_delta_ac_relative: Δ{%}%
     global.ibcssymbol_delta_generic_relative: Δ({%})%
 
-    bn-title.SEPERATOR_WS: ", "
+    bn-title.SEPARATOR_WS: ", "
     bn-title.CONNECTOR_WS: {{ if eq .Language "de" }}" und "{{ else }}" and "{{ end }}
     bn-title.in: in
     bn-table.in: in
     bn-table.category: " "
     bn-table.operation: " "
-    bn-table.there_of: {{ if eq .Language "de" }}davon{{ else }}there of{{ end }}
+    bn-table.thereof: {{ if eq .Language "de" }}davon{{ else }}there of{{ end }}
     bn-table.part_of: {{ if eq .Language "de" }}in % von{{ else }}in % of{{ end }}
     bn-table.SUM_TOTAL: ❖
     bn-table.REST: REST

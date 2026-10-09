@@ -16,13 +16,19 @@ func TestDefaultI18nTokens(t *testing.T) {
 	}
 
 	// Sentinel keys in the exact flattened form the engine stores them in.
-	for _, key := range []string{"global.ac1", "global.ibcssymbol_delta_ac", "bn-title.SEPERATOR_WS", "bn-table.there_of"} { //nolint:misspell // engine key is spelled this way
+	for _, key := range []string{"global.ac1", "global.ibcssymbol_delta_ac", "bn-title.SEPARATOR_WS", "bn-table.thereof"} {
 		if _, ok := de[key]; !ok {
 			t.Errorf("de is missing sentinel key %q", key)
 		}
 	}
-	if de["bn-table.there_of"] != "davon" || en["bn-table.there_of"] != "there of" {
-		t.Errorf("unexpected there_of labels: de=%q en=%q", de["bn-table.there_of"], en["bn-table.there_of"])
+	if de["bn-table.thereof"] != "davon" || en["bn-table.thereof"] != "there of" {
+		t.Errorf("unexpected thereof labels: de=%q en=%q", de["bn-table.thereof"], en["bn-table.thereof"])
+	}
+	// The engine renamed these two keys. The defaults must not write the old names.
+	for _, key := range []string{"bn-title.SEPERATOR_WS", "bn-table.there_of"} { //nolint:misspell // old engine key
+		if _, ok := de[key]; ok {
+			t.Errorf("de still has the deprecated key %q", key)
+		}
 	}
 
 	// Every locale ships the same key set. A key present in one bundle but not
@@ -62,8 +68,8 @@ func TestApplyI18nDefaultTokens(t *testing.T) {
 	if data.Content["global.ac1"] != "Ist" {
 		t.Errorf("explicit content must win, got %q", data.Content["global.ac1"])
 	}
-	if data.Content["bn-table.there_of"] != "davon" {
-		t.Errorf("expected defaults filled in, got %q", data.Content["bn-table.there_of"])
+	if data.Content["bn-table.thereof"] != "davon" {
+		t.Errorf("expected defaults filled in, got %q", data.Content["bn-table.thereof"])
 	}
 
 	unsupported := &InternationalizationManifestData{Code: "fr", Content: map[string]string{}}

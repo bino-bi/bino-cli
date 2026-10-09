@@ -128,8 +128,10 @@ func checkEmpty(c Component, src Source) (Finding, bool) {
 
 // checkOverflow reports content that does not fit its component box.
 //
-// The engine already detects this and publishes a WARN_overflow diagnostic,
-// but without a magnitude. The magnitude comes from the regions: a chart's
+// The engine already detects this and publishes a diagnostic (ERR_overflow
+// for a table, time chart or structure chart with a fixed size, WARN_overflow
+// in every other case), but without a magnitude. The magnitude comes from the
+// regions: a chart's
 // canvas region measures the rendered svg#drawCanvas, so it reports the
 // content's true size even when the host clips it.
 func checkOverflow(c Component, src Source) []Finding {

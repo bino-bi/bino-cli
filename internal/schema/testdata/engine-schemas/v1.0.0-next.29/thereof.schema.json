@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/ThereofEntry"
+  },
+  "description": "The `thereof` attribute of `bn-table`.",
+  "definitions": {
+    "ThereofEntry": {
+      "type": "object",
+      "properties": {
+        "rowGroup": {
+          "type": "string",
+          "description": "Row group of the row the drilldown belongs to."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the row the drilldown belongs to."
+        },
+        "subCategory": {
+          "type": "string",
+          "description": "Sub category that is shown below the row."
+        }
+      },
+      "required": [
+        "rowGroup",
+        "category",
+        "subCategory"
+      ],
+      "additionalProperties": false,
+      "description": "One entry of the `thereof` attribute of `bn-table`."
+    }
+  }
+}

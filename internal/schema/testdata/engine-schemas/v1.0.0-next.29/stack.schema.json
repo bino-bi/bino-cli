@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "by": {
+      "$ref": "#/definitions/StackBy",
+      "description": "What a stack is made of: the scenarios, or the level below `level`."
+    },
+    "mode": {
+      "$ref": "#/definitions/StackMode",
+      "description": "Default: `absolute`."
+    },
+    "order": {
+      "$ref": "#/definitions/StackOrder",
+      "description": "Order of the segments in a stack. Default: `dataset`."
+    }
+  },
+  "required": [
+    "by"
+  ],
+  "additionalProperties": false,
+  "description": "The `stack` attribute of `bn-chart-time` and `bn-chart-structure`.",
+  "definitions": {
+    "StackBy": {
+      "type": "string",
+      "enum": [
+        "scenarios",
+        "dimensions"
+      ],
+      "description": "Stacking dimension for multi-segment bar charts.\n- SCENARIOS: stack the scenarios from the `scenarios` prop end-to-end\n- DIMENSIONS: stack by the next-lower hierarchy level derived from the `level` prop   (rowGroup → category, category → subCategory)"
+    },
+    "StackMode": {
+      "type": "string",
+      "enum": [
+        "absolute",
+        "relative",
+        "absolute-relative"
+      ],
+      "description": "How stacked values are presented.\n- ABSOLUTE: raw values stacked\n- RELATIVE: normalized to 100% per data point\n- ABSOLUTE_RELATIVE: absolute bars with a relative (%) total label"
+    },
+    "StackOrder": {
+      "type": "string",
+      "enum": [
+        "asc",
+        "desc",
+        "dataset"
+      ],
+      "description": "Sort order of segments within a stacked bar. DATASET preserves the original data order."
+    }
+  }
+}

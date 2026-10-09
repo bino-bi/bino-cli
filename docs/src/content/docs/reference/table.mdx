@@ -297,7 +297,9 @@ spec:
 `scale` only fits the width. A table whose content is taller than the space it
 gets is clipped at the bottom by the page cell - the last rows, grand total
 included, simply are not drawn. From template engine **v1.0.0-next.26** on the
-engine reports this as a `WARN_overflow` diagnostic; a build with
+engine reports this as a diagnostic: the error `ERR_overflow` when `scale` fixes
+the size, the warning `WARN_overflow` when the engine chose it (engines before
+**v1.0.0-next.29** use `WARN_overflow` for both). A build with
 [`--layout-state`](/cli/layout-state/) prints it as a `layout-overflow` finding,
 and the preview inspector shows it on the component.
 

@@ -34,14 +34,14 @@ var defaultI18nTokens = map[string]map[string]string{
 		"global.ibcssymbol_delta_ac_relative": "Δ{%}%",
 		"global.ibcssymbol_delta_generic_relative": "Δ({%})%",
 
-		"bn-title.SEPERATOR_WS": ", ", //nolint:misspell // engine key is spelled this way
+		"bn-title.SEPARATOR_WS": ", ",
 		"bn-title.CONNECTOR_WS": " und ",
 		"bn-title.in":           "in",
 
 		"bn-table.in":        "in",
 		"bn-table.category":  " ",
 		"bn-table.operation": " ",
-		"bn-table.there_of":  "davon",
+		"bn-table.thereof":   "davon",
 		"bn-table.part_of":   "in % von",
 		"bn-table.SUM_TOTAL": "❖",
 		"bn-table.REST":      "REST",
@@ -126,14 +126,14 @@ var defaultI18nTokens = map[string]map[string]string{
 		"global.ibcssymbol_delta_ac_relative": "Δ{%}%",
 		"global.ibcssymbol_delta_generic_relative": "Δ({%})%",
 
-		"bn-title.SEPERATOR_WS": ", ", //nolint:misspell // engine key is spelled this way
+		"bn-title.SEPARATOR_WS": ", ",
 		"bn-title.CONNECTOR_WS": " and ",
 		"bn-title.in":           "in",
 
 		"bn-table.in":        "in",
 		"bn-table.category":  " ",
 		"bn-table.operation": " ",
-		"bn-table.there_of":  "there of",
+		"bn-table.thereof":   "there of",
 		"bn-table.part_of":   "in % of",
 		"bn-table.SUM_TOTAL": "❖",
 		"bn-table.REST":      "REST",

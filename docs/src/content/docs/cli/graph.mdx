@@ -88,7 +88,7 @@ Component  Table table-page#0  c7c45b5d3de5  DataSet:financial_summary  hash=c7c
 - The list is built from the manifests only. bino does not run any SQL for it.
 - The rules follow template engine v1.0.0-next.27. A newer engine or a new spec field is not detected.
 - `auto` is not resolved to a column. Dataset defaults (`_spec_*` columns) are not read, so a field set only by a dataset default shows as `auto` or not at all.
-- Fields the engine does not use to read data print nothing, for example Table `barColumns` and ChartTime `level`, `order`, `stack` and `dateInterval`.
+- Fields the engine does not use to read data print nothing, for example Table `barColumns` and ChartTime `stack` and `dateInterval`.
 - A component bound to several datasets lists the same columns for each of them, even though the engine reads only one.
 - Inline datasets appear under their generated name `_inline_dataset_<hash>`.
 - `filter` and Text values are read by simple pattern matching, so an unusual expression can give a wrong list. Text placeholders are only seen when written as `\${...}`.

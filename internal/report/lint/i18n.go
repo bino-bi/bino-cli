@@ -185,9 +185,10 @@ var i18nTitleNamespaceDeprecated = Rule{
 					RuleID: "i18n-title-namespace-deprecated",
 					Message: "titleNamespace is deprecated and only applies to the title; " +
 						"use i18nNamespace, which also inherits to all children",
-					File:   docFile,
-					DocIdx: docPos,
-					Path:   joinLintPath(path, "spec.titleNamespace"),
+					File:     docFile,
+					DocIdx:   docPos,
+					Path:     joinLintPath(path, "spec.titleNamespace"),
+					Severity: "info",
 				})
 			})
 		}

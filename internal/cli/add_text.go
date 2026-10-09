@@ -438,8 +438,8 @@ func newAddRuleSetCommand() *cobra.Command {
 		Long: strings.TrimSpace(`
 Create a new RuleSet manifest for IBCS scenario rule overrides.
 
-RuleSet adjusts how scenario columns (ac, fc, pl, bu, pp, py, ...) are named,
-colored, and ordered. A RuleSet named _default adjusts all components; any
+RuleSet adjusts how scenario columns (ac, pp, fc, pl) are named, colored, and
+ordered. A RuleSet named _default adjusts all components; any
 other name is selected per component via the ruleset attribute.
 `),
 		Example: strings.TrimSpace(`
@@ -533,8 +533,8 @@ other name is selected per component via the ruleset attribute.
 				if data.Content == "" {
 					template := `{
   "scenarios": {
-    "ac": { "name": "AC", "colorIndex": 10, "sortIndex": 400 },
-    "pl": { "name": "PL", "colorIndex": 50, "sortIndex": 200 }
+    "ac": { "colorIndex": 10, "sortIndex": 400 },
+    "pl": { "colorIndex": 50, "sortIndex": 200 }
   }
 }`
 					data.Content, err = promptWithEditor("bino-ruleset-", ".json", template)

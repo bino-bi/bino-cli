@@ -11,10 +11,10 @@ They share many fields with `ChartStructure` but add date-axis-specific options.
 ## Minimal definition
 
 The smallest well-formed `ChartTime` sets the required `spec.dataset` plus the fields
-that give the chart a message: a title, the axis granularity, the aggregation level,
-the chronological order, and the scenario columns with their scale and unit. Level,
-order, and scenarios are detected from the dataset when left blank, but each detection
-emits a warning, so pinning them keeps the chart stable when the data changes.
+that give the chart a message: a title, the axis granularity, and the scenario columns
+with their scale and unit. Scenarios are detected from the dataset when left blank, but
+the detection emits a warning, so pinning them keeps the chart stable when the data
+changes.
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -25,9 +25,6 @@ spec:
   dataset: revenue_monthly
   chartTitle: "Monthly revenue"
   dateInterval: month
-  level: category
-  order: category
-  orderDirection: asc
   scenarios: ["ac1", "pp1", "fc1"]
   measureScale: M
   measureUnit: "EUR"
@@ -49,13 +46,9 @@ stacked columns or a stacked area with the `stack` block (see
 - `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label.
 - `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` - optional filter expression.
-- `level` - aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` - keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When left blank, it is detected with a warning.
-- `order` - sort key; if you use a scenario, it must appear in `scenarios`. When set to `auto`, it is detected silently. When left blank, it is detected with a warning.
-- `orderDirection` - sort direction (`asc` or `desc`).
 - `measureScale`, `measureUnit` - SI prefix and unit string.
 - `showCategories`, `showMeasureScale` - visibility flags.
 - `showOverlayAvg`, `showOverlayMedian` - enables overlay lines.
-- `limit` - column stack limit; 0 means unlimited. Column stacks cut by the limit are cumulated as `REST`.
 - `intervalSpanLimit` - controls how many columns drive automatic date interval selection.
 - `unitScaling` - data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
 - `percentageScaling` - percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
@@ -68,13 +61,15 @@ stacked columns or a stacked area with the `stack` block (see
   - `"auto"` - auto-scale to fit the parent width silently (no warning).
   - `"0.5"`, `"1.2"`, … - fixed factor applied to the base font size. All dimensions scale proportionally.
 - `stack` - optional object to enable stacked rendering:
-  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
+  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` draws only the first scenario, one segment per period; additional scenarios are discarded with a warning.
   - `mode` - stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` - segment order within each stack: `asc`, `desc`, or `dataset` (default).
   - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
 - `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When not set, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
+
+`level`, `order`, `orderDirection` and `limit` are still accepted, but have no effect: a time chart always shows one value per period, in date order. bino does not pass them to the template engine, and `bino lint` reports them with [`chart-time-field-no-effect`](/appendix/lint-rules/#chart-time-field-no-effect).
 
 ## Example: Monthly revenue line chart
 
@@ -89,9 +84,6 @@ spec:
   chartTitle: "Monthly revenue"
   axisLabelsMode: smart
   dateInterval: month
-  level: category
-  order: category
-  orderDirection: asc
   measureScale: M
   measureUnit: "EUR"
   showMeasureScale: true
@@ -271,16 +263,16 @@ spec:
 
 ## Inherited props
 
-Instead of repeating `scenarios`, `variances`, `order`, and `orderDirection` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set any of these fields to a special keyword:
+Instead of repeating `scenarios` and `variances` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set either of them to a special keyword:
 
 | Value               | Resolves from                                                     |
 | ------------------- | ----------------------------------------------------------------- |
 | `inherited-closest` | Nearest ancestor `LayoutCard` or `LayoutPage` that sets the field |
 | `inherited-page`    | Nearest ancestor `LayoutPage` only (skips cards)                  |
 
-The inherited value is read from the ancestor's corresponding `titleScenarios`, `titleVariances`, `titleOrder`, or `titleOrderDirection` field. With `inherited-closest`, a `LayoutCard` that does not set the field is skipped and the lookup continues outwards to the `LayoutPage`. Template engines before **v1.0.0-next.28** ask only the nearest card or page.
+The inherited value is read from the ancestor's corresponding `titleScenarios` or `titleVariances` field. With `inherited-closest`, a `LayoutCard` that does not set the field is skipped and the lookup continues outwards to the `LayoutPage`. Template engines before **v1.0.0-next.28** ask only the nearest card or page.
 
-A keyword cannot be resolved when the page (and, for `inherited-closest`, every enclosing card) does not set the matching field. From template engine **v1.0.0-next.28** on, the component then behaves as if the field were not set (scenarios are auto-detected, the default order is used) and shows a warning. Older engines keep the keyword as a literal value: nothing is auto-detected and the component renders without usable scenarios or order. `bino lint` reports this case with the rule [`inherited-prop-unresolved`](/appendix/lint-rules/#inherited-prop-unresolved).
+A keyword cannot be resolved when the page (and, for `inherited-closest`, every enclosing card) does not set the matching field. From template engine **v1.0.0-next.28** on, the component then behaves as if the field were not set (scenarios are auto-detected) and shows a warning. Older engines keep the keyword as a literal value: nothing is auto-detected and the component renders without usable scenarios. `bino lint` reports this case with the rule [`inherited-prop-unresolved`](/appendix/lint-rules/#inherited-prop-unresolved).
 
 ```yaml
 children:
@@ -288,11 +280,8 @@ children:
     spec:
       dataset: revenue_trend
       dateInterval: month
-      level: category
       scenarios: inherited-page # uses page's titleScenarios
       variances: inherited-page # uses page's titleVariances
-      order: inherited-page
-      orderDirection: inherited-page
 ```
 
 See the [ChartStructure inherited props](/reference/chart-structure/#inherited-props) section for full examples.
@@ -323,9 +312,6 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`.       | `axisLabelsMode: short`           |
 | `spec.dateInterval`      | string                   | no                   | auto-detect                  | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`.                                                                                                                                                | `dateInterval: month`             |
 | `spec.filter`            | string                   | no                   | `""`                         | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                           | `filter: "region_group = 'EMEA'"` |
-| `spec.level`             | string                   | no                   | auto-detect with warning     | Aggregation level. Values: `rowgroup`, `rowgroupindex`, `category`, `categoryindex`, `subcategory`, `subcategoryindex`, `auto`.                                                                                                                                        | `level: category`                 |
-| `spec.order`             | string                   | no                   | auto-detect with warning     | Sort key; a scenario used here must also appear in `scenarios`. Values: `auto`, `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `inherited-closest`, `inherited-page`. When `auto`, detected silently.   | `order: ac1`                      |
-| `spec.orderDirection`    | string                   | no                   | `asc`                        | Sort direction. Values: `asc`, `desc`, `inherited-closest`, `inherited-page`.                                                                                                                                                                                          | `orderDirection: desc`            |
 | `spec.measureScale`      | string                   | no                   | largest value in the dataset | SI prefix for measure scaling; `_` means no prefix, `GREATEST` uses the largest and `LEAST` the smallest value in the dataset. Values (case-sensitive): `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`.      | `measureScale: M`                 |
 | `spec.measureUnit`       | string                   | no                   | `""`                         | Unit string for the chart axis.                                                                                                                                                                                                                                        | `measureUnit: "EUR"`              |
 | `spec.unitScaling`       | string or number         | no                   | auto-fit with warning        | Name of a scaling group, `auto`, or data units per em of bar height (larger value = smaller bars). Numeric values enable overdrive bars on overflow.                                                                                                                   | `unitScaling: 250000`             |
@@ -335,14 +321,13 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.showMeasureScale`  | boolean                  | no                   | `false`                      | Show measure unit in chart header.                                                                                                                                                                                                                                     | `showMeasureScale: true`          |
 | `spec.showOverlayAvg`    | boolean                  | no                   | `true`                       | Show average overlay line.                                                                                                                                                                                                                                             | `showOverlayAvg: true`            |
 | `spec.showOverlayMedian` | boolean                  | no                   | `false`                      | Show median overlay line.                                                                                                                                                                                                                                              | `showOverlayMedian: true`         |
-| `spec.limit`             | integer                  | no                   | `0`                          | Maximum number of column stacks. `0` means unlimited. Column stacks cut by the limit are cumulated as `REST`. Minimum: 0.                                                                                                                                              | `limit: 12`                       |
 | `spec.intervalSpanLimit` | integer                  | no                   | `28`                         | Maximum number of columns used to calculate the axis date interval; only applies when `dateInterval` is `auto` or unset. Minimum: 0.                                                                                                                                   | `intervalSpanLimit: 50`           |
 | `spec.scenarios`         | string or array          | no                   | -                            | Scenario measures (up to 4). Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `auto`, `inherited-closest`, `inherited-page`.                                                                                                                                | `scenarios: ["ac1", "fc1"]`       |
 | `spec.variances`         | string or array          | no                   | -                            | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`.                                                                                                                                       | `variances: ["dfc1_ac1_pos"]`     |
 | `spec.scale`             | string or number         | no                   | auto-scale with warning      | Proportional scaling; font size, spacings, and bar dimensions scale together. Omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (`0.5`, `1.2`, …). An empty string is rejected. | `scale: auto`                     |
 | `spec.i18nNamespace`     | string                   | no                   | -                            | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                       | `i18nNamespace: audited`          |
 | `spec.stack`             | object                   | no                   | -                            | Stacked rendering configuration. When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces stacked area chart. See [Stack configuration](#stack-configuration).                                                                        | see below                         |
-| `spec.stack.by`          | string                   | yes (within `stack`) | -                            | Stacking dimension. Values: `scenarios` (stacks scenario slots end-to-end), `dimensions` (auto-derives the stack column from `level`: `rowGroup`→`category`, `category`→`subCategory`).                                                                                | `by: scenarios`                   |
+| `spec.stack.by`          | string                   | yes (within `stack`) | -                            | Stacking dimension. Values: `scenarios` (stacks scenario slots end-to-end), `dimensions` (draws only the first scenario, one segment per period).                                                                                                                      | `by: scenarios`                   |
 | `spec.stack.mode`        | string                   | no                   | `absolute`                   | Stacking mode. Values: `absolute` (additive), `relative` (100% stacked), `absolute-relative` (absolute height with percentage labels).                                                                                                                                 | `mode: relative`                  |
 | `spec.stack.order`       | string                   | no                   | `dataset`                    | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                                                                                                                                                                     | `order: desc`                     |
 | `spec.selectedStyle`     | string                   | no                   | -                            | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                             | `selectedStyle: corporate-style`  |
@@ -360,6 +345,6 @@ spec:
 
 | Property      | Type   | Required | Default    | Description                                                                                                                 |
 | ------------- | ------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `stack.by`    | string | yes      | -          | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives from `level` prop.            |
+| `stack.by`    | string | yes      | -          | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: only the first scenario is drawn.          |
 | `stack.mode`  | string | no       | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
 | `stack.order` | string | no       | `dataset`  | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                          |

@@ -297,6 +297,14 @@ func TestInheritedPropUnresolved(t *testing.T) {
 			want: []string{"p.yaml spec.children.0.spec.children.0.spec.scenarios"},
 		},
 		{
+			// A time chart is drawn in date order and reads no order, so an
+			// order keyword is left to chart-time-field-no-effect.
+			name: "ChartTime order keywords are not followed",
+			docs: []Document{inheritPage("p", "", inheritChild("ChartTime",
+				`"order":"inherited-page","orderDirection":"inherited-closest","variances":"inherited-page"`))},
+			want: []string{"p.yaml spec.children.0.spec.variances"},
+		},
+		{
 			name: "one finding per unresolved prop",
 			docs: []Document{inheritPage("p", "",
 				inheritChild("Table", pageKeyword+`,"variances":"inherited-page","order":"inherited-page","orderDirection":"inherited-page"`))},

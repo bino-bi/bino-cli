@@ -2207,7 +2207,7 @@
       "properties": {
         "scenarios": {
           "type": "object",
-          "description": "Per-scenario-prefix rule overrides, keyed by scenario prefix (e.g. ac, fc, pl, bu, pp, py, dac..dpy, drac..drpy, or user-defined prefixes).",
+          "description": "Per-scenario-prefix rule overrides, keyed by scenario prefix. Data columns exist for ac, pp, fc and pl; an entry for bu or py has no effect. Of the variance prefixes (dac, drac, ...) only sortIndex is read.",
           "additionalProperties": { "$ref": "#/$defs/ruleSetScenarioRule" }
         },
         "fallback": {
@@ -2224,7 +2224,7 @@
             },
             "colorIndex": {
               "type": "number",
-              "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+              "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
             },
             "sortIndex": {
               "type": "number",
@@ -2238,15 +2238,15 @@
     },
     "ruleSetScenarioRule": {
       "type": "object",
-      "description": "Rule overrides for one scenario prefix. Variants 1-4 are derived from the base values (e.g. name 'AC' becomes AC1..AC4, sortIndex + n*10).",
+      "description": "Rule overrides for one scenario prefix. Slots 1-4 are derived from the base values (name 'Budget' gives 'Budget', 'Budget2', 'Budget3', 'Budget4'; sortIndex + n*10).",
       "properties": {
         "name": {
           "type": "string",
-          "description": "Display base name; variants get 1..4 appended (e.g. 'AC' -> 'AC1')."
+          "description": "Display name. Slot 1 shows it as written, slots 2 to 4 with their number ('Budget', 'Budget2'). It replaces the translated labels global.<prefix>1 to global.<prefix>4 in every locale, in tables, charts and titles."
         },
         "colorIndex": {
           "type": "number",
-          "description": "IBCS color encoding: 10 = solid dark, 20 = light gray, 30 = hatched, 50 = outlined."
+          "description": "Theme style slot the scenario is drawn in: 10 = ac (solid), 20 = pp (light), 30 = fc (hatched), 50 = pl (outlined). Any other value counts as 10."
         },
         "sortIndex": {
           "type": "number",
@@ -2263,7 +2263,11 @@
         "bn-text": { "$ref": "#/$defs/textStyle" },
         "bn-chart-time": { "$ref": "#/$defs/timeChartStyle" },
         "bn-chart-structure": { "$ref": "#/$defs/structureChartStyle" },
-        "bn-tree": { "$ref": "#/$defs/treeStyle" }
+        "bn-chart-scatter": { "$ref": "#/$defs/xyChartStyle" },
+        "bn-chart-bubble": { "$ref": "#/$defs/xyChartStyle" },
+        "bn-chart-bullet": { "$ref": "#/$defs/bulletChartStyle" },
+        "bn-tree": { "$ref": "#/$defs/treeStyle" },
+        "bn-grid": { "$ref": "#/$defs/gridStyle" }
       },
       "additionalProperties": true
     },
@@ -2296,7 +2300,29 @@
     },
     "textStyle": {
       "type": "object",
-      "description": "Style settings for bn-text components. Currently extensible for future use.",
+      "description": "Typography overrides for bn-text components. A font key that is not set falls back to the global style.",
+      "properties": {
+        "fontFamily": {
+          "type": "string",
+          "description": "CSS font-family value."
+        },
+        "fontSizePx": {
+          "type": "number",
+          "description": "Font size in pixels."
+        },
+        "fontColor": {
+          "type": "string",
+          "description": "Text color (CSS color)."
+        },
+        "fontBackgroundColor": {
+          "type": "string",
+          "description": "Background color (CSS color)."
+        },
+        "leading": {
+          "type": "number",
+          "description": "Leading (line spacing) factor. Template engine v1.0.0-next.29 accepts the key but does not apply it."
+        }
+      },
       "additionalProperties": true
     },
     "timeChartStyle": {
@@ -2529,6 +2555,174 @@
       },
       "additionalProperties": true
     },
+    "xyChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-scatter and bn-chart-bubble. The axisStyles slots are used as: ac = plot frame, pp = gridlines, fc = reference lines and iso-curves, pl = highlight band fill.",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsXYChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "seriesColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of CSS colors for the series. Series cycle through these colors."
+        },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "bulletChartStyle": {
+      "type": "object",
+      "description": "Style settings for bn-chart-bullet.",
+      "properties": {
+        "scaleFactors": { "$ref": "#/$defs/scaleFactorsBulletChart" },
+        "axisStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "barStyles": { "$ref": "#/$defs/svgStyleGroup" },
+        "varianceStyles": { "$ref": "#/$defs/svgVariancesStyleGroup" },
+        "rangeColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "CSS colors of the qualitative range bands, at most two. Default: [\"#D9D9D9\", \"#EFEFEF\"]."
+        },
+        "padding": { "$ref": "#/$defs/paddingStyle" }
+      },
+      "additionalProperties": true
+    },
+    "gridStyle": {
+      "type": "object",
+      "description": "Style settings for bn-grid (grid layouts with row and column headers).",
+      "properties": {
+        "headerBackground": {
+          "type": "string",
+          "description": "Background color for row and column headers (CSS color). Default: transparent. Template engine v1.0.0-next.29 accepts the key but does not apply it.",
+          "default": "transparent"
+        },
+        "borderColor": {
+          "type": "string",
+          "description": "Color of cell borders (CSS color). Default: #A6A6A6",
+          "default": "#A6A6A6"
+        },
+        "borderWidth": {
+          "type": "number",
+          "description": "Width of cell borders in pixels. Default: 1",
+          "default": 1
+        },
+        "cellPadding": {
+          "type": "number",
+          "description": "Padding inside each cell in pixels. Default: 4",
+          "default": 4
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsXYChart": {
+      "type": "object",
+      "description": "Scale factors for scatter and bubble chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "pointRadius": {
+          "type": "number",
+          "description": "Radius of a scatter point. Default: 0.4",
+          "default": 0.4
+        },
+        "bubbleMaxRadius": {
+          "type": "number",
+          "description": "Largest bubble radius. Default: 3.2",
+          "default": 3.2
+        },
+        "bubbleMinRadius": {
+          "type": "number",
+          "description": "Smallest visible bubble radius. Default: 0.35",
+          "default": 0.35
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.35",
+          "default": 0.35
+        },
+        "labelToMark": {
+          "type": "number",
+          "description": "Gap between a point or bubble and its name label. Default: 0.3",
+          "default": 0.3
+        },
+        "legendSwatch": {
+          "type": "number",
+          "description": "Diameter of a legend color swatch. Default: 0.9",
+          "default": 0.9
+        },
+        "panelGap": {
+          "type": "number",
+          "description": "Gap between facet panels. Default: 1.6",
+          "default": 1.6
+        },
+        "refLineWidth": {
+          "type": "number",
+          "description": "Stroke width of reference lines. Default: 0.075",
+          "default": 0.075
+        },
+        "gridLineWidth": {
+          "type": "number",
+          "description": "Stroke width of gridlines and the plot frame. Default: 0.075",
+          "default": 0.075
+        }
+      },
+      "additionalProperties": true
+    },
+    "scaleFactorsBulletChart": {
+      "type": "object",
+      "description": "Scale factors for bullet chart element sizing (multiplied by global.fontSizePx).",
+      "properties": {
+        "rowHeight": {
+          "type": "number",
+          "description": "Height of one row. Default: 1.9",
+          "default": 1.9
+        },
+        "barHeight": {
+          "type": "number",
+          "description": "Height of the actual-value bar. Default: 0.66",
+          "default": 0.66
+        },
+        "varianceHeight": {
+          "type": "number",
+          "description": "Height of the variance bar drawn inside the row. Default: 0.4",
+          "default": 0.4
+        },
+        "targetTickHeight": {
+          "type": "number",
+          "description": "Height of a per-row target tick. Default: 1.1",
+          "default": 1.1
+        },
+        "targetLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the shared target line. Default: 0.15",
+          "default": 0.15
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the baseline axis. Default: 0.075",
+          "default": 0.075
+        },
+        "labelToBar": {
+          "type": "number",
+          "description": "Gap between a bar end and its value label. Default: 0.3",
+          "default": 0.3
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between the category labels and the baseline axis. Default: 0.3",
+          "default": 0.3
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks. Default: 0.35",
+          "default": 0.35
+        },
+        "tickStripHeight": {
+          "type": "number",
+          "description": "Height of the per-row strip of tick labels. Default: 1.2",
+          "default": 1.2
+        }
+      },
+      "additionalProperties": true
+    },
     "svgStyleGroup": {
       "type": "object",
       "description": "SVG styles grouped by scenario type (IBCS notation).",
@@ -2593,7 +2787,8 @@
         },
         "fillpattern": {
           "type": "string",
-          "description": "Reference to a fill pattern (e.g., 'fc' for forecast hatching)."
+          "enum": ["solid", "hatched", "outlined", "fc"],
+          "description": "Fill pattern: 'solid', 'hatched' or 'outlined'. 'fc' is the deprecated name of 'hatched'; in time and structure charts, template engines before v1.0.0-next.28 know only 'fc'."
         }
       },
       "additionalProperties": true
@@ -2744,9 +2939,14 @@
           "type": "string",
           "description": "Relative-variance symbol, generic (parenthesised) form. '{%}' is replaced at render time with the comparison scenario's abbreviation."
         },
+        "bn-title.SEPARATOR_WS": {
+          "type": "string",
+          "description": "Separator placed between title segments."
+        },
         "bn-title.SEPERATOR_WS": {
           "type": "string",
-          "description": "Separator placed between title segments. The engine really does spell the key 'SEPERATOR_WS'."
+          "deprecated": true,
+          "description": "Deprecated: renamed to 'bn-title.SEPARATOR_WS'. Still read by template engine 1.x."
         },
         "bn-title.CONNECTOR_WS": {
           "type": "string",
@@ -2768,9 +2968,14 @@
           "type": "string",
           "description": "Header text above the operation (+/-) column."
         },
-        "bn-table.there_of": {
+        "bn-table.thereof": {
           "type": "string",
           "description": "Row-header prefix for rows drilled out of their parent."
+        },
+        "bn-table.there_of": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Deprecated: renamed to 'bn-table.thereof'. Still read by template engine 1.x."
         },
         "bn-table.part_of": {
           "type": "string",
@@ -3646,17 +3851,20 @@
         "level": {
           "type": "string",
           "enum": ["auto", "rowgroup", "rowgroupindex", "category", "categoryindex", "subcategory", "subcategoryindex"],
-          "description": "Determines the level on which the chart is aggregated. Index variants preserve the original dataset order. When set to 'auto', the level is detected from the dataset silently; when left blank, it is detected with a warning."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "order": {
           "type": "string",
           "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When set to 'auto', the sort key is detected silently; when left blank, it is detected with a warning. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "orderDirection": {
           "type": "string",
           "enum": ["asc", "desc", "inherited-closest", "inherited-page"],
-          "description": "Sets the sorting order direction. Set to 'inherited-closest' or 'inherited-page' to inherit from an ancestor LayoutCard or LayoutPage."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "measureScale": {
           "type": "string",
@@ -3681,7 +3889,8 @@
         "limit": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum number of column stacks. 0 means no limit. Column stacks cut by the limit are cumulated as REST."
+          "deprecated": true,
+          "description": "Deprecated: has no effect. A time chart always shows one value per period, in date order."
         },
         "intervalSpanLimit": {
           "type": "integer",
@@ -3760,7 +3969,7 @@
             "by": {
               "type": "string",
               "enum": ["scenarios", "dimensions"],
-              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' auto-derives the stack column from the level prop (rowGroup→category, category→subCategory)."
+              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' draws only the first scenario, one segment per period; further scenarios are dropped with a warning."
             },
             "mode": {
               "type": "string",

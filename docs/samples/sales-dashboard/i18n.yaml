@@ -15,4 +15,4 @@ spec:
   content:
     global.ac1: Actual
     global.pp1: Prior Year
-    bn-table.there_of: of which
+    bn-table.thereof: of which

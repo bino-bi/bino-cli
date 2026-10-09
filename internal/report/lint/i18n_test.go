@@ -195,6 +195,12 @@ func TestI18nTitleNamespaceDeprecated(t *testing.T) {
 	if findings[1].Path != "spec.children.0.spec.titleNamespace" {
 		t.Errorf("finding[1].Path = %q, want spec.children.0.spec.titleNamespace", findings[1].Path)
 	}
+	// The field still works, so the finding is a note and not a warning.
+	for _, f := range findings {
+		if f.Severity != "info" {
+			t.Errorf("Severity = %q, want info", f.Severity)
+		}
+	}
 
 	clean := componentDoc("LayoutPage", "page", map[string]any{"i18nNamespace": "global", "children": []any{}})
 	if findings := runRule(t, i18nTitleNamespaceDeprecated, []Document{clean}); len(findings) != 0 {

@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/RuleSetConfig",
+  "description": "Content of `<bn-ruleset>`.",
+  "definitions": {
+    "RuleSetConfig": {
+      "type": "object",
+      "properties": {
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ScenarioRuleConfig"
+          },
+          "description": "Keyed by scenario prefix. Data columns exist for `ac`, `pp`, `fc` and `pl`. Of the variance prefixes (`dac`, `drac`, ...) only `sortIndex` is read."
+        },
+        "fallback": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string"
+            },
+            "colorIndex": {
+              "type": "number"
+            },
+            "sortIndex": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Style returned for scenario names not present in `scenarios`."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Serializable rule-set configuration written by `<bn-ruleset>` and consumed by `IBCSRuleSet`."
+    },
+    "ScenarioRuleConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name. Slot 1 shows it as is, the slots 2 to 4 with their number (\"Budget\", \"Budget2\"). A name that a `<bn-ruleset>` sets replaces the i18n labels `global.<prefix>1` to `global.<prefix>4`. The built-in names do not."
+        },
+        "colorIndex": {
+          "type": "number",
+          "description": "Selects the theme style slot the scenario is drawn in: 10 = `ac` (solid), 20 = `pp` (light), 30 = `fc` (hatched), 50 = `pl` (outlined). Any other value counts as 10."
+        },
+        "sortIndex": {
+          "type": "number",
+          "description": "Base sort index for column ordering; variant n adds n*10."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-scenario-prefix rule overrides. Variants 1-4 are derived from the base values."
+    }
+  }
+}

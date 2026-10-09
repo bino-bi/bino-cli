@@ -1,0 +1,583 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/Style",
+  "description": "Content of `<bn-component-style>`. Every key is optional, the content is merged over the default style.",
+  "definitions": {
+    "Style": {
+      "type": "object",
+      "properties": {
+        "global": {
+          "$ref": "#/definitions/GlobalStyle"
+        },
+        "bn-text": {
+          "$ref": "#/definitions/TextStyle"
+        },
+        "bn-chart-time": {
+          "$ref": "#/definitions/TimeChartStyle"
+        },
+        "bn-chart-structure": {
+          "$ref": "#/definitions/StructureChartStyle"
+        },
+        "bn-chart-scatter": {
+          "$ref": "#/definitions/XYChartStyle"
+        },
+        "bn-chart-bubble": {
+          "$ref": "#/definitions/XYChartStyle"
+        },
+        "bn-chart-bullet": {
+          "$ref": "#/definitions/BulletChartStyle"
+        },
+        "bn-tree": {
+          "$ref": "#/definitions/TreeStyle"
+        },
+        "bn-grid": {
+          "$ref": "#/definitions/GridStyle"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Top-level style object grouping global defaults and per-component overrides."
+    },
+    "GlobalStyle": {
+      "type": "object",
+      "properties": {
+        "fontSizePx": {
+          "type": "number"
+        },
+        "fontFamily": {
+          "type": "string"
+        },
+        "fontColor": {
+          "type": "string"
+        },
+        "fontBackgroundColor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Baseline typography inherited by all components unless overridden."
+    },
+    "TextStyle": {
+      "type": "object",
+      "properties": {
+        "fontFamily": {
+          "type": "string"
+        },
+        "fontSizePx": {
+          "type": "number"
+        },
+        "fontColor": {
+          "type": "string"
+        },
+        "fontBackgroundColor": {
+          "type": "string"
+        },
+        "leading": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional typography overrides for the `bn-text` component."
+    },
+    "TimeChartStyle": {
+      "type": "object",
+      "properties": {
+        "scaleFactors": {
+          "$ref": "#/definitions/ScaleFactorsTimeChart"
+        },
+        "axisStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "barStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "varianceStyles": {
+          "$ref": "#/definitions/SVGVariancesStyleGroup"
+        },
+        "stackColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "padding": {
+          "type": "object",
+          "properties": {
+            "top": {
+              "type": "number"
+            },
+            "left": {
+              "type": "number"
+            },
+            "right": {
+              "type": "number"
+            },
+            "bottom": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "IBCS styling for `bn-chart-time`: scale factors, scenario colors, and padding."
+    },
+    "ScaleFactorsTimeChart": {
+      "type": "object",
+      "properties": {
+        "scenarioOffset": {
+          "type": "number",
+          "description": "Horizontal gap between adjacent scenario bars within a data point."
+        },
+        "scenarioLabelToColumn": {
+          "type": "number",
+          "description": "Vertical gap between the scenario label and the top of its column."
+        },
+        "labelToColumn": {
+          "type": "number",
+          "description": "Vertical gap between the value label and the top of its column."
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between axis labels and the axis line."
+        },
+        "needleWidth": {
+          "type": "number",
+          "description": "Width of the variance needle (pin chart element)."
+        },
+        "needleHeadWidth": {
+          "type": "number",
+          "description": "Width of the arrowhead on variance needles."
+        },
+        "columnWidth": {
+          "type": "number",
+          "description": "Width of a single data column (bar)."
+        },
+        "varianceAxisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the variance chart axis line."
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the main value axis line."
+        },
+        "auxiliaryLineWidth": {
+          "type": "number",
+          "description": "Stroke width of auxiliary/grid lines."
+        },
+        "scenarioLineWidth": {
+          "type": "number",
+          "description": "Stroke width of scenario indicator lines (e.g. forecast hatching)."
+        },
+        "markerWidth": {
+          "type": "number",
+          "description": "Width of plan/previous-period marker symbols."
+        },
+        "markerOffset": {
+          "type": "number",
+          "description": "Horizontal offset of markers from the column center."
+        },
+        "categoryWidth": {
+          "type": "number",
+          "description": "Total horizontal space allocated per data point (bar + padding)."
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Proportional scale factors for time-series chart elements.\n\nAll values are expressed in **font-size multiples** (em-like units), so the chart scales uniformly when the base font size changes. The chart renderer multiplies each factor by the computed font size to get pixel dimensions."
+    },
+    "SVGStyleGroup": {
+      "type": "object",
+      "properties": {
+        "ac": {
+          "$ref": "#/definitions/SVGStyle"
+        },
+        "fc": {
+          "$ref": "#/definitions/SVGStyle"
+        },
+        "pp": {
+          "$ref": "#/definitions/SVGStyle"
+        },
+        "pl": {
+          "$ref": "#/definitions/SVGStyle"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/SVGStyle"
+      },
+      "description": "IBCS scenario visual encoding for SVG elements. Each key maps to the standard IBCS rendering: ac=solid dark, fc=hatched, pp=light gray, pl=outlined."
+    },
+    "SVGStyle": {
+      "type": "object",
+      "properties": {
+        "stroke": {
+          "type": "string"
+        },
+        "fill": {
+          "type": "string"
+        },
+        "width": {
+          "type": "number"
+        },
+        "dasharray": {
+          "type": "string"
+        },
+        "fillpattern": {
+          "$ref": "#/definitions/FillPattern"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FillPattern": {
+      "type": "string",
+      "enum": [
+        "solid",
+        "hatched",
+        "outlined",
+        "fc"
+      ],
+      "description": "solid, hatched or outlined. fc is the deprecated name of hatched."
+    },
+    "SVGVariancesStyleGroup": {
+      "type": "object",
+      "properties": {
+        "pos": {
+          "$ref": "#/definitions/SVGStyle"
+        },
+        "neg": {
+          "$ref": "#/definitions/SVGStyle"
+        },
+        "neu": {
+          "$ref": "#/definitions/SVGStyle"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/SVGStyle"
+      },
+      "description": "IBCS traffic-light coloring for variance bars: pos=favorable (green), neg=unfavorable (red), neu=neutral."
+    },
+    "StructureChartStyle": {
+      "type": "object",
+      "properties": {
+        "scaleFactors": {
+          "$ref": "#/definitions/ScaleFactorsStructureChart"
+        },
+        "axisStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "barStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "varianceStyles": {
+          "$ref": "#/definitions/SVGVariancesStyleGroup"
+        },
+        "stackColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "padding": {
+          "type": "object",
+          "properties": {
+            "top": {
+              "type": "number"
+            },
+            "left": {
+              "type": "number"
+            },
+            "right": {
+              "type": "number"
+            },
+            "bottom": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "IBCS styling for `bn-chart-structure`: scale factors, scenario colors, and padding."
+    },
+    "ScaleFactorsStructureChart": {
+      "type": "object",
+      "properties": {
+        "scenarioOffset": {
+          "type": "number",
+          "description": "Horizontal gap between adjacent scenario bars within a category."
+        },
+        "scenarioLabelToBar": {
+          "type": "number",
+          "description": "Gap between the scenario label and the end of its bar."
+        },
+        "labelToBar": {
+          "type": "number",
+          "description": "Gap between the value label and the end of its bar."
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between axis labels and the axis line."
+        },
+        "needleWidth": {
+          "type": "number",
+          "description": "Width of the variance needle (pin chart element)."
+        },
+        "needleHeadWidth": {
+          "type": "number",
+          "description": "Width of the arrowhead on variance needles."
+        },
+        "barWidth": {
+          "type": "number",
+          "description": "Height of a single data bar."
+        },
+        "varianceAxisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the variance chart axis line."
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the main value axis line."
+        },
+        "auxiliaryLineWidth": {
+          "type": "number",
+          "description": "Stroke width of auxiliary/grid lines."
+        },
+        "scenarioLineWidth": {
+          "type": "number",
+          "description": "Stroke width of scenario indicator lines (e.g. forecast hatching)."
+        },
+        "markerWidth": {
+          "type": "number",
+          "description": "Size of plan/previous-period marker symbols."
+        },
+        "markerOffset": {
+          "type": "number",
+          "description": "Vertical offset of markers from the bar center."
+        },
+        "categoryWidth": {
+          "type": "number",
+          "description": "Total vertical space allocated per category (bar + padding)."
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Proportional scale factors for structural (categorical) bar chart elements.\n\nAll values are expressed in **font-size multiples** (em-like units), so the chart scales uniformly when the base font size changes. The chart renderer multiplies each factor by the computed font size to get pixel dimensions."
+    },
+    "XYChartStyle": {
+      "type": "object",
+      "properties": {
+        "scaleFactors": {
+          "$ref": "#/definitions/ScaleFactorsXYChart"
+        },
+        "axisStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "seriesColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "padding": {
+          "type": "object",
+          "properties": {
+            "top": {
+              "type": "number"
+            },
+            "left": {
+              "type": "number"
+            },
+            "right": {
+              "type": "number"
+            },
+            "bottom": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "IBCS styling for the XY charts (`bn-chart-scatter`, `bn-chart-bubble`): scale factors, axis styles, the series hue palette, and padding.\n\nAxis style roles: `ac` = plot frame, `pp` = gridlines, `fc` = reference lines and iso-curves, `pl` = highlight band fill."
+    },
+    "ScaleFactorsXYChart": {
+      "type": "object",
+      "properties": {
+        "pointRadius": {
+          "type": "number",
+          "description": "Radius of a scatter point."
+        },
+        "bubbleMaxRadius": {
+          "type": "number",
+          "description": "Maximum bubble radius in local (vMax-normalized) sizing mode."
+        },
+        "bubbleMinRadius": {
+          "type": "number",
+          "description": "Minimum visible bubble radius in local sizing mode."
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks."
+        },
+        "labelToMark": {
+          "type": "number",
+          "description": "Gap between a mark (dot/bubble) and its name label."
+        },
+        "legendSwatch": {
+          "type": "number",
+          "description": "Diameter of a legend color swatch."
+        },
+        "panelGap": {
+          "type": "number",
+          "description": "Gap between facet panels."
+        },
+        "refLineWidth": {
+          "type": "number",
+          "description": "Stroke width of reference lines."
+        },
+        "gridLineWidth": {
+          "type": "number",
+          "description": "Stroke width of gridlines and the plot frame."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Proportional scale factors for XY chart elements (scatter and bubble).\n\nAll values are expressed in **font-size multiples** (em-like units), so the chart scales uniformly when the base font size changes. The chart renderer multiplies each factor by the computed font size to get pixel dimensions. The line widths give 1 px at the default font size."
+    },
+    "BulletChartStyle": {
+      "type": "object",
+      "properties": {
+        "scaleFactors": {
+          "$ref": "#/definitions/ScaleFactorsBulletChart"
+        },
+        "axisStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "barStyles": {
+          "$ref": "#/definitions/SVGStyleGroup"
+        },
+        "varianceStyles": {
+          "$ref": "#/definitions/SVGVariancesStyleGroup"
+        },
+        "rangeColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "padding": {
+          "type": "object",
+          "properties": {
+            "top": {
+              "type": "number"
+            },
+            "left": {
+              "type": "number"
+            },
+            "right": {
+              "type": "number"
+            },
+            "bottom": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "IBCS styling for `bn-chart-bullet`: scale factors, scenario colors for the actual bar and target marker, variance colors, the qualitative range-band grays (max two bands), and padding."
+    },
+    "ScaleFactorsBulletChart": {
+      "type": "object",
+      "properties": {
+        "rowHeight": {
+          "type": "number",
+          "description": "Height of one KPI row."
+        },
+        "barHeight": {
+          "type": "number",
+          "description": "Height of the actual-value bar."
+        },
+        "varianceHeight": {
+          "type": "number",
+          "description": "Height of the integrated variance bar overlay."
+        },
+        "targetTickHeight": {
+          "type": "number",
+          "description": "Height of a per-row target tick (classic mode)."
+        },
+        "targetLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the shared target line (2 px at the default font size)."
+        },
+        "axisLineWidth": {
+          "type": "number",
+          "description": "Stroke width of the baseline axis (1 px at the default font size)."
+        },
+        "labelToBar": {
+          "type": "number",
+          "description": "Gap between a bar end and its value label."
+        },
+        "labelToAxis": {
+          "type": "number",
+          "description": "Gap between the category label column and the baseline axis."
+        },
+        "axisTickLength": {
+          "type": "number",
+          "description": "Length of axis tick marks (classic mode)."
+        },
+        "tickStripHeight": {
+          "type": "number",
+          "description": "Height of the per-row tick-label strip (classic mode)."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Proportional scale factors for bullet graph elements.\n\nAll values except the `*LineWidth` entries are expressed in **font-size multiples** (em-like units), so the chart scales uniformly when the base font size changes. Line widths are absolute pixel values (hairlines must not scale with the font)."
+    },
+    "TreeStyle": {
+      "type": "object",
+      "properties": {
+        "edgeColor": {
+          "type": "string"
+        },
+        "edgeWidth": {
+          "type": "number"
+        },
+        "operatorCircleRadius": {
+          "type": "number"
+        },
+        "operatorFontSizeScale": {
+          "type": "number"
+        },
+        "operatorColor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Visual properties for `bn-tree` node edges and operator badges."
+    },
+    "GridStyle": {
+      "type": "object",
+      "properties": {
+        "headerBackground": {
+          "type": "string"
+        },
+        "borderColor": {
+          "type": "string"
+        },
+        "borderWidth": {
+          "type": "number"
+        },
+        "cellPadding": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Visual properties for `bn-grid` headers, borders, and cell spacing."
+    }
+  }
+}

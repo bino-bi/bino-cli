@@ -76,7 +76,7 @@ func TestRenderLayoutChildWithRefAndOverride(t *testing.T) {
 		"spec": {
 			"dataset": "sales_data",
 			"chartTitle": "Original Title",
-			"level": "category"
+			"dateInterval": "month"
 		}
 	}`))
 
@@ -110,9 +110,9 @@ func TestRenderLayoutChildWithRefAndOverride(t *testing.T) {
 	if !strings.Contains(html, `chart-title='Overridden Title'`) {
 		t.Fatalf("expected chart with overridden title in HTML, got:\n%s", html)
 	}
-	// Verify the original level is preserved.
-	if !strings.Contains(html, `level='category'`) {
-		t.Fatalf("expected level=category to be preserved from base spec, got:\n%s", html)
+	// Verify the original date interval is preserved.
+	if !strings.Contains(html, `date-interval='month'`) {
+		t.Fatalf("expected date-interval=month to be preserved from base spec, got:\n%s", html)
 	}
 }
 
