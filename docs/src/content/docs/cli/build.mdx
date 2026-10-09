@@ -131,6 +131,22 @@ For efficiency, only the first rows are validated (default: 10). Configure via `
 BNR_DATA_VALIDATION_SAMPLE_SIZE=100 bino build
 ```
 
+## Components that fail to render
+
+A component that crashes while it renders leaves a gap in the report. For a `ReportArtefact` bino does not write such a PDF. The build stops at once with an error that names the component and what it reported:
+
+```text
+artefact sales-report: 1 component failed to render: bn-table-renderer: <message>
+```
+
+The name is the element of the template engine that failed. For a table this is `bn-table-renderer`, and `ibcs-table` with engine v1.0.0-next.28.
+
+A `ScreenshotArtefact` takes no screenshot of such a page. Each of its refs reports the same error, as a warning like any other screenshot that fails.
+
+This needs template engine **v1.0.0-next.28** or later. An older engine reports a page with a crashed component as rendered, so the PDF is written with the gap and without an error.
+
+A `DocumentArtefact` prints without waiting for its components, so a crashed component is not detected there.
+
 ## CI tips
 
 - Use `--work-dir` to point at the repository checkout.

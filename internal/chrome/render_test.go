@@ -196,14 +196,28 @@ func (l *warnCaptureLogger) Warnf(format string, args ...any) {
 	l.warns = append(l.warns, fmt.Sprintf(format, args...))
 }
 
+// newSignals returns the channels observeComponentReady would fill.
+func newSignals() *readySignals {
+	return &readySignals{ready: make(chan struct{}, 1), notReady: make(chan struct{}, 1)}
+}
+
+// noFailures is a page without failed components.
+func noFailures() []ComponentFailure { return nil }
+
 func TestWaitForComponentReady(t *testing.T) {
-	t.Run("ready signal received", func(t *testing.T) {
-		ready := make(chan struct{}, 1)
-		ready <- struct{}{}
+	failed := []ComponentFailure{{Tag: "bn-table-renderer", Message: "boom"}}
+
+	t.Run("ready signal returns without warning", func(t *testing.T) {
+		signals := newSignals()
+		signals.ready <- struct{}{}
 		logger := &warnCaptureLogger{Logger: logx.Nop()}
 
-		if err := waitForComponentReady(context.Background(), ready, time.Second, logger); err != nil {
+		got, err := waitForComponentReady(context.Background(), signals, time.Second, noFailures, logger)
+		if err != nil {
 			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("waitForComponentReady() failures = %v, want none", got)
 		}
 		if len(logger.warns) != 0 {
 			t.Errorf("waitForComponentReady() logged warnings %v, want none", logger.warns)
@@ -211,11 +225,14 @@ func TestWaitForComponentReady(t *testing.T) {
 	})
 
 	t.Run("timeout logs warning", func(t *testing.T) {
-		ready := make(chan struct{})
 		logger := &warnCaptureLogger{Logger: logx.Nop()}
 
-		if err := waitForComponentReady(context.Background(), ready, 10*time.Millisecond, logger); err != nil {
+		got, err := waitForComponentReady(context.Background(), newSignals(), 10*time.Millisecond, noFailures, logger)
+		if err != nil {
 			t.Fatalf("waitForComponentReady() error = %v, want nil (timeout is tolerated)", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("waitForComponentReady() failures = %v, want none", got)
 		}
 		if len(logger.warns) != 1 {
 			t.Fatalf("waitForComponentReady() logged %d warnings, want 1", len(logger.warns))
@@ -226,12 +243,11 @@ func TestWaitForComponentReady(t *testing.T) {
 	})
 
 	t.Run("cancellation returns error without warning", func(t *testing.T) {
-		ready := make(chan struct{})
 		logger := &warnCaptureLogger{Logger: logx.Nop()}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		err := waitForComponentReady(ctx, ready, time.Second, logger)
+		_, err := waitForComponentReady(ctx, newSignals(), time.Second, noFailures, logger)
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("waitForComponentReady() error = %v, want context.Canceled", err)
 		}
@@ -239,4 +255,203 @@ func TestWaitForComponentReady(t *testing.T) {
 			t.Errorf("waitForComponentReady() logged warnings %v, want none", logger.warns)
 		}
 	})
+
+	// The engine never reports a page with a failed component as rendered, so
+	// the wait must end on the failure list and not run into the timeout.
+	t.Run("failed components end the wait", func(t *testing.T) {
+		signals := newSignals()
+		signals.notReady <- struct{}{}
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+
+		start := time.Now()
+		got, err := waitForComponentReady(context.Background(), signals, time.Minute, func() []ComponentFailure { return failed }, logger)
+		if err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if len(got) != 1 || got[0] != failed[0] {
+			t.Errorf("waitForComponentReady() failures = %v, want %v", got, failed)
+		}
+		if elapsed := time.Since(start); elapsed > 10*time.Second {
+			t.Errorf("waitForComponentReady() took %s, want it to return at once", elapsed)
+		}
+		if len(logger.warns) != 0 {
+			t.Errorf("waitForComponentReady() logged warnings %v, want none (the caller reports failures)", logger.warns)
+		}
+	})
+
+	// "Not rendered" without failures means a component is still working.
+	t.Run("not ready without failures keeps waiting", func(t *testing.T) {
+		signals := newSignals()
+		signals.notReady <- struct{}{}
+		asked := make(chan struct{})
+		sent := make(chan struct{})
+		failures := func() []ComponentFailure {
+			close(asked)
+			return nil
+		}
+		go func() {
+			<-asked
+			signals.ready <- struct{}{}
+			close(sent)
+		}()
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+
+		got, err := waitForComponentReady(context.Background(), signals, 10*time.Second, failures, logger)
+		if err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("waitForComponentReady() failures = %v, want none", got)
+		}
+		if len(logger.warns) != 0 {
+			t.Errorf("waitForComponentReady() logged warnings %v, want none", logger.warns)
+		}
+		// A wait that went on until the ready line has taken its token.
+		<-sent
+		select {
+		case <-signals.ready:
+			t.Error("waitForComponentReady() returned before the ready line")
+		default:
+		}
+	})
+
+	// A component that is slow and then throws: the first line comes while it
+	// still works, the second one after it failed. The list is read each time.
+	t.Run("a later not ready line carries the failures", func(t *testing.T) {
+		signals := newSignals()
+		signals.notReady <- struct{}{}
+		reads := 0
+		failures := func() []ComponentFailure {
+			reads++
+			if reads == 1 {
+				signals.notReady <- struct{}{}
+				return nil
+			}
+			return failed
+		}
+
+		got, err := waitForComponentReady(context.Background(), signals, 10*time.Second, failures, logx.Nop())
+		if err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if reads != 2 {
+			t.Errorf("failures were read %d times, want once per not ready line", reads)
+		}
+		if len(got) != 1 || got[0] != failed[0] {
+			t.Errorf("waitForComponentReady() failures = %v, want %v", got, failed)
+		}
+	})
+
+	t.Run("not ready without failures runs into the timeout", func(t *testing.T) {
+		signals := newSignals()
+		signals.notReady <- struct{}{}
+		logger := &warnCaptureLogger{Logger: logx.Nop()}
+
+		got, err := waitForComponentReady(context.Background(), signals, 10*time.Millisecond, noFailures, logger)
+		if err != nil {
+			t.Fatalf("waitForComponentReady() error = %v, want nil", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("waitForComponentReady() failures = %v, want none", got)
+		}
+		if len(logger.warns) != 1 {
+			t.Fatalf("waitForComponentReady() logged %d warnings, want 1", len(logger.warns))
+		}
+	})
+
+	// A page that is rendered is ready, whatever an older line said. The
+	// failure list is not consulted then.
+	t.Run("ready wins over an older not ready line", func(t *testing.T) {
+		signals := newSignals()
+		signals.notReady <- struct{}{}
+		signals.ready <- struct{}{}
+		failures := func() []ComponentFailure {
+			t.Error("failures were read although the page is ready")
+			return failed
+		}
+
+		for range 20 { // select picks at random, so one pass proves little
+			got, err := waitForComponentReady(context.Background(), signals, time.Second, failures, logx.Nop())
+			if err != nil || len(got) != 0 {
+				t.Fatalf("waitForComponentReady() = %v, %v, want no failures and no error", got, err)
+			}
+			signals.ready <- struct{}{}
+			select {
+			case signals.notReady <- struct{}{}:
+			default:
+			}
+		}
+	})
+}
+
+func TestClassifyReadyLine(t *testing.T) {
+	const prefix = "componentregisterisrendered:"
+	tests := []struct {
+		line         string
+		wantRendered bool
+		wantOK       bool
+	}{
+		{line: "componentRegisterIsRendered: true", wantRendered: true, wantOK: true},
+		{line: "componentRegisterIsRendered: false", wantOK: true},
+		{line: "componentRegisterIsRendered:true", wantRendered: true, wantOK: true},
+		{line: `componentRegisterIsRendered: "true"`, wantRendered: true, wantOK: true},
+		{line: "COMPONENTREGISTERISRENDERED: TRUE", wantRendered: true, wantOK: true},
+		// The engine wrote no value: not rendered, but still its line.
+		{line: "componentRegisterIsRendered:", wantOK: true},
+		{line: "componentRegisterIsRendered: undefined", wantOK: true},
+		{line: "some other log line"},
+		{line: "note: componentRegisterIsRendered: true"},
+		{line: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.line, func(t *testing.T) {
+			rendered, ok := classifyReadyLine(tt.line, prefix)
+			if rendered != tt.wantRendered || ok != tt.wantOK {
+				t.Errorf("classifyReadyLine(%q) = %v, %v, want %v, %v", tt.line, rendered, ok, tt.wantRendered, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestComponentFailureString(t *testing.T) {
+	tests := []struct {
+		name    string
+		failure ComponentFailure
+		want    string
+	}{
+		{name: "tag and message", failure: ComponentFailure{Tag: "bn-table-renderer", Message: "boom"}, want: "bn-table-renderer: boom"},
+		{name: "with id", failure: ComponentFailure{Tag: "bn-table", ID: "sales", Message: "boom"}, want: "bn-table#sales: boom"},
+		{name: "without message", failure: ComponentFailure{Tag: "bn-tree"}, want: "bn-tree"},
+		{name: "empty entry", failure: ComponentFailure{}, want: "component"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.failure.String(); got != tt.want {
+				t.Errorf("String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComponentFailuresError(t *testing.T) {
+	one := &ComponentFailuresError{Failures: []ComponentFailure{{Tag: "bn-table-renderer", Message: "boom"}}}
+	if got, want := one.Error(), "1 component failed to render: bn-table-renderer: boom"; got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+
+	two := &ComponentFailuresError{Failures: []ComponentFailure{
+		{Tag: "bn-table-renderer", Message: "boom"},
+		{Tag: "bn-chart-time-renderer", ID: "trend", Message: "bang"},
+	}}
+	want := "2 components failed to render: bn-table-renderer: boom; bn-chart-time-renderer#trend: bang"
+	if got := two.Error(); got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+
+	// Callers wrap the error with the artefact name and must still find it.
+	wrapped := fmt.Errorf("artefact demo: %w", two)
+	var target *ComponentFailuresError
+	if !errors.As(wrapped, &target) || len(target.Failures) != 2 {
+		t.Errorf("errors.As did not find the failures in %v", wrapped)
+	}
 }

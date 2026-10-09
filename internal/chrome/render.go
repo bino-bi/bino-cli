@@ -42,6 +42,51 @@ type PDFOptions struct {
 	OnLayoutState func(snapshot []byte)
 }
 
+// ComponentFailure is a component that threw while rendering. The engine lists
+// these in window.componentRegisterFailures once the page has settled.
+type ComponentFailure struct {
+	// Tag is the element that threw, for example "bn-table-renderer".
+	Tag string `json:"tag"`
+	// ID is the id attribute of that element or of the public element around
+	// it. Empty when neither has one.
+	ID      string `json:"id"`
+	Message string `json:"message"`
+}
+
+// String names the component and what it threw: "tag#id: message".
+func (f ComponentFailure) String() string {
+	name := f.Tag
+	if name == "" {
+		name = "component"
+	}
+	if f.ID != "" {
+		name += "#" + f.ID
+	}
+	if f.Message == "" {
+		return name
+	}
+	return name + ": " + f.Message
+}
+
+// ComponentFailuresError reports a page that settled with failed components.
+// Such a page lacks their content, so RenderPDF writes nothing and
+// RenderScreenshots captures nothing.
+type ComponentFailuresError struct {
+	Failures []ComponentFailure
+}
+
+func (e *ComponentFailuresError) Error() string {
+	parts := make([]string, len(e.Failures))
+	for i, f := range e.Failures {
+		parts[i] = f.String()
+	}
+	noun := "components"
+	if len(parts) == 1 {
+		noun = "component"
+	}
+	return fmt.Sprintf("%d %s failed to render: %s", len(parts), noun, strings.Join(parts, "; "))
+}
+
 // RenderPDF loads the provided URL in a headless Chrome and exports it to PDF.
 // It checks ctx.Err() at entry and propagates context to waitForComponentReady.
 func RenderPDF(ctx context.Context, opts PDFOptions) error {
@@ -75,9 +120,9 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	defer timeoutCancel()
 
 	// Set up console listener for component readiness before navigation
-	var readyCh <-chan struct{}
+	var signals *readySignals
 	if opts.WaitForComponentReady {
-		readyCh = observeComponentReady(taskCtx, opts.ReadyConsolePrefix, logger)
+		signals = observeComponentReady(taskCtx, opts.ReadyConsolePrefix, logger)
 	}
 
 	// Navigate and wait for network idle
@@ -92,9 +137,13 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	}
 
 	// Wait for component readiness signal
-	if readyCh != nil {
-		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
+	if signals != nil {
+		failures, err := waitForComponentReady(ctx, signals, timeout, pageComponentFailures(taskCtx, logger), logger)
+		if err != nil {
 			return err
+		}
+		if len(failures) > 0 {
+			return &ComponentFailuresError{Failures: failures}
 		}
 	}
 
@@ -275,9 +324,9 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	defer timeoutCancel()
 
 	// Set up console listener before navigation
-	var readyCh <-chan struct{}
+	var signals *readySignals
 	if opts.WaitForComponentReady {
-		readyCh = observeComponentReady(taskCtx, opts.ReadyConsolePrefix, logger)
+		signals = observeComponentReady(taskCtx, opts.ReadyConsolePrefix, logger)
 	}
 
 	// Navigate with viewport emulation and wait for network idle
@@ -292,9 +341,21 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 		return nil, fmt.Errorf("load %s: %w", opts.URL, err)
 	}
 
-	if readyCh != nil {
-		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
+	if signals != nil {
+		failures, err := waitForComponentReady(ctx, signals, timeout, pageComponentFailures(taskCtx, logger), logger)
+		if err != nil {
 			return nil, err
+		}
+		if len(failures) > 0 {
+			// A failed component keeps its layout box, so its screenshot would
+			// be an empty image without an error. A failure cannot be mapped
+			// to a ref, so no ref is captured and each one reports the failure.
+			failed := &ComponentFailuresError{Failures: failures}
+			results := make([]ScreenshotResult, len(opts.Refs))
+			for i, ref := range opts.Refs {
+				results[i] = ScreenshotResult{Ref: ref, Error: failed}
+			}
+			return results, nil
 		}
 	}
 
@@ -402,10 +463,19 @@ func waitNetworkIdle(logger logx.Logger) chromedp.ActionFunc {
 	}
 }
 
+// readySignals carries the engine's "componentRegisterIsRendered: <value>"
+// console lines. The engine writes one each time the page has been quiet for a
+// moment: true when every component rendered, false when one is still working
+// or has failed.
+type readySignals struct {
+	ready    chan struct{} // a line with true arrived
+	notReady chan struct{} // a line with any other value arrived
+}
+
 // observeComponentReady sets up a listener for console messages that signal
-// component readiness. Returns a channel that receives when the component is ready.
-func observeComponentReady(ctx context.Context, prefix string, logger logx.Logger) <-chan struct{} {
-	ready := make(chan struct{}, 1)
+// component readiness. The returned channels receive when such a line arrives.
+func observeComponentReady(ctx context.Context, prefix string, logger logx.Logger) *readySignals {
+	signals := &readySignals{ready: make(chan struct{}, 1), notReady: make(chan struct{}, 1)}
 	if prefix == "" {
 		prefix = "componentregisterisrendered:"
 	} else {
@@ -432,21 +502,33 @@ func observeComponentReady(ctx context.Context, prefix string, logger logx.Logge
 			if joined == "" {
 				return
 			}
-			lower := strings.ToLower(joined)
-			if !strings.HasPrefix(lower, prefix) {
+			rendered, ok := classifyReadyLine(joined, prefix)
+			if !ok {
 				return
 			}
-			value := strings.TrimSpace(joined[len(prefix):])
-			value = strings.Trim(value, "\"'")
-			if isTruthy(value) {
-				select {
-				case ready <- struct{}{}:
-				default:
-				}
+			ch := signals.notReady
+			if rendered {
+				ch = signals.ready
+			}
+			select {
+			case ch <- struct{}{}:
+			default:
 			}
 		}
 	})
-	return ready
+	return signals
+}
+
+// classifyReadyLine reports whether a console line is the engine's readiness
+// line and, if it is, whether it says that the page is rendered. prefix must
+// be lower case.
+func classifyReadyLine(line, prefix string) (rendered, ok bool) {
+	if !strings.HasPrefix(strings.ToLower(line), prefix) {
+		return false, false
+	}
+	value := strings.TrimSpace(line[len(prefix):])
+	value = strings.Trim(value, "\"'")
+	return isTruthy(value), true
 }
 
 // unquoteJSValue extracts a string from a JSON-encoded runtime.RemoteObject value.
@@ -462,10 +544,19 @@ func unquoteJSValue(raw jsontext.Value) string {
 	return s
 }
 
-// waitForComponentReady blocks until the component signals readiness or a timeout/cancellation occurs.
+// waitForComponentReady blocks until the engine reports the page as rendered,
+// reports failed components, or a timeout/cancellation occurs.
+//
+// From v1.0.0-next.28 on the engine never reports a page with a failed
+// component as rendered. So on each "not rendered" line the failures are read:
+// a non-empty list means the page has settled and waiting longer cannot help.
+// The failures are returned, they are not an error. An empty list means a
+// component is still working. An older engine has no such list and reports a
+// page with a failed component as rendered.
+//
 // A timeout is tolerated (the page may never emit the readiness signal) but logged
 // as a warning, since the rendered output may be incomplete.
-func waitForComponentReady(ctx context.Context, ready <-chan struct{}, timeout time.Duration, logger logx.Logger) error {
+func waitForComponentReady(ctx context.Context, signals *readySignals, timeout time.Duration, failures func() []ComponentFailure, logger logx.Logger) ([]ComponentFailure, error) {
 	if logger == nil {
 		logger = logx.Nop()
 	}
@@ -474,15 +565,48 @@ func waitForComponentReady(ctx context.Context, ready <-chan struct{}, timeout t
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	select {
-	case <-ready:
-		return nil
-	case <-waitCtx.Done():
-		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
-			logger.Warnf("Component readiness signal not received within %s; rendered output may be incomplete", timeout)
+	for {
+		select {
+		case <-signals.ready:
+			return nil, nil
+		case <-signals.notReady:
+			// A later line may already say the page is rendered.
+			select {
+			case <-signals.ready:
+				return nil, nil
+			default:
+			}
+			if failed := failures(); len(failed) > 0 {
+				return failed, nil
+			}
+		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				logger.Warnf("Component readiness signal not received within %s; rendered output may be incomplete", timeout)
+				return nil, nil
+			}
+			return nil, waitCtx.Err()
+		}
+	}
+}
+
+// componentFailuresExpression reads the engine's failure list as plain
+// strings. A page without the list gives an empty result.
+const componentFailuresExpression = `(Array.isArray(window.componentRegisterFailures) ? window.componentRegisterFailures : []).map(function (f) {
+  f = f || {};
+  return { tag: String(f.tag || ''), id: String(f.id || ''), message: String(f.message || '') };
+})`
+
+// pageComponentFailures returns a reader of the failure list of the page in
+// ctx. A page that cannot be asked counts as having no failures, so the
+// caller keeps waiting as it did before.
+func pageComponentFailures(ctx context.Context, logger logx.Logger) func() []ComponentFailure {
+	return func() []ComponentFailure {
+		var failures []ComponentFailure
+		if err := chromedp.Run(ctx, chromedp.Evaluate(componentFailuresExpression, &failures)); err != nil {
+			logger.Debugf("read component failures: %v", err)
 			return nil
 		}
-		return waitCtx.Err()
+		return failures
 	}
 }
 
