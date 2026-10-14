@@ -16,18 +16,23 @@ import (
 const pluginSpecIDBase = "https://bino.bi/schemas/plugins/"
 
 // ensureSchemaID gives an embedded plugin schema its own id, so its local
-// "#/..." refs resolve inside it and not against the bino schema. Draft-04
-// uses the "id" keyword. A fragment-only id names no resource, so it is
-// replaced.
+// "#/..." refs resolve inside it and not against the bino schema. A
+// fragment-only id names no resource, so it is replaced.
 func ensureSchemaID(obj map[string]any, kindName string) {
 	key := "$id"
 	if s, _ := obj["$schema"].(string); strings.Contains(s, "draft-04") {
 		key = "id"
 	}
-	if id, _ := obj[key].(string); id != "" && !strings.HasPrefix(id, "#") {
-		return
+	id, _ := obj[key].(string)
+	if id == "" || strings.HasPrefix(id, "#") {
+		id = pluginSpecIDBase + kindName + ".json"
+		obj[key] = id
 	}
-	obj[key] = pluginSpecIDBase + kindName + ".json"
+	// Draft-04 ignores "id" next to a "$ref"; the compiler then falls back to
+	// the root draft, which reads "$id".
+	if key == "id" {
+		obj["$id"] = id
+	}
 }
 
 // SchemaAggregator merges built-in and plugin schemas into a unified JSON Schema.

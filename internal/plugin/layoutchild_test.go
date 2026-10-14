@@ -309,6 +309,7 @@ func TestDocumentValidator_SchemaIDVariants(t *testing.T) {
 	}{
 		{"draft-04 id", `{"$schema":"http://json-schema.org/draft-04/schema#","id":"http://example.com/gauge.json","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`},
 		{"draft-04 no id", `{"$schema":"http://json-schema.org/draft-04/schema#","type":"object","required":["title"],"properties":{"title":{"$ref":"#/definitions/label"}},"definitions":{"label":{"type":"string"}}}`},
+		{"draft-04 root $ref", `{"$schema":"http://json-schema.org/draft-04/schema#","$ref":"#/definitions/G","definitions":{"G":{"type":"object","required":["title"],"properties":{"title":{"type":"string"}}}}}`},
 		{"fragment-only $id", `{"$schema":"http://json-schema.org/draft-07/schema#","$id":"#gauge","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`},
 	}
 	for _, tt := range tests {
