@@ -172,6 +172,13 @@ spec:
 The plugin generates HTML (e.g., `<bn-example-chart ...>`) and provides the
 JS/CSS assets that implement the Web Component.
 
+Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
+`/plugins/example/chart.js`. bino serves these paths in `bino preview`,
+`bino serve`, and to the browser that renders PDFs and screenshots. Absolute
+`https://` URLs are linked as they are. Any other path logs a warning and is
+not served. A path under another plugin's `/plugins/` prefix is skipped, so
+one plugin cannot replace another plugin's files.
+
 A component kind can be used as a child of a `LayoutPage` or `LayoutCard`,
 inline or by `ref` to a document of that kind:
 

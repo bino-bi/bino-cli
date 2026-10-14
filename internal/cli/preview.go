@@ -214,6 +214,9 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			if err != nil {
 				return RuntimeError(err)
 			}
+			if pluginOpts != nil {
+				server.SetPluginAssets(pluginOpts.AssetHandler)
+			}
 
 			if loadingPage, lerr := web.LoadingPageHTML(); lerr == nil && len(loadingPage) > 0 {
 				server.SetContentFunc(httpserver.StaticContent(loadingPage, "text/html; charset=utf-8"))

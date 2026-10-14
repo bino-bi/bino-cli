@@ -252,6 +252,9 @@ Environment knobs:
 				}
 			}
 			servePluginOpts = applyServeDataMode(servePluginOpts, resolvedDataMode)
+			if servePluginOpts != nil {
+				server.SetPluginAssets(servePluginOpts.AssetHandler)
+			}
 
 			// Set up routes and assets
 			routeSetup, err := setupServeRoutes(serveRouteConfig{
