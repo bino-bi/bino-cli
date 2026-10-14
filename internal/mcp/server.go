@@ -561,7 +561,7 @@ func extractSpecSchema(merged json.RawMessage, kind string) (json.RawMessage, bo
 		out := make(map[string]any)
 		maps.Copy(out, spec)
 		if defs, ok := doc["$defs"]; ok {
-			out["$defs"] = defs
+			out["$defs"] = dropAllOfRefs(defs)
 		}
 		if sc, ok := doc["$schema"]; ok {
 			out["$schema"] = sc
@@ -573,6 +573,26 @@ func extractSpecSchema(merged json.RawMessage, kind string) (json.RawMessage, bo
 		return b, true
 	}
 	return nil, false
+}
+
+// dropAllOfRefs replaces {"$ref": "#/allOf/..."} with a plain object schema.
+// Plugin layout children point into the root allOf, which the extracted schema
+// does not carry; describe_kind on the plugin kind gives its fields.
+func dropAllOfRefs(node any) any {
+	switch n := node.(type) {
+	case map[string]any:
+		if ref, ok := n["$ref"].(string); ok && strings.HasPrefix(ref, "#/allOf/") {
+			return map[string]any{"type": "object"}
+		}
+		for k, v := range n {
+			n[k] = dropAllOfRefs(v)
+		}
+	case []any:
+		for i, v := range n {
+			n[i] = dropAllOfRefs(v)
+		}
+	}
+	return node
 }
 
 // listKinds enumerates kinds from the merged schema's kind enum and categorizes them.

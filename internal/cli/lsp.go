@@ -553,6 +553,21 @@ func newLSPGraphDepsCommand() *cobra.Command {
 	return cmd
 }
 
+// loadLSPKindProvider starts the project's plugins and returns their kinds, or
+// nil when the project has none or they fail to load. The logger is a no-op
+// because lsp-helper commands write their JSON result to stdout.
+func loadLSPKindProvider(ctx context.Context, absDir string) (kinds config.KindProvider, stop func()) {
+	projectCfg, err := pathutil.LoadProjectConfig(absDir)
+	if err != nil || len(projectCfg.Plugins) == 0 {
+		return nil, func() {}
+	}
+	mgr := plugin.NewManager(logx.Nop())
+	if err := mgr.LoadAll(ctx, projectCfg, absDir, version.Version); err != nil {
+		return nil, func() {}
+	}
+	return mgr.Registry(), mgr.KillAll
+}
+
 func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, maxDepth int, out io.Writer) error {
 	result := LSPGraphDepsResult{
 		Direction: direction,
@@ -577,15 +592,19 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 		return outputJSON(out, result)
 	}
 
+	// Load plugins so plugin component children resolve.
+	kindProvider, stopPlugins := loadLSPKindProvider(ctx, absDir)
+	defer stopPlugins()
+
 	// Load documents in lenient mode
-	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
+	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true, KindProvider: kindProvider})
 	if err != nil {
 		result.Error = fmt.Sprintf("load documents: %v", err)
 		return outputJSON(out, result)
 	}
 
 	// Build the dependency graph
-	g, err := graph.Build(ctx, docs)
+	g, err := graph.Build(ctx, docs, kindProvider)
 	if err != nil {
 		result.Error = fmt.Sprintf("build graph: %v", err)
 		return outputJSON(out, result)

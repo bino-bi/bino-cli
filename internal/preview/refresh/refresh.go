@@ -360,7 +360,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	}
 
 	report.Begin(bootstatus.PhaseGraph, "Building dependency graph")
-	g, graphErr := reportgraph.Build(ctx, docs)
+	g, graphErr := reportgraph.Build(ctx, docs, cfg.KindProvider)
 	if graphErr != nil {
 		logger.Warnf("Graph build skipped: %v", graphErr)
 	}
@@ -542,6 +542,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
+			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})

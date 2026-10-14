@@ -119,7 +119,7 @@ func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot strin
 	}
 
 	logger.Infof("bino MCP server ready (standalone) for %s", projectRoot)
-	srv := mcp.NewServer(mcp.Deps{State: managed.State, Registry: reg, Authoring: newCLIAuthoring(projectRoot), Packages: newCLIPackages(managed.State), AllowPublish: allowPublish})
+	srv := mcp.NewServer(mcp.Deps{State: managed.State, Registry: reg, Authoring: newCLIAuthoring(projectRoot, reg), Packages: newCLIPackages(managed.State), AllowPublish: allowPublish})
 	return srv.Run(ctx, &mcpsdk.StdioTransport{})
 }
 

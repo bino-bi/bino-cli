@@ -308,7 +308,7 @@ func TestColumnRefsNeverFail(t *testing.T) {
 			{"kind": "Table", "spec": {"dataset": "s", "scenarios": 5, "grouped": "yes", "thereof": "{broken"}}
 		]}
 	}`))
-	if _, err := Build(context.Background(), []config.Document{page}); err != nil {
+	if _, err := Build(context.Background(), []config.Document{page}, nil); err != nil {
 		t.Fatalf("Build with malformed column fields failed: %v", err)
 	}
 }
@@ -341,7 +341,7 @@ func TestBuildColumnsInherited(t *testing.T) {
 		"apiVersion": "bino.bi/v1", "kind": "ChartTime", "metadata": {"name": "lonely"},
 		"spec": {"dataset": "sales", "scenarios": "inherited-closest"}
 	}`))
-	g, err := Build(context.Background(), []config.Document{page, card, standalone})
+	g, err := Build(context.Background(), []config.Document{page, card, standalone}, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestBuildColumnsRefGridTree(t *testing.T) {
 			]}}
 		]}
 	}`))
-	g, err := Build(context.Background(), []config.Document{chart, page})
+	g, err := Build(context.Background(), []config.Document{chart, page}, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

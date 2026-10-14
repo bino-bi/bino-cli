@@ -172,6 +172,31 @@ spec:
 The plugin generates HTML (e.g., `<bn-example-chart ...>`) and provides the
 JS/CSS assets that implement the Web Component.
 
+A component kind can be used as a child of a `LayoutPage` or `LayoutCard`,
+inline or by `ref` to a document of that kind:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: overview
+spec:
+  children:
+    - kind: ExampleChart            # inline
+      spec:
+        dataset: monthly_revenue
+        chartType: line
+    - kind: ExampleChart            # ref, spec fields override
+      ref: revenue_chart
+      spec:
+        title: Revenue (override)
+```
+
+The spec is validated against the plugin's schema when the project loads, for
+inline children and for top-level plugin documents. A `spec.dataset` name links
+the component to that dataset in the dependency graph. Plugin kinds cannot be
+used inside `Grid` or `Tree` yet.
+
 ### Lint rules
 
 Plugin lint rules run alongside bino's built-in rules during `bino lint`,

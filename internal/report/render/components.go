@@ -23,6 +23,7 @@ import (
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/ref"
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/schema"
 )
 
 // Data delivery modes for renderDatasources / renderDatasets.
@@ -96,10 +97,8 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 		renderMode:     renderMode,
 	}
 	for _, doc := range docs {
-		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
-			key := doc.Kind + ":" + doc.Name
-			rc.docIndex[key] = doc
+		if refIndexable(doc.Kind) {
+			rc.docIndex[doc.Kind+":"+doc.Name] = doc
 		}
 	}
 	// Build globalIndex from allDocs (or fall back to docs if allDocs is nil)
@@ -108,13 +107,22 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 		globalDocs = docs
 	}
 	for _, doc := range globalDocs {
-		switch doc.Kind {
-		case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
-			key := doc.Kind + ":" + doc.Name
-			rc.globalIndex[key] = doc
+		if refIndexable(doc.Kind) {
+			rc.globalIndex[doc.Kind+":"+doc.Name] = doc
 		}
 	}
 	return rc
+}
+
+// refIndexable reports whether a layout child may reference documents of kind.
+// Kinds the loader admits that are not built-in come from plugins; schema
+// validation already limits child kinds to plugin component kinds.
+func refIndexable(kind string) bool {
+	switch kind {
+	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
+		return true
+	}
+	return !schema.IsBuiltinKind(kind)
 }
 
 // withInheritedStyle returns a render context whose children inherit the given
@@ -288,14 +296,7 @@ func collectReferencedDatasources(docs []config.Document, globalDocs []config.Do
 func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 	switch doc.Kind {
 	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image":
-		var p struct {
-			Spec struct {
-				Dataset spec.DatasetList `json:"dataset"`
-			} `json:"spec"`
-		}
-		if json.Unmarshal(doc.Raw, &p) == nil {
-			addDatasourceRefs(p.Spec.Dataset, refs)
-		}
+		addSpecDatasetRefs(doc.Raw, refs)
 	case "Tree":
 		var p struct {
 			Spec struct {
@@ -333,6 +334,23 @@ func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 				collectDatasourceRefsFromLayoutChild(childRaw, refs)
 			}
 		}
+	default:
+		// Plugin component documents can be used by ref; only spec.dataset is known.
+		if !schema.IsBuiltinKind(doc.Kind) {
+			addSpecDatasetRefs(doc.Raw, refs)
+		}
+	}
+}
+
+// addSpecDatasetRefs adds the $-prefixed refs in a document's spec.dataset.
+func addSpecDatasetRefs(raw json.RawMessage, refs map[string]bool) {
+	var p struct {
+		Spec struct {
+			Dataset spec.DatasetList `json:"dataset"`
+		} `json:"spec"`
+	}
+	if json.Unmarshal(raw, &p) == nil {
+		addDatasourceRefs(p.Spec.Dataset, refs)
 	}
 }
 

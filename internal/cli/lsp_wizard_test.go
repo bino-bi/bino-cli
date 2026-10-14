@@ -320,7 +320,7 @@ func TestRunLSPEditParityWithEditManifest(t *testing.T) {
 
 	// MCP EditManifest (writes to disk)
 	dirB, manB := seedEditProject(t)
-	a := newCLIAuthoring(dirB)
+	a := newCLIAuthoring(dirB, nil)
 	wr, err := a.EditManifest(context.Background(), mcp.EditManifestInput{
 		File: "note.yaml", Patch: map[string]any{"spec.value": "new"},
 	})
@@ -338,7 +338,7 @@ func TestRunLSPEditParityWithEditManifest(t *testing.T) {
 
 	// And the MCP dry-run content must equal the bytes the write path lands.
 	dirC, _ := seedEditProject(t)
-	c := newCLIAuthoring(dirC)
+	c := newCLIAuthoring(dirC, nil)
 	dry, err := c.EditManifest(context.Background(), mcp.EditManifestInput{
 		File: "note.yaml", Patch: map[string]any{"spec.value": "new"}, DryRun: true,
 	})
@@ -397,7 +397,7 @@ func TestRunLSPEditRemoveParity(t *testing.T) {
 
 	// MCP parity: RemoveManifestPaths must land identical bytes.
 	dirB, manB := seedSeqProject(t)
-	a := newCLIAuthoring(dirB)
+	a := newCLIAuthoring(dirB, nil)
 	wr, err := a.RemoveManifestPaths(context.Background(), mcp.RemoveManifestPathsInput{
 		File: "ds.yaml", Paths: []string{"spec.dependencies[1]"},
 	})
@@ -413,7 +413,7 @@ func TestRunLSPEditRemoveParity(t *testing.T) {
 
 	// MCP dry-run content equals the written bytes.
 	dirC, _ := seedSeqProject(t)
-	dry, err := newCLIAuthoring(dirC).RemoveManifestPaths(context.Background(), mcp.RemoveManifestPathsInput{
+	dry, err := newCLIAuthoring(dirC, nil).RemoveManifestPaths(context.Background(), mcp.RemoveManifestPathsInput{
 		File: "ds.yaml", Paths: []string{"spec.dependencies[1]"}, DryRun: true,
 	})
 	if err != nil {
@@ -444,7 +444,7 @@ func TestRunLSPEditReorderParity(t *testing.T) {
 
 	// MCP parity against a fresh copy.
 	dirB, manB := seedSeqProject(t)
-	if _, err := newCLIAuthoring(dirB).ReorderManifestSequence(context.Background(), mcp.ReorderManifestSequenceInput{
+	if _, err := newCLIAuthoring(dirB, nil).ReorderManifestSequence(context.Background(), mcp.ReorderManifestSequenceInput{
 		File: "ds.yaml", Path: "spec.dependencies", From: 0, To: 2,
 	}); err != nil {
 		t.Fatalf("ReorderManifestSequence: %v", err)

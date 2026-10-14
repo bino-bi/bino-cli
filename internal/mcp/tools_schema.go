@@ -81,8 +81,9 @@ func (h *handlers) registerSchemaTools(srv *mcpsdk.Server) {
 // schemaModel parses the merged schema (built-in + plugin kinds). The
 // aggregator embeds every plugin spec as a kind-discriminated allOf block and
 // extends the kind enum, which is exactly the shape the walker resolves, so one
-// model serves built-in and plugin kinds alike. Local $refs inside a plugin
-// spec resolve against the merged root $defs, as they do for validation.
+// model serves built-in and plugin kinds alike. The walker resolves local $refs
+// inside a plugin spec against the merged root, so they do not resolve here;
+// validation resolves them inside the plugin schema.
 func (h *handlers) schemaModel(ctx context.Context) (*walk.Model, error) {
 	agg, err := h.aggregator(ctx)
 	if err != nil {

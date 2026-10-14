@@ -130,7 +130,7 @@ func TestIntegration_DocRenderEmitsScalingGroups(t *testing.T) {
 func TestDocumentDataScopeFallback(t *testing.T) {
 	t.Parallel()
 
-	_, ok := documentDataScope(context.Background(), logx.Nop(), nil, "ghost")
+	_, ok := documentDataScope(context.Background(), logx.Nop(), nil, "ghost", nil)
 	if ok {
 		t.Fatal("expected ok=false for an artefact without a graph node")
 	}

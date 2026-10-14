@@ -28,6 +28,34 @@ func DocumentSchemaBytes() []byte {
 }
 
 var (
+	builtinKindsOnce sync.Once
+	builtinKinds     map[string]struct{}
+)
+
+// IsBuiltinKind reports whether the kind name is in the embedded schema's kind enum.
+// Any other kind of a loaded document comes from a plugin.
+func IsBuiltinKind(name string) bool {
+	builtinKindsOnce.Do(func() {
+		var doc struct {
+			Properties struct {
+				Kind struct {
+					Enum []string `json:"enum"`
+				} `json:"kind"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(documentSchema, &doc); err != nil {
+			return // the embedded schema is tested to parse
+		}
+		builtinKinds = make(map[string]struct{}, len(doc.Properties.Kind.Enum))
+		for _, k := range doc.Properties.Kind.Enum {
+			builtinKinds[k] = struct{}{}
+		}
+	})
+	_, ok := builtinKinds[name]
+	return ok
+}
+
+var (
 	schemaOnce sync.Once
 	schemaObj  *jsonschema.Schema
 	errSchema  error
@@ -84,27 +112,32 @@ func (v ValidationIssue) Format() string {
 // Validate checks that yamlBytes represents a valid manifest document.
 // Returns nil if valid, or a *ValidationError with details.
 func Validate(yamlBytes []byte) error {
-	// Parse YAML to generic structure
+	jsonBytes, err := yamlToJSON(yamlBytes)
+	if err != nil {
+		return err
+	}
+	return ValidateJSON(jsonBytes)
+}
+
+// yamlToJSON converts a YAML manifest to JSON for schema validation.
+func yamlToJSON(yamlBytes []byte) ([]byte, error) {
 	var doc any
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
-		return &ValidationError{
+		return nil, &ValidationError{
 			Errors: []ValidationIssue{
 				{Path: "(root)", Message: fmt.Sprintf("invalid YAML: %v", err)},
 			},
 		}
 	}
-
-	// Convert to JSON for schema validation
 	jsonBytes, err := json.Marshal(convertYAMLToJSON(doc))
 	if err != nil {
-		return &ValidationError{
+		return nil, &ValidationError{
 			Errors: []ValidationIssue{
 				{Path: "(root)", Message: fmt.Sprintf("failed to convert to JSON: %v", err)},
 			},
 		}
 	}
-
-	return ValidateJSON(jsonBytes)
+	return jsonBytes, nil
 }
 
 // ValidateJSON validates JSON bytes against the manifest schema.
@@ -112,31 +145,66 @@ func Validate(yamlBytes []byte) error {
 func ValidateJSON(jsonBytes []byte) error {
 	// Initialize schema once
 	schemaOnce.Do(func() {
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(documentSchema))
-		if err != nil {
-			errSchema = err
-			return
-		}
-		c := jsonschema.NewCompiler()
-		c.AssertFormat() // assert string formats (e.g. uri), matching prior behavior
-		const schemaURL = "https://bino.bi/schemas/report-bundle.json"
-		if err := c.AddResource(schemaURL, doc); err != nil {
-			errSchema = err
-			return
-		}
-		schemaObj, errSchema = c.Compile(schemaURL)
+		schemaObj, errSchema = compile(documentSchema)
 	})
 
 	if errSchema != nil {
 		return fmt.Errorf("load schema: %w", errSchema)
 	}
 
+	return validateWith(schemaObj, jsonBytes)
+}
+
+// Validator validates documents against a compiled schema other than the
+// embedded one, e.g. the schema merged with plugin kinds.
+type Validator struct {
+	s *jsonschema.Schema
+}
+
+// CompileValidator compiles schemaBytes into a Validator.
+func CompileValidator(schemaBytes []byte) (*Validator, error) {
+	s, err := compile(schemaBytes)
+	if err != nil {
+		return nil, fmt.Errorf("load schema: %w", err)
+	}
+	return &Validator{s: s}, nil
+}
+
+// ValidateJSON validates JSON bytes against the compiled schema.
+func (v *Validator) ValidateJSON(jsonBytes []byte) error {
+	return validateWith(v.s, jsonBytes)
+}
+
+// Validate is the package-level Validate against the compiled schema.
+func (v *Validator) Validate(yamlBytes []byte) error {
+	jsonBytes, err := yamlToJSON(yamlBytes)
+	if err != nil {
+		return err
+	}
+	return v.ValidateJSON(jsonBytes)
+}
+
+func compile(schemaBytes []byte) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	c.AssertFormat() // assert string formats (e.g. uri), matching prior behavior
+	const schemaURL = "https://bino.bi/schemas/report-bundle.json"
+	if err := c.AddResource(schemaURL, doc); err != nil {
+		return nil, err
+	}
+	return c.Compile(schemaURL)
+}
+
+func validateWith(s *jsonschema.Schema, jsonBytes []byte) error {
 	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(jsonBytes))
 	if err != nil {
 		return fmt.Errorf("parse json: %w", err)
 	}
 
-	verr := schemaObj.Validate(inst)
+	verr := s.Validate(inst)
 	if verr == nil {
 		return nil
 	}

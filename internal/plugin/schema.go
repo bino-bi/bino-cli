@@ -3,17 +3,47 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/schema"
 )
+
+// pluginSpecIDBase prefixes the $id given to a plugin spec schema without one.
+const pluginSpecIDBase = "https://bino.bi/schemas/plugins/"
+
+// ensureSchemaID gives an embedded plugin schema its own id, so its local
+// "#/..." refs resolve inside it and not against the bino schema. A
+// fragment-only id names no resource, and an id already used by another kind
+// fails compilation, so both are replaced. seen collects the ids in use.
+func ensureSchemaID(obj map[string]any, kindName string, seen map[string]bool) {
+	key := "$id"
+	if s, _ := obj["$schema"].(string); strings.Contains(s, "draft-04") {
+		key = "id"
+	}
+	id, _ := obj[key].(string)
+	if id == "" || strings.HasPrefix(id, "#") || seen[id] {
+		id = pluginSpecIDBase + kindName + ".json"
+		obj[key] = id
+	}
+	seen[id] = true
+	// Draft-04 ignores "id" next to a "$ref"; the compiler then falls back to
+	// the root draft, which reads "$id".
+	if key == "id" {
+		obj["$id"] = id
+	}
+}
 
 // SchemaAggregator merges built-in and plugin schemas into a unified JSON Schema.
 type SchemaAggregator struct {
 	registry    *PluginRegistry
 	merged      json.RawMessage
 	kindSchemas map[string]json.RawMessage // kind → plugin-provided schema
+	specPtrs    map[string]string          // kind → JSON pointer of the embedded spec schema
+	fetchErr    error                      // GetSchemas failures, see FetchErrors
 }
 
 // NewSchemaAggregator creates an aggregator backed by the given registry.
@@ -21,6 +51,7 @@ func NewSchemaAggregator(registry *PluginRegistry) *SchemaAggregator {
 	return &SchemaAggregator{
 		registry:    registry,
 		kindSchemas: make(map[string]json.RawMessage),
+		specPtrs:    make(map[string]string),
 	}
 }
 
@@ -34,6 +65,7 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 			// Skipping silently would make the user's manifests fail
 			// validation pointing at their YAML instead of the plugin.
 			log.Warnf("plugin %s: get schemas failed, its kinds are unavailable: %v", p.Manifest().Name, err)
+			a.fetchErr = errors.Join(a.fetchErr, fmt.Errorf("plugin %s: get schemas: %w", p.Manifest().Name, err))
 			continue
 		}
 		for kindName, schemaBytes := range schemas {
@@ -51,7 +83,7 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 		return fmt.Errorf("parsing built-in schema: %w", err)
 	}
 
-	if len(a.kindSchemas) == 0 {
+	if len(a.kindSchemas) == 0 && len(a.registry.AllKinds()) == 0 {
 		a.merged = builtinBytes
 		return nil
 	}
@@ -63,6 +95,9 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 
 	// Add if-then blocks for plugin kinds in the allOf array.
 	a.addPluginIfThenBlocks(schemaObj)
+
+	// Allow plugin component kinds as LayoutPage / LayoutCard children.
+	a.extendLayoutChild(schemaObj)
 
 	// Marshal back.
 	merged, err := json.Marshal(schemaObj)
@@ -110,10 +145,22 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 		allOf = []any{}
 	}
 
-	for kindName, kindSchema := range a.kindSchemas {
+	// Sorted so the merged schema, and which kind keeps a shared id, is stable.
+	names := make([]string, 0, len(a.kindSchemas))
+	for kindName := range a.kindSchemas {
+		names = append(names, kindName)
+	}
+	sort.Strings(names)
+	seen := make(map[string]bool, len(names))
+	for _, kindName := range names {
+		kindSchema := a.kindSchemas[kindName]
 		var specSchema any
 		if err := json.Unmarshal(kindSchema, &specSchema); err != nil {
 			continue
+		}
+		if obj, ok := specSchema.(map[string]any); ok {
+			ensureSchemaID(obj, kindName, seen)
+			a.specPtrs[kindName] = fmt.Sprintf("#/allOf/%d/then/properties/spec", len(allOf))
 		}
 
 		block := map[string]any{
@@ -132,6 +179,68 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 	}
 
 	schemaObj["allOf"] = allOf
+}
+
+// extendLayoutChild adds every plugin component kind to $defs.layoutChild: the
+// kind enum and an if/then that validates an inline spec with the plugin's
+// schema. With a ref, spec is only an override object. gridChild and tree
+// nodes stay closed because the renderer has no plugin fallback there.
+func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
+	defs, _ := schemaObj["$defs"].(map[string]any)
+	child, _ := defs["layoutChild"].(map[string]any)
+	props, _ := child["properties"].(map[string]any)
+	kindProp, _ := props["kind"].(map[string]any)
+	enumSlice, ok := kindProp["enum"].([]any)
+	if !ok {
+		return
+	}
+	allOf, _ := child["allOf"].([]any)
+
+	var names []string
+	for _, k := range a.registry.AllKinds() {
+		if k.Category == KindCategoryComponent {
+			names = append(names, k.KindName)
+		}
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		var specSchema any = map[string]any{"type": "object"}
+		// Point at the copy in the top-level allOf: a second copy would
+		// duplicate its id, and a local pointer is what the LSP can follow.
+		if ptr, ok := a.specPtrs[name]; ok {
+			specSchema = map[string]any{"$ref": ptr}
+		} else if raw, ok := a.kindSchemas[name]; ok {
+			var s any
+			if json.Unmarshal(raw, &s) == nil {
+				specSchema = s
+			}
+		}
+		enumSlice = append(enumSlice, name)
+		allOf = append(allOf, map[string]any{
+			"if": map[string]any{
+				"properties": map[string]any{"kind": map[string]any{"const": name}},
+				"required":   []any{"kind"},
+			},
+			"then": map[string]any{
+				"if":   map[string]any{"required": []any{"ref"}},
+				"then": map[string]any{"properties": map[string]any{"spec": map[string]any{"type": "object"}}},
+				"else": map[string]any{
+					"required":   []any{"spec"},
+					"properties": map[string]any{"spec": specSchema},
+				},
+			},
+		})
+	}
+
+	kindProp["enum"] = enumSlice
+	child["allOf"] = allOf
+}
+
+// FetchErrors returns the GetSchemas failures of the last Build. Those plugins'
+// kinds are in the merged schema without spec validation.
+func (a *SchemaAggregator) FetchErrors() error {
+	return a.fetchErr
 }
 
 // MergedSchema returns the complete merged JSON Schema.

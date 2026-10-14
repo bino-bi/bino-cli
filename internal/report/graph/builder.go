@@ -143,6 +143,8 @@ func (b *builder) categorize() {
 		if _, isComponent := componentKindSet[doc.Kind]; isComponent || doc.Kind == "LayoutPage" || doc.Kind == "LayoutCard" {
 			key := doc.Kind + ":" + doc.Name
 			b.docIndex[key] = doc
+		} else if config.IsPluginComponentKind(doc.Kind, b.opts.KindProvider) {
+			b.docIndex[doc.Kind+":"+doc.Name] = doc
 		}
 
 		switch doc.Kind {
@@ -367,14 +369,7 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 		b.nodes[id] = node
 		return id, nil
 	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Image":
-		label := fmt.Sprintf("%s %s#%s", child.Kind, parentName, pathKey(indexPath))
-		node, err := b.buildComponentNode(child.Kind, effectiveSpec, effectiveFile, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)), anc)
-		if err != nil {
-			return "", err
-		}
-		node.Attributes["parent"] = parentName
-		b.nodes[node.ID] = node
-		return node.ID, nil
+		return b.buildChildComponent(parentName, child.Kind, effectiveSpec, effectiveFile, indexPath, anc)
 	case "Grid":
 		label := fmt.Sprintf("Grid %s#%s", parentName, pathKey(indexPath))
 		nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(indexPath))
@@ -419,8 +414,23 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 		b.nodes[node.ID] = node
 		return node.ID, nil
 	default:
+		if config.IsPluginComponentKind(child.Kind, b.opts.KindProvider) {
+			return b.buildChildComponent(parentName, child.Kind, effectiveSpec, effectiveFile, indexPath, anc)
+		}
 		return "", fmt.Errorf("unsupported child kind %q", child.Kind)
 	}
+}
+
+// buildChildComponent adds the component node for a layout child.
+func (b *builder) buildChildComponent(parentName, kind string, effectiveSpec json.RawMessage, file string, indexPath []int, anc ancestors) (string, error) {
+	label := fmt.Sprintf("%s %s#%s", kind, parentName, pathKey(indexPath))
+	node, err := b.buildComponentNode(kind, effectiveSpec, file, label, fmt.Sprintf("%s#%s", parentName, pathKey(indexPath)), anc)
+	if err != nil {
+		return "", err
+	}
+	node.Attributes["parent"] = parentName
+	b.nodes[node.ID] = node
+	return node.ID, nil
 }
 
 // resolveChildSpec resolves a layout child's effective spec.
@@ -458,9 +468,14 @@ func (b *builder) resolveChildSpec(parentName string, child layoutChild) (spec j
 }
 
 func (b *builder) buildComponentNode(kind string, raw json.RawMessage, file, label, name string, anc ancestors) (*Node, error) {
-	datasets, err := extractDatasets(raw)
-	if err != nil {
-		return nil, err
+	var datasets []string
+	if config.IsPluginComponentKind(kind, b.opts.KindProvider) {
+		datasets = extractPluginDatasets(raw)
+	} else {
+		var err error
+		if datasets, err = extractDatasets(raw); err != nil {
+			return nil, err
+		}
 	}
 	id := makeNodeID(NodeComponent, name)
 	node := &Node{

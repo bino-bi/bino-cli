@@ -30,7 +30,7 @@ func TestNodeByManifest(t *testing.T) {
 			"spec": {"children": []}
 		}`)),
 	}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

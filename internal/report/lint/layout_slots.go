@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/schema"
 )
 
 // Predefined slot counts for standard layout types.
@@ -37,6 +38,13 @@ var renderableChildKinds = map[string]bool{
 	"Tree":           true,
 	"Grid":           true,
 	"Image":          true,
+}
+
+// isPluginKind reports whether kind is not built-in. The loader admits such
+// kinds only from plugins, and schema validation limits layout children to
+// plugin component kinds, which the renderer hands to the plugin.
+func isPluginKind(kind string) bool {
+	return !schema.IsBuiltinKind(kind)
 }
 
 // layoutChildSpec mirrors the child structure from render/spec.go for parsing.
@@ -148,6 +156,10 @@ var pageLayoutSlotsUsed = Rule{
 				cards[doc.Name] = doc
 			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
 				components[doc.Name] = doc
+			default:
+				if isPluginKind(doc.Kind) {
+					components[doc.Name] = doc
+				}
 			}
 		}
 
@@ -268,6 +280,10 @@ var cardLayoutSlotsUsed = Rule{
 				cards[doc.Name] = doc
 			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
 				components[doc.Name] = doc
+			default:
+				if isPluginKind(doc.Kind) {
+					components[doc.Name] = doc
+				}
 			}
 		}
 
@@ -448,7 +464,7 @@ func countEffectiveChildren(
 			count++
 		case len(child.Spec) > 0:
 			// Inline spec
-			if !renderableChildKinds[child.Kind] {
+			if !renderableChildKinds[child.Kind] && !isPluginKind(child.Kind) {
 				findings = append(findings, Finding{
 					RuleID:  "page-layout-slots-used",
 					Message: fmt.Sprintf("child kind %q is not a renderable component", child.Kind),

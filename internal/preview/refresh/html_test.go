@@ -164,7 +164,7 @@ func TestBuildPreviewGraphDataColumns(t *testing.T) {
 			"spec": {"filename": "out.pdf", "title": "Report", "layoutPages": ["page"]}
 		}`)},
 	}
-	g, err := reportgraph.Build(context.Background(), docs)
+	g, err := reportgraph.Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

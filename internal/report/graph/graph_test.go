@@ -48,7 +48,7 @@ func TestBuildGraphFromBundle(t *testing.T) {
 		}`)),
 	}
 
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/graph"
+	"bino.bi/bino/internal/schema"
 )
 
 // TestValidateDraft_SyntaxErrorSanitized: a draft with a YAML syntax error must
@@ -215,4 +217,35 @@ func TestGraphDepsColumns(t *testing.T) {
 		return
 	}
 	t.Fatalf("component node missing in %+v", res.Nodes)
+}
+
+// brokenPluginKinds fails to build its merged schema, like a plugin whose
+// GetSchemas call errors.
+type brokenPluginKinds struct{}
+
+func (brokenPluginKinds) PluginKindNames() []string { return []string{"Gauge"} }
+
+func (brokenPluginKinds) GetKind(name string) (config.KindInfo, bool) {
+	return config.KindInfo{KindName: name}, name == "Gauge"
+}
+
+func (brokenPluginKinds) DocumentValidator(context.Context) (*schema.Validator, error) {
+	return nil, errors.New("plugin gauges: get schemas: rpc broke")
+}
+
+func TestValidateDraft_ReportsFatalLoadError(t *testing.T) {
+	st, err := NewState(t.TempDir(), nil, logx.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	st.SetKindProvider(brokenPluginKinds{})
+
+	diags, err := st.ValidateDraft(context.Background(), []byte("apiVersion: bino.bi/v1alpha1\nkind: Text\nmetadata:\n  name: t\nspec:\n  value: hi\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diags) == 0 || !strings.Contains(diags[0].Message, "rpc broke") {
+		t.Fatalf("want the plugin failure as a diagnostic, got %+v", diags)
+	}
 }

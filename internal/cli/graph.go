@@ -87,7 +87,7 @@ a tree or flat table view. Components also list the dataset columns they read.`)
 				return ConfigErrorf("no artefacts selected (check --artefact / --exclude-artefact)")
 			}
 
-			g, err := reportgraph.Build(ctx, docs)
+			g, err := reportgraph.Build(ctx, docs, kindProvider)
 			if err != nil {
 				return RuntimeError(err)
 			}

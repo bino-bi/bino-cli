@@ -69,6 +69,8 @@ type Builder struct {
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	// PostDatasetHook is called after dataset execution. May be nil.
 	PostDatasetHook func(ctx context.Context, datasets []DatasetPayload) error
+	// KindProvider supplies plugin kinds for document data scoping. May be nil.
+	KindProvider config.KindProvider
 }
 
 func (b *Builder) logger() logx.Logger {
@@ -123,6 +125,9 @@ func (b *Builder) RenderDocumentHTML(ctx context.Context, docs []config.Document
 	}
 	if opts.PluginOptions == nil {
 		opts.PluginOptions = b.PluginOptions
+	}
+	if opts.KindProvider == nil {
+		opts.KindProvider = b.KindProvider
 	}
 	if opts.PostRenderHTMLHook == nil {
 		opts.PostRenderHTMLHook = b.PostRenderHTMLHook
