@@ -3,6 +3,7 @@ package walk
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -401,7 +402,7 @@ func appendUniqueStrings(dst []string, add []string) []string {
 	return dst
 }
 
-// resolveRef follows a local JSON pointer ("#/$defs/foo").
+// resolveRef follows a local JSON pointer ("#/$defs/foo", "#/allOf/3/then").
 func (m *Model) resolveRef(ref string) map[string]any {
 	if m.doc == nil || !strings.HasPrefix(ref, "#/") {
 		return nil
@@ -409,11 +410,19 @@ func (m *Model) resolveRef(ref string) map[string]any {
 	var cur any = m.doc
 	for p := range strings.SplitSeq(strings.TrimPrefix(ref, "#/"), "/") {
 		p = strings.ReplaceAll(strings.ReplaceAll(p, "~1", "/"), "~0", "~")
-		cm, ok := cur.(map[string]any)
-		if !ok {
+		switch c := cur.(type) {
+		case map[string]any:
+			cur = c[p]
+		case []any:
+			// Plugin layout children point into the root allOf.
+			i, err := strconv.Atoi(p)
+			if err != nil || i < 0 || i >= len(c) {
+				return nil
+			}
+			cur = c[i]
+		default:
 			return nil
 		}
-		cur = cm[p]
 	}
 	out, _ := cur.(map[string]any)
 	return out

@@ -353,3 +353,15 @@ func TestIsMap(t *testing.T) {
 		t.Error("Table spec must not be map-shaped")
 	}
 }
+
+func TestResolveRefIntoArray(t *testing.T) {
+	m := Parse(json.RawMessage(`{"allOf":[{"x":1},{"then":{"properties":{"spec":{"properties":{"title":{"type":"string"}}}}}}],
+		"properties":{"child":{"properties":{"spec":{"$ref":"#/allOf/1/then/properties/spec"}}}}}`))
+	props := m.ResolveAt([]string{"child", "spec"}, map[string]string{}).Props()
+	if !hasString(propNames(props), "title") {
+		t.Fatalf("want title through an allOf pointer, got %v", propNames(props))
+	}
+	if m.resolveRef("#/allOf/9/then") != nil || m.resolveRef("#/allOf/x") != nil {
+		t.Error("out-of-range or non-numeric index must not resolve")
+	}
+}

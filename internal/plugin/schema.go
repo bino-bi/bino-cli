@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/schema"
@@ -14,12 +15,27 @@ import (
 // pluginSpecIDBase prefixes the $id given to a plugin spec schema without one.
 const pluginSpecIDBase = "https://bino.bi/schemas/plugins/"
 
+// ensureSchemaID gives an embedded plugin schema its own id, so its local
+// "#/..." refs resolve inside it and not against the bino schema. Draft-04
+// uses the "id" keyword. A fragment-only id names no resource, so it is
+// replaced.
+func ensureSchemaID(obj map[string]any, kindName string) {
+	key := "$id"
+	if s, _ := obj["$schema"].(string); strings.Contains(s, "draft-04") {
+		key = "id"
+	}
+	if id, _ := obj[key].(string); id != "" && !strings.HasPrefix(id, "#") {
+		return
+	}
+	obj[key] = pluginSpecIDBase + kindName + ".json"
+}
+
 // SchemaAggregator merges built-in and plugin schemas into a unified JSON Schema.
 type SchemaAggregator struct {
 	registry    *PluginRegistry
 	merged      json.RawMessage
 	kindSchemas map[string]json.RawMessage // kind → plugin-provided schema
-	specIDs     map[string]string          // kind → $id of the embedded spec schema
+	specPtrs    map[string]string          // kind → JSON pointer of the embedded spec schema
 	fetchErr    error                      // GetSchemas failures, see FetchErrors
 }
 
@@ -28,7 +44,7 @@ func NewSchemaAggregator(registry *PluginRegistry) *SchemaAggregator {
 	return &SchemaAggregator{
 		registry:    registry,
 		kindSchemas: make(map[string]json.RawMessage),
-		specIDs:     make(map[string]string),
+		specPtrs:    make(map[string]string),
 	}
 }
 
@@ -127,16 +143,9 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 		if err := json.Unmarshal(kindSchema, &specSchema); err != nil {
 			continue
 		}
-		// An $id makes the plugin schema its own resource: its local "#/..."
-		// refs resolve inside it, and layoutChild can $ref it instead of
-		// embedding a second copy (a duplicate $id fails compilation).
 		if obj, ok := specSchema.(map[string]any); ok {
-			id, _ := obj["$id"].(string)
-			if id == "" {
-				id = pluginSpecIDBase + kindName + ".json"
-				obj["$id"] = id
-			}
-			a.specIDs[kindName] = id
+			ensureSchemaID(obj, kindName)
+			a.specPtrs[kindName] = fmt.Sprintf("#/allOf/%d/then/properties/spec", len(allOf))
 		}
 
 		block := map[string]any{
@@ -182,8 +191,10 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 
 	for _, name := range names {
 		var specSchema any = map[string]any{"type": "object"}
-		if id, ok := a.specIDs[name]; ok {
-			specSchema = map[string]any{"$ref": id}
+		// Point at the copy in the top-level allOf: a second copy would
+		// duplicate its id, and a local pointer is what the LSP can follow.
+		if ptr, ok := a.specPtrs[name]; ok {
+			specSchema = map[string]any{"$ref": ptr}
 		} else if raw, ok := a.kindSchemas[name]; ok {
 			var s any
 			if json.Unmarshal(raw, &s) == nil {

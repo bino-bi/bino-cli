@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/schema"
@@ -50,9 +51,12 @@ func (r *PluginRegistry) DocumentValidator(ctx context.Context) (*schema.Validat
 	}
 
 	// The result outlives this request, so a cancelled caller must not cut
-	// the plugin calls short.
+	// the plugin calls short. The timeout keeps a stuck plugin from holding
+	// the lock forever.
+	bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	agg := NewSchemaAggregator(r)
-	if err := agg.Build(context.WithoutCancel(ctx)); err != nil {
+	if err := agg.Build(bctx); err != nil {
 		return nil, fmt.Errorf("merge plugin schemas: %w", err)
 	}
 	if err := agg.FetchErrors(); err != nil {

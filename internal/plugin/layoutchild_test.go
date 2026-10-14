@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -298,5 +299,99 @@ func TestDocumentValidator_IgnoresCallerCancel(t *testing.T) {
 	v, err := reg.DocumentValidator(ctx)
 	if err != nil || v == nil {
 		t.Fatalf("want a validator from a cancelled ctx, got %v, %v", v, err)
+	}
+}
+
+func TestDocumentValidator_SchemaIDVariants(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{"draft-04 id", `{"$schema":"http://json-schema.org/draft-04/schema#","id":"http://example.com/gauge.json","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`},
+		{"draft-04 no id", `{"$schema":"http://json-schema.org/draft-04/schema#","type":"object","required":["title"],"properties":{"title":{"$ref":"#/definitions/label"}},"definitions":{"label":{"type":"string"}}}`},
+		{"fragment-only $id", `{"$schema":"http://json-schema.org/draft-07/schema#","$id":"#gauge","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := registryWithSchema(tt.schema).DocumentValidator(context.Background())
+			if err != nil {
+				t.Fatalf("DocumentValidator: %v", err)
+			}
+			if err := v.ValidateJSON(layoutPage(`[{"kind":"Gauge","spec":{"title":"x"}}]`)); err != nil {
+				t.Errorf("valid child rejected: %v", err)
+			}
+			if err := v.ValidateJSON(layoutPage(`[{"kind":"Gauge","spec":{"title":1}}]`)); err == nil {
+				t.Error("invalid child accepted")
+			}
+		})
+	}
+}
+
+// The layoutChild spec is a local pointer to the top-level copy, which editors
+// and the LSP can follow.
+func TestSchemaAggregator_LayoutChildRefIsLocalPointer(t *testing.T) {
+	agg := NewSchemaAggregator(newLayoutChildRegistry())
+	if err := agg.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	type kindIf struct {
+		Properties struct {
+			Kind struct {
+				Const string `json:"const"`
+			} `json:"kind"`
+		} `json:"properties"`
+	}
+	var doc struct {
+		AllOf []json.RawMessage `json:"allOf"`
+		Defs  struct {
+			LayoutChild struct {
+				AllOf []struct {
+					If   kindIf `json:"if"`
+					Then struct {
+						Else struct {
+							Properties struct {
+								Spec struct {
+									Ref string `json:"$ref"`
+								} `json:"spec"`
+							} `json:"properties"`
+						} `json:"else"`
+					} `json:"then"`
+				} `json:"allOf"`
+			} `json:"layoutChild"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(agg.MergedSchema(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	var ref string
+	for _, b := range doc.Defs.LayoutChild.AllOf {
+		if b.If.Properties.Kind.Const == "Gauge" {
+			ref = b.Then.Else.Properties.Spec.Ref
+		}
+	}
+	idx, ok := strings.CutPrefix(ref, "#/allOf/")
+	idx, rest, _ := strings.Cut(idx, "/")
+	if !ok || rest != "then/properties/spec" {
+		t.Fatalf("want #/allOf/<i>/then/properties/spec, got %q", ref)
+	}
+	i, err := strconv.Atoi(idx)
+	if err != nil || i >= len(doc.AllOf) {
+		t.Fatalf("bad allOf index in %q", ref)
+	}
+	var block struct {
+		If   kindIf `json:"if"`
+		Then struct {
+			Properties struct {
+				Spec struct {
+					Properties map[string]json.RawMessage `json:"properties"`
+				} `json:"spec"`
+			} `json:"properties"`
+		} `json:"then"`
+	}
+	if err := json.Unmarshal(doc.AllOf[i], &block); err != nil {
+		t.Fatal(err)
+	}
+	if block.If.Properties.Kind.Const != "Gauge" || block.Then.Properties.Spec.Properties["title"] == nil {
+		t.Fatalf("pointer %q does not reach the Gauge spec schema", ref)
 	}
 }
