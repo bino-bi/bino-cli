@@ -59,15 +59,14 @@ func TestSchemaAggregator_LayoutChildKinds(t *testing.T) {
 	}
 	merged := agg.MergedSchema()
 
-	layoutChild := defEnum(t, merged, "layoutChild")
-	if !slices.Contains(layoutChild, "Gauge") {
-		t.Errorf("layoutChild enum misses component kind Gauge: %v", layoutChild)
-	}
-	if slices.Contains(layoutChild, "GaugeDataSource") {
-		t.Errorf("layoutChild enum lists datasource kind GaugeDataSource: %v", layoutChild)
-	}
-	if grid := defEnum(t, merged, "gridChild"); slices.Contains(grid, "Gauge") {
-		t.Errorf("gridChild enum must stay closed, got %v", grid)
+	for _, def := range []string{"layoutChild", "gridChild", "treeNode"} {
+		enum := defEnum(t, merged, def)
+		if !slices.Contains(enum, "Gauge") {
+			t.Errorf("%s enum misses component kind Gauge: %v", def, enum)
+		}
+		if slices.Contains(enum, "GaugeDataSource") {
+			t.Errorf("%s enum lists datasource kind GaugeDataSource: %v", def, enum)
+		}
 	}
 }
 
@@ -95,7 +94,13 @@ func TestDocumentValidator_PluginLayoutChild(t *testing.T) {
 		{"ref with override", layoutPage(`[{"kind":"Gauge","ref":"g1","spec":{"anything":1}}]`), false},
 		{"in LayoutCard", layoutPage(`[{"kind":"LayoutCard","spec":{"children":[{"kind":"Gauge","spec":{"title":"x"}}]}}]`), false},
 		{"datasource kind as child", layoutPage(`[{"kind":"GaugeDataSource","spec":{"url":"x"}}]`), true},
-		{"inside Grid", layoutPage(`[{"kind":"Grid","spec":{"children":[{"kind":"Gauge","spec":{"title":"x"}}]}}]`), true},
+		{"grid cell valid", layoutPage(`[{"kind":"Grid","spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":"r","column":"c","kind":"Gauge","spec":{"title":"x"}}]}}]`), false},
+		{"grid cell spec violates plugin schema", layoutPage(`[{"kind":"Grid","spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":"r","column":"c","kind":"Gauge","spec":{"color":"red"}}]}}]`), true},
+		{"grid cell ref without spec", layoutPage(`[{"kind":"Grid","spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":"r","column":"c","kind":"Gauge","ref":"g1"}]}}]`), false},
+		{"grid cell datasource kind", layoutPage(`[{"kind":"Grid","spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":"r","column":"c","kind":"GaugeDataSource","spec":{"url":"x"}}]}}]`), true},
+		{"tree node valid", layoutPage(`[{"kind":"Tree","spec":{"nodes":[{"id":"n","kind":"Gauge","spec":{"title":"x"}}],"edges":[]}}]`), false},
+		{"tree node spec violates plugin schema", layoutPage(`[{"kind":"Tree","spec":{"nodes":[{"id":"n","kind":"Gauge","spec":{"color":"red"}}],"edges":[]}}]`), true},
+		{"tree node ref without spec", layoutPage(`[{"kind":"Tree","spec":{"nodes":[{"id":"n","kind":"Gauge","ref":"g1"}],"edges":[]}}]`), false},
 		{"top-level plugin doc valid", []byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Gauge","metadata":{"name":"g1"},"spec":{"title":"x"}}`), false},
 		{"top-level plugin doc invalid", []byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Gauge","metadata":{"name":"g1"},"spec":{}}`), true},
 	}

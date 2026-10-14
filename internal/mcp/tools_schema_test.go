@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"bino.bi/bino/internal/plugin"
+	"bino.bi/bino/internal/report/render"
 )
 
 // outlineSizeCeiling bounds the JSON size of every built-in outline. It guards
@@ -283,8 +284,8 @@ func (*stubPlugin) OnHook(context.Context, string, *plugin.HookPayload) (*plugin
 	return nil, nil
 }
 
-func (*stubPlugin) RenderComponent(context.Context, string, string, []byte, string) (string, error) {
-	return "", nil
+func (*stubPlugin) RenderComponent(context.Context, render.PluginRenderRequest) (*plugin.RenderResult, error) {
+	return &plugin.RenderResult{}, nil
 }
 
 func (*stubPlugin) Shutdown(context.Context) error { return nil }

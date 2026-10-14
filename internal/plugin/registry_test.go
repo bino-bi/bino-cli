@@ -3,6 +3,8 @@ package plugin
 import (
 	"context"
 	"testing"
+
+	"bino.bi/bino/internal/report/render"
 )
 
 // mockPlugin implements Plugin for testing.
@@ -40,8 +42,8 @@ func (m *mockPlugin) OnHook(context.Context, string, *HookPayload) (*HookResult,
 	return nil, nil
 }
 
-func (m *mockPlugin) RenderComponent(context.Context, string, string, []byte, string) (string, error) {
-	return "", nil
+func (m *mockPlugin) RenderComponent(context.Context, render.PluginRenderRequest) (*RenderResult, error) {
+	return &RenderResult{}, nil
 }
 
 func (m *mockPlugin) Shutdown(context.Context) error { return nil }

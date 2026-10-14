@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+
+	"bino.bi/bino/internal/report/render"
 )
 
 // fakePluginServer is a scriptable implementation of the plugin side of the
@@ -690,15 +692,31 @@ func TestGRPCClient_RenderComponent(t *testing.T) {
 	fake := newFakePluginServer()
 	fake.renderResp = &pluginv1.RenderComponentResponse{
 		Html: `<bn-example-chart data="[1,2]"></bn-example-chart>`,
+		Diagnostics: []*pluginv1.Diagnostic{
+			{Source: "charts", Message: "no data", Severity: pluginv1.Severity_WARNING},
+			{Message: "bad axis", Severity: pluginv1.Severity_ERROR},
+		},
 	}
 	client := newWireClient(t, fake)
 
-	got, err := client.RenderComponent(t.Context(), "ExampleChart", "sales", []byte(`{"dataset":"rev"}`), "build")
+	got, err := client.RenderComponent(t.Context(), render.PluginRenderRequest{
+		Kind:       "ExampleChart",
+		Name:       "sales",
+		Spec:       []byte(`{"dataset":"rev"}`),
+		RenderMode: "build",
+	})
 	if err != nil {
 		t.Fatalf("RenderComponent: %v", err)
 	}
-	if want := `<bn-example-chart data="[1,2]"></bn-example-chart>`; got != want {
-		t.Fatalf("RenderComponent() = %q, want %q", got, want)
+	if want := `<bn-example-chart data="[1,2]"></bn-example-chart>`; got.HTML != want {
+		t.Fatalf("RenderComponent() HTML = %q, want %q", got.HTML, want)
+	}
+	wantDiags := []Diagnostic{
+		{Source: "charts", Message: "no data", Severity: SeverityWarning},
+		{Message: "bad axis", Severity: SeverityError},
+	}
+	if !reflect.DeepEqual(got.Diagnostics, wantDiags) {
+		t.Fatalf("RenderComponent() Diagnostics = %+v, want %+v", got.Diagnostics, wantDiags)
 	}
 
 	fake.mu.Lock()
@@ -765,7 +783,7 @@ func TestGRPCClient_ErrorPropagation(t *testing.T) {
 			return err
 		}},
 		{"RenderComponent", func(ctx context.Context, c *grpcClient) error {
-			_, err := c.RenderComponent(ctx, "K", "n", nil, "build")
+			_, err := c.RenderComponent(ctx, render.PluginRenderRequest{Kind: "K", Name: "n", RenderMode: "build"})
 			return err
 		}},
 		{"Shutdown", func(ctx context.Context, c *grpcClient) error {

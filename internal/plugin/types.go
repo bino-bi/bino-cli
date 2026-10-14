@@ -76,6 +76,12 @@ type FlagDescriptor struct {
 	Required     bool
 }
 
+// RenderResult is the output of a plugin component render.
+type RenderResult struct {
+	HTML        string
+	Diagnostics []Diagnostic
+}
+
 // Diagnostic represents a non-fatal message from a plugin.
 type Diagnostic struct {
 	Source   string

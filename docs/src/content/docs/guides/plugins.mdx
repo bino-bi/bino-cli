@@ -179,8 +179,9 @@ Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
 not served. A path under another plugin's `/plugins/` prefix is skipped, so
 one plugin cannot replace another plugin's files.
 
-A component kind can be used as a child of a `LayoutPage` or `LayoutCard`,
-inline or by `ref` to a document of that kind:
+A component kind can be used as a child of a `LayoutPage` or `LayoutCard`, as
+a `Grid` cell, or as a `Tree` node, inline or by `ref` to a document of that
+kind:
 
 ```yaml
 apiVersion: bino.bi/v1alpha1
@@ -201,8 +202,15 @@ spec:
 
 The spec is validated against the plugin's schema when the project loads, for
 inline children and for top-level plugin documents. A `spec.dataset` name links
-the component to that dataset in the dependency graph. Plugin kinds cannot be
-used inside `Grid` or `Tree` yet.
+the component to that dataset in the dependency graph. The `name` the plugin
+receives is the `ref` if set, else `metadata.name`, else empty. Tree nodes have
+no `metadata`, so they send the `ref` or nothing.
+
+Warning and error diagnostics that a plugin returns from `RenderComponent`
+appear as warnings in the `bino build` output and in the build log, prefixed
+with the plugin, the kind and the name. In `bino preview` and `bino serve` they
+appear only in the terminal log. Info diagnostics are logged at debug level.
+Diagnostics never fail the render: to fail it, return an error.
 
 ### Lint rules
 

@@ -1,6 +1,10 @@
 package plugin
 
-import "context"
+import (
+	"context"
+
+	"bino.bi/bino/internal/report/render"
+)
 
 // Plugin is the interface to a loaded, running plugin process.
 // The gRPC client adapter (Task 04) implements this interface.
@@ -33,8 +37,9 @@ type Plugin interface {
 	OnHook(ctx context.Context, checkpoint string, payload *HookPayload) (*HookResult, error)
 
 	// RenderComponent generates HTML for a plugin-provided component kind.
-	// Returns the HTML fragment to insert into the layout.
-	RenderComponent(ctx context.Context, kind, name string, spec []byte, renderMode string) (string, error)
+	// Returns the HTML fragment to insert into the layout and the plugin's
+	// non-fatal diagnostics.
+	RenderComponent(ctx context.Context, req render.PluginRenderRequest) (*RenderResult, error)
 
 	// Shutdown gracefully terminates the plugin.
 	Shutdown(ctx context.Context) error
