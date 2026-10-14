@@ -50,3 +50,20 @@ func TestRenderLayoutChildPluginRef(t *testing.T) {
 		t.Errorf("plugin got spec %v, want ref spec merged with override", got)
 	}
 }
+
+func TestCollectReferencedDatasourcesPluginDoc(t *testing.T) {
+	gauge := config.Document{
+		Kind: "Gauge",
+		Name: "g1",
+		Raw:  json.RawMessage(`{"apiVersion":"bino.bi/v1alpha1","kind":"Gauge","metadata":{"name":"g1"},"spec":{"dataset":"$sales_src"}}`),
+	}
+	page := config.Document{
+		Kind: "LayoutPage",
+		Name: "page",
+		Raw:  json.RawMessage(`{"apiVersion":"bino.bi/v1alpha1","kind":"LayoutPage","metadata":{"name":"page"},"spec":{"children":[{"kind":"Gauge","ref":"g1"}]}}`),
+	}
+	refs := collectReferencedDatasources([]config.Document{gauge, page}, nil)
+	if !refs["sales_src"] {
+		t.Errorf("want sales_src in referenced datasources, got %v", refs)
+	}
+}

@@ -17,9 +17,8 @@ type PluginRegistry struct {
 	kinds   map[string]KindRegistration // kind_name → registration
 	order   []string                    // plugin names in declaration order (for hook chaining)
 
-	validatorOnce sync.Once
-	validator     *schema.Validator
-	validatorErr  error
+	validatorMu sync.Mutex
+	validator   *schema.Validator
 }
 
 // NewRegistry creates an empty PluginRegistry.

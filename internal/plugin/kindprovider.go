@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/schema"
@@ -35,20 +36,49 @@ func (r *PluginRegistry) GetKind(kindName string) (config.KindInfo, bool) {
 }
 
 // DocumentValidator returns a validator for the built-in schema merged with
-// every plugin kind, satisfying config.DocumentValidatorProvider. It is built
-// once per registry. Without plugin kinds it returns nil, so callers keep the
-// embedded schema.
+// every plugin kind, satisfying config.DocumentValidatorProvider. A success is
+// kept for the registry's lifetime; a failure is not, so the next call retries.
+// Without plugin kinds it returns nil, so callers keep the embedded schema.
 func (r *PluginRegistry) DocumentValidator(ctx context.Context) (*schema.Validator, error) {
 	if r == nil || len(r.AllKinds()) == 0 {
 		return nil, nil
 	}
-	r.validatorOnce.Do(func() {
-		agg := NewSchemaAggregator(r)
-		if err := agg.Build(ctx); err != nil {
-			r.validatorErr = fmt.Errorf("merge plugin schemas: %w", err)
-			return
+	r.validatorMu.Lock()
+	defer r.validatorMu.Unlock()
+	if r.validator != nil {
+		return r.validator, nil
+	}
+
+	// The result outlives this request, so a cancelled caller must not cut
+	// the plugin calls short.
+	agg := NewSchemaAggregator(r)
+	if err := agg.Build(context.WithoutCancel(ctx)); err != nil {
+		return nil, fmt.Errorf("merge plugin schemas: %w", err)
+	}
+	if err := agg.FetchErrors(); err != nil {
+		return nil, err
+	}
+	v, err := schema.CompileValidator(agg.MergedSchema())
+	if err != nil {
+		return nil, r.blameSchema(agg, err)
+	}
+	r.validator = v
+	return v, nil
+}
+
+// blameSchema names the plugin and kind whose schema does not compile on its
+// own. It falls back to err when each schema compiles alone.
+func (r *PluginRegistry) blameSchema(agg *SchemaAggregator, err error) error {
+	names := make([]string, 0, len(agg.kindSchemas))
+	for name := range agg.kindSchemas {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if _, kerr := schema.CompileValidator(agg.kindSchemas[name]); kerr != nil {
+			reg, _ := r.GetKindRegistration(name)
+			return fmt.Errorf("plugin %s: schema for kind %q: %w", reg.PluginName, name, kerr)
 		}
-		r.validator, r.validatorErr = schema.CompileValidator(agg.MergedSchema())
-	})
-	return r.validator, r.validatorErr
+	}
+	return fmt.Errorf("compile schema with plugin kinds: %w", err)
 }

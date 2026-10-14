@@ -203,3 +203,100 @@ func findIssue(err error, field string) string {
 	}
 	return ""
 }
+
+func registryWithSchema(kindSchema string) *PluginRegistry {
+	reg := NewRegistry()
+	reg.Register(&schemaMockPlugin{
+		mockPlugin: mockPlugin{manifest: PluginManifest{
+			Name:  "gauges",
+			Kinds: []KindRegistration{{KindName: "Gauge", Category: KindCategoryComponent}},
+		}},
+		schemas: map[string][]byte{"Gauge": []byte(kindSchema)},
+	})
+	return reg
+}
+
+func TestDocumentValidator_PluginSchemaShapes(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{"own $id", `{"$id":"https://example.com/gauge.json","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`},
+		{"local $defs and $ref", `{"type":"object","required":["title"],"properties":{"title":{"$ref":"#/$defs/label"}},"$defs":{"label":{"type":"string"}}}`},
+		{"draft-07 definitions", `{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["title"],"properties":{"title":{"$ref":"#/definitions/label"}},"definitions":{"label":{"type":"string"}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := registryWithSchema(tt.schema).DocumentValidator(context.Background())
+			if err != nil {
+				t.Fatalf("DocumentValidator: %v", err)
+			}
+			for _, doc := range [][]byte{
+				layoutPage(`[{"kind":"Gauge","spec":{"title":"x"}}]`),
+				[]byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Gauge","metadata":{"name":"g1"},"spec":{"title":"x"}}`),
+			} {
+				if err := v.ValidateJSON(doc); err != nil {
+					t.Errorf("valid doc rejected: %v", err)
+				}
+			}
+			for _, doc := range [][]byte{
+				layoutPage(`[{"kind":"Gauge","spec":{"title":1}}]`),
+				[]byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Gauge","metadata":{"name":"g1"},"spec":{"title":1}}`),
+			} {
+				if err := v.ValidateJSON(doc); err == nil {
+					t.Errorf("invalid doc accepted: %s", doc)
+				}
+			}
+		})
+	}
+}
+
+func TestDocumentValidator_BrokenSchemaNamesPlugin(t *testing.T) {
+	reg := registryWithSchema(`{"type":"object","properties":{"title":{"$ref":"#/$defs/missing"}}}`)
+	_, err := reg.DocumentValidator(context.Background())
+	if err == nil || !strings.Contains(err.Error(), `plugin gauges: schema for kind "Gauge"`) {
+		t.Fatalf("want an error naming plugin and kind, got %v", err)
+	}
+	// A failure is not cached.
+	if _, err2 := reg.DocumentValidator(context.Background()); err2 == nil {
+		t.Fatal("want the same error on retry")
+	}
+}
+
+func TestDocumentValidator_GetSchemasError(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&failingSchemaPlugin{newMock("gauges", func(m *PluginManifest) {
+		m.Kinds = []KindRegistration{{KindName: "Gauge", Category: KindCategoryComponent}}
+	})})
+	_, err := reg.DocumentValidator(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "plugin gauges: get schemas: rpc broke") {
+		t.Fatalf("want the GetSchemas error, got %v", err)
+	}
+}
+
+// ctxSchemaPlugin fails GetSchemas like a gRPC call does on a cancelled ctx.
+type ctxSchemaPlugin struct{ schemaMockPlugin }
+
+func (m *ctxSchemaPlugin) GetSchemas(ctx context.Context) (map[string][]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.schemas, nil
+}
+
+func TestDocumentValidator_IgnoresCallerCancel(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&ctxSchemaPlugin{schemaMockPlugin{
+		mockPlugin: mockPlugin{manifest: PluginManifest{
+			Name:  "gauges",
+			Kinds: []KindRegistration{{KindName: "Gauge", Category: KindCategoryComponent}},
+		}},
+		schemas: map[string][]byte{"Gauge": []byte(`{"type":"object"}`)},
+	}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	v, err := reg.DocumentValidator(ctx)
+	if err != nil || v == nil {
+		t.Fatalf("want a validator from a cancelled ctx, got %v, %v", v, err)
+	}
+}

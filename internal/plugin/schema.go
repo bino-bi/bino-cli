@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -10,11 +11,16 @@ import (
 	"bino.bi/bino/internal/schema"
 )
 
+// pluginSpecIDBase prefixes the $id given to a plugin spec schema without one.
+const pluginSpecIDBase = "https://bino.bi/schemas/plugins/"
+
 // SchemaAggregator merges built-in and plugin schemas into a unified JSON Schema.
 type SchemaAggregator struct {
 	registry    *PluginRegistry
 	merged      json.RawMessage
 	kindSchemas map[string]json.RawMessage // kind → plugin-provided schema
+	specIDs     map[string]string          // kind → $id of the embedded spec schema
+	fetchErr    error                      // GetSchemas failures, see FetchErrors
 }
 
 // NewSchemaAggregator creates an aggregator backed by the given registry.
@@ -22,6 +28,7 @@ func NewSchemaAggregator(registry *PluginRegistry) *SchemaAggregator {
 	return &SchemaAggregator{
 		registry:    registry,
 		kindSchemas: make(map[string]json.RawMessage),
+		specIDs:     make(map[string]string),
 	}
 }
 
@@ -35,6 +42,7 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 			// Skipping silently would make the user's manifests fail
 			// validation pointing at their YAML instead of the plugin.
 			log.Warnf("plugin %s: get schemas failed, its kinds are unavailable: %v", p.Manifest().Name, err)
+			a.fetchErr = errors.Join(a.fetchErr, fmt.Errorf("plugin %s: get schemas: %w", p.Manifest().Name, err))
 			continue
 		}
 		for kindName, schemaBytes := range schemas {
@@ -119,6 +127,17 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 		if err := json.Unmarshal(kindSchema, &specSchema); err != nil {
 			continue
 		}
+		// An $id makes the plugin schema its own resource: its local "#/..."
+		// refs resolve inside it, and layoutChild can $ref it instead of
+		// embedding a second copy (a duplicate $id fails compilation).
+		if obj, ok := specSchema.(map[string]any); ok {
+			id, _ := obj["$id"].(string)
+			if id == "" {
+				id = pluginSpecIDBase + kindName + ".json"
+				obj["$id"] = id
+			}
+			a.specIDs[kindName] = id
+		}
 
 		block := map[string]any{
 			"if": map[string]any{
@@ -163,7 +182,9 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 
 	for _, name := range names {
 		var specSchema any = map[string]any{"type": "object"}
-		if raw, ok := a.kindSchemas[name]; ok {
+		if id, ok := a.specIDs[name]; ok {
+			specSchema = map[string]any{"$ref": id}
+		} else if raw, ok := a.kindSchemas[name]; ok {
 			var s any
 			if json.Unmarshal(raw, &s) == nil {
 				specSchema = s
@@ -188,6 +209,12 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 
 	kindProp["enum"] = enumSlice
 	child["allOf"] = allOf
+}
+
+// FetchErrors returns the GetSchemas failures of the last Build. Those plugins'
+// kinds are in the merged schema without spec validation.
+func (a *SchemaAggregator) FetchErrors() error {
+	return a.fetchErr
 }
 
 // MergedSchema returns the complete merged JSON Schema.

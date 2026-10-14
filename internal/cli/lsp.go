@@ -577,15 +577,26 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 		return outputJSON(out, result)
 	}
 
+	// Load plugins so plugin component children resolve. The logger is a no-op
+	// because stdout carries the JSON result.
+	var kindProvider config.KindProvider
+	if projectCfg, cfgErr := pathutil.LoadProjectConfig(absDir); cfgErr == nil && len(projectCfg.Plugins) > 0 {
+		mgr := plugin.NewManager(logx.Nop())
+		if err := mgr.LoadAll(ctx, projectCfg, absDir, version.Version); err == nil {
+			defer mgr.KillAll()
+			kindProvider = mgr.Registry()
+		}
+	}
+
 	// Load documents in lenient mode
-	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
+	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true, KindProvider: kindProvider})
 	if err != nil {
 		result.Error = fmt.Sprintf("load documents: %v", err)
 		return outputJSON(out, result)
 	}
 
 	// Build the dependency graph
-	g, err := graph.Build(ctx, docs, nil)
+	g, err := graph.Build(ctx, docs, kindProvider)
 	if err != nil {
 		result.Error = fmt.Sprintf("build graph: %v", err)
 		return outputJSON(out, result)

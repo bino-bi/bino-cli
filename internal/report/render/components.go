@@ -296,14 +296,7 @@ func collectReferencedDatasources(docs []config.Document, globalDocs []config.Do
 func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 	switch doc.Kind {
 	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image":
-		var p struct {
-			Spec struct {
-				Dataset spec.DatasetList `json:"dataset"`
-			} `json:"spec"`
-		}
-		if json.Unmarshal(doc.Raw, &p) == nil {
-			addDatasourceRefs(p.Spec.Dataset, refs)
-		}
+		addSpecDatasetRefs(doc.Raw, refs)
 	case "Tree":
 		var p struct {
 			Spec struct {
@@ -341,6 +334,23 @@ func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 				collectDatasourceRefsFromLayoutChild(childRaw, refs)
 			}
 		}
+	default:
+		// Plugin component documents can be used by ref; only spec.dataset is known.
+		if !schema.IsBuiltinKind(doc.Kind) {
+			addSpecDatasetRefs(doc.Raw, refs)
+		}
+	}
+}
+
+// addSpecDatasetRefs adds the $-prefixed refs in a document's spec.dataset.
+func addSpecDatasetRefs(raw json.RawMessage, refs map[string]bool) {
+	var p struct {
+		Spec struct {
+			Dataset spec.DatasetList `json:"dataset"`
+		} `json:"spec"`
+	}
+	if json.Unmarshal(raw, &p) == nil {
+		addDatasourceRefs(p.Spec.Dataset, refs)
 	}
 }
 

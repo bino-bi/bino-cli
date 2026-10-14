@@ -32,9 +32,9 @@ var (
 	builtinKinds     map[string]struct{}
 )
 
-// IsBuiltinKind reports whether kind is in the embedded schema's kind enum.
+// IsBuiltinKind reports whether the kind name is in the embedded schema's kind enum.
 // Any other kind of a loaded document comes from a plugin.
-func IsBuiltinKind(kind string) bool {
+func IsBuiltinKind(name string) bool {
 	builtinKindsOnce.Do(func() {
 		var doc struct {
 			Properties struct {
@@ -51,7 +51,7 @@ func IsBuiltinKind(kind string) bool {
 			builtinKinds[k] = struct{}{}
 		}
 	})
-	_, ok := builtinKinds[kind]
+	_, ok := builtinKinds[name]
 	return ok
 }
 
