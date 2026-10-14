@@ -10,6 +10,7 @@ import (
 
 	"bino.bi/bino/internal/mcp"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/schema"
 	tmpl "bino.bi/bino/internal/template"
@@ -21,10 +22,13 @@ import (
 // root. It lives in the cli package (which owns those builders) and is injected
 // into the MCP server, so internal/mcp need not import internal/cli.
 type cliAuthoring struct {
-	root string
+	root  string
+	kinds config.KindProvider // plugin kinds for validation; may be nil
 }
 
-func newCLIAuthoring(root string) *cliAuthoring { return &cliAuthoring{root: root} }
+func newCLIAuthoring(root string, kinds config.KindProvider) *cliAuthoring {
+	return &cliAuthoring{root: root, kinds: kinds}
+}
 
 // CreateManifest builds the {apiVersion, kind, metadata, spec} envelope from a
 // spec object, validates it against the schema, and writes it atomically. The
@@ -72,11 +76,11 @@ func (a *cliAuthoring) CreateManifest(ctx context.Context, in mcp.CreateManifest
 }
 
 // WriteManifest persists a full manifest document verbatim after validating it.
-func (a *cliAuthoring) WriteManifest(_ context.Context, in mcp.WriteManifestInput) (mcp.WriteResult, error) {
+func (a *cliAuthoring) WriteManifest(ctx context.Context, in mcp.WriteManifestInput) (mcp.WriteResult, error) {
 	if in.File == "" {
 		return mcp.WriteResult{}, fmt.Errorf("file is required")
 	}
-	if err := schema.Validate([]byte(in.YAML)); err != nil {
+	if err := config.ValidateManifest(ctx, a.kinds, []byte(in.YAML)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("invalid manifest: %w", err)
 	}
 	abs := in.File
@@ -98,11 +102,11 @@ func (a *cliAuthoring) WriteManifest(_ context.Context, in mcp.WriteManifestInpu
 // EditManifest applies dotted-path edits to one document in a manifest file,
 // preserving comments and key order, validates the edited document, then writes
 // the whole file atomically.
-func (a *cliAuthoring) EditManifest(_ context.Context, in mcp.EditManifestInput) (mcp.WriteResult, error) {
+func (a *cliAuthoring) EditManifest(ctx context.Context, in mcp.EditManifestInput) (mcp.WriteResult, error) {
 	if len(in.Patch) == 0 {
 		return mcp.WriteResult{}, fmt.Errorf("patch is required")
 	}
-	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+	return a.rewriteManifest(ctx, in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
 		return spec.EditYAMLDocument(content, pos, in.Patch)
 	})
 }
@@ -110,11 +114,11 @@ func (a *cliAuthoring) EditManifest(_ context.Context, in mcp.EditManifestInput)
 // RemoveManifestPaths deletes dotted paths from one document in a manifest file,
 // preserving comments and key order, validates the result, then writes the whole
 // file atomically.
-func (a *cliAuthoring) RemoveManifestPaths(_ context.Context, in mcp.RemoveManifestPathsInput) (mcp.WriteResult, error) {
+func (a *cliAuthoring) RemoveManifestPaths(ctx context.Context, in mcp.RemoveManifestPathsInput) (mcp.WriteResult, error) {
 	if len(in.Paths) == 0 {
 		return mcp.WriteResult{}, fmt.Errorf("paths is required")
 	}
-	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+	return a.rewriteManifest(ctx, in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
 		return spec.RemoveYAMLPaths(content, pos, in.Paths)
 	})
 }
@@ -122,11 +126,11 @@ func (a *cliAuthoring) RemoveManifestPaths(_ context.Context, in mcp.RemoveManif
 // ReorderManifestSequence moves an element within a sequence in one document of a
 // manifest file, preserving comments and key order, validates the result, then
 // writes the whole file atomically.
-func (a *cliAuthoring) ReorderManifestSequence(_ context.Context, in mcp.ReorderManifestSequenceInput) (mcp.WriteResult, error) {
+func (a *cliAuthoring) ReorderManifestSequence(ctx context.Context, in mcp.ReorderManifestSequenceInput) (mcp.WriteResult, error) {
 	if in.Path == "" {
 		return mcp.WriteResult{}, fmt.Errorf("path is required")
 	}
-	return a.rewriteManifest(in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
+	return a.rewriteManifest(ctx, in.File, in.Position, in.DryRun, func(content string, pos int) (string, string, error) {
 		return spec.ReorderYAMLSequence(content, pos, in.Path, in.From, in.To)
 	})
 }
@@ -135,7 +139,7 @@ func (a *cliAuthoring) ReorderManifestSequence(_ context.Context, in mcp.Reorder
 // 1-based document position, validates the edited document, and either returns
 // the rewritten file (DryRun) or writes it atomically. It is the shared core for
 // the edit/remove/reorder authoring tools.
-func (a *cliAuthoring) rewriteManifest(file string, position int, dryRun bool, op func(content string, pos int) (full string, edited string, err error)) (mcp.WriteResult, error) {
+func (a *cliAuthoring) rewriteManifest(ctx context.Context, file string, position int, dryRun bool, op func(content string, pos int) (full string, edited string, err error)) (mcp.WriteResult, error) {
 	if file == "" {
 		return mcp.WriteResult{}, fmt.Errorf("file is required")
 	}
@@ -157,7 +161,7 @@ func (a *cliAuthoring) rewriteManifest(file string, position int, dryRun bool, o
 	if err != nil {
 		return mcp.WriteResult{}, err
 	}
-	if err := schema.Validate([]byte(edited)); err != nil {
+	if err := config.ValidateManifest(ctx, a.kinds, []byte(edited)); err != nil {
 		return mcp.WriteResult{}, fmt.Errorf("edit would make the document invalid: %w", err)
 	}
 	if dryRun {

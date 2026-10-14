@@ -350,7 +350,7 @@ func runLSPCreate(ctx context.Context, dir string, payloadJSON []byte, out io.Wr
 		return outputJSON(out, result)
 	}
 
-	res, err := newCLIAuthoring(absDir).CreateManifest(ctx, in)
+	res, err := newCLIAuthoring(absDir, nil).CreateManifest(ctx, in)
 	if err != nil {
 		// A schema failure is reported as per-issue diagnostics (nothing was
 		// written); any other error (e.g. duplicate name) is surfaced verbatim.
@@ -620,7 +620,7 @@ func newLSPEditCommand() *cobra.Command {
 	return cmd
 }
 
-func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer) error {
+func runLSPEdit(ctx context.Context, dir string, payloadJSON []byte, out io.Writer) error {
 	result := lspEditResult{Version: version.Version, Diagnostics: []lspEditDiagnostic{}}
 
 	// Patch values and the append value are kept as raw JSON so object key order
@@ -739,7 +739,9 @@ func runLSPEdit(_ context.Context, dir string, payloadJSON []byte, out io.Writer
 	}
 
 	// Validate the edited document; on failure return diagnostics and write nothing.
-	if verr := schema.Validate([]byte(edited)); verr != nil {
+	kindProvider, stopPlugins := loadLSPKindProvider(ctx, absDir)
+	defer stopPlugins()
+	if verr := config.ValidateManifest(ctx, kindProvider, []byte(edited)); verr != nil {
 		for _, issue := range schema.GetValidationIssues(verr) {
 			msg := issue.Message
 			if issue.Path != "" && issue.Path != "(root)" {

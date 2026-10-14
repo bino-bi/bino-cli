@@ -17,17 +17,19 @@ const pluginSpecIDBase = "https://bino.bi/schemas/plugins/"
 
 // ensureSchemaID gives an embedded plugin schema its own id, so its local
 // "#/..." refs resolve inside it and not against the bino schema. A
-// fragment-only id names no resource, so it is replaced.
-func ensureSchemaID(obj map[string]any, kindName string) {
+// fragment-only id names no resource, and an id already used by another kind
+// fails compilation, so both are replaced. seen collects the ids in use.
+func ensureSchemaID(obj map[string]any, kindName string, seen map[string]bool) {
 	key := "$id"
 	if s, _ := obj["$schema"].(string); strings.Contains(s, "draft-04") {
 		key = "id"
 	}
 	id, _ := obj[key].(string)
-	if id == "" || strings.HasPrefix(id, "#") {
+	if id == "" || strings.HasPrefix(id, "#") || seen[id] {
 		id = pluginSpecIDBase + kindName + ".json"
 		obj[key] = id
 	}
+	seen[id] = true
 	// Draft-04 ignores "id" next to a "$ref"; the compiler then falls back to
 	// the root draft, which reads "$id".
 	if key == "id" {
@@ -143,13 +145,21 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 		allOf = []any{}
 	}
 
-	for kindName, kindSchema := range a.kindSchemas {
+	// Sorted so the merged schema, and which kind keeps a shared id, is stable.
+	names := make([]string, 0, len(a.kindSchemas))
+	for kindName := range a.kindSchemas {
+		names = append(names, kindName)
+	}
+	sort.Strings(names)
+	seen := make(map[string]bool, len(names))
+	for _, kindName := range names {
+		kindSchema := a.kindSchemas[kindName]
 		var specSchema any
 		if err := json.Unmarshal(kindSchema, &specSchema); err != nil {
 			continue
 		}
 		if obj, ok := specSchema.(map[string]any); ok {
-			ensureSchemaID(obj, kindName)
+			ensureSchemaID(obj, kindName, seen)
 			a.specPtrs[kindName] = fmt.Sprintf("#/allOf/%d/then/properties/spec", len(allOf))
 		}
 

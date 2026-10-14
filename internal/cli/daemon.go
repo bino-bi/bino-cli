@@ -98,7 +98,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				deps := mcp.Deps{
 					State:        state,
 					Registry:     env.PluginRegistry,
-					Authoring:    newCLIAuthoring(env.ProjectRoot),
+					Authoring:    newCLIAuthoring(env.ProjectRoot, env.PluginRegistry),
 					Packages:     newCLIPackages(state),
 					AllowPublish: mcpAllowPublish,
 					// server is assigned below; the callback only runs once a

@@ -396,3 +396,30 @@ func TestSchemaAggregator_LayoutChildRefIsLocalPointer(t *testing.T) {
 		t.Fatalf("pointer %q does not reach the Gauge spec schema", ref)
 	}
 }
+
+func TestDocumentValidator_SharedIDAcrossKinds(t *testing.T) {
+	const shared = `{"$id":"https://example.com/plugin.json","type":"object","required":["title"],"properties":{"title":{"type":"string"}}}`
+	reg := NewRegistry()
+	reg.Register(&schemaMockPlugin{
+		mockPlugin: mockPlugin{manifest: PluginManifest{
+			Name: "gauges",
+			Kinds: []KindRegistration{
+				{KindName: "Gauge", Category: KindCategoryComponent},
+				{KindName: "Dial", Category: KindCategoryComponent},
+			},
+		}},
+		schemas: map[string][]byte{"Gauge": []byte(shared), "Dial": []byte(shared)},
+	})
+	v, err := reg.DocumentValidator(context.Background())
+	if err != nil {
+		t.Fatalf("DocumentValidator: %v", err)
+	}
+	for _, kind := range []string{"Gauge", "Dial"} {
+		if err := v.ValidateJSON(layoutPage(`[{"kind":"` + kind + `","spec":{"title":"x"}}]`)); err != nil {
+			t.Errorf("%s: valid child rejected: %v", kind, err)
+		}
+		if err := v.ValidateJSON(layoutPage(`[{"kind":"` + kind + `","spec":{}}]`)); err == nil {
+			t.Errorf("%s: invalid child accepted", kind)
+		}
+	}
+}

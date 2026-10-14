@@ -112,27 +112,32 @@ func (v ValidationIssue) Format() string {
 // Validate checks that yamlBytes represents a valid manifest document.
 // Returns nil if valid, or a *ValidationError with details.
 func Validate(yamlBytes []byte) error {
-	// Parse YAML to generic structure
+	jsonBytes, err := yamlToJSON(yamlBytes)
+	if err != nil {
+		return err
+	}
+	return ValidateJSON(jsonBytes)
+}
+
+// yamlToJSON converts a YAML manifest to JSON for schema validation.
+func yamlToJSON(yamlBytes []byte) ([]byte, error) {
 	var doc any
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
-		return &ValidationError{
+		return nil, &ValidationError{
 			Errors: []ValidationIssue{
 				{Path: "(root)", Message: fmt.Sprintf("invalid YAML: %v", err)},
 			},
 		}
 	}
-
-	// Convert to JSON for schema validation
 	jsonBytes, err := json.Marshal(convertYAMLToJSON(doc))
 	if err != nil {
-		return &ValidationError{
+		return nil, &ValidationError{
 			Errors: []ValidationIssue{
 				{Path: "(root)", Message: fmt.Sprintf("failed to convert to JSON: %v", err)},
 			},
 		}
 	}
-
-	return ValidateJSON(jsonBytes)
+	return jsonBytes, nil
 }
 
 // ValidateJSON validates JSON bytes against the manifest schema.
@@ -168,6 +173,15 @@ func CompileValidator(schemaBytes []byte) (*Validator, error) {
 // ValidateJSON validates JSON bytes against the compiled schema.
 func (v *Validator) ValidateJSON(jsonBytes []byte) error {
 	return validateWith(v.s, jsonBytes)
+}
+
+// Validate is the package-level Validate against the compiled schema.
+func (v *Validator) Validate(yamlBytes []byte) error {
+	jsonBytes, err := yamlToJSON(yamlBytes)
+	if err != nil {
+		return err
+	}
+	return v.ValidateJSON(jsonBytes)
 }
 
 func compile(schemaBytes []byte) (*jsonschema.Schema, error) {

@@ -85,6 +85,21 @@ func IsPluginKind(kind string, provider KindProvider) bool {
 	return ok
 }
 
+// ValidateManifest validates one YAML manifest against the embedded schema, or
+// against the schema merged with plugin kinds when kindProvider has any.
+func ValidateManifest(ctx context.Context, kindProvider KindProvider, yamlBytes []byte) error {
+	if vp, ok := kindProvider.(DocumentValidatorProvider); ok {
+		v, err := vp.DocumentValidator(ctx)
+		if err != nil {
+			return err
+		}
+		if v != nil {
+			return v.Validate(yamlBytes)
+		}
+	}
+	return schema.Validate(yamlBytes)
+}
+
 // IsPluginComponentKind reports whether kind is a plugin-provided component kind.
 func IsPluginComponentKind(kind string, provider KindProvider) bool {
 	if provider == nil {

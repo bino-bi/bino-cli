@@ -22,7 +22,7 @@ func newAuthoringClient(t *testing.T) (*mcpsdk.ClientSession, string) {
 	root := t.TempDir()
 
 	state := newTestState(t, root)
-	server := mcp.NewServer(mcp.Deps{State: state, Authoring: newCLIAuthoring(root)})
+	server := mcp.NewServer(mcp.Deps{State: state, Authoring: newCLIAuthoring(root, nil)})
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
 	if err != nil {
@@ -267,7 +267,7 @@ func TestInitBundle(t *testing.T) {
 
 func TestInitBundleBareIsBuiltinMinimal(t *testing.T) {
 	root := t.TempDir()
-	a := newCLIAuthoring(root)
+	a := newCLIAuthoring(root, nil)
 	dir := filepath.Join(root, "bundle")
 	res, err := a.InitBundle(context.Background(), mcp.InitBundleInput{Directory: dir})
 	if err != nil {
@@ -286,7 +286,7 @@ func TestInitBundleBareIsBuiltinMinimal(t *testing.T) {
 // standard` renders, folders and all.
 func TestInitBundleStandardSeedsReferenceBundle(t *testing.T) {
 	root := t.TempDir()
-	a := newCLIAuthoring(root)
+	a := newCLIAuthoring(root, nil)
 	dir := filepath.Join(root, "bundle")
 	res, err := a.InitBundle(context.Background(), mcp.InitBundleInput{Directory: dir, Source: "standard"})
 	if err != nil {
@@ -311,7 +311,7 @@ func TestInitBundleStandardSeedsReferenceBundle(t *testing.T) {
 }
 
 func TestInitBundleUncuratedRequiresTrust(t *testing.T) {
-	a := newCLIAuthoring(t.TempDir())
+	a := newCLIAuthoring(t.TempDir(), nil)
 	_, err := a.InitBundle(context.Background(), mcp.InitBundleInput{
 		Directory: "out",
 		Source:    "someowner/somerepo",
@@ -322,7 +322,7 @@ func TestInitBundleUncuratedRequiresTrust(t *testing.T) {
 }
 
 func TestInitBundleHonorsContextCancellation(t *testing.T) {
-	a := newCLIAuthoring(t.TempDir())
+	a := newCLIAuthoring(t.TempDir(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // canceled before the call: the fetch must not proceed
 	_, err := a.InitBundle(ctx, mcp.InitBundleInput{

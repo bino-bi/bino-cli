@@ -202,11 +202,17 @@ func (s *State) ValidateDraft(ctx context.Context, yamlBytes []byte) ([]Diagnost
 	// dir is outside the project, so this neither touches project files nor
 	// triggers the watcher.
 	var loadErrs []error
-	_, _ = config.LoadDirWithOptions(ctx, tmpDir, config.LoadOptions{ //nolint:errcheck // issues arrive via CollectErrors; the return would duplicate them
+	_, fatalErr := config.LoadDirWithOptions(ctx, tmpDir, config.LoadOptions{
 		Lenient:       false,
 		KindProvider:  s.kindProvider,
 		CollectErrors: &loadErrs,
 	})
+	// Document issues arrive via CollectErrors. A fatal error (e.g. plugin
+	// schemas that do not merge) stops the load before any document is
+	// checked, so it is the only diagnostic.
+	if fatalErr != nil && len(loadErrs) == 0 {
+		loadErrs = append(loadErrs, fatalErr)
+	}
 
 	diags := make([]Diagnostic, 0, len(loadErrs))
 	for _, loadErr := range loadErrs {
