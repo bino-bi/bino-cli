@@ -19,5 +19,6 @@ func BuildRenderOptions(ctx context.Context, registry *PluginRegistry, projectRo
 	}
 	assetCache := BuildAssetCache(ctx, registry, renderMode)
 	opts.ExtraHeadMarkup = RenderAssetTags(assetCache)
+	opts.AssetHandler = NewAssetHandler(assetCache)
 	return opts
 }

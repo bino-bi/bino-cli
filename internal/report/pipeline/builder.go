@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -233,7 +234,7 @@ func (b *Builder) RenderPDF(ctx context.Context, html []byte, assets []render.Lo
 // payloads on the ephemeral server's data store. Pass the EmittedData returned
 // by the renderer when DataMode == "url"; pass nil for inline mode.
 func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []render.LocalAsset, emitted []render.EmittedData, opts PDFRenderOptions) error {
-	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted)
+	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted, b.pluginAssetHandler())
 	if err != nil {
 		return fmt.Errorf("start ephemeral server: %w", err)
 	}
@@ -353,7 +354,7 @@ func (b *Builder) CaptureScreenshots(ctx context.Context, html []byte, assets []
 // CaptureScreenshotsWithData is CaptureScreenshots that registers EmittedData
 // on the ephemeral server when the renderer ran in url mode.
 func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, assets []render.LocalAsset, emitted []render.EmittedData, opts ScreenshotRenderOptions) ([]ScreenshotCaptureResult, error) {
-	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted)
+	srv, err := newEphemeralServer(ctx, b.CacheDir, b.logger(), html, ConvertLocalAssets(assets), emitted, b.pluginAssetHandler())
 	if err != nil {
 		return nil, fmt.Errorf("start ephemeral server: %w", err)
 	}
@@ -423,7 +424,15 @@ type ephemeralServer struct {
 	errCh  chan error
 }
 
-func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []httpserver.LocalAsset, emitted []render.EmittedData) (*ephemeralServer, error) {
+// pluginAssetHandler returns the handler for plugin assets, or nil.
+func (b *Builder) pluginAssetHandler() http.Handler {
+	if b.PluginOptions == nil {
+		return nil
+	}
+	return b.PluginOptions.AssetHandler
+}
+
+func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger, html []byte, assets []httpserver.LocalAsset, emitted []render.EmittedData, pluginAssets http.Handler) (*ephemeralServer, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -437,6 +446,7 @@ func newEphemeralServer(ctx context.Context, cacheDir string, logger logx.Logger
 		return nil, fmt.Errorf("create server: %w", err)
 	}
 	srv.SetLocalAssets(assets)
+	srv.SetPluginAssets(pluginAssets)
 	// Register dataset/datasource payloads BEFORE installing the HTML so the
 	// browser can never hit /__bino/data/... before the data is available.
 	for _, e := range emitted {

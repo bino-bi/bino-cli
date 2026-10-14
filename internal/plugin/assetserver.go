@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	urlpath "path"
+	"slices"
 	"strings"
 
 	"bino.bi/bino/internal/logx"
@@ -26,14 +28,49 @@ func BuildAssetCache(ctx context.Context, registry *PluginRegistry, renderMode s
 			log.Warnf("plugin %s: get assets failed, its assets are missing from the render: %v", p.Manifest().Name, err)
 			continue
 		}
-		for _, a := range scripts {
-			cache.assets[a.URLPath] = a
-		}
-		for _, a := range styles {
+		name := p.Manifest().Name
+		warned := make(map[string]bool)
+		for _, a := range slices.Concat(scripts, styles) {
+			scope := assetPathScope(name, a.URLPath)
+			if (scope == assetForeign || scope == assetUnserved) && !warned[a.URLPath] {
+				warned[a.URLPath] = true
+				if scope == assetForeign {
+					log.Warnf("plugin %s: asset %q is under /plugins/ but not under /plugins/%s/, skipped", name, a.URLPath, name)
+				} else {
+					log.Warnf("plugin %s: asset %q is not under /plugins/%s/ and will not be served", name, a.URLPath, name)
+				}
+			}
+			if scope == assetForeign {
+				// Skipped so one plugin cannot overwrite another plugin's assets.
+				continue
+			}
 			cache.assets[a.URLPath] = a
 		}
 	}
 	return cache
+}
+
+type assetScope int
+
+const (
+	assetServed   assetScope = iota // under the plugin's own /plugins/<name>/ prefix
+	assetExternal                   // absolute http(s) URL, loaded by the browser
+	assetUnserved                   // any other path, linked but never served
+	assetForeign                    // under /plugins/ but not the plugin's own prefix
+)
+
+func assetPathScope(pluginName, urlPath string) assetScope {
+	lower := strings.ToLower(urlPath)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return assetExternal
+	}
+	if urlpath.Clean(urlPath) == urlPath && strings.HasPrefix(urlPath, "/plugins/"+pluginName+"/") {
+		return assetServed
+	}
+	if strings.HasPrefix(urlpath.Clean(urlPath), "/plugins/") {
+		return assetForeign
+	}
+	return assetUnserved
 }
 
 // Get returns an asset by URL path.

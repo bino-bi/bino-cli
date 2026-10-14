@@ -192,6 +192,9 @@ type Server struct {
 	assetMu     sync.RWMutex
 	localAssets map[string]LocalAsset
 
+	pluginMu     sync.RWMutex
+	pluginAssets http.Handler
+
 	data *dataStore
 
 	dataMu sync.RWMutex
@@ -236,6 +239,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("/", compressionHandlerFunc(cfg.Logger, srv.handleRoot))
 	mux.Handle("/assets/", compressionHandlerFunc(cfg.Logger, srv.handleAsset))
 	mux.Handle("/cdn/", compressionHandlerFunc(cfg.Logger, srv.handleCDN))
+	mux.Handle("/plugins/", compressionHandlerFunc(cfg.Logger, srv.handlePluginAsset))
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(cfg.Logger, srv.handleContext))
 	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(cfg.Logger, srv.handleBootStatus))
@@ -612,6 +616,14 @@ func (s *Server) SetLocalAssets(assets []LocalAsset) {
 	s.assetMu.Unlock()
 }
 
+// SetPluginAssets sets the handler that serves plugin assets under /plugins/.
+// A nil handler makes every /plugins/ request a 404.
+func (s *Server) SetPluginAssets(h http.Handler) {
+	s.pluginMu.Lock()
+	s.pluginAssets = h
+	s.pluginMu.Unlock()
+}
+
 // BroadcastContent caches the latest HTML for a route and notifies connected
 // SSE clients that the content has changed. The notification carries only the
 // path, not the HTML body - clients fetch fresh content via
@@ -854,6 +866,17 @@ func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "asset unavailable", http.StatusInternalServerError)
 		s.cfg.Logger.Warnf("asset proxy failed: %v", err)
 	}
+}
+
+func (s *Server) handlePluginAsset(w http.ResponseWriter, r *http.Request) {
+	s.pluginMu.RLock()
+	h := s.pluginAssets
+	s.pluginMu.RUnlock()
+	if h == nil {
+		http.NotFound(w, r)
+		return
+	}
+	h.ServeHTTP(w, r)
 }
 
 func (s *Server) handleCDN(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/http"
 	"strings"
 
 	"bino.bi/bino/internal/report/config"
@@ -110,6 +111,10 @@ type PluginOptions struct {
 
 	// ExtraHeadMarkup is additional HTML to inject into <head> (e.g., plugin assets).
 	ExtraHeadMarkup string
+
+	// AssetHandler serves the plugin assets referenced by ExtraHeadMarkup
+	// under /plugins/. May be nil.
+	AssetHandler http.Handler
 
 	// ComponentRenderer renders HTML for plugin-provided component kinds.
 	ComponentRenderer PluginComponentRenderer
