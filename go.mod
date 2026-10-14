@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/andybalholm/brotli v1.2.5
-	github.com/bino-bi/bino-plugin-sdk v0.0.3
+	github.com/bino-bi/bino-plugin-sdk v0.0.4
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bmatcuk/doublestar/v4 v4.10.2
 	github.com/briandowns/spinner v1.23.2
