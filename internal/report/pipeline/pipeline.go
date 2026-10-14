@@ -1341,6 +1341,8 @@ type DocumentArtefactRenderOptions struct {
 	ContinueOnQueryError bool
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
+	// KindProvider supplies plugin kinds for the data-scoping graph. May be nil.
+	KindProvider config.KindProvider
 	// PostRenderHTMLHook is called after HTML generation. May be nil.
 	PostRenderHTMLHook func(ctx context.Context, html []byte) ([]byte, error)
 	// PostDatasetHook is called after dataset execution. May be nil.
@@ -1357,7 +1359,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 	logger := logx.FromContext(ctx).Channel("document")
 	s := artifact.Spec
 
-	scope, scoped := documentDataScope(ctx, logger, docs, artifact.Document.Name)
+	scope, scoped := documentDataScope(ctx, logger, docs, artifact.Document.Name, opts.KindProvider)
 
 	// Execute datasets scoped to the artefact's closure. All DataSource docs
 	// stay in for execution: a dataset query may reference a source it never
@@ -1534,8 +1536,8 @@ type docDataScope struct {
 // embeds. ok=false means the scope could not be computed (graph build failed
 // or the artefact has no node) and the caller must fall back to the full
 // document set - rendering must never fail because scoping failed.
-func documentDataScope(ctx context.Context, logger logx.Logger, docs []config.Document, name string) (docDataScope, bool) {
-	g, err := reportgraph.Build(ctx, docs)
+func documentDataScope(ctx context.Context, logger logx.Logger, docs []config.Document, name string, kindProvider config.KindProvider) (docDataScope, bool) {
+	g, err := reportgraph.Build(ctx, docs, kindProvider)
 	if err != nil {
 		logger.Warnf("document artefact %s: data scoping skipped (graph: %v)", name, err)
 		return docDataScope{}, false

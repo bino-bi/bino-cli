@@ -48,7 +48,7 @@ func TestBuildLayoutChildWithRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestBuildLayoutChildWithRefAndOverride(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestBuildLayoutChildWithMissingRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutPageDoc}
-	_, err := Build(ctx, docs)
+	_, err := Build(ctx, docs, nil)
 	if err == nil {
 		t.Fatalf("Build should error on missing required ref")
 	}
@@ -164,7 +164,7 @@ func TestBuildLayoutChildWithOptionalMissingRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build should not error on optional missing ref: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestBuildLayoutChildWithLayoutPageRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{referencedPage, layoutPageDoc}
-	_, err := Build(ctx, docs)
+	_, err := Build(ctx, docs, nil)
 	if err == nil {
 		t.Fatalf("expected error when referencing LayoutPage")
 	}
@@ -256,7 +256,7 @@ func TestBuildLayoutChildWithLayoutCardRef(t *testing.T) {
 	}`))
 
 	docs := []config.Document{layoutCardDoc, layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestBuildLayoutChildRefWithParams(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestBuildLayoutChildRefParamDefaults(t *testing.T) {
 	}`))
 
 	docs := []config.Document{chartTimeDoc, layoutPageDoc}
-	g, err := Build(ctx, docs)
+	g, err := Build(ctx, docs, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}

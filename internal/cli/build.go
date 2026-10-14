@@ -367,6 +367,7 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 				PluginOptions:            pluginOpts,
 				PostRenderHTMLHook:       postRenderHTMLHook,
 				PostDatasetHook:          postDatasetHook,
+				KindProvider:             env.PluginRegistry,
 			}
 
 			buildResults, err := buildAllArtefacts(ctx, out, manifests, buildExecutionConfig{
@@ -1286,7 +1287,7 @@ func loadBuildManifests(ctx context.Context, out *Output, logger logx.Logger, pr
 
 	var graph *reportgraph.Graph
 	if !noGraph {
-		graph, err = reportgraph.Build(ctx, documents)
+		graph, err = reportgraph.Build(ctx, documents, kindProvider)
 		if err != nil {
 			return nil, RuntimeError(err)
 		}

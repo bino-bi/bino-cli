@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/schema"
@@ -51,7 +52,7 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 		return fmt.Errorf("parsing built-in schema: %w", err)
 	}
 
-	if len(a.kindSchemas) == 0 {
+	if len(a.kindSchemas) == 0 && len(a.registry.AllKinds()) == 0 {
 		a.merged = builtinBytes
 		return nil
 	}
@@ -63,6 +64,9 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 
 	// Add if-then blocks for plugin kinds in the allOf array.
 	a.addPluginIfThenBlocks(schemaObj)
+
+	// Allow plugin component kinds as LayoutPage / LayoutCard children.
+	a.extendLayoutChild(schemaObj)
 
 	// Marshal back.
 	merged, err := json.Marshal(schemaObj)
@@ -132,6 +136,58 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 	}
 
 	schemaObj["allOf"] = allOf
+}
+
+// extendLayoutChild adds every plugin component kind to $defs.layoutChild: the
+// kind enum and an if/then that validates an inline spec with the plugin's
+// schema. With a ref, spec is only an override object. gridChild and tree
+// nodes stay closed because the renderer has no plugin fallback there.
+func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
+	defs, _ := schemaObj["$defs"].(map[string]any)
+	child, _ := defs["layoutChild"].(map[string]any)
+	props, _ := child["properties"].(map[string]any)
+	kindProp, _ := props["kind"].(map[string]any)
+	enumSlice, ok := kindProp["enum"].([]any)
+	if !ok {
+		return
+	}
+	allOf, _ := child["allOf"].([]any)
+
+	var names []string
+	for _, k := range a.registry.AllKinds() {
+		if k.Category == KindCategoryComponent {
+			names = append(names, k.KindName)
+		}
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		var specSchema any = map[string]any{"type": "object"}
+		if raw, ok := a.kindSchemas[name]; ok {
+			var s any
+			if json.Unmarshal(raw, &s) == nil {
+				specSchema = s
+			}
+		}
+		enumSlice = append(enumSlice, name)
+		allOf = append(allOf, map[string]any{
+			"if": map[string]any{
+				"properties": map[string]any{"kind": map[string]any{"const": name}},
+				"required":   []any{"kind"},
+			},
+			"then": map[string]any{
+				"if":   map[string]any{"required": []any{"ref"}},
+				"then": map[string]any{"properties": map[string]any{"spec": map[string]any{"type": "object"}}},
+				"else": map[string]any{
+					"required":   []any{"spec"},
+					"properties": map[string]any{"spec": specSchema},
+				},
+			},
+		})
+	}
+
+	kindProp["enum"] = enumSlice
+	child["allOf"] = allOf
 }
 
 // MergedSchema returns the complete merged JSON Schema.

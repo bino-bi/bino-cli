@@ -580,3 +580,27 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestPageLayoutSlotsUsed_PluginChildren(t *testing.T) {
+	// split-horizontal with an inline plugin child and a ref to a plugin document
+	docs := []Document{
+		{File: "/test/report.yaml", Position: 1, Kind: "ReportArtefact", Name: "report", Raw: rawDoc("ReportArtefact", "report", nil)},
+		{File: "/test/gauge.yaml", Position: 1, Kind: "Gauge", Name: "g1", Raw: rawDoc("Gauge", "g1", map[string]any{"title": "x"})},
+		{
+			File:     "/test/page.yaml",
+			Position: 1,
+			Kind:     "LayoutPage",
+			Name:     "page1",
+			Raw: rawLayoutPage("split-horizontal", "", []map[string]any{
+				{"kind": "Gauge", "spec": map[string]any{"title": "inline"}},
+				{"kind": "Gauge", "ref": "g1"},
+			}),
+		},
+	}
+
+	findings := pageLayoutSlotsUsed.Check(context.Background(), docs)
+
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings for plugin children, got %d: %v", len(findings), findings)
+	}
+}

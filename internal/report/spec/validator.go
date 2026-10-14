@@ -178,7 +178,16 @@ func friendlyDescription(msg string) string {
 // ValidateDocument verifies that the provided JSON manifest matches the report
 // bundle schema. Delegates to schema.ValidateJSON for actual validation.
 func ValidateDocument(doc []byte) error {
-	err := schema.ValidateJSON(doc)
+	return toSchemaValidationError(schema.ValidateJSON(doc))
+}
+
+// ValidateDocumentWith is ValidateDocument against a compiled schema, e.g. one
+// that includes plugin kinds.
+func ValidateDocumentWith(v *schema.Validator, doc []byte) error {
+	return toSchemaValidationError(v.ValidateJSON(doc))
+}
+
+func toSchemaValidationError(err error) error {
 	if err == nil {
 		return nil
 	}

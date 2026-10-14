@@ -585,7 +585,7 @@ func runLSPGraphDeps(ctx context.Context, dir, kind, name, direction string, max
 	}
 
 	// Build the dependency graph
-	g, err := graph.Build(ctx, docs)
+	g, err := graph.Build(ctx, docs, nil)
 	if err != nil {
 		result.Error = fmt.Sprintf("build graph: %v", err)
 		return outputJSON(out, result)

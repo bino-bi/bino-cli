@@ -17,6 +17,7 @@ import (
 	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/runtimecfg"
+	"bino.bi/bino/internal/schema"
 )
 
 // IsBinoHeader reports whether an apiVersion/kind pair identifies a bino
@@ -133,6 +134,17 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 
 	ignore := loadBnignore(dir)
 
+	// With plugin kinds loaded, validate against the merged schema, compiled once
+	// per provider. Lenient loads skip validation, so they skip the compile too.
+	var validator *schema.Validator
+	if vp, ok := opts.KindProvider.(DocumentValidatorProvider); ok && !opts.Lenient {
+		v, err := vp.DocumentValidator(ctx)
+		if err != nil {
+			return nil, err
+		}
+		validator = v
+	}
+
 	var (
 		docs       []Document
 		fileCount  int
@@ -182,7 +194,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 			}
 		}
 
-		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, opts.SkipForeign, lookup, opts.KindProvider, opts.CollectErrors, opts.Overlay)
+		fileDocs, err := loadFileWithLookup(ctx, path, cfg.MaxManifestDocs, opts.Lenient, opts.SkipForeign, lookup, opts.KindProvider, validator, opts.CollectErrors, opts.Overlay)
 		if err != nil {
 			if opts.Lenient {
 				// Skip file on error in lenient mode
@@ -243,7 +255,7 @@ func LoadDirWithOptions(ctx context.Context, dir string, opts LoadOptions) ([]Do
 	return docs, nil
 }
 
-func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, skipForeign bool, lookup LookupFunc, kindProvider KindProvider, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity - refactor before extending
+func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, skipForeign bool, lookup LookupFunc, kindProvider KindProvider, validator *schema.Validator, collect *[]error, overlay map[string]string) ([]Document, error) { //nolint:gocognit // grandfathered complexity - refactor before extending
 	var content []byte
 	if ov, ok := overlayContent(overlay, path); ok {
 		content = []byte(ov)
@@ -386,6 +398,15 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 				Kind string `json:"kind"`
 			}
 			if json.Unmarshal(rawJSON, &peek) == nil && IsPluginKind(peek.Kind, kindProvider) {
+				if validator != nil {
+					if err := validationError(spec.ValidateDocumentWith(validator, rawJSON), path, index, expanded); err != nil {
+						if collect != nil {
+							*collect = append(*collect, err)
+							continue
+						}
+						return nil, err
+					}
+				}
 				var header documentHeader
 				if err := json.Unmarshal(rawJSON, &header); err != nil {
 					if collect != nil {
@@ -417,31 +438,13 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 			}
 		}
 
-		if err := spec.ValidateDocument(rawJSON); err != nil {
-			// Enrich SchemaValidationError with file, position, and line info
-			var schemaErr *spec.SchemaValidationError
-			if errors.As(err, &schemaErr) {
-				schemaErr.File = path
-				schemaErr.DocPosition = index
-				schemaErr.Source = expanded
-
-				// Parse YAML nodes to resolve line/column positions
-				nodes, parseErr := spec.ParseYAMLNodes(expanded)
-				if parseErr == nil && index-1 >= 0 && index-1 < len(nodes) {
-					docNode := nodes[index-1]
-					for i := range schemaErr.Errors {
-						line, col, ok := spec.ResolvePathPosition(docNode, schemaErr.Errors[i].Field)
-						if ok {
-							schemaErr.Errors[i].Line = line
-							schemaErr.Errors[i].Column = col
-						}
-					}
-				}
-
-				err = schemaErr
-			} else {
-				err = fmt.Errorf("%s document %d: %w", path, index, err)
-			}
+		var verr error
+		if validator != nil {
+			verr = spec.ValidateDocumentWith(validator, rawJSON)
+		} else {
+			verr = spec.ValidateDocument(rawJSON)
+		}
+		if err := validationError(verr, path, index, expanded); err != nil {
 			if collect != nil {
 				*collect = append(*collect, err)
 				continue
@@ -481,6 +484,35 @@ func loadFileWithLookup(ctx context.Context, path string, maxDocs int, lenient, 
 	}
 
 	return docs, nil
+}
+
+// validationError adds file, document position and line/column info to a
+// schema validation error. Returns nil when err is nil.
+func validationError(err error, path string, index int, expanded string) error {
+	if err == nil {
+		return nil
+	}
+	var schemaErr *spec.SchemaValidationError
+	if !errors.As(err, &schemaErr) {
+		return fmt.Errorf("%s document %d: %w", path, index, err)
+	}
+	schemaErr.File = path
+	schemaErr.DocPosition = index
+	schemaErr.Source = expanded
+
+	// Parse YAML nodes to resolve line/column positions
+	nodes, parseErr := spec.ParseYAMLNodes(expanded)
+	if parseErr == nil && index-1 >= 0 && index-1 < len(nodes) {
+		docNode := nodes[index-1]
+		for i := range schemaErr.Errors {
+			line, col, ok := spec.ResolvePathPosition(docNode, schemaErr.Errors[i].Field)
+			if ok {
+				schemaErr.Errors[i].Line = line
+				schemaErr.Errors[i].Column = col
+			}
+		}
+	}
+	return schemaErr
 }
 
 // overlayContent looks up replacement content for path in the overlay map,

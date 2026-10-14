@@ -489,9 +489,10 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 func (s *State) BuildGraph(ctx context.Context) (*graph.Graph, error) {
 	s.mu.RLock()
 	docs := s.documents
+	kp := s.kindProvider
 	s.mu.RUnlock()
 
-	return graph.Build(ctx, docs)
+	return graph.Build(ctx, docs, kp)
 }
 
 // normalizeValue converts database values to JSON-serializable types.

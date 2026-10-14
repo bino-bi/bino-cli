@@ -71,7 +71,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 		mdPath := filepath.Join(dir, "notes.md")
 		writeFile(t, mdPath, "# One\n")
 
-		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"notes.md"})})
+		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"notes.md"})}, nil)
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -98,7 +98,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 		writeFile(t, filepath.Join(dir, "docs", "01_intro.md"), "# Intro\n")
 		writeFile(t, filepath.Join(dir, "docs", "02_body.md"), "# Body\n")
 
-		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"docs/*.md"})})
+		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"docs/*.md"})}, nil)
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -118,7 +118,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 		t.Parallel()
 		dir := tempDirResolved(t)
 
-		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"missing/*.md"})})
+		g, err := Build(ctx, []config.Document{docArtefactDoc(t, "handbook", dir, []string{"missing/*.md"})}, nil)
 		if err != nil {
 			t.Fatalf("Build must not fail on unresolvable sources, got: %v", err)
 		}
@@ -144,7 +144,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 		g, err := Build(ctx, []config.Document{
 			docArtefactDoc(t, "doc_a", dirA, []string{"notes.md"}),
 			docArtefactDoc(t, "doc_b", dirB, []string{"notes.md"}),
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -169,7 +169,7 @@ func TestBuildDocumentArtefactSources(t *testing.T) {
 		g, err := Build(ctx, []config.Document{
 			docArtefactDoc(t, "doc_a", dir, []string{"shared.md"}),
 			docArtefactDoc(t, "doc_b", dir, []string{"shared.md"}),
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -201,7 +201,7 @@ func TestBuildDocumentArtefactRefEdges(t *testing.T) {
 		docArtefactDoc(t, "handbook", dir, []string{"notes.md"}),
 	}
 
-	g, err := Build(context.Background(), docs)
+	g, err := Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestAffectedArtefactsFromMarkdownAndComponentEdits(t *testing.T) {
 		docArtefactDoc(t, "handbook", dir, []string{"notes.md"}),
 	}
 
-	g, err := Build(context.Background(), docs)
+	g, err := Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestStandaloneComponentDatasetEdge(t *testing.T) {
 		makeDoc("ChartTime", "chart", json.RawMessage(`{"kind":"ChartTime","metadata":{"name":"chart"},"spec":{"dataset":"sales"}}`)),
 	}
 
-	g, err := Build(context.Background(), docs)
+	g, err := Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestDataSetSourceAliasEdge(t *testing.T) {
 		makeDoc("DataSet", "alias_ds", json.RawMessage(`{"kind":"DataSet","metadata":{"name":"alias_ds"},"spec":{"source":"ppl"}}`)),
 	}
 
-	g, err := Build(context.Background(), docs)
+	g, err := Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

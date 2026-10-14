@@ -1422,3 +1422,14 @@ spec:
 		})
 	}
 }
+
+func TestIsBuiltinKind(t *testing.T) {
+	for _, k := range []string{"LayoutPage", "Text", "ScreenshotArtefact", "DataSource"} {
+		if !IsBuiltinKind(k) {
+			t.Errorf("IsBuiltinKind(%q) = false", k)
+		}
+	}
+	if IsBuiltinKind("Gauge") {
+		t.Error(`IsBuiltinKind("Gauge") = true`)
+	}
+}

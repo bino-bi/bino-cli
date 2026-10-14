@@ -209,12 +209,17 @@ type BuildOptions struct {
 	// Mode is the current execution mode (build or preview).
 	// Used for evaluating mode-based constraints.
 	Mode spec.Mode
+
+	// KindProvider supplies plugin kinds. Plugin component kinds are accepted
+	// as layout children. May be nil.
+	KindProvider config.KindProvider
 }
 
 // Build constructs a Graph from validated manifest documents.
 // This is a convenience wrapper that builds for all artifacts without constraint filtering.
-func Build(ctx context.Context, docs []config.Document) (*Graph, error) {
-	b := newBuilder(ctx, docs, BuildOptions{Mode: spec.ModeBuild})
+// kindProvider supplies plugin kinds and may be nil.
+func Build(ctx context.Context, docs []config.Document, kindProvider config.KindProvider) (*Graph, error) {
+	b := newBuilder(ctx, docs, BuildOptions{Mode: spec.ModeBuild, KindProvider: kindProvider})
 	return b.Build()
 }
 

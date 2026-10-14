@@ -27,7 +27,7 @@ func columnsGraph(t *testing.T) (*reportgraph.Graph, *reportgraph.Node) {
 		]}`),
 		doc("ReportArtefact", "report", `{"layoutPages":["page"]}`),
 	}
-	g, err := reportgraph.Build(context.Background(), docs)
+	g, err := reportgraph.Build(context.Background(), docs, nil)
 	if err != nil {
 		t.Fatalf("build graph: %v", err)
 	}

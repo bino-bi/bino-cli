@@ -3,6 +3,8 @@ package plugin
 import (
 	"strings"
 	"sync"
+
+	"bino.bi/bino/internal/schema"
 )
 
 // PluginRegistry holds all loaded plugins and provides lookup by capability.
@@ -14,6 +16,10 @@ type PluginRegistry struct {
 	plugins map[string]Plugin           // name → Plugin
 	kinds   map[string]KindRegistration // kind_name → registration
 	order   []string                    // plugin names in declaration order (for hook chaining)
+
+	validatorOnce sync.Once
+	validator     *schema.Validator
+	validatorErr  error
 }
 
 // NewRegistry creates an empty PluginRegistry.

@@ -28,6 +28,34 @@ func DocumentSchemaBytes() []byte {
 }
 
 var (
+	builtinKindsOnce sync.Once
+	builtinKinds     map[string]struct{}
+)
+
+// IsBuiltinKind reports whether kind is in the embedded schema's kind enum.
+// Any other kind of a loaded document comes from a plugin.
+func IsBuiltinKind(kind string) bool {
+	builtinKindsOnce.Do(func() {
+		var doc struct {
+			Properties struct {
+				Kind struct {
+					Enum []string `json:"enum"`
+				} `json:"kind"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(documentSchema, &doc); err != nil {
+			return // the embedded schema is tested to parse
+		}
+		builtinKinds = make(map[string]struct{}, len(doc.Properties.Kind.Enum))
+		for _, k := range doc.Properties.Kind.Enum {
+			builtinKinds[k] = struct{}{}
+		}
+	})
+	_, ok := builtinKinds[kind]
+	return ok
+}
+
+var (
 	schemaOnce sync.Once
 	schemaObj  *jsonschema.Schema
 	errSchema  error
@@ -112,31 +140,57 @@ func Validate(yamlBytes []byte) error {
 func ValidateJSON(jsonBytes []byte) error {
 	// Initialize schema once
 	schemaOnce.Do(func() {
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(documentSchema))
-		if err != nil {
-			errSchema = err
-			return
-		}
-		c := jsonschema.NewCompiler()
-		c.AssertFormat() // assert string formats (e.g. uri), matching prior behavior
-		const schemaURL = "https://bino.bi/schemas/report-bundle.json"
-		if err := c.AddResource(schemaURL, doc); err != nil {
-			errSchema = err
-			return
-		}
-		schemaObj, errSchema = c.Compile(schemaURL)
+		schemaObj, errSchema = compile(documentSchema)
 	})
 
 	if errSchema != nil {
 		return fmt.Errorf("load schema: %w", errSchema)
 	}
 
+	return validateWith(schemaObj, jsonBytes)
+}
+
+// Validator validates documents against a compiled schema other than the
+// embedded one, e.g. the schema merged with plugin kinds.
+type Validator struct {
+	s *jsonschema.Schema
+}
+
+// CompileValidator compiles schemaBytes into a Validator.
+func CompileValidator(schemaBytes []byte) (*Validator, error) {
+	s, err := compile(schemaBytes)
+	if err != nil {
+		return nil, fmt.Errorf("load schema: %w", err)
+	}
+	return &Validator{s: s}, nil
+}
+
+// ValidateJSON validates JSON bytes against the compiled schema.
+func (v *Validator) ValidateJSON(jsonBytes []byte) error {
+	return validateWith(v.s, jsonBytes)
+}
+
+func compile(schemaBytes []byte) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	c.AssertFormat() // assert string formats (e.g. uri), matching prior behavior
+	const schemaURL = "https://bino.bi/schemas/report-bundle.json"
+	if err := c.AddResource(schemaURL, doc); err != nil {
+		return nil, err
+	}
+	return c.Compile(schemaURL)
+}
+
+func validateWith(s *jsonschema.Schema, jsonBytes []byte) error {
 	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(jsonBytes))
 	if err != nil {
 		return fmt.Errorf("parse json: %w", err)
 	}
 
-	verr := schemaObj.Validate(inst)
+	verr := s.Validate(inst)
 	if verr == nil {
 		return nil
 	}

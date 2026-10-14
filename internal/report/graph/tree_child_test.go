@@ -34,7 +34,7 @@ func TestBuildLayoutPageWithTreeChild(t *testing.T) {
 		}
 	}`))
 
-	g, err := Build(ctx, []config.Document{treeDoc(), layoutPageDoc})
+	g, err := Build(ctx, []config.Document{treeDoc(), layoutPageDoc}, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestBuildLayoutPageWithTreeChild(t *testing.T) {
 func TestBuildStandaloneTreeComponent(t *testing.T) {
 	ctx := context.Background()
 
-	g, err := Build(ctx, []config.Document{treeDoc()})
+	g, err := Build(ctx, []config.Document{treeDoc()}, nil)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}

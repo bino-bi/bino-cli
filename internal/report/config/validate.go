@@ -1,11 +1,14 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"bino.bi/bino/internal/schema"
 )
 
 // KindProvider provides additional kind names from plugins.
@@ -26,6 +29,16 @@ type KindInfo struct {
 
 // KindCategoryDataSource is the category value for DataSource kinds.
 const KindCategoryDataSource = 0
+
+// KindCategoryComponent is the category value for component kinds.
+const KindCategoryComponent = 1
+
+// DocumentValidatorProvider is implemented by kind providers that can validate
+// documents against a schema that includes plugin kinds. A nil validator means
+// no plugin kinds are loaded and the embedded schema applies.
+type DocumentValidatorProvider interface {
+	DocumentValidator(ctx context.Context) (*schema.Validator, error)
+}
 
 var builtinUniqueNameKinds = map[string]struct{}{
 	"DataSource":           {},
@@ -70,6 +83,15 @@ func IsPluginKind(kind string, provider KindProvider) bool {
 	}
 	_, ok := provider.GetKind(kind)
 	return ok
+}
+
+// IsPluginComponentKind reports whether kind is a plugin-provided component kind.
+func IsPluginComponentKind(kind string, provider KindProvider) bool {
+	if provider == nil {
+		return false
+	}
+	k, ok := provider.GetKind(kind)
+	return ok && k.Category == KindCategoryComponent
 }
 
 // IsDataSourceKind returns true if the kind represents a DataSource.
