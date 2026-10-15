@@ -7,6 +7,8 @@ import (
 
 	pluginv1 "github.com/bino-bi/bino-plugin-sdk/proto/v1"
 	goplugin "github.com/hashicorp/go-plugin"
+
+	"bino.bi/bino/internal/report/render"
 )
 
 // grpcClient implements the Plugin interface by delegating to the gRPC stub.
@@ -128,17 +130,20 @@ func (g *grpcClient) OnHook(ctx context.Context, checkpoint string, payload *Hoo
 	}, nil
 }
 
-func (g *grpcClient) RenderComponent(ctx context.Context, kind, name string, spec []byte, renderMode string) (string, error) {
+func (g *grpcClient) RenderComponent(ctx context.Context, req render.PluginRenderRequest) (*RenderResult, error) {
 	resp, err := g.client.RenderComponent(ctx, &pluginv1.RenderComponentRequest{
-		Kind:       kind,
-		Name:       name,
-		Spec:       spec,
-		RenderMode: renderMode,
+		Kind:       req.Kind,
+		Name:       req.Name,
+		Spec:       req.Spec,
+		RenderMode: req.RenderMode,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return resp.GetHtml(), nil
+	return &RenderResult{
+		HTML:        resp.GetHtml(),
+		Diagnostics: diagnosticsFromProto(resp.GetDiagnostics()),
+	}, nil
 }
 
 func (g *grpcClient) Shutdown(ctx context.Context) error {

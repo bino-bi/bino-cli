@@ -96,8 +96,8 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 	// Add if-then blocks for plugin kinds in the allOf array.
 	a.addPluginIfThenBlocks(schemaObj)
 
-	// Allow plugin component kinds as LayoutPage / LayoutCard children.
-	a.extendLayoutChild(schemaObj)
+	// Allow plugin component kinds as layout children, grid cells and tree nodes.
+	a.extendChildDefs(schemaObj)
 
 	// Marshal back.
 	merged, err := json.Marshal(schemaObj)
@@ -181,21 +181,14 @@ func (a *SchemaAggregator) addPluginIfThenBlocks(schemaObj map[string]any) {
 	schemaObj["allOf"] = allOf
 }
 
-// extendLayoutChild adds every plugin component kind to $defs.layoutChild: the
-// kind enum and an if/then that validates an inline spec with the plugin's
-// schema. With a ref, spec is only an override object. gridChild and tree
-// nodes stay closed because the renderer has no plugin fallback there.
-func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
-	defs, _ := schemaObj["$defs"].(map[string]any)
-	child, _ := defs["layoutChild"].(map[string]any)
-	props, _ := child["properties"].(map[string]any)
-	kindProp, _ := props["kind"].(map[string]any)
-	enumSlice, ok := kindProp["enum"].([]any)
-	if !ok {
-		return
-	}
-	allOf, _ := child["allOf"].([]any)
+// childDefs are the $defs that place a component inside a container. They
+// share one shape: a kind enum and an allOf of if/then blocks.
+var childDefs = []string{"layoutChild", "gridChild", "treeNode"}
 
+// extendChildDefs adds every plugin component kind to each of childDefs: the
+// kind enum and an if/then that validates an inline spec with the plugin's
+// schema. With a ref, spec is only an override object.
+func (a *SchemaAggregator) extendChildDefs(schemaObj map[string]any) {
 	var names []string
 	for _, k := range a.registry.AllKinds() {
 		if k.Category == KindCategoryComponent {
@@ -204,7 +197,8 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 	}
 	sort.Strings(names)
 
-	for _, name := range names {
+	blocks := make([]any, len(names))
+	for i, name := range names {
 		var specSchema any = map[string]any{"type": "object"}
 		// Point at the copy in the top-level allOf: a second copy would
 		// duplicate its id, and a local pointer is what the LSP can follow.
@@ -216,8 +210,7 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 				specSchema = s
 			}
 		}
-		enumSlice = append(enumSlice, name)
-		allOf = append(allOf, map[string]any{
+		blocks[i] = map[string]any{
 			"if": map[string]any{
 				"properties": map[string]any{"kind": map[string]any{"const": name}},
 				"required":   []any{"kind"},
@@ -230,11 +223,26 @@ func (a *SchemaAggregator) extendLayoutChild(schemaObj map[string]any) {
 					"properties": map[string]any{"spec": specSchema},
 				},
 			},
-		})
+		}
 	}
 
-	kindProp["enum"] = enumSlice
-	child["allOf"] = allOf
+	defs, _ := schemaObj["$defs"].(map[string]any)
+	for _, def := range childDefs {
+		child, _ := defs[def].(map[string]any)
+		props, _ := child["properties"].(map[string]any)
+		kindProp, _ := props["kind"].(map[string]any)
+		enumSlice, ok := kindProp["enum"].([]any)
+		if !ok {
+			continue
+		}
+		allOf, _ := child["allOf"].([]any)
+		for i, name := range names {
+			enumSlice = append(enumSlice, name)
+			allOf = append(allOf, blocks[i])
+		}
+		kindProp["enum"] = enumSlice
+		child["allOf"] = allOf
+	}
 }
 
 // FetchErrors returns the GetSchemas failures of the last Build. Those plugins'

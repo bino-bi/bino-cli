@@ -118,3 +118,58 @@ func TestBuildUnknownLayoutChildStillFails(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPluginGridCellInline(t *testing.T) {
+	docs := []config.Document{
+		salesDataSet(),
+		pageDoc(`[{"kind": "Grid", "spec": {"rowHeaders": ["r"], "columnHeaders": ["c"], "children": [
+			{"row": "r", "column": "c", "kind": "Gauge", "spec": {"dataset": "sales"}}
+		]}}]`),
+	}
+	g, err := Build(context.Background(), docs, gaugeKinds)
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	cellID := makeNodeID(NodeComponent, "page#0.0")
+	cell, ok := g.NodeByID(cellID)
+	if !ok {
+		t.Fatalf("expected component node %s", cellID)
+	}
+	if got := cell.Attributes["componentKind"]; got != "Gauge" {
+		t.Errorf("componentKind = %q, want Gauge", got)
+	}
+	if want := makeNodeID(NodeDataSet, "sales"); !slices.Contains(cell.DependsOn, want) {
+		t.Errorf("grid cell depends on %v, want %s", cell.DependsOn, want)
+	}
+}
+
+// Tree node refs are not followed by the graph, for built-in kinds too, so
+// today neither a Table nor a Gauge node ref adds the dataset edge. A plugin
+// node ref must behave like a built-in one.
+func TestBuildTreeNodeRefParity(t *testing.T) {
+	treeDependsOnSales := func(t *testing.T, kind string) bool {
+		t.Helper()
+		target := makeDoc(kind, "n1", json.RawMessage(`{
+			"apiVersion": "bino.bi/v1alpha1",
+			"kind": "`+kind+`",
+			"metadata": {"name": "n1"},
+			"spec": {"dataset": "sales"}
+		}`))
+		page := pageDoc(`[{"kind": "Tree", "spec": {"edges": [], "nodes": [{"id": "a", "kind": "` + kind + `", "ref": "n1"}]}}]`)
+		g, err := Build(context.Background(), []config.Document{salesDataSet(), target, page}, gaugeKinds)
+		if err != nil {
+			t.Fatalf("Build returned error: %v", err)
+		}
+		tree, ok := g.NodeByID(makeNodeID(NodeComponent, "page#0"))
+		if !ok {
+			t.Fatal("expected tree component node")
+		}
+		return slices.Contains(tree.DependsOn, makeNodeID(NodeDataSet, "sales"))
+	}
+
+	builtin := treeDependsOnSales(t, "Table")
+	plugin := treeDependsOnSales(t, "Gauge")
+	if builtin != plugin {
+		t.Errorf("tree node ref: Table edge %v, Gauge edge %v, want the same", builtin, plugin)
+	}
+}

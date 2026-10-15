@@ -14,8 +14,8 @@ import (
 // fakePlugin renders every plugin kind as an empty element.
 type fakePlugin struct{}
 
-func (fakePlugin) RenderComponent(context.Context, string, string, []byte, string) (string, error) {
-	return "<bn-fake></bn-fake>", nil
+func (fakePlugin) RenderComponent(context.Context, PluginRenderRequest) (string, []string, error) {
+	return "<bn-fake></bn-fake>", nil, nil
 }
 
 func specDoc(kind, name, spec string) config.Document {

@@ -41,9 +41,18 @@ const (
 	EmittedKindDataset    = "dataset"
 )
 
+// PluginRenderRequest is what the host sends to a plugin to render one
+// component. Pass it by value.
+type PluginRenderRequest struct {
+	Kind, Name string
+	Spec       json.RawMessage
+	RenderMode string
+}
+
 // PluginComponentRenderer renders HTML for plugin-provided component kinds.
+// Warnings are non-fatal messages for the user; only err fails the render.
 type PluginComponentRenderer interface {
-	RenderComponent(ctx context.Context, kind, name string, spec []byte, renderMode string) (string, error)
+	RenderComponent(ctx context.Context, req PluginRenderRequest) (html string, warnings []string, err error)
 }
 
 // renderCtx holds context needed for rendering layout children with ref support.
@@ -157,6 +166,28 @@ func (rc *renderCtx) warn(msg string) {
 	if rc.warnings != nil {
 		*rc.warnings = append(*rc.warnings, msg)
 	}
+}
+
+// renderPluginComponent hands a non-built-in kind to the plugin renderer and
+// keeps its warnings. where names the container in the error for a missing
+// renderer ("child", "tree node", "grid child").
+func (rc *renderCtx) renderPluginComponent(kind, name string, specRaw json.RawMessage, where string) (string, error) {
+	if rc.pluginRenderer == nil {
+		return "", fmt.Errorf("unsupported %s kind %q", where, kind)
+	}
+	htmlOut, warnings, err := rc.pluginRenderer.RenderComponent(rc.ctx, PluginRenderRequest{
+		Kind:       kind,
+		Name:       name,
+		Spec:       specRaw,
+		RenderMode: rc.renderMode,
+	})
+	for _, w := range warnings {
+		rc.warn(w)
+	}
+	if err != nil {
+		return "", fmt.Errorf("plugin render %s: %w", kind, err)
+	}
+	return htmlOut, nil
 }
 
 // recordDataRefs notes the data a rendered component binds. It splits the
@@ -1031,16 +1062,15 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		}
 		component = renderImageComponent(s)
 	default:
-		// Try plugin component renderer for unknown kinds.
-		if rc.pluginRenderer != nil {
-			htmlFragment, err := rc.pluginRenderer.RenderComponent(rc.ctx, child.Kind, child.Ref, effectiveSpec, rc.renderMode)
-			if err != nil {
-				return "", false, fmt.Errorf("plugin render %s: %w", child.Kind, err)
-			}
-			component = htmlFragment
-		} else {
-			return "", false, fmt.Errorf("unsupported child kind %q", child.Kind)
+		name := child.Ref
+		if name == "" {
+			name = child.Metadata.Name
 		}
+		htmlOut, err := rc.renderPluginComponent(child.Kind, name, effectiveSpec, "child")
+		if err != nil {
+			return "", false, err
+		}
+		component = htmlOut
 	}
 
 	return indentBlock(component, 4), false, nil
@@ -1231,7 +1261,7 @@ func renderChartBulletComponent(s chartBulletSpec) string {
 
 // renderTreeComponent renders a Tree component as HTML.
 // Tree charts use slotted content for nodes, so we render node slots inside the element.
-// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, or LayoutCard component.
+// Each node can contain a Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, LayoutCard or plugin component.
 func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 	var b strings.Builder
 	b.WriteString("<bn-tree")
@@ -1264,7 +1294,7 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 }
 
 // renderTreeNode renders a single node in a tree chart.
-// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, and LayoutCard kinds with ref or inline spec.
+// It handles Label, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Image, LayoutCard and plugin component kinds with ref or inline spec.
 func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	// Resolve spec (handle ref if present)
 	effectiveSpec, err := resolveTreeNodeSpec(node, rc)
@@ -1276,9 +1306,12 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 	}
 
 	// Inject the inherited style as a default; the node's own selectedStyle wins.
-	effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
-	if err != nil {
-		return "", fmt.Errorf("apply inherited style to %s node: %w", node.Kind, err)
+	// Plugin kinds are excluded: their specs may reject unknown fields.
+	if node.Kind == "Label" || builtinLayoutChildKinds[node.Kind] {
+		effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
+		if err != nil {
+			return "", fmt.Errorf("apply inherited style to %s node: %w", node.Kind, err)
+		}
 	}
 	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, node.Kind, node.ID, rc)
 	if err != nil {
@@ -1342,7 +1375,8 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 		}
 		return renderLayoutCardContainer(s, rc)
 	default:
-		return "", fmt.Errorf("unsupported tree node kind %q", node.Kind)
+		// Tree nodes have no metadata; the id is a slot id, not a name.
+		return rc.renderPluginComponent(node.Kind, node.Ref, effectiveSpec, "tree node")
 	}
 }
 
@@ -1439,7 +1473,7 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 }
 
 // renderGridChild renders a single child (cell) in a grid.
-// It handles Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, and Image kinds with ref or inline spec.
+// It handles Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Image and plugin component kinds with ref or inline spec.
 func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	// Resolve spec (handle ref if present)
 	effectiveSpec, err := resolveGridChildSpec(child, rc)
@@ -1451,9 +1485,12 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 	}
 
 	// Inject the inherited style as a default; the child's own selectedStyle wins.
-	effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
-	if err != nil {
-		return "", fmt.Errorf("apply inherited style to %s grid child: %w", child.Kind, err)
+	// Plugin kinds are excluded: their specs may reject unknown fields.
+	if builtinLayoutChildKinds[child.Kind] {
+		effectiveSpec, err = applyInheritedStyle(effectiveSpec, rc.inheritedStyle)
+		if err != nil {
+			return "", fmt.Errorf("apply inherited style to %s grid child: %w", child.Kind, err)
+		}
 	}
 	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, child.Kind, child.Metadata.Name, rc)
 	if err != nil {
@@ -1517,7 +1554,11 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		}
 		return renderImageComponent(s), nil
 	default:
-		return "", fmt.Errorf("unsupported grid child kind %q", child.Kind)
+		name := child.Ref
+		if name == "" {
+			name = child.Metadata.Name
+		}
+		return rc.renderPluginComponent(child.Kind, name, effectiveSpec, "grid child")
 	}
 }
 
