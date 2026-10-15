@@ -542,6 +542,7 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
+			RenderMode:           "preview",
 			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,

@@ -113,8 +113,16 @@ func parseDataSetSpec(raw json.RawMessage) (dataSetSpec, error) {
 
 // extractPluginDatasets reads only spec.dataset of a plugin component. The rest
 // of a plugin spec is owned by the plugin, and a dataset field of another shape
-// gives no edges instead of an error.
+// gives no edges instead of an error. Like extractDatasets it accepts a bare
+// spec (layout children) or a full manifest (standalone documents).
 func extractPluginDatasets(raw json.RawMessage) []string {
+	var manifest struct {
+		Kind string          `json:"kind"`
+		Spec json.RawMessage `json:"spec"`
+	}
+	if json.Unmarshal(raw, &manifest) == nil && manifest.Kind != "" && len(manifest.Spec) > 0 {
+		raw = manifest.Spec
+	}
 	var payload struct {
 		Dataset reportspec.DatasetList `json:"dataset"`
 	}

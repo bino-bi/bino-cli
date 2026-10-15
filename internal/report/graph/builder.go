@@ -161,7 +161,7 @@ func (b *builder) categorize() {
 		case "DocumentArtefact":
 			b.documentArtefactDocs = append(b.documentArtefactDocs, doc)
 		default:
-			if _, isComponent := componentKindSet[doc.Kind]; isComponent {
+			if _, isComponent := componentKindSet[doc.Kind]; isComponent || config.IsPluginComponentKind(doc.Kind, b.opts.KindProvider) {
 				b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 			}
 			// Config/resource kinds (ScalingGroup, ComponentStyle, RuleSet,
@@ -249,7 +249,16 @@ func (b *builder) buildDataSets() error {
 }
 
 func (b *builder) buildStandaloneComponents() error {
-	for _, kind := range componentKinds {
+	// Built-in kinds in fixed order, then plugin kinds sorted.
+	kinds := append([]string(nil), componentKinds...)
+	var pluginKinds []string
+	for kind := range b.componentDocs {
+		if _, builtin := componentKindSet[kind]; !builtin {
+			pluginKinds = append(pluginKinds, kind)
+		}
+	}
+	sort.Strings(pluginKinds)
+	for _, kind := range append(kinds, pluginKinds...) {
 		docs := b.componentDocs[kind]
 		for _, doc := range docs {
 			if err := b.ctx.Err(); err != nil {
@@ -795,7 +804,7 @@ func (b *builder) addMarkdownFileNode(manifestDir, file string) string {
 		case "LayoutCard":
 			depID = makeNodeID(NodeLayoutCard, ref.Name)
 		default:
-			if _, isComponent := componentKindSet[ref.Kind]; !isComponent {
+			if _, isComponent := componentKindSet[ref.Kind]; !isComponent && !config.IsPluginComponentKind(ref.Kind, b.opts.KindProvider) {
 				continue // not a graph-linkable kind (e.g. LayoutPage)
 			}
 			depID = makeNodeID(NodeComponent, ref.Name)
