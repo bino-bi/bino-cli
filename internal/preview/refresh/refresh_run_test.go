@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/render"
 )
 
 const documentArtefactManifest = `apiVersion: bino.bi/v1alpha1
@@ -245,4 +247,85 @@ func TestWithDocumentPreviewMeta(t *testing.T) {
 			t.Errorf("expected unchanged output, got %q", got)
 		}
 	})
+}
+
+type gaugeKindProvider struct{}
+
+func (gaugeKindProvider) PluginKindNames() []string { return []string{"Gauge"} }
+
+func (gaugeKindProvider) GetKind(name string) (config.KindInfo, bool) {
+	if name != "Gauge" {
+		return config.KindInfo{}, false
+	}
+	return config.KindInfo{KindName: "Gauge", Category: config.KindCategoryComponent, PluginName: "demo"}, true
+}
+
+type modeRecordingRenderer struct {
+	mu    sync.Mutex
+	modes []string
+}
+
+func (r *modeRecordingRenderer) RenderComponent(_ context.Context, req render.PluginRenderRequest) (string, []string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.modes = append(r.modes, req.RenderMode)
+	return "<x-gauge></x-gauge>", nil, nil
+}
+
+// TestRunDocumentPluginRefRendersAsPreview proves the live preview and the
+// embed endpoint render a plugin :ref in a DocumentArtefact with render mode
+// "preview", although the document options default to "build".
+func TestRunDocumentPluginRefRendersAsPreview(t *testing.T) {
+	t.Parallel()
+
+	dir := writeDocBundle(t)
+	gauge := "apiVersion: bino.bi/v1alpha1\nkind: Gauge\nmetadata:\n  name: g1\nspec: {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "gauge.yaml"), []byte(gauge), 0o600); err != nil {
+		t.Fatalf("write gauge manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# Chapter One\n\n:ref[Gauge:g1]\n"), 0o600); err != nil {
+		t.Fatalf("write markdown: %v", err)
+	}
+	srv := startTestServer(t)
+	fake := &modeRecordingRenderer{}
+	cfg := &Config{
+		Logger:        logx.Nop(),
+		Workdir:       dir,
+		KindProvider:  gaugeKindProvider{},
+		PluginOptions: &render.PluginOptions{ComponentRenderer: fake},
+	}
+
+	checkModes := func(t *testing.T) {
+		t.Helper()
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		if len(fake.modes) == 0 {
+			t.Fatal("plugin renderer never called")
+		}
+		for _, m := range fake.modes {
+			if m != "preview" {
+				t.Errorf("render modes = %q, want all preview", fake.modes)
+				break
+			}
+		}
+		fake.modes = nil
+	}
+
+	state := NewState()
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, body := fetchContext(t, srv, "/doc/handbook"); !strings.Contains(body, "<x-gauge></x-gauge>") {
+		t.Errorf("document body missing plugin component html")
+	}
+	checkModes(t)
+
+	body, err := EmbedByName(context.Background(), "handbook", "DocumentArtefact", "", &sync.Mutex{}, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if !strings.Contains(string(body), "<x-gauge></x-gauge>") {
+		t.Errorf("embedded document missing plugin component html")
+	}
+	checkModes(t)
 }

@@ -267,6 +267,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
 			PluginOptions:        cfg.PluginOptions,
+			RenderMode:           "preview",
 			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,

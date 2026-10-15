@@ -1341,6 +1341,10 @@ type DocumentArtefactRenderOptions struct {
 	ContinueOnQueryError bool
 	// PluginOptions carries plugin integration state. May be nil.
 	PluginOptions *render.PluginOptions
+	// RenderMode is sent to plugin renderers: "build" or "preview". Empty
+	// means "build". Not taken from PluginOptions: the preview PDF export
+	// reuses preview's PluginOptions but renders as "build".
+	RenderMode string
 	// KindProvider supplies plugin kinds for the data-scoping graph. May be nil.
 	KindProvider config.KindProvider
 	// PostRenderHTMLHook is called after HTML generation. May be nil.
@@ -1467,9 +1471,13 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 	renderCtx := markdown.NewRenderContext(docs, datasetResults, datasourceResults, engineVersion)
 	renderCtx.AssetURLs = assetURLs
 	renderCtx.ScalingGroups = scalingGroups
+	renderCtx.Ctx = ctx
+	renderCtx.RenderMode = opts.RenderMode
 	if opts.PluginOptions != nil {
 		renderCtx.DataMode = opts.PluginOptions.DataMode
 		renderCtx.DataBaseURL = opts.PluginOptions.DataBaseURL
+		renderCtx.PluginRenderer = opts.PluginOptions.ComponentRenderer
+		renderCtx.PluginHead = opts.PluginOptions.ExtraHeadMarkup
 	}
 
 	// Render markdown files to HTML content with full context

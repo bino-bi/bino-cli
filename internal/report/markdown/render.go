@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	htmltemplate "html/template"
@@ -29,6 +30,7 @@ import (
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/render"
+	"bino.bi/bino/internal/schema"
 )
 
 // RenderContext holds data needed for rendering :ref[Kind:name] references.
@@ -56,6 +58,14 @@ type RenderContext struct {
 	// DataBaseURL is the absolute base URL for url mode (e.g.
 	// "http://127.0.0.1:45678").
 	DataBaseURL string
+	// Ctx is passed to PluginRenderer and carries the logger. May be nil.
+	Ctx context.Context
+	// PluginRenderer renders :ref targets of plugin component kinds. May be nil.
+	PluginRenderer render.PluginComponentRenderer
+	// RenderMode is sent to PluginRenderer: "build" or "preview". Empty means "build".
+	RenderMode string
+	// PluginHead is extra <head> markup for plugin assets.
+	PluginHead string
 	// docIndex maps kind:name to documents for ref resolution.
 	docIndex map[string]config.Document
 }
@@ -113,6 +123,10 @@ func NewRenderContext(docs []config.Document, datasetResults []dataset.Result, d
 		case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Image", "LayoutCard", "Grid":
 			key := doc.Kind + ":" + doc.Name
 			rc.docIndex[key] = doc
+		default:
+			if !schema.IsBuiltinKind(doc.Kind) {
+				rc.docIndex[doc.Kind+":"+doc.Name] = doc
+			}
 		}
 	}
 
@@ -511,9 +525,11 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 
 	dataMode := ""
 	dataBaseURL := ""
+	pluginHead := ""
 	if rc != nil {
 		dataMode = rc.DataMode
 		dataBaseURL = rc.DataBaseURL
+		pluginHead = rc.PluginHead
 	}
 	useURL := dataMode == render.DataModeURL
 	var emitted []render.EmittedData
@@ -664,6 +680,7 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 		PageCSS:       htmltemplate.CSS(pageCSS),               //nolint:gosec // G203: generated from trusted format/orientation values
 		CustomCSS:     htmltemplate.CSS(customCSS),             //nolint:gosec // G203: stylesheet is from trusted manifest config
 		ContextBody:   htmltemplate.HTML(contextBody.String()), //nolint:gosec // G203: content is rendered from trusted template engine output
+		PluginHead:    htmltemplate.HTML(pluginHead),           //nolint:gosec // G203: asset tags built by the plugin manager
 	}
 
 	var buf bytes.Buffer
@@ -751,6 +768,7 @@ type fullTemplateData struct {
 	PageCSS       htmltemplate.CSS
 	CustomCSS     htmltemplate.CSS
 	ContextBody   htmltemplate.HTML
+	PluginHead    htmltemplate.HTML
 }
 
 // fullDocumentTemplate is the HTML template for full bino document rendering.
@@ -763,6 +781,7 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
   <title>{{.Title}}</title>
   <script type='module' src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
   <script nomodule src='/cdn/bn-template-engine/{{.EngineVersion}}/bn-template-engine.esm.js'></script>
+  {{.PluginHead}}
   {{if .IncludeKatex}}<link rel='stylesheet' href='/__bino/static/katex/katex.min.css'>{{end}}
   <style>
     /* Page format */
@@ -1041,6 +1060,47 @@ func RenderComponentHTML(doc config.Document, assetURLs map[string]string) (stri
 	return render.ComponentFromSpec(doc.Kind, payload.Spec, assetURLs)
 }
 
+// errNoPluginRenderer sends a plugin :ref to the placeholder without a log line.
+var errNoPluginRenderer = errors.New("no plugin renderer")
+
+// renderPluginRef renders a :ref target of a plugin component kind. Plugin
+// warnings and a failed render are logged; the caller falls back to <bn-ref>.
+func (rc *RenderContext) renderPluginRef(doc config.Document) (string, error) {
+	if rc.PluginRenderer == nil {
+		return "", errNoPluginRenderer
+	}
+	ctx := rc.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := logx.FromContext(ctx)
+	mode := rc.RenderMode
+	if mode == "" {
+		mode = "build"
+	}
+	var payload struct {
+		Spec json.RawMessage `json:"spec"`
+	}
+	if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+		logger.Warnf("markdown :ref %s %q: parse spec: %v", doc.Kind, doc.Name, err)
+		return "", err
+	}
+	out, warnings, err := rc.PluginRenderer.RenderComponent(ctx, render.PluginRenderRequest{
+		Kind:       doc.Kind,
+		Name:       doc.Name,
+		Spec:       payload.Spec,
+		RenderMode: mode,
+	})
+	for _, w := range warnings {
+		logger.Warnf("%s", w)
+	}
+	if err != nil {
+		logger.Warnf("markdown :ref %s %q: plugin render failed, showing placeholder: %v", doc.Kind, doc.Name, err)
+		return "", err
+	}
+	return out, nil
+}
+
 // NewRefExtensionWithContext creates a goldmark extension that renders :ref[Kind:name]
 // as actual component HTML using the provided render context.
 func NewRefExtensionWithContext(rc *RenderContext) goldmark.Extender {
@@ -1109,7 +1169,13 @@ func (r *refRendererWithContext) renderRef(w util.BufWriter, source []byte, node
 			// inspector, and cmd/ctrl-click reveal-source work on embedded
 			// components. No id attribute: a component :ref'd twice in one
 			// document would produce duplicate ids.
-			componentHTML, err := RenderComponentHTML(doc, r.rc.AssetURLs)
+			var componentHTML string
+			var err error
+			if schema.IsBuiltinKind(kind) {
+				componentHTML, err = RenderComponentHTML(doc, r.rc.AssetURLs)
+			} else {
+				componentHTML, err = r.rc.renderPluginRef(doc)
+			}
 			if err == nil {
 				_, _ = w.WriteString(`<div class='bn-ref-container' data-ref-kind='`)
 				_, _ = w.WriteString(html.EscapeString(kind))

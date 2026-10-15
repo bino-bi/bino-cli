@@ -321,3 +321,57 @@ func TestDataSetSourceAliasEdge(t *testing.T) {
 		t.Errorf("alias dataset deps = %v, want DataSource:ppl edge", node.DependsOn)
 	}
 }
+
+// TestMarkdownRefToPluginComponent proves a top-level plugin component that a
+// document :refs gets a node and an edge, so its dataset is in the document's
+// data scope and a dataset edit marks the document affected.
+func TestMarkdownRefToPluginComponent(t *testing.T) {
+	t.Parallel()
+	dir := tempDirResolved(t)
+	mdPath := filepath.Join(dir, "notes.md")
+	writeFile(t, mdPath, "# Doc\n\n:ref[Gauge:g1]\n")
+
+	docs := []config.Document{
+		salesDataSet(),
+		makeDoc("Gauge", "g1", json.RawMessage(`{"kind":"Gauge","metadata":{"name":"g1"},"spec":{"dataset":"sales"}}`)),
+		docArtefactDoc(t, "handbook", dir, []string{"notes.md"}),
+	}
+
+	g, err := Build(context.Background(), docs, gaugeKinds)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	md, ok := g.NodeByID(makeNodeID(NodeMarkdownFile, mdPath))
+	if !ok {
+		t.Fatal("markdown node missing")
+	}
+	gaugeID := makeNodeID(NodeComponent, "g1")
+	if !slices.Contains(md.DependsOn, gaugeID) {
+		t.Errorf("markdown deps %v missing %s", md.DependsOn, gaugeID)
+	}
+	gauge, ok := g.NodeByID(gaugeID)
+	if !ok {
+		t.Fatalf("plugin component node %s missing", gaugeID)
+	}
+	if got := gauge.Attributes["componentKind"]; got != "Gauge" {
+		t.Errorf("componentKind = %q, want Gauge", got)
+	}
+	if !slices.Contains(gauge.DependsOn, makeNodeID(NodeDataSet, "sales")) {
+		t.Errorf("plugin component deps %v missing dataset sales", gauge.DependsOn)
+	}
+	seed, _ := g.NodeByID(makeNodeID(NodeDataSet, "sales"))
+	if _, affected := g.AffectedArtefacts([]*Node{seed}); !slices.Equal(affected, []string{"handbook"}) {
+		t.Errorf("affected docs = %v, want [handbook]", affected)
+	}
+
+	t.Run("without a kind provider the ref is not linked", func(t *testing.T) {
+		t.Parallel()
+		g, err := Build(context.Background(), docs, nil)
+		if err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if _, ok := g.NodeByID(gaugeID); ok {
+			t.Errorf("unknown kind must not become a component node")
+		}
+	})
+}

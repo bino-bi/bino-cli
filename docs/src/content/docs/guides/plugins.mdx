@@ -212,6 +212,13 @@ with the plugin, the kind and the name. In `bino preview` and `bino serve` they
 appear only in the terminal log. Info diagnostics are logged at debug level.
 Diagnostics never fail the render: to fail it, return an error.
 
+A `DocumentArtefact` can embed a top-level plugin document with
+`:ref[Kind:name]`, for example `:ref[ExampleChart:revenue_chart]`. The plugin
+receives the document's `metadata.name` and spec, and the plugin assets are
+added to the document `<head>`. In a document, warning and error
+diagnostics and a failed render appear in the terminal log. A failed render
+shows a placeholder in place of the component and does not fail the document.
+
 ### Lint rules
 
 Plugin lint rules run alongside bino's built-in rules during `bino lint`,
