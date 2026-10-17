@@ -43,6 +43,28 @@ func TestLoadDirSkipsIgnoredDirectories(t *testing.T) {
 	}
 }
 
+// Claude Code worktrees hold full project copies; loading them would report
+// every manifest as a duplicate name.
+func TestLoadDirSkipsClaudeWorktrees(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	writeManifest(t, filepath.Join(root, "main.yaml"), "main")
+	wt := filepath.Join(root, ".claude", "worktrees", "wt1")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatalf("mkdir worktree: %v", err)
+	}
+	writeManifest(t, filepath.Join(wt, "main.yaml"), "main")
+
+	docs, err := LoadDir(ctx, root)
+	if err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(docs) != 1 || docs[0].File != filepath.Join(root, "main.yaml") {
+		t.Fatalf("expected only the root manifest, got %+v", docs)
+	}
+}
+
 func TestLoadDirEnforcesFileLimit(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
