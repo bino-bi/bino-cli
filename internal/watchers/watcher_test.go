@@ -96,3 +96,75 @@ func TestShouldIgnorePathRegistryBypassesBnignore(t *testing.T) {
 		}
 	}
 }
+
+func watchSet(w *Watcher) map[string]bool {
+	set := map[string]bool{}
+	for _, p := range w.watcher.WatchList() {
+		set[p] = true
+	}
+	return set
+}
+
+// A watcher started without Dirs (daemon, mcp, in-process lsp) must skip the
+// directories the manifest loader skips, at start and when one is created later.
+func TestWatcherSkipsLoaderIgnoredDirs(t *testing.T) {
+	root := t.TempDir()
+	noise := []string{".git/objects/ab", "node_modules/pkg/lib", "vendor/x", "dist/out", ".claude/worktrees/wt1/reports"}
+	for _, d := range append(noise, "reports") {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w, err := NewWatcher(Config{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close() //nolint:errcheck
+
+	// Same path process() takes on a Create event for a new directory.
+	if err := os.MkdirAll(filepath.Join(root, "node_modules", "late", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.addTree(filepath.Join(root, "node_modules", "late")); err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]bool{root: true, filepath.Join(root, "reports"): true}
+	got := watchSet(w)
+	for p := range got {
+		if !want[p] {
+			t.Errorf("watching %s, want only the project root and reports/", p)
+		}
+	}
+	for p := range want {
+		if !got[p] {
+			t.Errorf("not watching %s", p)
+		}
+	}
+}
+
+// Registry packages must stay watched even when a path segment matches a
+// loader-ignored name, like a scope called "vendor".
+func TestWatcherKeepsRegistryDirs(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{".bino/registry/@scope/pkg", ".bino/registry/@scope/vendor", ".bino/cache"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w, err := NewWatcher(Config{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close() //nolint:errcheck
+
+	got := watchSet(w)
+	for _, d := range []string{".bino/registry/@scope/pkg", ".bino/registry/@scope/vendor"} {
+		if !got[filepath.Join(root, d)] {
+			t.Errorf("not watching %s", d)
+		}
+	}
+	if got[filepath.Join(root, ".bino", "cache")] {
+		t.Errorf("watching .bino/cache")
+	}
+}

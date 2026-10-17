@@ -13,6 +13,7 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 
 	"bino.bi/bino/internal/logx"
+	"bino.bi/bino/internal/report/config"
 )
 
 const ignoreFileName = ".bnignore"
@@ -133,6 +134,9 @@ func (y *Watcher) Run(ctx context.Context) {
 // skipping any that match ignore patterns. This is O(n) in the number of directories.
 func (y *Watcher) registerDirs(dirs []string) error {
 	for _, d := range dirs {
+		if y.inIgnoredDir(d) {
+			continue
+		}
 		if y.shouldIgnorePath(d, true) && d != y.cfg.Root {
 			continue
 		}
@@ -154,6 +158,9 @@ func (y *Watcher) addTree(root string) error {
 			}
 			return nil
 		}
+		if y.inIgnoredDir(p) {
+			return filepath.SkipDir
+		}
 		if y.shouldIgnorePath(p, true) && root != p {
 			return filepath.SkipDir
 		}
@@ -167,7 +174,7 @@ func (y *Watcher) addTree(root string) error {
 func (y *Watcher) process(event fsnotify.Event) {
 	if event.Op&fsnotify.Create == fsnotify.Create {
 		if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-			if y.shouldIgnorePath(event.Name, true) {
+			if y.shouldIgnorePath(event.Name, true) || y.inIgnoredDir(event.Name) {
 				return
 			}
 			_ = y.addTree(event.Name) //nolint:errcheck // a failed subtree add loses its events, not the watcher
@@ -276,6 +283,27 @@ func (y *Watcher) shouldIgnorePath(path string, isDir bool) bool {
 	}
 	if isDir {
 		return ignore.MatchesPath(rel + "/")
+	}
+	return false
+}
+
+// inIgnoredDir reports whether path lies in a directory the manifest loader
+// skips by name. Every component below the root is checked, so addTree on a
+// nested path is caught too. .bino is handled by shouldIgnorePath, and
+// .bino/registry is exempt like in the loader's registry pass.
+func (y *Watcher) inIgnoredDir(path string) bool {
+	rel, ok := y.relativePath(path)
+	if !ok {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == ".bino" || strings.HasPrefix(rel, ".bino/") {
+		return false
+	}
+	for _, name := range strings.Split(rel, "/") {
+		if config.IsIgnoredDirName(name) {
+			return true
+		}
 	}
 	return false
 }

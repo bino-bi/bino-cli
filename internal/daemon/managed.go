@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"bino.bi/bino/internal/logx"
@@ -88,13 +89,53 @@ func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, r
 		}
 	}
 
+	// Only manifests and files the loaded documents read can change the
+	// project; anything else (editor temp files, build output) is dropped.
+	// Events dropped while a refresh runs are checked again against the new
+	// refs, since that refresh may add a reference to them.
+	var (
+		refsMu     sync.Mutex
+		refs       = collectWatchRefs(m.State.Documents())
+		refreshing bool
+		dropped    = map[string]watchers.Event{}
+	)
 	watchLog := m.logger.Channel("watcher")
+	notify := func(evt watchers.Event) {
+		watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
+		enqueue(fmt.Sprintf("change %s", evt.RelativePath))
+	}
+	finishRefresh := func(next *watchRefs) {
+		refsMu.Lock()
+		if next != nil {
+			refs = next
+		}
+		var recheck []watchers.Event
+		for _, evt := range dropped {
+			if refs.relevant(evt) {
+				recheck = append(recheck, evt)
+			}
+		}
+		clear(dropped)
+		refreshing = false
+		refsMu.Unlock()
+		for _, evt := range recheck {
+			notify(evt)
+		}
+	}
+
 	watcher, err := watchers.NewWatcher(watchers.Config{
 		Root:   m.root,
 		Logger: watchLog,
 		Handler: func(evt watchers.Event) {
-			watchLog.Infof("File updated %s (%s)", evt.RelativePath, evt.Op)
-			enqueue(fmt.Sprintf("change %s", evt.RelativePath))
+			refsMu.Lock()
+			ok := refs.relevant(evt)
+			if !ok && refreshing {
+				dropped[evt.Path] = evt
+			}
+			refsMu.Unlock()
+			if ok {
+				notify(evt)
+			}
 		},
 	})
 	if err != nil {
@@ -123,10 +164,15 @@ func (m *ManagedState) Watch(ctx context.Context, onRefresh func(state *State, r
 				}
 				batch := append([]string(nil), reasons...)
 				reasons = reasons[:0]
+				refsMu.Lock()
+				refreshing = true
+				refsMu.Unlock()
 				if err := m.State.Refresh(ctx); err != nil {
+					finishRefresh(nil)
 					m.logger.Errorf("Refresh failed: %v", err)
 					continue
 				}
+				finishRefresh(collectWatchRefs(m.State.Documents()))
 				m.logger.Infof("Refreshed (%s)", CoalesceReasons(batch))
 				if onRefresh != nil {
 					onRefresh(m.State, batch)

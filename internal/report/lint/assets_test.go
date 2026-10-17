@@ -428,3 +428,27 @@ func TestAssetPrefixDeprecated(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalFileRefs(t *testing.T) {
+	page := componentDoc("LayoutPage", "p", map[string]any{
+		"messageImage": "./img/banner.png",
+		"children": []any{
+			map[string]any{"kind": "LayoutCard", "spec": map[string]any{"titleImage": "logo"}},
+			map[string]any{"kind": "Image", "spec": map[string]any{"source": "img/chart.svg"}},
+			map[string]any{"kind": "Image", "spec": map[string]any{"source": "asset:logo"}},
+			map[string]any{"kind": "Image", "spec": map[string]any{"source": "https://example.com/x.png"}},
+		},
+	})
+	assertPaths(t, LocalFileRefs(page), []string{filepath.FromSlash("/project/img/banner.png"), filepath.FromSlash("/project/img/chart.svg")})
+
+	asset := Document{
+		File: "/project/assets.yaml",
+		Kind: "Asset",
+		Raw: rawDoc("Asset", "logo", map[string]any{
+			"type":   "image",
+			"source": map[string]any{"localPath": "./files/logo.png"},
+		}),
+	}
+	assertPaths(t, LocalFileRefs(asset), []string{filepath.FromSlash("/project/files/logo.png")})
+	assertPaths(t, LocalFileRefs(imageAssetDoc("remote", "image")), nil)
+}
