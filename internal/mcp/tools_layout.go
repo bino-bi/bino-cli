@@ -65,10 +65,10 @@ func (h *handlers) runLayoutState(ctx context.Context, _ *mcpsdk.CallToolRequest
 	buildMu.Lock()
 	defer buildMu.Unlock()
 
-	root := h.deps.State.ProjectRoot()
+	root := h.root()
 	outDir := filepath.Join(root, "dist")
 
-	artefact, err := h.resolveArtefact(in.Artefact)
+	artefact, err := h.resolveArtefact(ctx, in.Artefact)
 	if err != nil {
 		return nil, layoutStateOutput{}, err
 	}
@@ -114,12 +114,16 @@ func (h *handlers) runLayoutState(ctx context.Context, _ *mcpsdk.CallToolRequest
 
 // resolveArtefact picks the artefact to inspect, defaulting to the only
 // ReportArtefact in the project.
-func (h *handlers) resolveArtefact(requested string) (string, error) {
+func (h *handlers) resolveArtefact(ctx context.Context, requested string) (string, error) {
 	if requested != "" {
 		return requested, nil
 	}
+	st, err := h.state(ctx)
+	if err != nil {
+		return "", err
+	}
 	var names []string
-	for _, doc := range h.deps.State.Documents() {
+	for _, doc := range st.Documents() {
 		if doc.Kind == "ReportArtefact" {
 			names = append(names, doc.Name)
 		}

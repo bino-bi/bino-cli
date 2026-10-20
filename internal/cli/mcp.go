@@ -99,28 +99,28 @@ func resolveMCPRoot(workdir string) (root string, initialized bool, err error) {
 	return root, false, nil
 }
 
-// runMCPStandalone serves the MCP directly over stdio from a freshly loaded
-// project State (no daemon involved).
+// runMCPStandalone serves the MCP directly over stdio (no daemon involved). The
+// project State is opened on the first call that needs it (see lazyProject).
 func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot string, allowPublish bool) error {
-	// Plugins are loaded so plugin kinds/linters appear in schema/validate (parity
-	// with the daemon and `bino schema`); the build tool shells out to `bino build`,
-	// which enforces engine-compat itself.
-	managed, reg, cleanup, err := loadStandaloneState(ctx, logger, projectRoot)
-	if err != nil {
-		return RuntimeError(err)
-	}
-	defer cleanup()
-
-	if err := managed.State.Refresh(ctx); err != nil {
-		logger.Errorf("Initial refresh failed: %v", err)
-	}
-	if err := managed.Watch(ctx, nil); err != nil {
-		logger.Warnf("File watcher unavailable: %v", err)
-	}
+	// Plugins are loaded with the State so plugin kinds/linters appear in
+	// schema/validate (parity with the daemon and `bino schema`); the build tool
+	// shells out to `bino build`, which enforces engine-compat itself.
+	project := newLazyProject(ctx, logger, projectRoot)
+	defer project.close()
 
 	logger.Infof("bino MCP server ready (standalone) for %s", projectRoot)
-	srv := mcp.NewServer(mcp.Deps{State: managed.State, Registry: reg, Authoring: newCLIAuthoring(projectRoot, reg), Packages: newCLIPackages(managed.State), AllowPublish: allowPublish})
+	srv := mcp.NewServer(newStandaloneDeps(project, allowPublish))
 	return srv.Run(ctx, &mcpsdk.StdioTransport{})
+}
+
+func newStandaloneDeps(project *lazyProject, allowPublish bool) mcp.Deps {
+	return mcp.Deps{
+		ProjectRoot:  project.root,
+		Load:         project.load,
+		Authoring:    newCLIAuthoring(project.root, lazyKinds{project}),
+		Packages:     newLazyCLIPackages(project.root, project.state),
+		AllowPublish: allowPublish,
+	}
 }
 
 // runMCPProxy bridges this stdio entrypoint to a running daemon's /mcp endpoint:

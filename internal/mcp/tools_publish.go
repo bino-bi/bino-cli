@@ -76,7 +76,7 @@ func (h *handlers) runPublish(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 	cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // G204: exe is our own binary, args are controlled
 	// `bino publish` has no --work-dir and resolves the project from its cwd.
 	// The server is long-lived and shared, so never os.Chdir here.
-	cmd.Dir = h.deps.State.ProjectRoot()
+	cmd.Dir = h.root()
 	cmd.Env = append(os.Environ(), "BINO_DISABLE_UPDATE_CHECK=1", "NO_COLOR=1")
 	// With --json stdout carries only the JSON object; progress and the
 	// registry's gate findings go to stderr.

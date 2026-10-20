@@ -66,7 +66,7 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	// --log-format json makes the logger emit JSON lines (parsed for progress);
 	// --build-log-format json makes build write the bino-build-*.json file
 	// parsed below for artefacts and warnings.
-	args := []string{"build", "--work-dir", h.deps.State.ProjectRoot(), "--out-dir", outDir, "--log-format", "json", "--build-log-format", "json"}
+	args := []string{"build", "--work-dir", h.root(), "--out-dir", outDir, "--log-format", "json", "--build-log-format", "json"}
 	for _, a := range in.Artefacts {
 		args = append(args, "--artefact", a)
 	}
@@ -86,7 +86,7 @@ func (h *handlers) runBuild(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	// Snapshot existing build logs so we can identify the one this run writes
 	// without relying on wall-clock vs filesystem mtime resolution (which varies
 	// by platform).
-	logDir := filepath.Join(h.deps.State.ProjectRoot(), outDir)
+	logDir := filepath.Join(h.root(), outDir)
 	preexisting := buildLogSet(logDir)
 
 	if err := cmd.Start(); err != nil {
