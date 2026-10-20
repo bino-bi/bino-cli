@@ -190,6 +190,47 @@ func checkImageReference(value string, assets map[string]bool, docFile string) s
 	}
 }
 
+// LocalFileRefs returns the local files the asset rules stat for doc: an
+// Asset's spec.source.localPath and image references that look like paths.
+// Paths are resolved relative to the manifest. A path-like value that names an
+// Asset is included too; callers use the list to decide what to watch.
+func LocalFileRefs(doc Document) []string {
+	var root any
+	if err := json.Unmarshal(doc.Raw, &root); err != nil {
+		return nil
+	}
+	var refs []string
+	add := func(value string) {
+		if !filepath.IsAbs(value) {
+			value = filepath.Join(filepath.Dir(doc.File), value)
+		}
+		refs = append(refs, value)
+	}
+	if doc.Kind == "Asset" {
+		top, _ := root.(map[string]any)
+		topSpec, _ := top["spec"].(map[string]any)
+		source, _ := topSpec["source"].(map[string]any)
+		if localPath := strings.TrimSpace(stringField(source, "localPath")); localPath != "" {
+			add(localPath)
+		}
+	}
+	walkNodes(root, "", func(node map[string]any, _ string) {
+		kind, _ := node["kind"].(string)
+		field, ok := imageFieldByKind[kind]
+		if !ok {
+			return
+		}
+		componentSpec, _ := node["spec"].(map[string]any)
+		value := strings.TrimSpace(stringField(componentSpec, field))
+		if value == "" || strings.Contains(value, "${") || strings.HasPrefix(value, assetRefPrefix) ||
+			isURL(value) || !looksLikePath(value) {
+			return
+		}
+		add(value)
+	})
+	return refs
+}
+
 // isURL reports whether a value is something the browser can fetch on its own:
 // an absolute URL, a data URI, or a root-relative path.
 func isURL(value string) bool {

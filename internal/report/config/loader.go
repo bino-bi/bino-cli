@@ -55,6 +55,7 @@ var yamlExt = map[string]struct{}{
 
 var ignoredDirNames = map[string]struct{}{
 	".git":         {},
+	".claude":      {},
 	".hg":          {},
 	".svn":         {},
 	".idea":        {},
@@ -605,8 +606,13 @@ func shouldSkipDir(root, current string, entry fs.DirEntry) bool {
 	if cleanRoot == cleanCurrent {
 		return false
 	}
-	name := strings.ToLower(entry.Name())
-	_, ignored := ignoredDirNames[name]
+	return IsIgnoredDirName(entry.Name())
+}
+
+// IsIgnoredDirName reports whether a directory with this base name is skipped
+// when scanning a project for manifests.
+func IsIgnoredDirName(name string) bool {
+	_, ignored := ignoredDirNames[strings.ToLower(name)]
 	return ignored
 }
 
