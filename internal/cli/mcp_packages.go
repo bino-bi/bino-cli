@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -13,31 +14,43 @@ import (
 )
 
 // cliPackages implements mcp.Packages over the daemon's registry computation
-// and the lifted `bino registry` write bodies. It is bound to one project
-// State, so the root is the server's fixed project root and never the process
-// working directory.
+// and the lifted `bino registry` write bodies. It is bound to one project, so
+// the root is the server's fixed project root and never the process working
+// directory.
 type cliPackages struct {
-	state *daemon.State
+	root  string
+	state func(ctx context.Context) (*daemon.State, error)
 }
 
-func newCLIPackages(state *daemon.State) *cliPackages { return &cliPackages{state: state} }
+func newCLIPackages(state *daemon.State) *cliPackages {
+	return &cliPackages{root: state.ProjectRoot(), state: func(context.Context) (*daemon.State, error) { return state, nil }}
+}
 
-func (p *cliPackages) Packages(_ context.Context) ([]daemon.RegistryPackage, error) {
-	return daemon.RegistryPackages(p.state.ProjectRoot(), p.state.Documents())
+// newLazyCLIPackages loads the State only for the calls that read documents.
+func newLazyCLIPackages(root string, state func(ctx context.Context) (*daemon.State, error)) *cliPackages {
+	return &cliPackages{root: root, state: state}
+}
+
+func (p *cliPackages) Packages(ctx context.Context) ([]daemon.RegistryPackage, error) {
+	st, err := p.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return daemon.RegistryPackages(st.ProjectRoot(), st.Documents())
 }
 
 func (p *cliPackages) Search(ctx context.Context, params registry.SearchParams) (registry.SearchResult, error) {
-	return daemon.RegistrySearch(ctx, p.state.ProjectRoot(), params)
+	return daemon.RegistrySearch(ctx, p.root, params)
 }
 
 func (p *cliPackages) Info(ctx context.Context, spec registry.Spec) (daemon.RegistryInfoResult, error) {
-	return daemon.RegistryInfo(ctx, p.state.ProjectRoot(), spec)
+	return daemon.RegistryInfo(ctx, p.root, spec)
 }
 
 // AuthStatus reports whether a credential resolves for the project's registry.
 // The token itself is never returned or logged.
 func (p *cliPackages) AuthStatus(_ context.Context) (mcp.RegistryAuthStatus, error) {
-	proj, err := registryProjectFor(p.state.ProjectRoot())
+	proj, err := registryProjectFor(p.root)
 	if err != nil {
 		return mcp.RegistryAuthStatus{}, err
 	}
@@ -61,7 +74,7 @@ func (p *cliPackages) AuthStatus(_ context.Context) (mcp.RegistryAuthStatus, err
 // validate_project already sees the new closure instead of waiting for the
 // asynchronous file watcher.
 func (p *cliPackages) mutate(ctx context.Context, op func(registryProject) (mcp.RegistryMutationResult, error)) (mcp.RegistryMutationResult, error) {
-	proj, err := registryProjectFor(p.state.ProjectRoot())
+	proj, err := registryProjectFor(p.root)
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
 	}
@@ -69,7 +82,14 @@ func (p *cliPackages) mutate(ctx context.Context, op func(registryProject) (mcp.
 	if err != nil {
 		return mcp.RegistryMutationResult{}, err
 	}
-	if err := p.state.Refresh(ctx); err != nil {
+	st, err := p.state(ctx)
+	if errors.Is(err, mcp.ErrNotInitialized) {
+		return res, nil
+	}
+	if err == nil {
+		err = st.Refresh(ctx)
+	}
+	if err != nil {
 		res.Warnings = append(res.Warnings, "project reload failed after the write: "+err.Error())
 	}
 	return res, nil
@@ -82,7 +102,9 @@ func (p *cliPackages) Add(ctx context.Context, specs []string) (mcp.RegistryMuta
 	if err != nil {
 		return res, err
 	}
-	res.NameCollisions = packageNameCollisions(p.state.ProjectRoot(), p.state.Documents())
+	if st, err := p.state(ctx); err == nil {
+		res.NameCollisions = packageNameCollisions(p.root, st.Documents())
+	}
 	return res, nil
 }
 

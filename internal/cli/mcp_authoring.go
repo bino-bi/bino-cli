@@ -201,6 +201,21 @@ func (a *cliAuthoring) ScaffoldSource(ctx context.Context, payload json.RawMessa
 // network. A remote source is fetched (cached by SHA) and honors ctx for
 // cancellation; an uncurated owner requires trust=true.
 func (a *cliAuthoring) InitBundle(ctx context.Context, in mcp.InitBundleInput) (mcp.InitResult, error) {
+	res, err := a.initBundle(ctx, in)
+	if err != nil {
+		return res, err
+	}
+	// This server only serves its root. A bundle in a subdirectory of a root that
+	// is not a project stays invisible to the other tools.
+	if filepath.Clean(res.Directory) != filepath.Clean(a.root) {
+		if _, statErr := os.Stat(filepath.Join(a.root, "bino.toml")); statErr != nil {
+			res.Note = fmt.Sprintf("The bundle was created in %s, but this MCP server serves %s, which is not a bino project. Open a new session in %s to work on the bundle.", res.Directory, a.root, res.Directory)
+		}
+	}
+	return res, nil
+}
+
+func (a *cliAuthoring) initBundle(ctx context.Context, in mcp.InitBundleInput) (mcp.InitResult, error) {
 	src, err := tmpl.ParseSource(in.Source)
 	if err != nil {
 		return mcp.InitResult{}, err

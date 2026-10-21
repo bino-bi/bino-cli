@@ -7,6 +7,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	claudeplugin "bino.bi/bino/claude-plugin"
 	"bino.bi/bino/internal/daemon"
+	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/datasource"
 	embedkinds "bino.bi/bino/internal/report/embed"
@@ -26,6 +28,13 @@ import (
 type Deps struct {
 	State    *daemon.State
 	Registry *plugin.PluginRegistry
+	// ProjectRoot is the project root when State is nil.
+	ProjectRoot string
+	// Load, when non-nil and State is nil, opens the project State and plugin
+	// registry on first use. Standalone `bino mcp` uses it so that starting the
+	// server opens no DuckDB session. It returns ErrNotInitialized while the
+	// root has no bino.toml.
+	Load func(ctx context.Context) (*daemon.State, *plugin.PluginRegistry, error)
 	// Authoring, when non-nil, enables the manifest write tools (create_manifest,
 	// write_manifest, scaffold_source, init_bundle, edit_manifest). Supplied by
 	// the CLI layer.
@@ -72,8 +81,11 @@ Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
 write_manifest -> build. bino's schema and validation are your guardrails.`
 
-// NewServer constructs the MCP server. deps.State must be non-nil; deps.Registry
-// may be nil (no plugins).
+// ErrNotInitialized is returned by Deps.Load while the project root has no bino.toml.
+var ErrNotInitialized = errors.New("not a bino project yet: no bino.toml in the server root; run init_bundle to scaffold one")
+
+// NewServer constructs the MCP server. One of deps.State or deps.Load must be
+// set; deps.Registry may be nil (no plugins).
 func NewServer(deps Deps) *mcpsdk.Server {
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "bino",
@@ -99,6 +111,52 @@ func NewServer(deps Deps) *mcpsdk.Server {
 // handlers carries the shared dependencies for every resource/tool handler.
 type handlers struct {
 	deps Deps
+}
+
+// root returns the project root without loading the project State.
+func (h *handlers) root() string {
+	if h.deps.State != nil {
+		return h.deps.State.ProjectRoot()
+	}
+	return h.deps.ProjectRoot
+}
+
+// state returns the project State, loading it on first use.
+func (h *handlers) state(ctx context.Context) (*daemon.State, error) {
+	if h.deps.State != nil {
+		return h.deps.State, nil
+	}
+	st, _, err := h.deps.Load(ctx)
+	return st, err
+}
+
+// draftState returns the project State. While the root has no bino.toml it
+// returns a bare State without a DuckDB session instead: draft validation and
+// source probes need no project, and there are no plugins yet. Call release
+// when done.
+func (h *handlers) draftState(ctx context.Context) (st *daemon.State, release func(), err error) {
+	st, err = h.state(ctx)
+	if !errors.Is(err, ErrNotInitialized) {
+		return st, func() {}, err
+	}
+	st, err = daemon.NewState(h.root(), nil, logx.Nop())
+	if err != nil {
+		return nil, nil, err
+	}
+	return st, st.Close, nil
+}
+
+// registry returns the plugin registry, loading the project on first use. A
+// folder without bino.toml has no plugins, so it yields nil there.
+func (h *handlers) registry(ctx context.Context) (*plugin.PluginRegistry, error) {
+	if h.deps.Load == nil || h.deps.State != nil {
+		return h.deps.Registry, nil
+	}
+	_, reg, err := h.deps.Load(ctx)
+	if errors.Is(err, ErrNotInitialized) {
+		return nil, nil
+	}
+	return reg, err
 }
 
 // --- Resources ---
@@ -269,8 +327,12 @@ func (h *handlers) readKinds(ctx context.Context, _ *mcpsdk.ReadResourceRequest)
 	return jsonResource("bino://kinds", map[string]any{"kinds": kinds})
 }
 
-func (h *handlers) readDocuments(_ context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
-	return jsonResource("bino://documents", h.deps.State.Index())
+func (h *handlers) readDocuments(ctx context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+	st, err := h.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return jsonResource("bino://documents", st.Index())
 }
 
 func (h *handlers) readPackages(ctx context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
@@ -327,15 +389,23 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_project",
 		Description: "List every document in the project: kind, name, file, and document position.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, daemon.IndexResult, error) {
-		return nil, h.deps.State.Index(), nil
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, daemon.IndexResult, error) {
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, daemon.IndexResult{}, err
+		}
+		return nil, st.Index(), nil
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "describe_document",
 		Description: "List the documents (kind, name, position) declared in a single manifest file.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in describeDocumentInput) (*mcpsdk.CallToolResult, describeDocumentOutput, error) {
-		idx := h.deps.State.Index()
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in describeDocumentInput) (*mcpsdk.CallToolResult, describeDocumentOutput, error) {
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, describeDocumentOutput{}, err
+		}
+		idx := st.Index()
 		out := describeDocumentOutput{File: in.File, Documents: []daemon.IndexDocument{}}
 		for _, doc := range idx.Documents {
 			if doc.File == in.File {
@@ -349,14 +419,22 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 		Name:        "validate_project",
 		Description: "Validate the project on disk and return diagnostics. Set execute_queries to also run datasets and report data-validation warnings.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in validateProjectInput) (*mcpsdk.CallToolResult, daemon.ValidateResult, error) {
-		return nil, h.deps.State.Validate(ctx, in.ExecuteQueries), nil
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, daemon.ValidateResult{}, err
+		}
+		return nil, st.Validate(ctx, in.ExecuteQueries), nil
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "get_columns",
 		Description: "Return the column names of a DataSet or DataSource. Prefix the name with '$' to force a DataSource lookup.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getColumnsInput) (*mcpsdk.CallToolResult, daemon.ColumnsResult, error) {
-		return nil, h.deps.State.Columns(ctx, in.Name), nil
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, daemon.ColumnsResult{}, err
+		}
+		return nil, st.Columns(ctx, in.Name), nil
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
@@ -367,21 +445,34 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 		if limit <= 0 {
 			limit = 100
 		}
-		return nil, h.deps.State.Rows(ctx, in.Name, limit), nil
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, daemon.RowsResult{}, err
+		}
+		return nil, st.Rows(ctx, in.Name, limit), nil
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "graph_deps",
 		Description: "Traverse the dependency graph from a node. direction: 'out' (dependencies), 'in' (dependents), or 'both' (default). Component nodes list the dataset columns they read in `columns` (dataset, column, role, field); column 'auto' means the engine picks it from the data.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in graphDepsInput) (*mcpsdk.CallToolResult, daemon.GraphDepsResult, error) {
-		return nil, h.deps.State.GraphDeps(ctx, in.Kind, in.Name, in.Direction, in.MaxDepth), nil
+		st, err := h.state(ctx)
+		if err != nil {
+			return nil, daemon.GraphDepsResult{}, err
+		}
+		return nil, st.GraphDeps(ctx, in.Kind, in.Name, in.Direction, in.MaxDepth), nil
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "validate_draft",
 		Description: "Validate manifest YAML in memory (no disk write) and return schema/constraint diagnostics. Use this to check a draft before create_manifest or write_manifest.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in validateDraftInput) (*mcpsdk.CallToolResult, daemon.ValidateResult, error) {
-		diags, err := h.deps.State.ValidateDraft(ctx, []byte(in.YAML))
+		st, release, err := h.draftState(ctx)
+		if err != nil {
+			return nil, daemon.ValidateResult{}, err
+		}
+		defer release()
+		diags, err := st.ValidateDraft(ctx, []byte(in.YAML))
 		if err != nil {
 			return nil, daemon.ValidateResult{}, err
 		}
@@ -395,12 +486,17 @@ func (h *handlers) registerReadTools(srv *mcpsdk.Server) {
 		Name:        "introspect_source",
 		Description: "Probe a not-yet-registered data source (CSV/Excel/database) and return its columns, sample rows, Excel sheet names, and detected CSV options. Pass the bare DataSource spec object (no apiVersion/kind/metadata).",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in introspectSourceInput) (*mcpsdk.CallToolResult, introspectSourceOutput, error) {
+		st, release, err := h.draftState(ctx)
+		if err != nil {
+			return nil, introspectSourceOutput{}, err
+		}
+		defer release()
 		specJSON, err := json.Marshal(in.Spec)
 		if err != nil {
 			return nil, introspectSourceOutput{}, fmt.Errorf("encode spec: %w", err)
 		}
 		out := introspectSourceOutput{Columns: []datasource.ProbeColumn{}, SampleRows: []map[string]any{}}
-		res, err := h.deps.State.IntrospectSource(ctx, specJSON, in.Sheet, in.Limit)
+		res, err := st.IntrospectSource(ctx, specJSON, in.Sheet, in.Limit)
 		if err != nil {
 			// Surface probe failures (bad path, unknown type, ...) as structured
 			// output so the agent can read and fix them, not as a protocol error.
@@ -491,7 +587,10 @@ type introspectSourceOutput struct {
 // aggregator builds a fresh schema aggregator over the (possibly empty) plugin
 // registry. Building is cheap when no plugins are registered.
 func (h *handlers) aggregator(ctx context.Context) (*plugin.SchemaAggregator, error) {
-	reg := h.deps.Registry
+	reg, err := h.registry(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if reg == nil {
 		reg = plugin.NewRegistry()
 	}
@@ -601,10 +700,14 @@ func (h *handlers) listKinds(ctx context.Context) ([]KindInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	reg, err := h.registry(ctx)
+	if err != nil {
+		return nil, err
+	}
 	names := kindEnum(agg.MergedSchema())
 	out := make([]KindInfo, 0, len(names))
 	for _, n := range names {
-		out = append(out, KindInfo{Name: n, Category: h.categoryFor(n), Embeddable: embedkinds.IsEmbeddable(n)})
+		out = append(out, KindInfo{Name: n, Category: categoryFor(reg, n), Embeddable: embedkinds.IsEmbeddable(n)})
 	}
 	return out, nil
 }
@@ -627,12 +730,12 @@ func kindEnum(merged json.RawMessage) []string {
 // categoryFor returns the capability category for a kind. Built-in kinds resolve
 // from the single authority (internal/report/embed); plugin-provided kinds fall
 // back to the registry's categorization.
-func (h *handlers) categoryFor(kind string) string {
+func categoryFor(reg *plugin.PluginRegistry, kind string) string {
 	if c, ok := embedkinds.BuiltinCategory(kind); ok {
 		return c
 	}
-	if h.deps.Registry != nil {
-		return h.deps.Registry.CategorizeKind(kind).CapabilityCategory()
+	if reg != nil {
+		return reg.CategorizeKind(kind).CapabilityCategory()
 	}
 	return "embeddable"
 }

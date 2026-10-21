@@ -105,4 +105,5 @@ type InitResult struct {
 	ResolvedSource string   `json:"resolvedSource,omitempty"`
 	ResolvedSHA    string   `json:"resolvedSHA,omitempty"`
 	Folders        []string `json:"folders,omitempty"`
+	Note           string   `json:"note,omitempty"`
 }
