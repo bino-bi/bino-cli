@@ -216,6 +216,11 @@ type FullRenderOptions struct {
 	ProjectRoot string
 }
 
+// TOCLinkPrefix prefixes TOC links in the TOC-only render. That print has no
+// heading targets, so Chrome keeps only absolute links; pdf.ResolveTOCLinks
+// turns them into internal links after the merge with the content PDF.
+const TOCLinkPrefix = "https://toc.bino.invalid/#"
+
 // RenderResult holds the output of RenderFilesWithContext.
 type RenderResult struct {
 	// HTML is the rendered HTML content.
@@ -336,7 +341,11 @@ func RenderFilesWithContext(ctx context.Context, files []string, opts FullRender
 	if renderTOC {
 		tocBuf.WriteString(`<nav class='bn-toc'><h2>Table of Contents</h2>`)
 		counters := make([]int, 0, 6) // tracks numbering state per depth level
-		renderTOCItems(&tocBuf, tocTree.Items, opts.TOCPageNumbers, opts.TOCNumbering, counters, 0)
+		hrefPrefix := "#"
+		if opts.TOCOnly {
+			hrefPrefix = TOCLinkPrefix
+		}
+		renderTOCItems(&tocBuf, tocTree.Items, opts.TOCPageNumbers, opts.TOCNumbering, hrefPrefix, counters, 0)
 		tocBuf.WriteString(`</nav>`)
 	}
 
@@ -382,7 +391,7 @@ func collectHeadingIDs(items toc.Items) []string {
 //	depth 2 (h3): 1.1.1, 1.1.2
 //	depth 3 (h4): 1.1.1 a), 1.1.1 b)
 //	depth 4+ (h5+): 1.1.1 a) i), 1.1.1 a) ii)
-func renderTOCItems(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]int, numbering bool, counters []int, depth int) {
+func renderTOCItems(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]int, numbering bool, hrefPrefix string, counters []int, depth int) {
 	if len(items) == 0 {
 		return
 	}
@@ -415,7 +424,8 @@ func renderTOCItems(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]i
 
 		// Write the link with optional chapter number prefix
 		if len(item.ID) > 0 {
-			buf.WriteString(`<a href='#`)
+			buf.WriteString(`<a href='`)
+			buf.WriteString(hrefPrefix)
 			buf.WriteString(html.EscapeString(itemID))
 			buf.WriteString(`'>`)
 		}
@@ -431,7 +441,7 @@ func renderTOCItems(buf *bytes.Buffer, items toc.Items, pageNumbers map[string]i
 
 		// Recurse for children
 		if len(item.Items) > 0 {
-			renderTOCItems(buf, item.Items, pageNumbers, numbering, counters, depth+1)
+			renderTOCItems(buf, item.Items, pageNumbers, numbering, hrefPrefix, counters, depth+1)
 		}
 		buf.WriteString("</li>")
 	}
@@ -926,6 +936,10 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
         content: " (" attr(href) ")";
         font-size: 0.8em;
         color: #666;
+      }
+
+      .bn-toc a[href^="http"]::after {
+        content: none;
       }
     }
 

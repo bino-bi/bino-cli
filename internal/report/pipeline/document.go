@@ -8,6 +8,7 @@ import (
 
 	"bino.bi/bino/internal/pdf"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/markdown"
 )
 
 // DocumentTOCPDFOptions configures BuildDocumentPDFWithTOC.
@@ -156,6 +157,14 @@ func (b *Builder) BuildDocumentPDFWithTOC(ctx context.Context, docs []config.Doc
 
 	if err := b.MergePDFs(ctx, []string{tocTmpPath, contentTmpPath}, opts.OutputPath); err != nil {
 		return fmt.Errorf("document artefact %s: merge pdfs: %w", artefactName, err)
+	}
+	if n, err := pdf.ResolveTOCLinks(opts.OutputPath, markdown.TOCLinkPrefix); err != nil {
+		logger.Warnf("TOC links not resolved for %s: %v", artefactName, err)
+	} else {
+		logger.Debugf("Resolved %d TOC links for %s", n, artefactName)
+	}
+	if err := normalizePDFIfRequested(opts.OutputPath); err != nil {
+		return fmt.Errorf("document artefact %s: %w", artefactName, err)
 	}
 
 	return nil

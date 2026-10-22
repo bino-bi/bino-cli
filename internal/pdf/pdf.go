@@ -21,7 +21,11 @@ func MergeFiles(inFiles []string, outFile string) error {
 	if len(inFiles) == 0 {
 		return fmt.Errorf("merge: no input files")
 	}
-	return api.MergeCreateFile(inFiles, outFile, false, nil)
+	// pdfcpu's default adds one bookmark per input file, titled with its
+	// random temp file name.
+	conf := model.NewDefaultConfiguration()
+	conf.CreateBookmarks = false
+	return api.MergeCreateFile(inFiles, outFile, false, conf)
 }
 
 // PageCount returns the number of pages in a PDF file.
