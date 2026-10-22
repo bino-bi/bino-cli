@@ -50,6 +50,7 @@ import (
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/pdf"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/pipeline"
 )
@@ -182,6 +183,11 @@ func statelessRenderPDF(ctx context.Context, cmd *cobra.Command, builder *pipeli
 		return classifyStatelessErr(ctx, statelessErrRenderFailed, err)
 	}
 	defer os.Remove(pdfPath)
+
+	spec := artifact.Spec
+	if err := builder.SetPDFInfo(pdfPath, pdf.Info{Title: spec.Title, Author: spec.Author, Subject: spec.Subject, Keywords: spec.Keywords}); err != nil {
+		return classifyStatelessErr(ctx, statelessErrRenderFailed, err)
+	}
 
 	return streamStatelessFile(cmd, pdfPath)
 }

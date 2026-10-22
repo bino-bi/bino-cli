@@ -41,6 +41,7 @@ spec:
   language: en
   filename: ` + absPDF + `
   title: "Sample Report"
+  author: "Ops Team"
   layoutPages:
     - sample-page
     - broken-page
@@ -76,6 +77,7 @@ spec:
   format: a4
   locale: en
   title: Handbook
+  author: Ops Team
   tableOfContents: true
   displayHeaderFooter: true
   sources:
@@ -153,7 +155,7 @@ func TestPreviewPDF_BuildsWatermarkedPDFs(t *testing.T) {
 		},
 	}
 
-	for _, query := range []string{"?kind=ReportArtefact&name=sample-report", "?kind=DocumentArtefact&name=handbook"} {
+	for query, title := range map[string]string{"?kind=ReportArtefact&name=sample-report": "Sample Report", "?kind=DocumentArtefact&name=handbook": "Handbook"} {
 		t.Run(query, func(t *testing.T) {
 			status, resp := postPDF(ctx, t, h, query, nil)
 			if status != http.StatusOK {
@@ -165,6 +167,10 @@ func TestPreviewPDF_BuildsWatermarkedPDFs(t *testing.T) {
 			pages, unstamped := unstampedPages(t, resp.PDF)
 			if pages == 0 || len(unstamped) > 0 {
 				t.Errorf("pages = %d, pages without watermark = %v", pages, unstamped)
+			}
+			info := pdfInfo(t, resp.PDF)
+			if info["Title"] != title || info["Author"] != "Ops Team" {
+				t.Errorf("Title, Author = %q, %q; want %q, %q", info["Title"], info["Author"], title, "Ops Team")
 			}
 			if !strings.Contains(strings.Join(resp.Warnings, "\n"), "broken_ds") {
 				t.Errorf("warnings do not name the failing dataset: %q", resp.Warnings)

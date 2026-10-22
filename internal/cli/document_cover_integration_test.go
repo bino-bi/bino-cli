@@ -19,6 +19,8 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -27,10 +29,7 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
 
-	"bino.bi/bino/internal/chrome"
-	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
-	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/pdf"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/pipeline"
@@ -167,28 +166,8 @@ type coverBuild struct {
 
 func newCoverBuild(t *testing.T, cover string) coverBuild {
 	t.Helper()
-	requireRenderStack(t)
 	ctx := context.Background()
-	engineMgr, err := engine.NewManager()
-	if err != nil {
-		t.Fatal(err)
-	}
-	engineInfo, err := engineMgr.EnsureVersion(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cacheDir, err := pathutil.CacheDir("cdn")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mgr, err := chrome.NewManager()
-	if err != nil {
-		t.Fatal(err)
-	}
-	chromePath, err := mgr.ResolveExecPath()
-	if err != nil {
-		t.Fatal(err)
-	}
+	engineVersion, cacheDir, chromePath := renderStack(t)
 	workdir := writeCoverFixture(t, cover)
 	loaded, err := pipeline.LoadManifests(ctx, workdir, nil)
 	if err != nil {
@@ -200,7 +179,7 @@ func newCoverBuild(t *testing.T, cover string) coverBuild {
 	}
 	return coverBuild{
 		ctx:     ctx,
-		builder: pipeline.Builder{Workdir: workdir, EngineVersion: engineInfo.Version, CacheDir: cacheDir},
+		builder: pipeline.Builder{Workdir: workdir, EngineVersion: engineVersion, CacheDir: cacheDir},
 		docs:    loaded.Documents,
 		art:     arts[0],
 		outDir:  t.TempDir(),
@@ -417,7 +396,10 @@ func TestIntegration_DocumentCoverErrors(t *testing.T) {
 	}
 }
 
-func TestIntegration_DocumentCoverSigned(t *testing.T) {
+// testSigningProfiles returns a signing profile "signer" with a fresh
+// self-signed certificate.
+func testSigningProfiles(t *testing.T, workdir string) map[string]config.SigningProfile {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -439,21 +421,20 @@ func TestIntegration_DocumentCoverSigned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	c := newCoverBuild(t, fullCover+"  signingProfile: signer\n")
-	profiles := map[string]config.SigningProfile{"signer": {
-		Document: config.Document{Name: "signer", File: filepath.Join(c.builder.Workdir, "signing.yaml")},
+	return map[string]config.SigningProfile{"signer": {
+		Document: config.Document{Name: "signer", File: filepath.Join(workdir, "signing.yaml")},
 		Spec: config.SigningProfileSpec{
 			Certificate: config.PEMSource{Inline: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))},
 			PrivateKey:  config.PEMSource{Inline: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))},
 			Signer:      config.SigningProfileSigner{Name: "Test Signer", Reason: "Integration test"},
 		},
 	}}
-	out, err := c.build(t, profiles)
-	if err != nil {
-		t.Fatalf("build: %v", err)
-	}
-	doc, err := pdfsign.OpenFile(out)
+}
+
+// requireOneValidSignature fails unless the PDF at path has exactly one valid signature.
+func requireOneValidSignature(t *testing.T, path string) {
+	t.Helper()
+	doc, err := pdfsign.OpenFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,6 +445,32 @@ func TestIntegration_DocumentCoverSigned(t *testing.T) {
 	if result.Count() != 1 || !result.Valid() {
 		t.Fatalf("signatures = %+v", result.Signatures())
 	}
+	// The signature must cover the whole file: nothing may be appended after signing.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := byteRangeRe.FindAllSubmatch(data, -1)
+	if len(m) == 0 {
+		t.Fatal("no /ByteRange found")
+	}
+	last := m[len(m)-1]
+	start, _ := strconv.Atoi(string(last[1]))
+	length, _ := strconv.Atoi(string(last[2]))
+	if start+length != len(data) {
+		t.Errorf("signature covers bytes up to %d of %d; the file changed after signing", start+length, len(data))
+	}
+}
+
+var byteRangeRe = regexp.MustCompile(`/ByteRange\s*\[\s*\d+\s+\d+\s+(\d+)\s+(\d+)\s*\]`)
+
+func TestIntegration_DocumentCoverSigned(t *testing.T) {
+	c := newCoverBuild(t, fullCover+"  signingProfile: signer\n")
+	out, err := c.build(t, testSigningProfiles(t, c.builder.Workdir))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	requireOneValidSignature(t, out)
 	if n, err := pdf.PageCount(out); err != nil || n < 5 {
 		t.Errorf("signed file has %d pages (%v), want covers and body", n, err)
 	}

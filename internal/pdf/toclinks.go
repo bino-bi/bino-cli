@@ -74,6 +74,7 @@ func ResolveTOCLinks(filePath, prefix string) (int, error) {
 		return 0, nil
 	}
 
+	useXRefTable(ctx.Configuration)
 	// WriteContextFile stages next to the target and keeps its file mode.
 	if err := api.WriteContextFile(ctx, filePath); err != nil {
 		return 0, fmt.Errorf("write pdf with toc links: %w", err)

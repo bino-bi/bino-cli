@@ -312,6 +312,15 @@ func (b *Builder) MergePDFs(_ context.Context, inFiles []string, outFile string)
 	return normalizePDFIfRequested(outFile)
 }
 
+// SetPDFInfo writes title, author, subject and keywords into the PDF at
+// pdfPath. Call it on the final file, before signing.
+func (b *Builder) SetPDFInfo(pdfPath string, info pdf.Info) error {
+	if err := pdf.SetInfo(pdfPath, info); err != nil {
+		return err
+	}
+	return normalizePDFIfRequested(pdfPath)
+}
+
 // ---------------------------------------------------------------------------
 // Chrome screenshot capture
 // ---------------------------------------------------------------------------

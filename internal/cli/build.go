@@ -17,6 +17,7 @@ import (
 	"bino.bi/bino/internal/hooks"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/pdf"
 	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
@@ -624,17 +625,7 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		onLayoutState = capture.Handle
 	}
 
-	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
-	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
-		PDFPath:               pdfPath,
-		ChromePath:            cfg.ChromePath,
-		Format:                cfg.Artifact.Spec.Format,
-		Orientation:           cfg.Artifact.Spec.Orientation,
-		Debug:                 cfg.Debug,
-		WaitForComponentReady: true,
-		ReadyConsolePrefix:    componentReadyConsolePrefix,
-		OnLayoutState:         onLayoutState,
-	}); err != nil {
+	if err := renderReportPDF(ctx, cfg, renderResult, pdfPath, onLayoutState); err != nil {
 		if spinner != nil {
 			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
 		}
@@ -702,6 +693,28 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		}
 	}
 	return result, nil
+}
+
+// renderReportPDF prints the report to pdfPath and writes its metadata.
+func renderReportPDF(ctx context.Context, cfg buildArtefactConfig, renderResult pipeline.RenderResult, pdfPath string, onLayoutState func([]byte)) error {
+	spec := cfg.Artifact.Spec
+	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
+	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
+		PDFPath:               pdfPath,
+		ChromePath:            cfg.ChromePath,
+		Format:                spec.Format,
+		Orientation:           spec.Orientation,
+		Debug:                 cfg.Debug,
+		WaitForComponentReady: true,
+		ReadyConsolePrefix:    componentReadyConsolePrefix,
+		OnLayoutState:         onLayoutState,
+	}); err != nil {
+		return err
+	}
+	if err := cfg.Builder.SetPDFInfo(pdfPath, pdf.Info{Title: spec.Title, Author: spec.Author, Subject: spec.Subject, Keywords: spec.Keywords}); err != nil {
+		return fmt.Errorf("write pdf metadata: %w", err)
+	}
+	return nil
 }
 
 func writeGraphReport(g *reportgraph.Graph, root *reportgraph.Node, pdfPath, base string) (string, error) {
@@ -789,6 +802,12 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 	}
 	if err := renderPDF(ctx, cfg, basePDFOpts, pdfPath); err != nil {
 		return documentArtefactResult{}, err
+	}
+	if err := cfg.Builder.SetPDFInfo(pdfPath, pdf.Info{Title: spec.Title, Author: spec.Author, Subject: spec.Subject, Keywords: spec.Keywords}); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to write PDF metadata for %s", artefactName))
+		}
+		return documentArtefactResult{}, fmt.Errorf("document artefact %s: write pdf metadata: %w", artefactName, err)
 	}
 
 	// Check for cancellation before signing
