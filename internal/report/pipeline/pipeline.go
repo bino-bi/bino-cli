@@ -1480,6 +1480,11 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		renderCtx.PluginHead = opts.PluginOptions.ExtraHeadMarkup
 	}
 
+	codeHighlight, err := markdown.ResolveCodeHighlight(s.CodeHighlight)
+	if err != nil {
+		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: spec.codeHighlight.theme: %w", artifact.Document.Name, err)
+	}
+
 	// Render markdown files to HTML content with full context
 	mathEnabled := s.MathEnabled()
 	mdResult, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
@@ -1494,6 +1499,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		Locale:         s.Locale,
 		TOCPageNumbers: opts.TOCPageNumbers,
 		Math:           mathEnabled,
+		CodeHighlight:  codeHighlight,
 		ExcludeTOC:     opts.ExcludeTOC,
 		TOCOnly:        opts.TOCOnly,
 		TOCNumbering:   s.TOCNumberingEnabled(),
@@ -1517,6 +1523,7 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		Locale:        s.Locale,
 		RenderContext: renderCtx,
 		Math:          mathEnabled,
+		CodeHighlight: codeHighlight,
 	})
 
 	// Dispatch post-render-html hook.

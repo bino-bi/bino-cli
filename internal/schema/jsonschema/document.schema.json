@@ -2000,6 +2000,24 @@
           "default": true,
           "description": "If true, enables LaTeX math rendering via KaTeX. Use $...$ for inline math and $$...$$ for display math."
         },
+        "codeHighlight": {
+          "type": "object",
+          "description": "Syntax highlighting of fenced code blocks. When unset, blocks with a known language are highlighted with the 'github' theme and no line numbers. Blocks without a language or with an unknown language stay plain.",
+          "properties": {
+            "theme": {
+              "type": "string",
+              "minLength": 1,
+              "default": "github",
+              "description": "Name of a chroma style (for example 'github', 'monokai', 'xcode'), or 'none' to disable highlighting. An unknown name fails the build and lists the valid names."
+            },
+            "lineNumbers": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, prints a line number in front of each line of a highlighted code block."
+            }
+          },
+          "additionalProperties": false
+        },
         "pageBreakBetweenSources": {
           "type": "boolean",
           "default": true,

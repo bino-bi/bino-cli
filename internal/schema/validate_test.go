@@ -240,6 +240,42 @@ spec:
 	}
 }
 
+func TestValidate_DocumentArtefactCodeHighlight(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    string
+		wantErr bool
+	}{
+		{name: "theme and line numbers", spec: "codeHighlight: {theme: monokai, lineNumbers: true}"},
+		{name: "theme none", spec: "codeHighlight: {theme: none}"},
+		{name: "empty object", spec: "codeHighlight: {}"},
+		{name: "unknown key", spec: "codeHighlight: {foo: 1}", wantErr: true},
+		{name: "empty theme", spec: `codeHighlight: {theme: ""}`, wantErr: true},
+		{name: "lineNumbers not a boolean", spec: "codeHighlight: {lineNumbers: yes please}", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yaml := `
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: manual
+spec:
+  format: a4
+  sources: [./docs/*.md]
+  ` + tt.spec + "\n"
+			err := Validate([]byte(yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_MissingRequiredField(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -529,6 +529,16 @@ type DocumentArtefactSpec struct {
 	// (e.g. 1, 1.1, 1.1.1, 1.1.1 a). Defaults to true when tableOfContents is enabled.
 	// Pointer to distinguish unset (nil -> default true) from explicit false.
 	TOCNumbering *bool `json:"tocNumbering,omitempty"`
+	// CodeHighlight configures syntax highlighting of fenced code blocks.
+	// Nil means highlighting with the default theme and no line numbers.
+	CodeHighlight *CodeHighlightSpec `json:"codeHighlight,omitempty"`
+}
+
+// CodeHighlightSpec mirrors spec.codeHighlight of a DocumentArtefact.
+type CodeHighlightSpec struct {
+	// Theme is a chroma style name, or "none" to disable highlighting.
+	Theme       string `json:"theme,omitempty"`
+	LineNumbers bool   `json:"lineNumbers,omitempty"`
 }
 
 // MathEnabled returns whether math rendering is enabled (defaults to true).

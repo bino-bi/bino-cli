@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
+	github.com/alecthomas/chroma/v2 v2.24.1
 	github.com/andybalholm/brotli v1.2.5
 	github.com/bino-bi/bino-plugin-sdk v0.0.4
 	github.com/blang/semver v3.5.1+incompatible
@@ -34,6 +35,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.abhg.dev/goldmark/toc v0.12.0
 	go.lsp.dev/jsonrpc2 v1.0.1
 	go.lsp.dev/protocol v1.0.1
@@ -62,6 +64,7 @@ require (
 	github.com/digitorus/pdf v0.3.0 // indirect
 	github.com/digitorus/pkcs7 v0.0.0-20260914070511-d678ea5ea03f // indirect
 	github.com/digitorus/timestamp v0.0.0-20250524132541-c45532741eea // indirect
+	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.3.3 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.3.3 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-arm64 v0.3.3 // indirect
