@@ -25,7 +25,16 @@ func MergeFiles(inFiles []string, outFile string) error {
 	// random temp file name.
 	conf := model.NewDefaultConfiguration()
 	conf.CreateBookmarks = false
+	useXRefTable(conf)
 	return api.MergeCreateFile(inFiles, outFile, false, conf)
+}
+
+// useXRefTable makes pdfcpu write a classic xref table instead of an xref
+// stream. The PDF signer copies the trailer, and with it /Info, only after a
+// table; after an xref stream the signed file loses its metadata.
+func useXRefTable(conf *model.Configuration) {
+	conf.WriteXRefStream = false
+	conf.WriteObjectStream = false
 }
 
 // PageCount returns the number of pages in a PDF file.

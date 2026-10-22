@@ -146,6 +146,9 @@ func TestStatelessBuild_PDFFromStdin(t *testing.T) {
 	if !bytes.HasPrefix(out, []byte("%PDF")) {
 		t.Fatalf("stdout is not a PDF (len=%d, prefix=%q)", len(out), firstBytes(out))
 	}
+	if got := pdfInfo(t, out)["Title"]; got != "Test Corp" {
+		t.Errorf("Title = %q, want the ReportArtefact title", got)
+	}
 }
 
 func TestStatelessBuild_PDFFromFile(t *testing.T) {
