@@ -157,6 +157,35 @@ bn-context[data-bino-doc-hf]:has(.bn-document-content)::after {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Cover pages in document previews. A cover is a full page without header or
+   footer, so it breaks out of the 2cm page padding, and the flex order puts
+   front covers above the header band and back covers below the footer band.
+   The canvas color between covers makes them read as separate sheets. */
+bn-context:has(> .bn-cover-preview) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.bn-cover-preview {
+  margin: 0 -2cm;
+  background: var(--bino-bg);
+}
+.bn-cover-preview > * + * {
+  margin-top: 1.5em;
+}
+.bn-cover-front {
+  order: -1;
+  margin-top: -2cm;
+  margin-bottom: 2cm;
+  padding-bottom: 1.5em;
+}
+.bn-cover-back {
+  order: 1;
+  margin-top: 2cm;
+  margin-bottom: -2cm;
+  padding-top: 1.5em;
+}
 /* Documents strip on the All Pages view (injected by withAllPagesDocuments) */
 .bn-docs-strip {
   display: flex;

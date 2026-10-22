@@ -526,6 +526,10 @@ type FullDocumentOptions struct {
 	Math bool
 	// CodeHighlight emits the chroma theme stylesheet. Nil emits none.
 	CodeHighlight *CodeHighlight
+	// FrontCoverHTML and BackCoverHTML are written before and after the
+	// content section. Only the preview sets them.
+	FrontCoverHTML string
+	BackCoverHTML  string
 }
 
 // WrapDocumentWithContext wraps rendered HTML content in a full bino HTML document.
@@ -669,10 +673,12 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 		contextBody.WriteByte('\n')
 	}
 	// Add the markdown content wrapped in a document section
+	contextBody.WriteString(opts.FrontCoverHTML)
 	contextBody.WriteString(`<section class='bn-document-content'>`)
 	contextBody.WriteString("\n")
 	contextBody.Write(content)
 	contextBody.WriteString("\n</section>")
+	contextBody.WriteString(opts.BackCoverHTML)
 
 	// Get engine version
 	engineVersion := "latest"

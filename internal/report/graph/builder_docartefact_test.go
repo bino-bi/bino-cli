@@ -375,3 +375,44 @@ func TestMarkdownRefToPluginComponent(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildDocumentArtefactCoverAssetEdges checks that Assets used by cover
+// pages are dependencies of the document, in both sources formats, so an
+// Asset edit refreshes the document preview.
+func TestBuildDocumentArtefactCoverAssetEdges(t *testing.T) {
+	t.Parallel()
+	dir := tempDirResolved(t)
+	writeFile(t, filepath.Join(dir, "notes.md"), "# Doc\n")
+	cover := `{"front": [{"template": "classic", "params": {"logo": "logo"}}, {"html": "<img src=\"asset:hero\">", "css": ".asset:hover {}"}],
+		"back": [{"pdf": "brochure"}, {"image": "ghost"}]}`
+	asset := func(name string) config.Document {
+		return makeDoc("Asset", name, json.RawMessage(fmt.Sprintf(`{"kind":"Asset","metadata":{"name":%q},"spec":{"type":"image","mediaType":"image/png","source":{"remoteURL":"https://example.com/x.png"}}}`, name)))
+	}
+	docs := []config.Document{
+		asset("logo"), asset("hero"), asset("brochure"), asset("hover"),
+		makeDocAt("DocumentArtefact", "current", filepath.Join(dir, "current.yaml"), json.RawMessage(
+			`{"kind":"DocumentArtefact","metadata":{"name":"current"},"spec":{"format":"a4","sources":["notes.md"],"cover":`+cover+`}}`)),
+		makeDocAt("DocumentArtefact", "legacy", filepath.Join(dir, "legacy.yaml"), json.RawMessage(
+			`{"kind":"DocumentArtefact","metadata":{"name":"legacy"},"spec":{"format":"a4","sources":[{"file":"notes.md"}],"cover":`+cover+`}}`)),
+	}
+	g, err := Build(context.Background(), docs, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, name := range []string{"current", "legacy"} {
+		node, ok := g.DocumentArtefactByName(name)
+		if !ok {
+			t.Fatalf("document %s not in graph", name)
+		}
+		for _, want := range []string{"logo", "hero", "brochure"} {
+			if !slices.Contains(node.DependsOn, makeNodeID(NodeComponent, want)) {
+				t.Errorf("%s: deps %v miss asset %s", name, node.DependsOn, want)
+			}
+		}
+		for _, notWant := range []string{"ghost", "hover"} {
+			if slices.Contains(node.DependsOn, makeNodeID(NodeComponent, notWant)) {
+				t.Errorf("%s: unexpected edge to %s", name, notWant)
+			}
+		}
+	}
+}

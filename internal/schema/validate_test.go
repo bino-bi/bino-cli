@@ -276,6 +276,53 @@ spec:
 	}
 }
 
+func TestValidate_DocumentArtefactCover(t *testing.T) {
+	tests := []struct {
+		name    string
+		cover   string
+		wantErr bool
+	}{
+		{name: "image", cover: "front: [{image: hero, fit: contain}]"},
+		{name: "pdf", cover: "back: [{pdf: brochure, page: 2}]"},
+		{name: "template", cover: "front: [{template: classic, params: {subtitle: Guide, accent: '#0b5394'}, css: '.x{}'}]"},
+		{name: "html", cover: "front: [{html: '<p>{{ .Date }}</p>', css: 'p{}', params: {edition: 2}}]"},
+		{name: "front and back", cover: "{front: [{image: hero}], back: [{pdf: brochure}]}"},
+		{name: "two sources in one entry", cover: "front: [{image: hero, pdf: brochure}]", wantErr: true},
+		{name: "unknown template", cover: "front: [{template: fancy}]", wantErr: true},
+		{name: "css with image", cover: "front: [{image: hero, css: 'img{}'}]", wantErr: true},
+		{name: "params with pdf", cover: "back: [{pdf: brochure, params: {a: b}}]", wantErr: true},
+		{name: "page zero", cover: "back: [{pdf: brochure, page: 0}]", wantErr: true},
+		{name: "unknown fit", cover: "front: [{image: hero, fit: stretch}]", wantErr: true},
+		{name: "empty entry", cover: "front: [{}]", wantErr: true},
+		{name: "unknown key in cover", cover: "middle: []", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cover := tt.cover
+			if !strings.HasPrefix(cover, "{") {
+				cover = "{" + cover + "}"
+			}
+			yaml := `
+apiVersion: bino.bi/v1alpha1
+kind: DocumentArtefact
+metadata:
+  name: manual
+spec:
+  format: a4
+  sources: [./docs/*.md]
+  cover: ` + cover + "\n"
+			err := Validate([]byte(yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_MissingRequiredField(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -130,7 +130,7 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 				WithPaperHeight(pxToInches(h))
 		} else {
 			// Standard paper format
-			pw, ph := paperSizeInches(format)
+			pw, ph := PaperSizeInches(format)
 			if pw > 0 && ph > 0 {
 				printParams = printParams.
 					WithPaperWidth(pw).
@@ -601,8 +601,8 @@ func parseMargin(s string) float64 {
 	}
 }
 
-// paperSizeInches returns the paper dimensions in inches for standard formats.
-func paperSizeInches(format string) (width, height float64) {
+// PaperSizeInches returns the portrait paper dimensions in inches for standard formats, or 0, 0 for an unknown one.
+func PaperSizeInches(format string) (width, height float64) {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "a3":
 		return mmToInches(297), mmToInches(420)
