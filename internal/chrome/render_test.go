@@ -153,9 +153,9 @@ func TestPaperSizeInches(t *testing.T) {
 		{"unknown", 0, 0},
 	}
 	for _, tt := range tests {
-		w, h := paperSizeInches(tt.format)
+		w, h := PaperSizeInches(tt.format)
 		if math.Abs(w-tt.wantW) > 0.001 || math.Abs(h-tt.wantH) > 0.001 {
-			t.Errorf("paperSizeInches(%q) = (%f, %f), want (%f, %f)", tt.format, w, h, tt.wantW, tt.wantH)
+			t.Errorf("PaperSizeInches(%q) = (%f, %f), want (%f, %f)", tt.format, w, h, tt.wantW, tt.wantH)
 		}
 	}
 }

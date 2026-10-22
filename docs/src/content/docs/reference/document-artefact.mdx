@@ -85,7 +85,8 @@ When enabled, the table of contents is automatically generated from all `h1`-`h6
 that have an `id` attribute (standard Markdown headings get IDs automatically). The TOC
 includes page numbers for each heading, calculated during a two-pass rendering process.
 
-The TOC appears at the beginning of the document and includes a page break after it.
+The TOC appears at the beginning of the document (after any [front cover pages](#cover-pages))
+and includes a page break after it. In the PDF, each TOC entry is a link to its heading.
 
 ### Math rendering
 
@@ -140,6 +141,107 @@ spec:
       <span class="pageNumber"></span> / <span class="totalPages"></span>
     </div>
 ```
+
+### Cover pages
+
+- `spec.cover.front` - Pages printed before the table of contents and the content.
+- `spec.cover.back` - Pages printed after the content.
+
+A cover written as the first markdown source would get page number 1, the header and the
+footer, and would shift every page number in the table of contents. Cover pages avoid that:
+each one is printed on its own and merged around the content, so it has no page number, no
+header and no footer, and the content still starts at page 1.
+
+Each entry in `front` and `back` is one page and sets exactly one source:
+
+```yaml
+spec:
+  cover:
+    front:
+      - template: classic
+        params: { subtitle: "Operations guide", logo: companyLogo, accent: "#0b5394" }
+      - html: |
+          <div class="note">{{ .Date }} · {{ .Author }}</div>
+        css: |
+          .note { position: absolute; bottom: 3cm; left: 2cm; }
+    back:
+      - pdf: legalNotice # Asset of type file, mediaType application/pdf
+        page: 2 # 1-based, default 1
+      - image: backCover # Asset of type image
+        fit: cover # cover | contain, default cover
+```
+
+- **`image`** names an [`Asset`](/reference/asset/) of type `image`. It fills the whole page;
+  `fit: cover` crops it to fill, `fit: contain` shows the whole image.
+- **`pdf`** names an `Asset` of type `file` with `mediaType: application/pdf`. One page is
+  taken from it (`page`, default `1`) and keeps its own page size; a size that differs from
+  the document format is logged as a warning. `localPath`, `inlineBase64` and `remoteURL`
+  sources work; a remote PDF is downloaded during the build.
+- **`template: classic`** is a built-in cover with the title, an optional subtitle, the
+  author, the date, an optional logo and an accent bar. It reads `params.subtitle`,
+  `params.logo` (an Asset name) and `params.accent` (a CSS color).
+- **`html`** is your own page body.
+
+`html` and `template` accept `css`, added after the template styles, and `params`.
+
+#### Template data
+
+`html` is a Go [html/template](https://pkg.go.dev/html/template). The classic template uses
+the same data:
+
+| Field       | Value                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `.Title`    | `spec.title`                                                                                                  |
+| `.Author`   | `spec.author`                                                                                                 |
+| `.Subject`  | `spec.subject`                                                                                                |
+| `.Date`     | Build date in `spec.locale`: `22. Oktober 2026` (de), `October 22, 2026` (en), `2026-10-22` for other locales |
+| `.Params.x` | The entry's `params.x`                                                                                        |
+
+`.Date` uses `SOURCE_DATE_EPOCH` when it is set, so the cover date does not change between
+builds.
+`asset:<name>` URLs in `html` and `css` resolve to Assets, as in markdown. They are resolved
+in `src`, `href`, `poster`, `data` and `srcset` attribute values and in CSS `url(...)`; an
+unknown Asset name there fails the build. Other text, such as a `.asset:hover` selector, is
+left alone:
+
+```yaml
+- html: |
+    <img class="hero" src="asset:heroImage">
+    <h1>{{ .Title }}</h1>
+  css: |
+    .hero { width: 100%; height: 60%; object-fit: cover; }
+```
+
+#### Styling the classic template
+
+The classic template is styled with CSS custom properties, so a `css` block can restyle it
+without copying the template:
+
+```yaml
+- template: classic
+  css: |
+    :root {
+      --bn-cover-font: Georgia, serif;
+      --bn-cover-title-size: 40pt;
+      --bn-cover-bg: #f4f1ea;
+    }
+```
+
+Available properties: `--bn-cover-accent`, `--bn-cover-bg`, `--bn-cover-fg`,
+`--bn-cover-muted`, `--bn-cover-font`, `--bn-cover-padding`, `--bn-cover-bar-width`,
+`--bn-cover-title-size`, `--bn-cover-subtitle-size`, `--bn-cover-meta-size`,
+`--bn-cover-logo-height`. The elements use the classes `bn-cover`, `bn-cover-bar`,
+`bn-cover-logo`, `bn-cover-title`, `bn-cover-subtitle`, `bn-cover-meta`, `bn-cover-author`
+and `bn-cover-date`.
+
+#### Rules
+
+- Every cover page is a standalone page in the document's `format` and `orientation`, with
+  margin 0 (full bleed). It does not load `spec.stylesheet` or the document's body styles.
+- Content that does not fit on one page is cut off after the first page, with a warning.
+- A missing Asset, a wrong Asset type or media type, and a `page` beyond the end of the PDF
+  fail the build.
+- A signed document is signed after the cover pages are merged in.
 
 ### Signing
 
@@ -247,6 +349,9 @@ The preview is exact for content and approximate for print geometry:
 - **Approximated**: the page width follows `format` and `orientation`; page breaks
   between sources show as dashed markers; with `displayHeaderFooter` the reserved
   margin bands appear as labeled placeholders sized by `marginTop`/`marginBottom`.
+- **Cover pages** show above and below the content, each in a frame sized to the page, so
+  their CSS stays apart from the document CSS as in the PDF. A `pdf` cover shows a
+  placeholder card ("PDF page N of asset X").
 - **Only in a PDF** (the toolbar's PDF button or `bino build`): real pagination, the
   page numbers in the table of contents, the separately paginated TOC pages with Roman
   numerals (the preview page shows the TOC inline, without page numbers), and the actual
@@ -458,6 +563,17 @@ $$r = \frac{\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_{i=1}^n (x_i
 | `spec.codeHighlight`             | object           | no                                  | highlighting on, `github` theme, no line numbers | [Syntax highlighting](#syntax-highlighting) of fenced code blocks.                                                                                                                                            | `codeHighlight: { theme: xcode }`                               |
 | `spec.codeHighlight.theme`       | string           | no                                  | `github`                                         | A chroma style name, or `none` to disable highlighting. An unknown name fails the build.                                                                                                                      | `theme: none`                                                   |
 | `spec.codeHighlight.lineNumbers` | boolean          | no                                  | `false`                                          | Prints a line number in front of each line of a highlighted code block.                                                                                                                                       | `lineNumbers: true`                                             |
+| `spec.cover`                     | object           | no                                  | -                                                | [Cover pages](#cover-pages) before and after the content, without page number, header or footer.                                                                                                              | `cover: { front: [{ template: classic }] }`                     |
+| `spec.cover.front`               | array            | no                                  | -                                                | Cover pages printed before the table of contents and the content.                                                                                                                                             | `front: [{ image: hero }]`                                      |
+| `spec.cover.back`                | array            | no                                  | -                                                | Cover pages printed after the content.                                                                                                                                                                        | `back: [{ pdf: notice, page: 2 }]`                              |
+| `spec.cover.*[].image`           | string           | one source required                 | -                                                | Asset of type `image`, shown full bleed.                                                                                                                                                                      | `image: hero`                                                   |
+| `spec.cover.*[].fit`             | string           | no                                  | `cover`                                          | How the image fills the page. Values: `cover`, `contain`. Only with `image`.                                                                                                                                  | `fit: contain`                                                  |
+| `spec.cover.*[].pdf`             | string           | one source required                 | -                                                | Asset of type `file` with `mediaType: application/pdf`. One page is used.                                                                                                                                     | `pdf: notice`                                                   |
+| `spec.cover.*[].page`            | integer          | no                                  | `1`                                              | Page of the PDF to use, starting at 1. Only with `pdf`.                                                                                                                                                       | `page: 2`                                                       |
+| `spec.cover.*[].template`        | string           | one source required                 | -                                                | Built-in cover template. Values: `classic`.                                                                                                                                                                   | `template: classic`                                             |
+| `spec.cover.*[].html`            | string           | one source required                 | -                                                | Cover body as a Go html/template with `.Title`, `.Author`, `.Subject`, `.Date`, `.Params`.                                                                                                                    | `html: "<h1>{{ .Title }}</h1>"`                                 |
+| `spec.cover.*[].css`             | string           | no                                  | -                                                | CSS for this cover page. Only with `template` and `html`.                                                                                                                                                     | `css: ".x { color: red; }"`                                     |
+| `spec.cover.*[].params`          | object           | no                                  | -                                                | Values for `.Params`. The classic template reads `subtitle`, `logo`, `accent`. Only with `template` and `html`.                                                                                               | `params: { subtitle: Guide }`                                   |
 | `spec.pageBreakBetweenSources`   | boolean          | no                                  | `true`                                           | Inserts a page break between each source file. The loader forces `true` when more than one source is present.                                                                                                 | `pageBreakBetweenSources: true`                                 |
 | `spec.displayHeaderFooter`       | boolean          | no                                  | `false`                                          | Displays a [header and footer](#header-and-footer) on each page, using the default templates when none are given.                                                                                             | `displayHeaderFooter: true`                                     |
 | `spec.headerTemplate`            | string           | no                                  | document title, centered                         | Custom HTML template for the page header. Supports the template classes `date`, `title`, `url`, `pageNumber`, `totalPages`. See [Custom header/footer templates](#custom-headerfooter-templates).             | `headerTemplate: '<div class="title"></div>'`                   |

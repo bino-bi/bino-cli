@@ -14,6 +14,7 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/cover"
 	"bino.bi/bino/internal/report/mdscan"
 	componentref "bino.bi/bino/internal/report/ref"
 )
@@ -735,6 +736,11 @@ func (b *builder) buildDocumentArtefacts() error {
 				deps = append(deps, b.addMarkdownFileNode(manifestDir, f))
 			}
 		}
+		for _, name := range cover.AssetNames(spec.Cover) {
+			if depID := makeNodeID(NodeComponent, name); b.nodes[depID] != nil {
+				deps = append(deps, depID)
+			}
+		}
 		deps = uniqueStrings(deps)
 
 		id := makeNodeID(NodeDocumentArtefact, doc.Name)
@@ -845,8 +851,9 @@ func (b *builder) addUnresolvedMarkdownNode(manifestDir, src string) string {
 }
 
 type documentArtefactSpec struct {
-	Sources []string `json:"sources"`
-	Format  string   `json:"format"`
+	Sources []string          `json:"sources"`
+	Format  string            `json:"format"`
+	Cover   *config.CoverSpec `json:"cover"`
 }
 
 // documentArtefactSpecLegacy supports the legacy object format for sources.
@@ -854,7 +861,8 @@ type documentArtefactSpecLegacy struct {
 	Sources []struct {
 		File string `json:"file"`
 	} `json:"sources"`
-	Format string `json:"format"`
+	Format string            `json:"format"`
+	Cover  *config.CoverSpec `json:"cover"`
 }
 
 func parseDocumentArtefactSpec(raw json.RawMessage) (*documentArtefactSpec, error) {
@@ -878,6 +886,7 @@ func parseDocumentArtefactSpec(raw json.RawMessage) (*documentArtefactSpec, erro
 	// Convert legacy format to new format
 	spec := &documentArtefactSpec{
 		Format: legacyPayload.Spec.Format,
+		Cover:  legacyPayload.Spec.Cover,
 	}
 	for _, src := range legacyPayload.Spec.Sources {
 		spec.Sources = append(spec.Sources, src.File)

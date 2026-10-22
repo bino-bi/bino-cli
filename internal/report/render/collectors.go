@@ -421,6 +421,47 @@ func ResolveNamedAsset(docs []config.Document, name string) (value, mediaType st
 	return "", "", nil, fmt.Errorf("render: asset %q not found", name)
 }
 
+// AssetInfo describes a resolved Asset document.
+type AssetInfo struct {
+	Type      string
+	MediaType string
+	// Value is the serving value: URL path, remote URL, or data URI.
+	Value string
+	// Local is the file to expose through the HTTP server; nil for remote and inline sources.
+	Local        *LocalAsset
+	RemoteURL    string
+	InlineBase64 string
+}
+
+// ResolveNamedAssetInfo is ResolveNamedAsset that also returns the asset type
+// and its raw source, for callers that need the bytes or check the type.
+func ResolveNamedAssetInfo(docs []config.Document, name string) (AssetInfo, error) {
+	for _, doc := range docs {
+		if doc.Kind != "Asset" || doc.Name != name {
+			continue
+		}
+		var payload struct {
+			Spec assetSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(doc.Raw, &payload); err != nil {
+			return AssetInfo{}, fmt.Errorf("render: parse asset %s: %w", doc.Name, err)
+		}
+		value, local, err := resolveAssetValue(doc, payload.Spec, assetURLPath)
+		if err != nil {
+			return AssetInfo{}, err
+		}
+		return AssetInfo{
+			Type:         payload.Spec.Type,
+			MediaType:    payload.Spec.MediaType,
+			Value:        value,
+			Local:        local,
+			RemoteURL:    payload.Spec.Source.RemoteURL,
+			InlineBase64: payload.Spec.Source.InlineBase64,
+		}, nil
+	}
+	return AssetInfo{}, fmt.Errorf("render: asset %q not found", name)
+}
+
 // fontURLPath generates a URL path for font assets.
 func fontURLPath(name string) string {
 	return "/assets/fonts/" + url.PathEscape(name)

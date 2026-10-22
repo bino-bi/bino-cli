@@ -1,0 +1,79 @@
+<style>
+  :root {
+    --bn-cover-accent: #0b5394;
+    --bn-cover-bg: #ffffff;
+    --bn-cover-fg: #1a1a1a;
+    --bn-cover-muted: #555555;
+    --bn-cover-font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --bn-cover-padding: 2.5cm;
+    --bn-cover-bar-width: 1.2cm;
+    --bn-cover-title-size: 34pt;
+    --bn-cover-subtitle-size: 16pt;
+    --bn-cover-meta-size: 11pt;
+    --bn-cover-logo-height: 2cm;
+  }
+  {{- with .Accent}}
+  :root { --bn-cover-accent: {{.}}; }
+  {{- end}}
+  .bn-cover {
+    position: absolute;
+    inset: 0;
+    background: var(--bn-cover-bg);
+    color: var(--bn-cover-fg);
+    font-family: var(--bn-cover-font);
+    padding: var(--bn-cover-padding);
+    padding-left: calc(var(--bn-cover-padding) + var(--bn-cover-bar-width));
+    display: flex;
+    flex-direction: column;
+  }
+  .bn-cover-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--bn-cover-bar-width);
+    background: var(--bn-cover-accent);
+  }
+  .bn-cover-logo {
+    height: var(--bn-cover-logo-height);
+    width: auto;
+    align-self: flex-start;
+  }
+  .bn-cover-main {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+  .bn-cover-title {
+    font-size: var(--bn-cover-title-size);
+    line-height: 1.15;
+    margin: 0 0 0.4em 0;
+    border-bottom: 3px solid var(--bn-cover-accent);
+    padding-bottom: 0.3em;
+  }
+  .bn-cover-subtitle {
+    font-size: var(--bn-cover-subtitle-size);
+    color: var(--bn-cover-muted);
+    margin: 0;
+  }
+  .bn-cover-meta {
+    font-size: var(--bn-cover-meta-size);
+    color: var(--bn-cover-muted);
+    line-height: 1.6;
+  }
+</style>
+<div class="bn-cover">
+  <div class="bn-cover-bar"></div>
+  {{- with .LogoURL}}
+  <img class="bn-cover-logo" src="{{.}}" alt="">
+  {{- end}}
+  <div class="bn-cover-main">
+    <h1 class="bn-cover-title">{{.Title}}</h1>
+    {{- with .Params.subtitle}}
+    <p class="bn-cover-subtitle">{{.}}</p>
+    {{- end}}
+  </div>
+  <div class="bn-cover-meta">
+    {{- with .Author}}<div class="bn-cover-author">{{.}}</div>{{end}}
+    <div class="bn-cover-date">{{.Date}}</div>
+  </div>
+</div>

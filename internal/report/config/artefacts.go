@@ -532,6 +532,38 @@ type DocumentArtefactSpec struct {
 	// CodeHighlight configures syntax highlighting of fenced code blocks.
 	// Nil means highlighting with the default theme and no line numbers.
 	CodeHighlight *CodeHighlightSpec `json:"codeHighlight,omitempty"`
+	// Cover adds pages before and after the content that get no page number,
+	// header or footer.
+	Cover *CoverSpec `json:"cover,omitempty"`
+}
+
+// CoverSpec mirrors spec.cover of a DocumentArtefact.
+type CoverSpec struct {
+	Front []CoverPage `json:"front,omitempty"`
+	Back  []CoverPage `json:"back,omitempty"`
+}
+
+// CoverPage is one cover page. Exactly one of Image, PDF, Template and HTML is set.
+type CoverPage struct {
+	// Image names an Asset of type image, shown full bleed.
+	Image string `json:"image,omitempty"`
+	// Fit is the object-fit of the image: cover (default) or contain.
+	Fit string `json:"fit,omitempty"`
+	// PDF names an Asset holding a PDF; Page selects one page (1-based, default 1).
+	PDF  string `json:"pdf,omitempty"`
+	Page int    `json:"page,omitempty"`
+	// Template names a built-in cover template.
+	Template string `json:"template,omitempty"`
+	// HTML is a Go html/template body.
+	HTML string `json:"html,omitempty"`
+	// CSS is added to the cover page after the template styles.
+	CSS    string         `json:"css,omitempty"`
+	Params map[string]any `json:"params,omitempty"`
+}
+
+// HasCover reports whether any front or back cover page is set.
+func (s *DocumentArtefactSpec) HasCover() bool {
+	return s.Cover != nil && len(s.Cover.Front)+len(s.Cover.Back) > 0
 }
 
 // CodeHighlightSpec mirrors spec.codeHighlight of a DocumentArtefact.

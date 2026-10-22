@@ -2018,6 +2018,23 @@
           },
           "additionalProperties": false
         },
+        "cover": {
+          "type": "object",
+          "description": "Cover pages printed before (front) and after (back) the content. Cover pages get no page number, no header and no footer, and do not shift table of contents page numbers. Each page is full bleed and does not load the document stylesheet.",
+          "properties": {
+            "front": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/documentCoverPage" },
+              "description": "Pages printed before the table of contents and the content, in order."
+            },
+            "back": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/documentCoverPage" },
+              "description": "Pages printed after the content, in order."
+            }
+          },
+          "additionalProperties": false
+        },
         "pageBreakBetweenSources": {
           "type": "boolean",
           "default": true,
@@ -2053,6 +2070,89 @@
         }
       },
       "additionalProperties": false
+    },
+    "documentCoverPage": {
+      "description": "One cover page. Set exactly one of image, pdf, template or html.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["image"],
+          "properties": {
+            "image": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of an Asset of type image, shown full bleed."
+            },
+            "fit": {
+              "type": "string",
+              "enum": ["cover", "contain"],
+              "default": "cover",
+              "description": "How the image fills the page: 'cover' crops to fill, 'contain' shows the whole image."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["pdf"],
+          "properties": {
+            "pdf": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of an Asset of type file with mediaType application/pdf. One page is taken from it and keeps its own page size."
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Page of the PDF to use, starting at 1."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["template"],
+          "properties": {
+            "template": {
+              "type": "string",
+              "enum": ["classic"],
+              "description": "Built-in cover template. 'classic' shows title, subtitle, author, date, an optional logo and an accent color."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": { "type": ["string", "number", "boolean"] },
+              "description": "Values available as .Params.<key>. The classic template reads subtitle, logo (an Asset name) and accent (a CSS color)."
+            },
+            "css": {
+              "type": "string",
+              "description": "CSS added to this cover page after the template styles. asset:<name> in src, href, poster, data and srcset attributes and in url(...) resolves to an Asset."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["html"],
+          "properties": {
+            "html": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Cover body as a Go html/template. Data: .Title, .Author, .Subject, .Date and .Params. asset:<name> in src, href, poster, data and srcset attributes and in url(...) resolves to an Asset."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": { "type": ["string", "number", "boolean"] },
+              "description": "Values available as .Params.<key> in the html template."
+            },
+            "css": {
+              "type": "string",
+              "description": "CSS added to this cover page after the template styles. asset:<name> in src, href, poster, data and srcset attributes and in url(...) resolves to an Asset."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "documentSource": {
       "type": "object",

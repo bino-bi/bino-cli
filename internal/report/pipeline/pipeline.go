@@ -15,6 +15,7 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/cover"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	reportgraph "bino.bi/bino/internal/report/graph"
@@ -1485,6 +1486,21 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 		return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: spec.codeHighlight.theme: %w", artifact.Document.Name, err)
 	}
 
+	// The preview shows cover pages around the content; the PDF build prints
+	// them as separate PDFs (see Builder.RenderCoverPDFs).
+	var frontCoverHTML, backCoverHTML string
+	if opts.RenderMode == "preview" && s.HasCover() {
+		front, back, err := cover.Resolve(docs, s)
+		if err != nil {
+			return DocumentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artifact.Document.Name, err)
+		}
+		frontCoverHTML = cover.PreviewHTML(front, s.Format, s.Orientation, "bn-cover-front")
+		backCoverHTML = cover.PreviewHTML(back, s.Format, s.Orientation, "bn-cover-back")
+		for _, page := range append(front, back...) {
+			assetLocals = append(assetLocals, page.LocalAssets...)
+		}
+	}
+
 	// Render markdown files to HTML content with full context
 	mathEnabled := s.MathEnabled()
 	mdResult, err := markdown.RenderFilesWithContext(ctx, files, markdown.FullRenderOptions{
@@ -1520,10 +1536,12 @@ func RenderDocumentArtefactHTML(ctx context.Context, workdir string, docs []conf
 			Orientation: s.Orientation,
 			Stylesheet:  customCSS,
 		},
-		Locale:        s.Locale,
-		RenderContext: renderCtx,
-		Math:          mathEnabled,
-		CodeHighlight: codeHighlight,
+		Locale:         s.Locale,
+		RenderContext:  renderCtx,
+		Math:           mathEnabled,
+		CodeHighlight:  codeHighlight,
+		FrontCoverHTML: frontCoverHTML,
+		BackCoverHTML:  backCoverHTML,
 	})
 
 	// Dispatch post-render-html hook.

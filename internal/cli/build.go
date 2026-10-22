@@ -783,47 +783,12 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		}
 	}
 
-	if spec.TableOfContents {
-		// ── Split-PDF pipeline: content PDF → extract page numbers → TOC PDF → merge ──
-		tocOpts := pipeline.DocumentTOCPDFOptions{
-			PDFOptions: basePDFOpts,
-			OutputPath: pdfPath,
-		}
-		if spinner != nil {
-			tocOpts.Progress = spinner.Update
-		}
-		if err := cfg.Builder.BuildDocumentPDFWithTOC(ctx, cfg.Docs, artifact, tocOpts); err != nil {
-			if spinner != nil {
-				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
-			}
-			return documentArtefactResult{}, err
-		}
-	} else {
-		// ── Single-pass: no TOC ──
-		renderResult, err := cfg.Builder.RenderDocumentHTML(ctx, cfg.Docs, artifact, pipeline.DocumentArtefactRenderOptions{})
-		if err != nil {
-			if spinner != nil {
-				spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
-			}
-			return documentArtefactResult{}, err
-		}
-
-		if err := ctx.Err(); err != nil {
-			return documentArtefactResult{}, err
-		}
-
-		if spinner != nil {
-			spinner.Update(fmt.Sprintf("Generating PDF for %s", artefactName))
-		}
-
-		finalPDFOpts := basePDFOpts
-		finalPDFOpts.PDFPath = pdfPath
-		if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, finalPDFOpts); err != nil {
-			if spinner != nil {
-				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
-			}
-			return documentArtefactResult{}, fmt.Errorf("document artefact %s: %w", artefactName, err)
-		}
+	renderPDF := renderDocumentBody
+	if spec.HasCover() {
+		renderPDF = renderDocumentWithCovers
+	}
+	if err := renderPDF(ctx, cfg, basePDFOpts, pdfPath); err != nil {
+		return documentArtefactResult{}, err
 	}
 
 	// Check for cancellation before signing
@@ -858,6 +823,101 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		spinner.Stop()
 	}
 	return documentArtefactResult{Name: artefactName, PDFPath: pdfPath}, nil
+}
+
+// renderDocumentWithCovers prints the cover pages and the body (TOC +
+// content) separately and merges them into outPath, so covers stay out of the
+// body's page numbers, header and footer.
+func renderDocumentWithCovers(ctx context.Context, cfg buildDocumentArtefactConfig, basePDFOpts pipeline.PDFRenderOptions, outPath string) error {
+	artefactName := cfg.Artifact.Document.Name
+	spinner := cfg.Spinner
+	if spinner != nil {
+		spinner.Update(fmt.Sprintf("Rendering cover pages for %s", artefactName))
+	}
+	covers, err := cfg.Builder.RenderCoverPDFs(ctx, cfg.Docs, cfg.Artifact, basePDFOpts)
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to render cover pages for %s", artefactName))
+		}
+		return err
+	}
+	defer covers.Remove()
+
+	tmp, err := os.CreateTemp("", "bino-doc-body-*.pdf")
+	if err != nil {
+		return fmt.Errorf("document artefact %s: create temp pdf file: %w", artefactName, err)
+	}
+	bodyPath := tmp.Name()
+	tmp.Close() //nolint:errcheck // reserves a temp name; the PDF renderer rewrites it
+	defer os.Remove(bodyPath)
+
+	if err := renderDocumentBody(ctx, cfg, basePDFOpts, bodyPath); err != nil {
+		return err
+	}
+
+	if spinner != nil {
+		spinner.Update(fmt.Sprintf("Merging cover pages for %s", artefactName))
+	}
+	parts := append(append(append([]string(nil), covers.Front...), bodyPath), covers.Back...)
+	if err := cfg.Builder.MergePDFs(ctx, parts, outPath); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to merge cover pages for %s", artefactName))
+		}
+		return fmt.Errorf("document artefact %s: merge cover pages: %w", artefactName, err)
+	}
+	return nil
+}
+
+// renderDocumentBody prints the TOC and content of a DocumentArtefact to outPath.
+func renderDocumentBody(ctx context.Context, cfg buildDocumentArtefactConfig, basePDFOpts pipeline.PDFRenderOptions, outPath string) error {
+	artifact := cfg.Artifact
+	artefactName := artifact.Document.Name
+	spinner := cfg.Spinner
+
+	if artifact.Spec.TableOfContents {
+		// ── Split-PDF pipeline: content PDF → extract page numbers → TOC PDF → merge ──
+		tocOpts := pipeline.DocumentTOCPDFOptions{
+			PDFOptions: basePDFOpts,
+			OutputPath: outPath,
+		}
+		if spinner != nil {
+			tocOpts.Progress = spinner.Update
+		}
+		if err := cfg.Builder.BuildDocumentPDFWithTOC(ctx, cfg.Docs, artifact, tocOpts); err != nil {
+			if spinner != nil {
+				spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
+			}
+			return err
+		}
+		return nil
+	}
+
+	// ── Single-pass: no TOC ──
+	renderResult, err := cfg.Builder.RenderDocumentHTML(ctx, cfg.Docs, artifact, pipeline.DocumentArtefactRenderOptions{})
+	if err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to render %s", artefactName))
+		}
+		return err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if spinner != nil {
+		spinner.Update(fmt.Sprintf("Generating PDF for %s", artefactName))
+	}
+
+	finalPDFOpts := basePDFOpts
+	finalPDFOpts.PDFPath = outPath
+	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, finalPDFOpts); err != nil {
+		if spinner != nil {
+			spinner.StopWithError(fmt.Sprintf("Failed to generate PDF for %s", artefactName))
+		}
+		return fmt.Errorf("document artefact %s: %w", artefactName, err)
+	}
+	return nil
 }
 
 // writeBuildLog writes a detailed build log file with run information.
