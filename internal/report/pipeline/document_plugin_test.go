@@ -42,7 +42,7 @@ func (r *recordingPluginRenderer) RenderComponent(_ context.Context, req render.
 func renderPluginRefDoc(t *testing.T, pluginOpts *render.PluginOptions) string {
 	t.Helper()
 	ctx := context.Background()
-	workdir := copyBundle(t, "doc-bundle")
+	workdir := copyDocBundle(t)
 	mdPath := filepath.Join(workdir, "docs", "refdoc.md")
 	md, err := os.ReadFile(mdPath)
 	if err != nil {

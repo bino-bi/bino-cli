@@ -13,13 +13,13 @@ import (
 	"bino.bi/bino/internal/report/config"
 )
 
-// copyBundle copies testdata/<name> (recursively) into a temp dir so the
-// dataset cache under .bino/ never writes into the repository tree.
-func copyBundle(t *testing.T, name string) string {
+// copyDocBundle copies testdata/doc-bundle (recursively) into a temp dir so
+// the dataset cache under .bino/ never writes into the repository tree.
+func copyDocBundle(t *testing.T) string {
 	t.Helper()
 	workdir := t.TempDir()
-	if err := os.CopyFS(workdir, os.DirFS(filepath.Join("testdata", name))); err != nil {
-		t.Fatalf("copy bundle %s: %v", name, err)
+	if err := os.CopyFS(workdir, os.DirFS(filepath.Join("testdata", "doc-bundle"))); err != nil {
+		t.Fatalf("copy doc-bundle: %v", err)
 	}
 	return workdir
 }
@@ -29,7 +29,7 @@ func copyBundle(t *testing.T, name string) string {
 func renderDocBundleArtefact(t *testing.T, name string) string {
 	t.Helper()
 	ctx := context.Background()
-	workdir := copyBundle(t, "doc-bundle")
+	workdir := copyDocBundle(t)
 
 	loadResult, err := LoadManifests(ctx, workdir, nil)
 	if err != nil {
@@ -151,7 +151,7 @@ func (l errCaptureLogger) Channel(string) logx.Logger { return l }
 // TestIntegration_DocRenderLogsDatasetWarnings proves a query that fails under
 // ContinueOnQueryError is logged for a document, and not repeated by the TOC pass.
 func TestIntegration_DocRenderLogsDatasetWarnings(t *testing.T) {
-	workdir := copyBundle(t, "doc-bundle")
+	workdir := copyDocBundle(t)
 	datasets := filepath.Join(workdir, "datasets.yaml")
 	raw, err := os.ReadFile(datasets)
 	if err != nil {

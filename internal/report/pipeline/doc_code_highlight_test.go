@@ -15,7 +15,7 @@ import (
 func renderPlainDocWithFence(t *testing.T, spec *config.CodeHighlightSpec) (string, error) {
 	t.Helper()
 	ctx := context.Background()
-	workdir := copyBundle(t, "doc-bundle")
+	workdir := copyDocBundle(t)
 	mdPath := filepath.Join(workdir, "docs", "plaindoc.md")
 	md, err := os.ReadFile(mdPath)
 	if err != nil {
