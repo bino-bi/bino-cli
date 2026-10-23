@@ -199,8 +199,9 @@ spec:
   title: Monthly Revenue
 ```
 
-The plugin generates HTML (e.g., `<bn-example-chart ...>`) and provides the
-JS/CSS assets that implement the Web Component.
+The plugin generates HTML (e.g., `<example-chart ...>`) and provides the
+JS/CSS assets that implement the Web Component. The HTML and the scripts follow
+the [front-end contract](#front-end-contract).
 
 Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
 `/plugins/example/chart.js`. bino serves these paths in `bino preview`,
@@ -256,6 +257,67 @@ receives the document's `metadata.name` and spec, and the plugin assets are
 added to the document `<head>`. In a document, warning and error
 diagnostics and a failed render appear in the terminal log. A failed render
 shows a placeholder in place of the component and does not fail the document.
+
+#### Front-end contract
+
+The HTML a component returns and the scripts that draw it follow these rules:
+
+1. Return one root element with your own custom element tag, prefixed with
+   the plugin name, for example `<highcharts-chart>`. The `bn-` prefix belongs
+   to the template engine and `bino-` to the preview UI. bino warns once per
+   kind when the root tag uses one of them.
+2. Ship all JavaScript through `GetAssets`. Do not put an executable inline
+   `<script>` in the HTML: it runs in `bino build` but not in `bino preview`,
+   which merges the new page into the old one. A
+   `<script type="application/json">` data block is fine. bino warns once per
+   kind about any other `<script>`.
+3. Pass the data the plugin got from bino as JSON in an attribute. List the
+   attribute in `observedAttributes` and redraw in `attributeChangedCallback`:
+   on a reload, `bino preview` keeps the element and only updates its
+   attributes.
+4. Wrap each draw in an async function and pass its promise to
+   `window.binoPlugin?.track(this, promise)`, in `connectedCallback` and on
+   every redraw. `window.binoPlugin` exists only while bino prints a PDF or
+   takes screenshots. In `bino preview`, `bino serve` and older bino releases
+   the optional chaining makes the call a no-op.
+5. Scripts load in the order `GetAssets` returns them, with the normal HTML
+   rules: classic scripts run before module scripts. List a library before the
+   element that uses it.
+6. Turn off animations. Size the drawing from the element's container when it
+   connects. If the size changes later, redraw and track the redraw: the PDF
+   waits for it too.
+
+```js
+class ExampleChart extends HTMLElement {
+  static observedAttributes = ["data"];
+
+  connectedCallback() {
+    this.redraw();
+  }
+
+  attributeChangedCallback(name, oldValue) {
+    // The first value arrives before connectedCallback.
+    if (oldValue !== null) this.redraw();
+  }
+
+  redraw() {
+    const draw = async () => {
+      const rows = JSON.parse(this.getAttribute("data") || "[]");
+      await drawChart(this, rows, { animation: false });
+    };
+    window.binoPlugin?.track(this, draw());
+  }
+}
+customElements.define("example-chart", ExampleChart);
+```
+
+When a loaded plugin provides a component kind, report PDFs, screenshots and
+document PDFs wait until every tracked promise has settled and the page has
+been quiet for a short moment. `bino build` then fails when a tracked promise
+rejected, when a script under `/plugins/` threw an error, or when a custom
+element in the page was never defined because its script did not load or did
+not call `customElements.define`. The PDF button in `bino preview` shows these
+as warnings and still returns the PDF.
 
 #### What a component receives
 
