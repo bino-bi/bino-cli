@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -156,6 +158,7 @@ func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.Plu
 		process:  client,
 	}
 	p.manifest.HookTimeout = hookTimeout
+	warnUndispatchedHooks(m.logger, p.manifest)
 
 	// 7. Enforce the bino.toml version pin against the reported version.
 	if decl.Version != "" {
@@ -169,6 +172,24 @@ func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.Plu
 
 	m.logger.Infof("loaded plugin %q v%s (%d kinds)", p.manifest.Name, p.manifest.Version, len(p.manifest.Kinds))
 	return nil
+}
+
+// dispatchedHooks are the only checkpoints bino dispatches.
+var dispatchedHooks = []string{"post-dataset-execute", "post-render-html"}
+
+// warnUndispatchedHooks logs one warning when a plugin subscribes to
+// checkpoints that never fire, so the author does not wait for them.
+func warnUndispatchedHooks(logger logx.Logger, manifest PluginManifest) {
+	var unknown []string
+	for _, h := range manifest.Hooks {
+		if !slices.Contains(dispatchedHooks, h) {
+			unknown = append(unknown, h)
+		}
+	}
+	if len(unknown) > 0 {
+		logger.Warnf("plugin %q subscribes to hooks that never fire: %s (bino dispatches only %s)",
+			manifest.Name, strings.Join(unknown, ", "), strings.Join(dispatchedHooks, ", "))
+	}
 }
 
 // checkVersionPin validates a plugin's reported version against the bino.toml

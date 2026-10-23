@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"bino.bi/bino/internal/logx"
@@ -74,5 +76,31 @@ func TestCheckVersionPin(t *testing.T) {
 				t.Errorf("checkVersionPin(%q, %q) error = %v, wantErr %v", tt.pin, tt.reported, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+type warnRecorder struct {
+	logx.Logger
+	warns []string
+}
+
+func (w *warnRecorder) Warnf(format string, args ...any) {
+	w.warns = append(w.warns, fmt.Sprintf(format, args...))
+}
+
+func TestWarnUndispatchedHooks(t *testing.T) {
+	rec := &warnRecorder{Logger: logx.Nop()}
+	warnUndispatchedHooks(rec, PluginManifest{Name: "gauges", Hooks: []string{"post-load", "post-render-html"}})
+	if len(rec.warns) != 1 {
+		t.Fatalf("want one warning, got %q", rec.warns)
+	}
+	if !strings.Contains(rec.warns[0], `"gauges"`) || !strings.Contains(rec.warns[0], "post-load") {
+		t.Errorf("warning must name plugin and hook, got %q", rec.warns[0])
+	}
+
+	rec.warns = nil
+	warnUndispatchedHooks(rec, PluginManifest{Name: "gauges", Hooks: []string{"post-dataset-execute", "post-render-html"}})
+	if len(rec.warns) != 0 {
+		t.Errorf("want no warning for dispatched hooks, got %q", rec.warns)
 	}
 }
