@@ -1385,6 +1385,29 @@ func TestBroadcastRefreshError(t *testing.T) {
 	})
 }
 
+func TestBroadcastPluginsReloaded(t *testing.T) {
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ch := srv.sse.Subscribe()
+	defer srv.sse.Unsubscribe(ch)
+
+	srv.BroadcastPluginsReloaded()
+
+	select {
+	case msg := <-ch:
+		if s := string(msg); !strings.HasPrefix(s, "event: plugins-reloaded\n") {
+			t.Errorf("event name not plugins-reloaded: %q", s)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("timeout waiting for plugins-reloaded broadcast")
+	}
+
+	var nilSrv *Server
+	nilSrv.BroadcastPluginsReloaded() // must not panic
+}
+
 func TestBroadcastRefreshDoneCarriesPaths(t *testing.T) {
 	srv, err := New(Config{})
 	if err != nil {

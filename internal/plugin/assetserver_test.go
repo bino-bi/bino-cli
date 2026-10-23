@@ -46,6 +46,9 @@ func TestAssetHandler_Found(t *testing.T) {
 	if rec.Body.String() != "console.log('hi')" {
 		t.Fatal("wrong body")
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("Cache-Control = %q, want no-cache", got)
+	}
 }
 
 func TestAssetHandler_NotFound(t *testing.T) {
@@ -280,5 +283,38 @@ func TestBuildRenderOptions_HasComponentKinds(t *testing.T) {
 				t.Errorf("HasComponentKinds = %v, want %v", opts.HasComponentKinds, tt.want)
 			}
 		})
+	}
+}
+
+func TestRefreshAssets_AfterReset(t *testing.T) {
+	ctx := context.Background()
+	reg := NewRegistry()
+	reg.Register(&assetsPlugin{newMock("old", withAssets(), withKinds(KindRegistration{KindName: "Gauge", Category: KindCategoryComponent})), []AssetFile{
+		{URLPath: "/plugins/old/a.js", Content: []byte("old")},
+	}})
+	opts := BuildRenderOptions(ctx, reg, t.TempDir(), "preview")
+	renderer := opts.ComponentRenderer
+
+	reg.reset()
+	reg.Register(&assetsPlugin{newMock("new", withAssets()), []AssetFile{
+		{URLPath: "/plugins/new/b.js", Content: []byte("new")},
+	}})
+	RefreshAssets(ctx, opts, reg, "preview")
+
+	if want := "<script src=\"/plugins/new/b.js\"></script>\n"; opts.ExtraHeadMarkup != want {
+		t.Errorf("ExtraHeadMarkup = %q, want %q", opts.ExtraHeadMarkup, want)
+	}
+	for path, code := range map[string]int{"/plugins/old/a.js": http.StatusNotFound, "/plugins/new/b.js": http.StatusOK} {
+		rec := httptest.NewRecorder()
+		opts.AssetHandler.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, "GET", path, nil))
+		if rec.Code != code {
+			t.Errorf("%s = %d, want %d", path, rec.Code, code)
+		}
+	}
+	if opts.HasComponentKinds {
+		t.Error("HasComponentKinds is still true")
+	}
+	if opts.ComponentRenderer == renderer {
+		t.Error("ComponentRenderer was not replaced, so its warnings are never given again")
 	}
 }

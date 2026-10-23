@@ -432,6 +432,14 @@ func main() {
 }
 ```
 
+`bino preview` checks the plugin binaries and `bino.toml` once a second. When
+one changes, for example after `go build`, preview restarts all plugins and
+reloads the page, so the new scripts and output show up without a restart. If
+the new build does not load, preview keeps running and shows the error until
+the next change fixes it. Two cases still need a restart: adding the first
+plugin to a project that had none, and the editor (`bino lsp` and the daemon),
+which loads plugins once.
+
 ## Limitations
 
 - **No marketplace**: Plugins are distributed manually. Copy the binary to the

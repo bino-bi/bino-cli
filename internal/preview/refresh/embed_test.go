@@ -308,7 +308,7 @@ func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
 
 	t.Run("embedRenderOpts", func(t *testing.T) {
 		t.Parallel()
-		opts := embedRenderOpts(cfg)
+		opts := embedRenderOpts(cfg, cfg.PluginOptions)
 		if opts.PluginOptions == nil {
 			t.Fatal("embedRenderOpts dropped PluginOptions")
 		}
@@ -322,7 +322,7 @@ func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
 
 	t.Run("embedComponentOpts", func(t *testing.T) {
 		t.Parallel()
-		opts := embedComponentOpts(cfg, "standalone_table", "")
+		opts := embedComponentOpts(cfg, cfg.PluginOptions, "standalone_table", "")
 		if opts.PluginOptions == nil {
 			t.Fatal("embedComponentOpts dropped PluginOptions")
 		}
@@ -336,10 +336,10 @@ func TestEmbedRenderOptsEmitRelativeDataURLs(t *testing.T) {
 
 	t.Run("embedComponentOpts language", func(t *testing.T) {
 		t.Parallel()
-		if got := embedComponentOpts(cfg, "standalone_table", "en").Language; got != "en" {
+		if got := embedComponentOpts(cfg, cfg.PluginOptions, "standalone_table", "en").Language; got != "en" {
 			t.Errorf("Language = %q, want %q", got, "en")
 		}
-		if got := embedComponentOpts(cfg, "standalone_table", "").Language; got != config.DefaultArtefactLanguage {
+		if got := embedComponentOpts(cfg, cfg.PluginOptions, "standalone_table", "").Language; got != config.DefaultArtefactLanguage {
 			t.Errorf("Language = %q, want the artefact default %q", got, config.DefaultArtefactLanguage)
 		}
 	})

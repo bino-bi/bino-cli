@@ -45,6 +45,7 @@ func lazyContent(renderFn httpserver.ContentFunc) httpserver.ContentFunc {
 // lazyPresentationContent returns a ContentFunc that renders the presentation view
 // on first access, caching the result for subsequent requests.
 func lazyPresentationContent(workdir string, docs []config.Document, art config.Artifact, cfg *Config, server *httpserver.Server, presPath string) httpserver.ContentFunc {
+	plugins := pluginOptionsSnapshot(cfg.PluginOptions)
 	return lazyContent(func(ctx context.Context) ([]byte, string, error) {
 		renderResult, err := pipeline.RenderPresentationFrameAndContext(ctx, workdir, docs, art, pipeline.PresentationArtefactRenderOptions{
 			EngineVersion:            cfg.EngineVersion,
@@ -52,7 +53,7 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 			DataValidation:           cfg.DataValidationMode,
 			DataValidationSampleSize: cfg.DataValidationSampleSize,
 			ContinueOnQueryError:     true,
-			PluginOptions:            cfg.PluginOptions,
+			PluginOptions:            plugins,
 			PostDatasetHook:          cfg.PostDatasetHook,
 			Session:                  cfg.Session,
 		})
@@ -65,6 +66,17 @@ func lazyPresentationContent(workdir string, docs []config.Document, art config.
 		server.BroadcastContent(presPath, renderResult.ContextHTML)
 		return body, "text/html; charset=utf-8", nil
 	})
+}
+
+// pluginOptionsSnapshot copies opts. A plugin reload rewrites the shared
+// PluginOptions in place under the refresh mutex, so a render that runs
+// without that mutex uses a copy taken while it was held.
+func pluginOptionsSnapshot(opts *render.PluginOptions) *render.PluginOptions {
+	if opts == nil {
+		return nil
+	}
+	c := *opts
+	return &c
 }
 
 // embedTarget holds the single resolved document to render. Exactly one field
@@ -151,9 +163,10 @@ func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mute
 	}
 
 	mu.Lock()
+	plugins := pluginOptionsSnapshot(cfg.PluginOptions)
 	if overlay := state.liveOverridesSnapshot(); overlay != nil {
 		mu.Unlock()
-		return embedFromOverlay(ctx, name, kind, language, overlay, cfg, server)
+		return embedFromOverlay(ctx, name, kind, language, overlay, cfg, plugins, server)
 	}
 
 	// The language is part of the key: the same component renders differently
@@ -176,7 +189,7 @@ func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mute
 	docs := state.lastDocs
 	mu.Unlock()
 
-	body, err := renderEmbedTarget(ctx, name, target, docs, cfg, language, server)
+	body, err := renderEmbedTarget(ctx, name, target, docs, cfg, plugins, language, server)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +208,7 @@ func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mute
 // reads or writes embeddingCache and never triggers a full report refresh, so
 // the preview reflects unsaved edits cheaply. Lenient loading means mid-edit
 // invalid YAML degrades to "not found" rather than aborting.
-func embedFromOverlay(ctx context.Context, name, kind, language string, overlay map[string]string, cfg *Config, server *httpserver.Server) ([]byte, error) {
+func embedFromOverlay(ctx context.Context, name, kind, language string, overlay map[string]string, cfg *Config, plugins *render.PluginOptions, server *httpserver.Server) ([]byte, error) {
 	docs, err := config.LoadDirWithOptions(ctx, cfg.Workdir, config.LoadOptions{
 		Lenient:      true,
 		KindProvider: cfg.KindProvider,
@@ -222,7 +235,7 @@ func embedFromOverlay(ctx context.Context, name, kind, language string, overlay 
 		return nil, httpserver.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no embeddable document named %q", name))
 	}
 
-	return renderEmbedTarget(ctx, name, target, docs, cfg, language, server)
+	return renderEmbedTarget(ctx, name, target, docs, cfg, plugins, language, server)
 }
 
 // validateEmbedLanguage rejects anything outside the ReportArtefact.spec.language
@@ -241,7 +254,7 @@ func validateEmbedLanguage(language string) error {
 // renderEmbedTarget renders the resolved target against docs and registers any
 // emitted data with the server. It is the shared render path for both the disk
 // and overlay sources.
-func renderEmbedTarget(ctx context.Context, name string, target embedTarget, docs []config.Document, cfg *Config, language string, server *httpserver.Server) ([]byte, error) {
+func renderEmbedTarget(ctx context.Context, name string, target embedTarget, docs []config.Document, cfg *Config, plugins *render.PluginOptions, language string, server *httpserver.Server) ([]byte, error) {
 	var body []byte
 	var emitted []render.EmittedData
 	var err error
@@ -254,7 +267,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		if language != "" {
 			art.Spec.Language = language
 		}
-		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, art, embedRenderOpts(cfg))
+		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, art, embedRenderOpts(cfg, plugins))
 		body, emitted, err = result.HTML, result.EmittedData, e
 	case target.docArt != nil:
 		// Same aliasing rule. DocumentArtefact spells the axis spec.locale.
@@ -266,7 +279,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 			EngineVersion:        cfg.EngineVersion,
 			Session:              cfg.Session,
 			ContinueOnQueryError: true,
-			PluginOptions:        cfg.PluginOptions,
+			PluginOptions:        plugins,
 			RenderMode:           "preview",
 			KindProvider:         cfg.KindProvider,
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
@@ -274,12 +287,12 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		})
 		body, emitted, err = result.HTML, result.EmittedData, e
 	case target.layoutDoc != nil:
-		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, syntheticPageArtefact(*target.layoutDoc, language), embedRenderOpts(cfg))
+		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, syntheticPageArtefact(*target.layoutDoc, language), embedRenderOpts(cfg, plugins))
 		body, emitted, err = result.HTML, result.EmittedData, e
 	default: // target.compDoc != nil
 		if _, direct := directEmbeddableComponentKinds[target.compDoc.Kind]; direct {
 			// Leaf components render directly inside <bn-context>, no wrapping page.
-			result, e := pipeline.RenderHTML(ctx, docsWithoutLayoutPages(docs), embedComponentOpts(cfg, name, language))
+			result, e := pipeline.RenderHTML(ctx, docsWithoutLayoutPages(docs), embedComponentOpts(cfg, plugins, name, language))
 			body, emitted, err = result.HTML, result.EmittedData, e
 			break
 		}
@@ -290,7 +303,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 			break
 		}
 		synthDocs := append(append([]config.Document(nil), docs...), page)
-		result, e2 := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, synthDocs, syntheticPageArtefact(page, language), embedRenderOpts(cfg))
+		result, e2 := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, synthDocs, syntheticPageArtefact(page, language), embedRenderOpts(cfg, plugins))
 		body, emitted, err = result.HTML, result.EmittedData, e2
 	}
 	if err != nil {
@@ -330,7 +343,7 @@ func docsWithoutLayoutPages(docs []config.Document) []config.Document {
 
 // embedComponentOpts builds RenderHTML options that render a single named
 // component directly inside <bn-context>.
-func embedComponentOpts(cfg *Config, name, language string) pipeline.RenderOptions {
+func embedComponentOpts(cfg *Config, plugins *render.PluginOptions, name, language string) pipeline.RenderOptions {
 	if language == "" {
 		language = config.DefaultArtefactLanguage
 	}
@@ -343,7 +356,7 @@ func embedComponentOpts(cfg *Config, name, language string) pipeline.RenderOptio
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
 		ContinueOnQueryError:     true,
-		PluginOptions:            cfg.PluginOptions,
+		PluginOptions:            plugins,
 		PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
 		PostDatasetHook:          cfg.PostDatasetHook,
 		RootComponent:            name,
@@ -351,14 +364,14 @@ func embedComponentOpts(cfg *Config, name, language string) pipeline.RenderOptio
 }
 
 // embedRenderOpts builds the shared render options used by every embedding render.
-func embedRenderOpts(cfg *Config) pipeline.RenderArtefactOptions {
+func embedRenderOpts(cfg *Config, plugins *render.PluginOptions) pipeline.RenderArtefactOptions {
 	return pipeline.RenderArtefactOptions{
 		EngineVersion:            cfg.EngineVersion,
 		QueryLogger:              cfg.QueryLogger,
 		DataValidation:           cfg.DataValidationMode,
 		DataValidationSampleSize: cfg.DataValidationSampleSize,
 		ContinueOnQueryError:     true,
-		PluginOptions:            cfg.PluginOptions,
+		PluginOptions:            plugins,
 		PostRenderHTMLHook:       cfg.PostRenderHTMLHook,
 		PostDatasetHook:          cfg.PostDatasetHook,
 	}

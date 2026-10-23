@@ -15,13 +15,23 @@ func BuildRenderOptions(ctx context.Context, registry *PluginRegistry, projectRo
 			PluginRouter: NewPluginRouter(registry, projectRoot),
 			ProjectRoot:  projectRoot,
 		},
-		ComponentRenderer: NewComponentRenderer(registry),
 	}
+	RefreshAssets(ctx, opts, registry, renderMode)
+	return opts
+}
+
+// RefreshAssets sets every field of opts that depends on which plugins the
+// registry holds. Preview calls it again after a plugin reload; opts is
+// shared by pointer, so the fields are updated in place. Preview renders that
+// run without the refresh mutex copy opts first.
+func RefreshAssets(ctx context.Context, opts *render.PluginOptions, registry *PluginRegistry, renderMode string) {
 	assetCache := BuildAssetCache(ctx, registry, renderMode)
 	opts.ExtraHeadMarkup = RenderAssetTags(assetCache)
 	opts.AssetHandler = NewAssetHandler(assetCache)
 	opts.HasComponentKinds = hasComponentKinds(registry)
-	return opts
+	// A new renderer also forgets the fragment warnings already given, so a
+	// reloaded plugin is checked again.
+	opts.ComponentRenderer = NewComponentRenderer(registry)
 }
 
 // hasComponentKinds reports whether a loaded plugin provides a component kind.

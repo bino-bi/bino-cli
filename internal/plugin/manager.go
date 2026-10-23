@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -22,10 +23,50 @@ import (
 // Manager handles plugin discovery, launching, and lifecycle.
 type Manager struct {
 	registry    *PluginRegistry
-	clients     []*goplugin.Client // track for shutdown
 	logger      logx.Logger
 	verbose     bool
 	hostService *BinoHostServer // shared host service for bidirectional calls
+
+	// mu guards the fields below. Changed runs on a poll goroutine while
+	// Reload runs on the refresh goroutine.
+	mu          sync.Mutex
+	clients     []*goplugin.Client // track for shutdown
+	projectRoot string
+	binoVersion string
+	configStamp fileStamp
+	binaries    []binaryStamp
+}
+
+// fileStamp identifies one version of a file. The zero value means the file
+// was missing.
+type fileStamp struct {
+	path    string
+	modTime int64
+	size    int64
+}
+
+func stampFile(path string) fileStamp {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}
+	}
+	return fileStamp{path: path, modTime: info.ModTime().UnixNano(), size: info.Size()}
+}
+
+// binaryStamp is the plugin binary a load used. Changed discovers it again,
+// so a binary that was missing, or now resolves to another file, counts too.
+type binaryStamp struct {
+	name         string
+	explicitPath string
+	stamp        fileStamp
+}
+
+func stampBinary(name, explicitPath, projectRoot string) fileStamp {
+	path, err := DiscoverBinary(name, explicitPath, projectRoot)
+	if err != nil {
+		return fileStamp{}
+	}
+	return stampFile(path)
 }
 
 // NewManager creates a new plugin Manager.
@@ -59,6 +100,16 @@ func (m *Manager) Registry() *PluginRegistry {
 // Plugins are loaded in alphabetical order by name for deterministic hook chaining.
 // Returns an error if any declared plugin fails to load.
 func (m *Manager) LoadAll(ctx context.Context, cfg *pathutil.ProjectConfig, projectRoot string, binoVersion string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.projectRoot = projectRoot
+	m.binoVersion = binoVersion
+	m.configStamp = stampFile(pathutil.ProjectConfigPath(projectRoot))
+	return m.loadAllLocked(ctx, cfg)
+}
+
+func (m *Manager) loadAllLocked(ctx context.Context, cfg *pathutil.ProjectConfig) error {
+	m.binaries = nil
 	if len(cfg.Plugins) == 0 {
 		return nil
 	}
@@ -72,10 +123,53 @@ func (m *Manager) LoadAll(ctx context.Context, cfg *pathutil.ProjectConfig, proj
 
 	for _, name := range names {
 		decl := cfg.Plugins[name]
-		if err := m.loadPlugin(ctx, name, decl, projectRoot, binoVersion); err != nil {
-			m.ShutdownAll(ctx)
+		if err := m.loadPlugin(ctx, name, decl, m.projectRoot, m.binoVersion); err != nil {
+			m.shutdownAllLocked(ctx)
 			return fmt.Errorf("loading plugin %q: %w", name, err)
 		}
+	}
+	return nil
+}
+
+// Changed reports whether bino.toml or a plugin binary used by the last load
+// has changed since. It only stats files, so it is cheap enough to poll.
+func (m *Manager) Changed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.projectRoot == "" {
+		return false
+	}
+	if stampFile(pathutil.ProjectConfigPath(m.projectRoot)) != m.configStamp {
+		return true
+	}
+	for _, b := range m.binaries {
+		if stampBinary(b.name, b.explicitPath, m.projectRoot) != b.stamp {
+			return true
+		}
+	}
+	return false
+}
+
+// Reload stops all plugins, reads [plugins] from bino.toml again and loads
+// them into the same registry and host service, so holders of either need no
+// rewiring. On failure the registry is left empty, not half loaded. ctx must
+// live as long as the plugins: it ends their processes.
+func (m *Manager) Reload(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.shutdownAllLocked(ctx)
+	m.registry.reset()
+
+	// Stamped before reading, so an edit during the reload triggers another.
+	m.configStamp = stampFile(pathutil.ProjectConfigPath(m.projectRoot))
+	cfg, err := pathutil.LoadProjectConfig(m.projectRoot)
+	if err != nil {
+		m.binaries = nil
+		return err
+	}
+	if err := m.loadAllLocked(ctx, cfg); err != nil {
+		m.registry.reset()
+		return err
 	}
 	return nil
 }
@@ -91,8 +185,14 @@ func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.Plu
 		hookTimeout = parsed
 	}
 
-	// 1. Discover binary.
+	// 1. Discover binary. The stamp is taken before launch, so a binary that
+	// fails to load does not look changed on every poll.
 	binaryPath, err := DiscoverBinary(name, decl.Path, projectRoot)
+	stamp := binaryStamp{name: name, explicitPath: decl.Path}
+	if err == nil {
+		stamp.stamp = stampFile(binaryPath)
+	}
+	m.binaries = append(m.binaries, stamp)
 	if err != nil {
 		return err
 	}
@@ -212,6 +312,12 @@ func checkVersionPin(pin, reported string) error {
 
 // ShutdownAll gracefully shuts down all loaded plugins via Shutdown RPC, then kills processes.
 func (m *Manager) ShutdownAll(ctx context.Context) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.shutdownAllLocked(ctx)
+}
+
+func (m *Manager) shutdownAllLocked(ctx context.Context) {
 	for _, p := range m.registry.AllPlugins() {
 		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		if err := p.Shutdown(shutdownCtx); err != nil {
@@ -219,7 +325,7 @@ func (m *Manager) ShutdownAll(ctx context.Context) {
 		}
 		cancel()
 	}
-	m.KillAll()
+	m.killAllLocked()
 }
 
 // KillAll kills all plugin processes in the background and returns immediately.
@@ -227,8 +333,15 @@ func (m *Manager) ShutdownAll(ctx context.Context) {
 // When the host process exits, orphaned plugin processes detect it and self-terminate.
 // It also removes the host service's dataset files.
 func (m *Manager) KillAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.killAllLocked()
+}
+
+func (m *Manager) killAllLocked() {
 	for _, c := range m.clients {
 		go c.Kill()
 	}
+	m.clients = nil
 	m.hostService.Close()
 }

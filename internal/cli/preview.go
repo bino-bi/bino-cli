@@ -370,6 +370,10 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return nil
 				})
 
+				var plugins *previewPlugins
+				if env.PluginManager != nil {
+					plugins = &previewPlugins{mgr: env.PluginManager, opts: pluginOpts, server: server, logger: logger}
+				}
 				doRefresh := func(reason string, changed []string) error {
 					if err := ctx.Err(); err != nil {
 						return err
@@ -380,6 +384,17 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 						return err
 					}
 					server.BroadcastRefreshing(reason)
+					fullRefresh, perr := plugins.reloadIfChanged(ctx)
+					if perr != nil {
+						if ctx.Err() == nil {
+							server.BroadcastRefreshError("", perr.Error())
+						}
+						server.BroadcastRefreshDone(nil)
+						return RuntimeError(perr)
+					}
+					if fullRefresh {
+						changed = nil
+					}
 					broadcastPaths, err := refresh.Run(ctx, reason, changed, server, explorerSlot.Load(), &refreshCfg, refreshState)
 					if err != nil && ctx.Err() == nil {
 						server.BroadcastRefreshError("", err.Error())
@@ -388,6 +403,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					if err != nil {
 						return RuntimeError(err)
 					}
+					plugins.refreshed()
 					return nil
 				}
 
@@ -457,6 +473,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					return
 				}
 				go watcher.Run(ctx)
+
+				go plugins.poll(ctx, func() { enqueue(refresh.Request{Reason: "plugin binary changed"}) })
 
 				go func() {
 					defer watcher.Close() //nolint:errcheck // fsnotify teardown when the refresh loop exits

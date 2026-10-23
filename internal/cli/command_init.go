@@ -140,9 +140,13 @@ func loadProjectPlugins(ctx context.Context, logger logx.Logger, cfg *pathutil.P
 	mgr := plugin.NewManager(logger.Channel("plugin"))
 	mgr.SetVerbose(logx.DebugEnabled(ctx))
 	if err := mgr.LoadAll(ctx, cfg, projectRoot, version.Version); err != nil {
-		return nil, ConfigError(fmt.Errorf("plugin declared in bino.toml did not load: %w", err))
+		return nil, ConfigError(pluginLoadError(err))
 	}
 	return mgr, nil
+}
+
+func pluginLoadError(err error) error {
+	return fmt.Errorf("plugin declared in bino.toml did not load: %w", err)
 }
 
 // pluginLoadDiagnostic reports a failed plugin load on bino.toml for editor

@@ -763,6 +763,16 @@ func (s *Server) BroadcastRefreshError(routePath, message string) {
 	s.sse.Broadcast(FormatSSE("refresh-error", payload))
 }
 
+// BroadcastPluginsReloaded tells clients that the plugins were restarted.
+// The preview page then reloads in full: a context swap never runs the new
+// plugin scripts in <head>, and a custom element cannot be defined twice.
+func (s *Server) BroadcastPluginsReloaded() {
+	if s == nil || s.sse == nil {
+		return
+	}
+	s.sse.Broadcast(FormatSSE("plugins-reloaded", []byte("{}")))
+}
+
 // evictOldestCacheEntries removes the oldest cache entries to stay within maxContextCacheEntries.
 // Entries are removed from the front of the LRU list (oldest first) in O(1) per entry.
 // Must be called with contentMu held.

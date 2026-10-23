@@ -108,6 +108,8 @@ func NewAssetHandler(cache *AssetCache) http.Handler {
 			mediaType = inferMediaType(r.URL.Path)
 		}
 		w.Header().Set("Content-Type", mediaType)
+		// Preview reloads plugins in place, so the browser must not keep old files.
+		w.Header().Set("Cache-Control", "no-cache")
 
 		if len(asset.Content) > 0 {
 			_, _ = w.Write(asset.Content)
