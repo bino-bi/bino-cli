@@ -257,6 +257,38 @@ added to the document `<head>`. In a document, warning and error
 diagnostics and a failed render appear in the terminal log. A failed render
 shows a placeholder in place of the component and does not fail the document.
 
+#### What a component receives
+
+Besides the kind, the name, the spec and the render mode, the render request
+carries this (Go SDK v0.0.5 and later):
+
+- `RenderRequest.Datasets` holds the rows of the DataSets named in
+  `spec.dataset`, in spec order, each name once. A name that is missing from
+  it is fetched with `GetDatasetResult`. A name is missing when the DataSet is
+  too large for one request (about 3.5 MiB together with the spec), when the
+  component is a `:ref` embed in a `DocumentArtefact`, or when bino is older.
+  `$` DataSource names are never in it, and `GetDatasetResult` does not serve
+  them either: DataSource rows are not available to plugins.
+- `RenderRequest.InheritedStyle` is the name of the ComponentStyle inherited
+  from the nearest artefact, page, card, grid or tree, or empty. bino does not
+  write it into the spec. The plugin decides if a style field in its own spec
+  wins, and reads the style with `GetDocument` (kind `ComponentStyle`) or from
+  the `<bn-component-style>` elements in the page.
+
+Other context comes from the spec or the page:
+
+- `LayoutPage` params are already expanded in the spec.
+- Locale: read `<html lang>` or the nearest `bn-context[locale]`.
+- Size: measure the element's own box.
+
+Limits:
+
+- Inline dataset definitions in a plugin spec are not supported. Use a named
+  DataSet.
+- `_spec_` dataset defaults do not apply to plugin kinds. The rows still carry
+  the `_spec_` columns.
+- Plugin components are not part of layout state or the layout inspector.
+
 ### Lint rules
 
 Plugin lint rules run alongside bino's built-in rules during `bino lint`,

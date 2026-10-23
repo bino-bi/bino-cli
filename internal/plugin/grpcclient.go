@@ -131,12 +131,20 @@ func (g *grpcClient) OnHook(ctx context.Context, checkpoint string, payload *Hoo
 }
 
 func (g *grpcClient) RenderComponent(ctx context.Context, req render.PluginRenderRequest) (*RenderResult, error) {
-	resp, err := g.client.RenderComponent(ctx, &pluginv1.RenderComponentRequest{
-		Kind:       req.Kind,
-		Name:       req.Name,
-		Spec:       req.Spec,
-		RenderMode: req.RenderMode,
-	})
+	pb := &pluginv1.RenderComponentRequest{
+		Kind:           req.Kind,
+		Name:           req.Name,
+		Spec:           req.Spec,
+		RenderMode:     req.RenderMode,
+		InheritedStyle: req.InheritedStyle,
+	}
+	for _, ds := range req.Datasets {
+		pb.Datasets = append(pb.Datasets, &pluginv1.DatasetPayload{
+			Name:     ds.Name,
+			JsonRows: ds.Rows,
+		})
+	}
+	resp, err := g.client.RenderComponent(ctx, pb)
 	if err != nil {
 		return nil, err
 	}

@@ -734,10 +734,12 @@ func TestGRPCClient_RenderComponent(t *testing.T) {
 	client := newWireClient(t, fake)
 
 	got, err := client.RenderComponent(t.Context(), render.PluginRenderRequest{
-		Kind:       "ExampleChart",
-		Name:       "sales",
-		Spec:       []byte(`{"dataset":"rev"}`),
-		RenderMode: "build",
+		Kind:           "ExampleChart",
+		Name:           "sales",
+		Spec:           []byte(`{"dataset":"rev"}`),
+		RenderMode:     "build",
+		Datasets:       []render.PluginDataset{{Name: "rev", Rows: []byte(`[{"a":1}]`)}},
+		InheritedStyle: "corp",
 	})
 	if err != nil {
 		t.Fatalf("RenderComponent: %v", err)
@@ -761,6 +763,12 @@ func TestGRPCClient_RenderComponent(t *testing.T) {
 	}
 	if string(req.GetSpec()) != `{"dataset":"rev"}` {
 		t.Fatalf("spec mangled in transit: %s", req.GetSpec())
+	}
+	if ds := req.GetDatasets(); len(ds) != 1 || ds[0].GetName() != "rev" || string(ds[0].GetJsonRows()) != `[{"a":1}]` {
+		t.Fatalf("datasets mangled in transit: %+v", ds)
+	}
+	if req.GetInheritedStyle() != "corp" {
+		t.Fatalf("inherited style = %q, want corp", req.GetInheritedStyle())
 	}
 }
 
