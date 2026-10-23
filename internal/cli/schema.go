@@ -12,7 +12,6 @@ import (
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/plugin"
-	"bino.bi/bino/internal/version"
 )
 
 func newSchemaCommand() *cobra.Command {
@@ -39,10 +38,12 @@ func newSchemaCommand() *cobra.Command {
 
 			if projectRoot != "" {
 				projectCfg, err := pathutil.LoadProjectConfig(projectRoot)
-				if err == nil && len(projectCfg.Plugins) > 0 {
-					mgr := plugin.NewManager(logger)
-					mgr.SetVerbose(logx.DebugEnabled(ctx))
-					if err := mgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err == nil {
+				if err == nil {
+					mgr, err := loadProjectPlugins(ctx, logger, projectCfg, projectRoot)
+					if err != nil {
+						return err
+					}
+					if mgr != nil {
 						defer mgr.KillAll()
 						registry = mgr.Registry()
 					}

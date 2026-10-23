@@ -276,8 +276,8 @@ func runLSPValidate(ctx context.Context, dir string, executeQueries bool, out io
 
 // validateDirectory performs validation on all bino documents in a directory
 // and returns structured diagnostics for any issues found. It runs the same
-// diagnostics.Collect pipeline as the daemon: plugins are loaded best-effort
-// (like `bino lint`), foreign YAML is skipped, and the engine-compat check is
+// diagnostics.Collect pipeline as the daemon: a plugin that does not load is
+// reported on bino.toml, foreign YAML is skipped, and the engine-compat check is
 // included. If executeQueries is true, datasets are executed and data is
 // validated. The result is never nil, so the JSON output is [] rather than
 // null when the bundle is clean.
@@ -288,17 +288,17 @@ func validateDirectory(ctx context.Context, dir string, executeQueries bool) []L
 		ExecuteQueries: executeQueries,
 	}
 
-	// Load plugins if declared, best-effort. lsp-helper emits pure JSON on
-	// stdout, so the plugin manager gets a stderr-only logger - its Infof
-	// lines must not corrupt the stream.
+	// Load plugins if declared. A failed load becomes a bino.toml diagnostic.
+	// lsp-helper emits pure JSON on stdout, so the plugin manager gets a
+	// stderr-only logger - its Infof lines must not corrupt the stream.
 	projectCfg, cfgErr := pathutil.LoadProjectConfig(dir)
-	if cfgErr == nil && len(projectCfg.Plugins) > 0 {
+	if cfgErr == nil {
 		logger := logx.NewTerminal(io.Discard, os.Stderr, false)
-		mgr := plugin.NewManager(logger.Channel("plugin"))
-		mgr.SetVerbose(logx.DebugEnabled(ctx))
-		if err := mgr.LoadAll(ctx, projectCfg, dir, version.Version); err != nil {
-			logger.Warnf("Failed to load plugins: %v", err)
-		} else {
+		mgr, err := loadProjectPlugins(ctx, logger, projectCfg, dir)
+		if err != nil {
+			opts.ConfigDiagnostics = []LSPDiagnostic{pluginLoadDiagnostic(dir, err)}
+		}
+		if mgr != nil {
 			defer mgr.ShutdownAll(ctx)
 			opts.KindProvider = mgr.Registry()
 			opts.PluginLinters = plugin.NewLinterRegistry(mgr.Registry())
