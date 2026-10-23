@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 )
 
 type recordingPluginRenderer struct {
@@ -241,6 +242,148 @@ func TestRenderPluginKindWithoutRenderer(t *testing.T) {
 			_, _, err := renderLayoutChild(tt.child, rc)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("want %s, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+var salesRows = json.RawMessage(`[{"m":"Jan","ac":1},{"m":"Feb","ac":2}]`)
+
+// renderPluginDocs renders docs with a recording plugin renderer and the
+// given dataset results.
+func renderPluginDocs(t *testing.T, docs []config.Document, results []dataset.Result) *recordingPluginRenderer {
+	t.Helper()
+	pr := &recordingPluginRenderer{}
+	if _, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0", nil,
+		&PluginOptions{ComponentRenderer: pr}, "", "", ""); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if len(pr.reqs) == 0 {
+		t.Fatal("plugin was not called")
+	}
+	return pr
+}
+
+func datasetNames(ds []PluginDataset) []string {
+	names := make([]string, 0, len(ds))
+	for _, d := range ds {
+		names = append(names, d.Name)
+	}
+	return names
+}
+
+func TestRenderPluginGetsRowsAndInheritedStyle(t *testing.T) {
+	page := pageDoc(`{"selectedStyle": "page_style", "children": [{"kind": "Gauge", "spec": {"dataset": "sales"}}]}`)
+	pr := renderPluginDocs(t, []config.Document{page}, []dataset.Result{{Name: "sales", Data: salesRows}})
+
+	req := pr.reqs[0]
+	if req.InheritedStyle != "page_style" {
+		t.Errorf("InheritedStyle = %q, want page_style", req.InheritedStyle)
+	}
+	if len(req.Datasets) != 1 || req.Datasets[0].Name != "sales" || string(req.Datasets[0].Rows) != string(salesRows) {
+		t.Errorf("Datasets = %+v, want the sales rows", req.Datasets)
+	}
+	if _, ok := pr.spec(t, 0)["selectedStyle"]; ok {
+		t.Errorf("plugin spec got an inherited selectedStyle: %s", req.Spec)
+	}
+}
+
+func TestRenderPluginDatasetSelection(t *testing.T) {
+	page := pageDoc(`{"children": [{"kind": "Gauge", "spec": {"dataset": ["sales", "$src", "missing", "sales"]}}]}`)
+	pr := renderPluginDocs(t, []config.Document{page}, []dataset.Result{{Name: "sales", Data: salesRows}})
+
+	if got := datasetNames(pr.reqs[0].Datasets); !slices.Equal(got, []string{"sales"}) {
+		t.Errorf("Datasets = %v, want [sales]", got)
+	}
+}
+
+func TestRenderPluginRefGetsRows(t *testing.T) {
+	pr := &recordingPluginRenderer{}
+	rc := newRenderCtx(context.Background(), []config.Document{gaugeDoc()}, nil, nil, nil, pr, "build")
+	rc.withDatasetResults([]dataset.Result{{Name: "sales", Data: salesRows}, {Name: "other", Data: salesRows}})
+
+	child := layoutChild{Kind: "Gauge", Ref: "g1", Spec: json.RawMessage(`{"title":"Override"}`)}
+	if _, _, err := renderLayoutChild(child, rc); err != nil {
+		t.Fatalf("renderLayoutChild: %v", err)
+	}
+	if got := datasetNames(pr.reqs[0].Datasets); !slices.Equal(got, []string{"sales"}) {
+		t.Errorf("Datasets = %v, want [sales]", got)
+	}
+}
+
+func TestRenderPluginInCardGetsCardStyle(t *testing.T) {
+	page := pageDoc(`{"selectedStyle": "page_style", "children": [{"kind": "LayoutCard", "spec": {
+		"selectedStyle": "card_style",
+		"children": [{"kind": "Gauge", "spec": {"dataset": "sales"}}]
+	}}]}`)
+	pr := renderPluginDocs(t, []config.Document{page}, []dataset.Result{{Name: "sales", Data: salesRows}})
+
+	if got := pr.reqs[0].InheritedStyle; got != "card_style" {
+		t.Errorf("InheritedStyle = %q, want card_style", got)
+	}
+}
+
+func TestRenderPluginSpecDefaultsNotApplied(t *testing.T) {
+	rows := json.RawMessage(`[{"m":"Jan","ac":1,"_spec_any_measureUnit":"kEUR"}]`)
+	defaults, _ := dataset.FoldDefaults("sales", rows)
+	if len(defaults) == 0 {
+		t.Fatal("rows fold to no defaults")
+	}
+	page := pageDoc(`{"children": [{"kind": "Gauge", "spec": {"dataset": "sales"}}]}`)
+	pr := renderPluginDocs(t, []config.Document{page}, []dataset.Result{{Name: "sales", Data: rows, Defaults: defaults}})
+
+	req := pr.reqs[0]
+	if string(req.Spec) != `{"dataset": "sales"}` {
+		t.Errorf("plugin spec = %s, want it unchanged", req.Spec)
+	}
+	if len(req.Datasets) != 1 || !strings.Contains(string(req.Datasets[0].Rows), `"_spec_any_measureUnit":"kEUR"`) {
+		t.Errorf("Datasets = %+v, want rows with the _spec_ column", req.Datasets)
+	}
+}
+
+func TestRenderPluginDatasetBudget(t *testing.T) {
+	big := json.RawMessage(`["` + strings.Repeat("x", pluginRequestBudget) + `"]`)
+	page := pageDoc(`{"children": [{"kind": "Gauge", "spec": {"dataset": ["big", "sales"]}}]}`)
+	pr := renderPluginDocs(t, []config.Document{page}, []dataset.Result{{Name: "big", Data: big}, {Name: "sales", Data: salesRows}})
+
+	if got := datasetNames(pr.reqs[0].Datasets); !slices.Equal(got, []string{"sales"}) {
+		t.Errorf("Datasets = %v, want [sales]", got)
+	}
+}
+
+func TestRenderPluginGridAndTreeGetRowsAndStyle(t *testing.T) {
+	tests := []struct {
+		name  string
+		child layoutChild
+		style string
+	}{
+		{"grid cell", layoutChild{Kind: "Grid", Spec: json.RawMessage(`{
+			"children": [{"row": "r1", "column": "c1", "kind": "Gauge", "spec": {"dataset": "sales"}}]
+		}`)}, "corp"},
+		{"tree node", layoutChild{Kind: "Tree", Spec: json.RawMessage(`{
+			"selectedStyle": "tree-style",
+			"edges": [],
+			"nodes": [{"id": "n1", "kind": "Gauge", "spec": {"dataset": "sales"}}]
+		}`)}, "tree-style"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pr := &recordingPluginRenderer{}
+			rc := newRenderCtx(context.Background(), nil, nil, nil, nil, pr, "build")
+			rc.inheritedStyle = "corp"
+			rc.withDatasetResults([]dataset.Result{{Name: "sales", Data: salesRows}})
+			if _, _, err := renderLayoutChild(tt.child, rc); err != nil {
+				t.Fatalf("renderLayoutChild: %v", err)
+			}
+			req := pr.reqs[0]
+			if got := datasetNames(req.Datasets); !slices.Equal(got, []string{"sales"}) {
+				t.Errorf("Datasets = %v, want [sales]", got)
+			}
+			if req.InheritedStyle != tt.style {
+				t.Errorf("InheritedStyle = %q, want %q", req.InheritedStyle, tt.style)
+			}
+			if _, ok := pr.spec(t, 0)["selectedStyle"]; ok {
+				t.Errorf("plugin spec got an inherited selectedStyle: %s", req.Spec)
 			}
 		})
 	}

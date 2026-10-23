@@ -46,6 +46,20 @@ func (r *PluginRegistry) Register(p Plugin) {
 	}
 }
 
+// reset removes every plugin and kind and drops the cached validator, so the
+// registry can be filled again by a reload. Holders keep their pointer.
+func (r *PluginRegistry) reset() {
+	r.mu.Lock()
+	r.plugins = make(map[string]Plugin)
+	r.kinds = make(map[string]KindRegistration)
+	r.order = nil
+	r.mu.Unlock()
+
+	r.validatorMu.Lock()
+	r.validator = nil
+	r.validatorMu.Unlock()
+}
+
 // Get returns a plugin by name.
 func (r *PluginRegistry) Get(name string) (Plugin, bool) {
 	r.mu.RLock()

@@ -13,11 +13,9 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
-	"bino.bi/bino/internal/plugin"
 	"bino.bi/bino/internal/report/config"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/pipeline"
-	"bino.bi/bino/internal/version"
 )
 
 func newGraphCommand() *cobra.Command {
@@ -46,9 +44,12 @@ a tree or flat table view. Components also list the dataset columns they read.`)
 			// Load plugins for kind validation.
 			var kindProvider config.KindProvider
 			projectCfg, cfgErr := pathutil.LoadProjectConfig(absDir)
-			if cfgErr == nil && len(projectCfg.Plugins) > 0 {
-				mgr := plugin.NewManager(logger.Channel("plugin"))
-				if err := mgr.LoadAll(ctx, projectCfg, absDir, version.Version); err == nil {
+			if cfgErr == nil {
+				mgr, err := loadProjectPlugins(ctx, logger, projectCfg, absDir)
+				if err != nil {
+					return err
+				}
+				if mgr != nil {
 					defer mgr.KillAll()
 					kindProvider = mgr.Registry()
 				}

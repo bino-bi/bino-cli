@@ -39,6 +39,8 @@ type commandEnv struct {
 	PluginManager *plugin.Manager
 	// PluginRegistry holds loaded plugins. May be nil if no plugins are declared.
 	PluginRegistry *plugin.PluginRegistry
+	// PluginLoadErr is the plugin load failure, set only by initEditorCommandEnv.
+	PluginLoadErr error
 }
 
 // initCommandEnv performs the initialization sequence shared by build, preview,
@@ -47,6 +49,17 @@ type commandEnv struct {
 //
 // mode selects the [build], [preview], or [serve] section from bino.toml.
 func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode string, logger logx.Logger) (*commandEnv, error) {
+	return initEnv(ctx, cmd, workdir, mode, logger, false)
+}
+
+// initEditorCommandEnv is initCommandEnv for editor surfaces (the daemon): a
+// plugin that does not load is kept in PluginLoadErr instead of failing, so
+// the editor can show it as a diagnostic.
+func initEditorCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode string, logger logx.Logger) (*commandEnv, error) {
+	return initEnv(ctx, cmd, workdir, mode, logger, true)
+}
+
+func initEnv(ctx context.Context, cmd *cobra.Command, workdir, mode string, logger logx.Logger, keepGoingWithoutPlugins bool) (*commandEnv, error) {
 	cacheDir, err := pathutil.CacheDir("cdn")
 	if err != nil {
 		return nil, RuntimeError(err)
@@ -92,22 +105,7 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 	}
 	logger.Infof("Using template engine %s", engineVersion)
 
-	// Load plugins if declared in bino.toml.
-	var pluginMgr *plugin.Manager
-	var pluginReg *plugin.PluginRegistry
-	if len(projectCfg.Plugins) > 0 {
-		pluginMgr = plugin.NewManager(logger.Channel("plugin"))
-		pluginMgr.SetVerbose(logx.DebugEnabled(ctx))
-		if err := pluginMgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
-			logger.Warnf("Failed to load plugins: %v", err)
-			// Continue without plugins - don't block the command.
-			pluginMgr = nil
-		} else {
-			pluginReg = pluginMgr.Registry()
-		}
-	}
-
-	return &commandEnv{
+	env := &commandEnv{
 		ProjectRoot:         projectRoot,
 		ProjectCfg:          projectCfg,
 		CacheDir:            cacheDir,
@@ -115,9 +113,54 @@ func initCommandEnv(ctx context.Context, cmd *cobra.Command, workdir, mode strin
 		EngineVersionPinned: engineVersionPinned,
 		HookRunner:          hookRunner,
 		Resolver:            resolver,
-		PluginManager:       pluginMgr,
-		PluginRegistry:      pluginReg,
-	}, nil
+	}
+
+	pluginMgr, err := loadProjectPlugins(ctx, logger, projectCfg, projectRoot)
+	if err != nil {
+		if !keepGoingWithoutPlugins {
+			return nil, err
+		}
+		logger.Errorf("%v", err)
+		env.PluginLoadErr = err
+	}
+	if pluginMgr != nil {
+		env.PluginManager = pluginMgr
+		env.PluginRegistry = pluginMgr.Registry()
+	}
+	return env, nil
+}
+
+// loadProjectPlugins starts the plugins declared in bino.toml. It returns
+// (nil, nil) when none are declared, and a ConfigError when one does not load:
+// running without it would produce incomplete output or confusing schema errors.
+func loadProjectPlugins(ctx context.Context, logger logx.Logger, cfg *pathutil.ProjectConfig, projectRoot string) (*plugin.Manager, error) {
+	if len(cfg.Plugins) == 0 {
+		return nil, nil
+	}
+	mgr := plugin.NewManager(logger.Channel("plugin"))
+	mgr.SetVerbose(logx.DebugEnabled(ctx))
+	if err := mgr.LoadAll(ctx, cfg, projectRoot, version.Version); err != nil {
+		return nil, ConfigError(pluginLoadError(err))
+	}
+	return mgr, nil
+}
+
+func pluginLoadError(err error) error {
+	return fmt.Errorf("plugin declared in bino.toml did not load: %w", err)
+}
+
+// pluginLoadDiagnostic reports a failed plugin load on bino.toml for editor
+// surfaces, which keep running without plugins. Plugins load once per process,
+// so the diagnostic stays until a restart.
+func pluginLoadDiagnostic(projectRoot string, err error) LSPDiagnostic {
+	return LSPDiagnostic{
+		File:     pathutil.ProjectConfigPath(projectRoot),
+		Line:     1,
+		Column:   1,
+		Severity: "error",
+		Message:  err.Error() + ". Reload the editor window after fixing it (in VS Code: Developer: Reload Window).",
+		Code:     "plugin-load-failed",
+	}
 }
 
 // applyCommandEnv exports the bino.toml [<mode>.env] values into the process

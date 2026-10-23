@@ -51,6 +51,11 @@ type Options struct {
 	// engine-version compatibility check lives in the CLI layer).
 	EngineCompat func(dir string) (Diagnostic, bool)
 
+	// ConfigDiagnostics are bino.toml problems found by the caller, such as a
+	// declared plugin that did not load. They are always reported: [lint]
+	// disable does not apply, because the build fails on them anyway.
+	ConfigDiagnostics []Diagnostic
+
 	// ExecuteQueries additionally executes dataset queries and appends
 	// data-validation diagnostics (slower but catches data issues).
 	ExecuteQueries bool
@@ -111,6 +116,7 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 			diagnostics = append(diagnostics, d)
 		}
 	}
+	diagnostics = append(diagnostics, opts.ConfigDiagnostics...)
 
 	// Run lint rules. DocumentsFromConfig carries metadata.params too - the
 	// ref-params rule is inert without the declarations.

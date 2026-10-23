@@ -47,7 +47,23 @@ type PluginRenderRequest struct {
 	Kind, Name string
 	Spec       json.RawMessage
 	RenderMode string
+	// Datasets holds the rows of the DataSets named in spec.dataset, in spec
+	// order. A name that is missing must be fetched with GetDatasetResult.
+	Datasets []PluginDataset
+	// InheritedStyle is the ComponentStyle name from the nearest artefact,
+	// page, card, grid or tree; "" means none. It is never written into Spec.
+	InheritedStyle string
 }
+
+// PluginDataset is the JSON rows of one executed DataSet.
+type PluginDataset struct {
+	Name string
+	Rows json.RawMessage
+}
+
+// pluginRequestBudget caps spec plus rows in one plugin render request below
+// the 4 MiB gRPC receive limit of plugins built with older SDKs.
+const pluginRequestBudget = 3670016
 
 // PluginComponentRenderer renders HTML for plugin-provided component kinds.
 // Warnings are non-fatal messages for the user; only err fails the render.
@@ -81,6 +97,8 @@ type renderCtx struct {
 	// rows' `_spec_` columns; a component's primary dataset fills the spec
 	// fields its author left unset.
 	datasetDefaults map[string]dataset.Defaults
+	// datasetRows maps a dataset name to its JSON rows, for plugin components.
+	datasetRows map[string]json.RawMessage
 	// warnings collects render-time warnings for the build log; nil when the
 	// caller has no use for them (they are always logged).
 	warnings *[]string
@@ -147,9 +165,16 @@ func (rc *renderCtx) withInheritedStyle(style string) *renderCtx {
 	return &c
 }
 
-// withDatasetDefaults indexes the dataset defaults of the executed datasets.
-func (rc *renderCtx) withDatasetDefaults(results []dataset.Result) {
+// withDatasetResults indexes the rows and dataset defaults of the executed
+// datasets.
+func (rc *renderCtx) withDatasetResults(results []dataset.Result) {
 	for _, r := range results {
+		if len(r.Data) > 0 {
+			if rc.datasetRows == nil {
+				rc.datasetRows = map[string]json.RawMessage{}
+			}
+			rc.datasetRows[r.Name] = r.Data
+		}
 		if len(r.Defaults) == 0 {
 			continue
 		}
@@ -176,10 +201,12 @@ func (rc *renderCtx) renderPluginComponent(kind, name string, specRaw json.RawMe
 		return "", fmt.Errorf("unsupported %s kind %q", where, kind)
 	}
 	htmlOut, warnings, err := rc.pluginRenderer.RenderComponent(rc.ctx, PluginRenderRequest{
-		Kind:       kind,
-		Name:       name,
-		Spec:       specRaw,
-		RenderMode: rc.renderMode,
+		Kind:           kind,
+		Name:           name,
+		Spec:           specRaw,
+		RenderMode:     rc.renderMode,
+		Datasets:       rc.pluginDatasets(specRaw),
+		InheritedStyle: rc.inheritedStyle,
 	})
 	for _, w := range warnings {
 		rc.warn(w)
@@ -188,6 +215,38 @@ func (rc *renderCtx) renderPluginComponent(kind, name string, specRaw json.RawMe
 		return "", fmt.Errorf("plugin render %s: %w", kind, err)
 	}
 	return htmlOut, nil
+}
+
+// pluginDatasets returns the rows of the DataSets named in spec.dataset, in
+// spec order. DataSources, unknown names and rows that would push the request
+// over pluginRequestBudget are left out; the plugin fetches those itself.
+func (rc *renderCtx) pluginDatasets(specRaw json.RawMessage) []PluginDataset {
+	if len(rc.datasetRows) == 0 {
+		return nil
+	}
+	var p struct {
+		Dataset spec.DatasetList `json:"dataset"`
+	}
+	if json.Unmarshal(specRaw, &p) != nil {
+		return nil
+	}
+	var out []PluginDataset
+	seen := map[string]bool{}
+	size := len(specRaw)
+	for _, name := range p.Dataset.Strings() {
+		rows, ok := rc.datasetRows[name]
+		if strings.HasPrefix(name, "$") || !ok || seen[name] {
+			continue
+		}
+		seen[name] = true
+		if size+len(rows) > pluginRequestBudget {
+			logx.FromContext(rc.ctx).Channel("render").Debugf("dataset %s (%d bytes) left out of the plugin render request: too large", name, len(rows))
+			continue
+		}
+		size += len(rows)
+		out = append(out, PluginDataset{Name: name, Rows: rows})
+	}
+	return out
 }
 
 // recordDataRefs notes the data a rendered component binds. It splits the

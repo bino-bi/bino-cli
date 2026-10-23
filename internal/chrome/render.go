@@ -29,6 +29,12 @@ type PDFOptions struct {
 	Debug                 bool
 	WaitForComponentReady bool
 	ReadyConsolePrefix    string
+	// WaitForPlugins injects window.binoPlugin and waits for the plugin
+	// components after the engine wait. A failed or never-defined plugin
+	// element fails the render unless AllowIncompletePlugins is set, which
+	// logs it as a warning instead.
+	WaitForPlugins         bool
+	AllowIncompletePlugins bool
 	// Header/footer options for document PDFs
 	DisplayHeaderFooter bool
 	HeaderTemplate      string
@@ -81,10 +87,11 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	}
 
 	// Navigate and wait for network idle
-	if err := chromedp.Run(taskCtx,
-		chromedp.Navigate(opts.URL),
-		waitNetworkIdle(logger),
-	); err != nil {
+	actions := []chromedp.Action{chromedp.Navigate(opts.URL), waitNetworkIdle(logger)}
+	if opts.WaitForPlugins {
+		actions = append([]chromedp.Action{injectPluginRuntime()}, actions...)
+	}
+	if err := chromedp.Run(taskCtx, actions...); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -94,6 +101,12 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	// Wait for component readiness signal
 	if readyCh != nil {
 		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
+			return err
+		}
+	}
+
+	if opts.WaitForPlugins {
+		if err := settlePluginComponents(taskCtx, opts.AllowIncompletePlugins, logger); err != nil {
 			return err
 		}
 	}
@@ -210,6 +223,9 @@ type ScreenshotOptions struct {
 	FilenamePrefix        string
 	FilenamePattern       string  // "index" or "ref"
 	Scale                 float64 // device scale factor (e.g. 2.0 for retina)
+	// WaitForPlugins and AllowIncompletePlugins work as in PDFOptions.
+	WaitForPlugins         bool
+	AllowIncompletePlugins bool
 }
 
 // ScreenshotRef identifies a component to capture a screenshot of.
@@ -281,11 +297,15 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	}
 
 	// Navigate with viewport emulation and wait for network idle
-	if err := chromedp.Run(taskCtx,
+	actions := []chromedp.Action{
 		chromedp.EmulateViewport(int64(viewportWidth), int64(viewportHeight), chromedp.EmulateScale(scaleFactor)),
 		chromedp.Navigate(opts.URL),
 		waitNetworkIdle(logger),
-	); err != nil {
+	}
+	if opts.WaitForPlugins {
+		actions = append([]chromedp.Action{injectPluginRuntime()}, actions...)
+	}
+	if err := chromedp.Run(taskCtx, actions...); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
@@ -294,6 +314,12 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 
 	if readyCh != nil {
 		if err := waitForComponentReady(ctx, readyCh, timeout, logger); err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.WaitForPlugins {
+		if err := settlePluginComponents(taskCtx, opts.AllowIncompletePlugins, logger); err != nil {
 			return nil, err
 		}
 	}

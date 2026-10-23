@@ -96,15 +96,6 @@ func (h *HookBus) LastFindings() []LintFinding {
 	return h.lastFindings
 }
 
-// DispatchPostLoad dispatches the post-load checkpoint with loaded documents.
-func (h *HookBus) DispatchPostLoad(ctx context.Context, docs []DocumentPayload) ([]DocumentPayload, []Diagnostic, error) {
-	result, diags, err := h.Dispatch(ctx, "post-load", &HookPayload{Documents: docs})
-	if err != nil {
-		return docs, diags, err
-	}
-	return result.Documents, diags, nil
-}
-
 // DispatchPostRenderHTML dispatches after HTML generation.
 func (h *HookBus) DispatchPostRenderHTML(ctx context.Context, html []byte) ([]byte, []Diagnostic, error) {
 	result, diags, err := h.Dispatch(ctx, "post-render-html", &HookPayload{HTML: html})
@@ -121,10 +112,4 @@ func (h *HookBus) DispatchPostDatasetExecute(ctx context.Context, datasets []Dat
 		return datasets, diags, err
 	}
 	return result.Datasets, diags, nil
-}
-
-// DispatchPostRenderPDF dispatches after PDF rendering (read-only).
-func (h *HookBus) DispatchPostRenderPDF(ctx context.Context, pdfPath string) ([]Diagnostic, error) {
-	_, diags, err := h.Dispatch(ctx, "post-render-pdf", &HookPayload{PDFPath: pdfPath})
-	return diags, err
 }

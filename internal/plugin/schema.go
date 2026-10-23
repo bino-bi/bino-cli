@@ -72,6 +72,9 @@ func (a *SchemaAggregator) Build(ctx context.Context) error {
 			if _, exists := a.kindSchemas[kindName]; exists {
 				return fmt.Errorf("duplicate schema for kind %q", kindName)
 			}
+			if !json.Valid(schemaBytes) {
+				return fmt.Errorf("plugin %s: schema for kind %q is not valid JSON", p.Manifest().Name, kindName)
+			}
 			a.kindSchemas[kindName] = json.RawMessage(schemaBytes)
 		}
 	}

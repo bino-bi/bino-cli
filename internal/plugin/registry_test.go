@@ -311,3 +311,57 @@ func TestRegistry_AllKinds(t *testing.T) {
 		t.Fatalf("expected 2 kinds, got %d", len(kinds))
 	}
 }
+
+// reloadingPlugin stands for one plugin across a reload: its kind is set by
+// the test, and GetSchemas returns the schema of that kind.
+type reloadingPlugin struct {
+	mockPlugin
+	kind        string
+	schemaCalls int
+}
+
+func (p *reloadingPlugin) Manifest() PluginManifest {
+	return PluginManifest{Name: "gauges", Kinds: []KindRegistration{{KindName: p.kind, Category: KindCategoryComponent}}}
+}
+
+func (p *reloadingPlugin) GetSchemas(context.Context) (map[string][]byte, error) {
+	p.schemaCalls++
+	return map[string][]byte{p.kind: []byte(`{"type":"object","required":["title"]}`)}, nil
+}
+
+func TestRegistry_ResetDropsPluginsAndValidator(t *testing.T) {
+	ctx := context.Background()
+	p := &reloadingPlugin{kind: "Gauge"}
+	r := NewRegistry()
+	r.Register(p)
+	if _, err := r.DocumentValidator(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	r.reset()
+	if len(r.AllKinds()) != 0 || len(r.AllPlugins()) != 0 {
+		t.Fatalf("after reset: kinds %v, plugins %v, want none", r.AllKinds(), r.AllPlugins())
+	}
+	if _, ok := r.Get("gauges"); ok {
+		t.Fatal("after reset: Get still finds the plugin")
+	}
+
+	p.kind = "Meter"
+	r.Register(p)
+	v, err := r.DocumentValidator(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.schemaCalls != 2 {
+		t.Fatalf("GetSchemas calls = %d, want 2: the validator was not rebuilt", p.schemaCalls)
+	}
+	meter := func(spec string) []byte {
+		return []byte(`{"apiVersion":"bino.bi/v1alpha1","kind":"Meter","metadata":{"name":"m"},"spec":` + spec + `}`)
+	}
+	if err := v.ValidateJSON(meter(`{"title":"x"}`)); err != nil {
+		t.Errorf("new kind rejected: %v", err)
+	}
+	if err := v.ValidateJSON(meter(`{}`)); err == nil {
+		t.Error("new kind is not validated against its schema")
+	}
+}

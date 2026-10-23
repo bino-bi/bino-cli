@@ -3,6 +3,9 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
+	"sync"
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/render"
@@ -21,6 +24,9 @@ func NewComponentRenderer(registry *PluginRegistry) ComponentRenderer {
 
 type registryComponentRenderer struct {
 	registry *PluginRegistry
+	// warned holds kind + "\x00" + check for the fragment warnings already
+	// given, so each shows once per kind.
+	warned sync.Map
 }
 
 // RenderComponent renders through the plugin that owns req.Kind. Warning and
@@ -58,5 +64,48 @@ func (r *registryComponentRenderer) RenderComponent(ctx context.Context, req ren
 			warnings = append(warnings, prefix+d.Message)
 		}
 	}
+	prefix := fmt.Sprintf("plugin %s: %s: ", reg.PluginName, req.Kind)
+	for _, w := range fragmentWarnings(res.HTML) {
+		if _, seen := r.warned.LoadOrStore(req.Kind+"\x00"+w.check, true); !seen {
+			warnings = append(warnings, prefix+w.message)
+		}
+	}
 	return res.HTML, warnings, nil
+}
+
+var (
+	fragmentRootTag = regexp.MustCompile(`^<([A-Za-z][^\s/>]*)`)
+	scriptOpenTag   = regexp.MustCompile(`(?is)<script\b([^>]*)>`)
+	scriptTypeAttr  = regexp.MustCompile(`(?is)\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+)
+
+type fragmentWarning struct{ check, message string }
+
+// fragmentWarnings finds the front-end mistakes the host can see in a
+// fragment: a reserved root tag and an inline script that preview never runs.
+func fragmentWarnings(html string) []fragmentWarning {
+	var out []fragmentWarning
+	if m := fragmentRootTag.FindStringSubmatch(strings.TrimSpace(html)); m != nil {
+		tag := strings.ToLower(m[1])
+		for _, reserved := range []string{"bn-", "bino-"} {
+			if strings.HasPrefix(tag, reserved) {
+				out = append(out, fragmentWarning{"root", fmt.Sprintf("root element <%s> uses the reserved %s prefix; use a tag that starts with the plugin name", tag, reserved)})
+			}
+		}
+	}
+	for _, m := range scriptOpenTag.FindAllStringSubmatch(html, -1) {
+		if !isJSONScript(m[1]) {
+			out = append(out, fragmentWarning{"script", "the HTML contains an inline <script>; it runs in bino build but not in bino preview, ship JS through GetAssets"})
+			break
+		}
+	}
+	return out
+}
+
+func isJSONScript(attrs string) bool {
+	m := scriptTypeAttr.FindStringSubmatch(attrs)
+	if m == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(m[1]+m[2]+m[3]), "application/json")
 }

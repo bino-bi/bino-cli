@@ -41,6 +41,7 @@ type State struct {
 	kindProvider  config.KindProvider
 	pluginLinters lint.PluginLinterRegistry
 	engineCompat  func(dir string) (Diagnostic, bool)
+	configDiags   []Diagnostic
 }
 
 // NewState creates a new daemon state.
@@ -145,14 +146,21 @@ func (s *State) SetEngineCompat(check func(dir string) (Diagnostic, bool)) {
 	s.engineCompat = check
 }
 
+// SetConfigDiagnostics sets bino.toml diagnostics found outside validation,
+// such as a plugin that did not load. Every validation reports them.
+func (s *State) SetConfigDiagnostics(diags []Diagnostic) {
+	s.configDiags = diags
+}
+
 // validateDocs runs full validation and returns diagnostics.
 // Must be called with s.mu held.
 func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 	return diagnostics.Collect(ctx, s.projectRoot, diagnostics.Options{
-		KindProvider:  s.kindProvider,
-		SkipForeign:   true,
-		PluginLinters: s.pluginLinters,
-		EngineCompat:  s.engineCompat,
+		KindProvider:      s.kindProvider,
+		SkipForeign:       true,
+		PluginLinters:     s.pluginLinters,
+		EngineCompat:      s.engineCompat,
+		ConfigDiagnostics: s.configDiags,
 	})
 }
 

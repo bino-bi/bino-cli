@@ -31,12 +31,11 @@ and SQL queries can express. A single plugin binary can provide any combination 
     or layout elements.
   </Card>
   <Card title="Lint Rules" icon="warning">
-    Validate manifests with domain-specific rules. Lint rules can access
-    datasets and query the host's DuckDB.
+    Validate manifests with domain-specific rules.
   </Card>
   <Card title="Pipeline Hooks" icon="setting">
-    React to pipeline events (post-load, post-dataset, post-render) to transform
-    data, inject content, or collect telemetry.
+    React to pipeline events (after datasets run, after HTML is generated) to
+    transform data, inject content, or collect telemetry.
   </Card>
 </CardGrid>
 
@@ -82,7 +81,7 @@ for Go.
    [plugins.myplugin]
    # path = ".bino/plugins/bino-plugin-myplugin"  # optional, if not on PATH
    [plugins.myplugin.config]
-   api_key = "${MY_API_KEY}"
+   region = "eu-1"
    ```
 
 4. **Verify**
@@ -92,6 +91,25 @@ for Go.
    ```
 
 </Steps>
+
+### When a plugin does not load
+
+A plugin declared in `bino.toml` must load. If it does not (the binary is
+missing, its `Init` returns an error, or it does not match the `version` pin),
+`bino build`, `preview`, `serve`, `lint`, `graph` and `schema` stop with exit
+code 1:
+
+```text
+plugin declared in bino.toml did not load: loading plugin "myplugin": ...
+```
+
+Editors keep working without the plugin and show this error on `bino.toml`
+(code `plugin-load-failed`). `[lint] disable` does not hide it. Plugins load
+once when the editor process starts. In VS Code the daemon and the language
+server both hold them, so after you fix the problem reload the window
+(**Developer: Reload Window**). **Bino: Restart Daemon** is not enough: the
+language server keeps talking to the old daemon.
+To build without a plugin, remove its `[plugins.<name>]` table.
 
 ### Platform-specific binaries
 
@@ -123,15 +141,27 @@ Plugins receive their configuration from `bino.toml` at startup:
 ```toml
 [plugins.salesforce]
 path = ".bino/plugins/bino-plugin-salesforce"   # optional explicit path
-version = "1.2.0"                                # optional version pin (future)
+version = "^1.2"                                 # optional semver constraint
 
 [plugins.salesforce.config]
 instance_url = "https://myorg.salesforce.com"
 api_version = "58.0"
 ```
 
-The `config` map is passed to the plugin's `Init` RPC as key-value pairs.
-Environment variable substitution (`${VAR}`) works in config values.
+The `config` map is passed to the plugin's `Init` RPC as key-value pairs. The
+values are passed as written: bino does not expand `${VAR}` in them. With the
+Go SDK (v0.0.4 and later), the plugin reads them in its `OnInit` callback.
+
+To keep a secret out of `bino.toml`, let the plugin read it from its
+environment (for example `MY_API_KEY`). The plugin process inherits bino's
+environment. Values from a `[build.env]`, `[preview.env]` or
+`[serve.env]` table in `bino.toml` are part of that environment only in
+`bino build`, `bino preview` and `bino serve`, and in the editor daemon, which
+uses `[preview.env]`.
+
+`version` is a semver constraint, either an exact version (`"1.2.0"`) or a
+range (`">=1.0 <2.0"`, `"^1.2"`). bino checks it against the version the plugin
+reports, and a plugin that does not match fails to load.
 
 ## What plugins can do
 
@@ -169,8 +199,9 @@ spec:
   title: Monthly Revenue
 ```
 
-The plugin generates HTML (e.g., `<bn-example-chart ...>`) and provides the
-JS/CSS assets that implement the Web Component.
+The plugin generates HTML (e.g., `<example-chart ...>`) and provides the
+JS/CSS assets that implement the Web Component. The HTML and the scripts follow
+the [front-end contract](#front-end-contract).
 
 Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
 `/plugins/example/chart.js`. bino serves these paths in `bino preview`,
@@ -178,6 +209,14 @@ Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
 `https://` URLs are linked as they are. Any other path logs a warning and is
 not served. A path under another plugin's `/plugins/` prefix is skipped, so
 one plugin cannot replace another plugin's files.
+
+bino writes the script and style tags in the order the plugin returns its
+assets, plugin by plugin in load order, so a library listed before the code
+that uses it also loads first. If two assets have the same path, the first one
+is kept and bino logs a warning. A style whose media type is a font, an image,
+or any other type that is not CSS is served but gets no `<link>` tag. A style
+without a media type is linked unless its file extension marks it as a font or
+an image, so an external stylesheet URL without a `.css` suffix still works.
 
 A component kind can be used as a child of a `LayoutPage` or `LayoutCard`, as
 a `Grid` cell, or as a `Tree` node, inline or by `ref` to a document of that
@@ -219,6 +258,99 @@ added to the document `<head>`. In a document, warning and error
 diagnostics and a failed render appear in the terminal log. A failed render
 shows a placeholder in place of the component and does not fail the document.
 
+#### Front-end contract
+
+The HTML a component returns and the scripts that draw it follow these rules:
+
+1. Return one root element with your own custom element tag, prefixed with
+   the plugin name, for example `<highcharts-chart>`. The `bn-` prefix belongs
+   to the template engine and `bino-` to the preview UI. bino warns once per
+   kind when the root tag uses one of them.
+2. Ship all JavaScript through `GetAssets`. Do not put an executable inline
+   `<script>` in the HTML: it runs in `bino build` but not in `bino preview`,
+   which merges the new page into the old one. A
+   `<script type="application/json">` data block is fine. bino warns once per
+   kind about any other `<script>`.
+3. Pass the data the plugin got from bino as JSON in an attribute. List the
+   attribute in `observedAttributes` and redraw in `attributeChangedCallback`:
+   on a reload, `bino preview` keeps the element and only updates its
+   attributes.
+4. Wrap each draw in an async function and pass its promise to
+   `window.binoPlugin?.track(this, promise)`, in `connectedCallback` and on
+   every redraw. `window.binoPlugin` exists only while bino prints a PDF or
+   takes screenshots. In `bino preview`, `bino serve` and older bino releases
+   the optional chaining makes the call a no-op.
+5. Scripts load in the order `GetAssets` returns them, with the normal HTML
+   rules: classic scripts run before module scripts. List a library before the
+   element that uses it.
+6. Turn off animations. Size the drawing from the element's container when it
+   connects. If the size changes later, redraw and track the redraw: the PDF
+   waits for it too.
+
+```js
+class ExampleChart extends HTMLElement {
+  static observedAttributes = ["data"];
+
+  connectedCallback() {
+    this.redraw();
+  }
+
+  attributeChangedCallback(name, oldValue) {
+    // The first value arrives before connectedCallback.
+    if (oldValue !== null) this.redraw();
+  }
+
+  redraw() {
+    const draw = async () => {
+      const rows = JSON.parse(this.getAttribute("data") || "[]");
+      await drawChart(this, rows, { animation: false });
+    };
+    window.binoPlugin?.track(this, draw());
+  }
+}
+customElements.define("example-chart", ExampleChart);
+```
+
+When a loaded plugin provides a component kind, report PDFs, screenshots and
+document PDFs wait until every tracked promise has settled and the page has
+been quiet for a short moment. `bino build` then fails when a tracked promise
+rejected, when a script under `/plugins/` threw an error, or when a custom
+element in the page was never defined because its script did not load or did
+not call `customElements.define`. The PDF button in `bino preview` shows these
+as warnings and still returns the PDF.
+
+#### What a component receives
+
+Besides the kind, the name, the spec and the render mode, the render request
+carries this (Go SDK v0.0.5 and later):
+
+- `RenderRequest.Datasets` holds the rows of the DataSets named in
+  `spec.dataset`, in spec order, each name once. A name that is missing from
+  it is fetched with `GetDatasetResult`. A name is missing when the DataSet is
+  too large for one request (about 3.5 MiB together with the spec), when the
+  component is a `:ref` embed in a `DocumentArtefact`, or when bino is older.
+  `$` DataSource names are never in it, and `GetDatasetResult` does not serve
+  them either: DataSource rows are not available to plugins.
+- `RenderRequest.InheritedStyle` is the name of the ComponentStyle inherited
+  from the nearest artefact, page, card, grid or tree, or empty. bino does not
+  write it into the spec. The plugin decides if a style field in its own spec
+  wins, and reads the style with `GetDocument` (kind `ComponentStyle`) or from
+  the `<bn-component-style>` elements in the page.
+
+Other context comes from the spec or the page:
+
+- `LayoutPage` params are already expanded in the spec.
+- Locale: read `<html lang>` or the nearest `bn-context[locale]`.
+- Size: measure the element's own box.
+
+Limits:
+
+- Inline dataset definitions in a plugin spec are not supported. Use a named
+  DataSet.
+- `_spec_` dataset defaults do not apply to plugin kinds. The rows still carry
+  the `_spec_` columns.
+- Plugin components are not part of layout state or the layout inspector.
+
 ### Lint rules
 
 Plugin lint rules run alongside bino's built-in rules during `bino lint`,
@@ -234,10 +366,11 @@ bino lint
 
 Plugins subscribe to pipeline checkpoints:
 
-- `post-load` - after manifests are loaded
 - `post-dataset-execute` - after SQL queries run
 - `post-render-html` - after HTML is generated
-- `post-render-pdf` - after PDF is rendered
+
+These are the only checkpoints bino dispatches. A plugin that subscribes to any
+other checkpoint gets a warning when it loads.
 
 Hooks can inspect and modify the pipeline payload (e.g., transform HTML,
 validate datasets, collect metrics).
@@ -255,10 +388,24 @@ bino plugin exec salesforce:sync --object Account
 
 Plugin callbacks can query the host's state:
 
-- **QueryDuckDB** - run SQL against the host's DuckDB engine
+- **QueryDuckDB** - run SQL against the executed DataSets
 - **GetDocument** - fetch a specific manifest document
 - **GetDatasetResult** - retrieve pre-computed dataset results
 - **ListDocuments** - list all loaded documents
+
+`QueryDuckDB` runs each query in a throwaway DuckDB session. The session holds
+one view per executed DataSet of the artefact being rendered, named by its
+`metadata.name`. DataSources are not visible. DataSets are available from the
+`post-dataset-execute` hook onward, so in `RenderComponent` and in later hooks.
+Before that hook, for example in `CollectDataSource`, `bino build` shows no
+DataSets, but `bino preview` and `bino serve` can still show the DataSets of
+the previous render. In `bino preview`, an embed or presentation render that
+runs at the same time can also replace the DataSets at any point, so a query
+can see another artefact's DataSets. `QueryDuckDB` is not available in
+`bino lint` or the language server. Nothing a query changes is kept: a
+`DROP VIEW` or `CREATE TABLE` ends with the session. A DataSet that cannot be
+loaded as a view is skipped with a warning diagnostic, and the query still runs.
+A failing query returns an error diagnostic.
 
 This enables data-aware plugins that make decisions based on the current
 report's data and configuration.
@@ -266,8 +413,8 @@ report's data and configuration.
 ## Building a plugin
 
 See the [Plugin SDK documentation](https://github.com/bino-bi/bino-plugin-sdk)
-for a complete guide to building plugins with Go, including the API reference
-and a working sample plugin.
+for a complete guide to building plugins with Go, including the API
+reference.
 
 A minimal plugin looks like:
 
@@ -285,11 +432,20 @@ func main() {
 }
 ```
 
+`bino preview` checks the plugin binaries and `bino.toml` once a second. When
+one changes, for example after `go build`, preview restarts all plugins and
+reloads the page, so the new scripts and output show up without a restart. If
+the new build does not load, preview keeps running and shows the error until
+the next change fixes it. Two cases still need a restart: adding the first
+plugin to a project that had none, and the editor (`bino lsp` and the daemon),
+which loads plugins once.
+
 ## Limitations
 
 - **No marketplace**: Plugins are distributed manually. Copy the binary to the
   project or install it on PATH.
-- **No automatic updates**: Version pinning is declared but not enforced yet.
+- **No automatic updates**: bino does not install or update plugins. A
+  `version` pin only checks the binary you installed.
 - **Platform-specific**: Each target OS/architecture needs its own binary.
 - **Early access**: The plugin API may change between bino releases. Pin your
   SDK dependency to a specific version.

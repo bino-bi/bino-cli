@@ -269,6 +269,16 @@ func TestDocumentValidator_BrokenSchemaNamesPlugin(t *testing.T) {
 	}
 }
 
+func TestDocumentValidator_InvalidJSONSchemaNamesPlugin(t *testing.T) {
+	reg := registryWithSchema(`{not json`)
+	for range 2 { // a failure is not cached
+		_, err := reg.DocumentValidator(context.Background())
+		if err == nil || !strings.Contains(err.Error(), `plugin gauges: schema for kind "Gauge"`) || !strings.Contains(err.Error(), "not valid JSON") {
+			t.Fatalf("want an invalid JSON error naming plugin and kind, got %v", err)
+		}
+	}
+}
+
 func TestDocumentValidator_GetSchemasError(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&failingSchemaPlugin{newMock("gauges", func(m *PluginManifest) {

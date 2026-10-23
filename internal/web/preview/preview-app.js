@@ -16,7 +16,7 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
   // Bumped on each user-visible runtime change so a quick devtools check
   // confirms whether the page is on the latest preview-app.js. Increment
   // when fixing a hot-reload bug here.
-  console.info('bn preview runtime v13 (pdf preview)');
+  console.info('bn preview runtime v14 (plugin reload)');
 
   var parser = new DOMParser();
   var basePrefix = appBase();
@@ -153,6 +153,12 @@ if (!window.EventSource || window.__bnPreviewRuntime) {
     }
     console.error('bn preview: refresh failed', payload && payload.message);
     document.dispatchEvent(new CustomEvent('bn-preview:refresh-error', { detail: payload }));
+  });
+
+  // The plugins were restarted. Their scripts in <head> only run on a full
+  // page load, and a custom element cannot be defined twice.
+  source.addEventListener('plugins-reloaded', function () {
+    location.reload();
   });
 
   window.addEventListener('beforeunload', function () {

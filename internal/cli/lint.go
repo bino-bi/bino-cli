@@ -78,12 +78,12 @@ with --fail-on-warnings.`),
 			var kindProvider config.KindProvider
 			var pluginLinters lint.PluginLinterRegistry
 			projectCfg, cfgErr := pathutil.LoadProjectConfig(projectRoot)
-			if cfgErr == nil && len(projectCfg.Plugins) > 0 {
-				mgr := plugin.NewManager(logger.Channel("plugin"))
-				mgr.SetVerbose(logx.DebugEnabled(ctx))
-				if err := mgr.LoadAll(ctx, projectCfg, projectRoot, version.Version); err != nil {
-					logger.Warnf("Failed to load plugins: %v", err)
-				} else {
+			if cfgErr == nil {
+				mgr, err := loadProjectPlugins(ctx, logger, projectCfg, projectRoot)
+				if err != nil {
+					return err
+				}
+				if mgr != nil {
 					defer mgr.ShutdownAll(ctx)
 					kindProvider = mgr.Registry()
 					pluginLinters = plugin.NewLinterRegistry(mgr.Registry())

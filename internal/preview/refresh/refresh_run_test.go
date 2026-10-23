@@ -14,6 +14,7 @@ import (
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
 )
 
@@ -328,4 +329,46 @@ func TestRunDocumentPluginRefRendersAsPreview(t *testing.T) {
 		t.Errorf("embedded document missing plugin component html")
 	}
 	checkModes(t)
+}
+
+// TestEmbedByNameKeepsPluginOptionsOfItsStart proves an embed render, which
+// runs without the refresh mutex, does not see a plugin reload that rewrites
+// the shared PluginOptions while it renders.
+func TestEmbedByNameKeepsPluginOptionsOfItsStart(t *testing.T) {
+	t.Parallel()
+
+	dir := writeDocBundle(t)
+	gauge := "apiVersion: bino.bi/v1alpha1\nkind: Gauge\nmetadata:\n  name: g1\nspec: {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "gauge.yaml"), []byte(gauge), 0o600); err != nil {
+		t.Fatalf("write gauge manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# Chapter One\n\n:ref[Gauge:g1]\n"), 0o600); err != nil {
+		t.Fatalf("write markdown: %v", err)
+	}
+	srv := startTestServer(t)
+	before := &modeRecordingRenderer{}
+	after := &modeRecordingRenderer{}
+	cfg := &Config{
+		Logger:        logx.Nop(),
+		Workdir:       dir,
+		KindProvider:  gaugeKindProvider{},
+		PluginOptions: &render.PluginOptions{ComponentRenderer: before},
+	}
+	state := NewState()
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	before.modes = nil
+
+	// The hook runs inside the render, before the plugin components.
+	cfg.PostDatasetHook = func(context.Context, []pipeline.DatasetPayload) error {
+		cfg.PluginOptions.ComponentRenderer = after
+		return nil
+	}
+	if _, err := EmbedByName(context.Background(), "handbook", "DocumentArtefact", "", &sync.Mutex{}, state, cfg, srv); err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if len(before.modes) == 0 || len(after.modes) != 0 {
+		t.Errorf("renderer calls: before reload %d, after reload %d; want the renderer of the embed start only", len(before.modes), len(after.modes))
+	}
 }

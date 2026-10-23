@@ -119,6 +119,10 @@ type PluginOptions struct {
 	// ComponentRenderer renders HTML for plugin-provided component kinds.
 	ComponentRenderer PluginComponentRenderer
 
+	// HasComponentKinds is true when a loaded plugin provides a component
+	// kind. Only then do PDF and screenshot renders wait for plugin elements.
+	HasComponentKinds bool
+
 	// DataMode selects how dataset/datasource payloads are delivered to the
 	// browser. "" or "inline" embeds gzip+base64 in the HTML (default for
 	// backward compatibility). "url" emits an HTTP URL pointing at the
@@ -347,7 +351,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
-	rc.withDatasetDefaults(datasetResults)
+	rc.withDatasetResults(datasetResults)
 	var renderWarnings []string
 	rc.warnings = &renderWarnings
 
@@ -494,7 +498,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	// Create render context for layout children ref resolution.
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artefactStyle)
-	rc.withDatasetDefaults(datasetResults)
+	rc.withDatasetResults(datasetResults)
 	if mode == ModeServe {
 		rc.dataRefs = map[string]bool{}
 	}

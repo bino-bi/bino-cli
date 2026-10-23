@@ -52,7 +52,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			ctx := cmd.Context()
 			logger := logx.FromContext(ctx).Channel("daemon")
 
-			env, err := initCommandEnv(ctx, cmd, workdir, "preview", logger)
+			env, err := initEditorCommandEnv(ctx, cmd, workdir, "preview", logger)
 			if err != nil {
 				return err
 			}
@@ -74,6 +74,9 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			if env.PluginRegistry != nil {
 				managedCfg.KindProvider = env.PluginRegistry
 				managedCfg.PluginLinters = plugin.NewLinterRegistry(env.PluginRegistry)
+			}
+			if env.PluginLoadErr != nil {
+				managedCfg.ConfigDiagnostics = []LSPDiagnostic{pluginLoadDiagnostic(env.ProjectRoot, env.PluginLoadErr)}
 			}
 			managed, err := daemon.NewManagedState(ctx, managedCfg)
 			if err != nil {

@@ -78,6 +78,7 @@ checks them in this order:
 
 | Condition                                                                 | Suppressible via `[lint]`?                                            |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| A plugin declared in `bino.toml` failed to load                           | No                                                                    |
 | The `engine-version` pin is incompatible with this CLI                    | Yes - `disable = ["engine-version-incompatible"]` turns the check off |
 | Manifests failed to load or failed schema validation                      | No - `disable` hides the individual lines, the command still fails    |
 | A rule you raised with `[lint.severity]` to `"error"` produced a finding  | n/a - this is the opt-in                                              |
@@ -85,7 +86,7 @@ checks them in this order:
 
 The `[lint]` table lives in `bino.toml`; see
 [Lint rules](/concepts/project-configuration/#lint-rules) for the full
-semantics. Without that table, nothing but the first two rows and
+semantics. Without that table, nothing but the first three rows and
 `--fail-on-warnings` can fail the command, exactly as before. `bino build` is
 not affected by `[lint]` at all: it prints the findings that survive `disable`,
 but no finding has ever failed a build.
