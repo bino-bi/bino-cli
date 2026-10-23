@@ -2,8 +2,10 @@ package plugin
 
 import (
 	"context"
+	"math"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -172,18 +174,21 @@ func newWireClient(t *testing.T, fake *fakePluginServer) *grpcClient {
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(pluginServerOptions...)
 	pluginv1.RegisterBinoPluginServer(srv, fake)
 	go func() {
 		_ = srv.Serve(lis)
 	}()
 
-	conn, err := grpc.NewClient("passthrough:///bufconn",
+	dialOpts := []grpc.DialOption{
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return lis.DialContext(ctx)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+		// The receive limit go-plugin dials plugins with.
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32)),
+	}
+	conn, err := grpc.NewClient("passthrough:///bufconn", dialOpts...)
 	if err != nil {
 		t.Fatalf("dial bufconn: %v", err)
 	}
@@ -686,6 +691,35 @@ func TestGRPCClient_OnHook(t *testing.T) {
 			t.Fatalf("expected nil payload on the wire, got %+v", req.GetPayload())
 		}
 	})
+}
+
+// TestGRPCClient_LargeMessages checks that responses above gRPC's 4 MiB
+// default reach the host.
+func TestGRPCClient_LargeMessages(t *testing.T) {
+	const size = 6 << 20
+	rows := []byte(`[{"s":"` + strings.Repeat("x", size) + `"}]`)
+	html := "<div>" + strings.Repeat("x", size) + "</div>"
+
+	fake := newFakePluginServer()
+	fake.collectResp = &pluginv1.CollectDataSourceResponse{JsonRows: rows}
+	fake.renderResp = &pluginv1.RenderComponentResponse{Html: html}
+	client := newWireClient(t, fake)
+
+	collected, err := client.CollectDataSource(t.Context(), "big", []byte(`{}`), nil, "/proj")
+	if err != nil {
+		t.Fatalf("CollectDataSource: %v", err)
+	}
+	if len(collected.JSONRows) != len(rows) {
+		t.Fatalf("CollectDataSource rows = %d bytes, want %d", len(collected.JSONRows), len(rows))
+	}
+
+	rendered, err := client.RenderComponent(t.Context(), render.PluginRenderRequest{Kind: "Big", RenderMode: "build"})
+	if err != nil {
+		t.Fatalf("RenderComponent: %v", err)
+	}
+	if len(rendered.HTML) != len(html) {
+		t.Fatalf("RenderComponent HTML = %d bytes, want %d", len(rendered.HTML), len(html))
+	}
 }
 
 func TestGRPCClient_RenderComponent(t *testing.T) {

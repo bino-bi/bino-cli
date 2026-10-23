@@ -8,6 +8,13 @@ import (
 	"google.golang.org/grpc"
 )
 
+// maxMsgSize is the receive limit of the BinoHost server that plugins call
+// through the broker. gRPC servers default to 4 MiB. Replies from plugins
+// need no option: go-plugin already dials them with math.MaxInt32.
+const maxMsgSize = 256 << 20
+
+var pluginServerOptions = []grpc.ServerOption{grpc.MaxRecvMsgSize(maxMsgSize)}
+
 // binoGRPCPlugin implements go-plugin's GRPCPlugin interface.
 // The host only uses the GRPCClient side. When a BinoHostServer is set,
 // it is exposed to the plugin via the GRPCBroker for bidirectional calls.
@@ -29,7 +36,7 @@ func (p *binoGRPCPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBrok
 	if p.hostServer != nil {
 		hostServiceID = broker.NextId()
 		go broker.AcceptAndServe(hostServiceID, func(opts []grpc.ServerOption) *grpc.Server {
-			s := grpc.NewServer(opts...)
+			s := grpc.NewServer(append(opts, pluginServerOptions...)...)
 			pluginv1.RegisterBinoHostServer(s, p.hostServer)
 			return s
 		})
