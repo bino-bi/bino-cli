@@ -708,20 +708,3 @@ jobs:
             ${{ secrets.DOCKER_REGISTRY }}/bino/cli-docs:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Update stack
-        uses: fjogeleit/http-request-action@f98bb26551cd1af7d3eb2674578a80754ece88db # v2.0.1
-        with:
-          url: ${{ secrets.DEPLOY_URL }}
-          bearerToken: ${{ secrets.DEPLOY_TOKEN }}
-          timeout: 60000
-          data: |
-            {
-              "resource": "bino-bi",
-              "actions": [
-                { "env": {
-                    "CLI_VERSION": "${{ needs.resolve-tag.outputs.version }}"
-                  }
-                }
-              ]
-            }
