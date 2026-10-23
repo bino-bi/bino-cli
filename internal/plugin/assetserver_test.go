@@ -261,3 +261,24 @@ func TestRenderAssetTags_Types(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildRenderOptions_HasComponentKinds(t *testing.T) {
+	tests := []struct {
+		name string
+		kind KindRegistration
+		want bool
+	}{
+		{"datasource only", KindRegistration{KindName: "SalesforceDataSource", Category: KindCategoryDataSource}, false},
+		{"component", KindRegistration{KindName: "Gauge", Category: KindCategoryComponent}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := NewRegistry()
+			reg.Register(newMock("p", withKinds(tt.kind)))
+			opts := BuildRenderOptions(context.Background(), reg, t.TempDir(), "build")
+			if opts.HasComponentKinds != tt.want {
+				t.Errorf("HasComponentKinds = %v, want %v", opts.HasComponentKinds, tt.want)
+			}
+		})
+	}
+}

@@ -212,6 +212,13 @@ type PDFRenderOptions struct {
 	Debug                 bool
 	WaitForComponentReady bool
 	ReadyConsolePrefix    string
+	// WaitForPlugins waits for plugin components without the engine wait.
+	// Document PDFs set it. The report PDF waits for them through
+	// WaitForComponentReady.
+	WaitForPlugins bool
+	// AllowIncompletePlugins logs a failed or never-defined plugin element
+	// as a warning instead of failing the render.
+	AllowIncompletePlugins bool
 	// Document-specific header/footer options.
 	DisplayHeaderFooter bool
 	HeaderTemplate      string
@@ -239,24 +246,7 @@ func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []r
 		return fmt.Errorf("start ephemeral server: %w", err)
 	}
 
-	pdfOpts := chrome.PDFOptions{
-		URL:                   srv.URL(),
-		PDFPath:               opts.PDFPath,
-		ChromePath:            opts.ChromePath,
-		Format:                opts.Format,
-		Orientation:           opts.Orientation,
-		Timeout:               2 * time.Minute,
-		Debug:                 opts.Debug,
-		WaitForComponentReady: opts.WaitForComponentReady,
-		ReadyConsolePrefix:    opts.ReadyConsolePrefix,
-		DisplayHeaderFooter:   opts.DisplayHeaderFooter,
-		HeaderTemplate:        opts.HeaderTemplate,
-		FooterTemplate:        opts.FooterTemplate,
-		MarginTop:             opts.MarginTop,
-		MarginBottom:          opts.MarginBottom,
-		OnLayoutState:         opts.OnLayoutState,
-	}
-	pdfErr := chrome.RenderPDF(ctx, pdfOpts)
+	pdfErr := chrome.RenderPDF(ctx, b.chromePDFOptions(srv.URL(), opts))
 	closeErr := srv.Close()
 
 	if pdfErr != nil {
@@ -266,6 +256,36 @@ func (b *Builder) RenderPDFWithData(ctx context.Context, html []byte, assets []r
 		return fmt.Errorf("stop ephemeral server: %w", closeErr)
 	}
 	return normalizePDFIfRequested(opts.PDFPath)
+}
+
+// chromePDFOptions maps opts to the Chrome options for the page at url.
+func (b *Builder) chromePDFOptions(url string, opts PDFRenderOptions) chrome.PDFOptions {
+	return chrome.PDFOptions{
+		URL:                    url,
+		PDFPath:                opts.PDFPath,
+		ChromePath:             opts.ChromePath,
+		Format:                 opts.Format,
+		Orientation:            opts.Orientation,
+		Timeout:                2 * time.Minute,
+		Debug:                  opts.Debug,
+		WaitForComponentReady:  opts.WaitForComponentReady,
+		ReadyConsolePrefix:     opts.ReadyConsolePrefix,
+		WaitForPlugins:         b.waitForPlugins(opts.WaitForComponentReady || opts.WaitForPlugins),
+		AllowIncompletePlugins: opts.AllowIncompletePlugins,
+		DisplayHeaderFooter:    opts.DisplayHeaderFooter,
+		HeaderTemplate:         opts.HeaderTemplate,
+		FooterTemplate:         opts.FooterTemplate,
+		MarginTop:              opts.MarginTop,
+		MarginBottom:           opts.MarginBottom,
+		OnLayoutState:          opts.OnLayoutState,
+	}
+}
+
+// waitForPlugins reports whether a Chrome render that wants to wait for
+// plugin components does so. It only does when a loaded plugin provides a
+// component kind, so other projects render exactly as without plugins.
+func (b *Builder) waitForPlugins(want bool) bool {
+	return want && b.PluginOptions != nil && b.PluginOptions.HasComponentKinds
 }
 
 // normalizePDFIfRequested strips nondeterministic metadata (timestamps,
@@ -351,6 +371,8 @@ type ScreenshotRenderOptions struct {
 	FilenamePrefix        string
 	FilenamePattern       string
 	Scale                 float64
+	// AllowIncompletePlugins works as in PDFRenderOptions.
+	AllowIncompletePlugins bool
 }
 
 // CaptureScreenshots starts an ephemeral HTTP server with the given HTML and
@@ -375,19 +397,21 @@ func (b *Builder) CaptureScreenshotsWithData(ctx context.Context, html []byte, a
 	}
 
 	chromeOpts := chrome.ScreenshotOptions{
-		URL:                   srv.URL(),
-		OutputDir:             opts.OutputDir,
-		ChromePath:            opts.ChromePath,
-		Format:                opts.Format,
-		Orientation:           opts.Orientation,
-		Timeout:               2 * time.Minute,
-		Debug:                 opts.Debug,
-		WaitForComponentReady: opts.WaitForComponentReady,
-		ReadyConsolePrefix:    opts.ReadyConsolePrefix,
-		Refs:                  chromeRefs,
-		FilenamePrefix:        opts.FilenamePrefix,
-		FilenamePattern:       opts.FilenamePattern,
-		Scale:                 opts.Scale,
+		URL:                    srv.URL(),
+		OutputDir:              opts.OutputDir,
+		ChromePath:             opts.ChromePath,
+		Format:                 opts.Format,
+		Orientation:            opts.Orientation,
+		Timeout:                2 * time.Minute,
+		Debug:                  opts.Debug,
+		WaitForComponentReady:  opts.WaitForComponentReady,
+		ReadyConsolePrefix:     opts.ReadyConsolePrefix,
+		Refs:                   chromeRefs,
+		FilenamePrefix:         opts.FilenamePrefix,
+		FilenamePattern:        opts.FilenamePattern,
+		Scale:                  opts.Scale,
+		WaitForPlugins:         b.waitForPlugins(opts.WaitForComponentReady),
+		AllowIncompletePlugins: opts.AllowIncompletePlugins,
 	}
 
 	chromeResults, screenshotErr := chrome.RenderScreenshots(ctx, chromeOpts)

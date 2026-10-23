@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -18,7 +19,9 @@ import (
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/pipeline"
+	"bino.bi/bino/internal/report/render"
 )
 
 // writePreviewPDFFixture builds a project with a report and a TOC document.
@@ -181,4 +184,86 @@ func TestPreviewPDF_BuildsWatermarkedPDFs(t *testing.T) {
 	if _, err := os.Stat(absPDF); !os.IsNotExist(err) {
 		t.Errorf("the preview PDF wrote the artefact's own output file %s", absPDF)
 	}
+}
+
+// failingPluginOptions stand in for a component plugin whose draw rejects.
+func failingPluginOptions() *render.PluginOptions {
+	return &render.PluginOptions{
+		HasComponentKinds: true,
+		ExtraHeadMarkup:   `<script>window.binoPlugin?.track(document.createElement("demo-chart"), Promise.reject(new Error("demo boom")));</script>`,
+	}
+}
+
+const demoPluginFailure = "plugin component demo-chart failed to render: demo boom"
+
+func TestPreviewPDF_PluginFailureIsAWarning(t *testing.T) {
+	ctx := context.Background()
+	engineVersion, cacheDir, _ := renderStack(t)
+	h := &previewPDFHandler{
+		base:   ctx,
+		mu:     &sync.Mutex{},
+		logger: logx.Nop(),
+		builder: pipeline.Builder{
+			Workdir:       writePreviewPDFFixture(t, filepath.Join(t.TempDir(), "report.pdf")),
+			EngineVersion: engineVersion,
+			CacheDir:      cacheDir,
+			PluginOptions: failingPluginOptions(),
+		},
+	}
+	for _, query := range []string{"?kind=ReportArtefact&name=sample-report", "?kind=DocumentArtefact&name=handbook"} {
+		t.Run(query, func(t *testing.T) {
+			status, resp := postPDF(ctx, t, h, query, nil)
+			if status != http.StatusOK {
+				t.Fatalf("status = %d, error = %q", status, resp.Error)
+			}
+			if !bytes.HasPrefix(resp.PDF, []byte("%PDF")) {
+				t.Fatalf("body is not a PDF")
+			}
+			if !slices.Contains(resp.Warnings, demoPluginFailure) {
+				t.Errorf("warnings = %q, want %q", resp.Warnings, demoPluginFailure)
+			}
+		})
+	}
+}
+
+func TestBuild_PluginFailureFailsThePDF(t *testing.T) {
+	ctx := context.Background()
+	engineVersion, cacheDir, chromePath := renderStack(t)
+	workdir := writePreviewPDFFixture(t, filepath.Join(t.TempDir(), "report.pdf"))
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	builder := &pipeline.Builder{
+		Workdir:              workdir,
+		EngineVersion:        engineVersion,
+		CacheDir:             cacheDir,
+		PluginOptions:        failingPluginOptions(),
+		ContinueOnQueryError: true,
+	}
+	reports, err := config.CollectArtefacts(docs)
+	if err != nil || len(reports) != 1 {
+		t.Fatalf("report artefacts = %v, %v", reports, err)
+	}
+	documents, err := config.CollectDocumentArtefacts(docs)
+	if err != nil || len(documents) != 1 {
+		t.Fatalf("document artefacts = %v, %v", documents, err)
+	}
+
+	t.Run("report", func(t *testing.T) {
+		_, err := buildArtefact(ctx, buildArtefactConfig{
+			Builder: builder, Docs: docs, Artifact: reports[0], OutputDir: t.TempDir(), ChromePath: chromePath,
+		})
+		if err == nil || !strings.Contains(err.Error(), demoPluginFailure) {
+			t.Fatalf("err = %v, want %q", err, demoPluginFailure)
+		}
+	})
+	t.Run("document", func(t *testing.T) {
+		_, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
+			Builder: builder, Logger: logx.Nop(), Docs: docs, Artifact: documents[0], OutputDir: t.TempDir(), ChromePath: chromePath,
+		})
+		if err == nil || !strings.Contains(err.Error(), demoPluginFailure) {
+			t.Fatalf("err = %v, want %q", err, demoPluginFailure)
+		}
+	})
 }

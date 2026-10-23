@@ -532,6 +532,9 @@ type buildArtefactConfig struct {
 	Spinner            *Spinner
 	HookRunner         *hooks.Runner
 	HookEnv            hooks.HookEnv
+	// AllowIncompletePlugins logs a failed or never-defined plugin element
+	// as a warning instead of failing the PDF. Only the preview PDF sets it.
+	AllowIncompletePlugins bool
 }
 
 // buildArtefact renders a single report artifact to PDF.
@@ -701,14 +704,15 @@ func renderReportPDF(ctx context.Context, cfg buildArtefactConfig, renderResult 
 	spec := cfg.Artifact.Spec
 	// Generate PDF via Builder (ephemeral server + Chrome headless shell)
 	if err := cfg.Builder.RenderPDFWithData(ctx, renderResult.HTML, renderResult.LocalAssets, renderResult.EmittedData, pipeline.PDFRenderOptions{
-		PDFPath:               pdfPath,
-		ChromePath:            cfg.ChromePath,
-		Format:                spec.Format,
-		Orientation:           spec.Orientation,
-		Debug:                 cfg.Debug,
-		WaitForComponentReady: true,
-		ReadyConsolePrefix:    componentReadyConsolePrefix,
-		OnLayoutState:         onLayoutState,
+		PDFPath:                pdfPath,
+		ChromePath:             cfg.ChromePath,
+		Format:                 spec.Format,
+		Orientation:            spec.Orientation,
+		Debug:                  cfg.Debug,
+		WaitForComponentReady:  true,
+		ReadyConsolePrefix:     componentReadyConsolePrefix,
+		AllowIncompletePlugins: cfg.AllowIncompletePlugins,
+		OnLayoutState:          onLayoutState,
 	}); err != nil {
 		return err
 	}
@@ -749,6 +753,8 @@ type buildDocumentArtefactConfig struct {
 	ChromePath      string
 	Debug           bool
 	Spinner         *Spinner
+	// AllowIncompletePlugins works as in buildArtefactConfig.
+	AllowIncompletePlugins bool
 }
 
 // buildDocumentArtefact renders a DocumentArtefact (markdown to PDF) using Chrome.
@@ -781,6 +787,9 @@ func buildDocumentArtefact(ctx context.Context, cfg buildDocumentArtefactConfig)
 		Format:      spec.Format,
 		Orientation: spec.Orientation,
 		Debug:       cfg.Debug,
+		// Covers and content can hold plugin components.
+		WaitForPlugins:         true,
+		AllowIncompletePlugins: cfg.AllowIncompletePlugins,
 	}
 	// Header/footer support
 	if spec.DisplayHeaderFooter {

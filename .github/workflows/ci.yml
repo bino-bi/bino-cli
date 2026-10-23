@@ -143,7 +143,7 @@ jobs:
       - name: Run integration tests
         env:
           CGO_ENABLED: "1"
-        run: go test -race -tags=integration ./internal/report/pipeline/ ./internal/cli/
+        run: go test -race -tags=integration ./internal/chrome/ ./internal/report/pipeline/ ./internal/cli/
 
   vscode:
     name: VS Code Extension

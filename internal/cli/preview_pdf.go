@@ -158,6 +158,7 @@ func (h *previewPDFHandler) renderArtefact(ctx context.Context, kind, name, outD
 			logger.Infof("Building preview PDF for document %s", art.Document.Name)
 			res, err := buildDocumentArtefact(ctx, buildDocumentArtefactConfig{
 				Builder: &b, Logger: logger, Docs: docs, Artifact: art, OutputDir: outDir, ChromePath: chromePath,
+				AllowIncompletePlugins: true,
 			})
 			return res.PDFPath, err
 		}
@@ -175,6 +176,7 @@ func (h *previewPDFHandler) renderArtefact(ctx context.Context, kind, name, outD
 			logger.Infof("Building preview PDF for report %s", art.Document.Name)
 			res, err := buildArtefact(ctx, buildArtefactConfig{
 				Builder: &b, Logger: logger, Docs: docs, Artifact: art, OutputDir: outDir, ChromePath: chromePath,
+				AllowIncompletePlugins: true,
 			})
 			return res.PDFPath, err
 		}

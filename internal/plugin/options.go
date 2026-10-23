@@ -20,5 +20,16 @@ func BuildRenderOptions(ctx context.Context, registry *PluginRegistry, projectRo
 	assetCache := BuildAssetCache(ctx, registry, renderMode)
 	opts.ExtraHeadMarkup = RenderAssetTags(assetCache)
 	opts.AssetHandler = NewAssetHandler(assetCache)
+	opts.HasComponentKinds = hasComponentKinds(registry)
 	return opts
+}
+
+// hasComponentKinds reports whether a loaded plugin provides a component kind.
+func hasComponentKinds(registry *PluginRegistry) bool {
+	for _, k := range registry.AllKinds() {
+		if k.Category == KindCategoryComponent {
+			return true
+		}
+	}
+	return false
 }
