@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	pluginv1 "github.com/bino-bi/bino-plugin-sdk/proto/v1"
@@ -114,6 +116,205 @@ func TestQueryDuckDB_Success(t *testing.T) {
 			t.Fatalf("columns = %v, want [n]", resp.GetColumns())
 		}
 	})
+}
+
+// queryRows runs sql and decodes the JSON rows. It fails the test on any
+// ERROR diagnostic and returns the diagnostics for further checks.
+func queryRows(t *testing.T, h *BinoHostServer, sql string) ([]map[string]any, []*pluginv1.Diagnostic) {
+	t.Helper()
+	resp, err := h.QueryDuckDB(t.Context(), &pluginv1.QueryRequest{Sql: sql})
+	if err != nil {
+		t.Fatalf("QueryDuckDB(%q): %v", sql, err)
+	}
+	for _, d := range resp.GetDiagnostics() {
+		if d.GetSeverity() == pluginv1.Severity_ERROR {
+			t.Fatalf("QueryDuckDB(%q): ERROR diagnostic: %s", sql, d.GetMessage())
+		}
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(resp.GetJsonRows(), &rows); err != nil {
+		t.Fatalf("json_rows is not valid JSON: %v (%s)", err, resp.GetJsonRows())
+	}
+	return rows, resp.GetDiagnostics()
+}
+
+func TestQueryDuckDB_DatasetViews(t *testing.T) {
+	sales := DatasetPayload{Name: "sales", JSONRows: []byte(`[{"m":"Jan","ac":1},{"m":"Feb","ac":2}]`)}
+
+	t.Run("dataset is a view by name", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{sales})
+		t.Cleanup(h.Close)
+
+		rows, diags := queryRows(t, h, "SELECT sum(ac) AS s FROM sales")
+		if len(diags) != 0 {
+			t.Fatalf("unexpected diagnostics: %+v", diags)
+		}
+		if want := []map[string]any{{"s": float64(3)}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+	})
+
+	t.Run("empty dataset is an empty view", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{{Name: "empty", JSONRows: []byte("[]")}})
+		t.Cleanup(h.Close)
+
+		rows, diags := queryRows(t, h, "SELECT * FROM empty")
+		if len(diags) != 0 || len(rows) != 0 {
+			t.Fatalf("rows = %+v, diags = %+v, want no rows and no diagnostics", rows, diags)
+		}
+	})
+
+	t.Run("plugin DDL dies with the session", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{sales})
+		t.Cleanup(h.Close)
+
+		queryRows(t, h, "DROP VIEW sales")
+		rows, _ := queryRows(t, h, "SELECT count(*) AS n FROM sales")
+		if want := []map[string]any{{"n": float64(2)}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+	})
+
+	t.Run("nested column does not break other datasets", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{{Name: "tagged", JSONRows: []byte(`[{"tags":["a","b"]}]`)}, sales})
+		t.Cleanup(h.Close)
+
+		rows, diags := queryRows(t, h, "SELECT count(*) AS n FROM sales")
+		if want := []map[string]any{{"n": float64(2)}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+		if len(diags) != 0 {
+			t.Fatalf("unexpected diagnostics: %+v", diags)
+		}
+		rows, _ = queryRows(t, h, "SELECT len(tags) AS n FROM tagged")
+		if want := []map[string]any{{"n": float64(2)}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+	})
+
+	t.Run("broken dataset gives one warning, not an error", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{{Name: "broken", JSONRows: []byte(`not json`)}, sales})
+		t.Cleanup(h.Close)
+
+		rows, diags := queryRows(t, h, "SELECT count(*) AS n FROM sales")
+		if want := []map[string]any{{"n": float64(2)}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+		if len(diags) != 1 || diags[0].GetSeverity() != pluginv1.Severity_WARNING || !strings.Contains(diags[0].GetMessage(), `"broken"`) {
+			t.Fatalf("diags = %+v, want one WARNING naming the dataset", diags)
+		}
+	})
+
+	t.Run("no views before SetDatasets or after SetDatasets(nil)", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		t.Cleanup(h.Close)
+
+		const countViews = "SELECT count(*) AS n FROM duckdb_views() WHERE NOT internal"
+		zero := []map[string]any{{"n": float64(0)}}
+		if rows, _ := queryRows(t, h, countViews); !reflect.DeepEqual(rows, zero) {
+			t.Fatalf("before SetDatasets: rows = %+v, want %+v", rows, zero)
+		}
+		h.SetDatasets([]DatasetPayload{sales})
+		queryRows(t, h, "SELECT * FROM sales")
+		h.SetDatasets(nil)
+		if rows, _ := queryRows(t, h, countViews); !reflect.DeepEqual(rows, zero) {
+			t.Fatalf("after SetDatasets(nil): rows = %+v, want %+v", rows, zero)
+		}
+	})
+
+	t.Run("string column keeps leading zeros", func(t *testing.T) {
+		h := NewBinoHostServer()
+		h.SetDuckDBOpener(testDuckDBOpener(t))
+		h.SetDatasets([]DatasetPayload{{Name: "codes", JSONRows: []byte(`[{"code":"001"}]`)}})
+		t.Cleanup(h.Close)
+
+		rows, _ := queryRows(t, h, "SELECT code FROM codes")
+		if want := []map[string]any{{"code": "001"}}; !reflect.DeepEqual(rows, want) {
+			t.Fatalf("rows = %+v, want %+v", rows, want)
+		}
+	})
+}
+
+func TestQueryDuckDB_DatasetFilesLifecycle(t *testing.T) {
+	h := NewBinoHostServer()
+	h.SetDuckDBOpener(testDuckDBOpener(t))
+	h.SetDatasets([]DatasetPayload{{Name: "sales", JSONRows: []byte(`[{"ac":1}]`)}})
+	t.Cleanup(h.Close)
+
+	viewDir := func() string {
+		h.mu.RLock()
+		defer h.mu.RUnlock()
+		return h.viewDir
+	}
+	if dir := viewDir(); dir != "" {
+		t.Fatalf("files written before any query: %s", dir)
+	}
+
+	queryRows(t, h, "SELECT * FROM sales")
+	first := viewDir()
+	if _, err := os.Stat(first); err != nil {
+		t.Fatalf("dataset dir missing after a query: %v", err)
+	}
+
+	h.SetDatasets([]DatasetPayload{{Name: "sales", JSONRows: []byte(`[{"ac":5}]`)}})
+	if _, err := os.Stat(first); !os.IsNotExist(err) {
+		t.Fatalf("SetDatasets kept the old dir %s (stat err %v)", first, err)
+	}
+	rows, _ := queryRows(t, h, "SELECT ac FROM sales")
+	if want := []map[string]any{{"ac": float64(5)}}; !reflect.DeepEqual(rows, want) {
+		t.Fatalf("rows = %+v, want %+v", rows, want)
+	}
+
+	// After Close the host is still usable and writes a fresh dir, as on a
+	// plugin reload that reuses the host service.
+	second := viewDir()
+	h.Close()
+	if _, err := os.Stat(second); !os.IsNotExist(err) {
+		t.Fatalf("Close kept %s (stat err %v)", second, err)
+	}
+	rows, _ = queryRows(t, h, "SELECT ac FROM sales")
+	if want := []map[string]any{{"ac": float64(5)}}; !reflect.DeepEqual(rows, want) {
+		t.Fatalf("after Close: rows = %+v, want %+v", rows, want)
+	}
+	third := viewDir()
+	if third == "" || third == second {
+		t.Fatalf("after Close: dir = %q, want a fresh dir", third)
+	}
+	if _, err := os.Stat(third); err != nil {
+		t.Fatalf("fresh dir missing: %v", err)
+	}
+}
+
+// TestQueryDuckDB_DatasetDirOutlivesSetDatasets covers a SetDatasets from
+// another render while a query still reads the old files.
+func TestQueryDuckDB_DatasetDirOutlivesSetDatasets(t *testing.T) {
+	h := NewBinoHostServer()
+	h.SetDatasets([]DatasetPayload{{Name: "sales", JSONRows: []byte(`[{"ac":1}]`)}})
+	t.Cleanup(h.Close)
+
+	views, dir, err := h.datasetViews()
+	if err != nil {
+		t.Fatalf("datasetViews: %v", err)
+	}
+	h.SetDatasets(nil)
+	if _, err := os.Stat(views[0].file); err != nil {
+		t.Fatalf("SetDatasets removed a file a query still reads: %v", err)
+	}
+	h.releaseViews(dir)
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("dropped dir %s kept after its last query (stat err %v)", dir, err)
+	}
 }
 
 func TestGetDocument(t *testing.T) {

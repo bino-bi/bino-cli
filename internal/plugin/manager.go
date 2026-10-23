@@ -225,8 +225,10 @@ func (m *Manager) ShutdownAll(ctx context.Context) {
 // KillAll kills all plugin processes in the background and returns immediately.
 // go-plugin's Kill() can block waiting for I/O drain, so we fire-and-forget.
 // When the host process exits, orphaned plugin processes detect it and self-terminate.
+// It also removes the host service's dataset files.
 func (m *Manager) KillAll() {
 	for _, c := range m.clients {
 		go c.Kill()
 	}
+	m.hostService.Close()
 }

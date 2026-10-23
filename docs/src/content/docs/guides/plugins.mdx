@@ -31,8 +31,7 @@ and SQL queries can express. A single plugin binary can provide any combination 
     or layout elements.
   </Card>
   <Card title="Lint Rules" icon="warning">
-    Validate manifests with domain-specific rules. Lint rules can access
-    datasets and query the host's DuckDB.
+    Validate manifests with domain-specific rules.
   </Card>
   <Card title="Pipeline Hooks" icon="setting">
     React to pipeline events (after datasets run, after HTML is generated) to
@@ -287,10 +286,24 @@ bino plugin exec salesforce:sync --object Account
 
 Plugin callbacks can query the host's state:
 
-- **QueryDuckDB** - run SQL against the host's DuckDB engine
+- **QueryDuckDB** - run SQL against the executed DataSets
 - **GetDocument** - fetch a specific manifest document
 - **GetDatasetResult** - retrieve pre-computed dataset results
 - **ListDocuments** - list all loaded documents
+
+`QueryDuckDB` runs each query in a throwaway DuckDB session. The session holds
+one view per executed DataSet of the artefact being rendered, named by its
+`metadata.name`. DataSources are not visible. DataSets are available from the
+`post-dataset-execute` hook onward, so in `RenderComponent` and in later hooks.
+Before that hook, for example in `CollectDataSource`, `bino build` shows no
+DataSets, but `bino preview` and `bino serve` can still show the DataSets of
+the previous render. In `bino preview`, an embed or presentation render that
+runs at the same time can also replace the DataSets at any point, so a query
+can see another artefact's DataSets. `QueryDuckDB` is not available in
+`bino lint` or the language server. Nothing a query changes is kept: a
+`DROP VIEW` or `CREATE TABLE` ends with the session. A DataSet that cannot be
+loaded as a view is skipped with a warning diagnostic, and the query still runs.
+A failing query returns an error diagnostic.
 
 This enables data-aware plugins that make decisions based on the current
 report's data and configuration.

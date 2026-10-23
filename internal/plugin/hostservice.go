@@ -1,10 +1,14 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	pluginv1 "github.com/bino-bi/bino-plugin-sdk/proto/v1"
@@ -23,6 +27,15 @@ type BinoHostServer struct {
 	mu       sync.RWMutex
 	docs     []DocumentPayload
 	datasets []DatasetPayload
+
+	// viewDir and views hold the dataset files QueryDuckDB reads. They are
+	// written by the first QueryDuckDB after SetDatasets, so nothing touches
+	// the disk when no plugin queries.
+	viewDir string
+	views   []datasetView
+	// viewUsers counts the running queries per dataset dir. A dir dropped
+	// while a query reads it is removed by the last of those queries.
+	viewUsers map[string]int
 
 	// duckDBOpener creates a new DuckDB session for plugin queries.
 	// The caller is responsible for closing the session.
@@ -46,6 +59,97 @@ func (h *BinoHostServer) SetDatasets(datasets []DatasetPayload) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.datasets = datasets
+	h.dropViewsLocked()
+}
+
+// Close removes the dataset files written for QueryDuckDB. The host stays
+// usable: the next QueryDuckDB writes them again.
+func (h *BinoHostServer) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.dropViewsLocked()
+}
+
+func (h *BinoHostServer) dropViewsLocked() {
+	if h.viewDir != "" && h.viewUsers[h.viewDir] == 0 {
+		_ = os.RemoveAll(h.viewDir)
+	}
+	h.viewDir = ""
+	h.views = nil
+}
+
+// datasetView is one dataset as QueryDuckDB exposes it. file is empty for a
+// dataset without rows.
+type datasetView struct {
+	name string
+	file string
+}
+
+// datasetViews returns the views for the current datasets and writes their
+// files on first use. The caller must pass the returned dir to
+// releaseViews once the query is done.
+func (h *BinoHostServer) datasetViews() ([]datasetView, string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.views == nil && len(h.datasets) > 0 {
+		if err := h.writeViewsLocked(); err != nil {
+			return nil, "", err
+		}
+	}
+	if h.viewDir != "" {
+		if h.viewUsers == nil {
+			h.viewUsers = make(map[string]int)
+		}
+		h.viewUsers[h.viewDir]++
+	}
+	return h.views, h.viewDir, nil
+}
+
+func (h *BinoHostServer) releaseViews(dir string) {
+	if dir == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.viewUsers[dir]--
+	if h.viewUsers[dir] > 0 {
+		return
+	}
+	delete(h.viewUsers, dir)
+	if dir != h.viewDir {
+		_ = os.RemoveAll(dir)
+	}
+}
+
+func (h *BinoHostServer) writeViewsLocked() error {
+	dir, err := os.MkdirTemp("", "bino-plugin-datasets-")
+	if err != nil {
+		return err
+	}
+	views := make([]datasetView, 0, len(h.datasets))
+	for i, ds := range h.datasets {
+		v := datasetView{name: ds.Name}
+		if rows := bytes.TrimSpace(ds.JSONRows); len(rows) > 0 && !bytes.Equal(rows, []byte("[]")) {
+			// Files are named by index so any dataset name is safe on disk.
+			v.file = filepath.Join(dir, fmt.Sprintf("%d.json", i))
+			if err := os.WriteFile(v.file, rows, 0o600); err != nil {
+				_ = os.RemoveAll(dir)
+				return err
+			}
+		}
+		views = append(views, v)
+	}
+	h.viewDir = dir
+	h.views = views
+	return nil
+}
+
+func (v datasetView) createSQL() string {
+	ident := `"` + strings.ReplaceAll(v.name, `"`, `""`) + `"`
+	if v.file == "" {
+		return "CREATE VIEW " + ident + " AS SELECT 1 WHERE 1=0"
+	}
+	return "CREATE VIEW " + ident + " AS SELECT * FROM read_json_auto('" + strings.ReplaceAll(v.file, "'", "''") + "')"
 }
 
 // SetDuckDBOpener sets the function used to create DuckDB sessions for plugin queries.
@@ -67,7 +171,17 @@ func (h *BinoHostServer) SetDefaultDuckDBOpener() {
 	})
 }
 
-// QueryDuckDB executes a SQL query against the host's DuckDB engine.
+// QueryDuckDB executes a SQL query in a throwaway DuckDB session.
+//
+// The session holds one view per executed DataSet, named by metadata.name.
+// DataSets are set from the post-dataset-execute hook onward, so they are
+// visible in RenderComponent and later hooks. Before that hook (for example
+// in CollectDataSource) build shows none, but preview and serve can still
+// hold the DataSets of the previous render. In preview, an embed or
+// presentation render running at the same time can replace them at any point.
+// DataSources are never visible. A dataset whose view cannot be created is
+// skipped with one WARNING diagnostic; the query still runs. Nothing the
+// query changes outlives the call.
 //
 // Error contract (deliberate, load-bearing): a failing query does NOT return
 // a Go error. It returns a *QueryResponse whose Diagnostics carry a single
@@ -91,16 +205,34 @@ func (h *BinoHostServer) QueryDuckDB(ctx context.Context, req *pluginv1.QueryReq
 	}
 	defer session.Close() //nolint:errcheck // teardown of an ephemeral in-memory session
 
+	views, viewDir, err := h.datasetViews()
+	if err != nil {
+		return nil, fmt.Errorf("write dataset files: %w", err)
+	}
+	defer h.releaseViews(viewDir)
+
 	db := session.DB()
+	var diags []*pluginv1.Diagnostic
+	for _, v := range views {
+		if _, err := db.ExecContext(ctx, v.createSQL()); err != nil {
+			diags = append(diags, &pluginv1.Diagnostic{
+				Source:   "host",
+				Stage:    "query",
+				Message:  fmt.Sprintf("dataset %q is not queryable: %v", v.name, err),
+				Severity: pluginv1.Severity_WARNING,
+			})
+		}
+	}
+
 	rows, err := db.QueryContext(ctx, req.GetSql())
 	if err != nil {
 		return &pluginv1.QueryResponse{
-			Diagnostics: []*pluginv1.Diagnostic{{
+			Diagnostics: append(diags, &pluginv1.Diagnostic{
 				Source:   "host",
 				Stage:    "query",
 				Message:  err.Error(),
 				Severity: pluginv1.Severity_ERROR,
-			}},
+			}),
 		}, nil
 	}
 	defer rows.Close()
@@ -111,8 +243,9 @@ func (h *BinoHostServer) QueryDuckDB(ctx context.Context, req *pluginv1.QueryReq
 	}
 
 	return &pluginv1.QueryResponse{
-		JsonRows: jsonRows,
-		Columns:  columns,
+		JsonRows:    jsonRows,
+		Columns:     columns,
+		Diagnostics: diags,
 	}, nil
 }
 

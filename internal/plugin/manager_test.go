@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -41,6 +42,28 @@ func TestManager_ShutdownAll_Empty(t *testing.T) {
 	mgr := NewManager(logx.Nop())
 	// Should not panic.
 	mgr.ShutdownAll(context.Background())
+}
+
+func TestManager_ShutdownAll_RemovesDatasetFiles(t *testing.T) {
+	mgr := NewManager(logx.Nop())
+	h := mgr.HostService()
+	h.SetDuckDBOpener(testDuckDBOpener(t))
+	h.SetDatasets([]DatasetPayload{{Name: "sales", JSONRows: []byte(`[{"ac":1}]`)}})
+	t.Cleanup(h.Close)
+
+	queryRows(t, h, "SELECT * FROM sales")
+	h.mu.RLock()
+	dir := h.viewDir
+	h.mu.RUnlock()
+
+	mgr.ShutdownAll(context.Background())
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("ShutdownAll kept %s (stat err %v)", dir, err)
+	}
+	// A reload reuses the host service, so it must still answer queries.
+	if rows, _ := queryRows(t, h, "SELECT ac FROM sales"); len(rows) != 1 {
+		t.Fatalf("after ShutdownAll: rows = %+v, want 1 row", rows)
+	}
 }
 
 func TestManager_Registry_NotNil(t *testing.T) {
