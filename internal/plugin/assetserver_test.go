@@ -68,10 +68,10 @@ func TestRenderAssetTags_Empty(t *testing.T) {
 }
 
 func TestRenderAssetTags_Mixed(t *testing.T) {
-	cache := &AssetCache{assets: map[string]AssetFile{
-		"/plugins/sf/chart.js":  {URLPath: "/plugins/sf/chart.js", IsModule: true},
-		"/plugins/sf/style.css": {URLPath: "/plugins/sf/style.css"},
-	}}
+	cache := &AssetCache{
+		scripts: []AssetFile{{URLPath: "/plugins/sf/chart.js", IsModule: true}},
+		styles:  []AssetFile{{URLPath: "/plugins/sf/style.css"}},
+	}
 
 	tags := RenderAssetTags(cache)
 	if !strings.Contains(tags, `type="module"`) {
@@ -91,6 +91,9 @@ func TestInferMediaType(t *testing.T) {
 		{"/a.mjs", "application/javascript"},
 		{"/a.css", "text/css"},
 		{"/a.woff2", "font/woff2"},
+		{"/a.ttf", "font/ttf"},
+		{"/a.png", "image/png"},
+		{"/a.svg", "image/svg+xml"},
 		{"/a.bin", "application/octet-stream"},
 	}
 	for _, tt := range tests {
@@ -142,8 +145,11 @@ func TestBuildAssetCache_PathRules(t *testing.T) {
 	cache := BuildAssetCache(ctx, reg, "build")
 	logged := buf.String()
 
-	if n := strings.Count(logged, `"chart.js"`); n != 1 {
-		t.Errorf("warning for chart.js logged %d times, want 1; logged: %q", n, logged)
+	if n := strings.Count(logged, `"chart.js" is not under`); n != 1 {
+		t.Errorf("path warning for chart.js logged %d times, want 1; logged: %q", n, logged)
+	}
+	if n := strings.Count(logged, `"chart.js" is already listed`); n != 1 {
+		t.Errorf("duplicate warning for chart.js logged %d times, want 1; logged: %q", n, logged)
 	}
 	if _, ok := cache.Get("chart.js"); !ok {
 		t.Error("chart.js should still be linked")
@@ -180,5 +186,78 @@ func TestBuildRenderOptions_SetsAssetHandler(t *testing.T) {
 	opts.AssetHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || rec.Body.String() != "js" {
 		t.Errorf("asset = %d %q, want 200 js", rec.Code, rec.Body.String())
+	}
+}
+
+// assetListPlugin returns fixed script and style lists from GetAssets.
+type assetListPlugin struct {
+	*mockPlugin
+	scripts, styles []AssetFile
+}
+
+func (p *assetListPlugin) GetAssets(context.Context, string) ([]AssetFile, []AssetFile, error) {
+	return p.scripts, p.styles, nil
+}
+
+func TestRenderAssetTags_Order(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&assetListPlugin{mockPlugin: newMock("x", withAssets()), scripts: []AssetFile{
+		{URLPath: "/plugins/x/a.js"},
+		{URLPath: "/plugins/x/b.js"},
+	}})
+	// Registered after x on purpose: tags follow load order, not names.
+	reg.Register(&assetListPlugin{mockPlugin: newMock("w", withAssets()), scripts: []AssetFile{
+		{URLPath: "/plugins/w/c.js"},
+	}})
+
+	want := "<script src=\"/plugins/x/a.js\"></script>\n" +
+		"<script src=\"/plugins/x/b.js\"></script>\n" +
+		"<script src=\"/plugins/w/c.js\"></script>\n"
+	for i := range 50 {
+		if got := RenderAssetTags(BuildAssetCache(context.Background(), reg, "build")); got != want {
+			t.Fatalf("run %d: tags = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestRenderAssetTags_Types(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&assetListPlugin{
+		mockPlugin: newMock("x", withAssets()),
+		scripts: []AssetFile{
+			{URLPath: "/plugins/x/hc", MediaType: "application/javascript", Content: []byte("js")},
+			{URLPath: "/plugins/x/hc", MediaType: "application/javascript"},
+		},
+		styles: []AssetFile{
+			{URLPath: "/plugins/x/f.woff2", Content: []byte("font")},
+			{URLPath: "/plugins/x/logo.png", Content: []byte("png")},
+			{URLPath: "/plugins/x/data.json", MediaType: "application/json"},
+			{URLPath: "https://fonts.googleapis.com/css2?family=X"},
+			{URLPath: "/plugins/x/theme", MediaType: "text/css; charset=utf-8"},
+			{URLPath: "/plugins/x/style.css"},
+			{URLPath: "/plugins/x/style.css"},
+		},
+	})
+	ctx, _ := captureContext()
+	cache := BuildAssetCache(ctx, reg, "build")
+	tags := RenderAssetTags(cache)
+
+	want := "<script src=\"/plugins/x/hc\"></script>\n" +
+		"<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=X\">\n" +
+		"<link rel=\"stylesheet\" href=\"/plugins/x/theme\">\n" +
+		"<link rel=\"stylesheet\" href=\"/plugins/x/style.css\">\n"
+	if tags != want {
+		t.Fatalf("tags = %q, want %q", tags, want)
+	}
+
+	// Unlinked styles are still served.
+	handler := NewAssetHandler(cache)
+	for path, ctype := range map[string]string{"/plugins/x/f.woff2": "font/woff2", "/plugins/x/logo.png": "image/png"} {
+		req := httptest.NewRequestWithContext(context.Background(), "GET", path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != ctype {
+			t.Errorf("%s = %d %q, want 200 %q", path, rec.Code, rec.Header().Get("Content-Type"), ctype)
+		}
 	}
 }

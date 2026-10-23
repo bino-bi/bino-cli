@@ -209,6 +209,14 @@ Each asset needs a URL path under `/plugins/<plugin-name>/`, for example
 not served. A path under another plugin's `/plugins/` prefix is skipped, so
 one plugin cannot replace another plugin's files.
 
+bino writes the script and style tags in the order the plugin returns its
+assets, plugin by plugin in load order, so a library listed before the code
+that uses it also loads first. If two assets have the same path, the first one
+is kept and bino logs a warning. A style whose media type is a font, an image,
+or any other type that is not CSS is served but gets no `<link>` tag. A style
+without a media type is linked unless its file extension marks it as a font or
+an image, so an external stylesheet URL without a `.css` suffix still works.
+
 A component kind can be used as a child of a `LayoutPage` or `LayoutCard`, as
 a `Grid` cell, or as a `Tree` node, inline or by `ref` to a document of that
 kind:

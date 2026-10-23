@@ -3,17 +3,21 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	urlpath "path"
-	"slices"
 	"strings"
 
 	"bino.bi/bino/internal/logx"
 )
 
 // AssetCache stores plugin assets indexed by URL path for fast HTTP serving.
+// scripts and styles keep the order the plugins returned them, plugin by
+// plugin in load order, because a library must load before code that uses it.
 type AssetCache struct {
-	assets map[string]AssetFile
+	assets  map[string]AssetFile
+	scripts []AssetFile
+	styles  []AssetFile
 }
 
 // BuildAssetCache collects assets from all plugins that provide them.
@@ -30,7 +34,7 @@ func BuildAssetCache(ctx context.Context, registry *PluginRegistry, renderMode s
 		}
 		name := p.Manifest().Name
 		warned := make(map[string]bool)
-		for _, a := range slices.Concat(scripts, styles) {
+		add := func(list *[]AssetFile, a AssetFile) {
 			scope := assetPathScope(name, a.URLPath)
 			if (scope == assetForeign || scope == assetUnserved) && !warned[a.URLPath] {
 				warned[a.URLPath] = true
@@ -42,9 +46,20 @@ func BuildAssetCache(ctx context.Context, registry *PluginRegistry, renderMode s
 			}
 			if scope == assetForeign {
 				// Skipped so one plugin cannot overwrite another plugin's assets.
-				continue
+				return
+			}
+			if _, dup := cache.assets[a.URLPath]; dup {
+				log.Warnf("plugin %s: asset %q is already listed, the first one is kept", name, a.URLPath)
+				return
 			}
 			cache.assets[a.URLPath] = a
+			*list = append(*list, a)
+		}
+		for _, a := range scripts {
+			add(&cache.scripts, a)
+		}
+		for _, a := range styles {
+			add(&cache.styles, a)
 		}
 	}
 	return cache
@@ -79,28 +94,6 @@ func (c *AssetCache) Get(urlPath string) (AssetFile, bool) {
 	return a, ok
 }
 
-// AllScripts returns all cached script assets.
-func (c *AssetCache) AllScripts() []AssetFile {
-	var scripts []AssetFile
-	for _, a := range c.assets {
-		if isScriptPath(a.URLPath) {
-			scripts = append(scripts, a)
-		}
-	}
-	return scripts
-}
-
-// AllStyles returns all cached style assets.
-func (c *AssetCache) AllStyles() []AssetFile {
-	var styles []AssetFile
-	for _, a := range c.assets {
-		if !isScriptPath(a.URLPath) {
-			styles = append(styles, a)
-		}
-	}
-	return styles
-}
-
 // NewAssetHandler creates an HTTP handler that serves plugin assets from the cache.
 func NewAssetHandler(cache *AssetCache) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,28 +121,44 @@ func NewAssetHandler(cache *AssetCache) http.Handler {
 	})
 }
 
-// RenderAssetTags generates HTML <script> and <link> tags for plugin assets.
+// RenderAssetTags generates HTML <script> and <link> tags for plugin assets,
+// in the order the plugins returned them.
 func RenderAssetTags(cache *AssetCache) string {
-	if cache == nil || len(cache.assets) == 0 {
+	if cache == nil {
 		return ""
 	}
 	var buf strings.Builder
-	for _, script := range cache.AllScripts() {
+	for _, script := range cache.scripts {
 		if script.IsModule {
 			fmt.Fprintf(&buf, "<script type=\"module\" src=\"%s\"></script>\n", escapeAttr(script.URLPath))
 		} else {
 			fmt.Fprintf(&buf, "<script src=\"%s\"></script>\n", escapeAttr(script.URLPath))
 		}
 	}
-	for _, style := range cache.AllStyles() {
-		fmt.Fprintf(&buf, "<link rel=\"stylesheet\" href=\"%s\">\n", escapeAttr(style.URLPath))
+	for _, style := range cache.styles {
+		if linkStyle(style) {
+			fmt.Fprintf(&buf, "<link rel=\"stylesheet\" href=\"%s\">\n", escapeAttr(style.URLPath))
+		}
 	}
 	return buf.String()
 }
 
-func isScriptPath(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasSuffix(lower, ".js") || strings.HasSuffix(lower, ".mjs")
+// linkStyle reports whether a style asset gets a stylesheet link. Only known
+// non-CSS types are skipped, so an external CSS URL without a suffix stays
+// linked. Skipped styles are still served.
+func linkStyle(a AssetFile) bool {
+	raw := a.MediaType
+	if raw == "" {
+		raw = inferMediaType(a.URLPath)
+	}
+	mediaType, _, err := mime.ParseMediaType(raw)
+	if err != nil {
+		return false
+	}
+	if strings.HasPrefix(mediaType, "font/") || strings.HasPrefix(mediaType, "image/") {
+		return false
+	}
+	return a.MediaType == "" || mediaType == "text/css"
 }
 
 func inferMediaType(path string) string {
@@ -163,6 +172,20 @@ func inferMediaType(path string) string {
 		return "font/woff2"
 	case strings.HasSuffix(lower, ".woff"):
 		return "font/woff"
+	case strings.HasSuffix(lower, ".ttf"):
+		return "font/ttf"
+	case strings.HasSuffix(lower, ".otf"):
+		return "font/otf"
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".gif"):
+		return "image/gif"
+	case strings.HasSuffix(lower, ".svg"):
+		return "image/svg+xml"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
 	default:
 		return "application/octet-stream"
 	}
