@@ -333,16 +333,14 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 
 		result := ScreenshotResult{Ref: ref}
 
-		// Build element ID selector
-		elementID := "bino-" + strings.ToLower(ref.Kind) + "-" + ref.Name
-		selector := "#" + elementID
+		selector := elementIDSelector("bino-" + strings.ToLower(ref.Kind) + "-" + ref.Name)
 
 		// Build output filename (always PNG)
 		var filename string
 		if opts.FilenamePattern == "index" {
 			filename = fmt.Sprintf("%s-%03d.png", opts.FilenamePrefix, i+1)
 		} else {
-			filename = fmt.Sprintf("%s-%s.png", opts.FilenamePrefix, ref.Name)
+			filename = fmt.Sprintf("%s-%s.png", opts.FilenamePrefix, filenamePart(ref.Name))
 		}
 		result.FilePath = filepath.Join(opts.OutputDir, filename)
 
@@ -645,4 +643,25 @@ func PaperSizeInches(format string) (width, height float64) {
 	default:
 		return 0, 0
 	}
+}
+
+// idSelectorEscaper escapes the two characters that end a CSS string.
+var idSelectorEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+
+// elementIDSelector matches the element whose id is exactly id. A "#id"
+// selector breaks on ids built from scoped names such as "@acme/table", since
+// "@" and "/" are not valid in a CSS identifier.
+func elementIDSelector(id string) string {
+	return `[id="` + idSelectorEscaper.Replace(id) + `"]`
+}
+
+// filenamePart makes a component name safe as one file name segment: a scoped
+// name such as "@acme/kit/table" must not become a path below the output dir.
+func filenamePart(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' {
+			return '-'
+		}
+		return r
+	}, name)
 }

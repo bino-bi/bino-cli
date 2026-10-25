@@ -177,6 +177,46 @@ func TestStatelessBuild_PNGFromStdin(t *testing.T) {
 	}
 }
 
+// TestStatelessBuild_PNGScopedName captures a component whose name is scoped
+// ("@scope/name/def"): the name is neither a valid CSS id selector nor a
+// valid file name segment.
+func TestStatelessBuild_PNGScopedName(t *testing.T) {
+	requireRenderStack(t)
+	const doc = `apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: "@acme/kit/note"
+spec:
+  value: "Scoped note"
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: page
+spec:
+  children:
+    - kind: Text
+      ref: "@acme/kit/note"
+---
+apiVersion: bino.bi/v1alpha1
+kind: ScreenshotArtefact
+metadata:
+  name: shot
+spec:
+  filenamePrefix: shot
+  refs:
+    - kind: Text
+      name: "@acme/kit/note"
+`
+	out, serr := runStatelessForTest(t, "png", "-", doc)
+	if serr != nil {
+		t.Fatalf("unexpected error: %v", serr)
+	}
+	if !bytes.HasPrefix(out, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("stdout is not a PNG (len=%d, prefix=%q)", len(out), firstBytes(out))
+	}
+}
+
 func TestStatelessBuild_InvalidYAML(t *testing.T) {
 	requireRenderStack(t)
 	out, serr := runStatelessForTest(t, "pdf", "-", "this: is: not: valid: [\n")
