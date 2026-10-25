@@ -259,10 +259,13 @@ func TestElementIDSelector(t *testing.T) {
 
 func TestFilenamePart(t *testing.T) {
 	tests := map[string]string{
-		"sales":            "sales",
-		"@acme/kit/table":  "@acme-kit-table",
-		"../../etc/passwd": "..-..-etc-passwd",
-		`a\b`:              "a-b",
+		"sales":               "sales",
+		"@acme/kit/table":     "@acme%2Fkit%2Ftable",
+		"../../etc/passwd":    "..%2F..%2Fetc%2Fpasswd",
+		`a\b`:                 "a%5Cb",
+		"@acme/kit/note-card": "@acme%2Fkit%2Fnote-card",
+		"@acme/kit-note/card": "@acme%2Fkit-note%2Fcard",
+		"a%2Fb":               "a%252Fb",
 	}
 	for in, want := range tests {
 		if got := filenamePart(in); got != want {
