@@ -240,3 +240,33 @@ func TestWaitForComponentReady(t *testing.T) {
 		}
 	})
 }
+
+func TestElementIDSelector(t *testing.T) {
+	tests := []struct {
+		id   string
+		want string
+	}{
+		{"bino-table-sales", `[id="bino-table-sales"]`},
+		{"bino-text-@acme/kit/note", `[id="bino-text-@acme/kit/note"]`},
+		{`bino-text-a"b\c`, `[id="bino-text-a\"b\\c"]`},
+	}
+	for _, tt := range tests {
+		if got := elementIDSelector(tt.id); got != tt.want {
+			t.Errorf("elementIDSelector(%q) = %q, want %q", tt.id, got, tt.want)
+		}
+	}
+}
+
+func TestFilenamePart(t *testing.T) {
+	tests := map[string]string{
+		"sales":            "sales",
+		"@acme/kit/table":  "@acme-kit-table",
+		"../../etc/passwd": "..-..-etc-passwd",
+		`a\b`:              "a-b",
+	}
+	for in, want := range tests {
+		if got := filenamePart(in); got != want {
+			t.Errorf("filenamePart(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
