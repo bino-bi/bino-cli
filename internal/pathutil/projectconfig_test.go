@@ -339,6 +339,33 @@ func TestPackageConfigValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "SPDX expression license",
+			pkg:  PackageConfig{Name: "@acme/kit", License: "(MIT OR Apache-2.0) AND LicenseRef-acme"},
+		},
+		{
+			name: "UNLICENSED license",
+			pkg:  PackageConfig{Name: "@acme/kit", License: "UNLICENSED"},
+		},
+		{
+			name: "SEE LICENSE IN license",
+			pkg:  PackageConfig{Name: "@acme/kit", License: "SEE LICENSE IN LICENSE.md"},
+		},
+		{
+			name:    "SEE LICENSE IN without a file",
+			pkg:     PackageConfig{Name: "@acme/kit", License: "SEE LICENSE IN"},
+			wantErr: `invalid [package] license "SEE LICENSE IN": SEE LICENSE IN needs a file name`,
+		},
+		{
+			name:    "SEE LICENSE IN without a space",
+			pkg:     PackageConfig{Name: "@acme/kit", License: "SEE LICENSE INFO.md"},
+			wantErr: `invalid [package] license "SEE LICENSE INFO.md": SEE LICENSE IN needs a file name`,
+		},
+		{
+			name:    "license with free text",
+			pkg:     PackageConfig{Name: "@acme/kit", License: "MIT, see repo"},
+			wantErr: `invalid [package] license "MIT, see repo": expected an SPDX expression`,
+		},
+		{
 			name:    "missing name",
 			pkg:     PackageConfig{},
 			wantErr: `[package] name is required`,

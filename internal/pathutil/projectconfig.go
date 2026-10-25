@@ -112,6 +112,7 @@ type PackageConfig struct {
 	Visibility   string   `toml:"visibility,omitempty"`    // "public" | "private", default "private"
 	CompatEngine string   `toml:"compat-engine,omitempty"` // semver range
 	CompatCLI    string   `toml:"compat-cli,omitempty"`    // semver range
+	License      string   `toml:"license,omitempty"`       // SPDX expression, "UNLICENSED" or "SEE LICENSE IN <file>"
 	Include      []string `toml:"include,omitempty"`       // project-relative dirs/files
 	Preview      string   `toml:"preview,omitempty"`       // "path#definition-name"
 }
@@ -142,6 +143,9 @@ func (p *PackageConfig) Validate() error {
 	default:
 		return fmt.Errorf("invalid [package] visibility %q: expected \"public\" or \"private\"", p.Visibility)
 	}
+	if err := checkLicense(p.License); err != nil {
+		return err
+	}
 	if p.CompatEngine != "" {
 		if _, err := semver.NewConstraint(p.CompatEngine); err != nil {
 			return fmt.Errorf("parse [package] compat-engine %q: %w", p.CompatEngine, err)
@@ -165,6 +169,36 @@ func (p *PackageConfig) Validate() error {
 		if _, ok := cleanProjectRelative(previewPath); !ok {
 			return fmt.Errorf("invalid [package] preview %q: path must be project-relative", p.Preview)
 		}
+	}
+	return nil
+}
+
+// licenseExprRe is a loose shape check for an SPDX expression: ids, the
+// AND/OR/WITH operators, "+" and parentheses. The registry checks the ids.
+var licenseExprRe = regexp.MustCompile(`^[A-Za-z0-9.+:() -]+$`)
+
+const seeLicenseIn = "SEE LICENSE IN"
+
+// checkLicense lightly validates [package] license. Empty is allowed (the
+// publish warns about it); the registry does the real SPDX check.
+func checkLicense(l string) error {
+	l = strings.TrimSpace(l)
+	switch {
+	case l == "":
+		return nil
+	case len(l) > 256:
+		return fmt.Errorf("invalid [package] license: longer than 256 characters")
+	case strings.EqualFold(l, "UNLICENSED"):
+		return nil
+	case len(l) >= len(seeLicenseIn) && strings.EqualFold(l[:len(seeLicenseIn)], seeLicenseIn):
+		// The registry needs "SEE LICENSE IN " with the space, then a file.
+		rest := l[len(seeLicenseIn):]
+		if !strings.HasPrefix(rest, " ") || strings.TrimSpace(rest) == "" {
+			return fmt.Errorf("invalid [package] license %q: SEE LICENSE IN needs a file name", l)
+		}
+		return nil
+	case !licenseExprRe.MatchString(l):
+		return fmt.Errorf("invalid [package] license %q: expected an SPDX expression (e.g. \"MIT\"), \"UNLICENSED\" or \"SEE LICENSE IN <file>\"", l)
 	}
 	return nil
 }

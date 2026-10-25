@@ -402,3 +402,138 @@ func captureStderr(t *testing.T, fn func() error) (string, error) {
 	r.Close() //nolint:errcheck // best effort
 	return out, fnErr
 }
+
+// predefTOML is a bino.toml whose [package] has no visibility and no license,
+// plus extra lines appended to the table.
+func predefTOML(registryURL, extra string) string {
+	return fmt.Sprintf(`report-id = "test"
+
+[registry]
+url = %q
+token = "test-token"
+
+[package]
+name = "@acme/kit"
+%s
+`, registryURL, extra)
+}
+
+func TestPublishSendsTheLicense(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"package":"@acme/kit","version":"1.0.0","digest":"sha256:d","unchanged":false,"files":[],"warnings":[]}`
+	})
+	newPredefTestProject(t, srv.URL, map[string]string{
+		"bino.toml": predefTOML(srv.URL, `license = "Apache-2.0 OR MIT"`+"\n"+`visibility = "public"`),
+	})
+
+	printed, err := captureStderr(t, func() error {
+		_, err := execPublish(t, "--bump", "patch", "--json")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.manifest.License != "Apache-2.0 OR MIT" {
+		t.Errorf("license = %q", capture.manifest.License)
+	}
+	if strings.Contains(printed, "no license") {
+		t.Errorf("warned about a missing license although one is set:\n%s", printed)
+	}
+}
+
+func TestPublishWarnsWithoutALicense(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"package":"@acme/kit","version":"1.0.0","digest":"sha256:d","unchanged":false,"files":[],"warnings":[]}`
+	})
+	newPredefTestProject(t, srv.URL, nil)
+
+	printed, err := captureStderr(t, func() error {
+		_, err := execPublish(t, "--bump", "patch", "--json")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.manifest.License != "" {
+		t.Errorf("license = %q, want none", capture.manifest.License)
+	}
+	if !strings.Contains(printed, "[package] has no license") {
+		t.Errorf("no missing-license warning:\n%s", printed)
+	}
+}
+
+func TestPublishRejectsAMalformedLicense(t *testing.T) {
+	newPredefTestProject(t, "http://example.invalid", map[string]string{
+		"bino.toml": predefTOML("http://example.invalid", `license = "MIT, mostly"`),
+	})
+	if _, err := execPublish(t, "--bump", "patch"); err == nil || !strings.Contains(err.Error(), "license") {
+		t.Fatalf("err = %v, want a license complaint", err)
+	}
+}
+
+// A first publish without a declared visibility lands private, and the author
+// must be told before it happens how to get a public package instead.
+func TestPublishNotesPrivateDefaultOnFirstPublish(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"package":"@acme/kit","version":"1.0.0","digest":"sha256:d","unchanged":false,"files":[],"warnings":[]}`
+	})
+	newPredefTestProject(t, srv.URL, map[string]string{"bino.toml": predefTOML(srv.URL, `license = "MIT"`)})
+
+	printed, err := captureStderr(t, func() error {
+		_, err := execPublish(t, "--bump", "patch", "--json")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.manifest.Visibility != "private" {
+		t.Errorf("visibility = %q, want private", capture.manifest.Visibility)
+	}
+	for _, want := range []string{"will be created as private", "--visibility public"} {
+		if !strings.Contains(printed, want) {
+			t.Errorf("output does not mention %q:\n%s", want, printed)
+		}
+	}
+}
+
+func TestPublishNoPrivateNoteForAnExistingPackage(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"package":"@acme/kit","version":"1.0.1","digest":"sha256:d","unchanged":false,"files":[],"warnings":[]}`
+	})
+	newPredefTestProject(t, srv.URL, map[string]string{"bino.toml": predefTOML(srv.URL, `license = "MIT"`)})
+	srv.Config.Handler = withResolve(srv.Config.Handler, http.StatusOK, `{"package":"@acme/kit","version":"1.0.0","digest":"sha256:x","kinds":["Table"],"files":[]}`)
+
+	printed, err := captureStderr(t, func() error {
+		_, err := execPublish(t, "--bump", "patch", "--json")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if strings.Contains(printed, "will be created as private") {
+		t.Errorf("printed the first-publish note for an existing package:\n%s", printed)
+	}
+	if capture.manifest.Visibility != "" {
+		t.Errorf("visibility = %q, want none for an existing package", capture.manifest.Visibility)
+	}
+}
+
+// Without a declared visibility an inconclusive probe only skips the note; it
+// must not block the publish.
+func TestPublishWithoutVisibilityToleratesAnInconclusiveProbe(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"package":"@acme/kit","version":"1.0.0","digest":"sha256:d","unchanged":false,"files":[],"warnings":[]}`
+	})
+	newPredefTestProject(t, srv.URL, map[string]string{"bino.toml": predefTOML(srv.URL, `license = "MIT"`)})
+	srv.Config.Handler = withResolve(srv.Config.Handler, http.StatusServiceUnavailable, `{"code":"validator_unavailable"}`)
+
+	if _, err := execPublish(t, "--bump", "patch", "--json"); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if capture.calls != 1 {
+		t.Errorf("publish calls = %d, want 1", capture.calls)
+	}
+	if capture.manifest.Visibility != "" {
+		t.Errorf("visibility = %q, want none after an inconclusive probe", capture.manifest.Visibility)
+	}
+}

@@ -54,6 +54,14 @@ as advice, but the registry's own gate is the authority, so a package that
 lints clean can still be rejected. Use --dry-run to see that verdict without
 minting anything.
 
+A new package is created private unless --visibility or [package].visibility
+says otherwise. Visibility only applies on that first publish; after it, change
+it in the registry's package settings.
+
+[package].license declares the package license: an SPDX expression such as
+"MIT" or "Apache-2.0 OR MIT", "UNLICENSED", or "SEE LICENSE IN <file>". The
+registry validates it; a publish without one warns.
+
 Republishing an unchanged package is not an error: the registry recognizes the
 identical content and reports the version that already carries it.`,
 		Args: cobra.NoArgs,
@@ -74,7 +82,7 @@ identical content and reports the version that already carries it.`,
 	}
 	cmd.Flags().StringVar(&bump, "bump", "", "Version increment: patch, minor or major (required unless --dry-run)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate against the registry without publishing")
-	cmd.Flags().StringVar(&visibility, "visibility", "", "Visibility for a first publish: public or private")
+	cmd.Flags().StringVar(&visibility, "visibility", "", "Visibility for a first publish: public or private (default private)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print the result as JSON")
 	return cmd
 }
@@ -188,10 +196,14 @@ func buildPublishManifest(ctx context.Context, client *registry.Client, p regist
 		Category:     pkg.Category,
 		CompatEngine: pkg.CompatEngine,
 		CompatCli:    pkg.CompatCLI,
+		License:      strings.TrimSpace(pkg.License),
 		Preview:      pkg.Preview,
 		Tags:         pkg.Tags,
 		Dependencies: publishDependencies(p.Cfg),
 		Files:        entries,
+	}
+	if m.License == "" {
+		p.Out.Warning(`[package] has no license. Add license = "MIT" (any SPDX expression), "UNLICENSED" or "SEE LICENSE IN <file>" to bino.toml`)
 	}
 	vis, err := publishVisibility(ctx, client, p, opts)
 	if err != nil {
@@ -208,20 +220,27 @@ func buildPublishManifest(ctx context.Context, client *registry.Client, p regist
 // visibility on every publish would break the moment someone changed it in the
 // web UI. The package is probed first, and an inconclusive answer is fatal
 // rather than "send nothing": a first publish that silently lands with the
-// server's default visibility cannot be undone.
+// server's default visibility cannot be undone. Without a declared visibility
+// a new package is sent as private, since registries released before the
+// private default create it public. There an inconclusive probe is not fatal:
+// it sends nothing and prints no note.
 func publishVisibility(ctx context.Context, client *registry.Client, p registryProject, opts publishOptions) (string, error) {
 	declared := opts.visibility
 	if declared == "" {
 		declared = strings.ToLower(p.Cfg.Package.Visibility)
-	}
-	if declared == "" {
-		return "", nil
 	}
 	scope, base, err := registry.ParseName(p.Cfg.Package.Name)
 	if err != nil {
 		return "", ConfigError(err)
 	}
 	exists, known := client.PackageExists(ctx, scope, base)
+	if declared == "" {
+		if known && !exists {
+			p.Out.Info(fmt.Sprintf("%s does not exist yet and will be created as private. To make it public, publish with --visibility public or set visibility = \"public\" in [package]. After the first publish, change it in the registry's package settings.", p.Cfg.Package.Name))
+			return "private", nil
+		}
+		return "", nil
+	}
 	if !known {
 		return "", ExternalErrorWithHint(
 			fmt.Errorf("could not determine whether %s already exists, and visibility only takes effect when a package is created", p.Cfg.Package.Name),

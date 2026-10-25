@@ -18,7 +18,7 @@ Flags:
 
 - `--bump` - how the registry increments the version: `patch`, `minor` or `major`. Required unless `--dry-run` is set.
 - `--dry-run` - run the registry's validation without creating a version.
-- `--visibility` - `public` or `private`. Only used when the package is created; ignored afterwards.
+- `--visibility` - `public` or `private`. Only used when the package is created; ignored afterwards. Without it (and without `[package].visibility`) a new package is created private, and the first publish prints a note saying so.
 - `--json` - print the result as JSON on stdout (progress goes to stderr).
 
 ## What is published
@@ -35,6 +35,13 @@ files (1 MB per manifest, 50 MB per resource).
 Publishing refuses, before uploading anything: symbolic links, anything under
 `secrets/` or `signing/`, and any document declaring a `ConnectionSecret` or
 `SigningProfile`.
+
+## License
+
+Set `[package].license` in `bino.toml` to an SPDX expression (`MIT`,
+`Apache-2.0 OR MIT`), `UNLICENSED` or `SEE LICENSE IN <file>`. `bino publish`
+checks the shape locally and warns when it is missing; the registry does the
+full SPDX check and rejects an unknown id.
 
 ## Validation
 

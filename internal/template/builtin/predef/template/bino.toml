@@ -22,6 +22,8 @@ tags = [{{ range $i, $t := .PackageTags }}{{ if $i }}, {{ end }}{{ $t | yaml }}{
 category = {{ .PackageCategory | yaml }}
 {{- end }}
 visibility = {{ .PackageVisibility | yaml }}
+# SPDX expression (e.g. "MIT"), "UNLICENSED" or "SEE LICENSE IN <file>".
+# license = "MIT"
 compat-engine = ">=1.0.0-alpha.1"
 
 # Without an explicit list every canonical manifest folder is published.

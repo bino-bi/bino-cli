@@ -22,6 +22,7 @@ type PublishManifest struct {
 	Category     string      `json:"category,omitempty"`
 	CompatEngine string      `json:"compatEngine,omitempty"`
 	CompatCli    string      `json:"compatCli,omitempty"`
+	License      string      `json:"license,omitempty"`
 	Preview      string      `json:"preview,omitempty"`
 	Tags         []string    `json:"tags,omitempty"`
 	Dependencies []string    `json:"dependencies,omitempty"`

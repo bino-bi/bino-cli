@@ -52,6 +52,7 @@ description = "IBCS finance report building blocks"
 tags        = ["finance", "ibcs"]
 category    = "components"
 visibility  = "private"             # only used when the package is created
+license     = "MIT"                 # SPDX expression, "UNLICENSED" or "SEE LICENSE IN <file>"
 
 # Warn-only semver ranges, reported to consumers on install:
 compat-engine = ">=1.2.0"
@@ -68,8 +69,14 @@ preview = "components/waterfall.yaml#@acme/finance-kit/waterfall"
 "@acme/base-style" = "2.1.0"
 ```
 
-`visibility` only takes effect when the package is created. Afterwards the
-registry owns it - change it in the web UI, not here.
+`visibility` only takes effect when the package is created. Without it the
+package is created private, and `bino publish` says so on the first publish.
+Afterwards the registry owns it - change it in the web UI, not here.
+
+`license` is an SPDX license expression (`MIT`, `Apache-2.0 OR MIT`,
+`LicenseRef-acme`), `UNLICENSED` for all rights reserved, or
+`SEE LICENSE IN <file>`. The registry validates it and shows it on the package
+page. `bino publish` warns when it is missing.
 
 ## Naming definitions
 
@@ -113,7 +120,8 @@ bino publish --bump minor
 ```
 
 `--bump` is `patch`, `minor` or `major`; the registry mints the version from it
-(the first publish is always `1.0.0`). Use `--json` for a machine-readable
+(the first publish is always `1.0.0`). `bino publish` refuses to run without
+`--bump` unless `--dry-run` is set. Use `--json` for a machine-readable
 result.
 
 The registry is the validation authority. `bino publish` runs your local lint
