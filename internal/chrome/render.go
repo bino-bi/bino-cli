@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -657,11 +658,8 @@ func elementIDSelector(id string) string {
 
 // filenamePart makes a component name safe as one file name segment: a scoped
 // name such as "@acme/kit/table" must not become a path below the output dir.
+// Percent-encoding keeps distinct names apart ("@acme/kit/a-b" and
+// "@acme/kit-a/b" must not overwrite each other's file).
 func filenamePart(name string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' {
-			return '-'
-		}
-		return r
-	}, name)
+	return url.PathEscape(name)
 }
