@@ -610,7 +610,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 		session.LogQuery(stmt)
 		setupStart := time.Now()
 		if _, err := db.ExecContext(queryCtx, stmt); err != nil {
-			err = describeQueryLimitError(err, cfg.MaxQueryDuration)
+			err = describeQueryLimitError(queryCtx, err, cfg.MaxQueryDuration)
 			logQueryExecError(session, stmt, job.doc.Name, setupStart, err)
 			return nil, nil, fmt.Errorf("setup: %w", err)
 		}
@@ -626,7 +626,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Declared expectations are checked on every row before the query runs.
 	if compiled.Declares() {
 		if err := runDeclarationChecks(queryCtx, db, compiled); err != nil {
-			return nil, nil, fmt.Errorf("check: %w", describeQueryLimitError(err, cfg.MaxQueryDuration))
+			return nil, nil, fmt.Errorf("check: %w", describeQueryLimitError(queryCtx, err, cfg.MaxQueryDuration))
 		}
 	}
 
@@ -641,7 +641,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Execute query
 	rows, err := db.QueryContext(queryCtx, query)
 	if err != nil {
-		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
+		err = describeQueryLimitError(queryCtx, err, cfg.MaxQueryDuration)
 		// Log failed query execution if logger is available
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
 		return nil, nil, fmt.Errorf("query: %w", err)
@@ -652,7 +652,7 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	// Enforces the row limit (BNR_MAX_QUERY_ROWS, 0 = unlimited).
 	scanned, columns, rowStrings, err := scanRows(rows, cfg.MaxQueryRows)
 	if err != nil {
-		err = describeQueryLimitError(err, cfg.MaxQueryDuration)
+		err = describeQueryLimitError(queryCtx, err, cfg.MaxQueryDuration)
 		logQueryExecError(session, query, job.doc.Name, startTime, err)
 		return nil, nil, fmt.Errorf("serialize: %w", err)
 	}
@@ -707,8 +707,10 @@ func logQueryExecError(session *duckdb.Session, query, datasetName string, start
 
 // describeQueryLimitError attributes a deadline-exceeded error to the
 // configured query duration limit so users learn which knob to turn.
-func describeQueryLimitError(err error, maxDuration time.Duration) error {
-	if maxDuration > 0 && errors.Is(err, context.DeadlineExceeded) {
+// DuckDB 2.0 can report the interrupt as a plain "Interrupted!" error that
+// does not wrap the context error, so ctx is checked as well.
+func describeQueryLimitError(ctx context.Context, err error, maxDuration time.Duration) error {
+	if maxDuration > 0 && (errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded)) {
 		return fmt.Errorf("exceeded max query duration %s (BNR_MAX_QUERY_DURATION_MS): %w", maxDuration, err)
 	}
 	return err
