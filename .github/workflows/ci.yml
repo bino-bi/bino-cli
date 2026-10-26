@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -51,7 +51,7 @@ jobs:
         os: [ubuntu-24.04, macos-15]
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -92,7 +92,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -203,7 +203,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -220,7 +220,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -243,7 +243,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
