@@ -84,7 +84,7 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 	// PRQL cannot autoload (community extension); load it only when a
 	// dataset actually uses it.
 	if dataset.NeedsPrql(docs) {
-		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
+		if err := s.session.LoadPRQL(ctx); err != nil {
 			s.logger.Warnf("explorer: prql extension: %v", err)
 		}
 	}

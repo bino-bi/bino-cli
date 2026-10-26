@@ -6,6 +6,20 @@ import "fmt"
 // slot back in time.
 const ShiftMacroName = "bino_shift"
 
+// SlotShiftMacro returns the copy of bino_shift that bino's own derive and
+// assert calls for slot use. DuckDB 2.0 rejects a table macro that reads a view
+// built with the same macro ("infinite recursion detected"), so each step of a
+// derive chain, and a derive over a query that calls bino_shift itself, must
+// use a different macro name. Slot names are unique along a chain.
+func SlotShiftMacro(slot string) string {
+	return "_bino_shift_" + slot
+}
+
+// shiftMacroNames are the names the shift macro is registered under.
+var shiftMacroNames = []string{
+	ShiftMacroName, SlotShiftMacro("pp1"), SlotShiftMacro("pp2"), SlotShiftMacro("pp3"), SlotShiftMacro("pp4"),
+}
+
 // ShiftMacroRevision is bumped whenever the semantics of the bino_shift macro
 // change. Dataset results that depend on the macro include it in their cache
 // digest, so a macro fix invalidates derived results and nothing else.
@@ -45,18 +59,19 @@ const IdentityHelperColumn = "_bino_one"
 // period (so only periods present in the data are ever created), and
 // shifted filled from the earlier row. assert passes fill := false, because
 // it compares supplied rows only.
-var shiftMacroSQL = fmt.Sprintf(`CREATE OR REPLACE MACRO %[1]s(src, source, shift, grain, fill := true) AS TABLE
+func shiftMacroSQL(name string) string {
+	return fmt.Sprintf(`CREATE OR REPLACE MACRO %[1]s(src, source, shift, grain, fill := true) AS TABLE
 WITH base AS (
   SELECT *, 1 AS %[2]s FROM query_table(src)
 ), keyed AS (
   SELECT *,
-         row(*COLUMNS(c -> NOT regexp_matches(c, '%[3]s'))) AS _bino_key,
+         row(*COLUMNS(lambda c: NOT regexp_matches(c, '%[3]s'))) AS _bino_key,
          date_trunc(grain, "date"::DATE) AS _bino_period
   FROM base
 ), periods AS (
   SELECT _bino_period, min("date") AS _bino_date FROM keyed GROUP BY 1
 ), ident AS (
-  SELECT COLUMNS(c -> NOT regexp_matches(c, '%[3]s')) FROM keyed
+  SELECT COLUMNS(lambda c: NOT regexp_matches(c, '%[3]s')) FROM keyed
 ), filled AS (
   SELECT _bino_i.* EXCLUDE (_bino_period), _bino_per._bino_date AS "date", _bino_per._bino_period
   FROM ident _bino_i
@@ -71,7 +86,7 @@ WITH base AS (
 ), current AS (
   SELECT * FROM keyed UNION ALL BY NAME SELECT * FROM filled
 ), prior AS (
-  SELECT _bino_key, _bino_period, coalesce(*COLUMNS(c -> c = source)) AS shifted FROM keyed
+  SELECT _bino_key, _bino_period, coalesce(*COLUMNS(lambda c: c = source)) AS shifted FROM keyed
 )
 SELECT _bino_a.* EXCLUDE (%[2]s, _bino_key, _bino_period), _bino_p.shifted
 FROM current _bino_a
@@ -79,4 +94,5 @@ LEFT JOIN prior _bino_p
   ON _bino_p._bino_key = _bino_a._bino_key
  AND _bino_p._bino_period = (_bino_a._bino_period - shift::INTERVAL)::DATE
  AND (_bino_p._bino_period + shift::INTERVAL)::DATE = _bino_a._bino_period`,
-	ShiftMacroName, IdentityHelperColumn, IdentityColumnPattern)
+		name, IdentityHelperColumn, IdentityColumnPattern)
+}

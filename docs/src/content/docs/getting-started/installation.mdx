@@ -14,7 +14,7 @@ bino provides pre-built binaries for:
 
 - macOS (Intel, Apple Silicon)
 - Linux x86_64, arm64
-- Windows x86_64
+- Windows x86_64 (experimental, see below)
 - Linux containers (`linux/amd64`, `linux/arm64`) via the official image
 
 ## Install using the bundled installer script (recommended)
@@ -47,10 +47,12 @@ Prefer the two-step flow if you want to review the script before execution.
 
 <Aside type="note">Requires Windows 10 or later with PowerShell 5.1+.</Aside>
 
-<Aside type="caution">
-  PostgreSQL and MySQL database connections are not available on Windows. The
-  required DuckDB extensions are currently not supported on that platform. CSV,
-  Excel, and other file-based data sources work normally.
+<Aside type="caution" title="Windows support is experimental">
+  The native Windows build is not tested as thoroughly as the macOS and Linux
+  builds. For a setup that behaves the same as on macOS and Linux, run the
+  official container image `ghcr.io/bino-bi/bino-cli` with Docker Desktop. See
+  [Run bino in a container](#run-bino-in-a-container) and
+  [Running bino in Docker](/guides/docker/).
 </Aside>
 
 Run directly in PowerShell (one-liner):

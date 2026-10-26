@@ -556,3 +556,30 @@ func TestInstallAndLoadCommunityExtensions_NilSession(t *testing.T) {
 		t.Error("InstallAndLoadCommunityExtensions() on nil session should return error")
 	}
 }
+
+func TestLoadPRQL_FailureIsClear(t *testing.T) {
+	var nilSession *Session
+	err := nilSession.LoadPRQL(context.Background())
+	if !errors.Is(err, ErrPRQLUnavailable) {
+		t.Fatalf("LoadPRQL() error = %v, want ErrPRQLUnavailable", err)
+	}
+	if !strings.Contains(err.Error(), "Use a SQL query instead") {
+		t.Errorf("LoadPRQL() error = %q, want a hint to use SQL", err)
+	}
+}
+
+// On DuckDB 2.0 the prql extension is not published, so this hits the real
+// install error (a 404, or a network error when offline).
+func TestLoadPRQL_NotPublished(t *testing.T) {
+	ctx, s := openTestSession(t)
+	err := s.LoadPRQL(ctx)
+	if err == nil {
+		t.Skip("prql is available for this DuckDB version again")
+	}
+	if !errors.Is(err, ErrPRQLUnavailable) || !strings.Contains(err.Error(), "DuckDB v") {
+		t.Errorf("LoadPRQL() error = %q, want ErrPRQLUnavailable naming the DuckDB version", err)
+	}
+	if again := s.LoadPRQL(ctx); again != err { //nolint:errorlint // must be the cached error itself
+		t.Errorf("second LoadPRQL() = %v, want the cached first error", again)
+	}
+}

@@ -395,8 +395,8 @@ func (s *State) prepareDataSet(ctx context.Context, doc *config.Document) (datas
 		return dataset.Compiled{}, err
 	}
 	if compiled.Prql {
-		if err := s.session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
-			return dataset.Compiled{}, fmt.Errorf("load prql extension: %w", err)
+		if err := s.session.LoadPRQL(ctx); err != nil {
+			return dataset.Compiled{}, err
 		}
 	}
 	if len(compiled.Setup) > 0 {

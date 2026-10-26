@@ -202,7 +202,7 @@ Everything below is baked into the image and needs no network at all:
 
 - The `bino` binary.
 - Chromium and a font set for PDF rendering (full variant) - you never run `bino setup`.
-- The DuckDB extensions `excel`, `httpfs`, `postgres`, `mysql`, `prql`, and `webdavfs`.
+- The DuckDB extensions `excel`, `httpfs`, `postgres`, `mysql`, and `webdavfs`. The `prql` extension is not published for DuckDB 2.0 yet, so [PRQL datasets are currently not available](/reference/dataset/#using-prql) in the image either.
 - The bn-template-engine bundle.
 
 You can verify an image end-to-end by cutting off its network entirely:

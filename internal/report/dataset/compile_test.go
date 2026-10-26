@@ -114,7 +114,7 @@ func TestCompile_DeriveWrapsView(t *testing.T) {
 	if len(c.Setup) != 1 || c.Setup[0] != `CREATE OR REPLACE VIEW "_bino_ds_sales" AS (SELECT * FROM sales_csv)` {
 		t.Errorf("Setup = %q", c.Setup)
 	}
-	want := `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('_bino_ds_sales', 'ac1', '1 year', 'month')`
+	want := `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM _bino_shift_pp2('_bino_ds_sales', 'ac1', '1 year', 'month')`
 	if c.Query != want {
 		t.Errorf("Query = %q\nwant  %q", c.Query, want)
 	}
@@ -131,12 +131,12 @@ func TestCompile_TwoDerivedSlotsNest(t *testing.T) {
 	}, "")
 	wantSetup := []string{
 		`CREATE OR REPLACE VIEW "_bino_ds_sales" AS (SELECT * FROM "sales_csv")`,
-		`CREATE OR REPLACE VIEW "_bino_ds_sales__pp1" AS (SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('_bino_ds_sales', 'ac1', '1 month', 'month'))`,
+		`CREATE OR REPLACE VIEW "_bino_ds_sales__pp1" AS (SELECT * EXCLUDE (shifted), shifted AS pp1 FROM _bino_shift_pp1('_bino_ds_sales', 'ac1', '1 month', 'month'))`,
 	}
 	if len(c.Setup) != 2 || c.Setup[0] != wantSetup[0] || c.Setup[1] != wantSetup[1] {
 		t.Errorf("Setup = %q\nwant  %q", c.Setup, wantSetup)
 	}
-	want := `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('_bino_ds_sales__pp1', 'ac1', '1 year', 'month')`
+	want := `SELECT * EXCLUDE (shifted), shifted AS pp2 FROM _bino_shift_pp2('_bino_ds_sales__pp1', 'ac1', '1 year', 'month')`
 	if c.Query != want {
 		t.Errorf("Query = %q", c.Query)
 	}

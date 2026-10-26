@@ -93,8 +93,8 @@ func extractColumns(ctx context.Context, doc *config.Document, allDocs []config.
 			return nil, err
 		}
 		if compiled.Prql {
-			if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
-				return nil, fmt.Errorf("load prql extension: %w", err)
+			if err := session.LoadPRQL(ctx); err != nil {
+				return nil, err
 			}
 		}
 		if err := RunSetup(ctx, session, compiled); err != nil {

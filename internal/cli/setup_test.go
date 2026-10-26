@@ -3,10 +3,13 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"bino.bi/bino/pkg/duckdb"
 )
 
 func TestSetupTasks(t *testing.T) {
@@ -69,5 +72,29 @@ func TestSetupDuckDBExtensionsDryRun(t *testing.T) {
 	// A dry run must not touch the network or the filesystem.
 	if _, err := os.Stat(filepath.Join(home, ".bino")); !os.IsNotExist(err) {
 		t.Errorf("dry-run created %s", filepath.Join(home, ".bino"))
+	}
+}
+
+func TestPrefetchCommunityExtensionsSkipsPRQL(t *testing.T) {
+	ctx := context.Background()
+	// A nil session fails every install without touching the network.
+	var session *duckdb.Session
+
+	var warnings []error
+	warn := func(err error) { warnings = append(warnings, err) }
+
+	if err := prefetchCommunityExtensions(ctx, session, []string{duckdb.PRQLExtension}, warn); err != nil {
+		t.Fatalf("prql failure must not fail the prefetch: %v", err)
+	}
+	if len(warnings) != 1 || !errors.Is(warnings[0], duckdb.ErrPRQLUnavailable) {
+		t.Errorf("warnings = %v, want one ErrPRQLUnavailable", warnings)
+	}
+
+	warnings = nil
+	if err := prefetchCommunityExtensions(ctx, session, []string{duckdb.PRQLExtension, "webdavfs"}, warn); err == nil {
+		t.Error("a webdavfs failure must fail the prefetch")
+	}
+	if len(warnings) != 1 {
+		t.Errorf("warnings = %v, want the prql one before webdavfs", warnings)
 	}
 }

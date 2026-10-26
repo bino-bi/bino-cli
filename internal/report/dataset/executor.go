@@ -353,6 +353,10 @@ func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceInde
 	// Include dataset definition in hash
 	h.Write(doc.Raw)
 
+	// A DuckDB upgrade can change any query result (or make the query fail),
+	// so rows cached by another DuckDB version must not be reused.
+	fmt.Fprintf(h, "duckdb:%s", duckdb.LibraryVersion())
+
 	// A derived/asserted result depends on the bino_shift macro; a macro fix
 	// must invalidate it and leave every other dataset's key unchanged.
 	if spec.declares() {
@@ -494,20 +498,6 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		})
 	}
 
-	// Load PRQL extension if any dataset uses PRQL queries
-	hasPrql := false
-	for _, job := range jobs {
-		if !job.spec.Prql.IsEmpty() {
-			hasPrql = true
-			break
-		}
-	}
-	if hasPrql {
-		if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
-			return nil, nil, fmt.Errorf("load prql extension: %w", err)
-		}
-	}
-
 	// Determine validation sample size
 	validationSampleSize := 0
 	if opts != nil && opts.DataValidation != DataValidationOff && opts.DataValidation != "" {
@@ -599,6 +589,11 @@ func executeDataSet(ctx context.Context, session *duckdb.Session, job dataSetJob
 	compiled, err := compileSpec(job.doc, job.spec)
 	if err != nil {
 		return nil, nil, err
+	}
+	if compiled.Prql {
+		if err := session.LoadPRQL(ctx); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Enforce the per-query duration limit (BNR_MAX_QUERY_DURATION_MS, 0 = unlimited).

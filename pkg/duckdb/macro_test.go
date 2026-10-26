@@ -78,10 +78,10 @@ func wantNull(t *testing.T, got map[string]*float64, date string) {
 }
 
 func TestShiftMacroSQLUsesIdentityConstants(t *testing.T) {
-	if !strings.Contains(shiftMacroSQL, IdentityColumnPattern) {
+	if !strings.Contains(shiftMacroSQL(ShiftMacroName), IdentityColumnPattern) {
 		t.Errorf("macro SQL does not contain IdentityColumnPattern %q", IdentityColumnPattern)
 	}
-	if !strings.Contains(shiftMacroSQL, IdentityHelperColumn) {
+	if !strings.Contains(shiftMacroSQL(ShiftMacroName), IdentityHelperColumn) {
 		t.Errorf("macro SQL does not contain IdentityHelperColumn %q", IdentityHelperColumn)
 	}
 }
@@ -362,9 +362,11 @@ func TestBinoShift_TwoLayersFillInBothOrders(t *testing.T) {
 		('A', 1, '2024-02-29', 110.0)
 	) v(category, "categoryIndex", "date", ac1)`)
 	mustExec(ctx, t, s, `CREATE VIEW m AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('t', 'ac1', '1 month', 'month')`)
-	mustExec(ctx, t, s, `CREATE VIEW my AS SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('m', 'ac1', '1 year', 'month')`)
+	// The outer layer uses a slot copy of the macro, as derive does: DuckDB 2.0
+	// rejects bino_shift over a view that uses bino_shift.
+	mustExec(ctx, t, s, `CREATE VIEW my AS SELECT * EXCLUDE (shifted), shifted AS pp2 FROM _bino_shift_pp2('m', 'ac1', '1 year', 'month')`)
 	mustExec(ctx, t, s, `CREATE VIEW y AS SELECT * EXCLUDE (shifted), shifted AS pp2 FROM bino_shift('t', 'ac1', '1 year', 'month')`)
-	mustExec(ctx, t, s, `CREATE VIEW ym AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('y', 'ac1', '1 month', 'month')`)
+	mustExec(ctx, t, s, `CREATE VIEW ym AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM _bino_shift_pp1('y', 'ac1', '1 month', 'month')`)
 	for _, view := range []string{"my", "ym"} {
 		var pp1, pp2 *float64
 		err := s.DB().QueryRowContext(ctx, `SELECT pp1, pp2 FROM `+view+` WHERE category = 'B' AND "date" = '2024-02-29'`).Scan(&pp1, &pp2)
@@ -374,6 +376,18 @@ func TestBinoShift_TwoLayersFillInBothOrders(t *testing.T) {
 		if pp1 == nil || *pp1 != 563 || pp2 == nil || *pp2 != 500 {
 			t.Errorf("%s: pp1 = %v, pp2 = %v; want 563 and 500", view, pp1, pp2)
 		}
+	}
+}
+
+// Documents the DuckDB 2.0 limit that SlotShiftMacro works around. If this
+// starts to pass, DuckDB fixed it and the docs note on chaining can go.
+func TestBinoShift_SameMacroOverItsOwnViewFails(t *testing.T) {
+	ctx, s := openTestSession(t)
+	mustExec(ctx, t, s, `CREATE TABLE t AS SELECT 'A' AS category, '2024-01-31' AS "date", 1.0 AS ac1`)
+	mustExec(ctx, t, s, `CREATE VIEW m AS SELECT * EXCLUDE (shifted), shifted AS pp1 FROM bino_shift('t', 'ac1', '1 month', 'month')`)
+	_, err := s.DB().ExecContext(ctx, `SELECT * FROM bino_shift('m', 'ac1', '1 year', 'month')`)
+	if err == nil || !strings.Contains(err.Error(), "infinite recursion") {
+		t.Errorf("bino_shift over a bino_shift view: err = %v, want infinite recursion", err)
 	}
 }
 

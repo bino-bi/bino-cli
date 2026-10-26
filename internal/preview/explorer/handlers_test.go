@@ -378,7 +378,7 @@ func TestHandleMetadataAndQuery_DerivedDataset(t *testing.T) {
 		t.Fatalf("datasets = %+v", meta.Datasets)
 	}
 	sqlText := meta.Datasets[0].SQL
-	if !strings.Contains(sqlText, "bino_shift('_bino_ds_sales_pp', 'ac1', '1 year', 'month')") {
+	if !strings.Contains(sqlText, "_bino_shift_pp2('_bino_ds_sales_pp', 'ac1', '1 year', 'month')") {
 		t.Errorf("published SQL = %q", sqlText)
 	}
 
