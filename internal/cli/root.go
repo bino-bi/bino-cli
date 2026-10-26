@@ -90,6 +90,8 @@ func newRootCommand() *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
+			updater.CleanupOldFiles()
+
 			// Check if setup has been completed for commands that need it.
 			// Skip for: setup, version, update, help, completion, about, and
 			// publish - publishing talks to the registry and needs no engine

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -312,34 +313,111 @@ func downloadAndApply(ctx context.Context, versionTag, downloadURL string, onPro
 		return fmt.Errorf("chmod: %w", err)
 	}
 
-	// Replace the old binary with the new one
-	onProgress("Installing binary")
-	// First, rename the old binary to a backup
-	backupPath := execPath + ".old"
-	if err := os.Rename(execPath, backupPath); err != nil {
-		return fmt.Errorf("backing up old binary: %w", err)
-	}
-
-	// Move the new binary to the executable path
-	if err := os.Rename(tmpPath, execPath); err != nil {
-		// Try to restore the backup
-		_ = os.Rename(backupPath, execPath) //nolint:errcheck // best-effort rollback; the replace error is what the user needs
-		return fmt.Errorf("replacing binary: %w", err)
-	}
-
-	// Remove the backup
-	_ = os.Remove(backupPath)
-
-	// On Windows, also extract and update duckdb.dll alongside the binary
+	// On Windows the archive also carries duckdb.dll, which must change
+	// together with the binary. Stage it before touching the installed files.
+	var dllTmpPath string
 	if runtime.GOOS == "windows" {
-		execDir := filepath.Dir(execPath)
-		if err := extractDLLFromZip(archivePath, execDir); err != nil {
-			// Non-fatal: binary was updated successfully, DLL extraction is best-effort
-			onProgress("Warning: could not update duckdb.dll")
+		dllTmpPath, err = stageDLL(archivePath, filepath.Dir(execPath))
+		if err != nil {
+			return err
+		}
+		if dllTmpPath != "" {
+			defer os.Remove(dllTmpPath)
 		}
 	}
 
+	onProgress("Installing binary")
+	return installFiles(execPath, tmpPath, dllTmpPath)
+}
+
+// dllName is the DuckDB library shipped next to bino.exe on Windows.
+const dllName = "duckdb.dll"
+
+// rename is os.Rename. Tests replace it to make a single step fail.
+var rename = os.Rename
+
+// installFiles moves the staged binary exeSrc to execPath and, when dllSrc is
+// not empty, the staged DLL next to it. Windows refuses to overwrite a running
+// binary or a loaded DLL but allows renaming them, so each installed file is
+// first renamed to "<name>.old". If any step fails, both files are restored.
+func installFiles(execPath, exeSrc, dllSrc string) error {
+	exeBackup := execPath + ".old"
+	if err := rename(execPath, exeBackup); err != nil {
+		return fmt.Errorf("backing up old binary: %w", err)
+	}
+	restoreExe := func(err error) error {
+		if rerr := rename(exeBackup, execPath); rerr != nil {
+			return errors.Join(err, fmt.Errorf("restoring old binary: %w", rerr))
+		}
+		return err
+	}
+
+	if err := rename(exeSrc, execPath); err != nil {
+		return restoreExe(fmt.Errorf("replacing binary: %w", err))
+	}
+
+	if dllSrc != "" {
+		dllPath := filepath.Join(filepath.Dir(execPath), dllName)
+		dllBackup := dllPath + ".old"
+		hadDLL := true
+		if err := rename(dllPath, dllBackup); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return restoreExe(fmt.Errorf("backing up old %s: %w", dllName, err))
+			}
+			hadDLL = false
+		}
+		if err := rename(dllSrc, dllPath); err != nil {
+			err = fmt.Errorf("replacing %s: %w", dllName, err)
+			if hadDLL {
+				if rerr := rename(dllBackup, dllPath); rerr != nil {
+					err = errors.Join(err, fmt.Errorf("restoring old %s: %w", dllName, rerr))
+				}
+			}
+			return restoreExe(err)
+		}
+	}
+
+	// On Windows this fails while the old files are still in use. The next
+	// start removes them (CleanupOldFiles).
+	removeOldFiles(execPath)
 	return nil
+}
+
+// CleanupOldFiles removes the backups an earlier update left next to the
+// executable on Windows, where the running process kept them locked.
+func CleanupOldFiles() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	removeOldFiles(execPath)
+}
+
+func removeOldFiles(execPath string) {
+	_ = os.Remove(execPath + ".old")                                     //nolint:errcheck // best effort, retried on the next start
+	_ = os.Remove(filepath.Join(filepath.Dir(execPath), dllName+".old")) //nolint:errcheck // best effort, retried on the next start
+}
+
+// stageDLL extracts duckdb.dll from the archive into a temp file in dir and
+// returns its path, or "" when the archive has no DLL.
+func stageDLL(archivePath, dir string) (string, error) {
+	f, err := os.CreateTemp(dir, ".bino-update-dll-*")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file for %s: %w", dllName, err)
+	}
+	path := f.Name()
+	found, err := extractDLLFromZip(archivePath, f)
+	if cerr := f.Close(); err == nil && cerr != nil {
+		err = fmt.Errorf("close temp file %s: %w", path, cerr)
+	}
+	if err != nil || !found {
+		_ = os.Remove(path) //nolint:errcheck // best-effort cleanup of the staging file
+		return "", err
+	}
+	return path, nil
 }
 
 // fetchExpectedChecksum downloads checksums.txt for the given release tag
@@ -477,42 +555,32 @@ func extractBinaryFromZip(archivePath string, w io.Writer) error {
 	return errors.New("bino binary not found in archive")
 }
 
-// extractDLLFromZip extracts duckdb.dll from a zip archive to the target directory.
-func extractDLLFromZip(archivePath, targetDir string) error {
+// extractDLLFromZip writes duckdb.dll from a zip archive to w. It reports
+// false when the archive has no DLL.
+func extractDLLFromZip(archivePath string, w io.Writer) (bool, error) {
 	r, err := zip.OpenReader(archivePath)
 	if err != nil {
-		return fmt.Errorf("opening zip archive: %w", err)
+		return false, fmt.Errorf("opening zip archive: %w", err)
 	}
 	defer r.Close()
 
 	for _, f := range r.File {
-		if f.Name != "duckdb.dll" {
+		if f.Name != dllName {
 			continue
 		}
 
 		rc, err := f.Open()
 		if err != nil {
-			return fmt.Errorf("opening duckdb.dll in zip: %w", err)
+			return false, fmt.Errorf("opening %s in zip: %w", dllName, err)
 		}
 
-		dllPath := filepath.Join(targetDir, "duckdb.dll")
-		out, err := os.Create(dllPath) //nolint:gosec // G304: writing to known install directory
-		if err != nil {
-			rc.Close()
-			return fmt.Errorf("creating duckdb.dll: %w", err)
-		}
-
-		_, copyErr := io.Copy(out, rc) //nolint:gosec // G110: decompressing trusted signed release archives
-		closeErr := out.Close()
+		_, copyErr := io.Copy(w, rc) //nolint:gosec // G110: decompressing trusted signed release archives
 		rc.Close()
 		if copyErr != nil {
-			return fmt.Errorf("extracting duckdb.dll: %w", copyErr)
+			return false, fmt.Errorf("extracting %s: %w", dllName, copyErr)
 		}
-		if closeErr != nil {
-			return fmt.Errorf("closing duckdb.dll: %w", closeErr)
-		}
-		return nil
+		return true, nil
 	}
 
-	return nil // DLL not in archive is OK (non-Windows builds)
+	return false, nil
 }

@@ -84,6 +84,32 @@ jobs:
           path: coverage.out
           retention-days: 7
 
+  # Only the updater package: the rest of the suite links DuckDB through cgo,
+  # which on Windows needs the DLL setup of the release build. This job runs
+  # the test that replaces a duckdb.dll the process has loaded.
+  test-windows:
+    name: Test (windows-latest, updater)
+    runs-on: windows-latest
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run updater tests
+        env:
+          CGO_ENABLED: "0"
+        run: go test -v ./internal/updater/...
+
   integration:
     name: Integration (PDF pipeline)
     # Disabled for now: the job fails randomly. Remove this line to turn it back on.

@@ -8,7 +8,7 @@ import (
 )
 
 func TestStateRoundTrip(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t)
 
 	want := &State{
 		LastUpdateCheck: time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC),
@@ -36,7 +36,7 @@ func TestStateRoundTrip(t *testing.T) {
 
 func TestLoadState(t *testing.T) {
 	t.Run("missing file returns empty state", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 
 		got, err := LoadState()
 		if err != nil {
@@ -51,7 +51,7 @@ func TestLoadState(t *testing.T) {
 	})
 
 	t.Run("falls back to legacy location", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 
 		legacyPath, err := legacyStatePath()
 		if err != nil {
@@ -74,7 +74,7 @@ func TestLoadState(t *testing.T) {
 	})
 
 	t.Run("corrupt state file errors", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 
 		path, err := getStatePath()
 		if err != nil {
@@ -91,4 +91,14 @@ func TestLoadState(t *testing.T) {
 			t.Error("LoadState() should error on corrupt state file")
 		}
 	})
+}
+
+// setHome points the user home and config dirs at a temp dir. Windows reads
+// USERPROFILE and APPDATA instead of HOME.
+func setHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 }

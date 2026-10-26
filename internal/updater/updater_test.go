@@ -300,8 +300,8 @@ func TestExtractBinaryFromZip(t *testing.T) {
 	})
 }
 
-func TestExtractDLLFromZip(t *testing.T) {
-	t.Run("extracts duckdb.dll into target dir", func(t *testing.T) {
+func TestStageDLL(t *testing.T) {
+	t.Run("extracts duckdb.dll into a temp file in dir", func(t *testing.T) {
 		tmp := t.TempDir()
 		zipPath := filepath.Join(tmp, "archive.zip")
 		writeTestZip(t, zipPath, map[string]string{
@@ -313,13 +313,17 @@ func TestExtractDLLFromZip(t *testing.T) {
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			t.Fatalf("mkdir target: %v", err)
 		}
-		if err := extractDLLFromZip(zipPath, targetDir); err != nil {
-			t.Fatalf("extractDLLFromZip() error = %v", err)
+		path, err := stageDLL(zipPath, targetDir)
+		if err != nil {
+			t.Fatalf("stageDLL() error = %v", err)
+		}
+		if filepath.Dir(path) != targetDir {
+			t.Errorf("staged in %s, want %s", filepath.Dir(path), targetDir)
 		}
 
-		data, err := os.ReadFile(filepath.Join(targetDir, "duckdb.dll"))
+		data, err := os.ReadFile(path)
 		if err != nil {
-			t.Fatalf("read extracted dll: %v", err)
+			t.Fatalf("read staged dll: %v", err)
 		}
 		if string(data) != "dll-content" {
 			t.Errorf("dll content = %q, want %q", data, "dll-content")
@@ -331,12 +335,18 @@ func TestExtractDLLFromZip(t *testing.T) {
 		zipPath := filepath.Join(tmp, "archive.zip")
 		writeTestZip(t, zipPath, map[string]string{"bino.exe": "exe"})
 
-		if err := extractDLLFromZip(zipPath, tmp); err != nil {
-			t.Fatalf("extractDLLFromZip() error = %v", err)
+		targetDir := filepath.Join(tmp, "install")
+		if err := os.MkdirAll(targetDir, 0o755); err != nil {
+			t.Fatalf("mkdir target: %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(tmp, "duckdb.dll")); !os.IsNotExist(err) {
-			t.Error("duckdb.dll should not exist")
+		path, err := stageDLL(zipPath, targetDir)
+		if err != nil {
+			t.Fatalf("stageDLL() error = %v", err)
 		}
+		if path != "" {
+			t.Errorf("stageDLL() = %q, want empty", path)
+		}
+		assertDirEmpty(t, targetDir)
 	})
 
 	t.Run("ignores path-escaping dll entries", func(t *testing.T) {
@@ -350,15 +360,14 @@ func TestExtractDLLFromZip(t *testing.T) {
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			t.Fatalf("mkdir target: %v", err)
 		}
-		if err := extractDLLFromZip(zipPath, targetDir); err != nil {
-			t.Fatalf("extractDLLFromZip() error = %v", err)
+		path, err := stageDLL(zipPath, targetDir)
+		if err != nil {
+			t.Fatalf("stageDLL() error = %v", err)
 		}
-
-		// The escaping entry must not be written anywhere: neither inside the
-		// target directory nor as a sibling of it.
-		if _, err := os.Stat(filepath.Join(targetDir, "duckdb.dll")); !os.IsNotExist(err) {
-			t.Error("escaping entry was extracted into target dir")
+		if path != "" {
+			t.Errorf("stageDLL() = %q, want empty", path)
 		}
+		assertDirEmpty(t, targetDir)
 		if _, err := os.Stat(filepath.Join(tmp, "duckdb.dll")); !os.IsNotExist(err) {
 			t.Error("escaping entry escaped the target dir")
 		}
@@ -370,10 +379,188 @@ func TestExtractDLLFromZip(t *testing.T) {
 		if err := os.WriteFile(zipPath, []byte("not a zip"), 0o644); err != nil {
 			t.Fatalf("write bad zip: %v", err)
 		}
-		if err := extractDLLFromZip(zipPath, tmp); err == nil {
-			t.Error("extractDLLFromZip() should error on invalid archive")
+		targetDir := filepath.Join(tmp, "install")
+		if err := os.MkdirAll(targetDir, 0o755); err != nil {
+			t.Fatalf("mkdir target: %v", err)
 		}
+		if _, err := stageDLL(zipPath, targetDir); err == nil {
+			t.Error("stageDLL() should error on invalid archive")
+		}
+		assertDirEmpty(t, targetDir)
 	})
+}
+
+func assertDirEmpty(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		t.Errorf("unexpected file %s in %s", e.Name(), dir)
+	}
+}
+
+// installFixture lays out an installed bino plus DLL and staged new files.
+type installFixture struct {
+	exe, dll, newExe, newDLL string
+}
+
+func newInstallFixture(t *testing.T) installFixture {
+	t.Helper()
+	dir := t.TempDir()
+	f := installFixture{
+		exe:    filepath.Join(dir, "bino.exe"),
+		dll:    filepath.Join(dir, dllName),
+		newExe: filepath.Join(dir, ".bino-update-exe"),
+		newDLL: filepath.Join(dir, ".bino-update-dll"),
+	}
+	for path, content := range map[string]string{
+		f.exe: "old-exe", f.dll: "old-dll", f.newExe: "new-exe", f.newDLL: "new-dll",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	return f
+}
+
+func assertContent(t *testing.T, path, want string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if string(data) != want {
+		t.Errorf("%s = %q, want %q", filepath.Base(path), data, want)
+	}
+}
+
+func assertMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("%s should not exist (stat err = %v)", filepath.Base(path), err)
+	}
+}
+
+// failRename makes rename fail for one source and destination pair.
+func failRename(t *testing.T, src, dst string) {
+	t.Helper()
+	old := rename
+	rename = func(from, to string) error {
+		if from == src && to == dst {
+			return fmt.Errorf("injected failure renaming to %s", filepath.Base(to))
+		}
+		return old(from, to)
+	}
+	t.Cleanup(func() { rename = old })
+}
+
+func TestInstallFiles(t *testing.T) {
+	t.Run("replaces binary and dll", func(t *testing.T) {
+		f := newInstallFixture(t)
+		if err := installFiles(f.exe, f.newExe, f.newDLL); err != nil {
+			t.Fatalf("installFiles() error = %v", err)
+		}
+		assertContent(t, f.exe, "new-exe")
+		assertContent(t, f.dll, "new-dll")
+		assertMissing(t, f.exe+".old")
+		assertMissing(t, f.dll+".old")
+	})
+
+	t.Run("installs dll when none was there", func(t *testing.T) {
+		f := newInstallFixture(t)
+		if err := os.Remove(f.dll); err != nil {
+			t.Fatal(err)
+		}
+		if err := installFiles(f.exe, f.newExe, f.newDLL); err != nil {
+			t.Fatalf("installFiles() error = %v", err)
+		}
+		assertContent(t, f.exe, "new-exe")
+		assertContent(t, f.dll, "new-dll")
+	})
+
+	t.Run("without staged dll leaves dll alone", func(t *testing.T) {
+		f := newInstallFixture(t)
+		if err := installFiles(f.exe, f.newExe, ""); err != nil {
+			t.Fatalf("installFiles() error = %v", err)
+		}
+		assertContent(t, f.exe, "new-exe")
+		assertContent(t, f.dll, "old-dll")
+	})
+
+	t.Run("failed dll write restores binary and dll", func(t *testing.T) {
+		f := newInstallFixture(t)
+		failRename(t, f.newDLL, f.dll)
+
+		err := installFiles(f.exe, f.newExe, f.newDLL)
+		if err == nil || !strings.Contains(err.Error(), "replacing duckdb.dll") {
+			t.Fatalf("installFiles() error = %v, want replacing duckdb.dll", err)
+		}
+		assertContent(t, f.exe, "old-exe")
+		assertContent(t, f.dll, "old-dll")
+		assertMissing(t, f.exe+".old")
+		assertMissing(t, f.dll+".old")
+	})
+
+	t.Run("failed dll backup restores binary", func(t *testing.T) {
+		f := newInstallFixture(t)
+		failRename(t, f.dll, f.dll+".old")
+
+		err := installFiles(f.exe, f.newExe, f.newDLL)
+		if err == nil || !strings.Contains(err.Error(), "backing up old duckdb.dll") {
+			t.Fatalf("installFiles() error = %v, want backing up old duckdb.dll", err)
+		}
+		assertContent(t, f.exe, "old-exe")
+		assertContent(t, f.dll, "old-dll")
+		assertMissing(t, f.exe+".old")
+	})
+
+	t.Run("failed binary write restores binary", func(t *testing.T) {
+		f := newInstallFixture(t)
+		failRename(t, f.newExe, f.exe)
+
+		err := installFiles(f.exe, f.newExe, f.newDLL)
+		if err == nil || !strings.Contains(err.Error(), "replacing binary") {
+			t.Fatalf("installFiles() error = %v, want replacing binary", err)
+		}
+		assertContent(t, f.exe, "old-exe")
+		assertContent(t, f.dll, "old-dll")
+		assertMissing(t, f.exe+".old")
+	})
+
+	t.Run("failed restore is reported", func(t *testing.T) {
+		f := newInstallFixture(t)
+		failRename(t, f.newDLL, f.dll)
+		failRename(t, f.exe+".old", f.exe)
+
+		err := installFiles(f.exe, f.newExe, f.newDLL)
+		if err == nil || !strings.Contains(err.Error(), "restoring old binary") {
+			t.Fatalf("installFiles() error = %v, want restoring old binary", err)
+		}
+		assertContent(t, f.exe+".old", "old-exe")
+		assertContent(t, f.dll, "old-dll")
+	})
+}
+
+func TestRemoveOldFiles(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "bino.exe")
+	for _, name := range []string{"bino.exe", "bino.exe.old", "duckdb.dll", "duckdb.dll.old"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removeOldFiles(exe)
+
+	assertMissing(t, exe+".old")
+	assertMissing(t, filepath.Join(dir, "duckdb.dll.old"))
+	assertContent(t, exe, "bino.exe")
+	assertContent(t, filepath.Join(dir, "duckdb.dll"), "duckdb.dll")
+
+	// Nothing left to remove is fine.
+	removeOldFiles(exe)
 }
 
 func TestGetAssetName(t *testing.T) {
@@ -518,7 +705,7 @@ func TestFetchExpectedChecksum(t *testing.T) {
 
 func TestCheckForUpdate(t *testing.T) {
 	t.Run("skips check within 24h interval", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 		if err := SaveState(&State{LastUpdateCheck: time.Now()}); err != nil {
 			t.Fatalf("SaveState() error = %v", err)
 		}
@@ -543,7 +730,7 @@ func TestCheckForUpdate(t *testing.T) {
 	})
 
 	t.Run("reports newer version", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 		setVersion(t, "1.0.0")
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -578,7 +765,7 @@ func TestCheckForUpdate(t *testing.T) {
 	})
 
 	t.Run("returns nil when up to date", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHome(t)
 		setVersion(t, "2.0.0")
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
