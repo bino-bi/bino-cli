@@ -13,11 +13,24 @@ import (
 	"sync"
 	"time"
 
+	bindings "github.com/duckdb/duckdb-go-bindings"
 	_ "github.com/duckdb/duckdb-go/v2" // register duckdb database driver
 )
 
 var standardExtensions = []string{"excel", "httpfs", "postgres", "mysql"}
-var communityExtensions = []string{"prql", "webdavfs"}
+var communityExtensions = []string{PRQLExtension, "webdavfs"}
+
+// LibraryVersion returns the version of the linked DuckDB library, e.g. "v2.0.0".
+func LibraryVersion() string {
+	return bindings.LibraryVersion()
+}
+
+// PRQLExtension is the community extension that runs PRQL queries.
+const PRQLExtension = "prql"
+
+// ErrPRQLUnavailable is returned by LoadPRQL when the prql extension cannot be
+// installed. The DuckDB community has not published it for DuckDB 2.0 yet.
+var ErrPRQLUnavailable = errors.New("PRQL is currently not available")
 
 // DefaultExtensions returns the built-in set of DuckDB extensions required by the CLI.
 func DefaultExtensions() []string {
@@ -74,11 +87,12 @@ type Session struct {
 	queryLogger     QueryLogger
 	queryExecLogger QueryExecLogger
 
-	mu          sync.Mutex          // guards loadedExts, attachedDBs, scratchDir and closed
+	mu          sync.Mutex          // guards loadedExts, attachedDBs, scratchDir, closed and prqlErr
 	loadedExts  map[string]struct{} // tracks loaded extensions for idempotent reloading
 	attachedDBs map[string]struct{} // tracks ATTACHed databases for session reuse
 	scratchDir  string              // created on first ScratchDir call, removed by Close
 	closed      bool                // set by Close, so ScratchDir cannot leak a new dir
+	prqlErr     error               // first LoadPRQL failure, returned without another download
 }
 
 // Options capture how a DuckDB session should be created.
@@ -465,4 +479,31 @@ func (s *Session) InstallAndLoadCommunityExtensions(ctx context.Context, names [
 	}
 
 	return nil
+}
+
+// LoadPRQL installs and loads the prql extension. On failure it returns an
+// error wrapping ErrPRQLUnavailable that says why, with the install error as
+// the cause. A failure is kept for the life of the session, so a preview does
+// not retry the download on every refresh.
+func (s *Session) LoadPRQL(ctx context.Context) error {
+	if s != nil {
+		s.mu.Lock()
+		err := s.prqlErr
+		s.mu.Unlock()
+		if err != nil {
+			return err
+		}
+	}
+	err := s.InstallAndLoadCommunityExtensions(ctx, []string{PRQLExtension})
+	if err == nil {
+		return nil
+	}
+	err = fmt.Errorf("%w: the prql extension is not published for DuckDB %s yet. Use a SQL query instead (cause: %w)",
+		ErrPRQLUnavailable, LibraryVersion(), err)
+	if s != nil && ctx.Err() == nil {
+		s.mu.Lock()
+		s.prqlErr = err
+		s.mu.Unlock()
+	}
+	return err
 }

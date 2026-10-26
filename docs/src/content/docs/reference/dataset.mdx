@@ -28,13 +28,14 @@ spec:
     - sales_csv
 ```
 
-Instead of `query` you can write the transformation in [PRQL](#using-prql) (`spec.prql`) or skip it entirely with a [direct source pass-through](#direct-source-pass-through) (`spec.source`).
+Instead of `query` you can write the transformation in [PRQL](#using-prql) (`spec.prql`, currently not available) or skip it entirely with a [direct source pass-through](#direct-source-pass-through) (`spec.source`).
+Queries run on DuckDB 2.0. If your SQL was written for an older bino, read [SQL dialect: DuckDB 2.0](#sql-dialect-duckdb-20).
 All attributes are listed in the [Attribute Reference](#attribute-reference) below.
 
 Fields:
 
 - `spec.query` - SQL query, either inline or loaded from an external file. Required if `spec.prql` and `spec.source` are not set.
-- `spec.prql` - [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql).
+- `spec.prql` - [PRQL](https://prql-lang.org) query, either inline or loaded from an external file. When set, takes precedence over `spec.query`. The PRQL is sent directly to the query engine which compiles it via the [prql extension](https://duckdb.org/community_extensions/extensions/prql). **Currently not available**, see [Using PRQL](#using-prql).
 - `spec.source` - direct pass-through to a DataSource without transformation. Mutually exclusive with `query` and `prql`.
 - `spec.dependencies` - optional list of datasource references. Can be string names or [inline DataSource definitions](#inline-dataset-definitions). Inline definitions are referenced via `@inline(N)` syntax in queries.
 
@@ -177,6 +178,10 @@ Datasets are referenced from layouts via their `metadata.name` using the `datase
 
 When you specify `spec.prql`, bino automatically loads the [PRQL extension](https://duckdb.org/community_extensions/extensions/prql) and sends your PRQL query directly to the query engine for compilation and execution.
 
+:::caution[PRQL is currently not available]
+The prql extension is not published for DuckDB 2.0 yet. Until it is, a DataSet with `spec.prql` fails with the error "PRQL is currently not available", and `bino setup --duckdb-extensions` skips the extension with a warning. Write the query in SQL (`spec.query`) instead. bino loads the extension on demand, so PRQL works again once it is published for DuckDB 2.0. The examples below stay for that time.
+:::
+
 ### Simple PRQL example
 
 ```yaml
@@ -312,6 +317,38 @@ FROM sales_data
 GROUP BY product_name, product_rank
 ```
 
+## SQL dialect: DuckDB 2.0
+
+bino runs `spec.query` (and DataSource queries) on DuckDB 2.0. SQL written for DuckDB 1.x, which older bino releases used, can fail or return different results.
+
+### Lambdas: `lambda x: ...` instead of `x -> ...`
+
+The single-arrow lambda syntax is not supported anymore. Write lambdas with the `lambda` keyword:
+
+```sql
+-- before (DuckDB 1.x)
+SELECT list_transform(xs, x -> x + 1) FROM t
+SELECT COLUMNS(c -> c LIKE 'ac%') FROM t
+
+-- now
+SELECT list_transform(xs, lambda x: x + 1) FROM t
+SELECT COLUMNS(lambda c: c LIKE 'ac%') FROM t
+```
+
+A lambda with two parameters becomes `lambda x, i: x + i`. A query that still uses `->` as a lambda fails with "Deprecated lambda arrow (->) detected". The JSON operators `->` and `->>` are not lambdas and work as before.
+
+### Other changes
+
+- `~` and `!~` now match anywhere in the string (`'abc' ~ 'b'` is true). Before, the pattern had to match the whole string. Anchor the pattern with `^...$` to keep the old meaning.
+- Integer `//` and `%` by zero raise an error instead of returning `NULL`. Use `TRY(a // b)` or `a // nullif(b, 0)` to get `NULL`.
+- An untyped `NULL` in `CREATE TABLE ... AS SELECT` keeps the type `NULL` instead of becoming `INTEGER`. Cast it, for example `NULL::DOUBLE`.
+- `X'...'` literals are `BLOB` values.
+- S3 parameters in a URL (for example `s3://bucket/file.csv?s3_region=...`) are ignored by default. Set credentials and region through a DuckDB secret instead.
+- DuckDB has a new SQL parser. Some unusual syntax that the old parser accepted can now be a syntax error.
+- `bino_shift` over a view or DataSet whose query itself calls `bino_shift` fails with "infinite recursion detected". `derive` and `assert` are not affected. To combine two shifts, declare both slots in `derive` (see [Deriving previous period](#deriving-previous-period)).
+
+The full list is in the [DuckDB 2.0 migration guide](https://duckdb.org/docs/2.0/operations_manual/migration).
+
 ## Built-in SQL functions
 
 bino registers a few helper functions on the DuckDB engine - two scalar functions and one table macro - so they are available in every DataSet (and DataSource) query without any import or extension.
@@ -376,6 +413,8 @@ The identity of a row is every column except `date` and the sixteen slot columns
 SELECT * EXCLUDE (shifted), shifted AS pp2
 FROM bino_shift('sales_view', 'ac1', '1 year', 'month')
 ```
+
+`src` must not itself be built with `bino_shift`: DuckDB 2.0 then fails with "infinite recursion detected". Use `derive` for a chain of shifts.
 
 Prefer `derive` on the DataSet unless you need the shifted value inside a larger query; the declaration also gives you the [checks](#checks-and-diagnostics) and the caption.
 
@@ -898,7 +937,7 @@ Setting `query` and `prql` together is accepted by the schema, but only `prql` i
 | ------------------------ | ---------------- | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `spec.query`             | string or object | conditional | -       | SQL query executed against DuckDB, inline or from an external file. DataSource and DataSet names are the table names; inline dependencies are addressed as `@inline(N)`. Required if `prql` and `source` are not set.                                                                   | `query: SELECT * FROM sales`                                          |
 | `spec.query.$file`       | string           | conditional | -       | Path to an external `.sql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files).                                                                                                                                | `$file: ./queries/sales_summary.sql`                                  |
-| `spec.prql`              | string or object | conditional | -       | [PRQL](https://prql-lang.org) query, inline or from an external file, compiled to SQL by DuckDB's prql extension. Required if `query` and `source` are not set.                                                                                                                         | `prql: from sales_csv`                                                |
+| `spec.prql`              | string or object | conditional | -       | [PRQL](https://prql-lang.org) query, inline or from an external file, compiled to SQL by DuckDB's prql extension. Required if `query` and `source` are not set. Currently not available, see [Using PRQL](#using-prql).                                                                 | `prql: from sales_csv`                                                |
 | `spec.prql.$file`        | string           | conditional | -       | Path to an external `.prql` file, resolved relative to the manifest. Used instead of an inline string. See [External query files](#external-query-files).                                                                                                                               | `$file: ./queries/customer_orders.prql`                               |
 | `spec.source`            | string or object | conditional | -       | Direct DataSource pass-through, equivalent to `SELECT * FROM <name>`. A string name or an inline DataSource definition. Required if `query` and `prql` are not set. See [Direct source pass-through](#direct-source-pass-through).                                                      | `source: sales_csv`                                                   |
 | `spec.dependencies`      | array            | no          | -       | List of DataSource dependencies. Feeds the dependency graph and the cache digest, so a changed input file invalidates the dataset.                                                                                                                                                      | see below                                                             |

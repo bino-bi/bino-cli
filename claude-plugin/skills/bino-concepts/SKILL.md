@@ -28,8 +28,10 @@ Docs: https://cli.bino.bi/concepts/workdir-and-manifests/
 Four stages, each a kind, each referencing the previous one by name:
 
 1. **DataSource** - raw input: `csv`, `excel`, `parquet`, `inline`, `postgres_query`, `mysql_query`.
-2. **DataSet** - a typed table computed from sources. Exactly one of `spec.query` (DuckDB SQL),
-   `spec.prql`, or `spec.source` (pass-through of one DataSource, no transformation).
+2. **DataSet** - a typed table computed from sources. Exactly one of `spec.query` (DuckDB 2.0 SQL,
+   lambdas are `lambda x: ...`, not `x -> ...`), `spec.prql` (currently unavailable: the DuckDB
+   prql extension is not published for 2.0, so write SQL), or `spec.source` (pass-through of one
+   DataSource, no transformation).
 3. **LayoutPage** - `spec.children` arranges the visual components: `Table`, `Text`, `ChartTime`,
    `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `LayoutCard`,
    `Image`. `LayoutCard` and `Grid` nest further children.

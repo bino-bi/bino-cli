@@ -92,8 +92,10 @@ func (s *Session) registerBuiltinUDFs(ctx context.Context) error {
 
 	// A plain (not TEMP) macro lands in the shared catalog and is visible on
 	// every pooled connection; a TEMP macro would be connection-local.
-	if _, err := conn.ExecContext(ctx, shiftMacroSQL); err != nil {
-		return fmt.Errorf("register table macro %q: %w", ShiftMacroName, err)
+	for _, name := range shiftMacroNames {
+		if _, err := conn.ExecContext(ctx, shiftMacroSQL(name)); err != nil {
+			return fmt.Errorf("register table macro %q: %w", name, err)
+		}
 	}
 	return nil
 }

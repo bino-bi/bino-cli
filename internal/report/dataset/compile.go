@@ -144,7 +144,7 @@ func compileSpec(doc config.Document, spec dataSetSpec) (Compiled, error) {
 	for i, slot := range slots {
 		d := c.Derive[slot]
 		layer := fmt.Sprintf("SELECT * EXCLUDE (shifted), shifted AS %s FROM %s('%s', '%s', '%s', '%s')",
-			slot, duckdb.ShiftMacroName, prev, d.From, d.Shift, d.Grain)
+			slot, duckdb.SlotShiftMacro(slot), prev, d.From, d.Shift, d.Grain)
 		if i == len(slots)-1 {
 			c.Query = layer
 			break

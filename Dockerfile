@@ -67,7 +67,7 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 
 # Bake the offline caches:
 #   $HOME/.bino/cdn/bn-template-engine/<version>/
-#   $HOME/.bino/cache/duckdb/extensions/v1.4.4/linux_{amd64,arm64}/
+#   $HOME/.bino/cache/duckdb/extensions/v2.0.0/linux_{amd64,arm64}/
 # Both runs also set state.SetupCompleted, which suppresses the "Setup required"
 # banner bino prints on every command.
 #
@@ -82,6 +82,8 @@ COPY --from=builder /out/bino /usr/local/bin/bino
 #
 # Loading webdavfs prints one "[WebDAV Extension] ..." line from C++ that --quiet
 # cannot suppress; it is expected in the build log and is not an error.
+# The prql extension is not published for DuckDB 2.0 yet. Setup skips it with a
+# warning, so the image has no PRQL until a later CLI release bakes it.
 #
 # The chgrp/chmod share this layer on purpose: group 0 gets the owner's rights so
 # an arbitrary UID can still read the caches, and a separate RUN would duplicate

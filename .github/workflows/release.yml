@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 # DuckDB version MUST match the duckdb-go driver version in go.mod.
-# duckdb-go v2.5.5 → duckdb-go-bindings v0.3.3 → DuckDB v1.4.4
+# duckdb-go v2.20000.0 → duckdb-go-bindings v0.20000.0 → DuckDB v2.0.0
+# TestReleaseDuckDBVersionMatchesBindings (pkg/duckdb/version_test.go) enforces it.
 #
 # ENGINE_VERSION is the bn-template-engine baked into the container image. It MUST
 # satisfy engine.SupportedEngineRanges (internal/engine/compat.go) and MUST match
@@ -25,7 +26,7 @@ permissions:
 # TestDockerEngineVersionPin (internal/engine/pin_test.go) enforces both rules -
 # it drifted below the supported floor for four releases before that test existed.
 env:
-  DUCKDB_VERSION: "v1.4.4"
+  DUCKDB_VERSION: "v2.0.0"
   ENGINE_VERSION: "v1.0.0-next.29"
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
@@ -187,9 +188,9 @@ jobs:
         if: matrix.goos == 'windows'
         shell: bash
         run: |
-          curl -sL -o libduckdb.zip "https://github.com/duckdb/duckdb/releases/download/${{ env.DUCKDB_VERSION }}/libduckdb-windows-amd64.zip"
+          curl -fsSL -o duckdb-shared-libs.tar.gz "https://github.com/duckdb/duckdb/releases/download/${{ env.DUCKDB_VERSION }}/duckdb-shared-libs-windows-amd64.tar.gz"
           mkdir -p duckdb-lib
-          unzip libduckdb.zip -d duckdb-lib
+          tar -xzf duckdb-shared-libs.tar.gz -C duckdb-lib
           ls -la duckdb-lib/
 
       - name: Build binary

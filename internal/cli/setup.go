@@ -26,7 +26,10 @@ func setupTasks(templateEngine, duckdbExtensions bool) (installEngine, installEx
 // Loading webdavfs prints one "[WebDAV Extension] ..." line from C++ directly to
 // the process's stderr, bypassing the command's writer, so --quiet cannot
 // suppress it. It is informational, not an error.
-func prefetchDuckDBExtensions(ctx context.Context, opts duckdb.Options) error {
+//
+// A prql failure goes to warn instead: the extension is not published for
+// every DuckDB version, and setup and the image build must not fail on it.
+func prefetchDuckDBExtensions(ctx context.Context, opts duckdb.Options, warn func(error)) error {
 	session, err := duckdb.OpenSession(ctx, opts)
 	if err != nil {
 		return err
@@ -37,7 +40,22 @@ func prefetchDuckDBExtensions(ctx context.Context, opts duckdb.Options) error {
 		return err
 	}
 
-	return session.InstallAndLoadCommunityExtensions(ctx, duckdb.CommunityExtensions())
+	return prefetchCommunityExtensions(ctx, session, duckdb.CommunityExtensions(), warn)
+}
+
+func prefetchCommunityExtensions(ctx context.Context, session *duckdb.Session, names []string, warn func(error)) error {
+	for _, name := range names {
+		if name == duckdb.PRQLExtension {
+			if err := session.LoadPRQL(ctx); err != nil {
+				warn(err)
+			}
+			continue
+		}
+		if err := session.InstallAndLoadCommunityExtensions(ctx, []string{name}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newSetupCommand() *cobra.Command { //nolint:gocognit // grandfathered complexity - refactor before extending
@@ -155,7 +173,10 @@ Use --verbose (-v) to surface verbose installer logs.`),
 					if !quiet {
 						fmt.Fprintf(out, "      Installing %s...\n", strings.Join(names, ", "))
 					}
-					if err := prefetchDuckDBExtensions(ctx, opts); err != nil {
+					warn := func(err error) {
+						fmt.Fprintf(cmd.ErrOrStderr(), "      Warning: skipped %s: %v\n", duckdb.PRQLExtension, err)
+					}
+					if err := prefetchDuckDBExtensions(ctx, opts, warn); err != nil {
 						return ExternalError(fmt.Errorf("prefetch duckdb extensions: %w", err))
 					}
 					if !quiet {

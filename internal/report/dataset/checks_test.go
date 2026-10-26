@@ -3,6 +3,7 @@ package dataset
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,6 +145,71 @@ func TestExecute_DeriveProducesShiftedSlot(t *testing.T) {
 	check("B/2020-02-29", "pp2", 2.0)
 	check("B/2020-02-29", "pp1", 11.0)
 	check("A/2019-01-31", "pp2", nil)
+}
+
+// DuckDB 2.0 rejects a table macro over a view built with the same macro, so
+// a derive over a query that calls bino_shift itself must still run.
+func TestExecute_DeriveOverQueryCallingBinoShift(t *testing.T) {
+	t.Parallel()
+	workdir, docs := writeProject(t, datasetYAML(`
+  query: >
+    SELECT * EXCLUDE (shifted), shifted AS pp2
+    FROM bino_shift('sales_csv', 'ac1', '1 year', 'month')
+  derive:
+    pp1: { from: ac1, shift: 1 month, grain: month }
+  assert:
+    pp2: { from: ac1, shift: 1 year, grain: month }
+`))
+	results, _, err := Execute(context.Background(), workdir, docs, warnOpts(false))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	rows := rowsByKey(t, results[0].Data)
+	if got := rows["B/2020-02-29"]["pp1"]; got != 11.0 {
+		t.Errorf("B/2020-02-29.pp1 = %v, want 11", got)
+	}
+	if got := rows["A/2020-04-30"]["pp2"]; got != 40.0 {
+		t.Errorf("A/2020-04-30.pp2 = %v, want 40", got)
+	}
+}
+
+// Without the prql extension only the PRQL dataset fails; with
+// ContinueOnQueryError the SQL datasets of the same run still execute.
+func TestExecute_PrqlUnavailableFailsOnlyItsDataset(t *testing.T) {
+	workdir, docs := writeProject(t, datasetYAML(`
+  query: SELECT category, "date", ac1 FROM sales_csv
+`)+`---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_prql
+spec:
+  prql: from sales_csv
+`)
+	results, warnings, err := Execute(context.Background(), workdir, docs, warnOpts(true))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) == 2 {
+		t.Skip("prql is available for this DuckDB version again")
+	}
+	if len(results) != 1 || results[0].Name != "sales" {
+		t.Fatalf("results = %v, want only sales", results)
+	}
+	found := false
+	for _, w := range warnings {
+		if w.DataSet == "sales_prql" && strings.Contains(w.Message, "PRQL is currently not available") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no PRQL warning for sales_prql in %v", warnings)
+	}
+
+	_, _, err = Execute(context.Background(), workdir, docs, warnOpts(false))
+	if !errors.Is(err, duckdb.ErrPRQLUnavailable) || !strings.Contains(err.Error(), "sales_prql") {
+		t.Errorf("Execute without continue: err = %v, want ErrPRQLUnavailable for sales_prql", err)
+	}
 }
 
 func TestExecute_DeriveOnPrql(t *testing.T) {

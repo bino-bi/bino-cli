@@ -95,7 +95,7 @@ func declaredGrains(c Compiled) []string {
 // checkDuplicates reports the first pair of rows sharing an identity within a period.
 func checkDuplicates(ctx context.Context, db *sql.DB, view, grain string) error {
 	query := fmt.Sprintf(`WITH _bino_b AS (SELECT *, 1 AS %s FROM %q),
-_bino_k AS (SELECT *, row(*COLUMNS(c -> NOT regexp_matches(c, '%s'))) AS _bino_key, date_trunc('%s', "date"::DATE) AS _bino_period FROM _bino_b)
+_bino_k AS (SELECT *, row(*COLUMNS(lambda c: NOT regexp_matches(c, '%s'))) AS _bino_key, date_trunc('%s', "date"::DATE) AS _bino_period FROM _bino_b)
 SELECT * EXCLUDE (_bino_key) FROM _bino_k QUALIFY count(*) OVER (PARTITION BY _bino_key, _bino_period) > 1 ORDER BY ALL LIMIT 1`,
 		duckdb.IdentityHelperColumn, view, duckdb.IdentityColumnPattern, grain)
 	row, err := firstRow(ctx, db, query)
@@ -115,7 +115,7 @@ SELECT * EXCLUDE (_bino_key) FROM _bino_k QUALIFY count(*) OVER (PARTITION BY _b
 func checkAssert(ctx context.Context, db *sql.DB, view, slot string, d ShiftDeclaration) error {
 	// fill := false: assert compares the rows the query supplied; a row added
 	// for an identity that exists only in the prior period has nothing to compare.
-	source := fmt.Sprintf("%s('%s', '%s', '%s', '%s', fill := false)", duckdb.ShiftMacroName, view, d.From, d.Shift, d.Grain)
+	source := fmt.Sprintf("%s('%s', '%s', '%s', '%s', fill := false)", duckdb.SlotShiftMacro(slot), view, d.From, d.Shift, d.Grain)
 	mismatch := fmt.Sprintf(`shifted IS NOT NULL AND (%q::DOUBLE IS NULL OR abs(%q::DOUBLE - shifted::DOUBLE) > 1e-9 * greatest(abs(%q::DOUBLE), abs(shifted::DOUBLE), 1))`,
 		slot, slot, slot)
 

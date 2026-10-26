@@ -441,8 +441,8 @@ func executeRowsPreview(ctx context.Context, doc *config.Document, allDocs []con
 			return nil, nil, false, err
 		}
 		if compiled.Prql {
-			if err := session.InstallAndLoadCommunityExtensions(ctx, []string{"prql"}); err != nil {
-				return nil, nil, false, fmt.Errorf("load prql extension: %w", err)
+			if err := session.LoadPRQL(ctx); err != nil {
+				return nil, nil, false, err
 			}
 		}
 		if err := dataset.RunSetup(ctx, session, compiled); err != nil {

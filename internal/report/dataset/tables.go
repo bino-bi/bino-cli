@@ -110,13 +110,17 @@ func (r *tableRefs) addTableFunction(n map[string]any) {
 	if !strings.EqualFold(name, duckdb.ShiftMacroName) && !strings.EqualFold(name, "query_table") {
 		return
 	}
-	args, _ := fn["children"].([]any)
+	args, _ := fn["arguments"].([]any)
 	if len(args) == 0 {
 		return
 	}
 	arg, _ := args[0].(map[string]any)
-	value, _ := arg["value"].(map[string]any)
-	if table, ok := value["value"].(string); ok && arg["type"] == "VALUE_CONSTANT" {
+	if name, _ := arg["name"].(string); name != "" {
+		return
+	}
+	expr, _ := arg["expression"].(map[string]any)
+	literal, _ := expr["literal"].(map[string]any)
+	if table, ok := literal["text"].(string); ok && expr["type"] == "VALUE_CONSTANT" && literal["kind"] == "STRING" {
 		r.unqualified = append(r.unqualified, table)
 	}
 }
