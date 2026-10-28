@@ -42,6 +42,7 @@ schema can't carry (scenarios, variances, component choice, narrative).
 | `/bino:build`      | Render the report artefacts to PDF.                                                      |
 | `/bino:package`    | Create a registry package, or turn the current project into one.                         |
 | `/bino:publish`    | Check the package against the registry, then publish a version after you confirm.        |
+| `/bino:preview`    | Start the live preview and show it, or one component alone, in Claude's browser.         |
 
 Four skills load automatically when relevant: **`bino-concepts`** (the mental model),
 **`bino-authoring`** (the outline→scaffold→validate→write discipline), **`bino-ibcs`** (the IBCS

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
@@ -108,8 +109,13 @@ func runMCPStandalone(ctx context.Context, logger logx.Logger, projectRoot strin
 	project := newLazyProject(ctx, logger, projectRoot)
 	defer project.close()
 
+	preview := daemon.NewPreviewProcess(projectRoot, logger)
+	defer preview.Shutdown(5 * time.Second)
+
 	logger.Infof("bino MCP server ready (standalone) for %s", projectRoot)
-	srv := mcp.NewServer(newStandaloneDeps(project, allowPublish))
+	deps := newStandaloneDeps(project, allowPublish)
+	deps.Preview = preview
+	srv := mcp.NewServer(deps)
 	return srv.Run(ctx, &mcpsdk.StdioTransport{})
 }
 

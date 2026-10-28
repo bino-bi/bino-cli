@@ -97,6 +97,8 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 			var mcpHandler http.Handler
 			var mcpActive func() int64
 			var server *daemon.Server
+			// One preview subprocess for the /preview routes and the MCP preview tools.
+			preview := daemon.NewPreviewProcess(env.ProjectRoot, logger.Channel("server"))
 			if mcpEnabled {
 				deps := mcp.Deps{
 					State:        state,
@@ -104,6 +106,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 					Authoring:    newCLIAuthoring(env.ProjectRoot, env.PluginRegistry),
 					Packages:     newCLIPackages(state),
 					AllowPublish: mcpAllowPublish,
+					Preview:      preview,
 					// server is assigned below; the callback only runs once a
 					// tool call has gone through the mounted handler.
 					RegistryChanged: func() {
@@ -134,6 +137,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				Logger:         logger.Channel("server"),
 				PluginRegistry: env.PluginRegistry,
 				MCPHandler:     mcpHandler,
+				Preview:        preview,
 			})
 			if err != nil {
 				return RuntimeError(err)
@@ -144,7 +148,7 @@ func newDaemonCommand() *cobra.Command { //nolint:gocognit // grandfathered comp
 				return RuntimeError(err)
 			}
 			defer daemon.RemovePortFile(env.ProjectRoot)
-			defer server.StopPreview()
+			defer preview.Shutdown(5 * time.Second)
 
 			logger.Infof("Daemon listening on %s:%d", listenAddr, server.Port())
 			if mcpEnabled {

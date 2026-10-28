@@ -88,8 +88,11 @@ Read `.bino/agent/verdict.json` and drive the fix loop per `bino-validation-loop
 files). Only on yes, **you** call `build(artefacts?, out_dir?)`. If it errors, route the build log to
 the human - do not auto-rebuild beyond the fix-loop cap (H4).
 
-**GATE 4 - human PDF visual sign-off (mandatory, every run).** The MCP can't read the PDF back. Present
-the output path(s) and ask Approve / Send back / Cancel. "Send back" re-enters the fix loop with the
+**GATE 4 - human PDF visual sign-off (mandatory, every run).** The MCP can't read the PDF back. If
+you can drive a browser on the machine that runs bino (in a local Claude desktop session: the
+built-in browser), first `preview_server_start(name)`
+for each artefact, open its `embedding_url`, and list any obvious fault you see (empty table, cut-off
+text) in the question. Present the output path(s) and ask Approve / Send back / Cancel. "Send back" re-enters the fix loop with the
 human's note as a synthetic diagnostic. A PASS is **ready for sign-off, never "done."**
 
 ## Closeout

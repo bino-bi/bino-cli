@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,12 +39,7 @@ type Server struct {
 	shutdownOnce   sync.Once
 	pluginRegistry *plugin.PluginRegistry
 
-	// Preview subprocess management
-	previewMu     sync.Mutex
-	previewCmd    *exec.Cmd
-	previewPort   int
-	previewStatus string // "stopped", "starting", "running", "error"
-	previewURL    string
+	preview *PreviewProcess
 
 	// Build state
 	buildMu  sync.Mutex
@@ -64,6 +57,9 @@ type ServerConfig struct {
 	// the CLI layer (internal/cli) so the daemon package avoids importing
 	// internal/mcp (which imports this package).
 	MCPHandler http.Handler
+	// Preview, when non-nil, is the preview subprocess the routes manage. The
+	// CLI shares it with the MCP preview tools; nil creates a private one.
+	Preview *PreviewProcess
 }
 
 // NewServer constructs a daemon HTTP server.
@@ -88,7 +84,16 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		startedAt:      time.Now(),
 		shutdownCh:     make(chan struct{}),
 		pluginRegistry: cfg.PluginRegistry,
+		preview:        cfg.Preview,
 	}
+	if srv.preview == nil {
+		root := ""
+		if cfg.State != nil {
+			root = cfg.State.ProjectRoot()
+		}
+		srv.preview = NewPreviewProcess(root, cfg.Logger)
+	}
+	srv.preview.SetOnStatus(func(info PreviewInfo) { srv.BroadcastEvent("preview-status", info) })
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", srv.handleHealth)
@@ -433,8 +438,6 @@ func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 
 // --- Preview subprocess management ---
 
-const defaultPreviewPort = 45678
-
 func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Port int `json:"port"`
@@ -444,85 +447,15 @@ func (s *Server) handlePreviewStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.previewMu.Lock()
-	defer s.previewMu.Unlock()
-
-	// Already running - return current state
-	if s.previewCmd != nil && s.previewStatus != "stopped" {
-		s.writeJSON(w, map[string]any{
-			"status": s.previewStatus,
-			"url":    s.previewURL,
-			"port":   s.previewPort,
-		})
-		return
-	}
-
-	exe, err := os.Executable()
-	if err != nil {
-		s.writeJSON(w, map[string]any{"status": "error", "error": fmt.Sprintf("resolve executable: %v", err)})
-		return
-	}
-
-	port := req.Port
-	if port == 0 {
-		port = defaultPreviewPort
-	}
-
-	cmd := exec.CommandContext(context.Background(), exe, "preview", "--port", strconv.Itoa(port), "--work-dir", s.state.ProjectRoot()) //nolint:gosec // G204: exe is our own binary
-	cmd.Env = append(os.Environ(), "BINO_DISABLE_UPDATE_CHECK=1", "NO_COLOR=1")
-
-	stdout, err := cmd.StdoutPipe()
+	info, err := s.preview.Start(req.Port)
 	if err != nil {
 		s.writeJSON(w, map[string]any{"status": "error", "error": err.Error()})
 		return
 	}
-	cmd.Stderr = cmd.Stdout // merge stderr into stdout pipe
-
-	if err := cmd.Start(); err != nil {
-		s.writeJSON(w, map[string]any{"status": "error", "error": err.Error()})
-		return
-	}
-
-	s.previewCmd = cmd
-	s.previewPort = port
-	s.previewStatus = "starting"
-	s.previewURL = fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	// Watch stdout for ready signal in background
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			s.logger.Debugf("[preview] %s", line)
-			if strings.Contains(line, "Serving preview at") || strings.Contains(line, "http://") {
-				s.previewMu.Lock()
-				if s.previewStatus == "starting" {
-					s.previewStatus = "running"
-				}
-				s.previewMu.Unlock()
-				s.BroadcastEvent("preview-status", map[string]any{
-					"status": "running",
-					"url":    fmt.Sprintf("http://127.0.0.1:%d", port),
-					"port":   port,
-				})
-			}
-		}
-
-		// Process exited
-		_ = cmd.Wait() //nolint:errcheck // reaping the exited preview process; its status is not consumed
-		s.previewMu.Lock()
-		s.previewCmd = nil
-		s.previewStatus = "stopped"
-		s.previewURL = ""
-		s.previewPort = 0
-		s.previewMu.Unlock()
-		s.BroadcastEvent("preview-status", map[string]any{"status": "stopped"})
-	}()
-
 	s.writeJSON(w, map[string]any{
-		"status": "starting",
-		"url":    s.previewURL,
-		"port":   port,
+		"status": info.Status,
+		"url":    info.URL,
+		"port":   info.Port,
 	})
 }
 
@@ -532,44 +465,17 @@ func (s *Server) handlePreviewStop(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handlePreviewStatus(w http.ResponseWriter, _ *http.Request) {
-	s.previewMu.Lock()
-	status := s.previewStatus
-	url := s.previewURL
-	port := s.previewPort
-	s.previewMu.Unlock()
-
-	if status == "" {
-		status = "stopped"
-	}
+	info := s.preview.Info()
 	s.writeJSON(w, map[string]any{
-		"status": status,
-		"url":    url,
-		"port":   port,
+		"status": info.Status,
+		"url":    info.URL,
+		"port":   info.Port,
 	})
 }
 
 // StopPreview kills the preview subprocess if running.
 func (s *Server) StopPreview() {
-	s.previewMu.Lock()
-	defer s.previewMu.Unlock()
-
-	if s.previewCmd == nil || s.previewCmd.Process == nil {
-		return
-	}
-
-	_ = s.previewCmd.Process.Signal(os.Interrupt) //nolint:errcheck // best-effort interrupt; the kill fallback below follows
-	// Force kill after 3 seconds
-	go func(cmd *exec.Cmd) {
-		time.Sleep(3 * time.Second)
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill() //nolint:errcheck // last-resort kill; the process may already be gone
-		}
-	}(s.previewCmd)
-
-	s.previewCmd = nil
-	s.previewStatus = "stopped"
-	s.previewURL = ""
-	s.previewPort = 0
+	s.preview.Stop()
 }
 
 // --- Build subprocess management ---

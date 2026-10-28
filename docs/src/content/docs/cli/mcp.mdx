@@ -157,6 +157,18 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 | `registry_publish_check(bump?)`                                     | Run `bino publish --dry-run --json`: the registry's validation gate for the project's `[package]`, without minting a version. With `bump` the result names the version a publish would mint.      |
 | `registry_publish(bump?, dry_run?, visibility?)`                    | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag - see [Security](#security).                                            |
 
+### Preview
+
+| Tool                                        | What it does                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `preview_server_start(name?, kind?, port?)` | Start `bino preview --no-open` for the project, or reuse the preview this server started, and wait for the first render. A preview started elsewhere on the same port is not reused; pass another `port`. Returns `url`; with `name`, also `embedding_url`: that one component, LayoutPage or artefact without the preview UI. Under a daemon the preview is shared with the editor. |
+| `preview_server_stop()`                     | Stop the preview server.                                                                                                                                                                                                                                                                                                                                                             |
+
+The server cannot display a page. The URL is loopback on the machine that runs bino, so only a
+browser on that machine can load it. An agent that controls such a browser (for example the
+built-in browser in a local Claude desktop session) opens the URL there; otherwise it hands the URL
+to the human.
+
 ## The authoring loop
 
 ```text
@@ -176,6 +188,9 @@ The server runs SQL, reads the filesystem, and (via `build`) launches headless C
 intended for **local** use over stdio and a loopback HTTP endpoint. Exposing the daemon on a
 non-loopback address (`bino daemon --listen-addr`) is out of scope for this surface and would
 require additional hardening.
+
+`preview_server_start` starts a loopback HTTP server (no token, and it includes the preview's SQL
+explorer) that runs until `preview_server_stop`, or until the MCP server or daemon exits.
 
 `registry_publish` is **off by default**. It is only registered when a human starts the server with
 `bino mcp --allow-publish`, or `bino daemon --mcp-allow-publish` when `bino mcp` proxies to a running
