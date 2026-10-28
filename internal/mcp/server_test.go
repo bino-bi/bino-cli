@@ -151,7 +151,7 @@ func TestResourcesReadable(t *testing.T) {
 	}
 }
 
-// TestSkillsPromptsAndResources pins the skills served over MCP: the five
+// TestSkillsPromptsAndResources pins the skills served over MCP: the six
 // client-neutral plugin skills as prompts and bino://skills/{name} resources,
 // with bino-ibcs carrying its reference files, and the Claude Code specific
 // skills left out.
@@ -165,6 +165,7 @@ func TestSkillsPromptsAndResources(t *testing.T) {
 		"bino-ibcs":            "# IBCS semantics for bino",
 		"bino-data-modeling":   "# Modeling source data into a bino DataSet",
 		"bino-validation-loop": "# The validation loop",
+		"bino-packaging":       "# Authoring and publishing bino packages",
 	}
 
 	listed, err := cs.ListPrompts(ctx, nil)

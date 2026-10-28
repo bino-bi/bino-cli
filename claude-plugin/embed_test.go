@@ -12,7 +12,7 @@ func TestSkillsParse(t *testing.T) {
 	}
 	want := []string{
 		"bino-authoring", "bino-concepts", "bino-data-modeling", "bino-ibcs",
-		"bino-orchestration", "bino-requirements", "bino-validation-loop",
+		"bino-orchestration", "bino-packaging", "bino-requirements", "bino-validation-loop",
 	}
 	if len(skills) != len(want) {
 		t.Fatalf("got %d skills, want %d", len(skills), len(want))

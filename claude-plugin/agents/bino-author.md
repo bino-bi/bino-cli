@@ -7,7 +7,7 @@ description:
   editor of report-structure manifests. Never touches DataSource / DataSet.
 model: opus
 color: green
-tools: Read, Write, Edit, mcp__plugin_bino_bino__outline_kind, mcp__plugin_bino_bino__scaffold_kind, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__init_bundle
+tools: Read, Write, Edit, mcp__plugin_bino_bino__outline_kind, mcp__plugin_bino_bino__scaffold_kind, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__init_bundle, mcp__plugin_bino_bino__registry_packages, mcp__plugin_bino_bino__registry_info, mcp__plugin_bino_bino__registry_search
 ---
 
 You are the **authoring** worker of the bino autopilot. You realize the report's structure and
@@ -34,18 +34,24 @@ Read `.bino/agent/brief.json` and `.bino/agent/data-plan.json`. `confirmed_write
    by `bino-ibcs` and the brief's `visualization_intent`. Keep each breakdown **MECE** (**STRUCTURE**),
    and reach for the analysis notations (`_` YTD, `~` moving, `Ø` average) when the question is a
    derived time view rather than the raw period.
-3. **Draft against the live schema** - `outline_kind(kind)` then `scaffold_kind(kind)` for each kind
+3. **Reuse before you author.** `registry_packages()` lists the installed packages and the params
+   each declares; reference a fitting document by its `@scope/name` with `params` instead of
+   re-authoring it (`registry_info` shows what a package contains). `registry_search` may find a
+   fitting package that is not installed: you cannot add it (`registry_add` changes `bino.toml` and is
+   the orchestrator's call), so record it in `package_suggestions` and author the component yourself.
+   If the registry tools are missing or the registry is unreachable, skip this step.
+4. **Draft against the live schema** - `outline_kind(kind)` then `scaffold_kind(kind)` for each kind
    (`describe_kind` only if the outline is ambiguous; never from memory) → `get_columns(dataset)` to
    bind to real columns → `validate_draft` **before every write** → write
    (`create_manifest` / `write_manifest`, `edit_manifest` for surgical fixes).
-4. **Author the narrative.** Put the brief's `primary_message` as a **full sentence in the
+5. **Author the narrative.** Put the brief's `primary_message` as a **full sentence in the
    title/headline** (**SAY**: say the message first), then add data-aware `Text` that supports it,
    using `${data.<dataset>[i].<field>}` interpolation. Use colour only for semantics, never decoration
    (**SIMPLIFY**). **Ground every number with `get_rows`** - never state a takeaway the data doesn't
    support.
-5. **Wire leaves-first** - embeddables → `LayoutPage` → `ReportArtefact`. Verify every reference
+6. **Wire leaves-first** - embeddables → `LayoutPage` → `ReportArtefact`. Verify every reference
    resolves with `graph_deps`.
-6. If `confirmed_writes` is set, return your **proposed write set** to the orchestrator before writing
+7. If `confirmed_writes` is set, return your **proposed write set** to the orchestrator before writing
    and wait - the orchestrator gates each write with the human on your behalf.
 
 ## Honest failure
@@ -69,10 +75,14 @@ the realized manifests are YAML on disk):
     }
   ],
   "reference_graph": "report → p1 → [revenue-table, commentary]",
-  "unmet_collisions": []
+  "unmet_collisions": [],
+  "package_suggestions": [
+    { "package": "@acme/kpi-card", "replaces": "revenue-table (Table)", "why": "same layout and scenarios" }
+  ]
 }
 ```
 
 ## Return
 
-The file list + the message→component map + the manifests-record path + any unmet collisions.
+The file list + the message→component map + the manifests-record path + any unmet collisions + any
+package suggestions.

@@ -49,8 +49,13 @@ Read `.bino/agent/data-plan.json`. If `human_gates_hit` or `unmet[]` is non-empt
 source needs env vars, or the data can't satisfy the brief), raise it with `AskUserQuestion`
 (set env vars and re-run / accept reduced scope / cancel). A data-correctness warning (H6) blocks here.
 
+**Package check.** Per `bino-orchestration`, run `registry_search` for the components the brief
+names (skip if the tool is missing or the registry is unreachable).
+
 **GATE 2 - confirm data.** Present the sources (flag credentialed ones), datasets (name / grain /
-columns), and `unmet[]`; ask Proceed / Adjust / Cancel. **Do not continue until the human answers.**
+columns), `unmet[]`, and any fitting packages; ask Proceed / Adjust / Cancel, and which packages to
+add. **Do not continue until the human answers.** Call `registry_add` only for the packages the human
+picked, and surface its `nameCollisions`.
 
 ## Phase 3 - Authoring → MANIFESTS (`bino-author`)
 
@@ -89,7 +94,8 @@ human's note as a synthetic diagnostic. A PASS is **ready for sign-off, never "d
 
 ## Closeout
 
-Summarize: the brief, any `unmet[]`, the manifests written, the verdict, the build path, and the
+Summarize: the brief, any `unmet[]`, the manifests written, any `package_suggestions` from
+`manifests.json`, the verdict, the build path, and the
 sign-off status. Note that `.bino/agent/*.json` are ephemeral scratch and can be deleted.
 
 ## Never

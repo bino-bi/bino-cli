@@ -62,7 +62,7 @@ type RegistryAuthStatus struct {
 }
 
 type registrySearchInput struct {
-	Query   string   `json:"query" jsonschema:"full-text search over package names and descriptions"`
+	Query   string   `json:"query,omitempty" jsonschema:"full-text search over package names and descriptions; omit it to browse by kinds, scopes or tags"`
 	Kinds   []string `json:"kinds,omitempty" jsonschema:"restrict to manifest kinds, e.g. Table"`
 	Scopes  []string `json:"scopes,omitempty" jsonschema:"restrict to scopes without the leading @, e.g. acme"`
 	Tags    []string `json:"tags,omitempty" jsonschema:"restrict to packages carrying these tags"`

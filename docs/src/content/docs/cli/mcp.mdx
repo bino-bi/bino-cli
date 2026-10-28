@@ -91,6 +91,7 @@ the skill text; the same text is readable as `bino://skills/{name}`.
 | `bino-ibcs`            | The IBCS rubric: SUCCESS rules, scenarios (`ac`/`pp`/`fc`/`pl`), variances, notations, choosing a component, data-aware commentary. Includes the full IBCS standard reference and the engine data model. |
 | `bino-data-modeling`   | Mapping raw source columns onto scenario slots, deriving variances, choosing the grain, writing typed DataSet SQL.                                                                                       |
 | `bino-validation-loop` | The four-layer check (schema, IBCS, build-readiness, acceptance) and the bounded fix loop.                                                                                                               |
+| `bino-packaging`       | Authoring a registry package: the `[package]` table, naming and forbidden kinds, params, `mocks/`, `registry_publish_check`, choosing the bump, and handing the publish to the human.                    |
 
 The plugin's `bino-orchestration` and `bino-requirements` skills are not served: they drive Claude
 Code specific machinery (subagents, questions to the human) and mean nothing to other clients.
@@ -143,17 +144,18 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 
 ### Registry
 
-| Tool                                                               | What it does                                                                                                                                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `registry_packages()`                                              | The project's dependencies, offline: `bino.lock` merged with `bino.toml` `[dependencies]`, whether each is installed under `.bino/registry/`, and the params each package declares.               |
-| `registry_search(query, kinds?, scopes?, tags?, page?, per_page?)` | Search the registry for published packages (network). Use it before authoring a component from scratch.                                                                                           |
-| `registry_info(spec)`                                              | Resolve one package spec (`@scope/name`, optionally `@version` or `@tag`): version, kinds, files, dependencies, and the installed version when the project already locks it.                      |
-| `registry_auth_status()`                                           | The resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token.                                                                          |
-| `registry_add(specs)`                                              | Add packages as dependencies: resolves the transitive closure, verifies every download, then writes `bino.toml`, `bino.lock` and `.bino/registry/`. Reports name collisions with local documents. |
-| `registry_update(packages?)`                                       | Re-resolve tag-following dependencies to their newest versions and rewrite `bino.lock`; exact pins are held.                                                                                      |
-| `registry_remove(packages)`                                        | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline).                                                                                               |
-| `registry_install()`                                               | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving.                                                                                                          |
-| `registry_publish(bump?, dry_run?, visibility?)`                   | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag - see [Security](#security).                                            |
+| Tool                                                                | What it does                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `registry_packages()`                                               | The project's dependencies, offline: `bino.lock` merged with `bino.toml` `[dependencies]`, whether each is installed under `.bino/registry/`, and the params each package declares.               |
+| `registry_search(query?, kinds?, scopes?, tags?, page?, per_page?)` | Search the registry for published packages (network). Without `query` it browses by kinds, scopes or tags. Use it before authoring a component from scratch.                                      |
+| `registry_info(spec)`                                               | Resolve one package spec (`@scope/name`, optionally `@version` or `@tag`): version, kinds, files, dependencies, and the installed version when the project already locks it.                      |
+| `registry_auth_status()`                                            | The resolved registry URL, whether a credential is available, and where credentials are stored. Never returns the token.                                                                          |
+| `registry_add(specs)`                                               | Add packages as dependencies: resolves the transitive closure, verifies every download, then writes `bino.toml`, `bino.lock` and `.bino/registry/`. Reports name collisions with local documents. |
+| `registry_update(packages?)`                                        | Re-resolve tag-following dependencies to their newest versions and rewrite `bino.lock`; exact pins are held.                                                                                      |
+| `registry_remove(packages)`                                         | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline).                                                                                               |
+| `registry_install()`                                                | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving.                                                                                                          |
+| `registry_publish_check(bump?)`                                     | Run `bino publish --dry-run --json`: the registry's validation gate for the project's `[package]`, without minting a version. With `bump` the result names the version a publish would mint.      |
+| `registry_publish(bump?, dry_run?, visibility?)`                    | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag - see [Security](#security).                                            |
 
 ## The authoring loop
 
@@ -179,5 +181,7 @@ require additional hardening.
 `bino mcp --allow-publish`, or `bino daemon --mcp-allow-publish` when `bino mcp` proxies to a running
 daemon. Publishing is irreversible - it mints an immutable version that cannot be deleted - and a
 first publish with `visibility: public` makes the package public, so an agent must not be able to
-trigger it by accident. The other registry tools only change the local project and never return a
-credential; when `registry_auth_status` reports none, the human runs `bino registry login`.
+trigger it by accident. `registry_publish_check` is always available: it uploads the package files
+to the registry for validation but mints nothing. The other registry tools only change the local
+project. None of them returns a credential; when `registry_auth_status` reports none, the human
+runs `bino registry login`.

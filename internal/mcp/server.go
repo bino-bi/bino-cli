@@ -218,7 +218,7 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 // mcpSkills lists the plugin skills served over MCP, in display order.
 // bino-orchestration and bino-requirements are left out: they drive Claude
 // Code specifics (subagents, AskUserQuestion) and mean nothing to other clients.
-var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop"}
+var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop", "bino-packaging"}
 
 // registerSkills serves each skill in mcpSkills twice: as a prompt (one user
 // message carrying the body) and as a bino://skills/{name} markdown resource,

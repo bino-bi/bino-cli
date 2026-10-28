@@ -40,10 +40,18 @@ schema can't carry (scenarios, variances, component choice, narrative).
 | `/bino:add-source` | Probe a CSV / Excel / database source, then scaffold a typed `DataSource` (+ `DataSet`). |
 | `/bino:fix`        | Validate the project and walk the diagnostics to green.                                  |
 | `/bino:build`      | Render the report artefacts to PDF.                                                      |
+| `/bino:package`    | Create a registry package, or turn the current project into one.                         |
+| `/bino:publish`    | Check the package against the registry, then publish a version after you confirm.        |
 
-Three skills load automatically when relevant: **`bino-concepts`** (the mental model),
-**`bino-authoring`** (the outline→scaffold→validate→write discipline) and **`bino-ibcs`** (the IBCS
-rubric).
+Four skills load automatically when relevant: **`bino-concepts`** (the mental model),
+**`bino-authoring`** (the outline→scaffold→validate→write discipline), **`bino-ibcs`** (the IBCS
+rubric) and **`bino-packaging`** (authoring and publishing registry packages).
+
+Publishing is irreversible, so the plugin registers `bino mcp` without `--allow-publish`: the agent
+can check a package against the registry (`registry_publish_check`) but the publish itself is yours
+(`bino publish --bump <level>`). To let the agent publish after you confirm, start the server with
+`bino mcp --allow-publish` in your own MCP config. When a `bino daemon` (or VS Code) runs for the
+project, `bino mcp` proxies to it and the daemon's `--mcp-allow-publish` decides instead.
 
 ### Mode B - Autopilot (you delegate, Claude runs the pipeline)
 
