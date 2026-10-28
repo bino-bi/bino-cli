@@ -163,7 +163,7 @@ func readLine(r *bufio.Reader) (string, error) {
 	for errors.Is(err, bufio.ErrBufferFull) {
 		_, err = r.ReadSlice('\n')
 	}
-	if err != nil && (len(out) == 0 || !errors.Is(err, io.EOF)) {
+	if err != nil && (out == "" || !errors.Is(err, io.EOF)) {
 		return out, err
 	}
 	return out, nil
@@ -205,11 +205,11 @@ func (p *PreviewProcess) Shutdown(timeout time.Duration) {
 	}
 }
 
-func (p *PreviewProcess) stop() (*exec.Cmd, chan struct{}) {
+func (p *PreviewProcess) stop() (cmd *exec.Cmd, done chan struct{}) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	cmd, done := p.cmd, p.done
+	cmd, done = p.cmd, p.done
 	if cmd == nil || cmd.Process == nil {
 		return nil, nil
 	}

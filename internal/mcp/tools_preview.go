@@ -148,8 +148,8 @@ func previewRefreshed(ctx context.Context, client *http.Client, base string) (bo
 		OK    bool   `json:"ok"`
 		Error string `json:"error"`
 	}
-	if json.Unmarshal([]byte(body), &st) != nil {
-		return false, nil
+	if jerr := json.Unmarshal([]byte(body), &st); jerr != nil {
+		return false, nil //nolint:nilerr // a half-written answer: keep waiting
 	}
 	if !st.OK {
 		return false, fmt.Errorf("the preview's latest refresh failed: %s", st.Error)
@@ -157,8 +157,8 @@ func previewRefreshed(ctx context.Context, client *http.Client, base string) (bo
 	return true, nil
 }
 
-func previewGet(ctx context.Context, client *http.Client, target string) (int, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+func previewGet(ctx context.Context, client *http.Client, target string) (code int, body string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return 0, "", err
 	}
@@ -166,7 +166,7 @@ func previewGet(ctx context.Context, client *http.Client, target string) (int, s
 	if err != nil {
 		return 0, "", err
 	}
-	defer resp.Body.Close()                                //nolint:errcheck // read-only response
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096)) //nolint:errcheck // a short body only decorates an error message
-	return resp.StatusCode, strings.TrimSpace(string(body)), nil
+	defer resp.Body.Close()                               //nolint:errcheck // read-only response
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096)) //nolint:errcheck // a short body only decorates an error message
+	return resp.StatusCode, strings.TrimSpace(string(raw)), nil
 }
