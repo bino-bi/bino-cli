@@ -292,6 +292,7 @@ func TestRegistryHTTPAndMCPPayloadsMatch(t *testing.T) {
 	}{
 		{"packages", "/registry/packages", "registry_packages", nil},
 		{"search", "/registry/search?q=kpi", "registry_search", map[string]any{"query": "kpi"}},
+		{"browse", "/registry/search?kind=Table", "registry_search", map[string]any{"kinds": []string{"Table"}}},
 		{"info", "/registry/info?spec=%40acme%2Fkpi-card", "registry_info", map[string]any{"spec": "@acme/kpi-card"}},
 	}
 	for _, tt := range tests {

@@ -168,6 +168,11 @@ type Server struct {
 	bootMu     sync.RWMutex
 	bootStatus []byte // latest boot-status JSON payload for late subscribers
 
+	refreshMu      sync.RWMutex
+	refreshDone    bool   // a refresh has finished since start
+	refreshErr     string // its error; empty when it succeeded
+	refreshPending bool   // a file change is queued or being rendered
+
 	contentMu sync.RWMutex
 	contentFn ContentFunc
 	routes    map[string]ContentFunc
@@ -243,6 +248,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("/__preview/events", srv.handleEvents) // SSE uses its own compression
 	mux.HandleFunc("/__preview/context", compressionHandlerFunc(cfg.Logger, srv.handleContext))
 	mux.HandleFunc("/__preview/boot-status", compressionHandlerFunc(cfg.Logger, srv.handleBootStatus))
+	mux.HandleFunc("GET /__preview/refresh-state", srv.handleRefreshState)
 	mux.HandleFunc("GET /__bino/data/datasource/{name}", compressionHandlerFunc(cfg.Logger, srv.handleData(DataKindDatasource)))
 	mux.HandleFunc("GET /__bino/data/dataset/{name}", compressionHandlerFunc(cfg.Logger, srv.handleData(DataKindDataset)))
 	mux.HandleFunc("GET /__embedding/{name}", compressionHandlerFunc(cfg.Logger, srv.handleEmbedding))
@@ -689,6 +695,53 @@ func (s *Server) BroadcastBootStatus(payload []byte) {
 		return
 	}
 	s.sse.Broadcast(FormatSSE("boot-status", payload))
+}
+
+// SetRefreshResult records how the latest refresh ended. Unlike the boot
+// status, which later phases overwrite, it answers "is the content rendered,
+// and did the last refresh work?" for clients that wait on the preview.
+func (s *Server) SetRefreshResult(err error) {
+	if s == nil {
+		return
+	}
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	s.refreshDone = true
+	s.refreshPending = false
+	s.refreshErr = ""
+	if err != nil {
+		s.refreshErr = err.Error()
+	}
+}
+
+// SetRefreshPending marks a queued file change; the next SetRefreshResult
+// clears it. Until then the last result is stale.
+func (s *Server) SetRefreshPending() {
+	if s == nil {
+		return
+	}
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	s.refreshPending = true
+}
+
+// handleRefreshState answers 503 until the first refresh has finished and
+// while a file change is pending, then {"ok":true} or
+// {"ok":false,"error":"..."} for the latest refresh.
+func (s *Server) handleRefreshState(w http.ResponseWriter, _ *http.Request) {
+	s.refreshMu.RLock()
+	done, pending, msg := s.refreshDone, s.refreshPending, s.refreshErr
+	s.refreshMu.RUnlock()
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	if !done || pending {
+		http.Error(w, "refresh still running", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(struct { //nolint:errcheck // a write error means the client is gone
+		OK    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	}{OK: msg == "", Error: msg})
 }
 
 // handleBootStatus serves the latest boot status JSON. Returns 204 when no

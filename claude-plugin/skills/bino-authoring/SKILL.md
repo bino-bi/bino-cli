@@ -64,7 +64,14 @@ For every manifest you create:
    `write_manifest(file, yaml, append?)` for a full document / a multi-doc file.
 6. **Validate the project** - `validate_project()` to catch cross-document and reference problems
    that an in-memory draft can't see. Resolve diagnostics (see _Fixing_ below).
-7. **Build** - `build(artefacts?)` only when the project validates. It renders PDFs via headless
+7. **Look at it** - `preview_server_start(name)` starts the live preview (or reuses the one this
+   server started) and returns `embedding_url`: only that component, page or artefact, without the
+   preview UI, reloading on every change. The URL is loopback on the machine that runs bino. If you
+   can drive a browser on that machine (in a local Claude desktop session: the built-in browser),
+   open `embedding_url` there and take a screenshot to check the render: empty tables, cut-off text,
+   the wrong comparison. Otherwise give the URL to the human when they work on that machine. Skip
+   this step when the server does not offer `preview_server_start`.
+8. **Build** - `build(artefacts?)` only when the project validates. It renders PDFs via headless
    Chrome: slow, and it writes files. A clean `validate_project` does not guarantee a good-looking
    PDF - a human still needs to look at it.
 
@@ -98,4 +105,5 @@ References are by `metadata.name` (and `$ref` where the schema uses it). After w
 - Don't copy a kind's schema into your draft from memory - `outline_kind` every time.
 - Don't write SQL or data bindings before `get_columns` confirms the column names.
 - Don't `build` before `validate_project` is clean.
-- Don't treat "validates + builds" as "correct" - that's what the human review is for.
+- Don't treat "validates + builds" as "correct" - that's what the human review is for. Your own look
+  in the browser finds obvious faults early; it does not replace the human's check of the PDF.

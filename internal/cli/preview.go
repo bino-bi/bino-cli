@@ -54,6 +54,7 @@ func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathe
 		workdir        string
 		logSQL         bool
 		enableLint     bool
+		noOpen         bool
 		dataValidation string
 		dataMode       string
 		incremental    bool
@@ -90,6 +91,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			port = env.Resolver.ResolveInt("port", "port", port)
 			logSQL = env.Resolver.ResolveBool("log-sql", "log-sql", logSQL)
 			enableLint = env.Resolver.ResolveBool("lint", "lint", enableLint)
+			noOpen = env.Resolver.ResolveBool("no-open", "no-open", noOpen)
 			include = env.Resolver.ResolveStringSlice("artefact", "artefact", include)
 			exclude = env.Resolver.ResolveStringSlice("exclude-artefact", "exclude-artefact", exclude)
 
@@ -253,7 +255,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 			// Only auto-open for a loopback bind. With --addr 0.0.0.0:8080 the
 			// URL is the wildcard itself, which no browser can usefully load,
 			// and that bind is the container case where there is no browser.
-			if isLoopbackURL(previewURL) {
+			if !noOpen && isLoopbackURL(previewURL) {
 				if err := openBrowser(ctx, previewURL); err != nil {
 					logger.Warnf("Unable to open browser automatically: %v", err)
 				}
@@ -293,6 +295,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				duckdbOpts, oerr := duckdb.DefaultOptions()
 				if oerr != nil {
 					reporter.Fail(bootstatus.PhaseDuckDB, oerr)
+					server.SetRefreshResult(fmt.Errorf("DuckDB options: %w", oerr))
 					logger.Errorf("DuckDB options: %v", oerr)
 					return
 				}
@@ -300,6 +303,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				sess, oerr := duckdb.OpenSession(ctx, duckdbOpts)
 				if oerr != nil {
 					reporter.Fail(bootstatus.PhaseDuckDB, oerr)
+					server.SetRefreshResult(fmt.Errorf("DuckDB open: %w", oerr))
 					logger.Errorf("DuckDB open: %v", oerr)
 					return
 				}
@@ -313,6 +317,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				}
 				if eerr := sess.InstallAndLoadExtensionsWithProgress(ctx, exts, progress); eerr != nil {
 					reporter.Fail(bootstatus.PhaseDuckDB, eerr)
+					server.SetRefreshResult(fmt.Errorf("DuckDB extensions: %w", eerr))
 					logger.Errorf("DuckDB extensions: %v", eerr)
 					return
 				}
@@ -413,6 +418,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 				var visitedDirs []string
 				refreshCfg.CollectedDirs = &visitedDirs
 				initialErr := doRefresh("initial load", nil)
+				server.SetRefreshResult(initialErr)
 				refreshCfg.CollectedDirs = nil
 				if initialErr != nil {
 					reporter.Fail(bootstatus.PhaseRendering, initialErr)
@@ -489,6 +495,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 							debounce.Stop()
 							return
 						case req := <-refreshCh:
+							server.SetRefreshPending()
 							pending = append(pending, req)
 							debounce.Reset(300 * time.Millisecond)
 						case <-debounce.C:
@@ -499,7 +506,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 							pending = pending[:0]
 							// refresh.Run logs its own failures with reason
 							// context; logging here would duplicate the output.
-							_ = doRefresh(coalesced, files) //nolint:errcheck // refresh.Run logs its own failures; re-logging would duplicate them
+							server.SetRefreshResult(doRefresh(coalesced, files))
 						}
 					}
 				}()
@@ -523,6 +530,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 	cmd.Flags().StringVarP(&workdir, "work-dir", "w", ".", "Working directory to watch for changes")
 	cmd.Flags().BoolVar(&logSQL, "log-sql", false, "Log all executed SQL queries to terminal")
 	cmd.Flags().BoolVar(&enableLint, "lint", false, "Run lint rules on each refresh")
+	cmd.Flags().BoolVar(&noOpen, "no-open", false, "Do not open the preview in the system browser")
 	cmd.Flags().StringVar(&dataValidation, "data-validation", "warn",
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
 	cmd.Flags().StringVar(&dataMode, "data-mode", "url",

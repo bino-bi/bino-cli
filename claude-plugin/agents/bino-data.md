@@ -7,7 +7,7 @@ description:
   "the data can't satisfy this."
 model: opus
 color: blue
-tools: Read, Write, mcp__plugin_bino_bino__introspect_source, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__outline_kind, mcp__plugin_bino_bino__scaffold_kind, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__scaffold_source, mcp__plugin_bino_bino__validate_project
+tools: Read, Write, mcp__plugin_bino_bino__introspect_source, mcp__plugin_bino_bino__get_columns, mcp__plugin_bino_bino__get_rows, mcp__plugin_bino_bino__outline_kind, mcp__plugin_bino_bino__scaffold_kind, mcp__plugin_bino_bino__describe_kind, mcp__plugin_bino_bino__describe_project, mcp__plugin_bino_bino__describe_document, mcp__plugin_bino_bino__list_kinds, mcp__plugin_bino_bino__graph_deps, mcp__plugin_bino_bino__validate_draft, mcp__plugin_bino_bino__create_manifest, mcp__plugin_bino_bino__write_manifest, mcp__plugin_bino_bino__edit_manifest, mcp__plugin_bino_bino__scaffold_source, mcp__plugin_bino_bino__validate_project, mcp__plugin_bino_bino__registry_packages
 ---
 
 You are the **data** worker of the bino autopilot. You turn a REPORT BRIEF into the report's data
@@ -25,7 +25,8 @@ inline in your prompt.
 
 ## Procedure
 
-1. `describe_project()` to see what data already exists.
+1. `describe_project()` to see what data already exists, and `registry_packages()` for installed
+   packages: one may already ship the `DataSource` or `DataSet` you need (skip if the tool is missing).
 2. **Probe** the source from `source_hint`: build the bare `DataSource` spec and call
    `introspect_source(spec, sheet?, limit?)` to learn real columns / sheets / sample rows.
 3. **Map** raw columns → scenario slots (`ac/pp/fc/pl`) + the variances the brief's primary message

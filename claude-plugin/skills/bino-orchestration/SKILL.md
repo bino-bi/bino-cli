@@ -50,14 +50,24 @@ Carry `confirmed_writes`, `daemon_present`, and the parsed `source_hint` into ev
 
 ## The four checkpoint gates (Tier-1 routine pauses)
 
-| Gate                       | When                      | Ask                                                                 |
-| -------------------------- | ------------------------- | ------------------------------------------------------------------- |
-| **G1** confirm brief       | after requirements        | "Proceed with this brief?" (surface `assumptions`/`open_questions`) |
-| **G2** confirm data plan   | after `bino-data` returns | "Proceed to authoring?" (surface credentialed sources + `unmet[]`)  |
-| **G3** before build        | after VERDICT = PASS      | "Render the PDF now?" (build is slow + writes files)                |
-| **G4** PDF visual sign-off | after every build         | "Open the PDF - approve / send back / cancel"                       |
+| Gate                       | When                      | Ask                                                                               |
+| -------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **G1** confirm brief       | after requirements        | "Proceed with this brief?" (surface `assumptions`/`open_questions`)               |
+| **G2** confirm data plan   | after `bino-data` returns | "Proceed to authoring?" (surface credentialed sources + `unmet[]` + package hits) |
+| **G3** before build        | after VERDICT = PASS      | "Render the PDF now?" (build is slow + writes files)                              |
+| **G4** PDF visual sign-off | after every build         | "Open the PDF - approve / send back / cancel"                                     |
 
 A gate is an **unconditional stop**: do not proceed until the human answers, even if you're confident.
+
+## Package check (before G2)
+
+Before asking G2, look for reusable registry packages: `registry_search` for each component the
+brief's `visualization_intent` names (skip when the tool is missing; an unreachable registry is not a
+blocker). Show fitting hits in the G2 question and ask which to add. For each one the human picks,
+**you** call `registry_add` (it writes `bino.toml` and `bino.lock`, so it is a gated write like any
+other) and surface its `nameCollisions`. `bino-author` then references installed documents and only
+records further `package_suggestions`; show those at closeout. Never add a package without the human's
+answer, and never publish from autopilot.
 
 ## The eight hard safety gates (every tier, grounded in source)
 
@@ -86,7 +96,8 @@ run flags inline:
 - `bino-validation` ← `manifests.json` + `brief.json` + `data-plan.json` → writes
   `.bino/agent/verdict.json`. It diagnoses only.
 
-The orchestrator never authors or edits a manifest itself, and never runs `execute_queries` or `build`
+The orchestrator never authors or edits a manifest itself (a gated `registry_add` is a dependency
+change, not authoring), and never runs `execute_queries` or `build`
 on behalf of a worker (build is gated at G3; `execute_queries` is `bino-data`'s single-owner step).
 
 ## Artifacts (`.bino/agent/`)

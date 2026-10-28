@@ -51,12 +51,17 @@ type publishToolOutput struct {
 // the project proves the tool selects it via cmd.Dir rather than the cwd.
 func newPublishClient(t *testing.T, registryURL string, extra map[string]string) *mcpsdk.ClientSession {
 	t.Helper()
+	return newPublishClientWith(t, registryURL, extra, true)
+}
+
+func newPublishClientWith(t *testing.T, registryURL string, extra map[string]string, allowPublish bool) *mcpsdk.ClientSession {
+	t.Helper()
 	ctx := context.Background()
 
 	root := newPredefTestProject(t, registryURL, extra)
 	t.Chdir(t.TempDir())
 	state := newTestState(t, root)
-	server := mcp.NewServer(mcp.Deps{State: state, AllowPublish: true})
+	server := mcp.NewServer(mcp.Deps{State: state, AllowPublish: allowPublish})
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
 	if err != nil {
@@ -75,9 +80,14 @@ func newPublishClient(t *testing.T, registryURL string, extra map[string]string)
 
 func callPublish(t *testing.T, cs *mcpsdk.ClientSession, args map[string]any) (*mcpsdk.CallToolResult, publishToolOutput) {
 	t.Helper()
-	res, err := cs.CallTool(context.Background(), &mcpsdk.CallToolParams{Name: "registry_publish", Arguments: args})
+	return callPublishTool(t, cs, "registry_publish", args)
+}
+
+func callPublishTool(t *testing.T, cs *mcpsdk.ClientSession, tool string, args map[string]any) (*mcpsdk.CallToolResult, publishToolOutput) {
+	t.Helper()
+	res, err := cs.CallTool(context.Background(), &mcpsdk.CallToolParams{Name: tool, Arguments: args})
 	if err != nil {
-		t.Fatalf("call registry_publish: %v", err)
+		t.Fatalf("call %s: %v", tool, err)
 	}
 	raw, err := json.Marshal(res.StructuredContent)
 	if err != nil {
@@ -126,6 +136,26 @@ func TestRegistryPublishDryRunMintsNothing(t *testing.T) {
 	}
 	if !capture.manifest.DryRun {
 		t.Error("the registry was not asked for a dry run")
+	}
+}
+
+// registry_publish_check needs no opt-in and is always a dry run, even with
+// a bump given.
+func TestRegistryPublishCheckIsDryRun(t *testing.T) {
+	srv, capture := fakePublishServer(t, http.StatusOK, func(registry.PublishManifest) string {
+		return `{"dryRun":true,"digest":"sha256:d","version":"1.1.0","files":[],"warnings":[]}`
+	})
+	cs := newPublishClientWith(t, srv.URL, nil, false)
+
+	res, out := callPublishTool(t, cs, "registry_publish_check", map[string]any{"bump": "minor"})
+	if res.IsError {
+		t.Fatalf("registry_publish_check failed: %s", toolText(t, res))
+	}
+	if !out.Success || out.Result == nil || !out.Result.DryRun || out.Result.Version != "1.1.0" {
+		t.Errorf("output = %+v", out)
+	}
+	if capture.calls != 1 || !capture.manifest.DryRun || capture.manifest.Bump != "minor" {
+		t.Errorf("registry calls = %d, manifest = %+v; want one dry run with bump minor", capture.calls, capture.manifest)
 	}
 }
 

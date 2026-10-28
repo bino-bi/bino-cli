@@ -11,6 +11,7 @@ import (
 
 // registry_publish mints an immutable, possibly public, version, so it only
 // exists when the human opted in; a server without the opt-in must not list it.
+// The dry-run check mints nothing and is always listed.
 func TestPublishToolRequiresOptIn(t *testing.T) {
 	ctx := context.Background()
 	root, err := filepath.Abs("../../docs/samples/sales-dashboard")
@@ -44,6 +45,9 @@ func TestPublishToolRequiresOptIn(t *testing.T) {
 		}
 		if slices.Contains(names, "registry_publish") != allow {
 			t.Errorf("AllowPublish=%v: registry_publish listed=%v: %v", allow, !allow, names)
+		}
+		if !slices.Contains(names, "registry_publish_check") {
+			t.Errorf("AllowPublish=%v: registry_publish_check not listed: %v", allow, names)
 		}
 	}
 }

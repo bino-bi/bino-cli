@@ -53,6 +53,10 @@ type Deps struct {
 	// only the human's `bino mcp --allow-publish` / `bino daemon
 	// --mcp-allow-publish` flag sets it.
 	AllowPublish bool
+	// Preview, when non-nil, enables preview_server_start and
+	// preview_server_stop. The daemon passes the instance its /preview routes
+	// manage, so editor and agent share one preview.
+	Preview *daemon.PreviewProcess
 }
 
 const serverInstructions = `bino is "Report-as-Code": pixel-perfect PDF reports defined as YAML manifests + SQL.
@@ -76,6 +80,11 @@ scratch, registry_search for one; registry_info(spec) describes it;
 registry_auth_status says whether the human must run ` + "`bino registry login`" + `.
 registry_add(specs) installs packages and records them in bino.toml; registry_update,
 registry_remove and registry_install change the lock the same way ` + "`bino registry`" + ` does.
+
+Preview: preview_server_start(name?) starts the live preview (no system browser)
+and returns its URL; with name, embedding_url shows that one document without the
+preview UI. If you can drive a browser, open the URL there to look at the result;
+otherwise give it to the human.
 
 Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
@@ -105,6 +114,7 @@ func NewServer(deps Deps) *mcpsdk.Server {
 	h.registerAuthoringTools(srv)
 	h.registerPackagesTools(srv)
 	h.registerPublishTool(srv)
+	h.registerPreviewTools(srv)
 	return srv
 }
 
@@ -218,7 +228,7 @@ func (h *handlers) registerResources(srv *mcpsdk.Server) {
 // mcpSkills lists the plugin skills served over MCP, in display order.
 // bino-orchestration and bino-requirements are left out: they drive Claude
 // Code specifics (subagents, AskUserQuestion) and mean nothing to other clients.
-var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop"}
+var mcpSkills = []string{"bino-concepts", "bino-authoring", "bino-ibcs", "bino-data-modeling", "bino-validation-loop", "bino-packaging"}
 
 // registerSkills serves each skill in mcpSkills twice: as a prompt (one user
 // message carrying the body) and as a bino://skills/{name} markdown resource,

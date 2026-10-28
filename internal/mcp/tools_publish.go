@@ -44,7 +44,20 @@ type registryPublishOutput struct {
 	Result *publishOutcome `json:"result,omitempty"`
 }
 
+type registryPublishCheckInput struct {
+	Bump string `json:"bump,omitempty" jsonschema:"version increment to preview: patch, minor or major; the result then names the version a publish would mint"`
+}
+
 func (h *handlers) registerPublishTool(srv *mcpsdk.Server) {
+	// The dry run mints nothing, so it needs no opt-in: an agent can always
+	// check a package against the registry's gate before a human publishes it.
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:        "registry_publish_check",
+		Description: "Check this project's [package] against the registry's validation gate by running `bino publish --dry-run --json` (network). It uploads the package files for validation but mints no version, so it is safe to repeat. Run validate_project first; the registry's gate is the authority, so a package that validates locally can still be rejected - `output` then carries the gate findings to fix. Needs a credential; if none resolves the human must run `bino registry login` (never try to obtain one). Publishing itself is registry_publish, or `bino publish --bump <level>` run by the human.",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, in registryPublishCheckInput) (*mcpsdk.CallToolResult, registryPublishOutput, error) {
+		return h.runPublish(ctx, req, registryPublishInput{Bump: in.Bump, DryRun: true})
+	})
+
 	if !h.deps.AllowPublish {
 		return
 	}
