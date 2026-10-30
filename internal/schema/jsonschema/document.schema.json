@@ -2366,12 +2366,16 @@
           "description": "Inline Markdown shown in the AnnotationList. An annotation with a title or a text gets a number."
         }
       },
-      "if": {
-        "properties": { "mark": { "const": "arrow" } },
-        "required": ["mark"]
+      "dependentSchemas": {
+        "mark": {
+          "if": { "properties": { "mark": { "const": "arrow" } } },
+          "then": { "required": ["to"] }
+        },
+        "to": {
+          "required": ["mark"],
+          "properties": { "mark": { "const": "arrow" } }
+        }
       },
-      "then": { "required": ["to"] },
-      "else": { "not": { "required": ["to"] } },
       "additionalProperties": false
     },
     "annotationTarget": {

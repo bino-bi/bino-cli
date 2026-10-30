@@ -28,8 +28,8 @@ type annotationPage struct {
 	wanted map[string]bool
 	// targets maps a component to the ids of its slots, one per place it sits.
 	targets map[string][]string
-	// specs maps a component to its effective spec, for the point check.
-	specs  map[string]json.RawMessage
+	// specs maps a component to its effective specs, one per place it sits.
+	specs  map[string][]json.RawMessage
 	lists  []schema.AnnotationListSpec
 	nextID int
 }
@@ -72,7 +72,7 @@ func (rc *renderCtx) withAnnotations(docs []config.Document, sets []dataset.Resu
 		return nil
 	}
 	if err := engine.CheckAnnotationSupport(engineVersion); err != nil {
-		return fmt.Errorf("render: %w", err)
+		return fmt.Errorf("render: annotation-engine-version: %w", err)
 	}
 	rc.annotations = annotations
 	rc.annotationData = newAnnotationData(sets, sources)
@@ -137,7 +137,7 @@ func (rc *renderCtx) withAnnotationPage() *renderCtx {
 		docs:    rc.annotations,
 		wanted:  map[string]bool{},
 		targets: map[string][]string{},
-		specs:   map[string]json.RawMessage{},
+		specs:   map[string][]json.RawMessage{},
 	}
 	for _, a := range rc.annotations {
 		page.wanted[annotation.Key(a.spec.Target.Kind, a.spec.Target.Name)] = true
@@ -172,14 +172,13 @@ func childKey(child layoutChild) string {
 }
 
 // noteAnnotationSpec keeps the effective spec of a component an annotation
-// points at. The first place wins when a component sits on a page twice.
+// points at. Two places of one component can bind different datasets.
 func (rc *renderCtx) noteAnnotationSpec(child layoutChild, effectiveSpec json.RawMessage) {
 	if rc.annotationPage == nil {
 		return
 	}
-	key := childKey(child)
-	if _, seen := rc.annotationPage.specs[key]; !seen && rc.annotationPage.wanted[key] {
-		rc.annotationPage.specs[key] = effectiveSpec
+	if key := childKey(child); rc.annotationPage.wanted[key] {
+		rc.annotationPage.specs[key] = append(rc.annotationPage.specs[key], effectiveSpec)
 	}
 }
 
@@ -313,15 +312,18 @@ func (p *annotationPage) canPlace(rc *renderCtx, a annotationDoc) bool {
 	return ok
 }
 
+// checkEnd is fine when the point can exist in one place of the component: the
+// engine has the last word for the others.
 func (p *annotationPage) checkEnd(rc *renderCtx, name string, end schema.AnnotationTarget) bool {
-	var rows annotation.Rows
-	if rc.annotationData != nil {
-		binding := annotation.FirstDataset(p.specs[annotation.Key(end.Kind, end.Name)])
-		rows = rc.annotationData.rows(binding)
-	}
-	reason := annotation.CheckPoint(end.Kind, end.Point, rows)
-	if reason == "" {
-		return true
+	reason := ""
+	for _, componentSpec := range p.specs[annotation.Key(end.Kind, end.Name)] {
+		var rows annotation.Rows
+		if rc.annotationData != nil {
+			rows = rc.annotationData.rows(annotation.Binding(componentSpec))
+		}
+		if reason = annotation.CheckPoint(end.Kind, end.Point, rows); reason == "" {
+			return true
+		}
 	}
 	rc.warn(fmt.Sprintf("annotation-point-missing: annotation %s on %s %s: %s", name, end.Kind, end.Name, reason))
 	return false

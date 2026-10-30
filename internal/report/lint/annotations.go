@@ -8,6 +8,7 @@ import (
 
 	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/ref"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/schema"
 )
@@ -165,25 +166,25 @@ var annotationListInLive = Rule{
 	Name:        "Annotation List In Live",
 	Description: "A page with an AnnotationList that a LiveReportArtefact serves has an empty slot there: live artefacts show no annotations.",
 	Check: func(_ context.Context, docs []Document) []Finding {
-		livePages := pagesServedLive(docs)
+		seen := map[string]bool{}
 		var findings []Finding
-		for _, page := range walkAnnotationPages(docs, nil, nil) {
-			if len(page.lists) == 0 {
-				continue
-			}
-			for _, live := range livePages {
-				if !live.pages(page.doc.Name) {
-					continue
+		for _, route := range liveRoutes(docs) {
+			for _, page := range walkAnnotationPages(docs, route.ctx, route.selected) {
+				for _, list := range page.lists {
+					key := fmt.Sprintf("%s\x00%d\x00%s", list.file, list.docIdx, list.path)
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+					findings = append(findings, Finding{
+						RuleID:   "annotation-list-in-live",
+						Message:  fmt.Sprintf("LiveReportArtefact %q serves page %q, this slot stays empty there", route.artefact, page.doc.Name),
+						File:     list.file,
+						DocIdx:   list.docIdx,
+						Path:     list.path,
+						Severity: "warning",
+					})
 				}
-				findings = append(findings, Finding{
-					RuleID:   "annotation-list-in-live",
-					Message:  fmt.Sprintf("LiveReportArtefact %q serves this page, its AnnotationList slot stays empty there", live.name),
-					File:     page.lists[0].file,
-					DocIdx:   page.lists[0].docIdx,
-					Path:     page.lists[0].path,
-					Severity: "warning",
-				})
-				break
 			}
 		}
 		return findings
@@ -351,7 +352,7 @@ func annotationViews(docs []Document) []annotationView {
 		}
 		format := getArtefactFormat(doc.Raw)
 		selected := func(page Document) bool {
-			return pageMatchesArtefact(page, doc, format) && pageSelected(payload.Spec.LayoutPages, page.Name)
+			return layoutPageMatchesFormat(getPageFormat(page.Raw), format) && pageSelected(payload.Spec.LayoutPages, page.Name)
 		}
 		views = append(views, annotationViewFor(doc.Name, docs, ctx, selected))
 	}
@@ -433,29 +434,27 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 			continue // missing or filtered: the child does not render
 		}
 
+		effective := child.Spec
+		if child.Ref != "" {
+			effective = mergedSpec(referenced, child.Spec)
+		}
+
 		switch child.Kind {
 		case schema.KindAnnotationList:
-			p.addList(child, owner, childPath, referenced, isRef)
+			p.addList(child, owner, childPath, referenced, effective)
 			continue
 		case schema.KindLayoutCard:
-			p.walkCard(child, owner, childPath, referenced, isRef, ctx, refs, cards)
+			p.walkCard(child, owner, childPath, effective, ctx, refs, cards)
 			continue
 		}
 		if name != "" {
 			p.slots[key] = true
 			if _, known := p.bindings[key]; !known {
-				binding := annotation.FirstDataset(child.Spec)
-				if binding == "" && isRef {
-					binding = annotation.FirstDataset(specOf(referenced))
-				}
-				p.bindings[key] = binding
+				p.bindings[key] = annotation.Binding(effective)
 			}
 		}
 		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree {
-			p.addNested(child.Spec)
-			if isRef {
-				p.addNested(specOf(referenced))
-			}
+			p.addNested(effective)
 		}
 	}
 }
@@ -472,38 +471,31 @@ func childIncluded(child layoutChildSpec, ctx *spec.ConstraintContext) bool {
 	return err == nil && match
 }
 
-func (p *annotationPageView) addList(child layoutChildSpec, owner Document, childPath string, referenced Document, isRef bool) {
+func (p *annotationPageView) addList(child layoutChildSpec, owner Document, childPath string, referenced Document, effective json.RawMessage) {
 	use := annotationListUse{file: owner.File, docIdx: owner.Position, path: childPath + ".spec"}
-	raw := child.Spec
-	if child.Ref != "" && isRef {
+	if child.Ref != "" {
 		use = annotationListUse{file: referenced.File, docIdx: referenced.Position, path: "spec"}
-		raw = specOf(referenced)
 	}
-	if len(raw) > 0 && json.Unmarshal(raw, &use.spec) != nil {
+	if len(effective) > 0 && json.Unmarshal(effective, &use.spec) != nil {
 		use.spec = schema.AnnotationListSpec{}
 	}
 	p.lists = append(p.lists, use)
 }
 
-func (p *annotationPageView) walkCard(child layoutChildSpec, owner Document, childPath string, referenced Document, isRef bool, ctx *spec.ConstraintContext, refs map[string]Document, cards map[string]bool) {
-	raw := child.Spec
-	basePath := childPath + ".spec.children"
-	nextOwner := owner
-	if child.Ref != "" && isRef {
+func (p *annotationPageView) walkCard(child layoutChildSpec, owner Document, childPath string, effective json.RawMessage, ctx *spec.ConstraintContext, refs map[string]Document, cards map[string]bool) {
+	if child.Ref != "" {
 		if cards[child.Ref] {
 			return
 		}
 		cards[child.Ref] = true
 		defer delete(cards, child.Ref)
-		raw = specOf(referenced)
-		basePath = "spec.children"
-		nextOwner = referenced
 	}
 	var card struct {
 		Children []layoutChildSpec `json:"children"`
 	}
-	if json.Unmarshal(raw, &card) == nil {
-		p.walk(card.Children, nextOwner, basePath, ctx, refs, cards)
+	if json.Unmarshal(effective, &card) == nil {
+		// Paths below a ref name the page child, which is what the author sees here.
+		p.walk(card.Children, owner, childPath+".spec.children", ctx, refs, cards)
 	}
 }
 
@@ -538,6 +530,19 @@ func (p *annotationPageView) addNested(raw json.RawMessage) {
 	visit(v)
 }
 
+// mergedSpec is the spec a ref child renders with, as in the renderer.
+func mergedSpec(doc Document, override json.RawMessage) json.RawMessage {
+	base := specOf(doc)
+	if len(override) == 0 {
+		return base
+	}
+	merged, err := ref.MergeSpec(base, override)
+	if err != nil {
+		return base
+	}
+	return merged
+}
+
 func specOf(doc Document) json.RawMessage {
 	var payload struct {
 		Spec json.RawMessage `json:"spec"`
@@ -562,28 +567,22 @@ func pageSelected(refs config.LayoutPagesOrRefs, name string) bool {
 	return false
 }
 
-// liveArtefactPages is a LiveReportArtefact and the pages its routes serve.
-type liveArtefactPages struct {
-	name  string
-	pages func(page string) bool
+// liveRoute is one route of a LiveReportArtefact: the context it renders in and
+// the pages it serves.
+type liveRoute struct {
+	artefact string
+	ctx      *spec.ConstraintContext
+	selected func(Document) bool
 }
 
-func pagesServedLive(docs []Document) []liveArtefactPages {
-	reports := map[string]config.LayoutPagesOrRefs{}
+func liveRoutes(docs []Document) []liveRoute {
+	reports := map[string]Document{}
 	for _, doc := range docs {
-		if doc.Kind != "ReportArtefact" {
-			continue
-		}
-		var payload struct {
-			Spec struct {
-				LayoutPages config.LayoutPagesOrRefs `json:"layoutPages"`
-			} `json:"spec"`
-		}
-		if json.Unmarshal(doc.Raw, &payload) == nil {
-			reports[doc.Name] = payload.Spec.LayoutPages
+		if doc.Kind == "ReportArtefact" {
+			reports[doc.Name] = doc
 		}
 	}
-	var out []liveArtefactPages
+	var out []liveRoute
 	for _, doc := range docs {
 		if doc.Kind != "LiveReportArtefact" {
 			continue
@@ -594,21 +593,33 @@ func pagesServedLive(docs []Document) []liveArtefactPages {
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		routes := payload.Spec.Routes
-		out = append(out, liveArtefactPages{name: doc.Name, pages: func(page string) bool {
-			for _, route := range routes {
-				if route.Artifact != "" {
-					if refs, ok := reports[route.Artifact]; ok && pageSelected(refs, page) {
-						return true
-					}
+		for _, r := range payload.Spec.Routes {
+			route := liveRoute{artefact: doc.Name, ctx: &spec.ConstraintContext{Mode: spec.ModeServe}}
+			refs := r.LayoutPages
+			if r.Artifact != "" {
+				report, ok := reports[r.Artifact]
+				if !ok {
 					continue
 				}
-				if len(route.LayoutPages) > 0 && pageSelected(route.LayoutPages, page) {
-					return true
+				if route.ctx = artefactConstraintContext(report); route.ctx == nil {
+					continue
 				}
+				route.ctx.Mode = spec.ModeServe
+				var artefact struct {
+					Spec struct {
+						LayoutPages config.LayoutPagesOrRefs `json:"layoutPages"`
+					} `json:"spec"`
+				}
+				if json.Unmarshal(report.Raw, &artefact) != nil {
+					continue
+				}
+				refs = artefact.Spec.LayoutPages
+			} else if len(refs) == 0 {
+				continue
 			}
-			return false
-		}})
+			route.selected = func(page Document) bool { return pageSelected(refs, page.Name) }
+			out = append(out, route)
+		}
 	}
 	return out
 }

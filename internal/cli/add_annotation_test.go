@@ -55,10 +55,21 @@ func TestBuildAnnotationDocument_Errors(t *testing.T) {
 		"unknown mark":            {Name: "a", Mark: "ring", Target: "Table:t"},
 		"use Kind:name":           {Name: "a", Target: "t"},
 		"use field=value":         {Name: "a", Target: "Table:t", Point: []string{"year=2024"}},
+		"--to-point needs --to":   {Name: "a", Target: "Table:t", ToPoint: []string{"date=2024-01-01"}},
 	}
 	for want, data := range tests {
 		if _, err := buildAnnotationDocument(data); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want it to contain %q", err, want)
 		}
+	}
+}
+
+func TestSplitPointEntries(t *testing.T) {
+	got := splitPointEntries("category=Food, Beverages, scenario=ac1")
+	if len(got) != 2 || got[0] != "category=Food, Beverages" || got[1] != "scenario=ac1" {
+		t.Fatalf("got %q", got)
+	}
+	if got := splitPointEntries(" "); len(got) != 0 {
+		t.Fatalf("got %q", got)
 	}
 }

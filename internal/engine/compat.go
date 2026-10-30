@@ -56,6 +56,24 @@ func CheckAnnotationSupport(engineVersion string) error {
 	return nil
 }
 
+// ResolveVersion returns the engine version to check from a non-downloading
+// source: the pin if set, otherwise the latest locally cached version. It is ""
+// when nothing is resolvable, and callers should then skip the check.
+func ResolveVersion(pinnedVersion string) string {
+	if pinnedVersion != "" {
+		return pinnedVersion
+	}
+	mgr, err := NewManager()
+	if err != nil {
+		return ""
+	}
+	info, err := mgr.LatestLocalVersion()
+	if err != nil {
+		return ""
+	}
+	return info.Version
+}
+
 // CompatibilityError indicates that the resolved template engine version is
 // not within any supported range. Callers can use errors.As to extract the
 // fields and format the error per channel (CLI stderr, LSP diagnostic, lint

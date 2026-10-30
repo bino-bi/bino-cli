@@ -66,6 +66,13 @@ func TestCheckPoint(t *testing.T) {
 		{"total row has no values", schema.KindTable, &schema.AnnotationPoint{Row: "total"}, byProduct, ""},
 		{"subtotal checks its parent", schema.KindTable, &schema.AnnotationPoint{Row: "subtotal", RowGroup: "Revenue"}, byProduct, ""},
 		{"subtotal of an unknown parent", schema.KindTable, &schema.AnnotationPoint{Row: "subtotal", RowGroup: "Costs"}, byProduct, "no row"},
+		{"variance with its slots on two rows", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01", Scenario: "dac1_pl1_pos"}, Rows{{"date": "2024-01-05", "ac1": 1}, {"date": "2024-01-20", "pl1": 2}}, ""},
+		{"family on a stack total", schema.KindChartTime, &schema.AnnotationPoint{Date: "2025-01-01", Scenario: "pl", Part: "total"}, yearly, ""},
+		{"family without a value", schema.KindChartTime, &schema.AnnotationPoint{Date: "2025-01-01", Scenario: "fc", Part: "total"}, yearly, "has no value"},
+		{"family is only a stack total", schema.KindChartTime, &schema.AnnotationPoint{Date: "2025-01-01", Scenario: "ac"}, yearly, "has no value"},
+		{"row date as year and month", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01"}, Rows{{"date": "2024-01"}}, ""},
+		{"row date as epoch milliseconds", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01"}, Rows{{"date": 1704067200000}}, ""},
+		{"row without a date", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01"}, Rows{{"ac1": 1}}, "no row"},
 		{"bullet measure column", schema.KindChartBullet, &schema.AnnotationPoint{Category: "Software", Scenario: "fc2"}, byProduct, "has no value"},
 	}
 	for _, tt := range tests {
@@ -81,17 +88,18 @@ func TestCheckPoint(t *testing.T) {
 	}
 }
 
-func TestFirstDataset(t *testing.T) {
+func TestBinding(t *testing.T) {
 	tests := map[string]string{
-		`{"dataset": "a"}`:         "a",
-		`{"dataset": ["$a", "b"]}`: "$a",
-		`{}`:                       "",
-		`{"dataset": {"bad": 1}}`:  "",
-		`not json`:                 "",
+		`{"dataset": "a"}`:        "a",
+		`{"dataset": ["$a"]}`:     "$a",
+		`{"dataset": ["a", "b"]}`: "",
+		`{}`:                      "",
+		`{"dataset": {"bad": 1}}`: "",
+		`not json`:                "",
 	}
 	for in, want := range tests {
-		if got := FirstDataset([]byte(in)); got != want {
-			t.Errorf("FirstDataset(%s) = %q, want %q", in, got, want)
+		if got := Binding([]byte(in)); got != want {
+			t.Errorf("Binding(%s) = %q, want %q", in, got, want)
 		}
 	}
 }

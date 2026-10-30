@@ -1640,7 +1640,7 @@ func TestValidate_Annotation(t *testing.T) {
 		{"unknown part", head + "  target: { kind: ChartTime, name: c, point: { part: bar } }\n", true},
 		{"unknown row", head + "  target: { kind: Table, name: c, point: { row: grand } }\n", true},
 		{"bad date", head + "  target: { kind: ChartTime, name: c, point: { date: \"Jan 2024\" } }\n", true},
-		{"colour that is no name", head + target + "  color: \"#ff0000\"\n", true},
+		{"color that is no name", head + target + "  color: \"#ff0000\"\n", true},
 		{"unknown field", head + target + "  label: \"1\"\n", true},
 		{"list document", "apiVersion: bino.bi/v1alpha1\nkind: AnnotationList\nmetadata:\n  name: l\nspec:\n  annotations: [a, b]\n", false},
 		{"list without a name in it", "apiVersion: bino.bi/v1alpha1\nkind: AnnotationList\nmetadata:\n  name: l\nspec:\n  annotations: [\"\"]\n", true},
@@ -1650,7 +1650,7 @@ func TestValidate_Annotation(t *testing.T) {
 		{"list child with an unknown field", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: AnnotationList\n      spec: { items: [a] }\n", true},
 		{"annotation is no layout child", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: Annotation\n      ref: a\n", true},
 		{"style section", "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: s\nspec:\n  content:\n    bn-annotation: { color: \"#000\", colors: { brand: \"#111\" } }\n", false},
-		{"style section with a typo", "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: s\nspec:\n  content:\n    bn-annotation: { colour: \"#000\" }\n", true},
+		{"style section with a typo", "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: s\nspec:\n  content:\n    bn-annotation: { shade: \"#000\" }\n", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -213,9 +213,9 @@ scenario, row, part.
 	cmd.Flags().StringVar(&flagMark, "mark", "", "Mark: marker (default), frame or arrow")
 	cmd.Flags().StringVar(&flagColor, "color", "", "Color name from the bn-annotation style, e.g. negative")
 	cmd.Flags().StringVar(&flagTarget, "target", "", "Target component as Kind:name")
-	cmd.Flags().StringSliceVar(&flagPoint, "point", nil, "Point of the target as field=value (repeatable)")
+	cmd.Flags().StringArrayVar(&flagPoint, "point", nil, "Point of the target as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow as Kind:name")
-	cmd.Flags().StringSliceVar(&flagToPoint, "to-point", nil, "Point of the end as field=value (repeatable)")
+	cmd.Flags().StringArrayVar(&flagToPoint, "to-point", nil, "Point of the end as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Title in the AnnotationList")
 	cmd.Flags().StringVar(&flagText, "text", "", "Text in the AnnotationList (inline Markdown)")
 	cmd.Flags().StringSliceVar(&flagConstraint, "constraint", nil, "Constraints (repeatable)")
@@ -239,12 +239,7 @@ func promptAnnotationEnd(manifests []ManifestInfo, label string) (string, error)
 	if item == nil {
 		return "", errAddCanceled
 	}
-	for _, m := range components {
-		if m.Name == item.Name {
-			return m.Kind + ":" + m.Name, nil
-		}
-	}
-	return "", errAddCanceled
+	return item.Kind + ":" + item.Name, nil
 }
 
 func promptAnnotationPoint(label string) ([]string, error) {
@@ -252,16 +247,30 @@ func promptAnnotationPoint(label string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return splitPointEntries(value), nil
+}
+
+// splitPointEntries splits field=value entries at commas. A part without "=" is
+// the rest of the value before it: a raw value can hold a comma.
+func splitPointEntries(value string) []string {
 	var point []string
-	for part := range strings.SplitSeq(value, ",") {
-		if part = strings.TrimSpace(part); part != "" {
-			point = append(point, part)
+	for _, part := range strings.Split(value, ",") {
+		switch {
+		case strings.Contains(part, "=") || len(point) == 0:
+			if part = strings.TrimSpace(part); part != "" {
+				point = append(point, part)
+			}
+		default:
+			point[len(point)-1] += "," + part
 		}
 	}
-	return point, nil
+	return point
 }
 
 func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, error) {
+	if len(data.ToPoint) > 0 && data.To == "" {
+		return nil, errors.New("--to-point needs --to")
+	}
 	switch data.Mark {
 	case "", "marker", "frame":
 		if data.To != "" {

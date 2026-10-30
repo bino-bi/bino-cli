@@ -25,24 +25,10 @@ func printCompatFinding(out *Output, projectRoot string, f lint.Finding) {
 	out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
 }
 
-// resolveEngineVersionForCompat returns the engine version to validate
-// against SupportedEngineRanges from a non-downloading source: the explicit
-// pin in bino.toml if set, otherwise the latest locally cached version.
-// Returns "" with no error when nothing is resolvable (e.g., no engine
-// cached and no pin) - callers should treat that as "skip the check".
+// resolveEngineVersionForCompat returns the engine version to validate, see
+// engine.ResolveVersion.
 func resolveEngineVersionForCompat(pinnedVersion string) string {
-	if pinnedVersion != "" {
-		return pinnedVersion
-	}
-	mgr, err := engine.NewManager()
-	if err != nil {
-		return ""
-	}
-	info, err := mgr.LatestLocalVersion()
-	if err != nil {
-		return ""
-	}
-	return info.Version
+	return engine.ResolveVersion(pinnedVersion)
 }
 
 // engineCompatFinding runs the compatibility check and, on a

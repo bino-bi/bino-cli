@@ -49,16 +49,17 @@ func DecodeRows(raw json.RawMessage) (Rows, error) {
 	return rows, nil
 }
 
-// FirstDataset returns the first dataset a component spec binds, "$name" for a
-// DataSource, or "" when it binds none.
-func FirstDataset(componentSpec json.RawMessage) string {
+// Binding returns the one dataset a component spec binds, "$name" for a
+// DataSource. It is "" when the spec binds none or several: which of several a
+// component draws is up to the order of delivery, so its rows prove nothing.
+func Binding(componentSpec json.RawMessage) string {
 	var p struct {
 		Dataset spec.DatasetList `json:"dataset"`
 	}
 	if json.Unmarshal(componentSpec, &p) != nil {
 		return ""
 	}
-	if names := p.Dataset.Strings(); len(names) > 0 {
+	if names := p.Dataset.Strings(); len(names) == 1 {
 		return names[0]
 	}
 	return ""
@@ -89,20 +90,28 @@ func CheckPoint(kind string, p *schema.AnnotationPoint, rows Rows) string {
 	if rows == nil || p.Row == "total" {
 		return ""
 	}
-	withValues := false
+	// The engine adds up the rows of a data point first, so a column counts when
+	// any of them fills it: a variance can have its two slots on different rows.
+	matched := false
+	filled := map[string]bool{}
 	for _, row := range rows {
 		if !matchesDimensions(row, p) {
 			continue
 		}
-		withValues = true
-		if scenarioHasValue(kind, row, p.Scenario) {
-			return ""
+		matched = true
+		for column, value := range row {
+			if value != nil {
+				filled[column] = true
+			}
 		}
 	}
-	if withValues {
-		return fmt.Sprintf("scenario %q has no value on the rows with %s", p.Scenario, Describe(p))
+	if !matched {
+		return fmt.Sprintf("no row of the dataset has %s", Describe(p))
 	}
-	return fmt.Sprintf("no row of the dataset has %s", Describe(p))
+	if scenarioHasValue(kind, filled, p) {
+		return ""
+	}
+	return fmt.Sprintf("scenario %q has no value on the rows with %s", p.Scenario, Describe(p))
 }
 
 func checkFields(kind string, p *schema.AnnotationPoint) string {
@@ -179,14 +188,18 @@ func matchesDimensions(row map[string]any, p *schema.AnnotationPoint) bool {
 
 // dateInPeriod reports whether want can be the first day of a period around the
 // row's date. The interval of a chart can be left to the engine, so every
-// period counts. Too generous at worst, and then the engine draws nothing.
+// period counts. A row date in another form (2024-01, epoch milliseconds) is
+// for the engine to read. Too generous at worst, and then the engine draws nothing.
 func dateInPeriod(rowDate, want string) bool {
-	if len(rowDate) < 10 || len(want) < 10 {
+	if rowDate == "" || len(want) < 10 {
 		return false
+	}
+	if len(rowDate) < 10 {
+		return true
 	}
 	day, err := time.Parse(time.DateOnly, rowDate[:10])
 	if err != nil {
-		return false
+		return true
 	}
 	start, err := time.Parse(time.DateOnly, want[:10])
 	if err != nil {
@@ -205,21 +218,26 @@ func dateInPeriod(rowDate, want string) bool {
 
 var (
 	slotToken     = regexp.MustCompile(`^(?:ac|pp|fc|pl)[1-4]$`)
+	familyToken   = regexp.MustCompile(`^(?:ac|pp|fc|pl)$`)
 	varianceToken = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu))?$`)
 )
 
-func scenarioHasValue(kind string, row map[string]any, scenario string) bool {
+func scenarioHasValue(kind string, filled map[string]bool, p *schema.AnnotationPoint) bool {
+	scenario := p.Scenario
 	switch {
 	case scenario == "":
 		return true
 	case slotToken.MatchString(scenario):
-		return row[scenario] != nil
+		return filled[scenario]
+	case familyToken.MatchString(scenario) && p.Part == "total":
+		// A stack that overlays families (ac and pl) has one total per family.
+		return filled[scenario+"1"] || filled[scenario+"2"] || filled[scenario+"3"] || filled[scenario+"4"]
 	}
 	if m := varianceToken.FindStringSubmatch(scenario); m != nil {
-		return row[m[1]] != nil && row[m[2]] != nil
+		return filled[m[1]] && filled[m[2]]
 	}
 	// A table column can be an attribute, which is computed and not in the rows.
-	return kind == schema.KindTable || row[scenario] != nil
+	return kind == schema.KindTable || filled[scenario]
 }
 
 func text(v any) string {

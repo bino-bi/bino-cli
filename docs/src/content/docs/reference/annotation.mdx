@@ -14,7 +14,7 @@ An annotation with a `title` or a `text` gets a number. An [`AnnotationList`](/r
 The annotation points at the component. The component does not change and does not know about it, so this also works for a component from a package.
 
 :::note
-Annotations need template engine **v1.0.0-next.30** or newer. With an older engine `bino build` and `bino lint` stop with `annotation-engine-version`. A project without annotations keeps working on its engine.
+Annotations need template engine **v1.0.0-next.30** or newer. With an older engine `bino build` and `bino lint` stop with `annotation-engine-version`, and `bino preview` shows that error. A project without annotations keeps working on its engine.
 :::
 
 :::caution[Live artefacts never show annotations]
@@ -46,8 +46,8 @@ spec:
 | Field | Value |
 | --- | --- |
 | `rowGroup`, `category`, `subCategory` | The value of the column. |
-| `date` | The first day of the period, `YYYY-MM-DD`. With `dateInterval: year` a row of `2024-03-15` is in the period `2024-01-01`. |
-| `scenario` | A slot (`ac1`, `pl1`), a variance (`dac1_pl1_pos`), or a table column. |
+| `date` | The first day of the period, `YYYY-MM-DD`. With `dateInterval: year` a row of `2024-03-15` is in the period `2024-01-01`. A period that does not start at midnight also has the time: `2024-01-01T09:00:00`. |
+| `scenario` | A slot (`ac1`, `pl1`), a variance (`dac1_pl1_pos`), a table column, or a family (`ac`, `pl`) on the total of a stack that overlays families. |
 | `row` | `subtotal` or `total`, for those rows of a table. |
 | `part` | `element` (default): the bar, mark, row or cell. `label`: its value label. `total`: the total label of a stack. |
 
@@ -55,7 +55,7 @@ A field left out is a wildcard. The point must match **exactly one** rendered el
 
 | Kind | Fields of a data point |
 | --- | --- |
-| `ChartTime` | `date` and `scenario`. The chart adds up the rows of a period, so it knows no other dimension. A stack total has `date` only. |
+| `ChartTime` | `date` and `scenario`. The chart adds up the rows of a period, so it knows no other dimension. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
 | `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. |
 | `ChartScatter`, `ChartBubble` | The dimensions of the point level, the series level and the facet level. |
 | `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
@@ -164,9 +164,9 @@ A component that sits on a page twice gets the mark twice, with the same number.
 
 ## A point that is not in the data
 
-This is a warning and not a failure. The rule [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) compares the point with the rows of the component's first dataset. It runs in `bino lint --execute-queries`, `bino build` and `bino preview`, and it fails CI only with `--fail-on-warnings`.
+This is a warning and not a failure. The rule [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) compares the point with the rows of the component's dataset. `bino build` and `bino preview` write it to their log. `bino lint --execute-queries` reports it as a finding, which fails only with `--fail-on-warnings` or a severity you set in `bino.toml`.
 
-The check does not look at the `filter` of a component, and it cannot see whether a wildcard matches several elements. In these cases the engine draws nothing and writes a warning to the browser console. The entry in the list keeps its place and loses its circle, the other numbers stay as they are.
+The check does not look at the `filter` of a component, it skips a component that binds several datasets, and it cannot see whether a wildcard matches several elements. In these cases the engine draws nothing and writes a warning to the browser console. The entry in the list keeps its place and loses its circle, the other numbers stay as they are.
 
 ## Colors
 
@@ -177,6 +177,7 @@ The check does not look at the `filter` of a component, and it cannot see whethe
 - A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one.
 - A `ScreenshotArtefact` of a single component does not show the marks: they are drawn over the page and not in the component.
 - A component embedded in the Markdown of a `DocumentArtefact` has no marks.
+- The presentation view shows annotations like `bino preview`.
 - `metadata.annotations` of any document is an unused free-form map and has nothing to do with this kind.
 
 ## Attribute reference

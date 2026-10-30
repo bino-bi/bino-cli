@@ -13,11 +13,14 @@ import (
 	"fmt"
 	"strings"
 
+	"bino.bi/bino/internal/engine"
+	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/lint"
+	"bino.bi/bino/internal/schema"
 )
 
 // Diagnostic represents a single diagnostic message for a file/document. The
@@ -115,6 +118,10 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 		})
 	}
 
+	if d, ok := annotationEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
+
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
@@ -153,6 +160,28 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	}
 
 	return diagnostics
+}
+
+// annotationEngineDiagnostic reports a project with Annotation documents whose
+// engine is older than the release with the overlay.
+func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	used := false
+	for _, doc := range docs {
+		used = used || doc.Kind == schema.KindAnnotation
+	}
+	if !used {
+		return Diagnostic{}, false
+	}
+	cfg, err := pathutil.LoadProjectConfig(dir)
+	if err != nil {
+		cfg = &pathutil.ProjectConfig{}
+	}
+	if err := engine.CheckAnnotationSupport(engine.ResolveVersion(cfg.EngineVersion)); err != nil {
+		configPath := pathutil.ProjectConfigPath(dir)
+		line, col := pathutil.FindEngineVersionLine(configPath)
+		return Diagnostic{File: configPath, Line: line, Column: col, Severity: "error", Message: err.Error(), Code: "annotation-engine-version"}, true
+	}
+	return Diagnostic{}, false
 }
 
 // AnnotationPointFindings checks the data points of the annotations against the

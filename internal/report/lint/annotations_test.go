@@ -222,6 +222,51 @@ func TestAnnotationListInLive(t *testing.T) {
 	wantFindings(t, runAnnotationRule(annotationListInLive, withList), "", 0, "")
 }
 
+func TestAnnotationListInLive_ConstraintsCount(t *testing.T) {
+	report := lintDoc(t, "ReportArtefact", "r", `{"title":"t","layoutPages":["p"]}`)
+	viaArtefact := lintDoc(t, "LiveReportArtefact", "live", `{"title":"t","routes":{"/":{"artefact":"r"}}}`)
+	hidden := `{"kind":"AnnotationList","metadata":{"constraints":["mode!=serve"]},"spec":{}}`
+	wantFindings(t, runAnnotationRule(annotationListInLive, report, pageWith(t, "p", chartChild, hidden), viaArtefact), "", 0, "")
+}
+
+func TestLayoutSlots_RefToAStandaloneList(t *testing.T) {
+	list := lintDoc(t, "AnnotationList", "l", `{}`)
+	report := lintDoc(t, "ReportArtefact", "r", `{"title":"t"}`)
+	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
+	page := lintDoc(t, "LayoutPage", "p", `{"pageLayout":"split-vertical","children":[`+chartChild+`,{"kind":"AnnotationList","ref":"l"}]}`)
+	for _, f := range pageLayoutSlotsUsed.Check(context.Background(), []Document{list, report, chart, page}) {
+		t.Errorf("unexpected finding: %+v", f)
+	}
+	card := lintDoc(t, "LayoutCard", "c", `{"cardLayout":"split-vertical","children":[`+chartChild+`,{"kind":"AnnotationList","ref":"l"}]}`)
+	for _, f := range cardLayoutSlotsUsed.Check(context.Background(), []Document{list, report, chart, card}) {
+		t.Errorf("unexpected finding on the card: %+v", f)
+	}
+}
+
+func TestAnnotationRules_RefOverridesCount(t *testing.T) {
+	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
+	note := annotationOn(t, "ChartTime", "trend")
+	list := lintDoc(t, "AnnotationList", "l", `{"annotations":["a","nope"]}`)
+	override := `{"kind":"AnnotationList","ref":"l","spec":{"annotations":["a"]}}`
+	wantFindings(t, runAnnotationRule(annotationListUnknown, chart, note, list, pageWith(t, "p", chartChild, override)), "", 0, "")
+
+	card := lintDoc(t, "LayoutCard", "c", `{"children":[{"kind":"Text","metadata":{"name":"x"},"spec":{"value":"y"}}]}`)
+	cardOverride := `{"kind":"LayoutCard","ref":"c","spec":{"children":[` + chartChild + `]}}`
+	wantFindings(t, runAnnotationRule(annotationTargetMissing, chart, note, card, pageWith(t, "p", cardOverride)), "", 0, "")
+}
+
+func TestAnnotationViews_ArtefactKindConstraint(t *testing.T) {
+	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
+	page := pageWith(t, "p", chartChild)
+	c, err := spec.ParseMixedConstraints([]any{"artefactKind==report"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Constraints = c
+	report := lintDoc(t, "ReportArtefact", "r", `{"title":"t"}`)
+	wantFindings(t, runAnnotationRule(annotationTargetMissing, chart, annotationOn(t, "ChartTime", "trend"), report, page), "", 0, "")
+}
+
 func TestAnnotationPointFindings(t *testing.T) {
 	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
 	onPoint := lintDoc(t, "Annotation", "a", `{"target":{"kind":"ChartTime","name":"trend","point":{"date":"1999-01-01"}}}`)

@@ -335,10 +335,47 @@ func TestAnnotations_PreviewPathShowsThem(t *testing.T) {
 	}
 }
 
+func TestAnnotations_PresentationShowsThem(t *testing.T) {
+	docs := []config.Document{chartDoc, marker2024, annotationTestPage(chartRefChild + "," + annotationsAll)}
+	frame, _, err := GeneratePresentationFrameAndContext(context.Background(), docs, salesData, config.Artifact{}, config.PresentationConfig{}, nil, nil, "v1.0.0-next.30", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items := listItems(t, string(frame.ContextHTML)); len(items) != 1 || items[0].Label != "1" {
+		t.Fatalf("list = %+v", items)
+	}
+	if items := layerItems(t, string(frame.ContextHTML)); len(items) != 1 {
+		t.Fatalf("layer = %+v", items)
+	}
+	standalone, _, err := GeneratePresentationHTML(context.Background(), docs, salesData, config.Artifact{}, config.PresentationConfig{}, nil, nil, "v1.0.0-next.30", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items := layerItems(t, string(standalone.HTML)); len(items) != 1 {
+		t.Fatalf("standalone layer = %+v", items)
+	}
+}
+
+func TestAnnotations_TwoPlacesWithDifferentDatasets(t *testing.T) {
+	other := `{"kind":"ChartTime","ref":"trend","spec":{"dataset":"unknown"}}`
+	out := renderAnnotations(t, ModeBuild, chartDoc, missingPoint, annotationTestPage(chartRefChild+","+other))
+	if items := layerItems(t, out); len(items) != 2 {
+		t.Fatalf("one place can have the point, so both keep the mark: %+v", items)
+	}
+}
+
+func TestAnnotations_SeveralDatasetsAreNotChecked(t *testing.T) {
+	chart := makeTestDoc("ChartTime", "trend", json.RawMessage(`{"metadata":{"name":"trend"},"spec":{"dataset":["sales","other"]}}`))
+	out := renderAnnotations(t, ModeBuild, chart, missingPoint, annotationTestPage(chartRefChild))
+	if items := layerItems(t, out); len(items) != 1 || items[0].Label != "1" {
+		t.Fatalf("layer = %+v", items)
+	}
+}
+
 func TestAnnotations_EngineGate(t *testing.T) {
 	docs := []config.Document{chartDoc, marker2024, annotationTestPage(chartRefChild)}
 	_, _, err := GenerateHTMLFromDocuments(context.Background(), docs, "en", "", "", ModeBuild, "v1.0.0-next.29")
-	if err == nil || !strings.Contains(err.Error(), "v1.0.0-next.30") {
+	if err == nil || !strings.Contains(err.Error(), "v1.0.0-next.30") || !strings.Contains(err.Error(), "annotation-engine-version") {
 		t.Fatalf("err = %v", err)
 	}
 	// without an Annotation, and in serve mode, an old engine stays fine

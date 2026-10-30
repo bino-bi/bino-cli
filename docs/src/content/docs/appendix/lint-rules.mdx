@@ -45,7 +45,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-unlisted` | Annotation Unlisted | Info | An annotation with a title or a text should be shown by an AnnotationList on its page. |
 | `annotation-list-in-live` | Annotation List In Live | Warning | A page with an AnnotationList that a LiveReportArtefact serves has an empty slot there. |
 | `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
-| `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint`, `bino build` and `bino preview`. |
+| `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
 | `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
 | `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
@@ -802,7 +802,7 @@ A page with an `AnnotationList` is served by a `LiveReportArtefact`, through `ar
 
 ### annotation-point-missing
 
-The `point` of an annotation cannot exist: no row of the first dataset of the component has these values, the scenario has no value on those rows, or the component reports no such field (a `ChartTime` has no `category`).
+The `point` of an annotation cannot exist: no row of the dataset of the component has these values, the scenario has no value on those rows, or the component reports no such field (a `ChartTime` has no `category`).
 
 The annotation draws nothing and has no number, the next ones move up. Its text stays in the list without a number.
 
@@ -813,11 +813,11 @@ target:
   point: { date: "1999-01-01", scenario: ac1 }  # no row of that date
 ```
 
-This rule needs the data. `bino lint` reports it with `--execute-queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it because the numbers depend on it.
+This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it because the numbers depend on it. A component that binds several datasets is not checked.
 
 ### annotation-engine-version
 
-The project has an `Annotation` and its engine is older than v1.0.0-next.30, which has no overlay. It stops `bino lint`, `bino build` and `bino preview`, whatever the severity. A project without annotations keeps working on that engine.
+The project has an `Annotation` and its engine is older than v1.0.0-next.30, which has no overlay. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without annotations keeps working on that engine.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.30 or newer.
 
