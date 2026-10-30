@@ -32,6 +32,9 @@
         },
         "bn-grid": {
           "$ref": "#/definitions/GridStyle"
+        },
+        "bn-annotation": {
+          "$ref": "#/definitions/AnnotationStyle"
         }
       },
       "additionalProperties": false,
@@ -578,6 +581,24 @@
       },
       "additionalProperties": false,
       "description": "Visual properties for `bn-grid` headers, borders, and cell spacing."
+    },
+    "AnnotationStyle": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "description": "The colour of a mark without a `color`, and of the circles of the list."
+        },
+        "colors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The colours a mark can name in its `color`."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Colours of the marks of `bn-annotation-layer` and the circles of `bn-annotation-list`."
     }
   }
 }
