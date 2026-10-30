@@ -267,6 +267,66 @@ func TestAnnotationViews_ArtefactKindConstraint(t *testing.T) {
 	wantFindings(t, runAnnotationRule(annotationTargetMissing, chart, annotationOn(t, "ChartTime", "trend"), report, page), "", 0, "")
 }
 
+func TestAnnotationListInLive_PageRoute(t *testing.T) {
+	route := lintDoc(t, "LiveReportArtefact", "live", `{"title":"t","routes":{"/":{"layoutPages":["p"]}}}`)
+	hiddenChild := `{"kind":"AnnotationList","metadata":{"constraints":["mode!=serve"]},"spec":{}}`
+	// a page route filters no children, so the slot is there and stays empty
+	wantFindings(t, runAnnotationRule(annotationListInLive, pageWith(t, "p", chartChild, hiddenChild), route), "annotation-list-in-live", 1, "warning")
+
+	page := pageWith(t, "p", chartChild, listAll)
+	labels, err := spec.ParseMixedConstraints([]any{"labels.env==prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Constraints = labels
+	wantFindings(t, runAnnotationRule(annotationListInLive, page, route), "annotation-list-in-live", 1, "warning")
+
+	notServed, err := spec.ParseMixedConstraints([]any{"mode!=serve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Constraints = notServed
+	wantFindings(t, runAnnotationRule(annotationListInLive, page, route), "", 0, "")
+}
+
+func TestAnnotationList_FindingLocations(t *testing.T) {
+	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
+	note := annotationOn(t, "ChartTime", "trend")
+
+	t.Run("in a standalone card", func(t *testing.T) {
+		card := lintDoc(t, "LayoutCard", "c", `{"children":[`+chartChild+`,{"kind":"AnnotationList","spec":{"annotations":["nope"]}}]}`)
+		findings := runAnnotationRule(annotationListUnknown, chart, note, card, pageWith(t, "p", `{"kind":"LayoutCard","ref":"c"}`), pageWith(t, "q", `{"kind":"LayoutCard","ref":"c"}`))
+		wantFindings(t, findings, "annotation-list-unknown", 1, "error")
+		if findings[0].File != "c.yaml" || findings[0].Path != "spec.children[1].spec.annotations[0]" {
+			t.Errorf("finding = %+v", findings[0])
+		}
+	})
+	t.Run("in the override of a ref", func(t *testing.T) {
+		list := lintDoc(t, "AnnotationList", "l", `{"annotations":["a"]}`)
+		findings := runAnnotationRule(annotationListUnknown, chart, note, list, pageWith(t, "p", chartChild, `{"kind":"AnnotationList","ref":"l","spec":{"annotations":["nope"]}}`))
+		wantFindings(t, findings, "annotation-list-unknown", 1, "error")
+		if findings[0].File != "p.yaml" || findings[0].Path != "spec.children[1].spec.annotations[0]" {
+			t.Errorf("finding = %+v", findings[0])
+		}
+	})
+}
+
+func TestAnnotationPointFindings_OnePlaceIsEnough(t *testing.T) {
+	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
+	onPoint := lintDoc(t, "Annotation", "a", `{"target":{"kind":"ChartTime","name":"trend","point":{"date":"2024-01-01"}}}`)
+	rows := func(binding string) annotation.Rows {
+		if binding == "other" {
+			return annotation.Rows{{"date": "2024-01-01"}}
+		}
+		return annotation.Rows{{"date": "1999-01-01"}}
+	}
+	other := `{"kind":"ChartTime","ref":"trend","spec":{"dataset":"other"}}`
+	for _, children := range [][]string{{chartChild, other}, {other, chartChild}} {
+		wantFindings(t, AnnotationPointFindings([]Document{chart, onPoint, pageWith(t, "p", children...)}, rows), "", 0, "")
+	}
+	wantFindings(t, AnnotationPointFindings([]Document{chart, onPoint, pageWith(t, "p", chartChild, chartChild)}, rows), "annotation-point-missing", 1, "warning")
+}
+
 func TestAnnotationPointFindings(t *testing.T) {
 	chart := lintDoc(t, "ChartTime", "trend", `{"dataset":"sales"}`)
 	onPoint := lintDoc(t, "Annotation", "a", `{"target":{"kind":"ChartTime","name":"trend","point":{"date":"1999-01-01"}}}`)

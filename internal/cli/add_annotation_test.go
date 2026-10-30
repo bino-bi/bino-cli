@@ -69,7 +69,15 @@ func TestSplitPointEntries(t *testing.T) {
 	if len(got) != 2 || got[0] != "category=Food, Beverages" || got[1] != "scenario=ac1" {
 		t.Fatalf("got %q", got)
 	}
-	if got := splitPointEntries(" "); len(got) != 0 {
-		t.Fatalf("got %q", got)
+	for in, want := range map[string]int{" ": 0, "scenario=ac1,": 1, "a=b,,c=d": 2} {
+		if got := splitPointEntries(in); len(got) != want {
+			t.Errorf("%q: got %q", in, got)
+		}
+	}
+	if got := splitPointEntries("scenario=ac1, "); got[0] != "scenario=ac1" {
+		t.Errorf("got %q", got)
+	}
+	if got := splitPointEntries("category=Food, Beverages , scenario=ac1"); got[0] != "category=Food, Beverages" {
+		t.Errorf("got %q", got)
 	}
 }

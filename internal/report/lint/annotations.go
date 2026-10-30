@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
+	"slices"
 
 	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
@@ -200,25 +202,28 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 	forEachAnnotation(docs, func(doc Document, a schema.AnnotationSpec) {
 		for _, end := range annotationEnds(a) {
 			key := annotation.Key(end.target.Kind, end.target.Name)
-			binding, found := "", false
+			found, reason := false, ""
+			// Fine when the point can exist in one place: the renderer keeps the mark then.
 			for _, view := range views {
 				if _, ok := view.annotations[doc.Name]; !ok {
 					continue
 				}
 				for _, page := range view.pages {
-					if page.slots[key] && !found {
-						binding, found = page.bindings[key], true
+					for _, binding := range page.bindings[key] {
+						var data annotation.Rows
+						if binding != "" {
+							data = rows(binding)
+						}
+						r := annotation.CheckPoint(end.target.Kind, end.target.Point, data)
+						if !found || reason != "" {
+							reason = r
+						}
+						found = true
 					}
 				}
 			}
-			if !found {
-				continue // annotation-target-missing says so
-			}
-			var data annotation.Rows
-			if binding != "" {
-				data = rows(binding)
-			}
-			if reason := annotation.CheckPoint(end.target.Kind, end.target.Point, data); reason != "" {
+			// Not on a page is annotation-target-missing.
+			if found && reason != "" {
 				findings = append(findings, Finding{
 					RuleID:   "annotation-point-missing",
 					Message:  fmt.Sprintf("%s %q: %s", end.target.Kind, end.target.Name, reason),
@@ -301,8 +306,9 @@ type annotationPageView struct {
 	slots map[string]bool
 	// nested holds the children of a Grid or a Tree.
 	nested map[string]bool
-	// bindings maps a component to the first dataset it binds.
-	bindings map[string]string
+	// bindings maps a component to the dataset of each place it sits, "" when
+	// that place binds none or several.
+	bindings map[string][]string
 	lists    annotationListUses
 }
 
@@ -411,7 +417,7 @@ func walkAnnotationPages(docs []Document, ctx *spec.ConstraintContext, selected 
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string]string{}}
+		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}}
 		page.walk(payload.Spec.Children, doc, "spec.children", ctx, refs, map[string]bool{})
 		pages = append(pages, page)
 	}
@@ -444,14 +450,12 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 			p.addList(child, owner, childPath, referenced, effective)
 			continue
 		case schema.KindLayoutCard:
-			p.walkCard(child, owner, childPath, effective, ctx, refs, cards)
+			p.walkCard(child, owner, childPath, referenced, effective, ctx, refs, cards)
 			continue
 		}
 		if name != "" {
 			p.slots[key] = true
-			if _, known := p.bindings[key]; !known {
-				p.bindings[key] = annotation.Binding(effective)
-			}
+			p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
 		}
 		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree {
 			p.addNested(effective)
@@ -473,7 +477,7 @@ func childIncluded(child layoutChildSpec, ctx *spec.ConstraintContext) bool {
 
 func (p *annotationPageView) addList(child layoutChildSpec, owner Document, childPath string, referenced Document, effective json.RawMessage) {
 	use := annotationListUse{file: owner.File, docIdx: owner.Position, path: childPath + ".spec"}
-	if child.Ref != "" {
+	if child.Ref != "" && !overrides(child.Spec, "annotations") {
 		use = annotationListUse{file: referenced.File, docIdx: referenced.Position, path: "spec"}
 	}
 	if len(effective) > 0 && json.Unmarshal(effective, &use.spec) != nil {
@@ -482,21 +486,35 @@ func (p *annotationPageView) addList(child layoutChildSpec, owner Document, chil
 	p.lists = append(p.lists, use)
 }
 
-func (p *annotationPageView) walkCard(child layoutChildSpec, owner Document, childPath string, effective json.RawMessage, ctx *spec.ConstraintContext, refs map[string]Document, cards map[string]bool) {
+func (p *annotationPageView) walkCard(child layoutChildSpec, owner Document, childPath string, referenced Document, effective json.RawMessage, ctx *spec.ConstraintContext, refs map[string]Document, cards map[string]bool) {
+	basePath := childPath + ".spec.children"
 	if child.Ref != "" {
 		if cards[child.Ref] {
 			return
 		}
 		cards[child.Ref] = true
 		defer delete(cards, child.Ref)
+		if !overrides(child.Spec, "children") {
+			owner, basePath = referenced, "spec.children"
+		}
 	}
 	var card struct {
 		Children []layoutChildSpec `json:"children"`
 	}
 	if json.Unmarshal(effective, &card) == nil {
-		// Paths below a ref name the page child, which is what the author sees here.
-		p.walk(card.Children, owner, childPath+".spec.children", ctx, refs, cards)
+		p.walk(card.Children, owner, basePath, ctx, refs, cards)
 	}
+}
+
+// overrides reports whether the spec of a ref child sets a field, so that a
+// finding about it belongs where the child is written.
+func overrides(childSpec json.RawMessage, field string) bool {
+	var fields map[string]json.RawMessage
+	if len(childSpec) == 0 || json.Unmarshal(childSpec, &fields) != nil {
+		return false
+	}
+	_, ok := fields[field]
+	return ok
 }
 
 // addNested records every component named below a Grid or a Tree.
@@ -575,6 +593,17 @@ type liveRoute struct {
 	selected func(Document) bool
 }
 
+// servedByPageRoute applies the constraints of a page as a layoutPages route
+// does: such a route has no artefact, so what cannot be evaluated stays in, and
+// the children of the page are not filtered at all.
+func servedByPageRoute(page Document) bool {
+	if len(page.Constraints) == 0 {
+		return true
+	}
+	match, err := spec.EvaluateParsedConstraints(page.Constraints, &spec.ConstraintContext{Mode: spec.ModeServe})
+	return err != nil || match
+}
+
 func liveRoutes(docs []Document) []liveRoute {
 	reports := map[string]Document{}
 	for _, doc := range docs {
@@ -593,8 +622,10 @@ func liveRoutes(docs []Document) []liveRoute {
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		for _, r := range payload.Spec.Routes {
-			route := liveRoute{artefact: doc.Name, ctx: &spec.ConstraintContext{Mode: spec.ModeServe}}
+		// Sorted: the first route to show a list words its finding.
+		for _, path := range slices.Sorted(maps.Keys(payload.Spec.Routes)) {
+			r := payload.Spec.Routes[path]
+			route := liveRoute{artefact: doc.Name}
 			refs := r.LayoutPages
 			if r.Artifact != "" {
 				report, ok := reports[r.Artifact]
@@ -617,7 +648,9 @@ func liveRoutes(docs []Document) []liveRoute {
 			} else if len(refs) == 0 {
 				continue
 			}
-			route.selected = func(page Document) bool { return pageSelected(refs, page.Name) }
+			route.selected = func(page Document) bool {
+				return pageSelected(refs, page.Name) && (route.ctx != nil || servedByPageRoute(page))
+			}
 			out = append(out, route)
 		}
 	}

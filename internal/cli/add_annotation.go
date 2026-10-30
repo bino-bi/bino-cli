@@ -256,12 +256,11 @@ func splitPointEntries(value string) []string {
 	var point []string
 	for _, part := range strings.Split(value, ",") {
 		switch {
+		case strings.TrimSpace(part) == "":
 		case strings.Contains(part, "=") || len(point) == 0:
-			if part = strings.TrimSpace(part); part != "" {
-				point = append(point, part)
-			}
+			point = append(point, strings.TrimSpace(part))
 		default:
-			point[len(point)-1] += "," + part
+			point[len(point)-1] += "," + strings.TrimRight(part, " ")
 		}
 	}
 	return point
