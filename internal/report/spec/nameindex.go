@@ -99,6 +99,20 @@ func (idx *NameIndex) walkRefs(file string, docIdx int, node *yaml.Node) {
 				idx.recordScalarOrSeq(file, docIdx, key, val, refFieldKinds[key])
 			case "layoutPages":
 				idx.recordLayoutPages(file, docIdx, val)
+			case "annotations":
+				// metadata.annotations is a map and unrelated: only a list names documents.
+				if val.Kind == yaml.SequenceNode {
+					idx.recordScalarOrSeq(file, docIdx, key, val, "Annotation")
+				}
+			case "target", "to":
+				if name := mappingChild(val, "name"); name != nil && name.Kind == yaml.ScalarNode && name.Value != "" {
+					if kind := mappingChildValue(val, "kind"); kind != "" {
+						idx.refs = append(idx.refs, SymbolRef{
+							File: file, DocIndex: docIdx, Range: nodeRange(name),
+							TargetKind: kind, TargetName: name.Value, Field: key,
+						})
+					}
+				}
 			case "ref":
 				if val.Kind == yaml.ScalarNode && val.Value != "" {
 					idx.refs = append(idx.refs, SymbolRef{

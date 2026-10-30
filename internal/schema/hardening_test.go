@@ -1614,3 +1614,50 @@ func TestValidate_Internationalization(t *testing.T) {
 		})
 	}
 }
+
+// TestValidate_Annotation covers the Annotation and AnnotationList kinds.
+func TestValidate_Annotation(t *testing.T) {
+	head := "apiVersion: bino.bi/v1alpha1\nkind: Annotation\nmetadata:\n  name: a\nspec:\n"
+	target := "  target: { kind: ChartTime, name: c }\n"
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"marker by default", head + target, false},
+		{"marker with a point and texts", head + "  target: { kind: Table, name: t, point: { rowGroup: a, category: b, subCategory: c, scenario: ac1, row: subtotal, part: element } }\n  title: T\n  text: x\n  color: negative\n", false},
+		{"frame", head + "  mark: frame\n" + target, false},
+		{"arrow with to", head + "  mark: arrow\n" + target + "  to: { kind: ChartTime, name: c, point: { date: \"2024-01-01\", part: total } }\n", false},
+		{"date with time", head + "  target: { kind: ChartTime, name: c, point: { date: \"2024-01-01T09:00:00\" } }\n", false},
+		{"arrow without to", head + "  mark: arrow\n" + target, true},
+		{"to on a marker", head + target + "  to: { kind: ChartTime, name: c }\n", true},
+		{"to on a frame", head + "  mark: frame\n" + target + "  to: { kind: ChartTime, name: c }\n", true},
+		{"unknown mark", head + "  mark: circle\n" + target, true},
+		{"no target", head + "  title: T\n", true},
+		{"target without name", head + "  target: { kind: ChartTime }\n", true},
+		{"target of a kind without marks", head + "  target: { kind: DataSet, name: c }\n", true},
+		{"unknown point field", head + "  target: { kind: ChartTime, name: c, point: { year: \"2024\" } }\n", true},
+		{"unknown part", head + "  target: { kind: ChartTime, name: c, point: { part: bar } }\n", true},
+		{"unknown row", head + "  target: { kind: Table, name: c, point: { row: grand } }\n", true},
+		{"bad date", head + "  target: { kind: ChartTime, name: c, point: { date: \"Jan 2024\" } }\n", true},
+		{"colour that is no name", head + target + "  color: \"#ff0000\"\n", true},
+		{"unknown field", head + target + "  label: \"1\"\n", true},
+		{"list document", "apiVersion: bino.bi/v1alpha1\nkind: AnnotationList\nmetadata:\n  name: l\nspec:\n  annotations: [a, b]\n", false},
+		{"list without a name in it", "apiVersion: bino.bi/v1alpha1\nkind: AnnotationList\nmetadata:\n  name: l\nspec:\n  annotations: [\"\"]\n", true},
+		{"list with an unknown field", "apiVersion: bino.bi/v1alpha1\nkind: AnnotationList\nmetadata:\n  name: l\nspec:\n  items: []\n", true},
+		{"list child without spec", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: AnnotationList\n", false},
+		{"list child with names", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: AnnotationList\n      spec: { annotations: [a] }\n", false},
+		{"list child with an unknown field", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: AnnotationList\n      spec: { items: [a] }\n", true},
+		{"annotation is no layout child", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: Annotation\n      ref: a\n", true},
+		{"style section", "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: s\nspec:\n  content:\n    bn-annotation: { color: \"#000\", colors: { brand: \"#111\" } }\n", false},
+		{"style section with a typo", "apiVersion: bino.bi/v1alpha1\nkind: ComponentStyle\nmetadata:\n  name: s\nspec:\n  content:\n    bn-annotation: { colour: \"#000\" }\n", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
+	}
+}

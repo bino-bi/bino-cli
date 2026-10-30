@@ -9,10 +9,14 @@ package diagnostics
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
+	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasource"
 	"bino.bi/bino/internal/report/lint"
 )
 
@@ -151,6 +155,38 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	return diagnostics
 }
 
+// AnnotationPointFindings checks the data points of the annotations against the
+// executed datasets. A DataSource is collected only when a component binds one.
+func AnnotationPointFindings(ctx context.Context, docs []config.Document, results []dataset.Result) []lint.Finding {
+	raw := make(map[string]json.RawMessage, len(results))
+	for _, r := range results {
+		raw[r.Name] = r.Data
+	}
+	collected := false
+	decoded := map[string]annotation.Rows{}
+	return lint.AnnotationPointFindings(lint.DocumentsFromConfig(docs), func(binding string) annotation.Rows {
+		if rows, ok := decoded[binding]; ok {
+			return rows
+		}
+		if strings.HasPrefix(binding, "$") && !collected {
+			collected = true
+			if sources, _, err := datasource.Collect(ctx, docs, nil); err == nil {
+				for _, s := range sources {
+					raw["$"+s.Name] = s.Data
+				}
+			}
+		}
+		var rows annotation.Rows
+		if data := raw[binding]; len(data) > 0 {
+			if parsed, err := annotation.DecodeRows(data); err == nil {
+				rows = parsed
+			}
+		}
+		decoded[binding] = rows
+		return rows
+	})
+}
+
 // RunQueryValidation executes dataset queries with data validation enabled and
 // maps the warnings to diagnostics, locating each warning's DataSet document
 // for file/position. It backs Collect's ExecuteQueries option and the daemon's
@@ -163,13 +199,24 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		DataValidationSampleSize: dataset.GetDataValidationSampleSize(),
 		ContinueOnQueryError:     true,
 	}
-	_, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
+	results, warnings, err := dataset.Execute(ctx, dir, docs, execOpts)
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			Severity: "warning",
 			Message:  fmt.Sprintf("Query execution failed: %v", err),
 			Code:     "data-validation-error",
 		})
+	} else {
+		for _, f := range lint.NewProjectRunner(dir).Apply(AnnotationPointFindings(ctx, docs, results)) {
+			diagnostics = append(diagnostics, Diagnostic{
+				File:     f.File,
+				Position: f.DocIdx,
+				Severity: f.Severity,
+				Message:  f.Message,
+				Code:     f.RuleID,
+				Field:    f.Path,
+			})
+		}
 	}
 	for _, w := range warnings {
 		var file string

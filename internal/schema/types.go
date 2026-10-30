@@ -42,6 +42,8 @@ const (
 	KindAsset                = "Asset"
 	KindComponentStyle       = "ComponentStyle"
 	KindRuleSet              = "RuleSet"
+	KindAnnotation           = "Annotation"
+	KindAnnotationList       = "AnnotationList"
 	KindInternationalization = "Internationalization"
 	KindReportArtefact       = "ReportArtefact"
 	KindLiveReportArtefact   = "LiveReportArtefact"

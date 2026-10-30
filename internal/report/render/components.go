@@ -106,6 +106,14 @@ type renderCtx struct {
 	// ("$" marks a DataSource); nil means no recording. A map, so the copies
 	// made by withInheritedStyle share it.
 	dataRefs map[string]bool
+	// annotations are the Annotation documents in manifest order; empty when
+	// the mode shows none.
+	annotations []annotationDoc
+	// annotationPage collects the marks of the page being rendered; nil
+	// outside a page and on a page without annotations.
+	annotationPage *annotationPage
+	// annotationData finds the rows behind a component for the point check.
+	annotationData *annotationData
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
@@ -146,7 +154,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 // validation already limits child kinds to plugin component kinds.
 func refIndexable(kind string) bool {
 	switch kind {
-	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
+	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
 		return true
 	}
 	return !schema.IsBuiltinKind(kind)
@@ -910,6 +918,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 
 	// Children inherit the page's effective style as their default.
 	childRC := rc.withInheritedStyle(pageSpec.SelectedStyle)
+	childRC = childRC.withAnnotationPage()
 
 	slotIdx := 0
 	for _, child := range filteredChildren {
@@ -923,15 +932,18 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 		// Build slot div with source location attributes for click-to-source in preview
 		fmt.Fprintf(&b, "  <div slot='slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		writeSourceAttrs(&b, child)
+		childRC.writeAnnotationTarget(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
 		slotIdx++
 	}
-	b.WriteString("</")
-	b.WriteString(tag)
-	b.WriteString(">")
-	return b.String(), nil
+	out, err := childRC.finishAnnotationPage(&b, pageSpec.SelectedStyle)
+	if err != nil {
+		return "", err
+	}
+	out += "</" + tag + ">"
+	return out, nil
 }
 
 // renderLayoutCardContainer renders a LayoutCard container as HTML.
@@ -962,6 +974,7 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		// Build slot div with source location attributes for click-to-source in preview
 		fmt.Fprintf(&b, "  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		writeSourceAttrs(&b, child)
+		childRC.writeAnnotationTarget(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
@@ -1011,11 +1024,16 @@ var builtinLayoutChildKinds = map[string]bool{
 	"Text": true, "Table": true, "ChartStructure": true, "ChartTime": true,
 	"ChartScatter": true, "ChartBubble": true, "ChartBullet": true,
 	"Tree": true, "LayoutCard": true, "Grid": true, "Image": true,
+	"AnnotationList": true,
 }
 
 // renderLayoutChild renders a child component within a layout.
 // Returns (html, skip, error) where skip=true means the child should be skipped (missing ref).
 func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip bool, err error) {
+	// A list needs no spec: without one it shows all annotations of the page.
+	if child.Kind == "AnnotationList" && child.Ref == "" && len(child.Spec) == 0 {
+		child.Spec = json.RawMessage("{}")
+	}
 	// Resolve ref to get effective spec (base from referenced doc + overrides).
 	effectiveSpec, err := resolveChildSpec(child, rc)
 	if err != nil {
@@ -1039,9 +1057,16 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		}
 	}
 	rc.recordDataRefs(effectiveSpec)
+	rc.noteAnnotationSpec(child, effectiveSpec)
 
 	var component string
 	switch child.Kind {
+	case "AnnotationList":
+		var s schema.AnnotationListSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render annotation list child: %w", err)
+		}
+		component = rc.annotationListPlaceholder(s)
 	case "Text":
 		var s textSpec
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
@@ -1089,7 +1114,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
-		htmlOut, err := renderTreeComponent(s, rc)
+		htmlOut, err := renderTreeComponent(s, rc.withoutAnnotationPage())
 		if err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
@@ -1109,7 +1134,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
-		htmlOut, err := renderGridComponent(s, rc)
+		htmlOut, err := renderGridComponent(s, rc.withoutAnnotationPage())
 		if err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}

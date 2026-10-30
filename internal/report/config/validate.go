@@ -57,6 +57,8 @@ var builtinUniqueNameKinds = map[string]struct{}{
 	"SigningProfile":       {},
 	"ComponentStyle":       {},
 	"RuleSet":              {},
+	"Annotation":           {},
+	"AnnotationList":       {},
 	"Internationalization": {},
 	"ScalingGroup":         {},
 }

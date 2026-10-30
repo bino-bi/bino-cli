@@ -6,7 +6,9 @@ import (
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/lint"
+	"bino.bi/bino/internal/schema"
 )
 
 // printCompatFinding renders the compat finding to the structured output
@@ -62,6 +64,36 @@ func engineCompatFinding(projectRoot, pinnedVersion string) (lint.Finding, bool)
 	return lint.Finding{
 		RuleID:  "engine-version-incompatible",
 		Message: cErr.Error(),
+		File:    configPath,
+		Line:    line,
+		Column:  col,
+	}, true
+}
+
+// annotationEngineFinding reports a project with Annotation documents whose
+// engine is older than the release with the overlay. It is its own check, as a
+// project without annotations keeps working on that engine.
+func annotationEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := false
+	for _, doc := range documents {
+		used = used || doc.Kind == schema.KindAnnotation
+	}
+	if !used {
+		return lint.Finding{}, false
+	}
+	pinned := ""
+	if cfg != nil {
+		pinned = cfg.EngineVersion
+	}
+	err := engine.CheckAnnotationSupport(resolveEngineVersionForCompat(pinned))
+	if err == nil {
+		return lint.Finding{}, false
+	}
+	configPath := pathutil.ProjectConfigPath(projectRoot)
+	line, col := pathutil.FindEngineVersionLine(configPath)
+	return lint.Finding{
+		RuleID:  "annotation-engine-version",
+		Message: err.Error(),
 		File:    configPath,
 		Line:    line,
 		Column:  col,

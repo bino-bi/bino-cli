@@ -1,0 +1,81 @@
+---
+title: AnnotationList
+description: Print the numbered texts of the annotations on a page.
+---
+
+An `AnnotationList` is a layout child of a `LayoutPage` or a `LayoutCard`. It prints the texts of the [`Annotation`](/reference/annotation/)s on its page: the numbered circle, the bold title, the text.
+
+## Minimal definition
+
+Without `annotations` the list shows all annotations of its page. It takes a slot like any other child, so count it in `pageLayout`.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_overview
+spec:
+  pageLayout: split-vertical
+  children:
+    - kind: ChartTime
+      ref: net_sales
+    - kind: AnnotationList
+```
+
+## Choosing and ordering
+
+`annotations` names the documents to show, in this order. The order also decides the numbers: the entries of the lists come first, then the other annotations of the page in manifest order.
+
+```yaml
+- kind: AnnotationList
+  spec:
+    annotations: [plan_software_2024, software_actual]
+```
+
+The list can also be a document of its own, used with `ref`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: AnnotationList
+metadata:
+  name: sales_comments
+spec:
+  annotations: [plan_software_2024, software_actual]
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: sales_overview
+spec:
+  pageLayout: split-vertical
+  children:
+    - kind: ChartTime
+      ref: net_sales
+    - kind: AnnotationList
+      ref: sales_comments
+```
+
+## What it shows
+
+- An annotation without `title` and `text` has no entry.
+- An annotation whose point is not in the data keeps its entry, without a number.
+- A list shows nothing when its page has no annotation to list. Its slot stays empty.
+- A list cannot show an annotation of another page. The rules [`annotation-list-off-page`](/appendix/lint-rules/#annotation-list-off-page) and [`annotation-list-unknown`](/appendix/lint-rules/#annotation-list-unknown) report such a name, and the list leaves it out.
+
+## Live artefacts
+
+Live artefacts never show annotations. The slot of the list stays empty there, the other children keep their places. The rule [`annotation-list-in-live`](/appendix/lint-rules/#annotation-list-in-live) warns about a page that a `LiveReportArtefact` serves.
+
+## Attribute reference
+
+| Attribute | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `spec.annotations` | array of strings | no | all of the page | Names of the `Annotation` documents, in this order. |
+| `spec.selectedStyle` | string | no | inherited | Name of the `ComponentStyle` whose `bn-annotation` section colors the circles. |
+
+The circles have the main color of the style, whatever the `color` of the mark.
+
+## See also
+
+- [`Annotation`](/reference/annotation/)
+- [`LayoutPage`](/reference/layout-page/)

@@ -100,6 +100,26 @@ References are by `metadata.name` (and `$ref` where the schema uses it). After w
   assume a fix worked.
 - Read the diagnostic's file/position; bino's messages point at the offending document and key.
 
+## Annotations
+
+To point at a number, write a separate `Annotation` document: the chart or table stays as it is, and
+this works on a package's component too. `outline_kind("Annotation")` shows the fields.
+
+1. `target.kind` and `target.name` are the component: the document a child refs, or `metadata.name` of
+   an inline child. A child of a `Grid` or `Tree` cannot be a target.
+2. `target.point` holds raw values from `get_rows`, not formatted labels. Leave out a field and it is a
+   wildcard, but the point must match exactly one element. A `ChartTime` point has only `date` (the first
+   day of the period) and `scenario`, `part: total` is a stack total. A table point without `scenario`
+   is the whole row.
+3. Add an `AnnotationList` child to the page when an annotation has a `title` or `text`. It takes a
+   slot, so count it in `pageLayout`.
+4. `validate_project(execute_queries: true)` checks the point against the data (`annotation-point-missing`),
+   and `build` reports the same in its `warnings`. Numbers are given by the CLI. They only exist for a
+   point that was found, so never write a number into the text.
+
+The engine must be v1.0.0-next.30 or newer. Live artefacts never show annotations. In the preview, or in
+the PDF, look at where the mark landed: `get_layout_state` says nothing about that.
+
 ## Don't
 
 - Don't copy a kind's schema into your draft from memory - `outline_kind` every time.

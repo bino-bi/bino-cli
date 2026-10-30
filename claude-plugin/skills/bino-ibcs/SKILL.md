@@ -142,6 +142,28 @@ ${t('<i18n-key>')}                       e.g.  ${t('report.title')}
 - **Ground every claim in the data.** Before writing a number into narrative, confirm it with
   `get_rows(<dataset>)`. Don't state a takeaway the data doesn't support.
 
+## Pointing at a number - Annotation
+
+IBCS pages point at the number that matters. An `Annotation` draws a numbered marker on a bar or cell,
+a frame around a value, or an arrow along a trend. An `AnnotationList` child prints the numbered
+comments next to it.
+
+```yaml
+kind: Annotation
+metadata: { name: plan_software_2024 }
+spec:
+  target: { kind: ChartTime, name: net_sales, point: { date: "2024-01-01", scenario: pl1 } }
+  title: 2024 Plan Software
+  text: Software increases by 9.1 kEUR compared to 2023.
+```
+
+- Use it when the page has a message about one value: the variance that matters, the trend to act on.
+  Marks are for the reader's eye, so use few of them. Blue is the highlight color, `negative` and
+  `positive` follow the variance colors.
+- `point` holds **raw dataset values**, so confirm them with `get_rows` before writing them. A
+  `ChartTime` point has only `date` (the first day of the period) and `scenario`.
+- Numbers come from the CLI, never write them yourself. Live artefacts never show annotations.
+
 ## Putting it together
 
 When you model a report: map raw columns onto the scenario codes (`ac/pp/fc/pl`), derive the

@@ -31,6 +31,8 @@ var kindConstants = []string{
 	KindAsset,
 	KindComponentStyle,
 	KindRuleSet,
+	KindAnnotation,
+	KindAnnotationList,
 	KindInternationalization,
 	KindReportArtefact,
 	KindLiveReportArtefact,

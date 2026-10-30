@@ -480,6 +480,14 @@ func (w *walker) classifyValue(parent, val *yaml.Node, field string, valPath, pa
 		ctx.RefKind = rk
 		return ctx
 	}
+	if segment := lastSegment(parentPath); field == "name" && (segment == "target" || segment == "to") {
+		// target.name of an Annotation: the kind is the sibling `kind:`.
+		if kind := mappingChildValue(parent, "kind"); kind != "" {
+			ctx.Kind = PosDatasetRef
+			ctx.RefKind = kind
+			return ctx
+		}
+	}
 	ctx.Kind = PosFreeValue
 	return ctx
 }
@@ -500,6 +508,9 @@ func (w *walker) classifySequenceItem(field string, elem *yaml.Node, itemPath []
 	case "dataset", "dependencies":
 		ctx.Kind = PosDatasetRef
 		ctx.RefKind = datasetRefKind(field, scalarText(elem))
+	case "annotations":
+		ctx.Kind = PosDatasetRef
+		ctx.RefKind = "Annotation"
 	default:
 		ctx.Kind = PosFreeValue
 	}
@@ -523,6 +534,9 @@ func (w *walker) newSequenceItem(field string, path []string, idx int) PositionC
 	case "dataset", "dependencies":
 		ctx.Kind = PosDatasetRef
 		ctx.RefKind = datasetRefKind(field, "")
+	case "annotations":
+		ctx.Kind = PosDatasetRef
+		ctx.RefKind = "Annotation"
 	default:
 		ctx.Kind = PosFreeValue
 	}

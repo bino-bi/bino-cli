@@ -1,0 +1,72 @@
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: june_peak
+spec:
+  target:
+    kind: ChartTime
+    name: annotated_trend
+    point: { date: "2025-06-01", scenario: ac1 }
+  title: June
+  text: Best month of the first half, **ahead of** the previous year.
+---
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: h1_growth
+spec:
+  mark: arrow
+  color: positive
+  target:
+    kind: ChartTime
+    name: annotated_trend
+    point: { date: "2025-01-01", scenario: ac1 }
+  to:
+    kind: ChartTime
+    name: annotated_trend
+    point: { date: "2025-06-01", scenario: ac1 }
+---
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: dach_actual
+spec:
+  mark: frame
+  target:
+    kind: Table
+    name: annotated_regions
+    point: { category: DACH, scenario: ac1 }
+  title: DACH
+  text: The largest region.
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: annotations-page
+spec:
+  titleBusinessUnit: "Acme Corp"
+  titleMeasures:
+    - name: "Revenue"
+      unit: "EUR k"
+  titleScenarios: "AC, PP"
+  titleDateEnd: "2025-06-30"
+  titleDateFormat: month
+  footerText: "Acme Corp - Comments on the first half"
+  pageLayout: 2-over-1
+  children:
+    - kind: ChartTime
+      metadata:
+        name: annotated_trend
+      spec:
+        dataset: revenue_trend
+        scenarios: [ac1, pp1]
+        chartTitle: "Monthly revenue"
+    - kind: Table
+      metadata:
+        name: annotated_regions
+      spec:
+        dataset: revenue_by_region
+        scenarios: [ac1, pp1]
+    - kind: AnnotationList
+      spec:
+        annotations: [june_peak, dach_actual]

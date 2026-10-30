@@ -20,3 +20,4 @@ spec:
     - layout-card-page
     - xy-charts-page
     - bullet-page
+    - annotations-page

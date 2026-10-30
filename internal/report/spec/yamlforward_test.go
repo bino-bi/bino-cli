@@ -725,3 +725,50 @@ spec:
 		t.Errorf("DocIndex = %d, want 1 (the new document)", ctx.DocIndex)
 	}
 }
+
+func TestResolvePositionPath_AnnotationReferences(t *testing.T) {
+	const doc = `kind: Annotation
+metadata:
+  name: a
+spec:
+  target:
+    kind: Table
+    name: products
+  to:
+    kind: ChartTime
+    name: trend
+`
+	tests := []struct {
+		name      string
+		line, col int
+		want      string
+	}{
+		{"target", 7, 13, "Table"},
+		{"to", 10, 13, "ChartTime"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, ok := ResolvePositionPath(doc, tt.line, tt.col)
+			if !ok || ctx.Kind != PosDatasetRef || ctx.RefKind != tt.want {
+				t.Fatalf("ok = %v, ctx = %+v", ok, ctx)
+			}
+		})
+	}
+}
+
+func TestResolvePositionPath_AnnotationListEntry(t *testing.T) {
+	const doc = `kind: AnnotationList
+metadata:
+  name: l
+spec:
+  annotations:
+    - first
+    - 
+`
+	for _, tt := range []struct{ line, col int }{{6, 8}, {7, 7}} {
+		ctx, ok := ResolvePositionPath(doc, tt.line, tt.col)
+		if !ok || ctx.Kind != PosDatasetRef || ctx.RefKind != "Annotation" {
+			t.Fatalf("line %d: ok = %v, ctx = %+v", tt.line, ok, ctx)
+		}
+	}
+}

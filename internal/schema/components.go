@@ -189,6 +189,57 @@ type RuleSetSpec struct {
 	Content any `yaml:"content,omitempty" json:"content,omitempty"`
 }
 
+// AnnotationSpec represents the spec section of an Annotation manifest.
+type AnnotationSpec struct {
+	// Mark is marker (default), frame or arrow.
+	Mark string `yaml:"mark,omitempty" json:"mark,omitempty"`
+
+	// Color names a color of the bn-annotation style section.
+	Color string `yaml:"color,omitempty" json:"color,omitempty"`
+
+	// Target is what the mark points at.
+	Target AnnotationTarget `yaml:"target" json:"target"`
+
+	// To is the end of an arrow.
+	To *AnnotationTarget `yaml:"to,omitempty" json:"to,omitempty"`
+
+	// Title is shown in bold in the AnnotationList.
+	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+
+	// Text is inline Markdown shown in the AnnotationList.
+	Text string `yaml:"text,omitempty" json:"text,omitempty"`
+}
+
+// AnnotationTarget names a component and optionally one data point in it.
+type AnnotationTarget struct {
+	Kind  string           `yaml:"kind" json:"kind"`
+	Name  string           `yaml:"name" json:"name"`
+	Point *AnnotationPoint `yaml:"point,omitempty" json:"point,omitempty"`
+}
+
+// AnnotationPoint addresses one data point by raw dataset values. A field left
+// out is a wildcard.
+type AnnotationPoint struct {
+	RowGroup    string `yaml:"rowGroup,omitempty" json:"rowGroup,omitempty"`
+	Category    string `yaml:"category,omitempty" json:"category,omitempty"`
+	SubCategory string `yaml:"subCategory,omitempty" json:"subCategory,omitempty"`
+	Date        string `yaml:"date,omitempty" json:"date,omitempty"`
+	Scenario    string `yaml:"scenario,omitempty" json:"scenario,omitempty"`
+	Row         string `yaml:"row,omitempty" json:"row,omitempty"`
+	Part        string `yaml:"part,omitempty" json:"part,omitempty"`
+}
+
+// AnnotationListSpec represents the spec section of an AnnotationList manifest.
+type AnnotationListSpec struct {
+	// Annotations names the Annotation documents to show, in this order. Empty
+	// means all annotations of the page.
+	Annotations []string `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+
+	// SelectedStyle names the ComponentStyle whose bn-annotation section
+	// colors the circles.
+	SelectedStyle string `yaml:"selectedStyle,omitempty" json:"selectedStyle,omitempty"`
+}
+
 // InternationalizationSpec represents the spec section of an Internationalization manifest.
 type InternationalizationSpec struct {
 	// Code is the locale code (e.g., "en", "de", "fr").

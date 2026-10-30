@@ -78,6 +78,10 @@ classes first**:
 The validator _proposes_ `routeTo`; the **orchestrator re-derives** it and treats human classes as
 authoritative (never overridden into an auto-fix).
 
+`annotation-point-missing` goes to whoever owns the annotation: compare `target.point` with `get_rows`. A
+wrong value is an authoring fix. A value that is really gone is a question for the human, because the
+comment is about data that no longer exists.
+
 ## Who edits (the orchestrator enforces)
 
 - `bino-author` is the **sole** editor of report-structure manifests (embeddables, layout, artefact,

@@ -38,6 +38,7 @@ var renderableChildKinds = map[string]bool{
 	"Tree":           true,
 	"Grid":           true,
 	"Image":          true,
+	"AnnotationList": true,
 }
 
 // isPluginKind reports whether kind is not built-in. The loader admits such
@@ -474,6 +475,9 @@ func countEffectiveChildren(
 				})
 				continue
 			}
+			count++
+		case child.Kind == "AnnotationList":
+			// A list needs no spec: without one it shows all annotations of the page.
 			count++
 		default:
 			// No ref and no spec - this child won't render

@@ -307,6 +307,7 @@ spec:
 ## Notes
 
 - Components must have `metadata.name` defined to be targetable.
+- A screenshot of a component does not show [annotation](/reference/annotation/) marks: they are drawn over the page.
 - Screenshots are captured after the page has fully rendered (including async data loading).
 - Multiple `ScreenshotArtefact` documents can target the same components with different settings (e.g., PNG + JPEG, or different formats).
 - When auto-wrapping standalone components, the synthetic page inherits `format` and `orientation` from the artefact spec.
