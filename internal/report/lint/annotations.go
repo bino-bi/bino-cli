@@ -202,31 +202,22 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 	forEachAnnotation(docs, func(doc Document, a schema.AnnotationSpec) {
 		for _, end := range annotationEnds(a) {
 			key := annotation.Key(end.target.Kind, end.target.Name)
-			found, reason := false, ""
-			// Fine when the point can exist in one place: the renderer keeps the mark then.
+			reason := ""
 			for _, view := range views {
 				if _, ok := view.annotations[doc.Name]; !ok {
 					continue
 				}
 				for _, page := range view.pages {
-					for _, binding := range page.bindings[key] {
-						var data annotation.Rows
-						if binding != "" {
-							data = rows(binding)
-						}
-						r := annotation.CheckPoint(end.target.Kind, end.target.Point, data)
-						if !found || reason != "" {
-							reason = r
-						}
-						found = true
+					if r := pointProblem(end.target, page.bindings[key], rows); r != "" && reason == "" {
+						reason = page.doc.Name + ": " + r
 					}
 				}
 			}
-			// Not on a page is annotation-target-missing.
-			if found && reason != "" {
+			// Not on a page is annotation-target-missing, and no place means no problem here.
+			if reason != "" {
 				findings = append(findings, Finding{
 					RuleID:   "annotation-point-missing",
-					Message:  fmt.Sprintf("%s %q: %s", end.target.Kind, end.target.Name, reason),
+					Message:  fmt.Sprintf("%s %q on page %s", end.target.Kind, end.target.Name, reason),
 					File:     doc.File,
 					DocIdx:   doc.Position,
 					Path:     "spec." + end.field + ".point",
@@ -236,6 +227,22 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 		}
 	})
 	return findings
+}
+
+// pointProblem judges one page as the renderer does: the mark stays when the
+// point can exist in one place of the component there.
+func pointProblem(target schema.AnnotationTarget, bindings []string, rows func(string) annotation.Rows) string {
+	reason := ""
+	for _, binding := range bindings {
+		var data annotation.Rows
+		if binding != "" {
+			data = rows(binding)
+		}
+		if reason = annotation.CheckPoint(target.Kind, target.Point, data); reason == "" {
+			return ""
+		}
+	}
+	return reason
 }
 
 type annotationEnd struct {

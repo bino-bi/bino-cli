@@ -325,6 +325,13 @@ func TestAnnotationPointFindings_OnePlaceIsEnough(t *testing.T) {
 		wantFindings(t, AnnotationPointFindings([]Document{chart, onPoint, pageWith(t, "p", children...)}, rows), "", 0, "")
 	}
 	wantFindings(t, AnnotationPointFindings([]Document{chart, onPoint, pageWith(t, "p", chartChild, chartChild)}, rows), "annotation-point-missing", 1, "warning")
+
+	// the other page has its own numbers and loses the mark
+	findings := AnnotationPointFindings([]Document{chart, onPoint, pageWith(t, "p", other), pageWith(t, "q", chartChild)}, rows)
+	wantFindings(t, findings, "annotation-point-missing", 1, "warning")
+	if !strings.Contains(findings[0].Message, "on page q") {
+		t.Errorf("message = %s", findings[0].Message)
+	}
 }
 
 func TestAnnotationPointFindings(t *testing.T) {
