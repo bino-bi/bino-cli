@@ -354,6 +354,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	rc.withDatasetResults(datasetResults)
 	var renderWarnings []string
 	rc.warnings = &renderWarnings
+	if err := rc.withAnnotations(docs, datasetResults, sources, mode, engineVersion); err != nil {
+		return Result{}, diags, err
+	}
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -501,6 +504,9 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	rc.withDatasetResults(datasetResults)
 	if mode == ModeServe {
 		rc.dataRefs = map[string]bool{}
+	}
+	if err := rc.withAnnotations(docs, datasetResults, sources, mode, engineVersion); err != nil {
+		return FrameResult{}, diags, err
 	}
 
 	// Pages render before the data so serve knows which data they bind.

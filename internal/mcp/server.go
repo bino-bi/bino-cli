@@ -88,7 +88,13 @@ otherwise give it to the human.
 
 Typical authoring loop: outline_kind(kind) -> scaffold_kind(kind) -> get_columns to
 learn a dataset's columns -> draft YAML -> validate_draft -> create_manifest /
-write_manifest -> build. bino's schema and validation are your guardrails.`
+write_manifest -> build. bino's schema and validation are your guardrails.
+
+Annotations: an Annotation document points at a component or one data point of it
+(target.point holds raw dataset values) and draws a marker, a frame or an arrow. An
+AnnotationList child prints the numbered texts. The CLI gives the numbers. A point
+that is not in the data is the warning annotation-point-missing, reported by build
+and by validate_project with execute_queries. Live artefacts never show annotations.`
 
 // ErrNotInitialized is returned by Deps.Load while the project root has no bino.toml.
 var ErrNotInitialized = errors.New("not a bino project yet: no bino.toml in the server root; run init_bundle to scaffold one")

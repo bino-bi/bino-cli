@@ -254,6 +254,28 @@ bn-grid:
 
 ---
 
+## Annotation style (`bn-annotation`)
+
+Colors of the marks of an [`Annotation`](/reference/annotation/) and the circles of an [`AnnotationList`](/reference/annotation-list/).
+
+```yaml
+spec:
+  content:
+    bn-annotation:
+      color: "#0070c0"
+      colors:
+        negative: "#ff0000"
+        positive: "#008f96"
+        brand: "#7b1fa2"
+```
+
+| Key | Effect |
+| --- | --- |
+| `color` | The color of a mark without a `color`, of a mark with a name that `colors` does not have, and of the circles of the list. |
+| `colors` | The names a mark can use in its `color`, with their colors. |
+
+The section works like any other: in `_default` for all marks, or in a named style. The marks read the style of their page, a list reads its own `selectedStyle`, which it inherits from the page.
+
 ## SVG style group
 
 Both `axisStyles` and `barStyles` use scenario-based grouping following IBCS notation:

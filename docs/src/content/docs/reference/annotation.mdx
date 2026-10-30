@@ -1,0 +1,200 @@
+---
+title: Annotation
+description: Point at a number with a numbered marker, a frame or an arrow.
+---
+
+An `Annotation` points at a component, or at one data point of it, and draws a mark over the page:
+
+- `marker` (default): a numbered circle.
+- `frame`: a rounded frame around a value. A frame around a text is an oval.
+- `arrow`: a straight arrow between two data points.
+
+An annotation with a `title` or a `text` gets a number. An [`AnnotationList`](/reference/annotation-list/) on the same page prints the numbered texts.
+
+The annotation points at the component. The component does not change and does not know about it, so this also works for a component from a package.
+
+:::note
+Annotations need template engine **v1.0.0-next.30** or newer. With an older engine `bino build` and `bino lint` stop with `annotation-engine-version`, and `bino preview` shows that error. A project without annotations keeps working on its engine.
+:::
+
+:::caution[Live artefacts never show annotations]
+`bino serve` drops every `Annotation` and `AnnotationList` before it renders, whatever their constraints say. This is silent: the same `ReportArtefact` builds as a PDF with annotations and is served live without them. `bino build` and `bino preview` show them.
+:::
+
+## Minimal definition
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: plan_software_2024
+spec:
+  target:
+    kind: ChartTime
+    name: net_sales_by_segment
+    point: { date: "2024-01-01", scenario: pl1 }
+  title: 2024 Plan Software
+  text: Software increases by **9.1 kEUR** compared to 2023.
+```
+
+`target.name` is the document a layout child refs, or `metadata.name` of an inline child. Without `point` the mark goes on the component as a whole.
+
+## The point
+
+`point` names one data point by its **raw dataset values**, not by the formatted label.
+
+| Field | Value |
+| --- | --- |
+| `rowGroup`, `category`, `subCategory` | The value of the column. |
+| `date` | The first day of the period, `YYYY-MM-DD`. With `dateInterval: year` a row of `2024-03-15` is in the period `2024-01-01`. A period that does not start at midnight also has the time: `2024-01-01T09:00:00`. |
+| `scenario` | A slot (`ac1`, `pl1`), a variance (`dac1_pl1_pos`), a table column, or a family (`ac`, `pl`) on the total of a stack that overlays families. |
+| `row` | `subtotal` or `total`, for those rows of a table. |
+| `part` | `element` (default): the bar, mark, row or cell. `label`: its value label. `total`: the total label of a stack. |
+
+A field left out is a wildcard. The point must match **exactly one** rendered element. What a component reports differs by kind:
+
+| Kind | Fields of a data point |
+| --- | --- |
+| `ChartTime` | `date` and `scenario`. The chart adds up the rows of a period, so it knows no other dimension. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
+| `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. |
+| `ChartScatter`, `ChartBubble` | The dimensions of the point level, the series level and the facet level. |
+| `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
+| `Table` | `rowGroup`, `category`, `subCategory`, and `date` in a column of a date `interval`. `scenario` selects the column. Without `scenario` the whole row is the target. |
+| `Text`, `Tree`, `Grid` | None: use a target without `point`. |
+
+A table point without `subCategory` means the row itself and not its thereof rows. All columns of one scenario with `columnthereof` or `interval: setname` have the same key, so a point cannot tell them apart.
+
+## Examples
+
+### Marker on a table cell and on a whole row
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: software_actual
+spec:
+  target:
+    kind: Table
+    name: sales_by_product
+    point: { category: Software, scenario: ac1 }
+  title: Software
+  text: Ahead of plan.
+---
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: services_row
+spec:
+  target:
+    kind: Table
+    name: sales_by_product
+    point: { category: Services }
+  title: Services
+  text: Behind plan in every quarter.
+```
+
+On a table cell the marker sits next to the number, not on it. A dense table has no room for that: there it is smaller and sits in the wider gap next to the number.
+
+### Subtotal and total rows
+
+```yaml
+target:
+  kind: Table
+  name: pnl
+  point: { row: subtotal, rowGroup: Revenue, scenario: ac1 }
+```
+
+```yaml
+target:
+  kind: Table
+  name: pnl
+  point: { row: total }
+```
+
+### Frame around a stack total
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: total_2025
+spec:
+  mark: frame
+  target:
+    kind: ChartTime
+    name: net_sales
+    point: { date: "2025-01-01", part: total }
+```
+
+This annotation has no text, so it has no number and no entry in a list.
+
+### Arrow between two totals
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: decline_trend
+spec:
+  mark: arrow
+  color: negative
+  target:
+    kind: ChartTime
+    name: net_sales
+    point: { date: "2024-01-01", part: total }
+  to:
+    kind: ChartTime
+    name: net_sales
+    point: { date: "2028-01-01", part: total }
+```
+
+Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow` and not allowed for the other marks.
+
+## Numbers
+
+The CLI gives the numbers, per page and starting at 1:
+
+1. The order of the entries of the page's `AnnotationList`s.
+2. Then the other annotations of the page, in manifest order.
+
+Only an annotation with a `title` or a `text` gets a number. A number exists only if a mark carries it: an annotation whose point is not in the data gets none, and the next ones move up. Its text stays in the list without a number.
+
+A component that sits on a page twice gets the mark twice, with the same number.
+
+## A point that is not in the data
+
+This is a warning and not a failure. The rule [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) compares the point with the rows of the component's dataset. `bino build` and `bino preview` write it to their log. `bino lint --execute-queries` reports it as a finding, which fails only with `--fail-on-warnings` or a severity you set in `bino.toml`.
+
+The check does not look at the `filter` of a component, it skips a component that binds several datasets, and it cannot see whether a wildcard matches several elements. In these cases the engine draws nothing and writes a warning to the browser console. The entry in the list keeps its place and loses its circle, the other numbers stay as they are.
+
+## Colors
+
+`color` names a color from the `bn-annotation` section of a [`ComponentStyle`](/reference/component-style/#annotation-style-bn-annotation). Built in are `negative` and `positive`. Without `color`, or with a name the style does not have, a mark has the main color of the style, a blue.
+
+## Limits
+
+- A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one.
+- A `ScreenshotArtefact` of a single component does not show the marks: they are drawn over the page and not in the component.
+- A component embedded in the Markdown of a `DocumentArtefact` has no marks.
+- The presentation view shows annotations like `bino preview`.
+- `metadata.annotations` of any document is an unused free-form map and has nothing to do with this kind.
+
+## Attribute reference
+
+| Attribute | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `spec.mark` | string | no | `marker` | `marker`, `frame` or `arrow`. |
+| `spec.color` | string | no | main color | Name of a color in the `bn-annotation` style. |
+| `spec.target.kind` | string | yes | - | `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Table`, `Text`, `Tree` or `Grid`. |
+| `spec.target.name` | string | yes | - | Name of the component. |
+| `spec.target.point` | object | no | whole component | See [The point](#the-point). |
+| `spec.to` | object | for `arrow` | - | The end of the arrow, the same shape as `target`. |
+| `spec.title` | string | no | - | Shown in bold in the list. |
+| `spec.text` | string | no | - | Inline Markdown shown in the list. |
+
+## See also
+
+- [`AnnotationList`](/reference/annotation-list/)
+- [Lint rules](/appendix/lint-rules/#annotation-target-missing)
+- [`ComponentStyle`](/reference/component-style/#annotation-style-bn-annotation)

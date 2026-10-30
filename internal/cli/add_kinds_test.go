@@ -33,6 +33,8 @@ func TestKindConfigRoundTripForSelectorKinds(t *testing.T) {
 		"chartscatter":         "ChartScatter",
 		"chartbubble":          "ChartBubble",
 		"chartbullet":          "ChartBullet",
+		"annotation":           "Annotation",
+		"annotationlist":       "AnnotationList",
 		"asset":                "Asset",
 		"componentstyle":       "ComponentStyle",
 		"ruleset":              "RuleSet",

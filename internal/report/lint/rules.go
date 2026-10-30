@@ -46,6 +46,13 @@ func DefaultRules() []Rule {
 		datasetDependencyUnused,
 		// Constant columns
 		datasetConstantsSpec,
+		// Annotations
+		annotationTargetMissing,
+		annotationArrowPages,
+		annotationListUnknown,
+		annotationListOffPage,
+		annotationUnlisted,
+		annotationListInLive,
 	}
 }
 

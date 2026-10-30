@@ -28,6 +28,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "snippets": [
+      {
+        "language": "yaml",
+        "path": "./snippets/annotations.code-snippets"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -371,6 +377,16 @@
         "category": "Bino"
       },
       {
+        "command": "bino.addAnnotation",
+        "title": "Add Annotation",
+        "category": "Bino"
+      },
+      {
+        "command": "bino.addAnnotationList",
+        "title": "Add AnnotationList",
+        "category": "Bino"
+      },
+      {
         "command": "bino.addReportArtefact",
         "title": "Add ReportArtefact",
         "category": "Bino"
@@ -602,6 +618,14 @@
         },
         {
           "command": "bino.addChartBullet",
+          "when": "false"
+        },
+        {
+          "command": "bino.addAnnotation",
+          "when": "false"
+        },
+        {
+          "command": "bino.addAnnotationList",
           "when": "false"
         },
         {

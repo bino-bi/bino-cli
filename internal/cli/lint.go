@@ -17,6 +17,7 @@ import (
 	"bino.bi/bino/internal/report/buildlog"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/diagnostics"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/spec"
@@ -171,6 +172,12 @@ with --fail-on-warnings.`),
 				findings = append([]lint.Finding{compatFinding}, findings...)
 			}
 
+			// A project with annotations needs a newer engine than one without.
+			annotationGateFinding, annotationGateFatal := annotationEngineFinding(projectRoot, projectCfg, documents)
+			if annotationGateFatal {
+				findings = append([]lint.Finding{annotationGateFinding}, findings...)
+			}
+
 			// Step 3: Execute queries and validate data (optional)
 			var dataValidationWarnings []dataset.Warning
 			if executeQueries {
@@ -189,6 +196,7 @@ with --fail-on-warnings.`),
 				} else {
 					out.StepDone(fmt.Sprintf("Executed %d dataset(s)", len(results)), time.Since(queryStart))
 					dataValidationWarnings = warnings
+					findings = append(findings, runner.Apply(diagnostics.AnnotationPointFindings(ctx, documents, results))...)
 				}
 			}
 
@@ -253,6 +261,9 @@ with --fail-on-warnings.`),
 			// a non-zero exit regardless of --fail-on-warnings.
 			if compatFatal {
 				return RuntimeErrorf("engine-version-incompatible")
+			}
+			if annotationGateFatal {
+				return RuntimeErrorf("annotation-engine-version")
 			}
 
 			// Manifests that failed to load stay fatal even when [lint] hides

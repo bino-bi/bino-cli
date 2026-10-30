@@ -32,6 +32,8 @@
         "Table",
         "ComponentStyle",
         "RuleSet",
+        "Annotation",
+        "AnnotationList",
         "Internationalization",
         "ScalingGroup",
         "ReportArtefact",
@@ -268,6 +270,33 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/ruleSetSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "Annotation" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["spec"],
+        "properties": {
+          "spec": { "$ref": "#/$defs/annotationSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "AnnotationList" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/annotationListSpec" }
         }
       }
     },
@@ -2304,6 +2333,118 @@
       },
       "additionalProperties": false
     },
+    "annotationSpec": {
+      "type": "object",
+      "description": "A note on a component: a mark on the page, and optionally a numbered text in an AnnotationList. It points at the component, the component does not change. Live artefacts never show annotations.",
+      "required": ["target"],
+      "properties": {
+        "mark": {
+          "type": "string",
+          "enum": ["marker", "frame", "arrow"],
+          "default": "marker",
+          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9-]*$",
+          "description": "Name of a color in the colors section of the bn-annotation style. Built in: negative, positive. Default: the main color of that style, a blue."
+        },
+        "target": {
+          "$ref": "#/$defs/annotationTarget",
+          "description": "What the mark points at."
+        },
+        "to": {
+          "$ref": "#/$defs/annotationTarget",
+          "description": "The end of an arrow. Required for mark: arrow, not allowed otherwise. Must be on the same page as target."
+        },
+        "title": {
+          "type": "string",
+          "description": "Shown in bold in the AnnotationList. An annotation with a title or a text gets a number."
+        },
+        "text": {
+          "type": "string",
+          "description": "Inline Markdown shown in the AnnotationList. An annotation with a title or a text gets a number."
+        }
+      },
+      "dependentSchemas": {
+        "mark": {
+          "if": { "properties": { "mark": { "const": "arrow" } } },
+          "then": { "required": ["to"] }
+        },
+        "to": {
+          "required": ["mark"],
+          "properties": { "mark": { "const": "arrow" } }
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotationTarget": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid"],
+          "description": "Kind of the component."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the component: the document a layout child refs, or metadata.name of an inline child. A child of a Grid or a Tree cannot be a target."
+        },
+        "point": {
+          "$ref": "#/$defs/annotationPoint",
+          "description": "One data point of the component. Without it the mark points at the component as a whole."
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotationPoint": {
+      "type": "object",
+      "description": "Raw dataset values, not formatted labels. A field left out is a wildcard. The point must match exactly one rendered element.",
+      "properties": {
+        "rowGroup": { "type": "string", "description": "Value of the rowGroup column." },
+        "category": { "type": "string", "description": "Value of the category column." },
+        "subCategory": { "type": "string", "description": "Value of the subCategory column." },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2})?$",
+          "description": "First day of the period, YYYY-MM-DD. With dateInterval year, a row of 2024-03-15 is in the period 2024-01-01."
+        },
+        "scenario": {
+          "type": "string",
+          "description": "A slot like ac1 or pl1, a variance like dac1_pl1_pos, or a table column. On a table, a point without scenario means the whole row."
+        },
+        "row": {
+          "type": "string",
+          "enum": ["subtotal", "total"],
+          "description": "A subtotal or total row of a table, with the values of its parent."
+        },
+        "part": {
+          "type": "string",
+          "enum": ["element", "label", "total"],
+          "default": "element",
+          "description": "element: the bar, mark, row or cell. label: its value label. total: the total label of a stack."
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotationListSpec": {
+      "type": "object",
+      "description": "Prints the numbered texts of the annotations on its page.",
+      "properties": {
+        "annotations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Names of the Annotation documents to show, in this order. Default: all annotations of this page."
+        },
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of the ComponentStyle whose bn-annotation section colors the circles."
+        }
+      },
+      "additionalProperties": false
+    },
     "ruleSetSpec": {
       "description": "A named set of rendering rules; components opt in via their ruleset field or inherit one from the surrounding layout.",
       "type": "object",
@@ -2385,9 +2526,26 @@
         "bn-chart-bubble": { "$ref": "#/$defs/xyChartStyle" },
         "bn-chart-bullet": { "$ref": "#/$defs/bulletChartStyle" },
         "bn-tree": { "$ref": "#/$defs/treeStyle" },
-        "bn-grid": { "$ref": "#/$defs/gridStyle" }
+        "bn-grid": { "$ref": "#/$defs/gridStyle" },
+        "bn-annotation": { "$ref": "#/$defs/annotationStyle" }
       },
       "additionalProperties": true
+    },
+    "annotationStyle": {
+      "type": "object",
+      "description": "Colors of the annotation marks and of the circles of the AnnotationList.",
+      "properties": {
+        "color": {
+          "type": "string",
+          "description": "Main color: a mark without a color, a mark with a name that colors does not have, and the circles of the list."
+        },
+        "colors": {
+          "type": "object",
+          "description": "The names a mark can use in its color, with their colors. Built in: negative, positive.",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
     },
     "globalStyle": {
       "type": "object",
@@ -3612,7 +3770,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard", "Image"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard", "Image", "AnnotationList"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -3642,6 +3800,10 @@
         {
           "if": { "required": ["params"] },
           "then": { "required": ["ref"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "AnnotationList" } }, "required": ["kind"] },
+          "then": { "properties": { "spec": { "$ref": "#/$defs/annotationListSpec" } } }
         },
         {
           "if": { "properties": { "kind": { "const": "Text" } }, "required": ["kind"] },

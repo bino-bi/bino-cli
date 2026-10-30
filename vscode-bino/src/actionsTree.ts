@@ -55,6 +55,8 @@ const SCAFFOLD_CATEGORIES: { id: string; label: string; items: ScaffoldEntry[] }
             { label: 'Add ChartScatter', commandId: 'bino.addChartScatter', icon: 'graph' },
             { label: 'Add ChartBubble', commandId: 'bino.addChartBubble', icon: 'graph' },
             { label: 'Add ChartBullet', commandId: 'bino.addChartBullet', icon: 'graph' },
+            { label: 'Add Annotation', commandId: 'bino.addAnnotation', icon: 'comment' },
+            { label: 'Add AnnotationList', commandId: 'bino.addAnnotationList', icon: 'list-ordered' },
         ]
     },
     {

@@ -38,6 +38,7 @@ var renderableChildKinds = map[string]bool{
 	"Tree":           true,
 	"Grid":           true,
 	"Image":          true,
+	"AnnotationList": true,
 }
 
 // isPluginKind reports whether kind is not built-in. The loader admits such
@@ -154,7 +155,7 @@ var pageLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
 				components[doc.Name] = doc
 			default:
 				if isPluginKind(doc.Kind) {
@@ -278,7 +279,7 @@ var cardLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
 				components[doc.Name] = doc
 			default:
 				if isPluginKind(doc.Kind) {
@@ -474,6 +475,9 @@ func countEffectiveChildren(
 				})
 				continue
 			}
+			count++
+		case child.Kind == "AnnotationList":
+			// A list needs no spec: without one it shows all annotations of the page.
 			count++
 		default:
 			// No ref and no spec - this child won't render

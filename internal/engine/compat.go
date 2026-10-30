@@ -35,6 +35,45 @@ var SupportedEngineRanges = []string{
 	">=1.0.0-alpha.19, <2.0.0-0",
 }
 
+// AnnotationsMinVersion is the first engine release with bn-annotation-layer,
+// bn-annotation-list and the annotations slot of bn-layout-page. It is no floor
+// of SupportedEngineRanges: a project without annotations keeps working on
+// older engines.
+const AnnotationsMinVersion = "v1.0.0-next.30"
+
+// CheckAnnotationSupport returns an error when a project with annotations uses
+// an engine older than AnnotationsMinVersion. An empty or unreadable version
+// is no finding: there is nothing to compare, and CheckCompatibility reports it.
+func CheckAnnotationSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(AnnotationsMinVersion)) {
+		return fmt.Errorf("annotations need template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", AnnotationsMinVersion, engineVersion, AnnotationsMinVersion)
+	}
+	return nil
+}
+
+// ResolveVersion returns the engine version to check from a non-downloading
+// source: the pin if set, otherwise the latest locally cached version. It is ""
+// when nothing is resolvable, and callers should then skip the check.
+func ResolveVersion(pinnedVersion string) string {
+	if pinnedVersion != "" {
+		return pinnedVersion
+	}
+	mgr, err := NewManager()
+	if err != nil {
+		return ""
+	}
+	info, err := mgr.LatestLocalVersion()
+	if err != nil {
+		return ""
+	}
+	return info.Version
+}
+
 // CompatibilityError indicates that the resolved template engine version is
 // not within any supported range. Callers can use errors.As to extract the
 // fields and format the error per channel (CLI stderr, LSP diagnostic, lint

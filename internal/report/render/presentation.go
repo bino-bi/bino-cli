@@ -320,6 +320,9 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, renderModeStr)
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 	rc.withDatasetResults(datasetResults)
+	if err := rc.withAnnotations(docs, datasetResults, sources, ModePreview, engineVersion); err != nil {
+		return PresentationResult{}, diags, err
+	}
 
 	// Render each LayoutPage as a slide - the page is embedded as-is inside a <section>.
 	var slides strings.Builder
@@ -453,6 +456,9 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	rc := newRenderCtx(ctx, docs, constraintCtx, allDocs, assetURLMap, pluginRenderer, "preview")
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 	rc.withDatasetResults(datasetResults)
+	if err := rc.withAnnotations(docs, datasetResults, sources, ModePreview, engineVersion); err != nil {
+		return PresentationFrameResult{}, diags, err
+	}
 
 	var slides strings.Builder
 	for _, doc := range docs {

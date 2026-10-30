@@ -88,6 +88,14 @@ page once per parameter set - `layoutPages: [{page: sales, params: {REGION: EU}}
 `${REGION}` expands anywhere in the page's spec. Explicit value > declared default > env var.
 Docs: https://cli.bino.bi/reference/layout-page/ and https://cli.bino.bi/guides/layoutpage-params/
 
+## Annotations
+
+An `Annotation` is a non-visual document that points at a component or one data point of it and draws a
+marker, a frame or an arrow over the page. An `AnnotationList` is a layout child that prints the numbered
+texts. The direction is annotation to component: the component does not name it. The CLI gives the
+numbers per page. Live artefacts (`bino serve`) drop both, silently. `metadata.annotations` is an unrelated,
+unused map. See `bino-authoring`.
+
 ## Constraints
 
 `metadata.constraints` includes a document only when every condition holds, evaluated per artefact

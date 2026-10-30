@@ -73,6 +73,8 @@ var builtinCategory = map[string]string{
 	"DocumentArtefact":     "artefact",
 	"ComponentStyle":       "config",
 	"RuleSet":              "config",
+	"Annotation":           "config",
+	"AnnotationList":       "layout",
 	"Internationalization": "config",
 	"ScalingGroup":         "config",
 	"SigningProfile":       "config",

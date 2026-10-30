@@ -498,6 +498,13 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"dataset-dependency-unused",
 		// Constant columns
 		"dataset-constants-spec",
+		// Annotations
+		"annotation-target-missing",
+		"annotation-arrow-pages",
+		"annotation-list-unknown",
+		"annotation-list-off-page",
+		"annotation-unlisted",
+		"annotation-list-in-live",
 	}
 
 	if len(rules) != len(expectedIDs) {

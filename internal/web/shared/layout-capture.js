@@ -15,7 +15,7 @@
  * with the engine or the source join silently misaligns.
  */
 export const VISUAL_SELECTOR =
-  'bn-body, bn-card, bn-chart-bubble, bn-chart-bullet, bn-chart-scatter, ' +
+  'bn-annotation-layer, bn-annotation-list, bn-body, bn-card, bn-chart-bubble, bn-chart-bullet, bn-chart-scatter, ' +
   'bn-chart-structure, bn-chart-time, bn-footer, bn-grid, bn-image, ' +
   'bn-layout-card, bn-layout-page, bn-message, bn-page, bn-table, ' +
   'bn-text, bn-title, bn-tree';

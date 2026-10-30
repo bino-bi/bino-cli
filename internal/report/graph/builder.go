@@ -166,7 +166,7 @@ func (b *builder) categorize() {
 				b.componentDocs[doc.Kind] = append(b.componentDocs[doc.Kind], doc)
 			}
 			// Config/resource kinds (ScalingGroup, ComponentStyle, RuleSet,
-			// Internationalization, ConnectionSecret, SigningProfile) get no
+			// Annotation, Internationalization, ConnectionSecret, SigningProfile) get no
 			// graph node - they are collected during rendering.
 		}
 	}
@@ -333,6 +333,10 @@ func (b *builder) buildLayoutChildren(parentName, file string, children []layout
 
 // anc are the enclosing page and card, whose title fields the child can inherit.
 func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, indexPath []int, anc ancestors) (string, error) {
+	// A list reads no data: like its Annotation documents it has no graph node.
+	if child.Kind == "AnnotationList" {
+		return "", nil
+	}
 	// Resolve ref to get the effective spec (base from referenced doc + overrides from child).
 	effectiveSpec, effectiveFile, err := b.resolveChildSpec(parentName, child)
 	if err != nil {

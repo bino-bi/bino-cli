@@ -25,6 +25,8 @@ var dirForKind = map[string]string{
 	schema.KindAsset:                "resources",
 	schema.KindLayoutPage:           "pages",
 	schema.KindLayoutCard:           "pages",
+	schema.KindAnnotation:           "components",
+	schema.KindAnnotationList:       "components",
 	schema.KindChartStructure:       "components",
 	schema.KindChartTime:            "components",
 	schema.KindChartScatter:         "components",

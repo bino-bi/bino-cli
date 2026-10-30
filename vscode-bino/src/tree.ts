@@ -120,6 +120,10 @@ export class BinoTreeItem extends vscode.TreeItem {
             case 'ChartBubble':
             case 'ChartBullet':
                 return new vscode.ThemeIcon('graph');
+            case 'Annotation':
+                return new vscode.ThemeIcon('comment');
+            case 'AnnotationList':
+                return new vscode.ThemeIcon('list-ordered');
             case 'ComponentStyle':
                 return new vscode.ThemeIcon('paintcan');
             case 'ScalingGroup':
@@ -245,6 +249,8 @@ export class BinoTreeProvider implements vscode.TreeDataProvider<BinoTreeItem> {
             'ChartScatter',
             'ChartBubble',
             'ChartBullet',
+            'Annotation',
+            'AnnotationList',
             'Asset',
             'ComponentStyle',
             'ScalingGroup',

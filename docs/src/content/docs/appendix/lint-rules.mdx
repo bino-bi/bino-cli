@@ -38,6 +38,14 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `dataset-dependency-undeclared`   | DataSet Dependency Undeclared               | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                                              |
 | `dataset-dependency-unused`       | DataSet Dependency Unused                   | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                                             |
 | `dataset-constants-spec`          | DataSet Constants Spec                      | Warning  | `constants.spec.<kind>.<field>` must name a known kind token and a field of that kind's spec.                               |
+| `annotation-target-missing` | Annotation Target Missing | Error | The `target` or `to` of an Annotation must be a component with a slot on a rendered page. |
+| `annotation-arrow-pages` | Annotation Arrow Pages | Error | Both ends of an arrow must be on the same page. |
+| `annotation-list-unknown` | Annotation List Unknown | Error | An AnnotationList must only name annotations that exist after constraint filtering. |
+| `annotation-list-off-page` | Annotation List Off Page | Error | An AnnotationList must only name annotations whose target is on its page. |
+| `annotation-unlisted` | Annotation Unlisted | Info | An annotation with a title or a text should be shown by an AnnotationList on its page. |
+| `annotation-list-in-live` | Annotation List In Live | Warning | A page with an AnnotationList that a LiveReportArtefact serves has an empty slot there. |
+| `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
+| `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
 | `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
 | `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
@@ -745,6 +753,73 @@ spec:
       table:
         barColumns: ac1,pl1
 ```
+
+### annotation-target-missing
+
+The `target` or `to` of an [`Annotation`](/reference/annotation/) resolves to no rendered component: no page has a child of that kind whose `ref` or inline `metadata.name` is that name, in any `ReportArtefact` that includes the annotation.
+
+A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The message says so.
+
+```yaml
+kind: Annotation
+metadata:
+  name: note
+spec:
+  target: { kind: Table, name: sales_table }  # no page shows this table
+```
+
+**Fix:** put the component on a page, or name it correctly. `kind` must match too.
+
+### annotation-arrow-pages
+
+The two ends of an arrow are on different pages. A mark is drawn over one page, so nothing is drawn.
+
+**Fix:** point both ends at components of one page.
+
+### annotation-list-unknown
+
+An [`AnnotationList`](/reference/annotation-list/) names an annotation that does not exist for an artefact that shows the page, either because of a typo or because the constraints of the annotation exclude it there.
+
+**Fix:** correct the name, or add the same constraints to the list.
+
+### annotation-list-off-page
+
+An `AnnotationList` names an annotation whose target is not on the page of the list. The list leaves it out.
+
+**Fix:** move the list or the component. A list shows only the annotations of its own page.
+
+### annotation-unlisted
+
+An annotation with a `title` or a `text` is on a page where no `AnnotationList` shows it. The mark has its number, but the reader never sees the text.
+
+**Fix:** add an `AnnotationList` to the page, or add the name to its `annotations`.
+
+### annotation-list-in-live
+
+A page with an `AnnotationList` is served by a `LiveReportArtefact`, through `artefact` or `layoutPages` of a route. Live artefacts never show annotations, so the slot of the list stays empty there.
+
+**Fix:** use a page without the list for the live route, or accept the empty slot.
+
+### annotation-point-missing
+
+The `point` of an annotation cannot exist: no row of the dataset of the component has these values, the scenario has no value on those rows, or the component reports no such field (a `ChartTime` has no `category`).
+
+The annotation draws nothing and has no number, the next ones move up. Its text stays in the list without a number.
+
+```yaml
+target:
+  kind: ChartTime
+  name: net_sales
+  point: { date: "1999-01-01", scenario: ac1 }  # no row of that date
+```
+
+This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it because the numbers depend on it. A component that binds several datasets is not checked.
+
+### annotation-engine-version
+
+The project has an `Annotation` and its engine is older than v1.0.0-next.30, which has no overlay. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without annotations keeps working on that engine.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.30 or newer.
 
 ### duplicate-name
 

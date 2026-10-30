@@ -52,6 +52,8 @@ var kindCategories = []KindCategory{
 			{Name: "chartscatter", Description: "XY scatter chart"},
 			{Name: "chartbubble", Description: "Bubble portfolio chart"},
 			{Name: "chartbullet", Description: "Bullet KPI chart"},
+			{Name: "annotation", Description: "Mark and note on a data point"},
+			{Name: "annotationlist", Description: "Numbered list of annotation texts"},
 		},
 	},
 	{
@@ -118,6 +120,8 @@ Subcommands (Visualization):
   chartscatter      Create a ChartScatter manifest (scatter chart)
   chartbubble       Create a ChartBubble manifest (bubble chart)
   chartbullet       Create a ChartBullet manifest (bullet KPI chart)
+  annotation        Create an Annotation manifest (mark and note on a data point)
+  annotationlist    Create an AnnotationList manifest (numbered list of texts)
 
 Subcommands (Resources):
   asset             Create an Asset manifest (image/font/file)
@@ -183,6 +187,8 @@ Three interaction modes are supported:
 	cmd.AddCommand(newAddChartScatterCommand())
 	cmd.AddCommand(newAddChartBubbleCommand())
 	cmd.AddCommand(newAddChartBulletCommand())
+	cmd.AddCommand(newAddAnnotationCommand())
+	cmd.AddCommand(newAddAnnotationListCommand())
 
 	// Resources
 	cmd.AddCommand(newAddAssetCommand())

@@ -1,0 +1,64 @@
+{
+  "bino Annotation (marker)": {
+    "prefix": "bino-annotation",
+    "description": "Numbered marker on a data point, with a text for the AnnotationList",
+    "body": [
+      "apiVersion: bino.bi/v1alpha1",
+      "kind: Annotation",
+      "metadata:",
+      "  name: ${1:name}",
+      "spec:",
+      "  target:",
+      "    kind: ${2|ChartTime,ChartStructure,ChartScatter,ChartBubble,ChartBullet,Table,Text,Tree,Grid|}",
+      "    name: ${3:component}",
+      "    point: { date: \"${4:2024-01-01}\", scenario: ${5:ac1} }",
+      "  title: ${6:Title}",
+      "  text: ${7:Text}"
+    ]
+  },
+  "bino Annotation (frame)": {
+    "prefix": "bino-annotation-frame",
+    "description": "Rounded frame around a value",
+    "body": [
+      "apiVersion: bino.bi/v1alpha1",
+      "kind: Annotation",
+      "metadata:",
+      "  name: ${1:name}",
+      "spec:",
+      "  mark: frame",
+      "  target:",
+      "    kind: ${2|Table,ChartTime,ChartStructure,ChartScatter,ChartBubble,ChartBullet|}",
+      "    name: ${3:component}",
+      "    point: { category: ${4:category}, scenario: ${5:ac1} }"
+    ]
+  },
+  "bino Annotation (arrow)": {
+    "prefix": "bino-annotation-arrow",
+    "description": "Straight arrow between two data points on one page",
+    "body": [
+      "apiVersion: bino.bi/v1alpha1",
+      "kind: Annotation",
+      "metadata:",
+      "  name: ${1:name}",
+      "spec:",
+      "  mark: arrow",
+      "  color: ${2|negative,positive|}",
+      "  target:",
+      "    kind: ChartTime",
+      "    name: ${3:component}",
+      "    point: { date: \"${4:2024-01-01}\", part: total }",
+      "  to:",
+      "    kind: ChartTime",
+      "    name: ${3:component}",
+      "    point: { date: \"${5:2026-01-01}\", part: total }"
+    ]
+  },
+  "bino AnnotationList child": {
+    "prefix": "bino-annotation-list",
+    "description": "Layout child that prints the numbered texts of the page",
+    "body": [
+      "- kind: AnnotationList",
+      "  spec: { annotations: [${1:name}] }"
+    ]
+  }
+}

@@ -6,7 +6,9 @@ import (
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/lint"
+	"bino.bi/bino/internal/schema"
 )
 
 // printCompatFinding renders the compat finding to the structured output
@@ -23,24 +25,10 @@ func printCompatFinding(out *Output, projectRoot string, f lint.Finding) {
 	out.List(fmt.Sprintf("[%s] %s: %s", f.RuleID, loc, f.Message))
 }
 
-// resolveEngineVersionForCompat returns the engine version to validate
-// against SupportedEngineRanges from a non-downloading source: the explicit
-// pin in bino.toml if set, otherwise the latest locally cached version.
-// Returns "" with no error when nothing is resolvable (e.g., no engine
-// cached and no pin) - callers should treat that as "skip the check".
+// resolveEngineVersionForCompat returns the engine version to validate, see
+// engine.ResolveVersion.
 func resolveEngineVersionForCompat(pinnedVersion string) string {
-	if pinnedVersion != "" {
-		return pinnedVersion
-	}
-	mgr, err := engine.NewManager()
-	if err != nil {
-		return ""
-	}
-	info, err := mgr.LatestLocalVersion()
-	if err != nil {
-		return ""
-	}
-	return info.Version
+	return engine.ResolveVersion(pinnedVersion)
 }
 
 // engineCompatFinding runs the compatibility check and, on a
@@ -62,6 +50,36 @@ func engineCompatFinding(projectRoot, pinnedVersion string) (lint.Finding, bool)
 	return lint.Finding{
 		RuleID:  "engine-version-incompatible",
 		Message: cErr.Error(),
+		File:    configPath,
+		Line:    line,
+		Column:  col,
+	}, true
+}
+
+// annotationEngineFinding reports a project with Annotation documents whose
+// engine is older than the release with the overlay. It is its own check, as a
+// project without annotations keeps working on that engine.
+func annotationEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := false
+	for _, doc := range documents {
+		used = used || doc.Kind == schema.KindAnnotation
+	}
+	if !used {
+		return lint.Finding{}, false
+	}
+	pinned := ""
+	if cfg != nil {
+		pinned = cfg.EngineVersion
+	}
+	err := engine.CheckAnnotationSupport(resolveEngineVersionForCompat(pinned))
+	if err == nil {
+		return lint.Finding{}, false
+	}
+	configPath := pathutil.ProjectConfigPath(projectRoot)
+	line, col := pathutil.FindEngineVersionLine(configPath)
+	return lint.Finding{
+		RuleID:  "annotation-engine-version",
+		Message: err.Error(),
 		File:    configPath,
 		Line:    line,
 		Column:  col,

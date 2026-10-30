@@ -32,7 +32,7 @@ type LayoutCardManifestData struct {
 
 // layoutChildKinds are the component kinds a LayoutPage/LayoutCard child may
 // reference (mirrors the layoutChild kind enum in document.schema.json).
-var layoutChildKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard"}
+var layoutChildKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard", "AnnotationList"}
 
 // resolveLayoutChildren maps component names (from --children) to typed child
 // references by looking up each name's kind among the scanned manifests.

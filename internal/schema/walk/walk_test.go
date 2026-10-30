@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"bino.bi/bino/internal/schema"
@@ -363,5 +364,15 @@ func TestResolveRefIntoArray(t *testing.T) {
 	}
 	if m.resolveRef("#/allOf/9/then") != nil || m.resolveRef("#/allOf/x") != nil {
 		t.Error("out-of-range or non-numeric index must not resolve")
+	}
+}
+
+func TestAnnotationScaffoldHasNoArrowEnd(t *testing.T) {
+	body := ScaffoldBody(Parse(schema.DocumentSchemaBytes()), "Annotation", "bino.bi/v1alpha1", false)
+	if !strings.Contains(body, "target:") {
+		t.Fatalf("no target in:\n%s", body)
+	}
+	if strings.Contains(body, "\n  to:") {
+		t.Fatalf("to is only for an arrow:\n%s", body)
 	}
 }
