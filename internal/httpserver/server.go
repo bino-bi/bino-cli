@@ -622,6 +622,21 @@ func (s *Server) SetLocalAssets(assets []LocalAsset) {
 	s.assetMu.Unlock()
 }
 
+// AddLocalAssets registers assets on top of the current table.
+func (s *Server) AddLocalAssets(assets []LocalAsset) {
+	s.assetMu.Lock()
+	defer s.assetMu.Unlock()
+	if s.localAssets == nil {
+		s.localAssets = make(map[string]LocalAsset, len(assets))
+	}
+	for _, asset := range assets {
+		if asset.URLPath == "" || asset.FilePath == "" {
+			continue
+		}
+		s.localAssets[asset.URLPath] = asset
+	}
+}
+
 // SetPluginAssets sets the handler that serves plugin assets under /plugins/.
 // A nil handler makes every /plugins/ request a 404.
 func (s *Server) SetPluginAssets(h http.Handler) {

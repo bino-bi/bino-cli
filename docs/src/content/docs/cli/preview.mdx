@@ -26,6 +26,7 @@ Common flags:
 - `--lint` - run lint rules on each refresh (disabled by default).
 - `--no-open` - do not open the preview in the system browser. Use it when an editor or an agent
   shows the preview itself.
+- `--embed-only` - render only what `/__embedding/{name}` asks for, and nothing on a refresh. The report routes are not served. For a host that shows single embeddings: a change then costs one render of the component on screen, not a render of the whole report.
 - `--data-validation` - data validation mode: `warn` (default), `fail`, or `off`.
 
 ## Documents
