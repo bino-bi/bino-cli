@@ -10,6 +10,7 @@ import (
 
 	"bino.bi/bino/internal/httpserver"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/datasource"
 	embedkinds "bino.bi/bino/internal/report/embed"
 	"bino.bi/bino/internal/report/pipeline"
 	"bino.bi/bino/internal/report/render"
@@ -187,6 +188,7 @@ func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mute
 	// Release the lock for the slow render call; the captured values are copies
 	// and docs are replaced (never mutated) by refreshes.
 	docs := state.lastDocs
+	generation := state.generation
 	mu.Unlock()
 
 	body, err := renderEmbedTarget(ctx, name, target, docs, cfg, plugins, language, server)
@@ -195,10 +197,12 @@ func EmbedByName(ctx context.Context, name, kind, language string, mu *sync.Mute
 	}
 
 	mu.Lock()
-	if state.embeddingCache == nil {
-		state.embeddingCache = make(map[string][]byte)
+	if state.generation == generation {
+		if state.embeddingCache == nil {
+			state.embeddingCache = make(map[string][]byte)
+		}
+		state.embeddingCache[cacheKey] = body
 	}
-	state.embeddingCache[cacheKey] = body
 	mu.Unlock()
 	return body, nil
 }
@@ -257,6 +261,8 @@ func validateEmbedLanguage(language string) error {
 func renderEmbedTarget(ctx context.Context, name string, target embedTarget, docs []config.Document, cfg *Config, plugins *render.PluginOptions, language string, server *httpserver.Server) ([]byte, error) {
 	var body []byte
 	var emitted []render.EmittedData
+	var assets []render.LocalAsset
+	var diagnostics []datasource.Diagnostic
 	var err error
 	switch {
 	case target.reportArt != nil:
@@ -268,7 +274,7 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 			art.Spec.Language = language
 		}
 		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, art, embedRenderOpts(cfg, plugins))
-		body, emitted, err = result.HTML, result.EmittedData, e
+		body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e
 	case target.docArt != nil:
 		// Same aliasing rule. DocumentArtefact spells the axis spec.locale.
 		docArt := *target.docArt
@@ -285,15 +291,15 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 			PostRenderHTMLHook:   cfg.PostRenderHTMLHook,
 			PostDatasetHook:      cfg.PostDatasetHook,
 		})
-		body, emitted, err = result.HTML, result.EmittedData, e
+		body, emitted, assets, err = result.HTML, result.EmittedData, result.LocalAssets, e
 	case target.layoutDoc != nil:
 		result, e := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, docs, syntheticPageArtefact(*target.layoutDoc, language), embedRenderOpts(cfg, plugins))
-		body, emitted, err = result.HTML, result.EmittedData, e
+		body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e
 	default: // target.compDoc != nil
 		if _, direct := directEmbeddableComponentKinds[target.compDoc.Kind]; direct {
 			// Leaf components render directly inside <bn-context>, no wrapping page.
 			result, e := pipeline.RenderHTML(ctx, docsWithoutLayoutPages(docs), embedComponentOpts(cfg, plugins, name, language))
-			body, emitted, err = result.HTML, result.EmittedData, e
+			body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e
 			break
 		}
 		// Container components (Tree, Grid) need child resolution: wrap in a page.
@@ -304,13 +310,19 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		}
 		synthDocs := append(append([]config.Document(nil), docs...), page)
 		result, e2 := pipeline.RenderArtefactHTML(ctx, cfg.Workdir, synthDocs, syntheticPageArtefact(page, language), embedRenderOpts(cfg, plugins))
-		body, emitted, err = result.HTML, result.EmittedData, e2
+		body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e2
 	}
 	if err != nil {
 		return nil, fmt.Errorf("embed %q: %w", name, err)
 	}
 
 	pipeline.RegisterEmittedData(server, emitted)
+	// A normal refresh registers the assets and logs the diagnostics of what it
+	// renders. Under --embed-only this render is the only one there is.
+	if cfg.EmbedOnly {
+		server.AddLocalAssets(pipeline.ConvertLocalAssets(assets))
+		pipeline.LogDiagnostics(cfg.Logger.Channel("datasource").Channel(name), diagnostics)
+	}
 	return body, nil
 }
 

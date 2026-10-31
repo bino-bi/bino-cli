@@ -58,6 +58,7 @@ func newPreviewCommand() *cobra.Command { //nolint:gocognit,funlen // grandfathe
 		dataValidation string
 		dataMode       string
 		incremental    bool
+		embedOnly      bool
 		include        []string
 		exclude        []string
 	)
@@ -342,6 +343,7 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 					PostDatasetHook:          postDatasetHook,
 					PluginLinters:            pluginLinters,
 					Reporter:                 reporter,
+					EmbedOnly:                embedOnly,
 					Include:                  include,
 					Exclude:                  exclude,
 				}
@@ -535,6 +537,8 @@ Use --verbose (-v) for verbose watcher logs and CDN diagnostics.`),
 		"Data validation mode: 'fail' treats errors as fatal, 'warn' logs and continues, 'off' skips validation")
 	cmd.Flags().StringVar(&dataMode, "data-mode", "url",
 		"Dataset/datasource delivery: 'url' fetches data via HTTP from the bino server (default), 'inline' embeds gzip+base64 in the HTML")
+	cmd.Flags().BoolVar(&embedOnly, "embed-only", false,
+		"Render only what /__embedding/{name} asks for, and nothing on a refresh. The report routes are not served. For hosts that show single embeddings")
 	cmd.Flags().BoolVar(&incremental, "incremental", true,
 		"Only re-render artefacts affected by the changed file(s); falls back to full rebuild for unknown files. Set --incremental=false to always rebuild everything")
 	cmd.Flags().StringSliceVar(&include, "artefact", nil, "metadata.name entries to preview (default: all)")

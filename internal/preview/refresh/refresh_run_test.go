@@ -1,11 +1,13 @@
 package refresh
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -370,5 +372,226 @@ func TestEmbedByNameKeepsPluginOptionsOfItsStart(t *testing.T) {
 	}
 	if len(before.modes) == 0 || len(after.modes) != 0 {
 		t.Errorf("renderer calls: before reload %d, after reload %d; want the renderer of the embed start only", len(before.modes), len(after.modes))
+	}
+}
+
+// writeEmbedBundle writes a report whose single page shows a local image, so a
+// render has an asset to register, and returns the bundle dir.
+func writeEmbedBundle(t *testing.T, title string) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("\x89PNG"), 0o600); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	writeEmbedManifest(t, dir, title)
+	return dir
+}
+
+func writeEmbedManifest(t *testing.T, dir, title string) {
+	t.Helper()
+	manifest := `apiVersion: bino.bi/v1alpha1
+kind: Asset
+metadata:
+  name: logo
+spec:
+  type: image
+  mediaType: image/png
+  source:
+    localPath: ./logo.png
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: note
+spec:
+  value: ` + title + `
+`
+	if err := os.WriteFile(filepath.Join(dir, "report.yaml"), []byte(manifest), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+}
+
+func get(t *testing.T, url string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get %s: %v", url, err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // test
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", url, err)
+	}
+	return resp.StatusCode, string(body)
+}
+
+func TestRunEmbedOnlyRendersNothing(t *testing.T) {
+	t.Parallel()
+
+	dir := writeEmbedBundle(t, "first")
+	srv := startTestServer(t)
+	state := NewState()
+	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
+
+	paths, err := Run(context.Background(), "test", nil, srv, nil, cfg, state)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Errorf("broadcast paths = %v, want none", paths)
+	}
+	if len(state.allPagesFrameHTML) != 0 {
+		t.Error("the All Pages view was rendered")
+	}
+	if status, body := get(t, srv.URL()+"/"); status != http.StatusOK || !strings.Contains(body, "--embed-only") {
+		t.Errorf("root = %d %q, want the notice", status, body)
+	}
+}
+
+func TestEmbedOnlyEmbeddingFollowsTheFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := writeEmbedBundle(t, "first")
+	srv := startTestServer(t)
+	state := NewState()
+	mu := &sync.Mutex{}
+	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	body, err := EmbedByName(context.Background(), "note", "Text", "", mu, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if !strings.Contains(string(body), "first") {
+		t.Errorf("first embedding does not show the first text: %s", body)
+	}
+
+	writeEmbedManifest(t, dir, "second")
+	if _, err := Run(context.Background(), "test", []string{filepath.Join(dir, "report.yaml")}, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	body, err = EmbedByName(context.Background(), "note", "Text", "", mu, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if !strings.Contains(string(body), "second") || strings.Contains(string(body), "first") {
+		t.Errorf("embedding after the edit is stale: %s", body)
+	}
+}
+
+// Under --embed-only no refresh registers assets, so the embedding has to.
+func TestEmbedOnlyServesTheAssetsOfAnEmbedding(t *testing.T) {
+	t.Parallel()
+
+	dir := writeEmbedBundle(t, "first")
+	srv := startTestServer(t)
+	state := NewState()
+	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	body, err := EmbedByName(context.Background(), "note", "Text", "", &sync.Mutex{}, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	match := regexp.MustCompile(`/assets/[^"'\s)<]+`).FindString(string(body))
+	if match == "" {
+		t.Fatalf("no asset reference in %s", body)
+	}
+	if status, _ := get(t, srv.URL()+match); status != http.StatusOK {
+		t.Errorf("GET %s = %d, want 200", match, status)
+	}
+}
+
+// The refresh under --embed-only is quick enough to finish while a render runs.
+// That render's body describes the old files and must not land in the new cache.
+func TestEmbedRenderOutlivedByARefreshDoesNotFillTheCache(t *testing.T) {
+	t.Parallel()
+
+	dir := writeEmbedBundle(t, "first")
+	srv := startTestServer(t)
+	state := NewState()
+	mu := &sync.Mutex{}
+	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// The hook runs inside the render, after the docs it uses were picked.
+	var once sync.Once
+	cfg.PostDatasetHook = func(ctx context.Context, _ []pipeline.DatasetPayload) error {
+		once.Do(func() {
+			writeEmbedManifest(t, dir, "second")
+			if _, err := Run(ctx, "test", nil, srv, nil, cfg, state); err != nil {
+				t.Errorf("Run: %v", err)
+			}
+		})
+		return nil
+	}
+	if _, err := EmbedByName(context.Background(), "note", "Text", "", mu, state, cfg, srv); err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+
+	body, err := EmbedByName(context.Background(), "note", "Text", "", mu, state, cfg, srv)
+	if err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if !strings.Contains(string(body), "second") {
+		t.Errorf("the render from before the refresh is still served: %s", body)
+	}
+}
+
+func TestEmbedOnlyLogsDataFailures(t *testing.T) {
+	t.Parallel()
+
+	dir := writeEmbedBundle(t, "first")
+	broken := `
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: broken
+spec:
+  query: SELECT no_such_col FROM no_such_table
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: tbl
+spec:
+  dataset: broken
+  type: sum
+`
+	f, err := os.OpenFile(filepath.Join(dir, "report.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := f.WriteString(broken); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	var logs bytes.Buffer
+	srv := startTestServer(t)
+	state := NewState()
+	cfg := &Config{Logger: logx.NewJSON(&logs, &logs, true), Workdir: dir, EmbedOnly: true}
+	if _, err := Run(context.Background(), "test", nil, srv, nil, cfg, state); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, err := EmbedByName(context.Background(), "tbl", "Table", "", &sync.Mutex{}, state, cfg, srv); err != nil {
+		t.Fatalf("EmbedByName: %v", err)
+	}
+	if !strings.Contains(logs.String(), "no_such_table") {
+		t.Errorf("the query failure is not in the log: %q", logs.String())
 	}
 }

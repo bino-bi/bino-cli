@@ -1868,3 +1868,22 @@ func TestHealthzAndServerTimeouts(t *testing.T) {
 		t.Fatalf("GET /healthz body = %q, want %q", got, "ok")
 	}
 }
+
+func TestAddLocalAssetsKeepsWhatIsThere(t *testing.T) {
+	t.Parallel()
+
+	srv, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	srv.AddLocalAssets([]LocalAsset{{URLPath: "/assets/a", FilePath: "/tmp/a"}})
+	srv.AddLocalAssets([]LocalAsset{{URLPath: "/assets/b", FilePath: "/tmp/b"}, {URLPath: "", FilePath: "/tmp/skip"}})
+	for _, path := range []string{"/assets/a", "/assets/b"} {
+		if _, ok := srv.lookupLocalAsset(path); !ok {
+			t.Errorf("%s is not registered", path)
+		}
+	}
+	if _, ok := srv.lookupLocalAsset(""); ok {
+		t.Error("an asset without a path was registered")
+	}
+}

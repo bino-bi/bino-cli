@@ -26,6 +26,10 @@ import (
 	"bino.bi/bino/pkg/duckdb"
 )
 
+// embedOnlyNotice answers every route but /__embedding/{name} under --embed-only.
+// Without it they would keep showing the boot-time loading page forever.
+const embedOnlyNotice = "This preview runs with --embed-only: it serves /__embedding/{name} only.\n"
+
 // Request carries one debounce input from the file watcher.
 // Files holds the absolute paths that changed; nil signals a full rebuild
 // (e.g. initial load, or --incremental=false). The debounce loop merges
@@ -65,6 +69,11 @@ type State struct {
 	// embeddingCache memoizes rendered embedding HTML keyed by artefact
 	// name. Reset to nil at the start of every refresh.
 	embeddingCache map[string][]byte
+
+	// generation counts the refreshes that reset embeddingCache. A render runs
+	// outside the mutex, so one that started before a refresh must not store its
+	// outdated body in the fresh cache, where it would hide the edit.
+	generation uint64
 
 	// liveOverrides maps absolute, filepath.Clean'd file paths to unsaved
 	// editor-buffer content. While non-empty, EmbedByName renders the
@@ -206,6 +215,12 @@ type Config struct {
 	// SSE stream. May be nil for callers that do not surface progress (tests).
 	Reporter bootstatus.Reporter
 
+	// EmbedOnly stops a refresh after loading the manifests. Nothing is rendered
+	// until /__embedding/{name} asks for it, and the other routes stay empty. For
+	// hosts that only ever show embeddings: a one-file project cannot use the
+	// selective rebuild, so every edit would render the whole report for nothing.
+	EmbedOnly bool
+
 	// Include/Exclude restrict the artefact set rendered each refresh.
 	// Empty Include means "render all". Applied on every refresh so the
 	// filter remains stable across manifest changes.
@@ -331,6 +346,13 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	state.artefacts = artifacts
 	state.documentArtefacts = documentArtefacts
 	state.embeddingCache = nil
+	state.generation++
+
+	if cfg.EmbedOnly {
+		server.SetContentFunc(httpserver.StaticContent([]byte(embedOnlyNotice), "text/plain; charset=utf-8"))
+		logger.Successf("Manifests reloaded (%s)", reason)
+		return nil, nil
+	}
 
 	artefactInfos := make([]previewArtefactInfo, 0, len(artifacts)+len(documentArtefacts))
 	for _, art := range artifacts {
