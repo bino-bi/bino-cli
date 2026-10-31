@@ -377,7 +377,7 @@ func TestEmbedByNameKeepsPluginOptionsOfItsStart(t *testing.T) {
 
 // writeEmbedBundle writes a report whose single page shows a local image, so a
 // render has an asset to register, and returns the bundle dir.
-func writeEmbedBundle(t *testing.T, title string) string {
+func writeEmbedBundle(t *testing.T) string {
 	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -386,7 +386,7 @@ func writeEmbedBundle(t *testing.T, title string) string {
 	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("\x89PNG"), 0o600); err != nil {
 		t.Fatalf("write asset: %v", err)
 	}
-	writeEmbedManifest(t, dir, title)
+	writeEmbedManifest(t, dir, "first")
 	return dir
 }
 
@@ -435,7 +435,7 @@ func get(t *testing.T, url string) (int, string) {
 func TestRunEmbedOnlyRendersNothing(t *testing.T) {
 	t.Parallel()
 
-	dir := writeEmbedBundle(t, "first")
+	dir := writeEmbedBundle(t)
 	srv := startTestServer(t)
 	state := NewState()
 	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
@@ -458,7 +458,7 @@ func TestRunEmbedOnlyRendersNothing(t *testing.T) {
 func TestEmbedOnlyEmbeddingFollowsTheFiles(t *testing.T) {
 	t.Parallel()
 
-	dir := writeEmbedBundle(t, "first")
+	dir := writeEmbedBundle(t)
 	srv := startTestServer(t)
 	state := NewState()
 	mu := &sync.Mutex{}
@@ -492,7 +492,7 @@ func TestEmbedOnlyEmbeddingFollowsTheFiles(t *testing.T) {
 func TestEmbedOnlyServesTheAssetsOfAnEmbedding(t *testing.T) {
 	t.Parallel()
 
-	dir := writeEmbedBundle(t, "first")
+	dir := writeEmbedBundle(t)
 	srv := startTestServer(t)
 	state := NewState()
 	cfg := &Config{Logger: logx.Nop(), Workdir: dir, EmbedOnly: true}
@@ -517,7 +517,7 @@ func TestEmbedOnlyServesTheAssetsOfAnEmbedding(t *testing.T) {
 func TestEmbedRenderOutlivedByARefreshDoesNotFillTheCache(t *testing.T) {
 	t.Parallel()
 
-	dir := writeEmbedBundle(t, "first")
+	dir := writeEmbedBundle(t)
 	srv := startTestServer(t)
 	state := NewState()
 	mu := &sync.Mutex{}
@@ -553,7 +553,7 @@ func TestEmbedRenderOutlivedByARefreshDoesNotFillTheCache(t *testing.T) {
 func TestEmbedOnlyLogsDataFailures(t *testing.T) {
 	t.Parallel()
 
-	dir := writeEmbedBundle(t, "first")
+	dir := writeEmbedBundle(t)
 	broken := `
 ---
 apiVersion: bino.bi/v1alpha1
