@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,11 +62,11 @@ func TestResolveTOCLinks(t *testing.T) {
 		t.Errorf("file mode = %v, %v; want 0644 kept", info.Mode().Perm(), err)
 	}
 
-	ctx, err := api.ReadContextFile(path)
+	ctx, err := api.ReadContextFile(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageDict, _, _, err := ctx.PageDict(1, false)
+	pageDict, _, _, err := ctx.PageDict(context.Background(), 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestResolveTOCLinks(t *testing.T) {
 	if !ok {
 		t.Fatalf("Dest[0] = %T", dest[0])
 	}
-	if pageNr, err := ctx.PageNumber(ref.ObjectNumber.Value()); err != nil || pageNr != 2 {
+	if pageNr, err := ctx.PageNumber(context.Background(), ref.ObjectNumber.Value()); err != nil || pageNr != 2 {
 		t.Errorf("Dest page = %d, %v; want 2", pageNr, err)
 	}
 
@@ -123,7 +124,7 @@ func TestMergeFilesAddsNoBookmarks(t *testing.T) {
 	if err := MergeFiles([]string{a, b}, out); err != nil {
 		t.Fatal(err)
 	}
-	ctx, err := api.ReadContextFile(out)
+	ctx, err := api.ReadContextFile(context.Background(), out)
 	if err != nil {
 		t.Fatal(err)
 	}

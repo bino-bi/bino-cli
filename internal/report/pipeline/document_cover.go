@@ -95,7 +95,7 @@ func (b *Builder) renderCoverPage(ctx context.Context, page cover.Page, spec con
 	}
 	if n > 1 {
 		b.logger().Warnf("%s overflows one page; only the first page is kept", page.Label)
-		if err := api.TrimFile(path, path, []string{"1"}, nil); err != nil {
+		if err := api.TrimFile(ctx, path, path, []string{"1"}, nil); err != nil {
 			os.Remove(path)
 			return "", fmt.Errorf("cut to one page: %w", err)
 		}
@@ -125,12 +125,12 @@ func (b *Builder) cutCoverPDFPage(ctx context.Context, page cover.Page, spec con
 	}
 	outPath := out.Name()
 	out.Close() //nolint:errcheck // reserves a temp name; TrimFile rewrites it
-	if err := api.TrimFile(src, outPath, []string{strconv.Itoa(page.PDFPage)}, nil); err != nil {
+	if err := api.TrimFile(ctx, src, outPath, []string{strconv.Itoa(page.PDFPage)}, nil); err != nil {
 		os.Remove(outPath)
 		return "", fmt.Errorf("cut page %d from pdf asset %q: %w", page.PDFPage, page.PDFAsset, err)
 	}
 
-	if dims, err := api.PageDimsFile(outPath); err == nil && len(dims) == 1 {
+	if dims, err := api.PageDimsFile(ctx, outPath); err == nil && len(dims) == 1 {
 		w, h := cover.PageSizeInches(spec.Format, spec.Orientation)
 		if math.Abs(dims[0].Width-w*72) > 1 || math.Abs(dims[0].Height-h*72) > 1 {
 			b.logger().Warnf("%s: page %d of pdf asset %q is %.0fx%.0fpt, the document is %s %s (%.0fx%.0fpt); the page keeps its own size",

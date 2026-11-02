@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/cdp/jsonv2"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
-	"github.com/go-json-experiment/json/jsontext"
 
 	"bino.bi/bino/internal/logx"
 )
@@ -88,11 +89,11 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	}
 
 	// Navigate and wait for network idle
-	actions := []chromedp.Action{chromedp.Navigate(opts.URL), waitNetworkIdle(logger)}
+	actions := []chromedp.Action[chromedp.Void]{chromedp.Navigate(opts.URL), waitNetworkIdle(logger)}
 	if opts.WaitForPlugins {
-		actions = append([]chromedp.Action{injectPluginRuntime()}, actions...)
+		actions = append([]chromedp.Action[chromedp.Void]{injectPluginRuntime()}, actions...)
 	}
-	if err := chromedp.Run(taskCtx, actions...); err != nil {
+	if err := chromedp.Do(taskCtx, actions...); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -123,9 +124,13 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 	}
 
 	// Build PrintToPDF parameters
-	printParams := page.PrintToPDF().
-		WithPrintBackground(true).
-		WithPreferCSSPageSize(true)
+	printParams := page.PrintToPDFParams{
+		PrintBackground:   new(true),
+		PreferCSSPageSize: new(true),
+		// Older cdproto always sent these as false; Chrome's own default may differ.
+		GenerateTaggedPDF:       new(false),
+		GenerateDocumentOutline: new(false),
+	}
 
 	format := strings.TrimSpace(opts.Format)
 	customFormat := false
@@ -139,16 +144,14 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 			if strings.EqualFold(opts.Orientation, "portrait") {
 				w, h = h, w
 			}
-			printParams = printParams.
-				WithPaperWidth(pxToInches(w)).
-				WithPaperHeight(pxToInches(h))
+			printParams.PaperWidth = pxToInches(w)
+			printParams.PaperHeight = pxToInches(h)
 		} else {
 			// Standard paper format
 			pw, ph := PaperSizeInches(format)
 			if pw > 0 && ph > 0 {
-				printParams = printParams.
-					WithPaperWidth(pw).
-					WithPaperHeight(ph)
+				printParams.PaperWidth = pw
+				printParams.PaperHeight = ph
 			}
 		}
 	}
@@ -166,43 +169,38 @@ func RenderPDF(ctx context.Context, opts PDFOptions) error {
 			marginBottom = parseMargin(opts.MarginBottom)
 		}
 	}
-	printParams = printParams.
-		WithMarginTop(marginTop).
-		WithMarginRight(0).
-		WithMarginBottom(marginBottom).
-		WithMarginLeft(0)
+	printParams.MarginTop = new(marginTop)
+	printParams.MarginRight = new(0.0)
+	printParams.MarginBottom = new(marginBottom)
+	printParams.MarginLeft = new(0.0)
 
 	// Only set Landscape for standard paper formats.
 	// Custom formats handle orientation via dimension swapping above.
 	if !customFormat && opts.Orientation != "" {
 		landscape := strings.EqualFold(opts.Orientation, "landscape")
-		printParams = printParams.WithLandscape(landscape)
+		printParams.Landscape = new(landscape)
 	}
 
 	// Header/footer support
 	if opts.DisplayHeaderFooter {
-		printParams = printParams.WithDisplayHeaderFooter(true)
+		printParams.DisplayHeaderFooter = new(true)
 		if opts.HeaderTemplate != "" {
-			printParams = printParams.WithHeaderTemplate(opts.HeaderTemplate)
+			printParams.HeaderTemplate = opts.HeaderTemplate
 		}
 		if opts.FooterTemplate != "" {
-			printParams = printParams.WithFooterTemplate(opts.FooterTemplate)
+			printParams.FooterTemplate = opts.FooterTemplate
 		}
 	}
 
 	// Generate PDF
-	var buf []byte
-	if err := chromedp.Run(taskCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			buf, _, err = printParams.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	res, err := chromedp.Run(taskCtx, func(ctx context.Context, t *chromedp.Target) (page.PrintToPDFResult, error) {
+		return cdp.Call(ctx, t, page.PrintToPDF, printParams)
+	})
+	if err != nil {
 		return fmt.Errorf("generate pdf: %w", err)
 	}
 
-	if err := os.WriteFile(opts.PDFPath, buf, 0o644); err != nil { //nolint:gosec // G306: PDF output files need standard read perms
+	if err := os.WriteFile(opts.PDFPath, res.Data, 0o644); err != nil { //nolint:gosec // G306: PDF output files need standard read perms
 		return fmt.Errorf("write pdf: %w", err)
 	}
 
@@ -298,15 +296,15 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 	}
 
 	// Navigate with viewport emulation and wait for network idle
-	actions := []chromedp.Action{
+	actions := []chromedp.Action[chromedp.Void]{
 		chromedp.EmulateViewport(int64(viewportWidth), int64(viewportHeight), chromedp.EmulateScale(scaleFactor)),
 		chromedp.Navigate(opts.URL),
 		waitNetworkIdle(logger),
 	}
 	if opts.WaitForPlugins {
-		actions = append([]chromedp.Action{injectPluginRuntime()}, actions...)
+		actions = append([]chromedp.Action[chromedp.Void]{injectPluginRuntime()}, actions...)
 	}
-	if err := chromedp.Run(taskCtx, actions...); err != nil {
+	if err := chromedp.Do(taskCtx, actions...); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
@@ -346,10 +344,8 @@ func RenderScreenshots(ctx context.Context, opts ScreenshotOptions) ([]Screensho
 		result.FilePath = filepath.Join(opts.OutputDir, filename)
 
 		// Take screenshot of element
-		var buf []byte
-		if err := chromedp.Run(taskCtx,
-			chromedp.Screenshot(selector, &buf, chromedp.ByQuery),
-		); err != nil {
+		buf, err := chromedp.Run(taskCtx, chromedp.Screenshot(chromedp.CSS(selector)))
+		if err != nil {
 			result.Error = fmt.Errorf("capture screenshot of %s: %w", selector, err)
 			results = append(results, result)
 			continue
@@ -393,38 +389,29 @@ func newExecAllocator(parentCtx context.Context, chromePath string, debug bool) 
 // waits for the "networkIdle" event, indicating no pending network requests.
 // A timeout is tolerated (some pages never fire networkIdle) but logged as a
 // warning, since the rendered output may be incomplete.
-func waitNetworkIdle(logger logx.Logger) chromedp.ActionFunc {
+func waitNetworkIdle(logger logx.Logger) chromedp.Action[chromedp.Void] {
 	if logger == nil {
 		logger = logx.Nop()
 	}
-	return func(ctx context.Context) error {
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
 		// Enable lifecycle events
-		if err := page.SetLifecycleEventsEnabled(true).Do(ctx); err != nil {
+		if _, err := cdp.Call(ctx, t, page.SetLifecycleEventsEnabled, page.SetLifecycleEventsEnabledParams{Enabled: true}); err != nil {
 			return err
 		}
 
-		ch := make(chan struct{}, 1)
-		chromedp.ListenTarget(ctx, func(ev interface{}) {
-			if le, ok := ev.(*page.EventLifecycleEvent); ok {
-				if le.Name == "networkIdle" {
-					select {
-					case ch <- struct{}{}:
-					default:
-					}
+		for le, err := range cdp.Events(ctx, t, page.LifecycleEvent) {
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					logger.Warnf("Timed out waiting for network idle; rendered output may be incomplete")
 				}
+				return nil
 			}
-		})
-
-		select {
-		case <-ch:
-			return nil
-		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				logger.Warnf("Timed out waiting for network idle; rendered output may be incomplete")
+			if le.Name == "networkIdle" {
+				return nil
 			}
-			return nil
 		}
-	}
+		return nil
+	})
 }
 
 // observeComponentReady sets up a listener for console messages that signal
@@ -440,8 +427,12 @@ func observeComponentReady(ctx context.Context, prefix string, logger logx.Logge
 		logger = logx.Nop()
 	}
 
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		if ev, ok := ev.(*runtime.EventConsoleAPICalled); ok {
+	events := chromedp.Events(ctx, runtime.ConsoleAPICalled)
+	go func() {
+		for ev, err := range events {
+			if err != nil {
+				return
+			}
 			// Join all console.log arguments into a single string,
 			// matching Playwright's behavior. In CDP, console.log("prefix:", value)
 			// arrives as separate args rather than a single concatenated string.
@@ -455,11 +446,11 @@ func observeComponentReady(ctx context.Context, prefix string, logger logx.Logge
 			joined := strings.Join(parts, " ")
 			logger.Debugf("Console log: %q", joined)
 			if joined == "" {
-				return
+				continue
 			}
 			lower := strings.ToLower(joined)
 			if !strings.HasPrefix(lower, prefix) {
-				return
+				continue
 			}
 			value := strings.TrimSpace(joined[len(prefix):])
 			value = strings.Trim(value, "\"'")
@@ -470,12 +461,12 @@ func observeComponentReady(ctx context.Context, prefix string, logger logx.Logge
 				}
 			}
 		}
-	})
+	}()
 	return ready
 }
 
 // unquoteJSValue extracts a string from a JSON-encoded runtime.RemoteObject value.
-func unquoteJSValue(raw jsontext.Value) string {
+func unquoteJSValue(raw jsonv2.Value) string {
 	if len(raw) == 0 {
 		return ""
 	}

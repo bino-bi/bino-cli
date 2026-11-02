@@ -52,7 +52,7 @@ func renderStack(t *testing.T) (engineVersion, cacheDir, chromePath string) {
 // pdfInfo returns the decoded string entries of the PDF's info dict.
 func pdfInfo(t *testing.T, data []byte) map[string]string {
 	t.Helper()
-	ctx, err := api.ReadContext(bytes.NewReader(data), model.NewDefaultConfiguration())
+	ctx, err := api.ReadContext(context.Background(), bytes.NewReader(data), model.NewDefaultConfiguration())
 	if err != nil {
 		t.Fatal(err)
 	}

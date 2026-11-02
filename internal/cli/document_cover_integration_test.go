@@ -209,7 +209,7 @@ func pageContents(t *testing.T, path string) [][]byte {
 		t.Fatal(err)
 	}
 	contents := make([][]byte, n)
-	err = api.ExtractContent(bytes.NewReader(data), nil, func(r io.Reader, pageNr int) error {
+	err = api.ExtractContent(context.Background(), bytes.NewReader(data), nil, func(r io.Reader, pageNr int) error {
 		c, rerr := io.ReadAll(r)
 		contents[pageNr-1] = c
 		return rerr
@@ -226,11 +226,11 @@ var footerMarker = []byte("1 0 0 rg")
 // linkTargetPages returns the page numbers internal links on page pageNr point to.
 func linkTargetPages(t *testing.T, path string, pageNr int) []int {
 	t.Helper()
-	ctx, err := api.ReadContextFile(path)
+	ctx, err := api.ReadContextFile(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageDict, _, _, err := ctx.PageDict(pageNr, false)
+	pageDict, _, _, err := ctx.PageDict(context.Background(), pageNr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func linkTargetPages(t *testing.T, path string, pageNr int) []int {
 			continue
 		}
 		if ref, ok := dest[0].(types.IndirectRef); ok {
-			if n, err := ctx.PageNumber(ref.ObjectNumber.Value()); err == nil {
+			if n, err := ctx.PageNumber(context.Background(), ref.ObjectNumber.Value()); err == nil {
 				pages = append(pages, n)
 			}
 		}
@@ -307,7 +307,7 @@ func TestIntegration_DocumentCoverPages(t *testing.T) {
 		t.Errorf("first content page differs from the build without covers")
 	}
 
-	dims, err := api.PageDimsFile(out)
+	dims, err := api.PageDimsFile(context.Background(), out)
 	if err != nil {
 		t.Fatal(err)
 	}

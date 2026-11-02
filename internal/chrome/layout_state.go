@@ -2,10 +2,8 @@ package chrome
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
 	"bino.bi/bino/internal/logx"
@@ -27,11 +25,10 @@ func captureLayoutState(ctx context.Context, logger logx.Logger) ([]byte, error)
 		return nil, fmt.Errorf("read layout capture script: %w", err)
 	}
 
-	var raw json.RawMessage
-	err = chromedp.Run(ctx,
-		chromedp.Evaluate(string(script), nil),
-		chromedp.Evaluate(captureExpression, &raw, awaitPromise),
-	)
+	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](string(script))); err != nil {
+		return nil, fmt.Errorf("evaluate layout capture: %w", err)
+	}
+	raw, err := chromedp.Run(ctx, chromedp.Evaluate[[]byte](captureExpression, chromedp.EvalAwaitPromise))
 	if err != nil {
 		return nil, fmt.Errorf("evaluate layout capture: %w", err)
 	}
@@ -53,9 +50,3 @@ const captureExpression = `(async () => {
   delete state.generatedAt;
   return { state: state, sources: capture.sources, settled: capture.settled };
 })()`
-
-// awaitPromise makes Evaluate resolve the promise the expression returns
-// instead of handing back a Promise object.
-func awaitPromise(p *runtime.EvaluateParams) *runtime.EvaluateParams {
-	return p.WithAwaitPromise(true)
-}

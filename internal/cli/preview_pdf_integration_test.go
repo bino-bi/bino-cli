@@ -113,7 +113,7 @@ spec:
 // unstampedPages returns the pages of the PDF that carry no pdfcpu stamp.
 func unstampedPages(t *testing.T, pdfBytes []byte) (pages int, unstamped []int) {
 	t.Helper()
-	err := api.ExtractContent(bytes.NewReader(pdfBytes), nil, func(r io.Reader, pageNr int) error {
+	err := api.ExtractContent(context.Background(), bytes.NewReader(pdfBytes), nil, func(r io.Reader, pageNr int) error {
 		content, rerr := io.ReadAll(r)
 		if rerr != nil {
 			return rerr

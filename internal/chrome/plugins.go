@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
@@ -22,11 +23,11 @@ var pluginRuntime string
 
 // injectPluginRuntime adds the runtime to every document the page loads. It
 // must run before Navigate.
-func injectPluginRuntime() chromedp.ActionFunc {
-	return func(ctx context.Context) error {
-		_, err := page.AddScriptToEvaluateOnNewDocument(pluginRuntime).Do(ctx)
+func injectPluginRuntime() chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		_, err := cdp.Call(ctx, t, page.AddScriptToEvaluateOnNewDocument, page.AddScriptToEvaluateOnNewDocumentParams{Source: pluginRuntime})
 		return err
-	}
+	})
 }
 
 // settlePluginComponents runs after the engine wait. With allowIncomplete a
@@ -52,10 +53,10 @@ func settlePluginComponents(taskCtx context.Context, allowIncomplete bool, logge
 // reports failed and never-defined plugin elements. A page without the
 // runtime passes.
 func waitForPluginComponents(ctx context.Context) error {
-	var raw json.RawMessage
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.binoPlugin ? window.binoPlugin.settled() : null`, &raw, awaitPromise),
-	); err != nil {
+	raw, err := chromedp.Run(ctx,
+		chromedp.Evaluate[[]byte](`window.binoPlugin ? window.binoPlugin.settled() : null`, chromedp.EvalAwaitPromise),
+	)
+	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("render timed out while plugin components were still drawing: %w", err)
 		}
