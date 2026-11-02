@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -232,7 +233,7 @@ func watermarkMarkers(t *testing.T, path string) map[int]int {
 	defer f.Close() //nolint:errcheck // read-only handle
 
 	counts := map[int]int{}
-	err = api.ExtractContent(f, nil, func(r io.Reader, pageNr int) error {
+	err = api.ExtractContent(context.Background(), f, nil, func(r io.Reader, pageNr int) error {
 		content, rerr := io.ReadAll(r)
 		if rerr != nil {
 			return rerr

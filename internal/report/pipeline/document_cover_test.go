@@ -76,7 +76,7 @@ func TestCutCoverPDFPage(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer os.Remove(out)
-			dims, err := api.PageDimsFile(out)
+			dims, err := api.PageDimsFile(context.Background(), out)
 			if err != nil {
 				t.Fatal(err)
 			}

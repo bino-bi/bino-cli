@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -58,7 +59,7 @@ func SetInfo(path string, info Info) (err error) {
 
 	conf := model.NewDefaultConfiguration()
 	conf.ValidationMode = model.ValidationRelaxed
-	ctx, err := api.ReadContext(f, conf)
+	ctx, err := api.ReadContext(context.Background(), f, conf)
 	if err != nil {
 		return fmt.Errorf("set pdf info: read: %w", err)
 	}
@@ -73,10 +74,10 @@ func SetInfo(path string, info Info) (err error) {
 	ctx.Write.Increment = true
 	ctx.Write.Offset = ctx.Read.FileSize
 
-	if err := pdfcpu.PropertiesAdd(ctx, props); err != nil {
+	if err := pdfcpu.PropertiesAdd(context.Background(), ctx, props); err != nil {
 		return fmt.Errorf("set pdf info: %w", err)
 	}
-	if err := api.WriteIncr(ctx, f, conf); err != nil {
+	if err := api.WriteIncr(context.Background(), ctx, f, conf); err != nil {
 		return fmt.Errorf("set pdf info: write: %w", err)
 	}
 	return nil

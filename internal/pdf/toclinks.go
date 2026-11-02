@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -20,7 +21,7 @@ import (
 // destination is missing lose their action instead of pointing at the
 // placeholder URL. It returns the number of resolved links.
 func ResolveTOCLinks(filePath, prefix string) (int, error) {
-	ctx, err := api.ReadContextFile(filePath)
+	ctx, err := api.ReadContextFile(context.Background(), filePath)
 	if err != nil {
 		return 0, fmt.Errorf("read pdf for toc links: %w", err)
 	}
@@ -37,7 +38,7 @@ func ResolveTOCLinks(filePath, prefix string) (int, error) {
 
 	resolved, changed := 0, false
 	for pageNr := 1; pageNr <= ctx.PageCount; pageNr++ {
-		pageDict, _, _, err := ctx.PageDict(pageNr, false)
+		pageDict, _, _, err := ctx.PageDict(context.Background(), pageNr, false)
 		if err != nil || pageDict == nil {
 			continue
 		}
@@ -76,7 +77,7 @@ func ResolveTOCLinks(filePath, prefix string) (int, error) {
 
 	useXRefTable(ctx.Configuration)
 	// WriteContextFile stages next to the target and keeps its file mode.
-	if err := api.WriteContextFile(ctx, filePath); err != nil {
+	if err := api.WriteContextFile(context.Background(), ctx, filePath); err != nil {
 		return 0, fmt.Errorf("write pdf with toc links: %w", err)
 	}
 	return resolved, nil

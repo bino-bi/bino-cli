@@ -79,15 +79,16 @@ func settlePage(t *testing.T, chromePath, body string, inject bool) (done bool, 
 	taskCtx, timeoutCancel := context.WithTimeout(taskCtx, time.Minute)
 	defer timeoutCancel()
 
-	actions := []chromedp.Action{chromedp.Navigate(url), waitNetworkIdle(logx.Nop())}
+	actions := []chromedp.Action[chromedp.Void]{chromedp.Navigate(url), waitNetworkIdle(logx.Nop())}
 	if inject {
-		actions = append([]chromedp.Action{injectPluginRuntime()}, actions...)
+		actions = append([]chromedp.Action[chromedp.Void]{injectPluginRuntime()}, actions...)
 	}
-	if err := chromedp.Run(taskCtx, actions...); err != nil {
+	if err := chromedp.Do(taskCtx, actions...); err != nil {
 		t.Fatalf("load page: %v", err)
 	}
 	settleErr = waitForPluginComponents(taskCtx)
-	if err := chromedp.Run(taskCtx, chromedp.Evaluate(`window.done === true`, &done)); err != nil {
+	done, err := chromedp.Run(taskCtx, chromedp.Evaluate[bool](`window.done === true`))
+	if err != nil {
 		t.Fatalf("read window.done: %v", err)
 	}
 	return done, settleErr

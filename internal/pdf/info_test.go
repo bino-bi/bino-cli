@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func writeInfoPDF(t *testing.T, path string) {
 // readInfo returns the decoded entries of the PDF's info dict.
 func readInfo(t *testing.T, path string) map[string]string {
 	t.Helper()
-	ctx, err := api.ReadContextFile(path)
+	ctx, err := api.ReadContextFile(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +210,7 @@ func TestSetInfoAfterPDF20Cover(t *testing.T) {
 	// cut with TrimFile, which writes 1.7 with an info dict, so the merged
 	// file never is 2.0.
 	cut, body, out := filepath.Join(dir, "cut.pdf"), filepath.Join(dir, "body.pdf"), filepath.Join(dir, "out.pdf")
-	if err := api.TrimFile(src, cut, []string{"1"}, nil); err != nil {
+	if err := api.TrimFile(context.Background(), src, cut, []string{"1"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	writePDF(t, body, onePagePDF[:3])
