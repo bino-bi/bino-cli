@@ -131,7 +131,11 @@ func ResolvePositionPath(content string, line, col int) (PositionContext, bool) 
 		return rootlessContext(root, line, col, docIdx, lineOffset)
 	}
 
-	w := &walker{cursorLine: line - lineOffset, cursorCol: col, enclosingKind: docKind(root), docIndex: docIdx, kindsByPath: map[string]string{}}
+	text := content
+	if lineOffset > 0 {
+		text = sl.text
+	}
+	w := &walker{cursorLine: line - lineOffset, cursorCol: col, lines: strings.Split(text, "\n"), enclosingKind: docKind(root), docIndex: docIdx, kindsByPath: map[string]string{}}
 	ctx, ok := w.descend(root, nil, sl.endLine+1-lineOffset)
 	if !ok {
 		return PositionContext{}, false
@@ -254,6 +258,32 @@ func RepairUnquotedAt(content string, line int) (repaired, token string, raw Ran
 	return strings.Join(lines, "\n"), token, raw, true
 }
 
+// BlankPartialKeyAt matches a cursor line that holds only indentation and one
+// bare word - a mapping key being typed, before its colon. That line breaks the
+// parse or folds into the previous value, while a blank line at the same
+// indentation resolves to the right key position. It returns the content with
+// the word removed, the word, and its (1-based, end-exclusive) span. ok=false
+// when the line doesn't match.
+func BlankPartialKeyAt(content string, line int) (blanked, token string, r Range, ok bool) {
+	lines := strings.Split(content, "\n")
+	if line < 1 || line > len(lines) {
+		return "", "", Range{}, false
+	}
+	src := lines[line-1]
+	m := partialKeyRe.FindStringSubmatchIndex(src)
+	if m == nil {
+		return "", "", Range{}, false
+	}
+	start, end := m[2], m[3]
+	token = src[start:end]
+	lines[line-1] = src[:start]
+	startCol := utf8.RuneCountInString(src[:start]) + 1
+	r = Range{StartLine: line, StartCol: startCol, EndLine: line, EndCol: startCol + utf8.RuneCountInString(token)}
+	return strings.Join(lines, "\n"), token, r, true
+}
+
+var partialKeyRe = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*$`)
+
 // unquotedAtValueRe matches a mapping value starting with the YAML-reserved
 // `@` (optionally inside a sequence item), e.g. `ref: @acme/kpi`.
 var unquotedAtValueRe = regexp.MustCompile(`^\s*(?:-\s+)?[A-Za-z][A-Za-z0-9_-]*:\s+(@\S*)\s*$`)
@@ -270,6 +300,7 @@ type refTarget struct {
 type walker struct {
 	cursorLine    int
 	cursorCol     int
+	lines         []string // the parsed text, indexed like cursorLine
 	enclosingKind string
 	docIndex      int
 	kindsByPath   map[string]string
@@ -349,10 +380,11 @@ func (w *walker) descendMapping(node *yaml.Node, path []string, parentEnd int) (
 		}
 
 		// Cursor is on a line below the key.
-		if isContainer(val) && w.cursorLine >= val.Line {
+		sibling := w.startsSibling(key.Column, upper)
+		if isContainer(val) && w.cursorLine >= val.Line && !sibling {
 			return w.descend(val, childPath, upper)
 		}
-		if isMultilineScalar(val) && w.cursorLine >= val.Line {
+		if isMultilineScalar(val) && w.cursorLine >= val.Line && !sibling {
 			return w.classifyValue(node, val, key.Value, childPath, path), true
 		}
 		// An empty `params:` parses as a null scalar, so a cursor indented beneath
@@ -413,6 +445,22 @@ func (w *walker) descendSequence(node *yaml.Node, path []string, parentEnd int) 
 	}
 	// Cursor below the last item (or empty sequence) → a new item slot.
 	return w.newSequenceItem(field, path, len(node.Content)), true
+}
+
+// startsSibling reports whether the cursor is on a blank line, no deeper than
+// a key at keyCol, that ends the key's nested block: no line deeper than the key
+// follows before upper. A blank line inside a block scalar does not end it.
+func (w *walker) startsSibling(keyCol, upper int) bool {
+	if w.cursorLine < 1 || w.cursorLine > len(w.lines) || strings.TrimSpace(w.lines[w.cursorLine-1]) != "" || w.cursorCol > keyCol {
+		return false
+	}
+	for n := w.cursorLine + 1; n < upper && n <= len(w.lines); n++ {
+		text := w.lines[n-1]
+		if strings.TrimSpace(text) != "" && utf8.RuneCountInString(text)-utf8.RuneCountInString(strings.TrimLeft(text, " \t")) >= keyCol {
+			return false
+		}
+	}
+	return true
 }
 
 // keyContext builds a PosKey result for the given mapping path, or a

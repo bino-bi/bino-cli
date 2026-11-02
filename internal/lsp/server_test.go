@@ -530,6 +530,45 @@ func TestCompletion_EmptyBufferOffersRootKeys(t *testing.T) {
 	}
 }
 
+// TestCompletion_PartialKey: a key typed without its colon yet must offer the
+// keys of the mapping it is indented into.
+func TestCompletion_PartialKey(t *testing.T) {
+	s := newRealSchemaServer(t)
+	for _, tt := range []struct {
+		name       string
+		doc        string
+		line, char uint32
+		want, not  string
+	}{
+		{"after a scalar sibling", "kind: Table\nmetadata:\n  name: t\nspec:\n  dataset: sales\n  or\n", 5, 4, "order", "dataset"},
+		{"first key under spec", "kind: Table\nmetadata:\n  name: t\nspec:\n  da\n", 4, 4, "dataset", "apiVersion"},
+		{"after a nested map", "kind: Table\nmetadata:\n  name: t\n  labels:\n    a: b\n  de\n", 5, 4, "description", "apiVersion"},
+		{"after a nested sequence", "kind: Table\nmetadata:\n  name: t\nspec:\n  scenarios:\n    - ac1\n  or\n", 6, 4, "order", "apiVersion"},
+		{"root after a nested map", "kind: Table\nmetadata:\n  name: t\nsp\n", 3, 2, "spec", "description"},
+		{"after a block scalar", "kind: Text\nmetadata:\n  name: t\n  description: |\n    Long text.\n  la\n", 5, 4, "labels", "apiVersion"},
+		{"cursor mid-token", "kind: Table\nmetadata:\n  name: t\nspec:\n  da\n", 4, 3, "dataset", "apiVersion"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			u := openDoc(t, s, tt.doc)
+			res, err := s.Completion(context.Background(), completionParams(u, tt.line, tt.char))
+			if err != nil {
+				t.Fatal(err)
+			}
+			labels := completionLabels(t, res)
+			if !contains(labels, tt.want) || contains(labels, tt.not) {
+				t.Errorf("want %q and no %q (got %v)", tt.want, tt.not, labels)
+			}
+		})
+	}
+}
+
+func TestResolvePartialKey_BlockScalarLineKeepsValueContext(t *testing.T) {
+	doc := "kind: DataSet\nmetadata:\n  name: d\nspec:\n  query: |\n    SELECT\n"
+	if pc, ok := resolvePartialKey(doc, 6, 11); ok {
+		t.Errorf("a word inside a block scalar resolved as a key position: %+v", pc)
+	}
+}
+
 // TestCompletion_SurvivesBrokenSiblingDoc: a syntax error in document 1 must
 // not darken completion in document 2 of the same file.
 func TestCompletion_SurvivesBrokenSiblingDoc(t *testing.T) {

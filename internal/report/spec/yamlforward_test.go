@@ -473,6 +473,82 @@ spec:
 	}
 }
 
+func TestResolvePositionPath_BlankLineAfterNestedBlock(t *testing.T) {
+	// A blank line at the key's own indentation is a sibling key, even right
+	// after that key's nested block; indented deeper it stays inside the block.
+	const doc = `kind: Table
+metadata:
+  name: t
+  labels:
+    a: b
+
+`
+	for _, tt := range []struct {
+		col  int
+		want string
+	}{{1, "(root)"}, {3, "metadata"}, {5, "metadata.labels"}} {
+		ctx, ok := ResolvePositionPath(doc, 6, tt.col)
+		if !ok || ctx.Kind != PosKey || ctx.Path != tt.want {
+			t.Errorf("col %d: ok=%v Kind=%v Path=%q, want PosKey at %s", tt.col, ok, ctx.Kind, ctx.Path, tt.want)
+		}
+	}
+}
+
+func TestResolvePositionPath_BlankLineAndBlockScalar(t *testing.T) {
+	// An empty line inside a block scalar stays in the scalar at any column;
+	// one after the block's last line is a sibling key of the scalar's key.
+	const inside = "kind: DataSet\nmetadata:\n  name: d\nspec:\n  query: |\n    SELECT a\n\n    FROM t\n"
+	for _, col := range []int{1, 3, 5} {
+		ctx, ok := ResolvePositionPath(inside, 7, col)
+		if !ok || ctx.Kind != PosQueryScalar || ctx.Path != "spec.query" {
+			t.Errorf("inside, col %d: ok=%v Kind=%v Path=%q, want PosQueryScalar at spec.query", col, ok, ctx.Kind, ctx.Path)
+		}
+	}
+	const after = "kind: DataSet\nmetadata:\n  name: d\nspec:\n  query: |\n    SELECT 1\n  \n"
+	ctx, ok := ResolvePositionPath(after, 7, 3)
+	if !ok || ctx.Kind != PosKey || ctx.Path != "spec" {
+		t.Errorf("after: ok=%v Kind=%v Path=%q, want PosKey at spec", ok, ctx.Kind, ctx.Path)
+	}
+}
+
+func TestResolvePositionPath_BlankLineEdgeCases(t *testing.T) {
+	for _, tt := range []struct {
+		name, doc string
+		line, col int
+		want      string
+	}{
+		// A whitespace-only CRLF line after the cursor is still blank.
+		{"crlf", "kind: Table\r\nmetadata:\r\n  name: t\r\n  labels:\r\n    a: b\r\n\r\n  \r\n", 6, 1, "(root)"},
+		// Document 2 is parsed alone when document 1 is broken; lines must be
+		// read relative to it.
+		{"reparsed document", "kind: [\n---\nkind: Table\nmetadata:\n  name: t\n  labels:\n    a: b\n  \n", 8, 3, "metadata"},
+	} {
+		ctx, ok := ResolvePositionPath(tt.doc, tt.line, tt.col)
+		if !ok || ctx.Kind != PosKey || ctx.Path != tt.want {
+			t.Errorf("%s: ok=%v Kind=%v Path=%q, want PosKey at %s", tt.name, ok, ctx.Kind, ctx.Path, tt.want)
+		}
+	}
+}
+
+func TestBlankPartialKeyAt(t *testing.T) {
+	blanked, token, r, ok := BlankPartialKeyAt("spec:\n  data_set-x \n", 2)
+	if !ok {
+		t.Fatal("expected a match for a bare word line")
+	}
+	if blanked != "spec:\n  \n" || token != "data_set-x" {
+		t.Errorf("blanked = %q token = %q", blanked, token)
+	}
+	if want := (Range{StartLine: 2, StartCol: 3, EndLine: 2, EndCol: 13}); r != want {
+		t.Errorf("range = %+v, want %+v", r, want)
+	}
+
+	for _, line := range []string{"  key: v", "  key:", "  - item", "  # note", "  two words", "  ", "---", "  1abc"} {
+		if _, _, _, ok := BlankPartialKeyAt(line, 1); ok {
+			t.Errorf("BlankPartialKeyAt(%q) matched", line)
+		}
+	}
+}
+
 func TestRepairUnquotedAt(t *testing.T) {
 	const doc = `kind: LayoutPage
 metadata:

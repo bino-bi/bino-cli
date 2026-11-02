@@ -79,6 +79,9 @@ func padAfterColon(doc *Document, pos protocol.Position, items []protocol.Comple
 // registry ref. rawValue reports that the buffer carries the token unquoted:
 // the accepted completion must then replace the raw span with a quoted value.
 func resolveForCompletion(text string, line, col int) (pc reportspec.PositionContext, rawValue bool, ok bool) {
+	if pc, ok := resolvePartialKey(text, line, col); ok {
+		return pc, false, true
+	}
 	if pc, ok := reportspec.ResolvePositionPath(text, line, col); ok {
 		return pc, false, true
 	}
@@ -96,6 +99,23 @@ func resolveForCompletion(text string, line, col int) (pc reportspec.PositionCon
 	}
 	pc.ReplaceRange = raw // replace the raw unquoted token; NewText adds quotes
 	return pc, true, true
+}
+
+// resolvePartialKey resolves a key being typed (`  dat`, no colon yet) as the
+// blank line it replaces. Any other result falls back to the normal resolve,
+// so a bare word inside a block scalar keeps its value context.
+func resolvePartialKey(text string, line, col int) (reportspec.PositionContext, bool) {
+	blanked, token, r, ok := reportspec.BlankPartialKeyAt(text, line)
+	if !ok || col < r.StartCol || col > r.EndCol {
+		return reportspec.PositionContext{}, false
+	}
+	pc, ok := reportspec.ResolvePositionPath(blanked, line, r.StartCol)
+	if !ok || (pc.Kind != reportspec.PosKey && pc.Kind != reportspec.PosParamKey) {
+		return reportspec.PositionContext{}, false
+	}
+	pc.Prefix = token
+	pc.ReplaceRange = r
+	return pc, true
 }
 
 // CompletionResolve is a passthrough; items already carry their documentation.
