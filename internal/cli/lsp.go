@@ -350,6 +350,12 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 		return outputJSON(out, result)
 	}
 
+	docs, ambiguous := config.ResolveForIntrospection(docs)
+	if err := ambiguous.Lookup(docs, name); err != nil {
+		result.Error = err.Error()
+		return outputJSON(out, result)
+	}
+
 	// Find the target document (DataSource or DataSet)
 	var targetDoc *config.Document
 	isDataSource := strings.HasPrefix(name, "$")
@@ -385,7 +391,7 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 	// Execute the query and get rows
 	columns, rows, truncated, err := executeRowsPreview(ctx, targetDoc, docs, limit)
 	if err != nil {
-		result.Error = fmt.Sprintf("execute query: %v", err)
+		result.Error = fmt.Sprintf("execute query: %v", ambiguous.Explain(err))
 		return outputJSON(out, result)
 	}
 

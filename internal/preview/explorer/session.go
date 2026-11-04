@@ -63,6 +63,13 @@ func (s *Session) Refresh(ctx context.Context, docs []config.Document) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Duplicate data documents resolve as the artefacts' constraints select
+	// them; the explorer must not serve a source the build excludes.
+	docs, ambiguous := config.ResolveForIntrospection(docs)
+	for _, a := range ambiguous {
+		s.logger.Warnf("explorer: %v", a)
+	}
+
 	db := s.session.DB()
 
 	// Drop all user views

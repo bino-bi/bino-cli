@@ -112,6 +112,16 @@ Code specific machinery (subagents, questions to the human) and mean nothing to 
 | `get_rows(name, limit?)`                         | A sample of rows from a DataSet or DataSource.                                                                                                                                                |
 | `graph_deps(kind, name, direction?, max_depth?)` | Dependencies (`out`), dependents (`in`), or `both`. Component nodes carry a `columns` list (`dataset`, `column`, `role`, `field`) of the dataset columns they read.                           |
 
+#### Duplicate names
+
+A project can define a DataSource, DataSet or ConnectionSecret more than once under one name and let
+constraints pick one per artefact, for example synthetic data for local work and real data only in
+CI. `get_rows`, `get_columns` and `validate_project(execute_queries)` resolve such a name like the
+build does: they evaluate the constraints against every ReportArtefact in `preview` mode and use the
+one definition all artefacts select. The result's `file` field names the manifest that answered. If
+the artefacts select different definitions, or none, the tools return an error that names every
+candidate instead of guessing.
+
 ### Validate
 
 | Tool                                      | What it does                                                                                        |

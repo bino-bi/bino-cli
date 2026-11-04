@@ -34,7 +34,10 @@ type ValidateResult struct {
 type ColumnsResult struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
-	Error   string   `json:"error,omitempty"`
+	// File is the manifest that defines the queried document; with duplicate
+	// names it shows which definition the constraints selected.
+	File  string `json:"file,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // RowsResult holds a preview of rows for a DataSource or DataSet.
@@ -45,7 +48,10 @@ type RowsResult struct {
 	Rows      []map[string]any `json:"rows"`
 	Limit     int              `json:"limit"`
 	Truncated bool             `json:"truncated"`
-	Error     string           `json:"error,omitempty"`
+	// File is the manifest that defines the queried document; with duplicate
+	// names it shows which definition the constraints selected.
+	File  string `json:"file,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // GraphNode is a node in a dependency-graph traversal result.
@@ -105,10 +111,16 @@ func (s *State) Validate(ctx context.Context, execQueries bool) ValidateResult {
 // Columns wraps IntrospectColumns into the canonical result shape; errors are
 // captured in the Error field rather than returned.
 func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
-	cols, err := s.IntrospectColumns(ctx, name)
-	res := ColumnsResult{Name: name, Columns: cols}
-	if res.Columns == nil {
-		res.Columns = []string{}
+	res := ColumnsResult{Name: name, Columns: []string{}}
+	// One lookup serves the query and the file field, so a refresh in between
+	// cannot make them name different documents.
+	doc, ambiguous, err := s.target(name)
+	if err == nil {
+		res.File = doc.File
+		var cols []string
+		if cols, err = s.columnsFor(ctx, doc, ambiguous); cols != nil {
+			res.Columns = cols
+		}
 	}
 	if err != nil {
 		res.Error = err.Error()
@@ -119,13 +131,19 @@ func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
 // Rows wraps QueryRows into the canonical result shape; errors are captured in
 // the Error field rather than returned.
 func (s *State) Rows(ctx context.Context, name string, limit int) RowsResult {
-	cols, rows, truncated, kind, err := s.QueryRows(ctx, name, limit)
-	res := RowsResult{Name: name, Kind: kind, Columns: cols, Rows: rows, Limit: limit, Truncated: truncated}
-	if res.Columns == nil {
-		res.Columns = []string{}
-	}
-	if res.Rows == nil {
-		res.Rows = []map[string]any{}
+	res := RowsResult{Name: name, Columns: []string{}, Rows: []map[string]any{}, Limit: limit}
+	doc, ambiguous, err := s.target(name)
+	if err == nil {
+		res.File = doc.File
+		var cols []string
+		var rows []map[string]any
+		cols, rows, res.Truncated, res.Kind, err = s.rowsFor(ctx, doc, ambiguous, limit)
+		if cols != nil {
+			res.Columns = cols
+		}
+		if rows != nil {
+			res.Rows = rows
+		}
 	}
 	if err != nil {
 		res.Error = err.Error()

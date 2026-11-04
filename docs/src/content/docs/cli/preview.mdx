@@ -42,6 +42,14 @@ the final file. See
 the exact contract. `--artefact` and `--exclude-artefact` filter document
 artefacts too.
 
+## Duplicate data sources
+
+The **All Pages** view and the data explorer have no single artefact to filter by. When a
+DataSource, DataSet or ConnectionSecret is defined more than once under one name, they use the
+definition that every ReportArtefact selects through its constraints in `preview` mode. If the
+artefacts disagree, neither definition is loaded and the log names the candidates. Each artefact's
+own page always uses exactly what its constraints select.
+
 ## PDF preview
 
 Select a report or document artefact and click **PDF** in the toolbar. bino

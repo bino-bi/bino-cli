@@ -19,6 +19,13 @@ import (
 // way the build does (source / prql / query, $file, @inline, derive/assert) and
 // queries the schema with LIMIT 0.
 func IntrospectColumns(ctx context.Context, docs []config.Document, name string) ([]string, error) {
+	// Duplicate names resolve as the artefacts' constraints select them, so the
+	// result never comes from a definition the build would exclude.
+	docs, ambiguous := config.ResolveForIntrospection(docs)
+	if err := ambiguous.Lookup(docs, name); err != nil {
+		return nil, err
+	}
+
 	// Find the target document (DataSource or DataSet)
 	var targetDoc *config.Document
 	isDataSource := strings.HasPrefix(name, "$")
@@ -48,7 +55,8 @@ func IntrospectColumns(ctx context.Context, docs []config.Document, name string)
 		return nil, fmt.Errorf("document not found: %s", name)
 	}
 
-	return extractColumns(ctx, targetDoc, docs)
+	cols, err := extractColumns(ctx, targetDoc, docs)
+	return cols, ambiguous.Explain(err)
 }
 
 // extractColumns runs a query against a datasource/dataset and returns column names.

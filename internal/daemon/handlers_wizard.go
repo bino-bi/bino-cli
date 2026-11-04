@@ -88,7 +88,7 @@ func (s *Server) handleIntrospectDraft(w http.ResponseWriter, r *http.Request) {
 	res, err := datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: req.Spec,
 		BaseDir:  baseDir,
-		Docs:     s.state.Documents(),
+		Docs:     s.state.IntrospectionDocuments(),
 		Sheet:    req.Sheet,
 		Limit:    limit,
 	})
@@ -194,7 +194,7 @@ func (s *Server) handlePreviewDataSet(w http.ResponseWriter, r *http.Request) {
 		SourceName: req.SourceName,
 		SQL:        req.SQL,
 		BaseDir:    baseDir,
-		Docs:       s.state.Documents(),
+		Docs:       s.state.IntrospectionDocuments(),
 		Sheet:      req.Sheet,
 		Limit:      limit,
 	})

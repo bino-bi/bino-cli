@@ -520,6 +520,15 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 				warnings = append(warnings, Warning{DataSet: job.doc.Name, Message: fmt.Sprintf("execute: %v", err)})
 				continue
 			}
+			// A DataSource whose view failed (a missing file, say) only
+			// surfaces here as a missing table; name the real cause too.
+			for _, diag := range viewDiags {
+				// SQL identifiers are case-insensitive.
+				if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(diag.Datasource)) {
+					continue
+				}
+				err = fmt.Errorf("%w\n  datasource %s: %w", err, diag.Datasource, diag.Err)
+			}
 			return results, warnings, fmt.Errorf("dataset %s: %w", job.doc.Name, err)
 		}
 		warnings = append(warnings, execWarnings...)
