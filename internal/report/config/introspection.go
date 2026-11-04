@@ -58,16 +58,19 @@ func hasDocument(docs []Document, kind, name string) bool {
 	return false
 }
 
-// Explain adds the ambiguities whose name the query error mentions: a DataSet
-// that reads an unresolved DataSource fails with a missing-table error that
-// hides the cause.
+// Explain adds the ambiguities that can explain a query error: a DataSet that
+// reads an unresolved DataSource fails with a missing-table error that hides
+// the cause. DataSources and DataSets count when the error names them (SQL
+// identifiers are case-insensitive); ConnectionSecrets always count, since an
+// error never names the secret behind a failed source.
 func (as Ambiguities) Explain(err error) error {
 	if err == nil {
 		return nil
 	}
+	msg := strings.ToLower(err.Error())
 	errs := []error{err}
 	for _, a := range as {
-		if strings.Contains(err.Error(), a.Name) {
+		if a.Kind == "ConnectionSecret" || strings.Contains(msg, strings.ToLower(a.Name)) {
 			errs = append(errs, a)
 		}
 	}

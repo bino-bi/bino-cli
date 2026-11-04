@@ -84,24 +84,24 @@ func (s *State) Refresh(ctx context.Context) error {
 
 	introspect, ambiguous := config.ResolveForIntrospection(docs)
 
-	// The shared session outlives refreshes: a view whose name is now
-	// ambiguous, or whose definition failed to register below, must not keep
-	// serving the definition an earlier refresh registered.
-	if err := datasource.DropAmbiguousViews(ctx, s.session, ambiguous); err != nil {
-		s.logger.Warnf("%v", err)
+	// The shared session outlives refreshes: drop every DataSource view
+	// first, so a name that is now ambiguous, or whose definition fails to
+	// register below, cannot keep serving what an earlier refresh registered.
+	for _, doc := range docs {
+		if doc.Kind != "DataSource" {
+			continue
+		}
+		if _, err := s.session.DB().ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS %q", doc.Name)); err != nil {
+			s.logger.Warnf("drop view %s: %v", doc.Name, err)
+		}
 	}
 
 	// Register views on the shared session
-	viewDiags, err := datasource.RegisterViews(ctx, s.session, introspect, &datasource.ViewsOptions{
+	_, err = datasource.RegisterViews(ctx, s.session, introspect, &datasource.ViewsOptions{
 		TempDir: s.tempDir,
 	})
 	if err != nil {
 		s.logger.Warnf("register views: %v", err)
-	}
-	for _, d := range viewDiags {
-		if _, err := s.session.DB().ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS %q", d.Datasource)); err != nil {
-			s.logger.Warnf("drop failed view %s: %v", d.Datasource, err)
-		}
 	}
 
 	// Validate

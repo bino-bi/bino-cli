@@ -182,3 +182,11 @@ func TestAmbiguitiesExplainOnlyNamedSources(t *testing.T) {
 		t.Fatalf("missing-table error lacks the ambiguity: %q", got)
 	}
 }
+
+func TestAmbiguitiesExplainSecretsAndCase(t *testing.T) {
+	as := Ambiguities{{Kind: "ConnectionSecret", Name: "pg"}, {Kind: "DataSource", Name: "sales"}}
+	got := as.Explain(errors.New("Table with name Sales does not exist")).Error()
+	if !strings.Contains(got, `ConnectionSecret "pg"`) || !strings.Contains(got, `DataSource "sales"`) {
+		t.Fatalf("explain = %q, want the secret and the case-insensitive source", got)
+	}
+}
