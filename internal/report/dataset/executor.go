@@ -523,6 +523,9 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 			// A DataSource whose view failed (a missing file, say) only
 			// surfaces here as a missing table; name the real cause too.
 			for _, diag := range viewDiags {
+				if !strings.Contains(err.Error(), diag.Datasource) {
+					continue
+				}
 				err = fmt.Errorf("%w\n  datasource %s: %w", err, diag.Datasource, diag.Err)
 			}
 			return results, warnings, fmt.Errorf("dataset %s: %w", job.doc.Name, err)

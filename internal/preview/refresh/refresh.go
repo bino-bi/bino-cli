@@ -19,6 +19,7 @@ import (
 	"bino.bi/bino/internal/preview/explorer"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasource"
 	reportgraph "bino.bi/bino/internal/report/graph"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/report/pipeline"
@@ -450,6 +451,11 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 		allPagesDocs, ambiguous := config.ResolveForIntrospection(docs)
 		for _, a := range ambiguous {
 			logger.Warnf("All Pages: %v", a)
+		}
+		// Artefact renders share this session; drop what they registered
+		// under an ambiguous name, or All Pages would read it.
+		if err := datasource.DropAmbiguousViews(ctx, cfg.Session, ambiguous); err != nil {
+			logger.Warnf("All Pages: %v", err)
 		}
 		allPagesResult, rerr := pipeline.RenderHTMLFrameAndContext(ctx, allPagesDocs, pipeline.RenderOptions{
 			Workdir:                  watchDir,

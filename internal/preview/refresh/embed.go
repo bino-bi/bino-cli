@@ -297,8 +297,15 @@ func renderEmbedTarget(ctx context.Context, name string, target embedTarget, doc
 		body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e
 	default: // target.compDoc != nil
 		if _, direct := directEmbeddableComponentKinds[target.compDoc.Kind]; direct {
-			// Leaf components render directly inside <bn-context>, no wrapping page.
-			result, e := pipeline.RenderHTML(ctx, docsWithoutLayoutPages(docs), embedComponentOpts(cfg, plugins, name, language))
+			// Leaf components render directly inside <bn-context>, no wrapping
+			// page and no artefact to filter by: resolve duplicate data
+			// documents like All Pages does.
+			leafDocs, ambiguous := config.ResolveForIntrospection(docsWithoutLayoutPages(docs))
+			if e := datasource.DropAmbiguousViews(ctx, cfg.Session, ambiguous); e != nil {
+				err = e
+				break
+			}
+			result, e := pipeline.RenderHTML(ctx, leafDocs, embedComponentOpts(cfg, plugins, name, language))
 			body, emitted, assets, diagnostics, err = result.HTML, result.EmittedData, result.LocalAssets, result.Diagnostics, e
 			break
 		}

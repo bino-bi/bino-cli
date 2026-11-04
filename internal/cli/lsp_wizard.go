@@ -80,6 +80,7 @@ func runLSPIntrospectDraft(ctx context.Context, dir, baseDir string, specJSON []
 
 	// Sibling documents let database sources resolve their ConnectionSecret.
 	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient load; the wizard works with whatever parses
+	docs, _ = config.ResolveForIntrospection(docs)
 
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {
@@ -210,6 +211,7 @@ func runLSPPreviewDataSet(ctx context.Context, dir string, payloadJSON []byte, o
 
 	// Sibling documents let database sources resolve their ConnectionSecret.
 	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient load; the wizard works with whatever parses
+	docs, _ = config.ResolveForIntrospection(docs)
 
 	opts, err := duckdb.DefaultOptions()
 	if err != nil {

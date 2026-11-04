@@ -22,7 +22,7 @@ func IntrospectColumns(ctx context.Context, docs []config.Document, name string)
 	// Duplicate names resolve as the artefacts' constraints select them, so the
 	// result never comes from a definition the build would exclude.
 	docs, ambiguous := config.ResolveForIntrospection(docs)
-	if err := ambiguous.Lookup(name); err != nil {
+	if err := ambiguous.Lookup(docs, name); err != nil {
 		return nil, err
 	}
 

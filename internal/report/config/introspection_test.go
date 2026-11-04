@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,7 +116,7 @@ func TestResolveForIntrospection(t *testing.T) {
 				if len(got) != 0 || len(ambiguous) != 1 {
 					t.Fatalf("kept %v, ambiguities %v; want none kept and one ambiguity", got, ambiguous)
 				}
-				err := ambiguous.Lookup("$sales")
+				err := ambiguous.Lookup(kept, "$sales")
 				if err == nil || !strings.Contains(err.Error(), `DataSource "sales" is defined 2 times`) {
 					t.Fatalf("Lookup($sales) = %v", err)
 				}
@@ -156,5 +157,28 @@ spec:
 	kept, ambiguous := ResolveForIntrospection(docs)
 	if len(kept) != len(docs) || len(ambiguous) != 0 {
 		t.Fatalf("kept %d of %d documents, ambiguities %v; LayoutPages must pass unchanged", len(kept), len(docs), ambiguous)
+	}
+}
+
+func TestAmbiguitiesLookupPrefersUniqueDataSet(t *testing.T) {
+	docs := loadFixture(t, map[string]string{"a.yaml": syntheticSales, "b.yaml": realSales,
+		"r.yaml": artefactYAML("monthly", "synthetic"), "s.yaml": artefactYAML("weekly", "real"),
+		"ds.yaml": "apiVersion: bino.bi/v1alpha1\nkind: DataSet\nmetadata:\n  name: sales\nspec:\n  query: SELECT 1 AS v\n"})
+	kept, ambiguous := ResolveForIntrospection(docs)
+	if err := ambiguous.Lookup(kept, "sales"); err != nil {
+		t.Fatalf("bare name with a unique DataSet: %v", err)
+	}
+	if err := ambiguous.Lookup(kept, "$sales"); err == nil {
+		t.Fatal("$sales must report the ambiguous DataSource")
+	}
+}
+
+func TestAmbiguitiesExplainOnlyNamedSources(t *testing.T) {
+	as := Ambiguities{{Kind: "DataSource", Name: "sales", Files: []string{"a #1", "b #1"}}}
+	if got := as.Explain(errors.New("syntax error near SELEC")).Error(); strings.Contains(got, "sales") {
+		t.Fatalf("unrelated error got the ambiguity: %q", got)
+	}
+	if got := as.Explain(errors.New("Table with name sales does not exist")).Error(); !strings.Contains(got, "defined 2 times") {
+		t.Fatalf("missing-table error lacks the ambiguity: %q", got)
 	}
 }

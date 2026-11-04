@@ -84,23 +84,24 @@ func (s *State) Refresh(ctx context.Context) error {
 
 	introspect, ambiguous := config.ResolveForIntrospection(docs)
 
-	// The shared session outlives refreshes: drop a view whose name is now
-	// ambiguous, so it cannot keep serving a definition from an earlier refresh.
-	for _, a := range ambiguous {
-		if a.Kind != "DataSource" {
-			continue
-		}
-		if _, err := s.session.DB().ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS %q", a.Name)); err != nil {
-			s.logger.Warnf("drop ambiguous view %s: %v", a.Name, err)
-		}
+	// The shared session outlives refreshes: a view whose name is now
+	// ambiguous, or whose definition failed to register below, must not keep
+	// serving the definition an earlier refresh registered.
+	if err := datasource.DropAmbiguousViews(ctx, s.session, ambiguous); err != nil {
+		s.logger.Warnf("%v", err)
 	}
 
 	// Register views on the shared session
-	_, err = datasource.RegisterViews(ctx, s.session, introspect, &datasource.ViewsOptions{
+	viewDiags, err := datasource.RegisterViews(ctx, s.session, introspect, &datasource.ViewsOptions{
 		TempDir: s.tempDir,
 	})
 	if err != nil {
 		s.logger.Warnf("register views: %v", err)
+	}
+	for _, d := range viewDiags {
+		if _, err := s.session.DB().ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS %q", d.Datasource)); err != nil {
+			s.logger.Warnf("drop failed view %s: %v", d.Datasource, err)
+		}
 	}
 
 	// Validate
@@ -127,6 +128,14 @@ func (s *State) Diagnostics() []Diagnostic {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return slices.Clone(s.diagnostics)
+}
+
+// IntrospectionDocuments returns the documents resolved for queries, see
+// config.ResolveForIntrospection.
+func (s *State) IntrospectionDocuments() []config.Document {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return slices.Clone(s.introspect)
 }
 
 // LastIndexAt returns when the last refresh completed.
@@ -331,7 +340,7 @@ func (s *State) IntrospectSource(ctx context.Context, specJSON json.RawMessage, 
 	return datasource.Probe(ctx, session, datasource.ProbeRequest{
 		SpecJSON: specJSON,
 		BaseDir:  s.ProjectRoot(),
-		Docs:     s.Documents(),
+		Docs:     s.IntrospectionDocuments(),
 		Sheet:    sheet,
 		Limit:    limit,
 	})
@@ -347,7 +356,7 @@ func (s *State) target(name string) (*config.Document, config.Ambiguities, error
 	ambiguous := s.ambiguous
 	s.mu.RUnlock()
 
-	if err := ambiguous.Lookup(name); err != nil {
+	if err := ambiguous.Lookup(docs, name); err != nil {
 		return nil, nil, err
 	}
 
@@ -385,7 +394,11 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	return s.columnsFor(ctx, targetDoc, ambiguous)
+}
 
+// columnsFor returns the columns of a document target already resolved.
+func (s *State) columnsFor(ctx context.Context, targetDoc *config.Document, ambiguous config.Ambiguities) ([]string, error) {
 	// Build query (datasource views already registered during refresh)
 	var schemaQuery string
 	var constants []dataset.Constant
@@ -448,7 +461,11 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	if err != nil {
 		return nil, nil, false, "", err
 	}
+	return s.rowsFor(ctx, targetDoc, ambiguous, limit)
+}
 
+// rowsFor returns preview rows of a document target already resolved.
+func (s *State) rowsFor(ctx context.Context, targetDoc *config.Document, ambiguous config.Ambiguities, limit int) (columns []string, rowData []map[string]any, truncated bool, kind string, err error) {
 	var query string
 	var constants []dataset.Constant
 	switch targetDoc.Kind {

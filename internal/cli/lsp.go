@@ -351,7 +351,7 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 	}
 
 	docs, ambiguous := config.ResolveForIntrospection(docs)
-	if err := ambiguous.Lookup(name); err != nil {
+	if err := ambiguous.Lookup(docs, name); err != nil {
 		result.Error = err.Error()
 		return outputJSON(out, result)
 	}

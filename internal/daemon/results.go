@@ -111,10 +111,16 @@ func (s *State) Validate(ctx context.Context, execQueries bool) ValidateResult {
 // Columns wraps IntrospectColumns into the canonical result shape; errors are
 // captured in the Error field rather than returned.
 func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
-	cols, err := s.IntrospectColumns(ctx, name)
-	res := ColumnsResult{Name: name, Columns: cols, File: s.targetFile(name)}
-	if res.Columns == nil {
-		res.Columns = []string{}
+	res := ColumnsResult{Name: name, Columns: []string{}}
+	// One lookup serves the query and the file field, so a refresh in between
+	// cannot make them name different documents.
+	doc, ambiguous, err := s.target(name)
+	if err == nil {
+		res.File = doc.File
+		var cols []string
+		if cols, err = s.columnsFor(ctx, doc, ambiguous); cols != nil {
+			res.Columns = cols
+		}
 	}
 	if err != nil {
 		res.Error = err.Error()
@@ -122,25 +128,22 @@ func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
 	return res
 }
 
-// targetFile returns the manifest file of the document a query for name reads,
-// or "" when there is none.
-func (s *State) targetFile(name string) string {
-	if doc, _, err := s.target(name); err == nil {
-		return doc.File
-	}
-	return ""
-}
-
 // Rows wraps QueryRows into the canonical result shape; errors are captured in
 // the Error field rather than returned.
 func (s *State) Rows(ctx context.Context, name string, limit int) RowsResult {
-	cols, rows, truncated, kind, err := s.QueryRows(ctx, name, limit)
-	res := RowsResult{Name: name, Kind: kind, Columns: cols, Rows: rows, Limit: limit, Truncated: truncated, File: s.targetFile(name)}
-	if res.Columns == nil {
-		res.Columns = []string{}
-	}
-	if res.Rows == nil {
-		res.Rows = []map[string]any{}
+	res := RowsResult{Name: name, Columns: []string{}, Rows: []map[string]any{}, Limit: limit}
+	doc, ambiguous, err := s.target(name)
+	if err == nil {
+		res.File = doc.File
+		var cols []string
+		var rows []map[string]any
+		cols, rows, res.Truncated, res.Kind, err = s.rowsFor(ctx, doc, ambiguous, limit)
+		if cols != nil {
+			res.Columns = cols
+		}
+		if rows != nil {
+			res.Rows = rows
+		}
 	}
 	if err != nil {
 		res.Error = err.Error()

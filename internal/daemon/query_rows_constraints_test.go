@@ -168,3 +168,32 @@ func TestQueryRowsRefusesAmbiguousSource(t *testing.T) {
 		t.Fatalf("columns = %v, want an ambiguity error", cols.Columns)
 	}
 }
+
+func TestQueryRowsDropsViewWhenNewSelectionFails(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"synthetic.csv": "v\n1\n",
+		"a.yaml":        syntheticSource,
+		"b.yaml":        realSource,
+		"report.yaml":   reportArtefact("monthly", "synthetic"),
+	})
+	st := newRefreshedState(t, root)
+	ctx := context.Background()
+	if res := st.Rows(ctx, "$sales", 10); res.Error != "" {
+		t.Fatalf("synthetic selection: %s", res.Error)
+	}
+
+	// The label now selects the real source, whose file is missing here. The
+	// synthetic view from the first refresh must not answer for it.
+	writeFiles(t, root, map[string]string{"report.yaml": reportArtefact("monthly", "real")})
+	if err := st.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	res := st.Rows(ctx, "$sales", 10)
+	if len(res.Rows) != 0 || res.Error == "" {
+		t.Fatalf("rows = %v, error %q; want no rows and an error", res.Rows, res.Error)
+	}
+	if filepath.Base(res.File) != "b.yaml" {
+		t.Errorf("file = %q, want b.yaml", res.File)
+	}
+}

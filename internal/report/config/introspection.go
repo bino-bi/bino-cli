@@ -29,31 +29,47 @@ func (a AmbiguityError) Error() string {
 // Ambiguities lists the names ResolveForIntrospection could not resolve.
 type Ambiguities []AmbiguityError
 
-// Lookup returns the ambiguity for a name as authoring tools look it up: "$x"
-// is the DataSource x, a bare "x" is the DataSet x or else the DataSource x.
-func (as Ambiguities) Lookup(name string) error {
+// Lookup returns the ambiguity for a name as authoring tools look it up in
+// the resolved docs: "$x" is the DataSource x, a bare "x" is the DataSet x or
+// else the DataSource x.
+func (as Ambiguities) Lookup(docs []Document, name string) error {
 	isDataSource := strings.HasPrefix(name, "$")
 	lookup := strings.TrimPrefix(name, "$")
 	for _, a := range as {
 		if a.Name != lookup {
 			continue
 		}
-		if a.Kind == "DataSource" || (!isDataSource && a.Kind == "DataSet") {
+		switch {
+		case isDataSource && a.Kind == "DataSource", !isDataSource && a.Kind == "DataSet":
+			return a
+		case !isDataSource && a.Kind == "DataSource" && !hasDocument(docs, "DataSet", lookup):
 			return a
 		}
 	}
 	return nil
 }
 
-// Explain adds the ambiguities to a query error: a DataSet that reads an
-// unresolved DataSource fails with a missing-table error that hides the cause.
+func hasDocument(docs []Document, kind, name string) bool {
+	for _, d := range docs {
+		if d.Kind == kind && d.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Explain adds the ambiguities whose name the query error mentions: a DataSet
+// that reads an unresolved DataSource fails with a missing-table error that
+// hides the cause.
 func (as Ambiguities) Explain(err error) error {
-	if err == nil || len(as) == 0 {
-		return err
+	if err == nil {
+		return nil
 	}
 	errs := []error{err}
 	for _, a := range as {
-		errs = append(errs, a)
+		if strings.Contains(err.Error(), a.Name) {
+			errs = append(errs, a)
+		}
 	}
 	return errors.Join(errs...)
 }
