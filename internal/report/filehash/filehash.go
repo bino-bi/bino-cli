@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,9 @@ import (
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
 )
+
+// ErrNoFiles is returned when a directory or glob pattern matches no files.
+var ErrNoFiles = errors.New("matched no files")
 
 // FileDigest captures a file path and its content hash for dependency tracking.
 type FileDigest struct {
@@ -125,7 +129,7 @@ func ResolveAndHashFiles(baseDir, path, sourceType string) ([]FileDigest, error)
 		return nil, err
 	}
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("path pattern %s matched no files", path)
+		return nil, fmt.Errorf("path pattern %s %w", path, ErrNoFiles)
 	}
 
 	// Sort for deterministic ordering
@@ -148,7 +152,7 @@ func ResolveAndHashFiles(baseDir, path, sourceType string) ([]FileDigest, error)
 	}
 
 	if len(digests) == 0 {
-		return nil, fmt.Errorf("path pattern %s matched no files", path)
+		return nil, fmt.Errorf("path pattern %s %w", path, ErrNoFiles)
 	}
 
 	return digests, nil

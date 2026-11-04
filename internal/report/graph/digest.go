@@ -2,7 +2,9 @@ package graph
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,12 +23,21 @@ func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) (sum 
 		"type": spec.Type,
 	}
 	var digests []filehash.FileDigest
-	var hasEphemeral bool
+	var hasEphemeral, missing bool
 	baseDir := filepath.Dir(doc.File)
 	switch spec.Type {
 	case "excel", "csv", "parquet":
 		if spec.Path != "" {
 			patternDigests, err := filehash.ResolveAndHashFiles(baseDir, spec.Path, spec.Type)
+			// The graph covers every DataSource, also those that constraints
+			// exclude from every artefact, so a file that only exists in
+			// another environment is not an error here. A selected source
+			// still fails when its view is created.
+			if errors.Is(err, fs.ErrNotExist) || errors.Is(err, filehash.ErrNoFiles) {
+				attrs["sourcesMissing"] = spec.Path
+				missing = true
+				err = nil
+			}
 			if err != nil {
 				return nil, nil, err
 			}
@@ -64,6 +75,9 @@ func (b *builder) hashDataSource(doc config.Document, spec dataSourceSpec) (sum 
 	digest.Write(doc.Raw)
 	for _, d := range digests {
 		digest.Write([]byte(d.Hash))
+	}
+	if missing {
+		digest.Write([]byte("missing:" + spec.Path))
 	}
 	return digest.Sum(nil), attrs, nil
 }
