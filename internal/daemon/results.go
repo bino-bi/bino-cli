@@ -34,7 +34,10 @@ type ValidateResult struct {
 type ColumnsResult struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
-	Error   string   `json:"error,omitempty"`
+	// File is the manifest that defines the queried document; with duplicate
+	// names it shows which definition the constraints selected.
+	File  string `json:"file,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // RowsResult holds a preview of rows for a DataSource or DataSet.
@@ -45,7 +48,10 @@ type RowsResult struct {
 	Rows      []map[string]any `json:"rows"`
 	Limit     int              `json:"limit"`
 	Truncated bool             `json:"truncated"`
-	Error     string           `json:"error,omitempty"`
+	// File is the manifest that defines the queried document; with duplicate
+	// names it shows which definition the constraints selected.
+	File  string `json:"file,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // GraphNode is a node in a dependency-graph traversal result.
@@ -106,7 +112,7 @@ func (s *State) Validate(ctx context.Context, execQueries bool) ValidateResult {
 // captured in the Error field rather than returned.
 func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
 	cols, err := s.IntrospectColumns(ctx, name)
-	res := ColumnsResult{Name: name, Columns: cols}
+	res := ColumnsResult{Name: name, Columns: cols, File: s.targetFile(name)}
 	if res.Columns == nil {
 		res.Columns = []string{}
 	}
@@ -116,11 +122,20 @@ func (s *State) Columns(ctx context.Context, name string) ColumnsResult {
 	return res
 }
 
+// targetFile returns the manifest file of the document a query for name reads,
+// or "" when there is none.
+func (s *State) targetFile(name string) string {
+	if doc, _, err := s.target(name); err == nil {
+		return doc.File
+	}
+	return ""
+}
+
 // Rows wraps QueryRows into the canonical result shape; errors are captured in
 // the Error field rather than returned.
 func (s *State) Rows(ctx context.Context, name string, limit int) RowsResult {
 	cols, rows, truncated, kind, err := s.QueryRows(ctx, name, limit)
-	res := RowsResult{Name: name, Kind: kind, Columns: cols, Rows: rows, Limit: limit, Truncated: truncated}
+	res := RowsResult{Name: name, Kind: kind, Columns: cols, Rows: rows, Limit: limit, Truncated: truncated, File: s.targetFile(name)}
 	if res.Columns == nil {
 		res.Columns = []string{}
 	}

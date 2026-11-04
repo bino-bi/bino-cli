@@ -445,7 +445,13 @@ func Run(ctx context.Context, reason string, changed []string, server *httpserve
 	// can reuse them on selective refreshes that don't touch the layout.
 	if renderAllPages {
 		report.Progress(rendered, totalRender, "All Pages")
-		allPagesResult, rerr := pipeline.RenderHTMLFrameAndContext(ctx, docs, pipeline.RenderOptions{
+		// All Pages has no artefact to filter by: resolve duplicate data
+		// documents so it never renders a source the artefacts exclude.
+		allPagesDocs, ambiguous := config.ResolveForIntrospection(docs)
+		for _, a := range ambiguous {
+			logger.Warnf("All Pages: %v", a)
+		}
+		allPagesResult, rerr := pipeline.RenderHTMLFrameAndContext(ctx, allPagesDocs, pipeline.RenderOptions{
 			Workdir:                  watchDir,
 			Language:                 "de",
 			Mode:                     pipeline.RenderModePreview,

@@ -34,6 +34,8 @@ type State struct {
 	projectRoot   string
 	session       *duckdb.Session
 	documents     []config.Document
+	introspect    []config.Document // documents resolved for queries, see config.ResolveForIntrospection
+	ambiguous     config.Ambiguities
 	diagnostics   []Diagnostic
 	lastIndexAt   time.Time
 	logger        logx.Logger
@@ -80,8 +82,21 @@ func (s *State) Refresh(ctx context.Context) error {
 		return fmt.Errorf("load documents: %w", err)
 	}
 
+	introspect, ambiguous := config.ResolveForIntrospection(docs)
+
+	// The shared session outlives refreshes: drop a view whose name is now
+	// ambiguous, so it cannot keep serving a definition from an earlier refresh.
+	for _, a := range ambiguous {
+		if a.Kind != "DataSource" {
+			continue
+		}
+		if _, err := s.session.DB().ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS %q", a.Name)); err != nil {
+			s.logger.Warnf("drop ambiguous view %s: %v", a.Name, err)
+		}
+	}
+
 	// Register views on the shared session
-	_, err = datasource.RegisterViews(ctx, s.session, docs, &datasource.ViewsOptions{
+	_, err = datasource.RegisterViews(ctx, s.session, introspect, &datasource.ViewsOptions{
 		TempDir: s.tempDir,
 	})
 	if err != nil {
@@ -92,6 +107,8 @@ func (s *State) Refresh(ctx context.Context) error {
 	diags := s.validateDocs(ctx)
 
 	s.documents = docs
+	s.introspect = introspect
+	s.ambiguous = ambiguous
 	s.diagnostics = diags
 	s.lastIndexAt = time.Now()
 
@@ -167,7 +184,7 @@ func (s *State) validateDocs(ctx context.Context) []Diagnostic {
 // ValidateWithQueries runs validation including query execution and returns diagnostics.
 func (s *State) ValidateWithQueries(ctx context.Context) []Diagnostic {
 	s.mu.RLock()
-	docs := s.documents
+	docs := s.introspect
 	dir := s.projectRoot
 	s.mu.RUnlock()
 
@@ -320,13 +337,20 @@ func (s *State) IntrospectSource(ctx context.Context, specJSON json.RawMessage, 
 	})
 }
 
-// IntrospectColumns returns column names for a DataSource or DataSet using the shared session.
-func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, error) {
+// target finds the document a query for name reads, among the documents
+// resolved for introspection: "$x" is the DataSource x, a bare "x" is the
+// DataSet x or else the DataSource x. A name whose duplicates the artefacts do
+// not resolve is an error, never a guess.
+func (s *State) target(name string) (*config.Document, config.Ambiguities, error) {
 	s.mu.RLock()
-	docs := s.documents
+	docs := s.introspect
+	ambiguous := s.ambiguous
 	s.mu.RUnlock()
 
-	// Find the target document
+	if err := ambiguous.Lookup(name); err != nil {
+		return nil, nil, err
+	}
+
 	isDataSource := strings.HasPrefix(name, "$")
 	lookupName := strings.TrimPrefix(name, "$")
 
@@ -350,7 +374,16 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 	}
 
 	if targetDoc == nil {
-		return nil, fmt.Errorf("document not found: %s", name)
+		return nil, nil, fmt.Errorf("document not found: %s", name)
+	}
+	return targetDoc, ambiguous, nil
+}
+
+// IntrospectColumns returns column names for a DataSource or DataSet using the shared session.
+func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, error) {
+	targetDoc, ambiguous, err := s.target(name)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build query (datasource views already registered during refresh)
@@ -362,7 +395,7 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 	case "DataSet":
 		compiled, err := s.prepareDataSet(ctx, targetDoc)
 		if err != nil {
-			return nil, err
+			return nil, ambiguous.Explain(err)
 		}
 		schemaQuery = dataset.LimitQuery(compiled.Query, 0)
 		constants = compiled.Constants
@@ -372,7 +405,7 @@ func (s *State) IntrospectColumns(ctx context.Context, name string) ([]string, e
 
 	rows, err := s.session.DB().QueryContext(ctx, schemaQuery)
 	if err != nil {
-		return nil, fmt.Errorf("query schema: %w", err)
+		return nil, ambiguous.Explain(fmt.Errorf("query schema: %w", err))
 	}
 	defer rows.Close()
 
@@ -411,34 +444,9 @@ func (s *State) prepareDataSet(ctx context.Context, doc *config.Document) (datas
 
 // QueryRows returns preview rows for a DataSource or DataSet using the shared session.
 func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns []string, rowData []map[string]any, truncated bool, kind string, err error) {
-	s.mu.RLock()
-	docs := s.documents
-	s.mu.RUnlock()
-
-	isDataSource := strings.HasPrefix(name, "$")
-	lookupName := strings.TrimPrefix(name, "$")
-
-	var targetDoc *config.Document
-	for i := range docs {
-		doc := &docs[i]
-		if doc.Name != lookupName {
-			continue
-		}
-		if isDataSource && doc.Kind == "DataSource" {
-			targetDoc = doc
-			break
-		}
-		if !isDataSource && doc.Kind == "DataSet" {
-			targetDoc = doc
-			break
-		}
-		if !isDataSource && doc.Kind == "DataSource" {
-			targetDoc = doc
-		}
-	}
-
-	if targetDoc == nil {
-		return nil, nil, false, "", fmt.Errorf("document not found: %s", name)
+	targetDoc, ambiguous, err := s.target(name)
+	if err != nil {
+		return nil, nil, false, "", err
 	}
 
 	var query string
@@ -449,7 +457,7 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 	case "DataSet":
 		compiled, err := s.prepareDataSet(ctx, targetDoc)
 		if err != nil {
-			return nil, nil, false, "", err
+			return nil, nil, false, "", ambiguous.Explain(err)
 		}
 		query = dataset.LimitQuery(compiled.Query, limit+1)
 		constants = compiled.Constants
@@ -459,7 +467,7 @@ func (s *State) QueryRows(ctx context.Context, name string, limit int) (columns 
 
 	rows, err := s.session.DB().QueryContext(ctx, query)
 	if err != nil {
-		return nil, nil, false, "", fmt.Errorf("query: %w", err)
+		return nil, nil, false, "", ambiguous.Explain(fmt.Errorf("query: %w", err))
 	}
 	defer rows.Close()
 
