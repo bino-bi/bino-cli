@@ -48,7 +48,7 @@ func renderSmallMultiple(t *testing.T, smSpec string, extra ...config.Document) 
 		{Name: "profit", Data: json.RawMessage(profitRows)},
 		{Name: "profit_avg", Data: json.RawMessage(`[]`)},
 	}
-	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestSmallMultiple_RefusesAutoScale(t *testing.T) {
 		`{"dataset": "profit", "scale": "0.5", ` + inlineBase + `, "panels": {"by": "rowGroup"}}`,
 	} {
 		page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": ` + smSpec + `}]}`)
-		_, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, nil, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+		_, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, nil, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 		if err == nil || !strings.Contains(err.Error(), "all panels must share one scale") {
 			t.Errorf("%s: err = %v", smSpec, err)
 		}
@@ -244,7 +244,7 @@ func TestSmallMultiple_RefusesAutoScale(t *testing.T) {
 func TestSmallMultiple_DatasourceWithByFails(t *testing.T) {
 	page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": {"dataset": "$src",
 		"unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "panels": {"by": "rowGroup"}}}]}`)
-	_, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, nil, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	_, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, nil, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "panels.by needs a DataSet") {
 		t.Fatalf("err = %v", err)
 	}
@@ -269,7 +269,7 @@ func TestSmallMultiple_ParamValueIsEscaped(t *testing.T) {
 		"unitScaling": 10, "scale": "0.5", "base": {"kind": "ChartTime", "ref": "trend"},
 		"panels": {"by": "rowGroup", "param": "LOCATION"}}}]}`)
 	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page, chart},
-		[]dataset.Result{{Name: "odd", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+		[]dataset.Result{{Name: "odd", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestSmallMultiple_ItemWithoutFilterDropsDatasetDefaultFilter(t *testing.T) 
 		"unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "panels": {"items": [{"label": "All"}]}}}]}`)
 	results := []dataset.Result{{Name: "profit", Data: json.RawMessage(profitRows),
 		Defaults: dataset.Defaults{dataset.AnyToken: {"filter": json.RawMessage(`"rowGroup = 'Berlin'"`)}}}}
-	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestSmallMultiple_NumbersSortAsNumbers(t *testing.T) {
 		"panels": {"by": "month"}}}]}`)
 	rows := `[{"month":10},{"month":2},{"month":1},{"month":11},{"month":3}]`
 	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page},
-		[]dataset.Result{{Name: "months", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+		[]dataset.Result{{Name: "months", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}

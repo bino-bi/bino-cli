@@ -49,10 +49,10 @@ func TestGridCellLayout_DefaultsWriteNothing(t *testing.T) {
 func TestGridCellLayout_EngineGate(t *testing.T) {
 	docs := []config.Document{pageDoc(cellLayoutGrid)}
 	_, _, err := GenerateHTMLFromDocuments(context.Background(), docs, "en", "", "", ModeBuild, "v1.0.0-next.30")
-	if err == nil || !strings.Contains(err.Error(), "v1.0.0-next.31") || !strings.Contains(err.Error(), "grid-cell-layout-engine-version") {
+	if err == nil || !strings.Contains(err.Error(), "v1.0.0-next.32") || !strings.Contains(err.Error(), "grid-cell-layout-engine-version") {
 		t.Fatalf("err = %v", err)
 	}
-	if _, _, err := GenerateHTMLFromDocuments(context.Background(), docs, "en", "", "", ModeBuild, "v1.0.0-next.31"); err != nil {
+	if _, _, err := GenerateHTMLFromDocuments(context.Background(), docs, "en", "", "", ModeBuild, "v1.0.0-next.32"); err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
 	plain := makeTestDoc("LayoutPage", "page", json.RawMessage(`{"kind":"LayoutPage","metadata":{"name":"page"},"spec":{"children":[]}}`))

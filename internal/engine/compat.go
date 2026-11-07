@@ -60,7 +60,7 @@ func CheckAnnotationSupport(engineVersion string) error {
 // cell-height, cell-width, cell-vertical-align, cell-horizontal-align and
 // cell-captions. Older engines ignore these attributes without an error. It is
 // no floor of SupportedEngineRanges: a grid without them keeps working.
-const GridCellLayoutMinVersion = "v1.0.0-next.31"
+const GridCellLayoutMinVersion = "v1.0.0-next.32"
 
 // CheckGridCellLayoutSupport returns an error when a project that uses the grid
 // cell layout uses an engine older than GridCellLayoutMinVersion. An empty or

@@ -195,7 +195,7 @@ func TestGridCellLayoutEngineFinding(t *testing.T) {
 	}{
 		{"old engine with the fields", "v1.0.0-next.30", []config.Document{grid}, true},
 		{"old engine without the fields", "v1.0.0-next.30", []config.Document{plain}, false},
-		{"new engine with the fields", "v1.0.0-next.31", []config.Document{grid}, false},
+		{"new engine with the fields", "v1.0.0-next.32", []config.Document{grid}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

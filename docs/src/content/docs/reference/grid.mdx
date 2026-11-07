@@ -108,7 +108,7 @@ columnHeaders:
 | `rowHeaderWidth`    | string  | `"auto"` | CSS width of the row header column (e.g., `"auto"`, `"100px"`, `"20%"`).                                                      |
 | `cellGap`           | string  | `"0px"`  | CSS gap between grid cells (e.g., `"0px"`, `"8px"`).                                                                          |
 | `cellHeight`        | string  | `"auto"` | Height of the data rows: `auto` (each row fits its content) or `equal` (every row as tall as the tallest). See [Cell size and alignment](#cell-size-and-alignment). |
-| `cellWidth`         | string  | `"auto"` | Width of the data columns: `auto` or `equal` (every column as wide as the widest).                                            |
+| `cellWidth`         | string  | `"auto"` | Width of the data columns: `auto` or `equal` (the grid fills its container and the columns share its width).                   |
 | `cellVerticalAlign` | string  | `"top"`  | Vertical position of the content in its cell: `top`, `center`, `bottom` or `baseline`.                                        |
 | `cellHorizontalAlign` | string | `"left"` | Horizontal position of the content in its cell: `left`, `center`, `right` or `baseline`.                                     |
 | `selectedStyle`     | string  | -        | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply; merged over the `_system` and `_default` styles. |
@@ -139,7 +139,7 @@ Each child object has these properties:
 
 By default every row is as tall as its content, every column as wide as its content, and the content sits at the top left of its cell. Charts of different heights then start at the same top line, but their axes do not line up. Four fields change this:
 
-- `cellHeight: equal` makes every data row as tall as the tallest, `cellWidth: equal` makes every data column as wide as the widest. Header rows and the row header column keep their size.
+- `cellHeight: equal` makes every data row as tall as the tallest, `cellWidth: equal` makes the grid as wide as its container and gives every data column the same share of it. Header rows and the row header column keep their size.
 - `cellVerticalAlign` puts the content at the `top`, `center` or `bottom` of its cell, or on the `baseline` of its row.
 - `cellHorizontalAlign` puts the content at the `left`, `center` or `right` of its cell, or on the `baseline` of its column.
 
@@ -197,9 +197,9 @@ spec:
       spec: { filter: "rowGroup = 'West'", scale: "0.5" }
 ```
 
-A chart with `scale` unset or `auto` picks its font size from the size of its cell. With `cellWidth: equal` the cell is sized by the largest sibling, so the factor of such a chart can change. Pin `scale` when the charts must be comparable.
+A chart with `scale` unset or `auto` picks its font size from the size of its cell. With `cellWidth: equal` the cell width is a share of the grid width, so charts with different content get different factors. Pin `scale` when the charts must be comparable.
 
-These fields and `caption` need template engine **v1.0.0-next.31** or newer. With an older engine `bino build` and `bino lint` stop with `grid-cell-layout-engine-version`, and `bino preview` shows that error. A grid without them keeps working on its engine.
+These fields and `caption` need template engine **v1.0.0-next.32** or newer. With an older engine `bino build` and `bino lint` stop with `grid-cell-layout-engine-version`, and `bino preview` shows that error. A grid without them keeps working on its engine.
 
 ---
 
@@ -517,10 +517,10 @@ See [ComponentStyle](/reference/component-style/) for all available grid styling
 | `spec.showBorders`           | boolean | no       | `true`   | Display border/divider lines between cells.                                                                                                                                                     | `showBorders: false`                    |
 | `spec.rowHeaderWidth`        | string  | no       | `"auto"` | CSS width of the row header column (e.g. `auto`, `100px`, `20%`).                                                                                                                               | `rowHeaderWidth: "120px"`               |
 | `spec.cellGap`               | string  | no       | `"0px"`  | CSS gap between grid cells (e.g. `0px`, `8px`).                                                                                                                                                 | `cellGap: "8px"`                        |
-| `spec.cellHeight`            | string  | no       | `"auto"` | Height of the data rows. `auto` or `equal` (every data row as tall as the tallest). Needs engine v1.0.0-next.31.                                                                                | `cellHeight: equal`                     |
-| `spec.cellWidth`             | string  | no       | `"auto"` | Width of the data columns. `auto` or `equal` (every data column as wide as the widest). Needs engine v1.0.0-next.31.                                                                            | `cellWidth: equal`                      |
-| `spec.cellVerticalAlign`     | string  | no       | `"top"`  | Vertical position of the content in its cell. `top`, `center`, `bottom` or `baseline` (the baselines of a row on one line). Needs engine v1.0.0-next.31.                                        | `cellVerticalAlign: baseline`           |
-| `spec.cellHorizontalAlign`   | string  | no       | `"left"` | Horizontal position of the content in its cell. `left`, `center`, `right` or `baseline` (the baselines of a column on one line). Needs engine v1.0.0-next.31.                                   | `cellHorizontalAlign: baseline`         |
+| `spec.cellHeight`            | string  | no       | `"auto"` | Height of the data rows. `auto` or `equal` (every data row as tall as the tallest). Needs engine v1.0.0-next.32.                                                                                | `cellHeight: equal`                     |
+| `spec.cellWidth`             | string  | no       | `"auto"` | Width of the data columns. `auto` or `equal` (the grid fills its container, the data columns share its width). Needs engine v1.0.0-next.32.                                                                 | `cellWidth: equal`                      |
+| `spec.cellVerticalAlign`     | string  | no       | `"top"`  | Vertical position of the content in its cell. `top`, `center`, `bottom` or `baseline` (the baselines of a row on one line). Needs engine v1.0.0-next.32.                                        | `cellVerticalAlign: baseline`           |
+| `spec.cellHorizontalAlign`   | string  | no       | `"left"` | Horizontal position of the content in its cell. `left`, `center`, `right` or `baseline` (the baselines of a column on one line). Needs engine v1.0.0-next.32.                                   | `cellHorizontalAlign: baseline`         |
 | `spec.selectedStyle`         | string  | no       | -        | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                      | `selectedStyle: corporate-style`        |
 | `spec.i18nNamespace`         | string  | no       | -        | I18n namespace inherited by the grid's children (their own `i18nNamespace` wins). Resolved from the enclosing artefact, page or card when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: sales`                  |
 | `spec.children`              | array   | yes      | -        | Array of grid child definitions specifying position and content, at least one entry.                                                                                                            | see below                               |
@@ -578,5 +578,5 @@ spec:
 | `children[].optional` | boolean           | no          | `false` | Skip gracefully if `ref` is missing.                                                                                                   | `optional: true`                |
 | `children[].params`   | object of string  | no          | -       | Parameter values passed to the referenced document, expanded as `${NAME}` in its spec. Only valid together with `ref`.                 | `params: { QUARTER: "q1" }`     |
 | `children[].spec`     | object            | conditional | -       | Component specification. Required for inline children, optional override for `ref` children.                                           | `spec: { dataset: sales-data }` |
-| `children[].caption`  | string            | no          | -       | Caption drawn at the top left of the cell, above its content. Needs engine v1.0.0-next.31.                                             | `caption: North`                |
+| `children[].caption`  | string            | no          | -       | Caption drawn at the top left of the cell, above its content. Needs engine v1.0.0-next.32.                                             | `caption: North`                |
 | `children[].metadata` | object            | no          | -       | Optional metadata including `name` and `constraints`.                                                                                  | `metadata: { name: cell-name }` |

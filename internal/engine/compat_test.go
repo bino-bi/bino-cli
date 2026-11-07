@@ -195,7 +195,7 @@ func TestCheckAnnotationSupport(t *testing.T) {
 		ok      bool
 	}{
 		{"v1.0.0-next.30", true},
-		{"1.0.0-next.31", true},
+		{"1.0.0-next.32", true},
 		{"v1.0.0", true},
 		{"v1.2.2", true},
 		{"v1.0.0-next.29", false},
@@ -215,9 +215,10 @@ func TestCheckGridCellLayoutSupport(t *testing.T) {
 		version string
 		ok      bool
 	}{
-		{"v1.0.0-next.31", true},
-		{"1.0.0-next.32", true},
+		{"v1.0.0-next.32", true},
+		{"1.0.0-next.33", true},
 		{"v1.0.0", true},
+		{"v1.0.0-next.31", false},
 		{"v1.0.0-next.30", false},
 		{"v1.0.0-alpha.19", false},
 		{"", true}, // nothing resolved: not this check's job
