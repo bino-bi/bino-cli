@@ -225,7 +225,10 @@ func headerIDs(prefix string, n int) json.RawMessage {
 	for i := range labels {
 		labels[i] = prefix + strconv.Itoa(i)
 	}
-	data, _ := json.Marshal(labels)
+	data, err := json.Marshal(labels)
+	if err != nil {
+		return nil
+	}
 	return data
 }
 
@@ -408,7 +411,7 @@ func toFloat(v any) (float64, bool) {
 // resolveSmallMultipleBase is the base spec of every panel: the referenced
 // document with the base params (panels.param gets the ${panel.label}
 // placeholder) and the base.spec overrides, or the inline base.spec.
-func resolveSmallMultipleBase(s smallMultipleSpec, rc *renderCtx) (json.RawMessage, bool, error) {
+func resolveSmallMultipleBase(s smallMultipleSpec, rc *renderCtx) (spec json.RawMessage, skipped bool, err error) {
 	if s.Base.Ref == "" {
 		if len(s.Base.Spec) == 0 {
 			return json.RawMessage("{}"), false, nil
@@ -446,7 +449,9 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	// The base filter is SQL: a label in it is quoted as an SQL string.
 	baseFilter := ""
 	if raw, ok := fields["filter"]; ok {
-		_ = json.Unmarshal(raw, &baseFilter)
+		if err := json.Unmarshal(raw, &baseFilter); err != nil {
+			return nil, fmt.Errorf("base filter: %w", err)
+		}
 		baseFilter = replacePanelPlaceholders(baseFilter, p, i, sqlEscape)
 		delete(fields, "filter")
 	}
@@ -472,8 +477,7 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 		shared["dataset"] = s.Dataset
 	}
 	if p.item != nil && p.item.Dataset != "" {
-		data, _ := json.Marshal(p.item.Dataset)
-		shared["dataset"] = data
+		shared["dataset"] = jsonString(p.item.Dataset)
 	}
 	if unitScaledKinds[s.Base.Kind] {
 		shared["unitScaling"] = s.UnitScaling
@@ -497,13 +501,22 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	}
 	// Always set, also when empty: a default filter of the dataset must not
 	// narrow one panel and not the others.
-	filterJSON, _ := json.Marshal(joinFilters(s.Filter, baseFilter, panelPart))
+	filterJSON := jsonString(joinFilters(s.Filter, baseFilter, panelPart))
 	return ref.MergeSpec(merged, json.RawMessage(`{"filter":`+string(filterJSON)+`}`))
+}
+
+// jsonString is v as a JSON string.
+func jsonString(v string) json.RawMessage {
+	data, err := json.Marshal(v)
+	if err != nil { // a string always marshals
+		return json.RawMessage(`""`)
+	}
+	return data
 }
 
 // jsonEscape makes v safe inside a JSON string.
 func jsonEscape(v string) string {
-	data, _ := json.Marshal(v)
+	data := jsonString(v)
 	return string(data[1 : len(data)-1])
 }
 

@@ -61,9 +61,7 @@ func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
 		walk = func(raw json.RawMessage, path string) {
 			var obj map[string]json.RawMessage
 			if json.Unmarshal(raw, &obj) == nil {
-				var kind, ref string
-				_ = json.Unmarshal(obj["kind"], &kind)
-				_ = json.Unmarshal(obj["ref"], &ref)
+				kind, ref := rawString(obj["kind"]), rawString(obj["ref"])
 				if kind == "SmallMultiple" && ref != "" && obj["spec"] == nil {
 					plain[ref] = true
 				}
@@ -96,6 +94,15 @@ func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
 		}
 	}
 	return sites
+}
+
+// rawString is a JSON string value, "" when it is none.
+func rawString(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return s
 }
 
 // smallMultipleScale requires one shared scale for all panels.

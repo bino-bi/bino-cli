@@ -174,8 +174,8 @@ func (w *inheritWalker) child(owner specSite, path string, item any, chain []inh
 		spec: inline,
 	}}
 
-	if ref := stringField(child, "ref"); ref != "" {
-		id := kind + ":" + ref
+	if refName := stringField(child, "ref"); refName != "" {
+		id := kind + ":" + refName
 		base, ok := w.standalone[id]
 		// Not followed: a dangling ref (missing-required-reference reports it),
 		// a shared name, and a document that references itself.

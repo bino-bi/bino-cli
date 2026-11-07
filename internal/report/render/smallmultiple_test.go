@@ -340,8 +340,9 @@ func TestSmallMultiple_NumbersSortAsNumbers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	var got []string
-	for _, m := range cellPattern.FindAllStringSubmatch(string(res.HTML), -1) {
+	matches := cellPattern.FindAllStringSubmatch(string(res.HTML), -1)
+	got := make([]string, 0, len(matches))
+	for _, m := range matches {
 		got = append(got, attrsOf(m[2])["chart-title"])
 	}
 	if strings.Join(got, ",") != "1,2,3,10,11" {
