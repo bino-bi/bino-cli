@@ -505,6 +505,10 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"annotation-list-off-page",
 		"annotation-unlisted",
 		"annotation-list-in-live",
+		// Small multiples
+		"small-multiple-scale",
+		"small-multiple-base-dataset",
+		"small-multiple-by-datasource",
 	}
 
 	if len(rules) != len(expectedIDs) {

@@ -252,7 +252,7 @@ func TestResolveAt_RealSchema(t *testing.T) {
 	t.Run("layout child kind enum", func(t *testing.T) {
 		kinds := map[string]string{"": "LayoutPage"}
 		vals := m.ResolveAt([]string{"spec", "children", "0", "kind"}, kinds).EnumValues()
-		for _, want := range []string{"Text", "Table", "ChartTime", "Tree", "Grid", "LayoutCard", "Image"} {
+		for _, want := range []string{"Text", "Table", "ChartTime", "Tree", "Grid", "SmallMultiple", "LayoutCard", "Image"} {
 			if !hasString(vals, want) {
 				t.Errorf("child kind enum missing %q (got %v)", want, vals)
 			}

@@ -1,0 +1,146 @@
+---
+title: SmallMultiple
+description: Draw the same chart or table once per value of a dataset column, all on one dataset and one scale.
+---
+
+`SmallMultiple` draws one base component once per panel: one panel per value of a dataset column, plus panels you list yourself. All panels use the same dataset, each with its own filter, and all share one scale. This is the IBCS "small multiples" chart template: one measure for many locations, products or regions, where the reader compares the panels.
+
+bino builds the panels when it renders, from the data. A location that is added to the data gets its panel without a change to the manifest. The panels are laid out as a [`Grid`](/reference/grid/) with equal rows and columns, and the axes of each row and column are lined up (see [Cell size and alignment](/reference/grid/#cell-size-and-alignment)).
+
+## Minimal definition
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: SmallMultiple
+metadata:
+  name: net-profit-by-location
+spec:
+  chartTitle: Net profit by location
+  dataset: net_profit
+  unitScaling: net_profit_scale # a ScalingGroup, shared by all panels
+  scale: "0.5" # a fixed factor or "none", never "auto"
+  base:
+    kind: ChartTime
+    ref: net-profit-trend
+  panels:
+    by: rowGroup
+```
+
+This gives one `ChartTime` per distinct `rowGroup` value, each filtered to `rowGroup = '<value>'`, with the value as the caption of its panel.
+
+## When to use it
+
+- Use `SmallMultiple` when every panel is the same chart or table on a slice of one dataset, and the panels must be comparable: same scale, same size, axes on one line.
+- Use a [`Grid`](/reference/grid/) when the cells show different things.
+- For a scatter or bubble chart split by `rowGroup` or `category`, the `facet` field of [`ChartScatter`](/reference/chart-scatter/) and [`ChartBubble`](/reference/chart-bubble/) is the better fit: it draws all panels in one chart with shared axes.
+
+## The panels
+
+`panels.by` names a column of the dataset. Its distinct values become the panels. Column names are case-sensitive: `rowGroup`, not `rowgroup`. A value with an apostrophe, such as `O'Hare`, is quoted for the filter.
+
+```yaml
+panels:
+  by: rowGroup
+  order: ac1 desc # largest first
+  limit: 15 # the rest is dropped, with a warning
+  items:
+    - label: 11 more small locations
+      filter: "rowGroup NOT IN ('Cologne', 'Frankfurt')"
+    - label: Average of 25 locations
+      dataset: net_profit_avg
+      spec: { selectedStyle: highlight-panel }
+```
+
+- `order` sorts the `by` panels: `dataset` (default) sorts by the `<by>Index` column when it exists (`rowGroupIndex` for `rowGroup`), else by label. `label` sorts by label. Any other name, such as `ac1`, sorts by the sum of that column per panel. Add ` desc` to reverse.
+- `limit` keeps the first panels after sorting.
+- `items` are panels you define yourself. They come after the `by` panels. An item selects its rows with `filter`, can use another DataSet with `dataset`, and can change its panel with `spec`. `panels` needs `by`, `items`, or both.
+- `param` also passes the panel value to a referenced base as a parameter, for a base that uses it in its text: `param: LOCATION` gives `${LOCATION}`.
+
+The filter of a panel is the `filter` of the SmallMultiple, the `filter` of the base and the panel part (`<by> = '<value>'`, or the item's `filter`), joined with `AND`.
+
+## The base
+
+`base` is the component in every panel: a `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet` or `Table`. It is either inline (`kind` + `spec`) or a reference (`kind` + `ref`, with `params`, and `spec` to override fields of the referenced document).
+
+The SmallMultiple sets these fields in every panel, over the base:
+
+- `dataset` (or the `dataset` of an item),
+- `unitScaling` and `percentageScaling` (ChartStructure, ChartTime and Table),
+- `scale`,
+- `filter`.
+
+A `dataset` in `base.spec` has no effect, and lint says so. A default filter from the `_spec_` columns of the dataset is replaced by the panel filter, and the build log says so.
+
+In the base spec, the caption and the item specs, `${panel.label}`, `${panel.value}` and `${panel.index}` (1-based) are replaced per panel. The values are escaped, so a label with quotes is safe.
+
+## One scale
+
+IBCS small multiples are only useful when the reader can compare the panels. That needs two things:
+
+- `unitScaling`: the number of data units per em, or a [`ScalingGroup`](/reference/scaling-group/). It is required for ChartStructure, ChartTime and Table, and must not be `auto`.
+- `scale`: a fixed font factor such as `"0.5"`, or `"none"`. It is required and must not be `auto`. With `auto`, each panel picks its own factor, and the same `unitScaling` gives bars of different lengths.
+
+Start with `scale: "0.5"` for a four-column grid on one page, and adjust it until the panels fit. The rule [`small-multiple-scale`](/appendix/lint-rules/#small-multiple-scale) and the build both reject a missing or `auto` value.
+
+## Captions
+
+Each panel gets a caption at its top left. The default is `${panel.label}`. Set `caption` to change it, or to `""` to turn the captions off:
+
+```yaml
+caption: "${panel.index}. ${panel.label}"
+```
+
+An empty `chartTitle` in the base is usual, as the caption names the panel. The font of the captions is set with the `caption*` keys of the [grid style](/reference/component-style/#grid-style-bn-grid).
+
+## Layout
+
+- `columns`: number of panel columns. Default: the square root of the panel count, rounded up (16 panels give 4 columns).
+- `cellHeight`, `cellWidth`: `equal` (default) or `auto`.
+- `cellGap`, `showBorders` (default `false`), `selectedStyle`, `i18nNamespace`, `chartTitle`: as on a `Grid`.
+
+The panels are always aligned on their baselines, in both directions.
+
+## Using it in a layout
+
+A `SmallMultiple` is a standalone document, or a child of a `LayoutPage` or `LayoutCard`, inline or by `ref`. It cannot be a cell of a `Grid` or a node of a `Tree`, and a `ScreenshotArtefact` cannot target it directly: wrap it in a `LayoutCard`.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: locations
+spec:
+  children:
+    - kind: SmallMultiple
+      ref: net-profit-by-location
+```
+
+`SmallMultiple` needs template engine **v1.0.0-next.31** or newer. With an older engine `bino build` and `bino lint` stop with [`grid-cell-layout-engine-version`](/appendix/lint-rules/#grid-cell-layout-engine-version).
+
+## Attribute Reference
+
+| Attribute                  | Type             | Required    | Default            | Description                                                                                              |
+| -------------------------- | ---------------- | ----------- | ------------------ | -------------------------------------------------------------------------------------------------------- |
+| `spec.dataset`             | string or object | yes         | -                  | Dataset of every panel: a DataSet name, an inline DataSet, or a list. With `panels.by` the first entry must be a DataSet. |
+| `spec.filter`              | string           | no          | -                  | AlaSQL WHERE fragment ANDed into every panel filter.                                                     |
+| `spec.unitScaling`         | string or number | conditional | -                  | Shared unit scaling. Required for ChartStructure, ChartTime and Table bases, never `auto`.               |
+| `spec.percentageScaling`   | string or number | no          | -                  | Shared percentage scaling, never `auto`.                                                                 |
+| `spec.scale`               | string or number | yes         | -                  | Shared font scale: a fixed factor or `none`, never `auto`.                                               |
+| `spec.base.kind`           | string           | yes         | -                  | `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet` or `Table`.                  |
+| `spec.base.ref`            | string           | conditional | -                  | Name of a document of that kind. Without it, `base.spec` is the inline spec.                             |
+| `spec.base.params`         | object of string | no          | -                  | Parameters of the referenced document. Only with `ref`.                                                  |
+| `spec.base.spec`           | object           | conditional | -                  | Inline spec, or overrides of the referenced spec. Required without `ref`.                                |
+| `spec.caption`             | string           | no          | `"${panel.label}"` | Caption of each panel. `""` turns captions off.                                                          |
+| `spec.panels.by`           | string           | conditional | -                  | Column whose distinct values become panels. `panels` needs `by` or `items`.                              |
+| `spec.panels.order`        | string           | no          | `dataset`          | `dataset`, `label`, or a column name, optionally followed by ` desc`.                                    |
+| `spec.panels.limit`        | integer          | no          | -                  | Most panels from `by`.                                                                                   |
+| `spec.panels.param`        | string           | no          | -                  | Pass the panel value to the referenced base as this parameter. Needs `base.ref`.                         |
+| `spec.panels.items`        | array            | conditional | -                  | Explicit panels after the `by` panels: `label` (required), `filter`, `dataset`, `spec`.                  |
+| `spec.columns`             | integer          | no          | square root        | Number of panel columns.                                                                                 |
+| `spec.cellHeight`          | string           | no          | `equal`            | `equal` or `auto`.                                                                                       |
+| `spec.cellWidth`           | string           | no          | `equal`            | `equal` or `auto`.                                                                                       |
+| `spec.cellGap`             | string           | no          | -                  | CSS gap between the panels.                                                                              |
+| `spec.showBorders`         | boolean          | no          | `false`            | Lines between the panels.                                                                                |
+| `spec.chartTitle`          | string           | no          | -                  | Title of the whole grid.                                                                                 |
+| `spec.selectedStyle`       | string           | no          | -                  | ComponentStyle of the grid, inherited by the panels.                                                     |
+| `spec.i18nNamespace`       | string           | no          | -                  | I18n namespace inherited by the panels.                                                                  |

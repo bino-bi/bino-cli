@@ -19,7 +19,8 @@ const FALLBACK_RENDER_EMBEDDABLE_KINDS = [
     'ChartBullet',
     'Text',
     'Tree',
-    'Grid'
+    'Grid',
+    'SmallMultiple'
 ];
 
 /**

@@ -13,7 +13,8 @@ var gridCellLayoutDefaults = map[string]string{
 
 // UsesGridCellLayout reports whether any document asks bn-grid for cell size,
 // alignment or captions: a Grid, standalone or nested inline at any depth, with
-// a non-default cell layout field or a child caption.
+// a non-default cell layout field or a child caption, or any SmallMultiple,
+// which always renders as such a grid.
 func UsesGridCellLayout(docs []Document) bool {
 	for _, doc := range docs {
 		var v any
@@ -30,6 +31,9 @@ func UsesGridCellLayout(docs []Document) bool {
 func usesGridCellLayout(v any) bool {
 	switch node := v.(type) {
 	case map[string]any:
+		if node["kind"] == "SmallMultiple" {
+			return true
+		}
 		if node["kind"] == "Grid" {
 			if spec, ok := node["spec"].(map[string]any); ok && gridSpecUsesCellLayout(spec) {
 				return true

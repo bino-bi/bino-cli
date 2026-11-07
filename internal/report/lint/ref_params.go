@@ -52,7 +52,7 @@ var refParams = Rule{
 		// silently (the render/graph layers report those).
 		for _, doc := range docs {
 			switch doc.Kind {
-			case "LayoutPage", "LayoutCard", "Grid", "Tree":
+			case "LayoutPage", "LayoutCard", "Grid", "Tree", "SmallMultiple":
 			default:
 				continue
 			}
@@ -89,6 +89,24 @@ var refParams = Rule{
 	},
 }
 
+// addPanelParam adds panels.param of a SmallMultiple spec to the params of its
+// base, as the renderer does per panel. The value is a placeholder, so it is
+// not checked against the param type.
+func addPanelParam(spec map[string]any) {
+	base, _ := spec["base"].(map[string]any)
+	panels, _ := spec["panels"].(map[string]any)
+	name, _ := panels["param"].(string)
+	if base == nil || name == "" {
+		return
+	}
+	params, _ := base["params"].(map[string]any)
+	if params == nil {
+		params = map[string]any{}
+		base["params"] = params
+	}
+	params[name] = "${panel.value}"
+}
+
 // walkRefSites recursively visits every object carrying both a string "kind"
 // and a string "ref" (layout children, grid children, tree nodes), passing
 // along any "params" values (absent params visit with an empty map so
@@ -96,6 +114,7 @@ var refParams = Rule{
 func walkRefSites(node any, visit func(kind, ref string, params map[string]string)) {
 	switch v := node.(type) {
 	case map[string]any:
+		addPanelParam(v)
 		kind, _ := v["kind"].(string)
 		ref, _ := v["ref"].(string)
 		if kind != "" && ref != "" {

@@ -51,7 +51,7 @@ If the server does not offer the registry tools, the bino binary predates them -
 For every manifest you create:
 
 1. **Read the shape** - `outline_kind("Table")` (or whichever kind), then `scaffold_kind("Table")`
-   and fill its placeholders. For a layout kind (`LayoutPage`, `LayoutCard`, `Grid`): read
+   and fill its placeholders. For a layout kind (`LayoutPage`, `LayoutCard`, `Grid`, `SmallMultiple`): read
    `childKinds`, then `outline_kind(child)` for each child kind you place.
 2. **Learn the data** - before writing any SQL or `${data…}` binding, call `get_columns("sales")`
    to get the real column names (prefix `$` to force a DataSource: `get_columns("$raw")`). Use
@@ -85,7 +85,10 @@ the moment you write it:
 1. **Data** first - `DataSource` (raw input), then `DataSet` (typed SQL over sources).
 2. **Embeddables** next - `Table`, `Text`, `Tree`, `ChartTime`, `ChartStructure` - each binding to a
    dataset by name.
-3. **Layout** - `LayoutPage` / `LayoutCard` / `Grid` arranging the embeddables.
+3. **Layout** - `LayoutPage` / `LayoutCard` / `Grid` arranging the embeddables. For the same chart
+   once per region, product or location (IBCS small multiples), use `SmallMultiple` instead of a
+   hand-written `Grid`: `panels.by` names the column, and a fixed `scale` plus `unitScaling` keep the
+   panels comparable.
 4. **Artefact** last - `ReportArtefact` referencing the pages.
 
 References are by `metadata.name` (and `$ref` where the schema uses it). After wiring, use

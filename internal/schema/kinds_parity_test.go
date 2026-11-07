@@ -28,6 +28,7 @@ var kindConstants = []string{
 	KindChartBullet,
 	KindTree,
 	KindGrid,
+	KindSmallMultiple,
 	KindAsset,
 	KindComponentStyle,
 	KindRuleSet,

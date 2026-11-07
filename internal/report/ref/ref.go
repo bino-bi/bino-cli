@@ -83,7 +83,7 @@ func Resolve(r Ref, opt Options) (Result, error) {
 	if !found {
 		// Referencing a LayoutPage is explicitly disallowed, in every context.
 		if opt.IsPage != nil && opt.IsPage(r.Name) {
-			return Result{}, opt.errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, LayoutCard, and Image can be referenced", r.Name)
+			return Result{}, opt.errorf("ref %q points to LayoutPage which cannot be referenced; only Text, Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, Tree, Grid, SmallMultiple, LayoutCard, and Image can be referenced", r.Name)
 		}
 
 		// Present in the unfiltered set but not in the filtered one: the ref

@@ -28,6 +28,7 @@ var componentKinds = map[string]struct{}{
 	"Text":           {},
 	"Tree":           {},
 	"Grid":           {},
+	"SmallMultiple":  {},
 }
 
 // IsEmbeddable reports whether a manifest kind renders standalone as a
@@ -66,6 +67,7 @@ var builtinCategory = map[string]string{
 	"ChartBullet":          "embeddable",
 	"Tree":                 "embeddable",
 	"Grid":                 "embeddable",
+	"SmallMultiple":        "embeddable",
 	"Asset":                "embeddable",
 	"ReportArtefact":       "artefact",
 	"LiveReportArtefact":   "artefact",

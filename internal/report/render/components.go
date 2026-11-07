@@ -154,7 +154,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 // validation already limits child kinds to plugin component kinds.
 func refIndexable(kind string) bool {
 	switch kind {
-	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
+	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "SmallMultiple", "Image", "AnnotationList":
 		return true
 	}
 	return !schema.IsBuiltinKind(kind)
@@ -393,7 +393,7 @@ func collectReferencedDatasources(docs []config.Document, globalDocs []config.Do
 // collectDatasourceRefsFromDoc extracts $-prefixed dataset references from a single document.
 func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 	switch doc.Kind {
-	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image":
+	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "SmallMultiple":
 		addSpecDatasetRefs(doc.Raw, refs)
 	case "Tree":
 		var p struct {
@@ -1023,7 +1023,7 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 var builtinLayoutChildKinds = map[string]bool{
 	"Text": true, "Table": true, "ChartStructure": true, "ChartTime": true,
 	"ChartScatter": true, "ChartBubble": true, "ChartBullet": true,
-	"Tree": true, "LayoutCard": true, "Grid": true, "Image": true,
+	"Tree": true, "LayoutCard": true, "Grid": true, "SmallMultiple": true, "Image": true,
 	"AnnotationList": true,
 }
 
@@ -1137,6 +1137,20 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		htmlOut, err := renderGridComponent(s, rc.withoutAnnotationPage())
 		if err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
+		}
+		component = htmlOut
+	case "SmallMultiple":
+		var s smallMultipleSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render small multiple child: %w", err)
+		}
+		name := child.Ref
+		if name == "" {
+			name = child.Metadata.Name
+		}
+		htmlOut, err := renderSmallMultipleComponent(s, name, rc.withoutAnnotationPage())
+		if err != nil {
+			return "", false, fmt.Errorf("render small multiple child: %w", err)
 		}
 		component = htmlOut
 	case "Image":

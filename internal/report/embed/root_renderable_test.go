@@ -16,7 +16,7 @@ func TestIsRootRenderable(t *testing.T) {
 			t.Errorf("IsRootRenderable(%q) = false, want true", kind)
 		}
 	}
-	for _, kind := range []string{"Tree", "Grid", "LayoutPage", "DataSet", "Bogus"} {
+	for _, kind := range []string{"Tree", "Grid", "SmallMultiple", "LayoutPage", "DataSet", "Bogus"} {
 		if IsRootRenderable(kind) {
 			t.Errorf("IsRootRenderable(%q) = true, want false", kind)
 		}

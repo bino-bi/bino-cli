@@ -29,6 +29,7 @@
         "ChartBullet",
         "Tree",
         "Grid",
+        "SmallMultiple",
         "Table",
         "ComponentStyle",
         "RuleSet",
@@ -231,6 +232,19 @@
       "then": {
         "properties": {
           "spec": { "$ref": "#/$defs/gridSpec" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "SmallMultiple" }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec": { "$ref": "#/$defs/smallMultipleSpec" }
         }
       }
     },
@@ -3790,7 +3804,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "LayoutCard", "Image", "AnnotationList"],
+          "enum": ["Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "SmallMultiple", "LayoutCard", "Image", "AnnotationList"],
           "description": "The type of component to render. Must match the kind of the referenced document when using ref."
         },
         "metadata": {
@@ -3903,6 +3917,14 @@
             "if": { "required": ["ref"] },
             "then": { "properties": { "spec": { "$ref": "#/$defs/gridSpecBase" } } },
             "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/gridSpec" } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "SmallMultiple" } }, "required": ["kind"] },
+          "then": {
+            "if": { "required": ["ref"] },
+            "then": { "properties": { "spec": { "$ref": "#/$defs/smallMultipleSpecBase" } } },
+            "else": { "required": ["spec"], "properties": { "spec": { "$ref": "#/$defs/smallMultipleSpec" } } }
           }
         },
         {
@@ -4990,6 +5012,155 @@
             { "type": "string", "pattern": "^(0?\\.[0-9]+|[1-9][0-9]*(\\.[0-9]+)?)$" }
           ],
           "description": "Font-size scaling mode. \"none\" disables scaling, \"auto\" auto-scales silently, a positive number (e.g. \"0.8\") sets an explicit factor. When omitted, auto-scales and warns with the applied factor."
+        }
+      }
+    },
+    "smallMultipleSpec": { "description": "Small multiples (IBCS chart template C13): the same chart or table once per value of a dataset column, all on one dataset and one scale, in a grid with the axes lined up.", "allOf": [{ "$ref": "#/$defs/smallMultipleSpecBase" }], "required": ["dataset", "base", "panels"] },
+    "smallMultipleSpecBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for a SmallMultiple. It renders as a grid with one panel per value of panels.by and one per panels.items entry. Every panel is the base component on the same dataset with its own filter, and all panels share unitScaling and scale.",
+      "properties": {
+        "selectedStyle": {
+          "type": "string",
+          "description": "Name of a ComponentStyle manifest (metadata.name) applied to the grid and inherited by the panels. Maps to the selected-style HTML attribute of bn-grid."
+        },
+        "i18nNamespace": {
+          "type": "string",
+          "description": "I18n namespace inherited by the panels at runtime. Maps to the i18n-namespace HTML attribute of bn-grid."
+        },
+        "chartTitle": {
+          "type": "string",
+          "description": "Title at the top left of the grid. If empty, the title area is omitted."
+        },
+        "dataset": {
+          "$ref": "#/$defs/datasetRef",
+          "description": "The dataset of every panel: a DataSet name, an inline DataSet, or a list. The rows of the first entry give the values of panels.by, so with panels.by the first entry must be a DataSet, not a $datasource."
+        },
+        "filter": {
+          "type": "string",
+          "description": "An AlaSQL WHERE-clause fragment ANDed into the filter of every panel."
+        },
+        "unitScaling": {
+          "description": "Shared unit scaling of all panels: a ScalingGroup name or the number of data units per em. Required for ChartStructure, ChartTime and Table bases, and never 'auto': the panels must be comparable.",
+          "oneOf": [{ "type": "string" }, { "type": "number" }]
+        },
+        "percentageScaling": {
+          "description": "Shared percentage scaling of all panels: a ScalingGroup name or the percentage points per em. Optional, never 'auto'.",
+          "oneOf": [{ "type": "string" }, { "type": "number" }]
+        },
+        "scale": {
+          "oneOf": [
+            { "enum": ["none", "auto"] },
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^(0?\\.[0-9]+|[1-9][0-9]*(\\.[0-9]+)?)$" }
+          ],
+          "description": "Shared font scale of all panels: a fixed factor (e.g. '0.5') or 'none'. Required, never 'auto': an auto factor differs per panel and breaks the shared unitScaling.",
+          "examples": ["0.5", "none"]
+        },
+        "base": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "description": "The component drawn in every panel: inline (kind + spec) or a reference (kind + ref, with params and spec overrides). Its dataset, unitScaling, percentageScaling, scale and filter are set by the SmallMultiple.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table"],
+              "description": "The kind of the panel component."
+            },
+            "ref": {
+              "type": "string",
+              "description": "Name of a standalone document of that kind used as the base."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "Parameter values passed to the referenced document. Only valid together with ref."
+            },
+            "spec": {
+              "type": "object",
+              "description": "Inline spec of the panel component, or overrides of the referenced spec. ${panel.label}, ${panel.value} and ${panel.index} are replaced per panel."
+            }
+          },
+          "allOf": [
+            { "if": { "required": ["params"] }, "then": { "required": ["ref"] } },
+            { "if": { "not": { "required": ["ref"] } }, "then": { "required": ["spec"] } }
+          ]
+        },
+        "caption": {
+          "type": "string",
+          "default": "${panel.label}",
+          "description": "Caption of each panel, at the top left of its cell. ${panel.label}, ${panel.value} and ${panel.index} (1-based) are replaced. An empty string turns the captions off."
+        },
+        "panels": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Where the panels come from: the distinct values of a dataset column (by), explicit entries (items), or both. Items come after the by panels.",
+          "anyOf": [{ "required": ["by"] }, { "required": ["items"] }],
+          "properties": {
+            "by": {
+              "type": "string",
+              "description": "Dataset column whose distinct values become panels, e.g. rowGroup. Column names are case-sensitive."
+            },
+            "order": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*( (asc|desc))?$",
+              "default": "dataset",
+              "description": "Order of the by panels: 'dataset' (by the <by>Index column when it exists, else by label), 'label', or a column such as ac1 (by its sum per panel). Add ' desc' to reverse."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Most panels taken from by, after ordering. The rest are dropped with a warning."
+            },
+            "param": {
+              "type": "string",
+              "description": "Also pass the panel value to a referenced base as this parameter. Needs base.ref."
+            },
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Explicit panels, appended after the by panels.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label"],
+                "properties": {
+                  "label": { "type": "string", "description": "Label of the panel, used as ${panel.label} and ${panel.value}." },
+                  "filter": { "type": "string", "description": "AlaSQL WHERE-clause fragment selecting the rows of this panel." },
+                  "dataset": { "type": "string", "pattern": "^[^$]", "description": "DataSet name used for this panel instead of the SmallMultiple dataset. A $datasource is not allowed here." },
+                  "spec": { "type": "object", "description": "Overrides of the panel spec for this panel only." }
+                }
+              }
+            }
+          }
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of grid columns. Default: the square root of the panel count, rounded up."
+        },
+        "cellHeight": {
+          "type": "string",
+          "enum": ["auto", "equal"],
+          "default": "equal",
+          "description": "Height of the panel rows: 'equal' (default) or 'auto'."
+        },
+        "cellWidth": {
+          "type": "string",
+          "enum": ["auto", "equal"],
+          "default": "equal",
+          "description": "Width of the panel columns: 'equal' (default) or 'auto'."
+        },
+        "cellGap": {
+          "type": "string",
+          "description": "CSS gap between the panels (e.g. '4px')."
+        },
+        "showBorders": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to draw lines between the panels."
         }
       }
     },

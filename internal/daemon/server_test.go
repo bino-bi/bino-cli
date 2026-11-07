@@ -161,7 +161,7 @@ func TestKindsEndpoint(t *testing.T) {
 		}
 		got[k.Name] = k.Embeddable
 	}
-	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid"} {
+	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid", "SmallMultiple"} {
 		if !got[name] {
 			t.Errorf("component kind %s: embeddable = false, want true", name)
 		}

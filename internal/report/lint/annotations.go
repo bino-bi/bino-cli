@@ -464,7 +464,7 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 			p.slots[key] = true
 			p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
 		}
-		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree {
+		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree || child.Kind == schema.KindSmallMultiple {
 			p.addNested(effective)
 		}
 	}

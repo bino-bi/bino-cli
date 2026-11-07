@@ -290,7 +290,7 @@ func TestListKindsEmbeddable(t *testing.T) {
 	for _, k := range out.Kinds {
 		got[k.Name] = k
 	}
-	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid"} {
+	for _, name := range []string{"Table", "ChartStructure", "ChartTime", "Text", "Tree", "Grid", "SmallMultiple"} {
 		if !got[name].Embeddable {
 			t.Errorf("component kind %s: embeddable = false, want true", name)
 		}
