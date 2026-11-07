@@ -57,3 +57,25 @@ func TestSmallMultipleBaseDatasetAndByDatasource(t *testing.T) {
 		t.Errorf("items on a datasource are fine: %+v", f)
 	}
 }
+
+func TestSmallMultipleScale_RefOverride(t *testing.T) {
+	sm := Document{Kind: "SmallMultiple", Name: "sm", File: "sm.yaml", Position: 1,
+		Raw: json.RawMessage(`{"kind":"SmallMultiple","spec":{"base":{"kind":"ChartTime"},"unitScaling":"g"}}`)}
+	page := func(spec string) Document {
+		return Document{Kind: "LayoutPage", Name: "page", File: "page.yaml", Position: 1,
+			Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{"children":[{"kind":"SmallMultiple","ref":"sm","spec":` + spec + `}]}}`)}
+	}
+	// the ref site sets the scale the document lacks: nothing to report
+	if f := smallMultipleScale.Check(context.Background(), []Document{sm, page(`{"scale":"0.5"}`)}); len(f) != 0 {
+		t.Fatalf("findings = %+v", f)
+	}
+	// the ref site breaks the unit scaling: reported at the child
+	f := smallMultipleScale.Check(context.Background(), []Document{sm, page(`{"scale":"0.5","unitScaling":"auto"}`)})
+	if len(f) != 1 || f[0].File != "page.yaml" || f[0].Path != "spec.children[0].spec" {
+		t.Fatalf("findings = %+v", f)
+	}
+	// without an override the document itself is checked
+	if f := smallMultipleScale.Check(context.Background(), []Document{sm}); len(f) != 1 || f[0].File != "sm.yaml" {
+		t.Fatalf("findings = %+v", f)
+	}
+}

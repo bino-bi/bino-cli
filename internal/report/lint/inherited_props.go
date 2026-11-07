@@ -157,27 +157,32 @@ type inheritWalker struct {
 func (w *inheritWalker) children(owner specSite, key string, list any, chain []inheritScope, refs []string) {
 	items, _ := list.([]any)
 	for i, item := range items {
-		child, _ := item.(map[string]any)
-		kind := stringField(child, "kind")
-		inline, _ := child["spec"].(map[string]any)
-		node := specNode{inline: specSite{
-			doc:  owner.doc,
-			path: joinLintPath(owner.path, key+"."+strconv.Itoa(i)+".spec"),
-			spec: inline,
-		}}
-
-		if ref := stringField(child, "ref"); ref != "" {
-			id := kind + ":" + ref
-			base, ok := w.standalone[id]
-			// Not followed: a dangling ref (missing-required-reference reports it),
-			// a shared name, and a document that references itself.
-			if !ok || slices.Contains(refs, id) {
-				continue
-			}
-			node.base = &base
-		}
-		w.node(kind, node, chain, refs)
+		w.child(owner, key+"."+strconv.Itoa(i), item, chain, refs)
 	}
+}
+
+// child walks one child written at owner under path.
+func (w *inheritWalker) child(owner specSite, path string, item any, chain []inheritScope, refs []string) {
+	child, _ := item.(map[string]any)
+	kind := stringField(child, "kind")
+	inline, _ := child["spec"].(map[string]any)
+	node := specNode{inline: specSite{
+		doc:  owner.doc,
+		path: joinLintPath(owner.path, path+".spec"),
+		spec: inline,
+	}}
+
+	if ref := stringField(child, "ref"); ref != "" {
+		id := kind + ":" + ref
+		base, ok := w.standalone[id]
+		// Not followed: a dangling ref (missing-required-reference reports it),
+		// a shared name, and a document that references itself.
+		if !ok || slices.Contains(refs, id) {
+			return
+		}
+		node.base = &base
+	}
+	w.node(kind, node, chain, refs)
 }
 
 func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs []string) {
@@ -195,7 +200,7 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		}
 	}
 
-	// Grid and Tree hold children but are no inheritance source.
+	// Grid, Tree and the base of a SmallMultiple are no inheritance source.
 	listKey := "children"
 	switch kind {
 	case "LayoutCard":
@@ -203,6 +208,13 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 	case "Grid":
 	case "Tree":
 		listKey = "nodes"
+	case "SmallMultiple":
+		base, site := n.field("base")
+		if site.ref != "" {
+			refs = append(slices.Clip(refs), site.ref)
+		}
+		w.child(site, "base", base, chain, refs)
+		return
 	default:
 		return
 	}

@@ -94,7 +94,7 @@ func TestSmallMultiple_ExpandsToBaselineGrid(t *testing.T) {
 		if cell["slot"] != wantSlots[i] {
 			t.Errorf("cell %d slot = %q, want %q", i, cell["slot"], wantSlots[i])
 		}
-		wantFilter := "rowGroup = '" + strings.ReplaceAll(label, "'", "''") + "'"
+		wantFilter := "[rowGroup] = '" + strings.ReplaceAll(label, "'", "''") + "'"
 		if cell["filter"] != wantFilter {
 			t.Errorf("cell %d filter = %q, want %q", i, cell["filter"], wantFilter)
 		}
@@ -129,7 +129,7 @@ func TestSmallMultiple_FiltersAreANDed(t *testing.T) {
 	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", "filter": "date >= '2024-01-01'",
 		"base": {"kind": "ChartTime", "spec": {"filter": "ac1 > 0"}},
 		"panels": {"by": "rowGroup", "limit": 1}}`)
-	if got := out.cells[0]["filter"]; got != "(date >= '2024-01-01') AND (ac1 > 0) AND (rowGroup = 'Berlin')" {
+	if got := out.cells[0]["filter"]; got != "(date >= '2024-01-01') AND (ac1 > 0) AND ([rowGroup] = 'Berlin')" {
 		t.Errorf("filter = %q", got)
 	}
 }
@@ -256,5 +256,55 @@ func TestSmallMultiple_EngineGate(t *testing.T) {
 	_, _, err := GenerateHTMLFromDocuments(context.Background(), []config.Document{page}, "en", "", "", ModeBuild, "v1.0.0-next.30")
 	if err == nil || !strings.Contains(err.Error(), "grid-cell-layout-engine-version") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSmallMultiple_ParamValueIsEscaped(t *testing.T) {
+	t.Setenv("SM_SECRET", "leaked")
+	rows := `[{"rowGroup":"Store \"A\" \\ ${SM_SECRET}"}]`
+	chart := makeTestDoc("ChartTime", "trend", json.RawMessage(`{"kind":"ChartTime","metadata":{"name":"trend"},
+		"spec":{"dataset":"other","chartTitle":"Trend ${LOCATION}"}}`))
+	chart.Params = []config.LayoutPageParamSpec{{Name: "LOCATION", Type: "string"}}
+	page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": {"dataset": "odd",
+		"unitScaling": 10, "scale": "0.5", "base": {"kind": "ChartTime", "ref": "trend"},
+		"panels": {"by": "rowGroup", "param": "LOCATION"}}}]}`)
+	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page, chart},
+		[]dataset.Result{{Name: "odd", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	m := cellPattern.FindStringSubmatch(string(res.HTML))
+	if m == nil {
+		t.Fatalf("no cell:\n%s", res.HTML)
+	}
+	if got := attrsOf(m[2])["chart-title"]; got != `Trend Store "A" \ ${SM_SECRET}` {
+		t.Fatalf("title = %q", got)
+	}
+}
+
+func TestSmallMultiple_LabelInBaseFilterIsSQLQuoted(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5",
+		"base": {"kind": "ChartTime", "spec": {"filter": "note <> '${panel.label}'"}},
+		"panels": {"by": "rowGroup", "order": "label desc", "limit": 1}}`)
+	if got := out.cells[0]["filter"]; got != "(note <> 'O''Hare') AND ([rowGroup] = 'O''Hare')" {
+		t.Fatalf("filter = %q", got)
+	}
+}
+
+func TestSmallMultiple_ItemWithoutFilterDropsDatasetDefaultFilter(t *testing.T) {
+	page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": {"dataset": "profit",
+		"unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "panels": {"items": [{"label": "All"}]}}}]}`)
+	results := []dataset.Result{{Name: "profit", Data: json.RawMessage(profitRows),
+		Defaults: dataset.Defaults{dataset.AnyToken: {"filter": json.RawMessage(`"rowGroup = 'Berlin'"`)}}}}
+	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page}, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	m := cellPattern.FindStringSubmatch(string(res.HTML))
+	if m == nil || attrsOf(m[2])["filter"] != "" {
+		t.Fatalf("the default filter must not narrow one panel: %v", m)
+	}
+	if !strings.Contains(strings.Join(res.Warnings, "\n"), `dataset "profit" sets a default filter`) {
+		t.Fatalf("warnings = %v", res.Warnings)
 	}
 }

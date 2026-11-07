@@ -1539,15 +1539,12 @@ func renderImageComponent(s imageSpec) string {
 // renderGridComponent renders a Grid component as HTML.
 // Grid uses slotted content for children, with slot names following the pattern "{row-id}-{column-id}".
 func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
-	var b strings.Builder
-	b.WriteString("<bn-grid")
-	s.writeAttrs(&b)
-	b.WriteString(">")
-
 	// Cells inherit the grid's effective style as their default.
 	childRC := rc.withInheritedStyle(s.SelectedStyle)
 
 	// Render child content as slotted elements
+	var cells strings.Builder
+	rendered := make([]gridChild, 0, len(s.Children))
 	for _, child := range s.Children {
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
@@ -1556,13 +1553,22 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		if childContent == "" {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
+		rendered = append(rendered, child)
 		slotName := gridSlotName(child)
-		b.WriteString("\n  <div slot='")
-		b.WriteString(html.EscapeString(slotName))
-		b.WriteString("'>")
-		b.WriteString(childContent)
-		b.WriteString("</div>")
+		cells.WriteString("\n  <div slot='")
+		cells.WriteString(html.EscapeString(slotName))
+		cells.WriteString("'>")
+		cells.WriteString(childContent)
+		cells.WriteString("</div>")
 	}
+
+	var b strings.Builder
+	b.WriteString("<bn-grid")
+	attrs := s
+	attrs.Children = rendered // a skipped cell gets no caption
+	attrs.writeAttrs(&b)
+	b.WriteString(">")
+	b.WriteString(cells.String())
 	if len(s.Children) > 0 {
 		b.WriteString("\n")
 	}

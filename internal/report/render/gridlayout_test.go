@@ -60,3 +60,16 @@ func TestGridCellLayout_EngineGate(t *testing.T) {
 		t.Fatalf("no grid layout fields: %v", err)
 	}
 }
+
+func TestGridCellLayout_SkippedChildGetsNoCaption(t *testing.T) {
+	html := renderDocsWithArtefactStyle(t, []config.Document{pageDoc(`{"children": [{"kind": "Grid", "metadata": {"name": "grid"}, "spec": {
+		"rowHeaders": ["A"], "columnHeaders": ["X", "Y"],
+		"children": [
+			{"row": 0, "column": 0, "kind": "Table", "ref": "missing", "optional": true, "caption": "North"},
+			{"row": 0, "column": 1, "kind": "Text", "caption": "South", "spec": {"value": "b"}}
+		]
+	}}]}`)}, "", "")
+	if tag := openTag(t, html, "bn-grid"); !strings.Contains(tag, `cell-captions='{&#34;0-1&#34;:&#34;South&#34;}'`) {
+		t.Fatalf("only the rendered cell has a caption: %s", tag)
+	}
+}

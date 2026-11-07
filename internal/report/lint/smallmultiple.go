@@ -32,10 +32,19 @@ type smallMultipleLintSpec struct {
 	} `json:"panels"`
 }
 
-// smallMultipleSites finds every SmallMultiple spec: standalone documents and
-// inline children at any depth. A child with ref is covered by its document.
+// smallMultipleSites finds every SmallMultiple spec that renders: inline
+// children at any depth, ref children with spec overrides (merged over the
+// document, reported at the child), and standalone documents unless every ref
+// to them overrides the spec.
 func smallMultipleSites(docs []Document) []smallMultipleSite {
+	byName := map[string]Document{}
+	for _, doc := range docs {
+		if doc.Kind == "SmallMultiple" {
+			byName[doc.Name] = doc
+		}
+	}
 	var sites []smallMultipleSite
+	overridden, plain := map[string]bool{}, map[string]bool{}
 	add := func(doc Document, path string, raw json.RawMessage) {
 		var s smallMultipleLintSpec
 		if json.Unmarshal(raw, &s) == nil {
@@ -44,11 +53,7 @@ func smallMultipleSites(docs []Document) []smallMultipleSite {
 	}
 	for _, doc := range docs {
 		var root map[string]json.RawMessage
-		if json.Unmarshal(doc.Raw, &root) != nil {
-			continue
-		}
-		if doc.Kind == "SmallMultiple" {
-			add(doc, "spec", root["spec"])
+		if doc.Kind == "SmallMultiple" || json.Unmarshal(doc.Raw, &root) != nil {
 			continue
 		}
 		var walk func(raw json.RawMessage, path string)
@@ -58,8 +63,16 @@ func smallMultipleSites(docs []Document) []smallMultipleSite {
 				var kind, ref string
 				_ = json.Unmarshal(obj["kind"], &kind)
 				_ = json.Unmarshal(obj["ref"], &ref)
-				if kind == "SmallMultiple" && ref == "" && obj["spec"] != nil {
-					add(doc, joinLintPath(path, "spec"), obj["spec"])
+				if kind == "SmallMultiple" && ref != "" && obj["spec"] == nil {
+					plain[ref] = true
+				}
+				if kind == "SmallMultiple" && obj["spec"] != nil {
+					if ref == "" {
+						add(doc, joinLintPath(path, "spec"), obj["spec"])
+					} else if target, ok := byName[ref]; ok {
+						overridden[ref] = true
+						add(doc, joinLintPath(path, "spec"), mergedSpec(target, obj["spec"]))
+					}
 					return
 				}
 				for k, v := range obj {
@@ -75,6 +88,11 @@ func smallMultipleSites(docs []Document) []smallMultipleSite {
 			}
 		}
 		walk(root["spec"], "spec")
+	}
+	for _, doc := range docs {
+		if doc.Kind == "SmallMultiple" && (!overridden[doc.Name] || plain[doc.Name]) {
+			add(doc, "spec", specOf(doc))
+		}
 	}
 	return sites
 }

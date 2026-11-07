@@ -279,6 +279,16 @@ func TestInheritedPropUnresolved(t *testing.T) {
 			},
 		},
 		{
+			name: "the base of a SmallMultiple is walked through to the card",
+			docs: []Document{inheritPage("p", "",
+				inheritCard(scenariosSet, `{"kind":"SmallMultiple","spec":{"base":`+tableClosest+`}}`))},
+		},
+		{
+			name: "the base of a SmallMultiple without a card",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"base":`+tableClosest+`}}`)},
+			want: []string{"p.yaml spec.children.0.spec.base.spec.scenarios"},
+		},
+		{
 			name: "ChartStructure resolved",
 			docs: []Document{inheritPage("p", scenariosSet, inheritChild("ChartStructure", pageKeyword))},
 		},

@@ -1601,6 +1601,10 @@ func TestValidate_SmallMultiple(t *testing.T) {
 		{"item dataset is no datasource", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { items: [{ label: a, dataset: $src }] }\n"), true},
 		{"missing dataset", doc("  base: { kind: ChartTime, ref: t }\n  panels: { by: rowGroup }\n"), true},
 		{"unknown field", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { by: rowGroup }\n  rows: 3\n"), true},
+		{"param needs a ref'd base", doc("  dataset: profit\n  base: { kind: ChartTime, spec: {} }\n  panels: { by: rowGroup, param: LOC }\n"), true},
+		{"base spec checked against its kind", doc("  dataset: profit\n  base: { kind: ChartTime, spec: { notAField: 1 } }\n  panels: { by: rowGroup }\n"), true},
+		{"by without a closing bracket", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { by: \"a]b\" }\n"), true},
+		{"ref'd child overrides only a part", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: SmallMultiple\n      ref: sm\n      spec:\n        scale: \"0.4\"\n        panels: { limit: 4 }\n        base: { spec: { chartTitle: x } }\n", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -139,8 +139,16 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		rc.warn(fmt.Sprintf("SmallMultiple %q: no panels", name))
 		return "", nil
 	}
-	if defaults := rc.datasetDefaults[primary]; hasDefaultFilter(defaults, s.Base.Kind) {
-		rc.warn(fmt.Sprintf("SmallMultiple %q: dataset %q sets a default filter; the panel filters replace it", name, primary))
+	warned := map[string]bool{}
+	for _, p := range panels {
+		ds := primary
+		if p.item != nil && p.item.Dataset != "" {
+			ds = p.item.Dataset
+		}
+		if !warned[ds] && hasDefaultFilter(rc.datasetDefaults[ds], s.Base.Kind) {
+			warned[ds] = true
+			rc.warn(fmt.Sprintf("SmallMultiple %q: dataset %q sets a default filter; the panel filters replace it", name, ds))
+		}
 	}
 
 	columns := s.Columns
@@ -397,7 +405,9 @@ func resolveSmallMultipleBase(s smallMultipleSpec, p panel, rc *renderCtx) (json
 		params[k] = v
 	}
 	if s.Panels.Param != "" {
-		params[s.Panels.Param] = p.label
+		// The value is pasted into the JSON text of the document, and must not
+		// expand as a variable there.
+		params[s.Panels.Param] = strings.ReplaceAll(jsonEscape(p.label), "${", `\${`)
 	}
 	res, err := ref.Resolve(ref.Ref{Kind: s.Base.Kind, Name: s.Base.Ref, Spec: s.Base.Spec, Params: params}, rc.refOptions())
 	if err != nil {
@@ -413,18 +423,23 @@ func resolveSmallMultipleBase(s smallMultipleSpec, p panel, rc *renderCtx) (json
 // first: the base, the shared fields of the SmallMultiple, the item spec, the
 // generated filter.
 func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMessage) (json.RawMessage, error) {
-	jsonEscape := func(v string) string {
-		data, _ := json.Marshal(v)
-		return string(data[1 : len(data)-1])
-	}
-	spec := json.RawMessage(replacePanelPlaceholders(string(base), p, i, jsonEscape))
 	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(spec, &fields); err != nil {
+	if err := json.Unmarshal(base, &fields); err != nil {
 		return nil, fmt.Errorf("base spec is not an object: %w", err)
 	}
+	// The base filter is SQL: a label in it is quoted as an SQL string.
 	baseFilter := ""
 	if raw, ok := fields["filter"]; ok {
 		_ = json.Unmarshal(raw, &baseFilter)
+		baseFilter = replacePanelPlaceholders(baseFilter, p, i, sqlEscape)
+		delete(fields, "filter")
+	}
+	baseJSON, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(replacePanelPlaceholders(string(baseJSON), p, i, jsonEscape)), &fields); err != nil {
+		return nil, fmt.Errorf("base spec: %w", err)
 	}
 
 	shared := map[string]json.RawMessage{"scale": s.Scale}
@@ -459,14 +474,23 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	if p.item != nil {
 		panelPart = p.item.Filter
 	} else {
-		panelPart = s.Panels.By + " = " + p.value
+		panelPart = "[" + s.Panels.By + "] = " + p.value
 	}
-	filter := joinFilters(s.Filter, baseFilter, panelPart)
-	if filter == "" {
-		return merged, nil
-	}
-	filterJSON, _ := json.Marshal(filter)
+	// Always set, also when empty: a default filter of the dataset must not
+	// narrow one panel and not the others.
+	filterJSON, _ := json.Marshal(joinFilters(s.Filter, baseFilter, panelPart))
 	return ref.MergeSpec(merged, json.RawMessage(`{"filter":`+string(filterJSON)+`}`))
+}
+
+// jsonEscape makes v safe inside a JSON string.
+func jsonEscape(v string) string {
+	data, _ := json.Marshal(v)
+	return string(data[1 : len(data)-1])
+}
+
+// sqlEscape makes v safe inside an SQL string literal.
+func sqlEscape(v string) string {
+	return strings.ReplaceAll(v, "'", "''")
 }
 
 // joinFilters ANDs the non-empty parts, each in parentheses when there are several.

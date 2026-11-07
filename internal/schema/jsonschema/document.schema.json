@@ -5015,7 +5015,27 @@
         }
       }
     },
-    "smallMultipleSpec": { "description": "Small multiples (IBCS chart template C13): the same chart or table once per value of a dataset column, all on one dataset and one scale, in a grid with the axes lined up.", "allOf": [{ "$ref": "#/$defs/smallMultipleSpecBase" }], "required": ["dataset", "base", "panels"] },
+    "smallMultipleSpec": {
+      "description": "Small multiples (IBCS chart template C13): the same chart or table once per value of a dataset column, all on one dataset and one scale, in a grid with the axes lined up.",
+      "allOf": [
+        { "$ref": "#/$defs/smallMultipleSpecBase" },
+        {
+          "if": { "properties": { "panels": { "required": ["param"] } }, "required": ["panels"] },
+          "then": { "properties": { "base": { "required": ["ref"] } } }
+        }
+      ],
+      "required": ["dataset", "base", "panels"],
+      "properties": {
+        "base": {
+          "required": ["kind"],
+          "allOf": [
+            { "if": { "required": ["params"] }, "then": { "required": ["ref"] } },
+            { "if": { "not": { "required": ["ref"] } }, "then": { "required": ["spec"] } }
+          ]
+        },
+        "panels": { "anyOf": [{ "required": ["by"] }, { "required": ["items"] }] }
+      }
+    },
     "smallMultipleSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -5061,7 +5081,6 @@
         "base": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind"],
           "description": "The component drawn in every panel: inline (kind + spec) or a reference (kind + ref, with params and spec overrides). Its dataset, unitScaling, percentageScaling, scale and filter are set by the SmallMultiple.",
           "properties": {
             "kind": {
@@ -5084,8 +5103,12 @@
             }
           },
           "allOf": [
-            { "if": { "required": ["params"] }, "then": { "required": ["ref"] } },
-            { "if": { "not": { "required": ["ref"] } }, "then": { "required": ["spec"] } }
+            { "if": { "properties": { "kind": { "const": "ChartStructure" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartStructureSpecBase" } } } },
+            { "if": { "properties": { "kind": { "const": "ChartTime" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartTimeSpecBase" } } } },
+            { "if": { "properties": { "kind": { "const": "ChartScatter" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartScatterSpecBase" } } } },
+            { "if": { "properties": { "kind": { "const": "ChartBubble" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartBubbleSpecBase" } } } },
+            { "if": { "properties": { "kind": { "const": "ChartBullet" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartBulletSpecBase" } } } },
+            { "if": { "properties": { "kind": { "const": "Table" } }, "required": ["kind"] }, "then": { "properties": { "spec": { "$ref": "#/$defs/tableSpecBase" } } } }
           ]
         },
         "caption": {
@@ -5097,10 +5120,10 @@
           "type": "object",
           "additionalProperties": false,
           "description": "Where the panels come from: the distinct values of a dataset column (by), explicit entries (items), or both. Items come after the by panels.",
-          "anyOf": [{ "required": ["by"] }, { "required": ["items"] }],
           "properties": {
             "by": {
               "type": "string",
+              "pattern": "^[^\\]]+$",
               "description": "Dataset column whose distinct values become panels, e.g. rowGroup. Column names are case-sensitive."
             },
             "order": {
