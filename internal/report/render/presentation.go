@@ -323,6 +323,9 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	if err := rc.withAnnotations(docs, datasetResults, sources, ModePreview, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
+	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
+		return PresentationResult{}, diags, err
+	}
 
 	// Render each LayoutPage as a slide - the page is embedded as-is inside a <section>.
 	var slides strings.Builder
@@ -457,6 +460,9 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	rc.inheritedStyle = strings.TrimSpace(artifact.Spec.SelectedStyle)
 	rc.withDatasetResults(datasetResults)
 	if err := rc.withAnnotations(docs, datasetResults, sources, ModePreview, engineVersion); err != nil {
+		return PresentationFrameResult{}, diags, err
+	}
+	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
 

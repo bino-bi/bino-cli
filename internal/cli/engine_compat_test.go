@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/internal/report/config"
 )
 
 func writeProjectWithEngine(t *testing.T, dir, engineVersion string) {
@@ -178,5 +181,33 @@ spec:
 	}
 	if !strings.Contains(combined, "bino.toml:2:1") {
 		t.Errorf("output should include line:col, got: %s", combined)
+	}
+}
+
+func TestGridCellLayoutEngineFinding(t *testing.T) {
+	grid := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{"cellHeight":"equal"}}`)}
+	plain := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{}}`)}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine with the fields", "v1.0.0-next.30", []config.Document{grid}, true},
+		{"old engine without the fields", "v1.0.0-next.30", []config.Document{plain}, false},
+		{"new engine with the fields", "v1.0.0-next.31", []config.Document{grid}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := gridCellLayoutEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "grid-cell-layout-engine-version" || finding.Line != 2) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
 	}
 }

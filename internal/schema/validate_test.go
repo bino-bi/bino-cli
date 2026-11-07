@@ -1516,3 +1516,45 @@ func TestIsBuiltinKind(t *testing.T) {
 		t.Error(`IsBuiltinKind("Gauge") = true`)
 	}
 }
+
+func TestValidate_GridCellLayout(t *testing.T) {
+	grid := func(fields, child string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: g
+spec:
+  rowHeaders: ["A"]
+  columnHeaders: ["X"]
+` + fields + `
+  children:
+    - row: 0
+      column: 0
+      kind: Text
+      spec: { value: a }
+` + child
+	}
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"all fields and a caption", grid("  cellHeight: equal\n  cellWidth: auto\n  cellVerticalAlign: baseline\n  cellHorizontalAlign: right", "      caption: North\n"), false},
+		{"unknown cellHeight", grid("  cellHeight: fill", ""), true},
+		{"unknown cellVerticalAlign", grid("  cellVerticalAlign: middle", ""), true},
+		{"unknown cellHorizontalAlign", grid("  cellHorizontalAlign: start", ""), true},
+		{"caption must be a string", grid("", "      caption: [a]\n"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

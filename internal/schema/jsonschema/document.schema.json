@@ -2886,6 +2886,26 @@
           "type": "number",
           "description": "Padding inside each cell in pixels. Default: 4",
           "default": 4
+        },
+        "captionFontSize": {
+          "type": "number",
+          "description": "Font size of a cell caption in pixels. Default: 12. Needs template engine v1.0.0-next.31 or newer.",
+          "default": 12
+        },
+        "captionFontWeight": {
+          "type": "string",
+          "description": "Font weight of a cell caption (CSS font-weight). Default: bold. Needs template engine v1.0.0-next.31 or newer.",
+          "default": "bold"
+        },
+        "captionColor": {
+          "type": "string",
+          "description": "Color of a cell caption (CSS color). Default: #000000. Needs template engine v1.0.0-next.31 or newer.",
+          "default": "#000000"
+        },
+        "captionGap": {
+          "type": "number",
+          "description": "Space below a cell caption in pixels. Default: 2. Needs template engine v1.0.0-next.31 or newer.",
+          "default": 2
         }
       },
       "additionalProperties": true
@@ -5067,6 +5087,30 @@
           "default": "0px",
           "description": "CSS gap between grid cells (e.g., '0px', '8px')."
         },
+        "cellHeight": {
+          "type": "string",
+          "enum": ["auto", "equal"],
+          "default": "auto",
+          "description": "Height of the data rows. \"auto\" sizes each row to its content, \"equal\" makes every data row as tall as the tallest. Needs template engine v1.0.0-next.31 or newer."
+        },
+        "cellWidth": {
+          "type": "string",
+          "enum": ["auto", "equal"],
+          "default": "auto",
+          "description": "Width of the data columns. \"auto\" sizes each column to its content, \"equal\" makes every data column as wide as the widest. Needs template engine v1.0.0-next.31 or newer."
+        },
+        "cellVerticalAlign": {
+          "type": "string",
+          "enum": ["top", "center", "bottom", "baseline"],
+          "default": "top",
+          "description": "Vertical position of the content in its cell. \"baseline\" lines up the baselines of a row: the axis line of a chart, the bottom of a table header. Content without a baseline goes to the bottom. Needs template engine v1.0.0-next.31 or newer."
+        },
+        "cellHorizontalAlign": {
+          "type": "string",
+          "enum": ["left", "center", "right", "baseline"],
+          "default": "left",
+          "description": "Horizontal position of the content in its cell. \"baseline\" lines up the baselines of a column: the value axis of a chart, the first value column of a table. Content without a baseline stays left. Needs template engine v1.0.0-next.31 or newer."
+        },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/gridChild" },
@@ -5121,6 +5165,10 @@
         "spec": {
           "type": "object",
           "description": "Component specification. Required for inline children (without ref). When ref is set, spec fields override the referenced document's spec values."
+        },
+        "caption": {
+          "type": "string",
+          "description": "Caption drawn at the top left of the cell, above its content. Needs template engine v1.0.0-next.31 or newer."
         }
       },
       "allOf": [

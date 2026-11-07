@@ -1542,7 +1542,7 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		if childContent == "" {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
-		slotName := child.Row.String() + "-" + child.Column.String()
+		slotName := gridSlotName(child)
 		b.WriteString("\n  <div slot='")
 		b.WriteString(html.EscapeString(slotName))
 		b.WriteString("'>")

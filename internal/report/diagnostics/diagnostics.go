@@ -121,6 +121,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := annotationEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := gridCellLayoutEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
@@ -169,6 +172,18 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 	for _, doc := range docs {
 		used = used || doc.Kind == schema.KindAnnotation
 	}
+	return engineGateDiagnostic(dir, used, engine.CheckAnnotationSupport, "annotation-engine-version")
+}
+
+// gridCellLayoutEngineDiagnostic reports a project that uses grid cell size,
+// alignment or captions on an engine older than the release with them.
+func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), engine.CheckGridCellLayoutSupport, "grid-cell-layout-engine-version")
+}
+
+// engineGateDiagnostic runs a feature gate of the engine when the project uses
+// the feature, and reports a failure on the engine-version line of bino.toml.
+func engineGateDiagnostic(dir string, used bool, check func(string) error, code string) (Diagnostic, bool) {
 	if !used {
 		return Diagnostic{}, false
 	}
@@ -176,10 +191,10 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 	if err != nil {
 		cfg = &pathutil.ProjectConfig{}
 	}
-	if err := engine.CheckAnnotationSupport(engine.ResolveVersion(cfg.EngineVersion)); err != nil {
+	if err := check(engine.ResolveVersion(cfg.EngineVersion)); err != nil {
 		configPath := pathutil.ProjectConfigPath(dir)
 		line, col := pathutil.FindEngineVersionLine(configPath)
-		return Diagnostic{File: configPath, Line: line, Column: col, Severity: "error", Message: err.Error(), Code: "annotation-engine-version"}, true
+		return Diagnostic{File: configPath, Line: line, Column: col, Severity: "error", Message: err.Error(), Code: code}, true
 	}
 	return Diagnostic{}, false
 }

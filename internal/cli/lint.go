@@ -177,6 +177,10 @@ with --fail-on-warnings.`),
 			if annotationGateFatal {
 				findings = append([]lint.Finding{annotationGateFinding}, findings...)
 			}
+			gridGateFinding, gridGateFatal := gridCellLayoutEngineFinding(projectRoot, projectCfg, documents)
+			if gridGateFatal {
+				findings = append([]lint.Finding{gridGateFinding}, findings...)
+			}
 
 			// Step 3: Execute queries and validate data (optional)
 			var dataValidationWarnings []dataset.Warning
@@ -264,6 +268,9 @@ with --fail-on-warnings.`),
 			}
 			if annotationGateFatal {
 				return RuntimeErrorf("annotation-engine-version")
+			}
+			if gridGateFatal {
+				return RuntimeErrorf("grid-cell-layout-engine-version")
 			}
 
 			// Manifests that failed to load stay fatal even when [lint] hides
