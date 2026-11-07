@@ -454,3 +454,32 @@ func TestSmallMultiple_CardEngineGate(t *testing.T) {
 		t.Fatalf("a SmallMultiple without card still works on next.32: %v", err)
 	}
 }
+
+func TestSmallMultiple_CardTitleShowsTheLabelAsText(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`, "card": {},
+		"panels": {"items": [{"label": "*Total* <b>x</b> 1. Q", "filter": "1 = 1"}]}}`)
+	cells := cardCells(out.html)
+	if len(cells) != 1 {
+		t.Fatalf("card cells = %d:\n%s", len(cells), out.html)
+	}
+	if got := cells[0].card["title-business-unit"]; strings.Contains(got, "<em>") || strings.Contains(got, "<b>") || !strings.Contains(got, "*Total*") {
+		t.Errorf("title-business-unit = %q, want the label as text", got)
+	}
+}
+
+func TestSmallMultiple_NullItemCardIsNoCard(t *testing.T) {
+	_, _, err := renderSmallMultipleWith(`{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"panels": {"items": [{"label": "A", "filter": "1 = 1", "card": null}]}}`, "v1.0.0-next.33")
+	if err != nil {
+		t.Fatalf("card: null is no card: %v", err)
+	}
+}
+
+func TestSmallMultiple_PanelCardHasNoSourceAttributes(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`, "card": {},
+		"panels": {"by": "rowGroup", "limit": 1}}`)
+	grid := out.html[strings.Index(out.html, "<bn-grid"):strings.Index(out.html, "</bn-grid>")]
+	if strings.Contains(grid, "data-bino-") || strings.Contains(grid, "id='bino-") {
+		t.Errorf("a generated panel names no document:\n%s", grid)
+	}
+}

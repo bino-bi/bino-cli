@@ -73,7 +73,10 @@ type PluginComponentRenderer interface {
 
 // renderCtx holds context needed for rendering layout children with ref support.
 type renderCtx struct {
-	ctx           context.Context
+	ctx context.Context
+	// panelCard marks a LayoutCard that a SmallMultiple made around a panel:
+	// its child is no document, so it gets no source attributes.
+	panelCard     bool
 	docs          []config.Document
 	constraintCtx *spec.ConstraintContext
 	// docIndex maps kind+name to the document for ref resolution (from filtered docs).
@@ -961,6 +964,12 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 
 	// Children inherit the card's effective style as their default.
 	childRC := rc.withInheritedStyle(cardSpec.SelectedStyle)
+	panelCard := rc.panelCard
+	if panelCard {
+		c := *childRC
+		c.panelCard = false
+		childRC = &c
+	}
 
 	slotIdx := 0
 	for _, child := range filteredChildren {
@@ -973,8 +982,10 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		}
 		// Build slot div with source location attributes for click-to-source in preview
 		fmt.Fprintf(&b, "  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
-		writeSourceAttrs(&b, child)
-		childRC.writeAnnotationTarget(&b, child)
+		if !panelCard {
+			writeSourceAttrs(&b, child)
+			childRC.writeAnnotationTarget(&b, child)
+		}
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
 		b.WriteString("\n  </div>\n")
@@ -1662,7 +1673,9 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal layout card spec: %w", err)
 		}
-		return renderLayoutCardContainer(s, rc)
+		panelRC := *rc
+		panelRC.panelCard = true
+		return renderLayoutCardContainer(s, &panelRC)
 	default:
 		name := child.Ref
 		if name == "" {

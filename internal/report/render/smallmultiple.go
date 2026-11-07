@@ -169,7 +169,7 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 	}
 	rows := (len(panels) + columns - 1) / columns
 
-	hasCard := len(bytes.TrimSpace(s.Card)) > 0 && string(bytes.TrimSpace(s.Card)) != "null"
+	hasCard := isSet(s.Card)
 	caption := defaultPanelCaption
 	if hasCard {
 		caption = "" // the card title names the panel
@@ -192,7 +192,7 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 			Spec:     cellSpec,
 			Caption:  replacePanelPlaceholders(caption, p, i, func(v string) string { return v }),
 		}
-		if p.item != nil && len(p.item.Card) > 0 && !hasCard {
+		if p.item != nil && isSet(p.item.Card) && !hasCard {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: panels.items[].card needs card", name, p.label)
 		}
 		if hasCard {
@@ -532,7 +532,7 @@ var cardLayoutFields = []string{"children", "cardLayout", "cardCustomTemplate", 
 // border and names the panel in its title unless the card says otherwise.
 func smallMultipleCardSpec(s smallMultipleSpec, p panel, i int, component gridChild) (json.RawMessage, error) {
 	card := json.RawMessage(replacePanelPlaceholders(string(s.Card), p, i, jsonEscape))
-	if p.item != nil && len(p.item.Card) > 0 {
+	if p.item != nil && isSet(p.item.Card) {
 		var err error
 		itemCard := replacePanelPlaceholders(string(p.item.Card), p, i, jsonEscape)
 		if card, err = ref.MergeSpec(card, json.RawMessage(itemCard)); err != nil {
@@ -549,7 +549,8 @@ func smallMultipleCardSpec(s smallMultipleSpec, p panel, i int, component gridCh
 		}
 	}
 	if _, ok := fields["titleBusinessUnit"]; !ok {
-		fields["titleBusinessUnit"] = jsonString(p.label)
+		// the field is Markdown; a label is plain text, as in a caption
+		fields["titleBusinessUnit"] = jsonString(markdownEscape(p.label))
 	}
 	if _, ok := fields["cardShowBorder"]; !ok {
 		fields["cardShowBorder"] = json.RawMessage("false")
@@ -568,6 +569,25 @@ func smallMultipleCardSpec(s smallMultipleSpec, p panel, i int, component gridCh
 	}
 	fields["children"] = children
 	return json.Marshal(fields)
+}
+
+// isSet reports whether a raw JSON field is present and not null.
+func isSet(raw json.RawMessage) bool {
+	raw = bytes.TrimSpace(raw)
+	return len(raw) > 0 && string(raw) != "null"
+}
+
+// markdownEscape makes v literal text in inline Markdown: every ASCII
+// punctuation character gets a backslash.
+func markdownEscape(v string) string {
+	var b strings.Builder
+	for _, r := range v {
+		if r < 128 && strings.ContainsRune("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // jsonString is v as a JSON string.
