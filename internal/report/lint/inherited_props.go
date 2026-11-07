@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"bino.bi/bino/internal/report/ref"
 )
 
 const (
@@ -157,27 +159,32 @@ type inheritWalker struct {
 func (w *inheritWalker) children(owner specSite, key string, list any, chain []inheritScope, refs []string) {
 	items, _ := list.([]any)
 	for i, item := range items {
-		child, _ := item.(map[string]any)
-		kind := stringField(child, "kind")
-		inline, _ := child["spec"].(map[string]any)
-		node := specNode{inline: specSite{
-			doc:  owner.doc,
-			path: joinLintPath(owner.path, key+"."+strconv.Itoa(i)+".spec"),
-			spec: inline,
-		}}
-
-		if ref := stringField(child, "ref"); ref != "" {
-			id := kind + ":" + ref
-			base, ok := w.standalone[id]
-			// Not followed: a dangling ref (missing-required-reference reports it),
-			// a shared name, and a document that references itself.
-			if !ok || slices.Contains(refs, id) {
-				continue
-			}
-			node.base = &base
-		}
-		w.node(kind, node, chain, refs)
+		w.child(owner, key+"."+strconv.Itoa(i), item, chain, refs)
 	}
+}
+
+// child walks one child written at owner under path.
+func (w *inheritWalker) child(owner specSite, path string, item any, chain []inheritScope, refs []string) {
+	child, _ := item.(map[string]any)
+	kind := stringField(child, "kind")
+	inline, _ := child["spec"].(map[string]any)
+	node := specNode{inline: specSite{
+		doc:  owner.doc,
+		path: joinLintPath(owner.path, path+".spec"),
+		spec: inline,
+	}}
+
+	if refName := stringField(child, "ref"); refName != "" {
+		id := kind + ":" + refName
+		base, ok := w.standalone[id]
+		// Not followed: a dangling ref (missing-required-reference reports it),
+		// a shared name, and a document that references itself.
+		if !ok || slices.Contains(refs, id) {
+			return
+		}
+		node.base = &base
+	}
+	w.node(kind, node, chain, refs)
 }
 
 func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs []string) {
@@ -195,7 +202,7 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		}
 	}
 
-	// Grid and Tree hold children but are no inheritance source.
+	// Grid, Tree and the base of a SmallMultiple are no inheritance source.
 	listKey := "children"
 	switch kind {
 	case "LayoutCard":
@@ -203,6 +210,17 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 	case "Grid":
 	case "Tree":
 		listKey = "nodes"
+	case "SmallMultiple":
+		base, site := n.field("base")
+		if merged, ok := mergedBase(n); ok {
+			// a partial override of the base merges into the document's base, as in render
+			base, site = merged, *n.base
+		}
+		if site.ref != "" {
+			refs = append(slices.Clip(refs), site.ref)
+		}
+		w.child(site, "base", base, chain, refs)
+		return
 	default:
 		return
 	}
@@ -211,6 +229,33 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		refs = append(slices.Clip(refs), site.ref)
 	}
 	w.children(site, listKey, list, chain, refs)
+}
+
+// mergedBase is the base of a referenced SmallMultiple with the base of the
+// ref site merged over it (ref.MergeSpec). ok is false when either is missing.
+func mergedBase(n specNode) (any, bool) {
+	inline, ok := n.inline.spec["base"].(map[string]any)
+	if !ok || n.base == nil {
+		return nil, false
+	}
+	doc, ok := n.base.spec["base"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	docJSON, err1 := json.Marshal(doc)
+	inlineJSON, err2 := json.Marshal(inline)
+	if err1 != nil || err2 != nil {
+		return nil, false
+	}
+	merged, err := ref.MergeSpec(docJSON, inlineJSON)
+	if err != nil {
+		return nil, false
+	}
+	var out map[string]any
+	if json.Unmarshal(merged, &out) != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 func (w *inheritWalker) report(site specSite, p inheritedProp, keyword string) {

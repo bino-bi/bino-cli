@@ -33,8 +33,10 @@ Four stages, each a kind, each referencing the previous one by name:
    prql extension is not published for 2.0, so write SQL), or `spec.source` (pass-through of one
    DataSource, no transformation).
 3. **LayoutPage** - `spec.children` arranges the visual components: `Table`, `Text`, `ChartTime`,
-   `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `LayoutCard`,
-   `Image`. `LayoutCard` and `Grid` nest further children.
+   `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Tree`, `Grid`, `SmallMultiple`,
+   `LayoutCard`, `Image`. `LayoutCard` and `Grid` nest further children. `SmallMultiple` draws one
+   chart or table per value of a dataset column (`panels.by`), all on one dataset and one scale; it
+   needs a fixed `scale` and, for ChartTime, ChartStructure and Table, a fixed `unitScaling`.
 4. **Artefact** - `ReportArtefact` (PDF from pages), `LiveReportArtefact` (interactive web app),
    `DocumentArtefact` (PDF from Markdown), `ScreenshotArtefact` (PNG/JPEG of single components).
 
@@ -80,7 +82,7 @@ Docs: https://cli.bino.bi/reference/dataset/#standard-dataset-schema
 A child of `LayoutPage` / `LayoutCard` / `Grid` is either **`kind` + `ref`** - a standalone document
 referenced by its `metadata.name`; any `spec` given alongside overrides the referenced spec (objects
 deep-merge, arrays replace) - or **`kind` + `spec`** - defined inline. `Text`, `Table`, the charts,
-`Tree`, `Grid`, `LayoutCard` and `Image` can be referenced; a `LayoutPage` cannot. A missing `ref`
+`Tree`, `Grid`, `SmallMultiple`, `LayoutCard` and `Image` can be referenced; a `LayoutPage` cannot. A missing `ref`
 fails the build unless the child is `optional: true`.
 
 A page declares `metadata.params` (`name`, `type`, `default`, …). An artefact then renders the same

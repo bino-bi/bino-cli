@@ -613,17 +613,21 @@ func (s imageSpec) writeAttrs(b *strings.Builder) {
 // gridSpec defines the structure for Grid components.
 // Grids create CSS grid-based layouts with row and column headers.
 type gridSpec struct {
-	ChartTitle        string          `json:"chartTitle"`
-	RowHeaders        json.RawMessage `json:"rowHeaders"`
-	ColumnHeaders     json.RawMessage `json:"columnHeaders"`
-	ShowRowHeaders    *bool           `json:"showRowHeaders"`
-	ShowColumnHeaders *bool           `json:"showColumnHeaders"`
-	ShowBorders       *bool           `json:"showBorders"`
-	RowHeaderWidth    string          `json:"rowHeaderWidth"`
-	CellGap           string          `json:"cellGap"`
-	I18nNamespace     string          `json:"i18nNamespace"`
-	SelectedStyle     string          `json:"selectedStyle"`
-	Children          []gridChild     `json:"children"`
+	ChartTitle          string          `json:"chartTitle"`
+	RowHeaders          json.RawMessage `json:"rowHeaders"`
+	ColumnHeaders       json.RawMessage `json:"columnHeaders"`
+	ShowRowHeaders      *bool           `json:"showRowHeaders"`
+	ShowColumnHeaders   *bool           `json:"showColumnHeaders"`
+	ShowBorders         *bool           `json:"showBorders"`
+	RowHeaderWidth      string          `json:"rowHeaderWidth"`
+	CellGap             string          `json:"cellGap"`
+	CellHeight          string          `json:"cellHeight"`
+	CellWidth           string          `json:"cellWidth"`
+	CellVerticalAlign   string          `json:"cellVerticalAlign"`
+	CellHorizontalAlign string          `json:"cellHorizontalAlign"`
+	I18nNamespace       string          `json:"i18nNamespace"`
+	SelectedStyle       string          `json:"selectedStyle"`
+	Children            []gridChild     `json:"children"`
 }
 
 // gridChild defines a child (cell) in the grid.
@@ -636,6 +640,7 @@ type gridChild struct {
 	Optional bool              `json:"optional,omitempty"`
 	Params   map[string]string `json:"params,omitempty"`
 	Spec     json.RawMessage   `json:"spec,omitempty"`
+	Caption  string            `json:"caption,omitempty"`
 }
 
 // stringOrInt is a type that can unmarshal from either a string or an integer,
@@ -675,6 +680,35 @@ func (s gridSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-borders", s.ShowBorders)
 	writeAttr(b, "row-header-width", s.RowHeaderWidth)
 	writeAttr(b, "cell-gap", s.CellGap)
+	writeAttr(b, "cell-height", s.CellHeight)
+	writeAttr(b, "cell-width", s.CellWidth)
+	writeAttr(b, "cell-vertical-align", s.CellVerticalAlign)
+	writeAttr(b, "cell-horizontal-align", s.CellHorizontalAlign)
+	writeAttr(b, "cell-captions", s.captions())
 	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
+}
+
+// captions is the cell-captions attribute: a JSON object from slot name to
+// caption, "" when no child has one.
+func (s gridSpec) captions() string {
+	captions := map[string]string{}
+	for _, child := range s.Children {
+		if child.Caption != "" {
+			captions[gridSlotName(child)] = child.Caption
+		}
+	}
+	if len(captions) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(captions)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// gridSlotName is the bn-grid slot of a child: "<row>-<column>".
+func gridSlotName(child gridChild) string {
+	return child.Row.String() + "-" + child.Column.String()
 }

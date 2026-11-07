@@ -53,6 +53,10 @@ func DefaultRules() []Rule {
 		annotationListOffPage,
 		annotationUnlisted,
 		annotationListInLive,
+		// Small multiples
+		smallMultipleScale,
+		smallMultipleBaseDataset,
+		smallMultipleByDatasource,
 	}
 }
 
@@ -181,7 +185,7 @@ var textContentRequired = Rule{
 var datasetRequired = Rule{
 	ID:          "dataset-required",
 	Name:        "Dataset Required",
-	Description: "Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a 'dataset' binding.",
+	Description: "Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, ChartBullet, and SmallMultiple components must have a 'dataset' binding.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 
@@ -192,6 +196,7 @@ var datasetRequired = Rule{
 			"ChartScatter":   true,
 			"ChartBubble":    true,
 			"ChartBullet":    true,
+			"SmallMultiple":  true,
 		}
 
 		for _, doc := range docs {

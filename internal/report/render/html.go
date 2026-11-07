@@ -357,6 +357,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	if err := rc.withAnnotations(docs, datasetResults, sources, mode, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
+	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
+		return Result{}, diags, err
+	}
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -506,6 +509,9 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		rc.dataRefs = map[string]bool{}
 	}
 	if err := rc.withAnnotations(docs, datasetResults, sources, mode, engineVersion); err != nil {
+		return FrameResult{}, diags, err
+	}
+	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
 

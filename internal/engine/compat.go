@@ -56,6 +56,27 @@ func CheckAnnotationSupport(engineVersion string) error {
 	return nil
 }
 
+// GridCellLayoutMinVersion is the first engine release whose bn-grid knows
+// cell-height, cell-width, cell-vertical-align, cell-horizontal-align and
+// cell-captions. Older engines ignore these attributes without an error. It is
+// no floor of SupportedEngineRanges: a grid without them keeps working.
+const GridCellLayoutMinVersion = "v1.0.0-next.32"
+
+// CheckGridCellLayoutSupport returns an error when a project that uses the grid
+// cell layout uses an engine older than GridCellLayoutMinVersion. An empty or
+// unreadable version is no finding, as in CheckAnnotationSupport.
+func CheckGridCellLayoutSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(GridCellLayoutMinVersion)) {
+		return fmt.Errorf("grid cell size, alignment and captions need template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", GridCellLayoutMinVersion, engineVersion, GridCellLayoutMinVersion)
+	}
+	return nil
+}
+
 // ResolveVersion returns the engine version to check from a non-downloading
 // source: the pin if set, otherwise the latest locally cached version. It is ""
 // when nothing is resolvable, and callers should then skip the check.

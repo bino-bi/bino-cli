@@ -1516,3 +1516,105 @@ func TestIsBuiltinKind(t *testing.T) {
 		t.Error(`IsBuiltinKind("Gauge") = true`)
 	}
 }
+
+func TestValidate_GridCellLayout(t *testing.T) {
+	grid := func(fields, child string) string {
+		return `
+apiVersion: bino.bi/v1alpha1
+kind: Grid
+metadata:
+  name: g
+spec:
+  rowHeaders: ["A"]
+  columnHeaders: ["X"]
+` + fields + `
+  children:
+    - row: 0
+      column: 0
+      kind: Text
+      spec: { value: a }
+` + child
+	}
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"all fields and a caption", grid("  cellHeight: equal\n  cellWidth: auto\n  cellVerticalAlign: baseline\n  cellHorizontalAlign: right", "      caption: North\n"), false},
+		{"unknown cellHeight", grid("  cellHeight: fill", ""), true},
+		{"unknown cellVerticalAlign", grid("  cellVerticalAlign: middle", ""), true},
+		{"unknown cellHorizontalAlign", grid("  cellHorizontalAlign: start", ""), true},
+		{"caption must be a string", grid("", "      caption: [a]\n"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_SmallMultiple(t *testing.T) {
+	doc := func(spec string) string {
+		return "apiVersion: bino.bi/v1alpha1\nkind: SmallMultiple\nmetadata:\n  name: sm\nspec:\n" + spec
+	}
+	valid := `  dataset: profit
+  unitScaling: profit_scale
+  scale: "0.5"
+  base:
+    kind: ChartTime
+    ref: trend
+    params: { UNIT: kEUR }
+    spec: { chartTitle: "" }
+  caption: "${panel.label}"
+  panels:
+    by: rowGroup
+    order: ac1 desc
+    limit: 15
+    param: LOCATION
+    items:
+      - label: average
+        dataset: profit_avg
+        spec: { selectedStyle: highlight }
+  columns: 4
+  cellHeight: equal
+  cellGap: 4px
+  showBorders: false
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"full spec", doc(valid), false},
+		{"inline base", doc("  dataset: profit\n  scale: none\n  base: { kind: Table, spec: { scenarios: ac } }\n  panels: { items: [{ label: a, filter: \"x = 1\" }] }\n"), false},
+		{"inline base without spec", doc("  dataset: profit\n  base: { kind: ChartTime }\n  panels: { by: rowGroup }\n"), true},
+		{"params without ref", doc("  dataset: profit\n  base: { kind: ChartTime, params: { A: b }, spec: {} }\n  panels: { by: rowGroup }\n"), true},
+		{"base kind not allowed", doc("  dataset: profit\n  base: { kind: Grid, ref: g }\n  panels: { by: rowGroup }\n"), true},
+		{"panels need by or items", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { order: label }\n"), true},
+		{"item needs a label", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { items: [{ filter: \"x = 1\" }] }\n"), true},
+		{"item dataset is no datasource", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { items: [{ label: a, dataset: $src }] }\n"), true},
+		{"missing dataset", doc("  base: { kind: ChartTime, ref: t }\n  panels: { by: rowGroup }\n"), true},
+		{"unknown field", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { by: rowGroup }\n  rows: 3\n"), true},
+		{"param needs a ref'd base", doc("  dataset: profit\n  base: { kind: ChartTime, spec: {} }\n  panels: { by: rowGroup, param: LOC }\n"), true},
+		{"base spec checked against its kind", doc("  dataset: profit\n  base: { kind: ChartTime, spec: { notAField: 1 } }\n  panels: { by: rowGroup }\n"), true},
+		{"by without a closing bracket", doc("  dataset: profit\n  base: { kind: ChartTime, ref: t }\n  panels: { by: \"a]b\" }\n"), true},
+		{"ref'd child overrides only a part", "apiVersion: bino.bi/v1alpha1\nkind: LayoutPage\nmetadata:\n  name: p\nspec:\n  children:\n    - kind: SmallMultiple\n      ref: sm\n      spec:\n        scale: \"0.4\"\n        panels: { limit: 4 }\n        base: { spec: { chartTitle: x } }\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+		})
+	}
+}

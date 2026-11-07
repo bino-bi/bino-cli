@@ -577,6 +577,20 @@
         },
         "cellPadding": {
           "type": "number"
+        },
+        "captionFontSize": {
+          "type": "number",
+          "description": "Cell caption (`cell-captions`): font size in px."
+        },
+        "captionFontWeight": {
+          "type": "string"
+        },
+        "captionColor": {
+          "type": "string"
+        },
+        "captionGap": {
+          "type": "number",
+          "description": "Space below a cell caption, in px."
         }
       },
       "additionalProperties": false,

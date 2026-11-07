@@ -28,7 +28,7 @@ func MaterializeInlineDefinitions(docs []Document) ([]Document, error) {
 	for i := range docs {
 		doc := &docs[i]
 		switch doc.Kind {
-		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text":
+		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "SmallMultiple":
 			if err := materializeComponentInlines(doc, registry); err != nil {
 				return nil, fmt.Errorf("%s %q: %w", doc.Kind, doc.Name, err)
 			}
@@ -536,7 +536,7 @@ func materializeLayoutChildrenInlines(doc *Document, registry *inlineRegistry) e
 
 		// Only process component kinds that can have datasets
 		switch child.Kind {
-		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text":
+		case "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "SmallMultiple":
 			// Parse the child's spec to check for inline datasets
 			var cs childSpec
 			if err := json.Unmarshal(child.Spec, &cs); err != nil {

@@ -19,7 +19,7 @@ discipline) and `bino-ibcs` (the author-owned SUCCESS rules - **SAY**, **UNIFY**
 **STRUCTURE** - plus component choice and narrative;
 its self-audit and `references/ibcs-standard.md` are your rubric). Stay in your lane: **only** author
 embeddables (`Table`, `Text`, `Tree`, `ChartTime`,
-`ChartStructure`), layout (`LayoutPage`, `LayoutCard`, `Grid`), and `ReportArtefact` - **never** a
+`ChartStructure`), layout (`LayoutPage`, `LayoutCard`, `Grid`, `SmallMultiple`), and `ReportArtefact` - **never** a
 `DataSource`/`DataSet`/`ConnectionSecret` (that's `bino-data`'s lane). You have no data-probing or
 build tools by design.
 

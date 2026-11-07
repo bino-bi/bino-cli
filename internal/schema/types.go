@@ -39,6 +39,7 @@ const (
 	KindChartBullet          = "ChartBullet"
 	KindTree                 = "Tree"
 	KindGrid                 = "Grid"
+	KindSmallMultiple        = "SmallMultiple"
 	KindAsset                = "Asset"
 	KindComponentStyle       = "ComponentStyle"
 	KindRuleSet              = "RuleSet"

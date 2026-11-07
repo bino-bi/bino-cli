@@ -243,6 +243,12 @@ Style settings for grid layouts with row and column headers.
 | `borderColor`      | string | `"#A6A6A6"`     | Color of cell border/divider lines (CSS color)          |
 | `borderWidth`      | number | `1`             | Width of cell borders in pixels                         |
 | `cellPadding`      | number | `4`             | Padding inside cells in pixels                          |
+| `captionFontSize`   | number | `12`        | Font size of a cell caption in pixels                   |
+| `captionFontWeight` | string | `"bold"`    | Font weight of a cell caption (CSS font-weight)         |
+| `captionColor`      | string | `"#000000"` | Color of a cell caption (CSS color)                     |
+| `captionGap`        | number | `2`         | Space below a cell caption in pixels                    |
+
+The `caption*` keys style the `caption` of a [grid child](/reference/grid/#cell-size-and-alignment) and need template engine v1.0.0-next.32 or newer.
 
 ```yaml
 bn-grid:

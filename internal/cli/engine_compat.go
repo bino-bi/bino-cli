@@ -64,6 +64,19 @@ func annotationEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, do
 	for _, doc := range documents {
 		used = used || doc.Kind == schema.KindAnnotation
 	}
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckAnnotationSupport, "annotation-engine-version")
+}
+
+// gridCellLayoutEngineFinding reports a project that uses grid cell size,
+// alignment or captions on an engine older than the release with them.
+func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := config.UsesGridCellLayout(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckGridCellLayoutSupport, "grid-cell-layout-engine-version")
+}
+
+// engineGateFinding runs a feature gate of the engine when the project uses
+// the feature, and reports a failure on the engine-version line of bino.toml.
+func engineGateFinding(projectRoot string, cfg *pathutil.ProjectConfig, used bool, check func(string) error, ruleID string) (lint.Finding, bool) {
 	if !used {
 		return lint.Finding{}, false
 	}
@@ -71,14 +84,14 @@ func annotationEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, do
 	if cfg != nil {
 		pinned = cfg.EngineVersion
 	}
-	err := engine.CheckAnnotationSupport(resolveEngineVersionForCompat(pinned))
+	err := check(resolveEngineVersionForCompat(pinned))
 	if err == nil {
 		return lint.Finding{}, false
 	}
 	configPath := pathutil.ProjectConfigPath(projectRoot)
 	line, col := pathutil.FindEngineVersionLine(configPath)
 	return lint.Finding{
-		RuleID:  "annotation-engine-version",
+		RuleID:  ruleID,
 		Message: err.Error(),
 		File:    configPath,
 		Line:    line,

@@ -37,6 +37,7 @@ var renderableChildKinds = map[string]bool{
 	"ChartBullet":    true,
 	"Tree":           true,
 	"Grid":           true,
+	"SmallMultiple":  true,
 	"Image":          true,
 	"AnnotationList": true,
 }
@@ -155,7 +156,7 @@ var pageLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "SmallMultiple", "Image", "AnnotationList":
 				components[doc.Name] = doc
 			default:
 				if isPluginKind(doc.Kind) {
@@ -279,7 +280,7 @@ var cardLayoutSlotsUsed = Rule{
 				pages[doc.Name] = doc
 			case "LayoutCard":
 				cards[doc.Name] = doc
-			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
+			case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "SmallMultiple", "Image", "AnnotationList":
 				components[doc.Name] = doc
 			default:
 				if isPluginKind(doc.Kind) {

@@ -46,6 +46,10 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-list-in-live` | Annotation List In Live | Warning | A page with an AnnotationList that a LiveReportArtefact serves has an empty slot there. |
 | `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
+| `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer. Stops `bino lint` and `bino build`. |
+| `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
+| `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
+| `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
 | `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
 | `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
@@ -119,7 +123,7 @@ spec:
 
 ### dataset-required
 
-Data visualization components (`Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
+Data visualization components (`Table`, `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `SmallMultiple`) need a dataset to display. Without `spec.dataset`, there's nothing to render.
 
 **Example problem:**
 
@@ -820,6 +824,43 @@ This rule needs the data. `bino lint` reports it with `--execute-queries`, and s
 The project has an `Annotation` and its engine is older than v1.0.0-next.30, which has no overlay. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without annotations keeps working on that engine.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.30 or newer.
+
+### grid-cell-layout-engine-version
+
+The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `cellVerticalAlign` or `cellHorizontalAlign` to a value other than the default, or a grid child has a `caption`, and the engine is older than v1.0.0-next.32. An older engine ignores these settings without an error, so the grid would look wrong. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these settings and without a `SmallMultiple` keeps working on that engine.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.32 or newer.
+
+### small-multiple-scale
+
+The panels of a [`SmallMultiple`](/reference/small-multiple/) are only comparable on one scale. A chart with `scale` unset or `auto` picks its own font factor, and `unitScaling` counts units per em of that font, so two panels with the same `unitScaling` would still draw the same value at different sizes. The rule wants `scale` as a fixed factor or `none`, and for a `ChartStructure`, `ChartTime` or `Table` base a `unitScaling` that is a number or a ScalingGroup name. `percentageScaling` is optional but must not be `auto`. The build fails with the same message.
+
+**Example problem:**
+
+```yaml
+kind: SmallMultiple
+metadata:
+  name: profit-by-location
+spec:
+  dataset: net_profit
+  unitScaling: auto # not comparable
+  base: { kind: ChartTime, ref: profit-trend }
+  panels: { by: rowGroup }
+```
+
+**Fix:** set `unitScaling: profit_scale` (a ScalingGroup) and `scale: "0.5"`.
+
+### small-multiple-base-dataset
+
+Every panel of a `SmallMultiple` reads the dataset of the SmallMultiple (or of its `panels.items` entry). A `dataset` in `base.spec` is replaced and has no effect.
+
+**Fix:** remove `base.spec.dataset` and set `spec.dataset` of the SmallMultiple.
+
+### small-multiple-by-datasource
+
+`panels.by` takes the panel values from the rows of the first dataset. The rows of a `$datasource` are not there when the panels are built, so the build fails.
+
+**Fix:** use a DataSet with `source: <datasource>` as the dataset, or list the panels yourself in `panels.items`.
 
 ### duplicate-name
 

@@ -22,7 +22,7 @@ import (
 // componentKinds are the manifest kinds the builder registers as
 // NodeComponent nodes (standalone components). NodeByManifest derives its
 // lookup set from this list, so the two never drift.
-var componentKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid"}
+var componentKinds = []string{"Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "Asset", "Tree", "Grid", "SmallMultiple"}
 
 // componentKindSet is the membership view of componentKinds.
 var componentKindSet = func() map[string]struct{} {
@@ -427,12 +427,67 @@ func (b *builder) buildLayoutChild(parentName, file string, child layoutChild, i
 
 		b.nodes[node.ID] = node
 		return node.ID, nil
+	case "SmallMultiple":
+		return b.buildSmallMultiple(parentName, effectiveSpec, effectiveFile, indexPath, anc)
 	default:
 		if config.IsPluginComponentKind(child.Kind, b.opts.KindProvider) {
 			return b.buildChildComponent(parentName, child.Kind, effectiveSpec, effectiveFile, indexPath, anc)
 		}
 		return "", fmt.Errorf("unsupported child kind %q", child.Kind)
 	}
+}
+
+// buildSmallMultiple adds a SmallMultiple node. It depends on its dataset, on
+// the datasets of its items, and on its base component, which reads the
+// SmallMultiple's dataset in every panel.
+func (b *builder) buildSmallMultiple(parentName string, effectiveSpec json.RawMessage, file string, indexPath []int, anc ancestors) (string, error) {
+	nodeName := fmt.Sprintf("%s#%s", parentName, pathKey(indexPath))
+	node, err := b.buildComponentNode("SmallMultiple", effectiveSpec, file, "SmallMultiple "+nodeName, nodeName, anc)
+	if err != nil {
+		return "", err
+	}
+	node.Attributes["parent"] = parentName
+
+	var sm struct {
+		Dataset json.RawMessage `json:"dataset"`
+		Base    gridChildSpec   `json:"base"`
+		Panels  struct {
+			Items []struct {
+				Dataset string `json:"dataset"`
+			} `json:"items"`
+		} `json:"panels"`
+	}
+	if err := json.Unmarshal(effectiveSpec, &sm); err != nil {
+		return "", fmt.Errorf("small multiple child: %w", err)
+	}
+	for _, item := range sm.Panels.Items {
+		if id, _, ok := b.resolveDataBinding(item.Dataset); ok {
+			node.DependsOn = append(node.DependsOn, id)
+		}
+	}
+	if sm.Base.Kind != "" {
+		baseSpec := sm.Base.Spec
+		if len(sm.Dataset) > 0 {
+			override := json.RawMessage(`{"dataset":` + string(sm.Dataset) + `}`)
+			if len(baseSpec) == 0 {
+				baseSpec = override
+			} else if baseSpec, err = componentref.MergeSpec(baseSpec, override); err != nil {
+				return "", fmt.Errorf("small multiple base: %w", err)
+			}
+		}
+		base := layoutChild{Kind: sm.Base.Kind, Ref: sm.Base.Ref, Params: sm.Base.Params, Spec: baseSpec}
+		childPath := append(append([]int(nil), indexPath...), 0)
+		baseID, err := b.buildLayoutChild(parentName, file, base, childPath, anc)
+		if err != nil {
+			return "", err
+		}
+		if baseID != "" {
+			node.DependsOn = append(node.DependsOn, baseID)
+		}
+	}
+	node.DependsOn = uniqueStrings(node.DependsOn)
+	b.nodes[node.ID] = node
+	return node.ID, nil
 }
 
 // buildChildComponent adds the component node for a layout child.

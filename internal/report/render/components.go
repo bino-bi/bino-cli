@@ -154,7 +154,7 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 // validation already limits child kinds to plugin component kinds.
 func refIndexable(kind string) bool {
 	switch kind {
-	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "Image", "AnnotationList":
+	case "LayoutCard", "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Tree", "Grid", "SmallMultiple", "Image", "AnnotationList":
 		return true
 	}
 	return !schema.IsBuiltinKind(kind)
@@ -393,7 +393,7 @@ func collectReferencedDatasources(docs []config.Document, globalDocs []config.Do
 // collectDatasourceRefsFromDoc extracts $-prefixed dataset references from a single document.
 func collectDatasourceRefsFromDoc(doc config.Document, refs map[string]bool) {
 	switch doc.Kind {
-	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image":
+	case "Text", "Table", "ChartStructure", "ChartTime", "ChartScatter", "ChartBubble", "ChartBullet", "Image", "SmallMultiple":
 		addSpecDatasetRefs(doc.Raw, refs)
 	case "Tree":
 		var p struct {
@@ -1023,7 +1023,7 @@ func filterChildrenByConstraints(children []layoutChild, rc *renderCtx) ([]layou
 var builtinLayoutChildKinds = map[string]bool{
 	"Text": true, "Table": true, "ChartStructure": true, "ChartTime": true,
 	"ChartScatter": true, "ChartBubble": true, "ChartBullet": true,
-	"Tree": true, "LayoutCard": true, "Grid": true, "Image": true,
+	"Tree": true, "LayoutCard": true, "Grid": true, "SmallMultiple": true, "Image": true,
 	"AnnotationList": true,
 }
 
@@ -1137,6 +1137,20 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		htmlOut, err := renderGridComponent(s, rc.withoutAnnotationPage())
 		if err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
+		}
+		component = htmlOut
+	case "SmallMultiple":
+		var s smallMultipleSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", false, fmt.Errorf("render small multiple child: %w", err)
+		}
+		name := child.Ref
+		if name == "" {
+			name = child.Metadata.Name
+		}
+		htmlOut, err := renderSmallMultipleComponent(s, name, rc.withoutAnnotationPage())
+		if err != nil {
+			return "", false, fmt.Errorf("render small multiple child: %w", err)
 		}
 		component = htmlOut
 	case "Image":
@@ -1525,15 +1539,12 @@ func renderImageComponent(s imageSpec) string {
 // renderGridComponent renders a Grid component as HTML.
 // Grid uses slotted content for children, with slot names following the pattern "{row-id}-{column-id}".
 func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
-	var b strings.Builder
-	b.WriteString("<bn-grid")
-	s.writeAttrs(&b)
-	b.WriteString(">")
-
 	// Cells inherit the grid's effective style as their default.
 	childRC := rc.withInheritedStyle(s.SelectedStyle)
 
 	// Render child content as slotted elements
+	var cells strings.Builder
+	rendered := make([]gridChild, 0, len(s.Children))
 	for _, child := range s.Children {
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
@@ -1542,13 +1553,22 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		if childContent == "" {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
-		slotName := child.Row.String() + "-" + child.Column.String()
-		b.WriteString("\n  <div slot='")
-		b.WriteString(html.EscapeString(slotName))
-		b.WriteString("'>")
-		b.WriteString(childContent)
-		b.WriteString("</div>")
+		rendered = append(rendered, child)
+		slotName := gridSlotName(child)
+		cells.WriteString("\n  <div slot='")
+		cells.WriteString(html.EscapeString(slotName))
+		cells.WriteString("'>")
+		cells.WriteString(childContent)
+		cells.WriteString("</div>")
 	}
+
+	var b strings.Builder
+	b.WriteString("<bn-grid")
+	attrs := s
+	attrs.Children = rendered // a skipped cell gets no caption
+	attrs.writeAttrs(&b)
+	b.WriteString(">")
+	b.WriteString(cells.String())
 	if len(s.Children) > 0 {
 		b.WriteString("\n")
 	}
