@@ -1657,6 +1657,12 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 			return "", fmt.Errorf("unmarshal image spec: %w", err)
 		}
 		return renderImageComponent(s), nil
+	case "LayoutCard": // only from a SmallMultiple with a card; the Grid schema has no LayoutCard cell
+		var s layoutCardSpec
+		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
+			return "", fmt.Errorf("unmarshal layout card spec: %w", err)
+		}
+		return renderLayoutCardContainer(s, rc)
 	default:
 		name := child.Ref
 		if name == "" {

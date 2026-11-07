@@ -28,6 +28,44 @@ func UsesGridCellLayout(docs []Document) bool {
 	return false
 }
 
+// UsesSmallMultipleCard reports whether any SmallMultiple, standalone or
+// nested inline at any depth, wraps its panels in cards.
+func UsesSmallMultipleCard(docs []Document) bool {
+	for _, doc := range docs {
+		var v any
+		if err := json.Unmarshal(doc.Raw, &v); err != nil {
+			continue
+		}
+		if usesSmallMultipleCard(v) {
+			return true
+		}
+	}
+	return false
+}
+
+func usesSmallMultipleCard(v any) bool {
+	switch node := v.(type) {
+	case map[string]any:
+		if node["kind"] == "SmallMultiple" {
+			if spec, ok := node["spec"].(map[string]any); ok && spec["card"] != nil {
+				return true
+			}
+		}
+		for _, child := range node {
+			if usesSmallMultipleCard(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range node {
+			if usesSmallMultipleCard(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func usesGridCellLayout(v any) bool {
 	switch node := v.(type) {
 	case map[string]any:

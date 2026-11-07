@@ -178,7 +178,8 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 // gridCellLayoutEngineDiagnostic reports a project that uses grid cell size,
 // alignment or captions on an engine older than the release with them.
 func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
-	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), engine.CheckGridCellLayoutSupport, "grid-cell-layout-engine-version")
+	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))
+	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), check, "grid-cell-layout-engine-version")
 }
 
 // engineGateDiagnostic runs a feature gate of the engine when the project uses

@@ -13,7 +13,7 @@ func checkGridCellLayoutEngine(docs []config.Document, engineVersion string) err
 	if !config.UsesGridCellLayout(docs) {
 		return nil
 	}
-	if err := engine.CheckGridCellLayoutSupport(engineVersion); err != nil {
+	if err := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))(engineVersion); err != nil {
 		return fmt.Errorf("render: grid-cell-layout-engine-version: %w", err)
 	}
 	return nil

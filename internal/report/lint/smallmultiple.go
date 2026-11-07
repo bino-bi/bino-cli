@@ -27,8 +27,13 @@ type smallMultipleLintSpec struct {
 		Kind string          `json:"kind"`
 		Spec json.RawMessage `json:"spec"`
 	} `json:"base"`
-	Panels struct {
-		By string `json:"by"`
+	Caption *string         `json:"caption"`
+	Card    json.RawMessage `json:"card"`
+	Panels  struct {
+		By    string `json:"by"`
+		Items []struct {
+			Card json.RawMessage `json:"card"`
+		} `json:"items"`
 	} `json:"panels"`
 }
 
@@ -178,6 +183,47 @@ var smallMultipleByDatasource = Rule{
 				Path:     joinLintPath(site.path, "dataset"),
 				Severity: "error",
 			})
+		}
+		return findings
+	},
+}
+
+// smallMultipleCard checks the card of a SmallMultiple: an item card needs the
+// card of the SmallMultiple, and a caption is drawn above the card title.
+var smallMultipleCard = Rule{
+	ID:          "small-multiple-card",
+	Name:        "Small Multiple Card",
+	Description: "panels.items[].card needs card on the SmallMultiple, and a caption next to a card names each panel twice.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			s := site.spec
+			hasCard := len(s.Card) > 0 && string(s.Card) != "null"
+			if hasCard && s.Caption != nil && *s.Caption != "" {
+				findings = append(findings, Finding{
+					RuleID:  "small-multiple-card",
+					Message: "caption is drawn above the card title of every panel; remove caption, the card title names the panel",
+					File:    site.doc.File,
+					DocIdx:  site.doc.Position,
+					Path:    joinLintPath(site.path, "caption"),
+				})
+			}
+			if hasCard {
+				continue
+			}
+			for i, item := range s.Panels.Items {
+				if len(item.Card) == 0 || string(item.Card) == "null" {
+					continue
+				}
+				findings = append(findings, Finding{
+					RuleID:   "small-multiple-card",
+					Message:  "panels.items[].card only changes the card of the SmallMultiple; set card on the SmallMultiple",
+					File:     site.doc.File,
+					DocIdx:   site.doc.Position,
+					Path:     joinLintPath(site.path, fmt.Sprintf("panels.items[%d].card", i)),
+					Severity: "error",
+				})
+			}
 		}
 		return findings
 	},

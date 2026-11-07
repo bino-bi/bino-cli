@@ -3650,6 +3650,28 @@
       }
     },
     "layoutCardSpec": { "allOf": [{ "$ref": "#/$defs/layoutCardSpecBase" }], "required": ["children"], "properties": { "children": { "minItems": 1 } } },
+    "smallMultipleCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Wraps every panel in a LayoutCard without a border. titleBusinessUnit defaults to ${panel.label}, so the card title names the panel. ${panel.label}, ${panel.value} and ${panel.index} are replaced. The card holds exactly the panel component.",
+      "properties": {
+        "selectedStyle": { "$ref": "#/$defs/layoutCardSpecBase/properties/selectedStyle" },
+        "ruleset": { "$ref": "#/$defs/layoutCardSpecBase/properties/ruleset" },
+        "i18nNamespace": { "$ref": "#/$defs/layoutCardSpecBase/properties/i18nNamespace" },
+        "titleImage": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleImage" },
+        "titleBusinessUnit": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleBusinessUnit" },
+        "titleScenarios": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleScenarios" },
+        "titleVariances": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleVariances" },
+        "titleMeasures": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleMeasures" },
+        "titleDateStart": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleDateStart" },
+        "titleDateEnd": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleDateEnd" },
+        "titleDateFormat": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleDateFormat" },
+        "titleDateLink": { "$ref": "#/$defs/layoutCardSpecBase/properties/titleDateLink" },
+        "footerText": { "$ref": "#/$defs/layoutCardSpecBase/properties/footerText" },
+        "cardFitToContent": { "$ref": "#/$defs/layoutCardSpecBase/properties/cardFitToContent" },
+        "cardShowBorder": { "type": "boolean", "default": false, "description": "Display a border around each panel card. Default: false." }
+      }
+    },
     "layoutCardSpecBase": {
       "type": "object",
       "additionalProperties": false,
@@ -5114,8 +5136,9 @@
         "caption": {
           "type": "string",
           "default": "${panel.label}",
-          "description": "Caption of each panel, at the top left of its cell. ${panel.label}, ${panel.value} and ${panel.index} (1-based) are replaced. An empty string turns the captions off."
+          "description": "Caption of each panel, at the top left of its cell. ${panel.label}, ${panel.value} and ${panel.index} (1-based) are replaced. An empty string turns the captions off. Off by default when card is set."
         },
+        "card": { "$ref": "#/$defs/smallMultipleCard" },
         "panels": {
           "type": "object",
           "additionalProperties": false,
@@ -5153,7 +5176,8 @@
                   "label": { "type": "string", "description": "Label of the panel, used as ${panel.label} and ${panel.value}." },
                   "filter": { "type": "string", "description": "AlaSQL WHERE-clause fragment selecting the rows of this panel." },
                   "dataset": { "type": "string", "pattern": "^[^$]", "description": "DataSet name used for this panel instead of the SmallMultiple dataset. A $datasource is not allowed here." },
-                  "spec": { "type": "object", "description": "Overrides of the panel spec for this panel only." }
+                  "spec": { "type": "object", "description": "Overrides of the panel spec for this panel only." },
+                  "card": { "type": "object", "description": "Changes the card of this panel, over the card of the SmallMultiple: the same fields as card. Needs card." }
                 }
               }
             }

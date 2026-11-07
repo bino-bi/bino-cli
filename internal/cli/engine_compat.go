@@ -71,7 +71,8 @@ func annotationEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, do
 // alignment or captions on an engine older than the release with them.
 func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
 	used := config.UsesGridCellLayout(documents)
-	return engineGateFinding(projectRoot, cfg, used, engine.CheckGridCellLayoutSupport, "grid-cell-layout-engine-version")
+	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(documents))
+	return engineGateFinding(projectRoot, cfg, used, check, "grid-cell-layout-engine-version")
 }
 
 // engineGateFinding runs a feature gate of the engine when the project uses

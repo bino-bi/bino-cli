@@ -90,3 +90,32 @@ func TestSmallMultipleBaseDataset_ReportedInTheDocument(t *testing.T) {
 		t.Fatalf("findings = %+v", f)
 	}
 }
+
+func TestSmallMultipleCard(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     string
+		path     string
+		severity string
+	}{
+		{"card alone", `{"card":{},"panels":{"by":"rowGroup"}}`, "", ""},
+		{"card and empty caption", `{"card":{},"caption":"","panels":{"by":"rowGroup"}}`, "", ""},
+		{"card and caption", `{"card":{},"caption":"${panel.label}","panels":{"by":"rowGroup"}}`, "spec.caption", ""},
+		{"item card without card", `{"panels":{"items":[{"label":"a"},{"label":"b","card":{"footerText":"x"}}]}}`, "spec.panels.items[1].card", "error"},
+		{"item card with card", `{"card":{},"panels":{"items":[{"label":"b","card":{"footerText":"x"}}]}}`, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := smallMultipleCard.Check(context.Background(), []Document{smDoc("SmallMultiple", tt.spec)})
+			if tt.path == "" {
+				if len(f) != 0 {
+					t.Fatalf("findings = %+v", f)
+				}
+				return
+			}
+			if len(f) != 1 || f[0].Path != tt.path || f[0].Severity != tt.severity {
+				t.Fatalf("findings = %+v", f)
+			}
+		})
+	}
+}

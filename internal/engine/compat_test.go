@@ -230,3 +230,26 @@ func TestCheckGridCellLayoutSupport(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckSmallMultipleCardSupport(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.33", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.32", false},
+		{"", true},
+	}
+	for _, c := range cases {
+		if err := CheckSmallMultipleCardSupport(c.version); (err == nil) != c.ok {
+			t.Errorf("CheckSmallMultipleCardSupport(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+	}
+	if err := GridCellLayoutCheck(false)("v1.0.0-next.32"); err != nil {
+		t.Errorf("without a card next.32 is enough: %v", err)
+	}
+	if err := GridCellLayoutCheck(true)("v1.0.0-next.32"); err == nil {
+		t.Error("with a card next.32 is too old")
+	}
+}
