@@ -371,8 +371,9 @@ type cardCell struct {
 }
 
 func cardCells(html string) []cardCell {
-	var out []cardCell
-	for _, m := range cardCellPattern.FindAllStringSubmatch(html, -1) {
+	matches := cardCellPattern.FindAllStringSubmatch(html, -1)
+	out := make([]cardCell, 0, len(matches))
+	for _, m := range matches {
 		out = append(out, cardCell{slot: m[1], card: attrsOf(m[2]), chart: attrsOf(m[3])})
 	}
 	return out
