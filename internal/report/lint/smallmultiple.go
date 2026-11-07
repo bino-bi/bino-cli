@@ -32,11 +32,12 @@ type smallMultipleLintSpec struct {
 	} `json:"panels"`
 }
 
-// smallMultipleSites finds every SmallMultiple spec that renders: inline
-// children at any depth, ref children with spec overrides (merged over the
-// document, reported at the child), and standalone documents unless every ref
-// to them overrides the spec.
-func smallMultipleSites(docs []Document) []smallMultipleSite {
+// smallMultipleSites finds the SmallMultiple specs: inline children at any
+// depth and standalone documents. With merged, a ref child with spec
+// overrides counts too, merged over its document and reported at the child,
+// and a document is left out when every ref to it overrides it. Without, each
+// field is checked where it is written.
+func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
 	byName := map[string]Document{}
 	for _, doc := range docs {
 		if doc.Kind == "SmallMultiple" {
@@ -69,7 +70,7 @@ func smallMultipleSites(docs []Document) []smallMultipleSite {
 				if kind == "SmallMultiple" && obj["spec"] != nil {
 					if ref == "" {
 						add(doc, joinLintPath(path, "spec"), obj["spec"])
-					} else if target, ok := byName[ref]; ok {
+					} else if target, ok := byName[ref]; ok && merged {
 						overridden[ref] = true
 						add(doc, joinLintPath(path, "spec"), mergedSpec(target, obj["spec"]))
 					}
@@ -90,7 +91,7 @@ func smallMultipleSites(docs []Document) []smallMultipleSite {
 		walk(root["spec"], "spec")
 	}
 	for _, doc := range docs {
-		if doc.Kind == "SmallMultiple" && (!overridden[doc.Name] || plain[doc.Name]) {
+		if doc.Kind == "SmallMultiple" && (!merged || !overridden[doc.Name] || plain[doc.Name]) {
 			add(doc, "spec", specOf(doc))
 		}
 	}
@@ -104,7 +105,7 @@ var smallMultipleScale = Rule{
 	Description: "A SmallMultiple needs a fixed scale and, for ChartStructure, ChartTime and Table, a fixed unitScaling, so all panels share one scale.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		for _, site := range smallMultipleSites(docs) {
+		for _, site := range smallMultipleSites(docs, true) {
 			s := site.spec
 			problems := render.SmallMultipleScaleProblems(s.Base.Kind, s.UnitScaling, s.PercentageScaling, s.Scale)
 			if len(problems) == 0 {
@@ -130,7 +131,7 @@ var smallMultipleBaseDataset = Rule{
 	Description: "The dataset of a SmallMultiple replaces base.spec.dataset in every panel.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		for _, site := range smallMultipleSites(docs) {
+		for _, site := range smallMultipleSites(docs, false) {
 			var base struct {
 				Dataset json.RawMessage `json:"dataset"`
 			}
@@ -157,7 +158,7 @@ var smallMultipleByDatasource = Rule{
 	Description: "panels.by needs a DataSet as the first dataset of a SmallMultiple, not a $datasource.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		for _, site := range smallMultipleSites(docs) {
+		for _, site := range smallMultipleSites(docs, false) {
 			entries := site.spec.Dataset.Entries()
 			if site.spec.Panels.By == "" || len(entries) == 0 || !strings.HasPrefix(entries[0].Ref, "$") {
 				continue

@@ -289,6 +289,14 @@ func TestInheritedPropUnresolved(t *testing.T) {
 			want: []string{"p.yaml spec.children.0.spec.base.spec.scenarios"},
 		},
 		{
+			name: "a partial base override keeps the document's base",
+			docs: []Document{
+				inheritPage("p", "", `{"kind":"SmallMultiple","ref":"sm","spec":{"base":{"spec":{"chartTitle":"x"}}}}`),
+				inheritDoc("SmallMultiple", "sm", `{"base":`+tableClosest+`}`),
+			},
+			want: []string{"sm.yaml spec.base.spec.scenarios"},
+		},
+		{
 			name: "ChartStructure resolved",
 			docs: []Document{inheritPage("p", scenariosSet, inheritChild("ChartStructure", pageKeyword))},
 		},

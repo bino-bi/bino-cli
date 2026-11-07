@@ -79,3 +79,14 @@ func TestSmallMultipleScale_RefOverride(t *testing.T) {
 		t.Fatalf("findings = %+v", f)
 	}
 }
+
+func TestSmallMultipleBaseDataset_ReportedInTheDocument(t *testing.T) {
+	sm := Document{Kind: "SmallMultiple", Name: "sm", File: "sm.yaml", Position: 1,
+		Raw: json.RawMessage(`{"kind":"SmallMultiple","spec":{"dataset":"d","base":{"kind":"ChartTime","spec":{"dataset":"x"}}}}`)}
+	page := Document{Kind: "LayoutPage", Name: "page", File: "page.yaml", Position: 1,
+		Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{"children":[{"kind":"SmallMultiple","ref":"sm","spec":{"scale":"0.4"}},{"kind":"SmallMultiple","ref":"sm","spec":{"scale":"0.5"}}]}}`)}
+	f := smallMultipleBaseDataset.Check(context.Background(), []Document{sm, page})
+	if len(f) != 1 || f[0].File != "sm.yaml" || f[0].Path != "spec.base.spec.dataset" {
+		t.Fatalf("findings = %+v", f)
+	}
+}

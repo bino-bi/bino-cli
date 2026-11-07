@@ -51,18 +51,20 @@ panels:
       spec: { selectedStyle: highlight-panel }
 ```
 
-- `order` sorts the `by` panels: `dataset` (default) sorts by the `<by>Index` column when it exists (`rowGroupIndex` for `rowGroup`), else by label. `label` sorts by label. Any other name, such as `ac1`, sorts by the sum of that column per panel. Add ` desc` to reverse.
+- `order` sorts the `by` panels: `dataset` (default) sorts by the `<by>Index` column when it exists (`rowGroupIndex` for `rowGroup`), else by label. `label` sorts by label, numbers as numbers. Any other name, such as `ac1`, sorts by the sum of that column per panel. Add ` desc` to reverse.
 - `limit` keeps the first panels after sorting.
 - `items` are panels you define yourself. They come after the `by` panels. An item selects its rows with `filter`, can use another DataSet with `dataset`, and can change its panel with `spec`. `panels` needs `by`, `items`, or both.
-- `param` also passes the panel value to a referenced base as a parameter, for a base that uses it in its text: `param: LOCATION` gives `${LOCATION}`.
+- `param` also passes the panel value to a referenced base as a parameter, for a base that uses it in its text or filter: `param: LOCATION` gives `${LOCATION}`. The value is escaped like `${panel.label}` (see below). A `select` parameter gets the value as its `_LABEL` too, not the label of the option.
 
 The filter of a panel is the `filter` of the SmallMultiple, the `filter` of the base and the panel part (`[<by>] = '<value>'`, or the item's `filter`), joined with `AND`. A panel without any of them has no filter, also when its dataset sets a default filter.
+
+The panels, their order and `limit` come from all rows of the dataset. The filters only apply inside each panel, so a location that a filter removes still gets an empty panel, and the build log says so. To leave panels out, filter the DataSet itself.
 
 ## The base
 
 `base` is the component in every panel: a `ChartStructure`, `ChartTime`, `ChartScatter`, `ChartBubble`, `ChartBullet` or `Table`. It is either inline (`kind` + `spec`) or a reference (`kind` + `ref`, with `params`, and `spec` to override fields of the referenced document).
 
-The SmallMultiple sets these fields in every panel, over the base:
+The SmallMultiple sets these fields in every panel, over the base and over the `spec` of an item, so no panel can leave the shared scale:
 
 - `dataset` (or the `dataset` of an item),
 - `unitScaling` and `percentageScaling` (ChartStructure, ChartTime and Table),

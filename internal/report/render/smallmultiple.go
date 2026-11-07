@@ -62,6 +62,9 @@ type panel struct {
 	label string
 	// value is the by value as a filter literal; empty for an item.
 	value string
+	// num is the by value when it is a number, so numbers sort as numbers.
+	num   float64
+	isNum bool
 	item  *smallMultipleItem
 	// sort keys of a by panel
 	index float64
@@ -131,7 +134,14 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		primary = entries[0].Ref
 	}
 
-	panels, err := smallMultiplePanels(s, name, primary, rc)
+	baseSpec, skipped, err := resolveSmallMultipleBase(s, rc)
+	if err != nil {
+		return "", fmt.Errorf("SmallMultiple %q: base: %w", name, err)
+	}
+	if skipped {
+		return "", nil
+	}
+	panels, err := smallMultiplePanels(s, name, primary, specHasFilter(baseSpec), rc)
 	if err != nil {
 		return "", err
 	}
@@ -162,23 +172,8 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		caption = *s.Caption
 	}
 
-	var shared json.RawMessage // the resolved base when it is the same for every panel
 	children := make([]gridChild, 0, len(panels))
 	for i, p := range panels {
-		baseSpec := shared
-		if baseSpec == nil {
-			resolved, skipped, err := resolveSmallMultipleBase(s, p, rc)
-			if err != nil {
-				return "", fmt.Errorf("SmallMultiple %q: base: %w", name, err)
-			}
-			if skipped {
-				return "", nil
-			}
-			baseSpec = resolved
-			if s.Panels.Param == "" {
-				shared = resolved
-			}
-		}
 		cellSpec, err := smallMultipleCellSpec(s, p, i, baseSpec)
 		if err != nil {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: %w", name, p.label, err)
@@ -243,7 +238,7 @@ func hasDefaultFilter(defaults dataset.Defaults, kind string) bool {
 }
 
 // smallMultiplePanels lists the panels: the by values in order, then the items.
-func smallMultiplePanels(s smallMultipleSpec, name, primary string, rc *renderCtx) ([]panel, error) {
+func smallMultiplePanels(s smallMultipleSpec, name, primary string, baseFilter bool, rc *renderCtx) ([]panel, error) {
 	var panels []panel
 	if by := s.Panels.By; by != "" {
 		if primary == "" || strings.HasPrefix(primary, "$") {
@@ -252,6 +247,9 @@ func smallMultiplePanels(s smallMultipleSpec, name, primary string, rc *renderCt
 		byPanels, err := panelsFromRows(rc.datasetRows[primary], by, s.Panels.Order)
 		if err != nil {
 			return nil, fmt.Errorf("SmallMultiple %q: dataset %q: %w", name, primary, err)
+		}
+		if s.Filter != "" || baseFilter {
+			rc.warn(fmt.Sprintf("SmallMultiple %q: the panels, their order and limit come from all rows of dataset %q; filters only apply inside each panel. Filter the DataSet to leave panels out", name, primary))
 		}
 		if byPanels == nil {
 			rc.warn(fmt.Sprintf("SmallMultiple %q: column %q is not in the rows of dataset %q (column names are case-sensitive)", name, by, primary))
@@ -272,6 +270,14 @@ func smallMultiplePanels(s smallMultipleSpec, name, primary string, rc *renderCt
 		panels = append(panels, panel{label: item.Label, item: item})
 	}
 	return panels, nil
+}
+
+// specHasFilter reports whether a resolved spec sets a filter.
+func specHasFilter(spec json.RawMessage) bool {
+	var v struct {
+		Filter string `json:"filter"`
+	}
+	return json.Unmarshal(spec, &v) == nil && strings.TrimSpace(v.Filter) != ""
 }
 
 func isEmptyRows(rows json.RawMessage) bool {
@@ -310,6 +316,9 @@ func panelsFromRows(rows json.RawMessage, by, order string) ([]panel, error) {
 		p := byValue[label]
 		if p == nil {
 			p = &panel{label: label, value: literal, index: math.Inf(1)}
+			p.num, p.isNum = toFloat(v)
+			_, isNumber := v.(json.Number)
+			p.isNum = p.isNum && isNumber
 			byValue[label] = p
 			panels = append(panels, p)
 		}
@@ -326,21 +335,27 @@ func panelsFromRows(rows json.RawMessage, by, order string) ([]panel, error) {
 	if !found {
 		return nil, nil
 	}
-	less := func(a, b *panel) bool { return a.label < b.label }
+	byLabel := func(a, b *panel) bool {
+		if a.isNum && b.isNum && a.num != b.num {
+			return a.num < b.num
+		}
+		return a.label < b.label
+	}
+	less := byLabel
 	switch {
 	case key == "dataset" && hasIndex:
 		less = func(a, b *panel) bool {
 			if a.index != b.index {
 				return a.index < b.index
 			}
-			return a.label < b.label
+			return byLabel(a, b)
 		}
 	case key != "dataset" && key != "label":
 		less = func(a, b *panel) bool {
 			if a.sum != b.sum {
 				return a.sum < b.sum
 			}
-			return a.label < b.label
+			return byLabel(a, b)
 		}
 	}
 	sort.SliceStable(panels, func(i, j int) bool {
@@ -390,10 +405,10 @@ func toFloat(v any) (float64, bool) {
 	return 0, false
 }
 
-// resolveSmallMultipleBase is the base spec of a panel: the referenced
-// document with the base params (plus the panel value as panels.param) and
-// the base.spec overrides, or the inline base.spec.
-func resolveSmallMultipleBase(s smallMultipleSpec, p panel, rc *renderCtx) (json.RawMessage, bool, error) {
+// resolveSmallMultipleBase is the base spec of every panel: the referenced
+// document with the base params (panels.param gets the ${panel.label}
+// placeholder) and the base.spec overrides, or the inline base.spec.
+func resolveSmallMultipleBase(s smallMultipleSpec, rc *renderCtx) (json.RawMessage, bool, error) {
 	if s.Base.Ref == "" {
 		if len(s.Base.Spec) == 0 {
 			return json.RawMessage("{}"), false, nil
@@ -405,9 +420,9 @@ func resolveSmallMultipleBase(s smallMultipleSpec, p panel, rc *renderCtx) (json
 		params[k] = v
 	}
 	if s.Panels.Param != "" {
-		// The value is pasted into the JSON text of the document, and must not
-		// expand as a variable there.
-		params[s.Panels.Param] = strings.ReplaceAll(jsonEscape(p.label), "${", `\${`)
+		// Replaced per panel like the other placeholders: quoted as SQL in the
+		// filter and as JSON elsewhere.
+		params[s.Panels.Param] = "${panel.label}"
 	}
 	res, err := ref.Resolve(ref.Ref{Kind: s.Base.Kind, Name: s.Base.Ref, Spec: s.Base.Spec, Params: params}, rc.refOptions())
 	if err != nil {
@@ -420,8 +435,9 @@ func resolveSmallMultipleBase(s smallMultipleSpec, p panel, rc *renderCtx) (json
 }
 
 // smallMultipleCellSpec builds the spec of one panel. Precedence, lowest
-// first: the base, the shared fields of the SmallMultiple, the item spec, the
-// generated filter.
+// first: the base, the item spec, the shared fields of the SmallMultiple, the
+// generated filter. The shared fields come after the item, so no panel leaves
+// the shared scale.
 func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMessage) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(base, &fields); err != nil {
@@ -438,9 +454,18 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal([]byte(replacePanelPlaceholders(string(baseJSON), p, i, jsonEscape)), &fields); err != nil {
+	baseJSON = []byte(replacePanelPlaceholders(string(baseJSON), p, i, jsonEscape))
+	if p.item != nil && len(p.item.Spec) > 0 {
+		itemSpec := replacePanelPlaceholders(string(p.item.Spec), p, i, jsonEscape)
+		if baseJSON, err = ref.MergeSpec(baseJSON, json.RawMessage(itemSpec)); err != nil {
+			return nil, fmt.Errorf("item spec: %w", err)
+		}
+	}
+	fields = map[string]json.RawMessage{}
+	if err := json.Unmarshal(baseJSON, &fields); err != nil {
 		return nil, fmt.Errorf("base spec: %w", err)
 	}
+	delete(fields, "filter") // the generated filter is the whole filter
 
 	shared := map[string]json.RawMessage{"scale": s.Scale}
 	if len(s.Dataset) > 0 {
@@ -462,12 +487,6 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	merged, err := json.Marshal(fields)
 	if err != nil {
 		return nil, err
-	}
-	if p.item != nil && len(p.item.Spec) > 0 {
-		itemSpec := replacePanelPlaceholders(string(p.item.Spec), p, i, jsonEscape)
-		if merged, err = ref.MergeSpec(merged, json.RawMessage(itemSpec)); err != nil {
-			return nil, fmt.Errorf("item spec: %w", err)
-		}
 	}
 
 	panelPart := ""

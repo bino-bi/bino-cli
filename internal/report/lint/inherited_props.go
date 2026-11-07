@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"bino.bi/bino/internal/report/ref"
 )
 
 const (
@@ -210,6 +212,10 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		listKey = "nodes"
 	case "SmallMultiple":
 		base, site := n.field("base")
+		if merged, ok := mergedBase(n); ok {
+			// a partial override of the base merges into the document's base, as in render
+			base, site = merged, *n.base
+		}
 		if site.ref != "" {
 			refs = append(slices.Clip(refs), site.ref)
 		}
@@ -223,6 +229,33 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		refs = append(slices.Clip(refs), site.ref)
 	}
 	w.children(site, listKey, list, chain, refs)
+}
+
+// mergedBase is the base of a referenced SmallMultiple with the base of the
+// ref site merged over it (ref.MergeSpec). ok is false when either is missing.
+func mergedBase(n specNode) (any, bool) {
+	inline, ok := n.inline.spec["base"].(map[string]any)
+	if !ok || n.base == nil {
+		return nil, false
+	}
+	doc, ok := n.base.spec["base"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	docJSON, err1 := json.Marshal(doc)
+	inlineJSON, err2 := json.Marshal(inline)
+	if err1 != nil || err2 != nil {
+		return nil, false
+	}
+	merged, err := ref.MergeSpec(docJSON, inlineJSON)
+	if err != nil {
+		return nil, false
+	}
+	var out map[string]any
+	if json.Unmarshal(merged, &out) != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 func (w *inheritWalker) report(site specSite, p inheritedProp, keyword string) {

@@ -308,3 +308,51 @@ func TestSmallMultiple_ItemWithoutFilterDropsDatasetDefaultFilter(t *testing.T) 
 		t.Fatalf("warnings = %v", res.Warnings)
 	}
 }
+
+func TestSmallMultiple_ParamInRefFilterIsSQLQuoted(t *testing.T) {
+	chart := makeTestDoc("ChartTime", "trend", json.RawMessage(`{"kind":"ChartTime","metadata":{"name":"trend"},
+		"spec":{"dataset":"other","filter":"note = '${LOCATION}'"}}`))
+	chart.Params = []config.LayoutPageParamSpec{{Name: "LOCATION", Type: "string"}}
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5",
+		"base": {"kind": "ChartTime", "ref": "trend"},
+		"panels": {"by": "rowGroup", "param": "LOCATION", "order": "label desc", "limit": 1}}`, chart)
+	if got := out.cells[0]["filter"]; got != "(note = 'O''Hare') AND ([rowGroup] = 'O''Hare')" {
+		t.Fatalf("filter = %q", got)
+	}
+}
+
+func TestSmallMultiple_ItemSpecCannotLeaveTheSharedScale(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"panels": {"items": [{"label": "x", "spec": {"unitScaling": "auto", "scale": "auto", "chartTitle": "own"}}]}}`)
+	cell := out.cells[0]
+	if cell["unit-scaling"] != "10" || cell["scale"] != "0.5" || cell["chart-title"] != "own" {
+		t.Fatalf("cell = %+v", cell)
+	}
+}
+
+func TestSmallMultiple_NumbersSortAsNumbers(t *testing.T) {
+	page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": {"dataset": "months",
+		"unitScaling": 10, "scale": "0.5", "base": {"kind": "ChartTime", "spec": {"chartTitle": "${panel.label}"}},
+		"panels": {"by": "month"}}}]}`)
+	rows := `[{"month":10},{"month":2},{"month":1},{"month":11},{"month":3}]`
+	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{page},
+		[]dataset.Result{{Name: "months", Data: json.RawMessage(rows)}}, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.31", nil, nil, "", "", "")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got []string
+	for _, m := range cellPattern.FindAllStringSubmatch(string(res.HTML), -1) {
+		got = append(got, attrsOf(m[2])["chart-title"])
+	}
+	if strings.Join(got, ",") != "1,2,3,10,11" {
+		t.Fatalf("order = %v", got)
+	}
+}
+
+func TestSmallMultiple_WarnsThatFiltersDoNotChooseThePanels(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", "filter": "ac1 > 0",
+		`+inlineBase+`, "panels": {"by": "rowGroup"}}`)
+	if !strings.Contains(strings.Join(out.warnings, "\n"), "filters only apply inside each panel") {
+		t.Fatalf("warnings = %v", out.warnings)
+	}
+}
