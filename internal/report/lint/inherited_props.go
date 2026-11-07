@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -187,7 +188,9 @@ func (w *inheritWalker) child(owner specSite, path string, item any, chain []inh
 	w.node(kind, node, chain, refs)
 }
 
-func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs []string) {
+// scope is what a node of kind passes down, and reports its keywords that
+// resolve nowhere in chain.
+func (w *inheritWalker) scope(kind string, n specNode, chain []inheritScope) inheritScope {
 	scope := make(inheritScope)
 	for _, p := range inheritedPropsOf(kind) {
 		value, site := n.field(p.prop)
@@ -201,6 +204,11 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 			w.report(site, p, keyword)
 		}
 	}
+	return scope
+}
+
+func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs []string) {
+	scope := w.scope(kind, n, chain)
 
 	// Grid, Tree and the base of a SmallMultiple are no inheritance source.
 	listKey := "children"
@@ -219,7 +227,11 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		if site.ref != "" {
 			refs = append(slices.Clip(refs), site.ref)
 		}
-		w.child(site, "base", base, chain, refs)
+		// with a card, every panel sits in a LayoutCard made from it; the
+		// base is checked once per panel card, and findings are deduplicated
+		for _, cardChain := range w.panelCardChains(n, chain) {
+			w.child(site, "base", base, cardChain, refs)
+		}
 		return
 	default:
 		return
@@ -229,6 +241,65 @@ func (w *inheritWalker) node(kind string, n specNode, chain []inheritScope, refs
 		refs = append(slices.Clip(refs), site.ref)
 	}
 	w.children(site, listKey, list, chain, refs)
+}
+
+// panelCardChains are the chains the panels of a SmallMultiple see: chain
+// alone without a card, else chain with the card of each kind of panel. The
+// card is the ref site's card merged field by field over the document's, as
+// in render, and an item card goes over that. Keywords in the cards are
+// checked against chain.
+func (w *inheritWalker) panelCardChains(n specNode, chain []inheritScope) [][]inheritScope {
+	cardNode := specNode{}
+	if card, ok := n.inline.spec["card"].(map[string]any); ok {
+		cardNode.inline = specSite{doc: n.inline.doc, path: joinLintPath(n.inline.path, "card"), spec: card, ref: n.inline.ref}
+	}
+	if n.base != nil {
+		if card, ok := n.base.spec["card"].(map[string]any); ok {
+			docCard := specSite{doc: n.base.doc, path: joinLintPath(n.base.path, "card"), spec: card, ref: n.base.ref}
+			if cardNode.inline.spec == nil {
+				cardNode.inline = docCard
+			} else {
+				cardNode.base = &docCard
+			}
+		}
+	}
+	if cardNode.inline.spec == nil {
+		return [][]inheritScope{chain}
+	}
+	cardScope := w.scope("LayoutCard", cardNode, chain)
+	withScope := func(scope inheritScope) []inheritScope { return append(slices.Clip(chain), scope) }
+
+	panelsValue, panelsSite := n.field("panels")
+	panels, _ := panelsValue.(map[string]any)
+	items, _ := panels["items"].([]any)
+	var chains [][]inheritScope
+	if by, _ := panels["by"].(string); by != "" || len(items) == 0 {
+		chains = append(chains, withScope(cardScope))
+	}
+	for i, item := range items {
+		entry, _ := item.(map[string]any)
+		itemCard, ok := entry["card"].(map[string]any)
+		if !ok {
+			chains = append(chains, withScope(cardScope))
+			continue
+		}
+		itemSite := specSite{
+			doc:  panelsSite.doc,
+			path: joinLintPath(panelsSite.path, "panels.items."+strconv.Itoa(i)+".card"),
+			spec: itemCard,
+			ref:  panelsSite.ref,
+		}
+		itemScope := w.scope("LayoutCard", specNode{inline: itemSite}, chain)
+		scope := maps.Clone(cardScope)
+		// only the fields the item writes replace those of the shared card
+		for _, p := range inheritedPropsOf("LayoutCard") {
+			if _, ok := itemCard[p.prop]; ok {
+				scope[p.field] = itemScope[p.field]
+			}
+		}
+		chains = append(chains, withScope(scope))
+	}
+	return chains
 }
 
 // mergedBase is the base of a referenced SmallMultiple with the base of the

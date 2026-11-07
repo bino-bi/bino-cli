@@ -40,6 +40,27 @@ func TestUsesGridCellLayout_SmallMultiple(t *testing.T) {
 	}
 }
 
+func TestUsesSmallMultipleCard(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"standalone with card", `{"kind":"SmallMultiple","spec":{"card":{}}}`, true},
+		{"standalone without card", `{"kind":"SmallMultiple","spec":{"caption":""}}`, false},
+		{"ref override in a page", `{"kind":"LayoutPage","spec":{"children":[{"kind":"SmallMultiple","ref":"sm","spec":{"card":{"footerText":"x"}}}]}}`, true},
+		{"card field of another kind", `{"kind":"LayoutPage","spec":{"children":[{"kind":"Text","spec":{"card":{}}}]}}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			docs := []Document{{Kind: "x", Raw: json.RawMessage(tt.raw)}}
+			if got := UsesSmallMultipleCard(docs); got != tt.want {
+				t.Fatalf("UsesSmallMultipleCard = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // The panel placeholders must survive environment expansion at load and the
 // params of a parameterized page, so the renderer can replace them per panel.
 func TestPanelPlaceholdersSurviveLoadAndPageParams(t *testing.T) {

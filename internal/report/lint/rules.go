@@ -57,6 +57,7 @@ func DefaultRules() []Rule {
 		smallMultipleScale,
 		smallMultipleBaseDataset,
 		smallMultipleByDatasource,
+		smallMultipleCard,
 	}
 }
 

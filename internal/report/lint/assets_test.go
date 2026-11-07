@@ -452,3 +452,22 @@ func TestLocalFileRefs(t *testing.T) {
 	assertPaths(t, LocalFileRefs(asset), []string{filepath.FromSlash("/project/files/logo.png")})
 	assertPaths(t, LocalFileRefs(imageAssetDoc("remote", "image")), nil)
 }
+
+func TestAssetReferenceUndefined_SmallMultipleCards(t *testing.T) {
+	spec := map[string]any{
+		"card": map[string]any{"titleImage": "nope"},
+		"panels": map[string]any{"items": []any{
+			map[string]any{"label": "a", "card": map[string]any{"titleImage": "logo"}},
+			map[string]any{"label": "b", "card": map[string]any{"titleImage": "logo_${panel.value}"}},
+			map[string]any{"label": "c", "card": map[string]any{"titleImage": "gone"}},
+		}},
+	}
+	docs := []Document{componentDoc("SmallMultiple", "sm", spec), imageAssetDoc("logo", "image")}
+	assertPaths(t, runAssetRefRule(t, docs), []string{"spec.card.titleImage", "spec.panels.items[2].card.titleImage"})
+
+	spec = map[string]any{"card": map[string]any{"titleImage": "asset:logo"}}
+	findings := assetPrefixDeprecated.Check(context.Background(), []Document{componentDoc("SmallMultiple", "sm", spec)})
+	if len(findings) != 1 || findings[0].Path != "spec.card.titleImage" {
+		t.Fatalf("findings = %+v", findings)
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/report/datasource"
 )
 
 const profitRows = `[
@@ -40,15 +41,19 @@ func attrsOf(tag string) map[string]string {
 	return out
 }
 
-func renderSmallMultiple(t *testing.T, smSpec string, extra ...config.Document) renderedSM {
-	t.Helper()
+func renderSmallMultipleWith(smSpec, engineVersion string, extra ...config.Document) (Result, []datasource.Diagnostic, error) {
 	page := pageDoc(`{"children": [{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": ` + smSpec + `}]}`)
 	docs := append([]config.Document{page}, extra...)
 	results := []dataset.Result{
 		{Name: "profit", Data: json.RawMessage(profitRows)},
 		{Name: "profit_avg", Data: json.RawMessage(`[]`)},
 	}
-	res, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.32", nil, nil, "", "", "")
+	return GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, engineVersion, nil, nil, "", "", "")
+}
+
+func renderSmallMultiple(t *testing.T, smSpec string, extra ...config.Document) renderedSM {
+	t.Helper()
+	res, _, err := renderSmallMultipleWith(smSpec, "v1.0.0-next.33", extra...)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -355,5 +360,127 @@ func TestSmallMultiple_WarnsThatFiltersDoNotChooseThePanels(t *testing.T) {
 		`+inlineBase+`, "panels": {"by": "rowGroup"}}`)
 	if !strings.Contains(strings.Join(out.warnings, "\n"), "filters only apply inside each panel") {
 		t.Fatalf("warnings = %v", out.warnings)
+	}
+}
+
+var cardCellPattern = regexp.MustCompile(`(?s)<div slot='([^']*)'><bn-layout-card([^>]*)>.*?<bn-chart-time([^>]*)>`)
+
+type cardCell struct {
+	slot        string
+	card, chart map[string]string
+}
+
+func cardCells(html string) []cardCell {
+	matches := cardCellPattern.FindAllStringSubmatch(html, -1)
+	out := make([]cardCell, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, cardCell{slot: m[1], card: attrsOf(m[2]), chart: attrsOf(m[3])})
+	}
+	return out
+}
+
+func TestSmallMultiple_CardWrapsEveryPanel(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"card": {"titleImage": "logo_${panel.value}", "footerText": "Source: ${panel.label} \"ctl\""},
+		"panels": {"by": "rowGroup"}}`)
+	cells := cardCells(out.html)
+	if len(cells) != 4 {
+		t.Fatalf("card cells = %d, want 4:\n%s", len(cells), out.html)
+	}
+	if _, ok := attrsOf(out.grid)["cell-captions"]; ok {
+		t.Errorf("a card replaces the captions: %s", out.grid)
+	}
+	ohare := cells[3]
+	if ohare.slot != "1-1" || ohare.card["title-business-unit"] != "O'Hare" || ohare.card["card-show-border"] != "false" {
+		t.Errorf("card = %+v", ohare.card)
+	}
+	if ohare.card["title-image"] != "logo_O'Hare" || ohare.card["footer-text"] != `Source: O'Hare "ctl"` {
+		t.Errorf("card placeholders = %+v", ohare.card)
+	}
+	if _, ok := ohare.card["card-fit-to-content"]; ok {
+		t.Errorf("equal rows need no fit-to-content: %+v", ohare.card)
+	}
+	if ohare.chart["filter"] != "[rowGroup] = 'O''Hare'" || ohare.chart["unit-scaling"] != "10" || ohare.chart["chart-title"] != "Profit O'Hare" {
+		t.Errorf("chart = %+v", ohare.chart)
+	}
+}
+
+func TestSmallMultiple_ItemCardOverridesCard(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"card": {"titleImage": "logo", "cardShowBorder": true}, "cellHeight": "auto",
+		"panels": {"by": "rowGroup", "limit": 1, "items": [{"label": "Average", "dataset": "profit_avg",
+			"card": {"titleImage": "", "titleBusinessUnit": "All ${panel.index}"}}]}}`)
+	cells := cardCells(out.html)
+	if len(cells) != 2 {
+		t.Fatalf("card cells = %d:\n%s", len(cells), out.html)
+	}
+	if c := cells[0].card; c["title-image"] != "logo" || c["title-business-unit"] != "Berlin" || c["card-show-border"] != "true" || c["card-fit-to-content"] != "true" {
+		t.Errorf("first card = %+v", c)
+	}
+	if c := cells[1].card; c["title-image"] != "" || c["title-business-unit"] != "All 2" {
+		t.Errorf("item card = %+v", c)
+	}
+}
+
+func TestSmallMultiple_CardKeepsAnExplicitCaption(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"card": {}, "caption": "${panel.index}", "panels": {"by": "rowGroup", "limit": 1}}`)
+	if got := attrsOf(out.grid)["cell-captions"]; got != `{"0-0":"1"}` {
+		t.Errorf("captions = %s", got)
+	}
+}
+
+func TestSmallMultiple_CardErrors(t *testing.T) {
+	for smSpec, want := range map[string]string{
+		`{"dataset": "profit", "unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "card": {"cardLayout": "2x2"},
+			"panels": {"by": "rowGroup"}}`: "cardLayout is set by the SmallMultiple",
+		`{"dataset": "profit", "unitScaling": 10, "scale": "0.5", ` + inlineBase + `,
+			"panels": {"items": [{"label": "A", "card": {"footerText": "x"}}]}}`: "panels.items[].card needs card",
+	} {
+		_, _, err := renderSmallMultipleWith(smSpec, "v1.0.0-next.33")
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", smSpec, err, want)
+		}
+	}
+}
+
+func TestSmallMultiple_CardEngineGate(t *testing.T) {
+	smSpec := `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "card": {}, "panels": {"by": "rowGroup"}}`
+	_, _, err := renderSmallMultipleWith(smSpec, "v1.0.0-next.32")
+	if err == nil || !strings.Contains(err.Error(), "SmallMultiple card needs template engine v1.0.0-next.33") {
+		t.Fatalf("err = %v", err)
+	}
+	plain := `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", ` + inlineBase + `, "panels": {"by": "rowGroup"}}`
+	if _, _, err := renderSmallMultipleWith(plain, "v1.0.0-next.32"); err != nil {
+		t.Fatalf("a SmallMultiple without card still works on next.32: %v", err)
+	}
+}
+
+func TestSmallMultiple_CardTitleShowsTheLabelAsText(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`, "card": {},
+		"panels": {"items": [{"label": "*Total* <b>x</b> 1. Q", "filter": "1 = 1"}]}}`)
+	cells := cardCells(out.html)
+	if len(cells) != 1 {
+		t.Fatalf("card cells = %d:\n%s", len(cells), out.html)
+	}
+	if got := cells[0].card["title-business-unit"]; strings.Contains(got, "<em>") || strings.Contains(got, "<b>") || !strings.Contains(got, "*Total*") {
+		t.Errorf("title-business-unit = %q, want the label as text", got)
+	}
+}
+
+func TestSmallMultiple_NullItemCardIsNoCard(t *testing.T) {
+	_, _, err := renderSmallMultipleWith(`{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`,
+		"panels": {"items": [{"label": "A", "filter": "1 = 1", "card": null}]}}`, "v1.0.0-next.33")
+	if err != nil {
+		t.Fatalf("card: null is no card: %v", err)
+	}
+}
+
+func TestSmallMultiple_PanelCardHasNoSourceAttributes(t *testing.T) {
+	out := renderSmallMultiple(t, `{"dataset": "profit", "unitScaling": 10, "scale": "0.5", `+inlineBase+`, "card": {},
+		"panels": {"by": "rowGroup", "limit": 1}}`)
+	grid := out.html[strings.Index(out.html, "<bn-grid"):strings.Index(out.html, "</bn-grid>")]
+	if strings.Contains(grid, "data-bino-") || strings.Contains(grid, "id='bino-") {
+		t.Errorf("a generated panel names no document:\n%s", grid)
 	}
 }

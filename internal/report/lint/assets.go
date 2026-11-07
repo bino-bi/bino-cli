@@ -37,6 +37,62 @@ var markdownFieldsByKind = map[string][]string{
 	"Text":       {"value"},
 }
 
+// specField is a field of a component spec: its path below spec and its value.
+type specField struct {
+	path, value string
+}
+
+// smallMultipleCards are the card objects of a SmallMultiple spec with their
+// paths below spec: card and every panels.items[].card.
+func smallMultipleCards(spec map[string]any) map[string]map[string]any {
+	cards := map[string]map[string]any{}
+	if card, ok := spec["card"].(map[string]any); ok {
+		cards["card"] = card
+	}
+	panels, _ := spec["panels"].(map[string]any)
+	items, _ := panels["items"].([]any)
+	for i, item := range items {
+		entry, _ := item.(map[string]any)
+		if card, ok := entry["card"].(map[string]any); ok {
+			cards["panels.items["+strconv.Itoa(i)+"].card"] = card
+		}
+	}
+	return cards
+}
+
+// imageFields are the image references of a component: the image field of its
+// kind, and the titleImage of each SmallMultiple card, which renders as a LayoutCard.
+func imageFields(kind string, spec map[string]any) []specField {
+	if field, ok := imageFieldByKind[kind]; ok {
+		return []specField{{field, stringField(spec, field)}}
+	}
+	var out []specField
+	if kind == "SmallMultiple" {
+		for path, card := range smallMultipleCards(spec) {
+			out = append(out, specField{path + ".titleImage", stringField(card, "titleImage")})
+		}
+	}
+	slices.SortFunc(out, func(a, b specField) int { return strings.Compare(a.path, b.path) })
+	return out
+}
+
+// markdownFields are the Markdown fields of a component, as imageFields.
+func markdownFields(kind string, spec map[string]any) []specField {
+	var out []specField
+	for _, field := range markdownFieldsByKind[kind] {
+		out = append(out, specField{field, stringField(spec, field)})
+	}
+	if kind == "SmallMultiple" {
+		for path, card := range smallMultipleCards(spec) {
+			for _, field := range markdownFieldsByKind["LayoutCard"] {
+				out = append(out, specField{path + "." + field, stringField(card, field)})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b specField) int { return strings.Compare(a.path, b.path) })
+	return out
+}
+
 // urlSchemeRe matches an absolute URL like "https://host/x.png".
 var urlSchemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.\-]*://`)
 
@@ -79,17 +135,16 @@ var assetReferenceUndefined = Rule{
 				}
 				componentSpec, _ := node["spec"].(map[string]any)
 
-				if field, ok := imageFieldByKind[kind]; ok {
-					value := strings.TrimSpace(stringField(componentSpec, field))
-					if problem := checkImageReference(value, assets, doc.File); problem != "" {
-						add(joinLintPath(path, "spec."+field), problem)
+				for _, field := range imageFields(kind, componentSpec) {
+					if problem := checkImageReference(strings.TrimSpace(field.value), assets, doc.File); problem != "" {
+						add(joinLintPath(path, "spec."+field.path), problem)
 					}
 				}
 
-				for _, field := range markdownFieldsByKind[kind] {
-					for _, name := range render.CollectAssetRefs(stringField(componentSpec, field)) {
+				for _, field := range markdownFields(kind, componentSpec) {
+					for _, name := range render.CollectAssetRefs(field.value) {
 						if !assets[name] {
-							add(joinLintPath(path, "spec."+field), fmt.Sprintf(
+							add(joinLintPath(path, "spec."+field.path), fmt.Sprintf(
 								"Markdown image references asset %q, but no Asset document with that name is defined; "+
 									"the image will not render",
 								name,
@@ -123,24 +178,22 @@ var assetPrefixDeprecated = Rule{
 			}
 			walkNodes(root, "", func(node map[string]any, path string) {
 				kind, _ := node["kind"].(string)
-				field, ok := imageFieldByKind[kind]
-				if !ok {
-					return
-				}
 				componentSpec, _ := node["spec"].(map[string]any)
-				name, ok := strings.CutPrefix(strings.TrimSpace(stringField(componentSpec, field)), assetRefPrefix)
-				if !ok {
-					return
+				for _, field := range imageFields(kind, componentSpec) {
+					name, ok := strings.CutPrefix(strings.TrimSpace(field.value), assetRefPrefix)
+					if !ok {
+						continue
+					}
+					findings = append(findings, Finding{
+						RuleID: "asset-prefix-deprecated",
+						Message: fmt.Sprintf("the 'asset:' prefix is deprecated; write the plain asset name %q",
+							strings.TrimSpace(name)),
+						File:     doc.File,
+						DocIdx:   doc.Position,
+						Path:     joinLintPath(path, "spec."+field.path),
+						Severity: "info",
+					})
 				}
-				findings = append(findings, Finding{
-					RuleID: "asset-prefix-deprecated",
-					Message: fmt.Sprintf("the 'asset:' prefix is deprecated; write the plain asset name %q",
-						strings.TrimSpace(name)),
-					File:     doc.File,
-					DocIdx:   doc.Position,
-					Path:     joinLintPath(path, "spec."+field),
-					Severity: "info",
-				})
 			})
 		}
 		return findings

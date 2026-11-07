@@ -27,6 +27,7 @@ type smallMultipleSpec struct {
 	Scale             json.RawMessage        `json:"scale"`
 	Base              smallMultipleBase      `json:"base"`
 	Caption           *string                `json:"caption"`
+	Card              json.RawMessage        `json:"card"`
 	Panels            smallMultiplePanelSpec `json:"panels"`
 	Columns           int                    `json:"columns"`
 	CellHeight        string                 `json:"cellHeight"`
@@ -55,6 +56,7 @@ type smallMultipleItem struct {
 	Filter  string          `json:"filter"`
 	Dataset string          `json:"dataset"`
 	Spec    json.RawMessage `json:"spec"`
+	Card    json.RawMessage `json:"card"`
 }
 
 // panel is one cell of a SmallMultiple.
@@ -167,7 +169,11 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 	}
 	rows := (len(panels) + columns - 1) / columns
 
+	hasCard := isSet(s.Card)
 	caption := defaultPanelCaption
+	if hasCard {
+		caption = "" // the card title names the panel
+	}
 	if s.Caption != nil {
 		caption = *s.Caption
 	}
@@ -178,14 +184,26 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		if err != nil {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: %w", name, p.label, err)
 		}
-		children = append(children, gridChild{
+		child := gridChild{
 			Row:      stringOrInt(strconv.Itoa(i / columns)),
 			Column:   stringOrInt(strconv.Itoa(i % columns)),
 			Kind:     s.Base.Kind,
 			Metadata: layoutChildMeta{Name: fmt.Sprintf("%s-%d", name, i+1)},
 			Spec:     cellSpec,
 			Caption:  replacePanelPlaceholders(caption, p, i, func(v string) string { return v }),
-		})
+		}
+		if p.item != nil && isSet(p.item.Card) && !hasCard {
+			return "", fmt.Errorf("SmallMultiple %q: panel %q: panels.items[].card needs card", name, p.label)
+		}
+		if hasCard {
+			cardSpec, err := smallMultipleCardSpec(s, p, i, child)
+			if err != nil {
+				return "", fmt.Errorf("SmallMultiple %q: panel %q: card: %w", name, p.label, err)
+			}
+			child.Kind = "LayoutCard"
+			child.Spec = cardSpec
+		}
+		children = append(children, child)
 	}
 
 	showBorders := false
@@ -503,6 +521,73 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 	// narrow one panel and not the others.
 	filterJSON := jsonString(joinFilters(s.Filter, baseFilter, panelPart))
 	return ref.MergeSpec(merged, json.RawMessage(`{"filter":`+string(filterJSON)+`}`))
+}
+
+// cardLayoutFields are LayoutCard fields the SmallMultiple sets itself: a
+// panel card holds exactly one component.
+var cardLayoutFields = []string{"children", "cardLayout", "cardCustomTemplate", "cardGridGap"}
+
+// smallMultipleCardSpec wraps the component of a panel in a LayoutCard: the
+// card of the SmallMultiple, then the card of the item. The card has no
+// border and names the panel in its title unless the card says otherwise.
+func smallMultipleCardSpec(s smallMultipleSpec, p panel, i int, component gridChild) (json.RawMessage, error) {
+	card := json.RawMessage(replacePanelPlaceholders(string(s.Card), p, i, jsonEscape))
+	if p.item != nil && isSet(p.item.Card) {
+		var err error
+		itemCard := replacePanelPlaceholders(string(p.item.Card), p, i, jsonEscape)
+		if card, err = ref.MergeSpec(card, json.RawMessage(itemCard)); err != nil {
+			return nil, fmt.Errorf("item card: %w", err)
+		}
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(card, &fields); err != nil {
+		return nil, fmt.Errorf("not an object: %w", err)
+	}
+	for _, f := range cardLayoutFields {
+		if _, ok := fields[f]; ok {
+			return nil, fmt.Errorf("%s is set by the SmallMultiple", f)
+		}
+	}
+	if _, ok := fields["titleBusinessUnit"]; !ok {
+		// the field is Markdown; a label is plain text, as in a caption
+		fields["titleBusinessUnit"] = jsonString(markdownEscape(p.label))
+	}
+	if _, ok := fields["cardShowBorder"]; !ok {
+		fields["cardShowBorder"] = json.RawMessage("false")
+	}
+	if _, ok := fields["cardFitToContent"]; !ok && s.CellHeight == "auto" {
+		// a card fills its cell, and an auto row takes its height from the content
+		fields["cardFitToContent"] = json.RawMessage("true")
+	}
+	children, err := json.Marshal([]map[string]any{{
+		"kind":     component.Kind,
+		"metadata": map[string]string{"name": component.Metadata.Name},
+		"spec":     component.Spec,
+	}})
+	if err != nil {
+		return nil, err
+	}
+	fields["children"] = children
+	return json.Marshal(fields)
+}
+
+// isSet reports whether a raw JSON field is present and not null.
+func isSet(raw json.RawMessage) bool {
+	raw = bytes.TrimSpace(raw)
+	return len(raw) > 0 && string(raw) != "null"
+}
+
+// markdownEscape makes v literal text in inline Markdown: every ASCII
+// punctuation character gets a backslash.
+func markdownEscape(v string) string {
+	var b strings.Builder
+	for _, r := range v {
+		if r < 128 && strings.ContainsRune("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // jsonString is v as a JSON string.

@@ -289,6 +289,36 @@ func TestInheritedPropUnresolved(t *testing.T) {
 			want: []string{"p.yaml spec.children.0.spec.base.spec.scenarios"},
 		},
 		{
+			name: "the card of a SmallMultiple is an inheritance source for its base",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"card":{`+scenariosSet+`},"base":`+tableClosest+`}}`)},
+		},
+		{
+			name: "the card of a SmallMultiple is checked like a LayoutCard",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"card":{"titleScenarios":"inherited-page"},"base":{"kind":"ChartTime","spec":{}}}}`)},
+			want: []string{"p.yaml spec.children.0.spec.card.titleScenarios"},
+		},
+		{
+			name: "a partial card override keeps the document's card",
+			docs: []Document{
+				inheritPage("p", "", `{"kind":"SmallMultiple","ref":"sm","spec":{"card":{"titleBusinessUnit":"x"}}}`),
+				inheritDoc("SmallMultiple", "sm", `{"card":{`+scenariosSet+`},"base":`+tableClosest+`}`),
+			},
+		},
+		{
+			name: "every item card sets what the base inherits",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"card":{},"panels":{"items":[{"label":"a","card":{`+scenariosSet+`}}]},"base":`+tableClosest+`}}`)},
+		},
+		{
+			name: "one panel without the field is enough to report the base",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"card":{},"panels":{"items":[{"label":"a","card":{`+scenariosSet+`}},{"label":"b"}]},"base":`+tableClosest+`}}`)},
+			want: []string{"p.yaml spec.children.0.spec.base.spec.scenarios"},
+		},
+		{
+			name: "a keyword in an item card is checked",
+			docs: []Document{inheritPage("p", "", `{"kind":"SmallMultiple","spec":{"card":{},"panels":{"items":[{"label":"a","card":{"titleScenarios":"inherited-page"}}]},"base":{"kind":"ChartTime","spec":{}}}}`)},
+			want: []string{"p.yaml spec.children.0.spec.panels.items.0.card.titleScenarios"},
+		},
+		{
 			name: "a partial base override keeps the document's base",
 			docs: []Document{
 				inheritPage("p", "", `{"kind":"SmallMultiple","ref":"sm","spec":{"base":{"spec":{"chartTitle":"x"}}}}`),

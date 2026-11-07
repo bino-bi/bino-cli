@@ -77,6 +77,34 @@ func CheckGridCellLayoutSupport(engineVersion string) error {
 	return nil
 }
 
+// SmallMultipleCardMinVersion is the first engine release whose bn-grid aligns
+// on the component inside a bn-layout-card. Older engines draw the cards but
+// leave their cells unaligned.
+const SmallMultipleCardMinVersion = "v1.0.0-next.33"
+
+// CheckSmallMultipleCardSupport is CheckGridCellLayoutSupport for a project
+// with a SmallMultiple card.
+func CheckSmallMultipleCardSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(SmallMultipleCardMinVersion)) {
+		return fmt.Errorf("SmallMultiple card needs template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", SmallMultipleCardMinVersion, engineVersion, SmallMultipleCardMinVersion)
+	}
+	return nil
+}
+
+// GridCellLayoutCheck is the engine check for what the documents use: the
+// card check when a SmallMultiple has a card, else the grid cell layout check.
+func GridCellLayoutCheck(usesCard bool) func(string) error {
+	if usesCard {
+		return CheckSmallMultipleCardSupport
+	}
+	return CheckGridCellLayoutSupport
+}
+
 // ResolveVersion returns the engine version to check from a non-downloading
 // source: the pin if set, otherwise the latest locally cached version. It is ""
 // when nothing is resolvable, and callers should then skip the check.
