@@ -22,6 +22,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
 | `chart-time-field-no-effect`      | ChartTime Field Without Effect              | Warning  | `level`, `order`, `orderDirection` and `limit` have no effect on a ChartTime.                                               |
 | `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
+| `chart-order-inherits-measure`    | Chart Order Inherits Measure                | Warning  | A ChartStructure `order` inherits a `titleOrder` with a variance or `@` key, which a chart cannot sort by.                  |
 | `missing-required-reference`      | Missing Required Reference                  | Error    | Required child references (`ref`) must point to existing documents.                                                         |
 | `page-layout-slots-used`          | Page Layout Slots Used                      | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                                               |
 | `card-layout-slots-used`          | Card Layout Slots Used                      | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                                               |
@@ -48,6 +49,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
 | `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
+| `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
 | `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
@@ -257,6 +259,31 @@ spec:
 ```
 
 Only the plain string is a keyword. `Grid` and `Tree` are passed through: a component inside them inherits from the next card or from the page. A component used through `ref` is checked at every place it is used, with the inline `spec` merged over the referenced document, and the finding points at the key that holds the keyword. A standalone document that no page uses is not reported. A child whose `ref` names several documents is not checked, because the rule does not evaluate constraints.
+
+### chart-order-inherits-measure
+
+A `titleOrder` can hold variance keys (`dac1_pp1`) and `@<setname>` keys, so that a `Table` with `order: inherited-closest` or `inherited-page` sorts by them (see [Table sorting](/reference/table/#sorting)). A `ChartStructure` can inherit the same `titleOrder`, but it cannot sort by these keys: it sorts by `category`, without a warning from the engine. The rule finds the `titleOrder` the keyword resolves to, the same way as [`inherited-prop-unresolved`](#inherited-prop-unresolved), and reports the chart when it has such a key. It has its own ID, so `[lint] disable` can turn it off without turning off `inherited-prop-unresolved`.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: sales
+spec:
+  titleOrder: dac1_pp1
+  children:
+    - kind: Table
+      spec:
+        dataset: sales-data
+        order: inherited-closest # sorts by the variance
+    - kind: ChartStructure
+      spec:
+        dataset: sales-data
+        order: inherited-closest # sorts by category
+```
+
+**Fix:** give the chart an explicit `order`, or set the variance key in the table's own `order` and keep `titleOrder` to dimensions and scenarios.
 
 ### missing-required-reference
 
@@ -838,6 +865,12 @@ The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `
 A variance token of the project ends in `_op` or `_opinv` (in `variances`, `titleVariances`, `barColumns` or a chart axis), and the engine is older than v1.0.0-next.34. An older engine draws these variances grey in charts and drops them in tables without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these suffixes keeps working on that engine.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.34 or newer, or use `_pos`, `_neg` or `_neu`.
+
+### table-order-engine-version
+
+The `order` of a `Table`, or a `titleOrder` of a `LayoutPage` or `LayoutCard` that a table can inherit, has a variance key (like `dac1_pp1`) or a key with an `@<setname>` interval block (like `ac1@_November`), and the engine is older than v1.0.0-next.35. An older engine sorts by `category` instead, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these keys keeps working on that engine. See [Table sorting](/reference/table/#sorting).
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.35 or newer, or sort by a dimension or a scenario without `@`.
 
 ### small-multiple-scale
 

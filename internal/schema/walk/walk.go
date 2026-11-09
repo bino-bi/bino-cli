@@ -65,6 +65,9 @@ type PropInfo struct {
 	Types    []string
 	Default  any
 	Required bool
+	// Pattern is the first string pattern across the variants. With it, Enum
+	// lists only keywords, not every valid value.
+	Pattern string
 }
 
 // KindDoc returns a kind's spec description (the per-kind prose carried by the
@@ -290,6 +293,9 @@ func (m *Model) enrichProp(p *PropInfo, raw any) {
 			p.Default = v["default"]
 		}
 		p.Enum = appendUniqueStrings(p.Enum, enumOf(v))
+		if p.Pattern == "" {
+			p.Pattern, _ = v["pattern"].(string)
+		}
 	}
 }
 
@@ -307,6 +313,16 @@ func (n Node) EnumValues() []string {
 		}
 	}
 	return out
+}
+
+// Pattern returns the first string pattern across the variants, or "".
+func (n Node) Pattern() string {
+	for _, v := range n.variants {
+		if p, _ := v["pattern"].(string); p != "" {
+			return p
+		}
+	}
+	return ""
 }
 
 // DefaultValue returns the first declared default across the variants.

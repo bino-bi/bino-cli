@@ -82,6 +82,13 @@ func operationSentimentEngineFinding(projectRoot string, cfg *pathutil.ProjectCo
 	return engineGateFinding(projectRoot, cfg, used, engine.CheckOperationSentimentSupport, "operation-sentiment-engine-version")
 }
 
+// tableOrderMeasureEngineFinding reports a project that sorts a Table by a
+// variance or an interval block on an engine older than the release with it.
+func tableOrderMeasureEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := config.UsesTableOrderMeasure(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckTableOrderMeasureSupport, "table-order-engine-version")
+}
+
 // engineGateFinding runs a feature gate of the engine when the project uses
 // the feature, and reports a failure on the engine-version line of bino.toml.
 func engineGateFinding(projectRoot string, cfg *pathutil.ProjectConfig, used bool, check func(string) error, ruleID string) (lint.Finding, bool) {

@@ -239,3 +239,31 @@ func TestOperationSentimentEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestTableOrderMeasureEngineFinding(t *testing.T) {
+	measure := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"order":"rowgroupindex,dac1_pp1_pos"}}`)}
+	plain := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"order":"rowgroupindex,ac1"}}`)}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine with variance order", "v1.0.0-next.34", []config.Document{measure}, true},
+		{"old engine without variance order", "v1.0.0-next.34", []config.Document{plain}, false},
+		{"new engine with variance order", "v1.0.0-next.35", []config.Document{measure}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := tableOrderMeasureEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "table-order-engine-version" || finding.Line != 2) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}

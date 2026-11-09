@@ -117,6 +117,27 @@ func CheckOperationSentimentSupport(engineVersion string) error {
 	return nil
 }
 
+// TableOrderMeasureMinVersion is the first engine release whose Table order
+// takes a variance or an @<setname> interval block. Older engines sort by
+// category instead, without an error. It is no floor of SupportedEngineRanges:
+// a project without these order keys keeps working.
+const TableOrderMeasureMinVersion = "v1.0.0-next.35"
+
+// CheckTableOrderMeasureSupport returns an error when a project that sorts a
+// Table by a variance or an interval block uses an engine older than
+// TableOrderMeasureMinVersion. An empty or unreadable version is no finding.
+func CheckTableOrderMeasureSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(TableOrderMeasureMinVersion)) {
+		return fmt.Errorf("a Table order by a variance or an @ interval block needs template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", TableOrderMeasureMinVersion, engineVersion, TableOrderMeasureMinVersion)
+	}
+	return nil
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

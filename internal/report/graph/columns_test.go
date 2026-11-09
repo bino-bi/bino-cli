@@ -456,3 +456,24 @@ func TestVarianceTokens_OperationSentiment(t *testing.T) {
 		}
 	}
 }
+
+func TestColumnRefsTableOrderMeasure(t *testing.T) {
+	t.Parallel()
+	spec := `{"scenarios":["ac1","pp1"],"order":"rowgroupindex, dac1_pp1_pos@_November, ac1@_November, drfc1_pl1"}`
+	got := refStrings(columnRefs("Table", json.RawMessage(spec), []string{"sales"}, ancestors{}))
+	for _, want := range []string{
+		"sales|order|order|rowGroupIndex",
+		"sales|variance|order|ac1", "sales|variance|order|pp1",
+		"sales|order|order|ac1",
+		"sales|variance|order|fc1", "sales|variance|order|pl1",
+	} {
+		if !slices.Contains(got, want) {
+			t.Errorf("missing %s in %v", want, got)
+		}
+	}
+	for _, ref := range got {
+		if strings.Contains(ref, "@") || strings.Contains(ref, "dac1") {
+			t.Errorf("order token leaked as a column: %s", ref)
+		}
+	}
+}

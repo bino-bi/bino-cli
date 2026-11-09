@@ -389,7 +389,7 @@ func propHover(p walk.PropInfo) string {
 		parts = append(parts, p.Description)
 	}
 	if len(p.Enum) > 0 {
-		parts = append(parts, "One of: `"+strings.Join(p.Enum, "`, `")+"`")
+		parts = append(parts, enumHover(p.Enum, p.Pattern != ""))
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -407,9 +407,19 @@ func valueHover(n walk.Node) string {
 		}
 	}
 	if enum := n.EnumValues(); len(enum) > 0 {
-		parts = append(parts, "One of: `"+strings.Join(enum, "`, `")+"`")
+		parts = append(parts, enumHover(enum, n.Pattern() != ""))
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// enumHover lists the enum values. With a pattern variant they are only the
+// keywords, so the list does not claim to be complete.
+func enumHover(enum []string, pattern bool) string {
+	list := "`" + strings.Join(enum, "`, `") + "`"
+	if pattern {
+		return "Keywords: " + list + ", or a value as described above"
+	}
+	return "One of: " + list
 }
 
 // refTargetHover summarizes a component/page reference target: its kind,

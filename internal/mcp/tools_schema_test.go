@@ -151,6 +151,23 @@ func TestOutlineKindLayoutChildren(t *testing.T) {
 	if table.ChildKinds != nil {
 		t.Errorf("Table: unexpected childKinds %v", table.ChildKinds)
 	}
+	sawOrder := false
+	for _, f := range table.Fields {
+		switch f.Path {
+		case "order":
+			sawOrder = true
+			if !f.EnumOpen || !slices.Contains(f.Enum, "auto") {
+				t.Errorf("Table order: enum lists only keywords, want enumOpen and auto: %+v", f)
+			}
+		case "orderDirection":
+			if f.EnumOpen {
+				t.Errorf("Table orderDirection: enum is complete, enumOpen must be false")
+			}
+		}
+	}
+	if !sawOrder {
+		t.Error("Table: order field missing")
+	}
 
 	var shot outlineKindOutput
 	callToolJSON(t, cs, "outline_kind", map[string]any{"kind": "ScreenshotArtefact"}, &shot)
