@@ -209,7 +209,7 @@ func completeVariances(scenarios []string, snippets bool) []protocol.CompletionI
 		items = append(items, protocol.CompletionItem{
 			Label:            "d…/dr…_…_… (variance builder)",
 			Kind:             protocol.CompletionItemKindSnippet,
-			InsertText:       protocol.NewOptional("${1|d,dr|}${2:ac1}_${3:pp1}_${4|pos,neg,neu|}"),
+			InsertText:       protocol.NewOptional("${1|d,dr|}${2:ac1}_${3:pp1}_${4|pos,neg,neu,op,opinv|}"),
 			InsertTextFormat: protocol.InsertTextFormatSnippet,
 			Documentation:    protocol.String("Variance of {3} vs {2} with a sentiment suffix; 'd' is absolute, 'dr' is relative (%)."),
 		})

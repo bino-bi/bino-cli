@@ -171,3 +171,21 @@ func TestBuildChartBulletDocument(t *testing.T) {
 		}
 	})
 }
+
+func TestMeasureTokenRegex_OperationSentiment(t *testing.T) {
+	for token, sentiment := range map[string]string{
+		"dac1_pl1_op":     "_op",
+		"drac1_pl1_opinv": "_opinv",
+		"dac1_pp1_pos":    "_pos",
+	} {
+		m := measureTokenRegex.FindStringSubmatch(token)
+		if m == nil || m[6] != sentiment {
+			t.Errorf("%s: match = %q, want sentiment %s", token, m, sentiment)
+		}
+	}
+	for _, token := range []string{"dac1_pl1_opx", "dac1_pl1_opinvx", "dac1_pl1_"} {
+		if measureTokenRegex.MatchString(token) {
+			t.Errorf("%s must not match", token)
+		}
+	}
+}

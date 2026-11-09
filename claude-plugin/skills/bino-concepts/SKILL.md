@@ -72,7 +72,7 @@ Components expect a DataSet with these column names (this section says what they
   `rowGroupIndex`, `categoryIndex`, `subCategoryIndex`, `columnGroupIndex` that fixes the order.
 - **`date`** - ISO-8601 string; `ChartTime` requires it.
 - **`operation`** - `'+'` (default) or `'-'`; the sign a row contributes in aggregations.
-- **Variance tokens** in component specs follow `d<B>_<A>_[pos|neg|neu]` for absolute and `dr<B>_<A>_…`
+- **Variance tokens** in component specs follow `d<B>_<A>_[pos|neg|neu|op|opinv]` for absolute and `dr<B>_<A>_…`
   for relative differences, e.g. `dac1_pl1_pos`, `drac1_pp1_neg`.
 
 Docs: https://cli.bino.bi/reference/dataset/#standard-dataset-schema

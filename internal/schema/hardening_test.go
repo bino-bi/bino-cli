@@ -751,6 +751,34 @@ spec:
 			wantErr: false,
 		},
 		{
+			name: "scatter variance token with operation sentiment",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: variance_scatter
+spec:
+  dataset: product_data
+  x: dac1_pl1_op
+  y: drac1_pl1_opinv
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter unknown sentiment suffix rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: variance_scatter
+spec:
+  dataset: product_data
+  x: dac1_pl1_opx
+  y: ac1
+`,
+			wantErr: true,
+		},
+		{
 			name: "scatter iso values auto",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

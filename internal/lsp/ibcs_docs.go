@@ -14,9 +14,11 @@ var scenarioDoc = map[string]string{
 
 // varianceSentiment documents the sentiment suffix of the variance grammar.
 var varianceSentiment = map[string]string{
-	"pos": "positive sentiment - more is better (e.g. revenue).",
-	"neg": "negative sentiment - more is worse (e.g. cost).",
-	"neu": "neutral sentiment - no inherent good/bad direction.",
+	"pos":   "positive sentiment - more is better (e.g. revenue).",
+	"neg":   "negative sentiment - more is worse (e.g. cost).",
+	"neu":   "neutral sentiment - no inherent good/bad direction.",
+	"op":    "operation sentiment - the colour follows the contribution to the result. In a Table of type opt or optnototal, rows with operation \"+\" and sum rows act like pos, rows with operation \"-\" act like neg (thereof rows use the operation of their parent). Elsewhere the values carry the sign, so it acts like pos.",
+	"opinv": "inverse operation sentiment - the inverse of op, for reports whose main measure is a cost. In a Table of type opt or optnototal, rows with operation \"+\" and sum rows act like neg, rows with operation \"-\" act like pos. Elsewhere it acts like neg.",
 }
 
 // scenarioMeaning returns hover documentation for a scenario slot like "ac1" or

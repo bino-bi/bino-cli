@@ -181,6 +181,10 @@ with --fail-on-warnings.`),
 			if gridGateFatal {
 				findings = append([]lint.Finding{gridGateFinding}, findings...)
 			}
+			opGateFinding, opGateFatal := operationSentimentEngineFinding(projectRoot, projectCfg, documents)
+			if opGateFatal {
+				findings = append([]lint.Finding{opGateFinding}, findings...)
+			}
 
 			// Step 3: Execute queries and validate data (optional)
 			var dataValidationWarnings []dataset.Warning

@@ -13,13 +13,14 @@ import (
 // them: one emitted from inside another rule, and the ones synthesized by the
 // lint command. They are known IDs for [lint] purposes.
 var nonRuleFindingIDs = []string{
-	"missing-required-reference",      // emitted by page-layout-slots-used
-	"schema-validation",               // cli/lint.go schemaFindingsFromErrors
-	"manifest-load",                   // cli/lint.go schemaFindingsFromErrors
-	"engine-version-incompatible",     // cli/engine_compat.go
-	"annotation-point-missing",        // needs data: AnnotationPointFindings, called by cli/lint.go
-	"annotation-engine-version",       // cli/engine_compat.go
-	"grid-cell-layout-engine-version", // cli/engine_compat.go
+	"missing-required-reference",         // emitted by page-layout-slots-used
+	"schema-validation",                  // cli/lint.go schemaFindingsFromErrors
+	"manifest-load",                      // cli/lint.go schemaFindingsFromErrors
+	"engine-version-incompatible",        // cli/engine_compat.go
+	"annotation-point-missing",           // needs data: AnnotationPointFindings, called by cli/lint.go
+	"annotation-engine-version",          // cli/engine_compat.go
+	"grid-cell-layout-engine-version",    // cli/engine_compat.go
+	"operation-sentiment-engine-version", // cli/engine_compat.go
 }
 
 // fixedSeverityIDs are known finding IDs whose weight is decided by the state
@@ -34,6 +35,7 @@ var fixedSeverityIDs = []string{
 	"engine-version-incompatible",
 	"annotation-engine-version",
 	"grid-cell-layout-engine-version",
+	"operation-sentiment-engine-version",
 }
 
 // loadLintConfig reads the project's [lint] table into the runner. A nil cfg

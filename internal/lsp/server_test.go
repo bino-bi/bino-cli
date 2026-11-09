@@ -1019,3 +1019,35 @@ func TestHover_PreviousPeriodExplainsDerive(t *testing.T) {
 		t.Errorf("pp hover should point at derive:/assert: and the PY default (got %+v)", h.Contents)
 	}
 }
+
+const opTableDoc = `kind: Table
+metadata:
+  name: pnl
+spec:
+  dataset: pnl
+  scenarios: [ac1, pl1]
+  variances:
+    - dac1_pl1_op
+    - drac1_pl1_opinv
+`
+
+func TestHover_OperationSentiment(t *testing.T) {
+	s := newTestServer()
+	u := openDoc(t, s, opTableDoc)
+	for _, c := range []struct {
+		line uint32
+		want string
+	}{
+		{7, "operation sentiment - the colour"},
+		{8, "inverse operation sentiment"},
+	} {
+		h, _ := s.Hover(context.Background(), hoverParams(u, c.line, 8))
+		if h == nil {
+			t.Fatalf("line %d: expected hover for the variance token", c.line)
+		}
+		mc, ok := h.Contents.(*protocol.MarkupContent)
+		if !ok || !strings.Contains(mc.Value, c.want) || !strings.Contains(mc.Value, "operation") {
+			t.Errorf("line %d: hover should explain the operation sentiment (got %+v)", c.line, h.Contents)
+		}
+	}
+}

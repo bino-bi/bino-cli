@@ -253,3 +253,22 @@ func TestCheckSmallMultipleCardSupport(t *testing.T) {
 		t.Error("with a card next.32 is too old")
 	}
 }
+
+func TestCheckOperationSentimentSupport(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.34", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.33", false},
+		{"v1.0.0-alpha.19", false},
+		{"", true}, // nothing resolved: not this check's job
+		{"junk", true},
+	}
+	for _, c := range cases {
+		if err := CheckOperationSentimentSupport(c.version); (err == nil) != c.ok {
+			t.Errorf("CheckOperationSentimentSupport(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+	}
+}

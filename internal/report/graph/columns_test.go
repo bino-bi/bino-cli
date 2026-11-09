@@ -438,3 +438,21 @@ func TestBuildColumnsRefGridTree(t *testing.T) {
 		"s2|template|nodes[b].value|pp1",
 	})
 }
+
+func TestVarianceTokens_OperationSentiment(t *testing.T) {
+	for _, token := range []string{"dac1_pl1_op", "drac1_pl1_opinv"} {
+		for name, re := range map[string]interface{ FindStringSubmatch(string) []string }{
+			"varianceToken": varianceToken,
+			"measureToken":  measureToken,
+		} {
+			if m := re.FindStringSubmatch(token); m == nil || m[0] != token || m[1] != "ac1" || m[2] != "pl1" {
+				t.Errorf("%s %s: match = %q", name, token, m)
+			}
+		}
+	}
+	for _, token := range []string{"dac1_pl1_opx", "dac1_pl1_opinvx"} {
+		if varianceToken.MatchString(token) || measureToken.MatchString(token) {
+			t.Errorf("%s must not match", token)
+		}
+	}
+}

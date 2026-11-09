@@ -47,6 +47,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
+| `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
 | `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
@@ -831,6 +832,12 @@ The project has an `Annotation` and its engine is older than v1.0.0-next.30, whi
 The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `cellVerticalAlign` or `cellHorizontalAlign` to a value other than the default, or a grid child has a `caption`, and the engine is older than v1.0.0-next.32. An older engine ignores these settings without an error, so the grid would look wrong. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these settings and without a `SmallMultiple` keeps working on that engine. A `SmallMultiple` with `card` needs v1.0.0-next.33: older engines draw the cards but do not line up the axes inside them.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.32 or newer, or v1.0.0-next.33 or newer with `card`.
+
+### operation-sentiment-engine-version
+
+A variance token of the project ends in `_op` or `_opinv` (in `variances`, `titleVariances`, `barColumns` or a chart axis), and the engine is older than v1.0.0-next.34. An older engine draws these variances grey in charts and drops them in tables without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these suffixes keeps working on that engine.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.34 or newer, or use `_pos`, `_neg` or `_neu`.
 
 ### small-multiple-scale
 

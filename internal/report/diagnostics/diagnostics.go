@@ -124,6 +124,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := gridCellLayoutEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := operationSentimentEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
@@ -180,6 +183,12 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))
 	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), check, "grid-cell-layout-engine-version")
+}
+
+// operationSentimentEngineDiagnostic reports a project that uses the variance
+// sentiments _op or _opinv on an engine older than the release with them.
+func operationSentimentEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	return engineGateDiagnostic(dir, config.UsesOperationSentiment(docs), engine.CheckOperationSentimentSupport, "operation-sentiment-engine-version")
 }
 
 // engineGateDiagnostic runs a feature gate of the engine when the project uses
