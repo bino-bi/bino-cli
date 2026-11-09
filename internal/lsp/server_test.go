@@ -1038,7 +1038,7 @@ func TestHover_OperationSentiment(t *testing.T) {
 		line uint32
 		want string
 	}{
-		{7, "operation sentiment - the colour"},
+		{7, "operation sentiment - the color"},
 		{8, "inverse operation sentiment"},
 	} {
 		h, _ := s.Hover(context.Background(), hoverParams(u, c.line, 8))
