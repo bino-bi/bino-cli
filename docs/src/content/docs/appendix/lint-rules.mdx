@@ -48,6 +48,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
 | `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
+| `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
 | `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
@@ -838,6 +839,12 @@ The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `
 A variance token of the project ends in `_op` or `_opinv` (in `variances`, `titleVariances`, `barColumns` or a chart axis), and the engine is older than v1.0.0-next.34. An older engine draws these variances grey in charts and drops them in tables without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these suffixes keeps working on that engine.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.34 or newer, or use `_pos`, `_neg` or `_neu`.
+
+### table-order-engine-version
+
+The `order` of a `Table`, or a `titleOrder` of a `LayoutPage` or `LayoutCard` that a table can inherit, has a variance key (like `dac1_pp1`) or a key with an `@<setname>` interval block (like `ac1@_November`), and the engine is older than v1.0.0-next.35. An older engine sorts by `category` instead, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these keys keeps working on that engine. See [Table sorting](/reference/table/#sorting).
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.35 or newer, or sort by a dimension or a scenario without `@`.
 
 ### small-multiple-scale
 

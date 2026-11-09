@@ -171,10 +171,19 @@ Applied to scenario names that have no `scenarios` entry:
 | `pp`           | PP         | 20         | 100         |
 | `py`           | PY         | 20         | 100         |
 | `dac`..`dpy`   | dAC..dPY   | as base    | base + 1000 |
-| `drac`..`drpy` | drAC..drPY | as base    | base + 2000 |
+| `drac`..`drpy` | drAC..drPY | as base    | base + 1005 |
 
 `bu` and `py` are part of the built-in rules, but no dataset column uses these
 prefixes.
+
+A relative variance sorts 5 after the absolute variance with the same
+reference (`dpp` 1100, `drpp` 1105, `dpl` 1200, `drpl` 1205). So with template
+engine **v1.0.0-next.35** or newer a table shows its variance columns grouped
+by reference, as IBCS does: ΔPY, ΔPY%, ΔPL, ΔPL%. Older engines used base +
+2000 for relative variances and showed ΔPY, ΔPL, ΔPY%, ΔPL%. A table that mixes
+references can change order too: `drac1_pp1` now comes before `dpp1_ac1`. To
+keep the old order, set the old values (2100 to 2400) in a `RuleSet`. A rule
+set that moves only `dpl` should now move `drpl` as well.
 
 ## Complete example
 
