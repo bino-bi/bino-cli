@@ -5,15 +5,15 @@ go 1.27.0
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/andybalholm/brotli v1.2.7
+	github.com/andybalholm/brotli v1.2.8
 	github.com/bino-bi/bino-plugin-sdk v0.0.5
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/chromedp/cdproto v0.158.6
-	github.com/chromedp/chromedp v0.21.0
+	github.com/chromedp/cdproto v0.159.2
+	github.com/chromedp/chromedp v0.23.0
 	github.com/digitorus/pdfsign v1.0.0-rc3
 	github.com/duckdb/duckdb-go-bindings v0.20000.0
 	github.com/duckdb/duckdb-go/v2 v2.20000.0
@@ -33,7 +33,7 @@ require (
 	github.com/sahilm/fuzzy v0.1.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/yuin/goldmark v1.8.7
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.abhg.dev/goldmark/toc v0.12.0
