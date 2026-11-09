@@ -112,3 +112,14 @@ func TestHasContent(t *testing.T) {
 		t.Error("a text is content")
 	}
 }
+
+func TestVarianceToken_OperationSentiment(t *testing.T) {
+	for _, token := range []string{"dac1_pl1_op", "drac1_pl1_opinv"} {
+		if m := varianceToken.FindStringSubmatch(token); m == nil || m[0] != token || m[1] != "ac1" || m[2] != "pl1" {
+			t.Errorf("%s: match = %q", token, m)
+		}
+	}
+	if varianceToken.MatchString("dac1_pl1_opx") {
+		t.Error("dac1_pl1_opx must not match")
+	}
+}

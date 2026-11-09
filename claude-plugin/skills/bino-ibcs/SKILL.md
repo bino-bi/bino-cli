@@ -3,7 +3,7 @@ name: bino-ibcs
 description:
   The IBCS rubric for bino reports - the semantics the schema can't carry. The SUCCESS
   rules (SAY · UNIFY · CONDENSE · CHECK · EXPRESS · SIMPLIFY · STRUCTURE), scenarios (ac/pp/fc/pl),
-  variances (d_/dr_ … pos/neg/neu), analysis notations (_ ~ Ø ..), choosing between Table / ChartTime /
+  variances (d_/dr_ … pos/neg/neu/op/opinv), analysis notations (_ ~ Ø ..), choosing between Table / ChartTime /
   ChartStructure / Tree, and data-aware narrative Text. Use when modeling a report's scenarios and
   variances, picking a visualization, writing commentary, or auditing IBCS compliance.
 ---
@@ -79,13 +79,20 @@ A variance column compares two scenarios. The naming convention is:
 | `direction` | `pos` / `neg` / `neu` | which sign is _good_                            |
 
 `direction` sets the colour: `pos` = favorable (teal/green), `neg` = unfavorable (red), `neu` =
-neutral (grey).
+neutral (grey). `op` follows the contribution to the result: in a Table with `type: opt` or
+`optnototal`, rows with operation `+` and sum rows act like `pos`, rows with operation `-` act like
+`neg` (a rising cost on a `-` row is red; thereof rows use their parent's operation). Everywhere else
+(other tables, ChartTime, ChartStructure) the values already carry the sign, so `op` acts like
+`pos`. `opinv` is the full inverse of `op`, for reports whose main measure is a cost. `op`/`opinv`
+need template engine v1.0.0-next.34 or newer.
 
 Examples:
 
 - `dac1_pl1_pos` - `ac1 − pl1`, absolute, favorable when positive (actual beat plan).
 - `drac1_pp1_neg` - `(ac1 − pp1) / pp1`, relative %, unfavorable when positive (e.g. cost growth).
 - `dac1_fc1_neu` - `ac1 − fc1`, absolute, neutral colour.
+- `dac1_pl1_op` - `ac1 − pl1` in an income statement (`type: opt`): green when a row helps the
+  result, so revenue above plan is green and cost above plan is red.
 
 **Direction encodes good/bad _impact_, not the raw sign.** A cost _decrease_ is favorable (`pos`,
 teal) even though the number is negative - so you must know each measure's **polarity**: is "more"

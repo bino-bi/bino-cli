@@ -46,10 +46,10 @@ repeated here (see [Inherited props](#inherited-props)).
 - `grouped`, `showGroupTitle` - group rows by `rowgroup` and optionally show group headers.
 - `showMeasureScale` - toggle measure unit in table header.
 - `limit` - maximum rows per group; extra rows are cumulated as REST.
-- `type` - table type (`list`, `sum`, `opt`, `sumnototal`, `optnototal`). Only `sum` and `opt` render a grand-total row at the bottom of the table.
+- `type` - table type (`list`, `sum`, `opt`, `sumnototal`, `optnototal`). Only `sum` and `opt` render a grand-total row at the bottom of the table. In `opt` tables the variances of sum rows follow the operation sign of their rows (template engines before **v1.0.0-next.34** computed them without the sign).
 - `sumTitle` - label of that grand-total row. It is **not** a title above the table: it is the text in the category cell of the total row. Since the other table types render no total row, they ignore the value. When empty, the row is labelled with the IBCS grand-total symbol ❖.
 - `scenarios` - list of scenario measures, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank (and variances are also blank), they are detected with a warning.
-- `variances` - list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu]`.
+- `variances` - list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu|op|opinv]`. See [Variance sentiment](#variance-sentiment).
 - `barColumns` - list of column names to render as inline IBCS-compliant bar charts instead of numbers.
 - `barColumnWidth` - maximum width of inline bar/pin chart columns in em (`w5`..`w100`). Default: `w10`.
 - `unitScaling` - data units displayed per 1 em of bar length for absolute variance bars (d\_ prefix columns) - map-scale semantics: a larger value means smaller bars. Also accepts `auto` (fit the largest bar to the bar column) or a [ScalingGroup](/reference/scaling-group/) name. Default: 100.
@@ -65,6 +65,42 @@ repeated here (see [Inherited props](#inherited-props)).
 - `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When unset, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
+
+## Variance sentiment
+
+The last part of a variance token says which direction is good. It picks the colour of the variance: green for good, red for bad.
+
+| Suffix   | Meaning                                                                                                                                                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_pos`   | More is better (revenue).                                                                                                                                                                                                                                |
+| `_neg`   | More is worse (cost).                                                                                                                                                                                                                                    |
+| `_neu`   | No good or bad direction. The variance is grey.                                                                                                                                                                                                         |
+| `_op`    | The colour follows the contribution to the result. In a table with `type: opt` or `optnototal`, rows with operation `+` and sum rows act like `_pos`, rows with operation `-` act like `_neg`. A rising cost on a `-` row is red. `thereof` rows use the operation of their parent. In all other tables the values already carry the sign, so `_op` acts like `_pos`. |
+| `_opinv` | The full inverse of `_op`. Use it for reports where the main measure is a cost.                                                                                                                                                                          |
+
+The operation of a row comes from the `operation` column of the [dataset](/reference/dataset/) (`'+'` or `'-'`).
+
+An income statement with one sentiment for all rows:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: income_statement
+spec:
+  dataset: income_statement   # revenue rows with operation '+', cost rows with '-'
+  type: opt
+  sumTitle: "Net income"
+  scenarios: ["ac1", "pl1"]
+  variances: ["dac1_pl1_op", "drac1_pl1_op"]
+```
+
+Revenue above plan is green, cost above plan is red, and the net income row is green when it is above plan.
+
+In an `opt` table the variances of the sum rows follow the operation sign of the rows they add up. Template engines before **v1.0.0-next.34** computed them without the sign.
+
+`_op` and `_opinv` need template engine **v1.0.0-next.34** or newer. With an older engine `bino build` and `bino lint` stop with [`operation-sentiment-engine-version`](/appendix/lint-rules/#operation-sentiment-engine-version), and `bino preview` shows that error. A project without them keeps working on its engine.
 
 ## Example: Grouped table with drilldown
 
@@ -369,7 +405,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.type`                      | string                   | no              | `list`                  | Table type. Values: `list`, `sum`, `opt`, `sumnototal`, `optnototal`. Only `sum` and `opt` render a grand-total row.                                                                                                                                                                                                  | `type: sum`                        |
 | `spec.sumTitle`                  | string                   | no              | `❖`                     | Label of the grand-total row at the bottom of the table (not a title above it). Ignored by the table types that render no total row. Empty renders the IBCS grand-total symbol ❖. Maps to the `sum-title` HTML attribute.                                                                                             | `sumTitle: "Total"`                |
 | `spec.scenarios`                 | string or array          | no              | -                       | Scenario measures to display, as a YAML array or a JSON string. Left blank they are detected from the dataset with a warning. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `auto`, `inherited-closest`, `inherited-page`.                                                                              | `scenarios: ["ac1", "pp1"]`        |
-| `spec.variances`                 | string or array          | no              | -                       | Variance definitions, as a YAML array or a JSON string. The scenarios used must be listed in `scenarios`. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu]`. Also accepts `inherited-closest` or `inherited-page`.                                                                                                  | `variances: ["dac1_pp1_pos"]`      |
+| `spec.variances`                 | string or array          | no              | -                       | Variance definitions, as a YAML array or a JSON string. The scenarios used must be listed in `scenarios`. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu\|op\|opinv]`, see [Variance sentiment](#variance-sentiment). Also accepts `inherited-closest` or `inherited-page`.                                                                                                  | `variances: ["dac1_pp1_pos"]`      |
 | `spec.barColumns`                | string or array          | no              | -                       | Column names to render as inline IBCS-compliant bar/pin charts.                                                                                                                                                                                                                                                       | `barColumns: ["dac1_pp1_pos"]`     |
 | `spec.barColumnWidth`            | string                   | no              | `w10`                   | Maximum width of inline bar chart columns. Values: `w5`, `w10`, `w15`, `w20`, `w25`, `w30`, `w40`, `w60`, `w80`, `w100`.                                                                                                                                                                                              | `barColumnWidth: w20`              |
 | `spec.unitScaling`               | string or number         | no              | `100`                   | Name of a scaling group, `auto`, or data units per em of bar length for absolute variance bars (`d_` prefix columns). Larger value = smaller bars.                                                                                                                                                                    | `unitScaling: 50`                  |

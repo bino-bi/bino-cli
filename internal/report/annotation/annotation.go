@@ -219,7 +219,7 @@ func dateInPeriod(rowDate, want string) bool {
 var (
 	slotToken     = regexp.MustCompile(`^(?:ac|pp|fc|pl)[1-4]$`)
 	familyToken   = regexp.MustCompile(`^(?:ac|pp|fc|pl)$`)
-	varianceToken = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu))?$`)
+	varianceToken = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu|opinv|op))?$`)
 )
 
 func scenarioHasValue(kind string, filled map[string]bool, p *schema.AnnotationPoint) bool {

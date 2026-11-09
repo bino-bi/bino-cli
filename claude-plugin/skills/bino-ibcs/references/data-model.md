@@ -80,12 +80,20 @@ Examples:
 | `dac1_pl1_pos`  | Absolute: AC1 minus PL1, favorable when positive       |
 | `drac1_pp1_neg` | Relative: (AC1 − PP1) / PP1, unfavorable when positive |
 | `dac1_fc1_neu`  | Absolute: AC1 minus FC1, neutral (no color coding)     |
+| `dac1_pl1_op`   | Absolute: AC1 minus PL1, colour follows the operation  |
+| `drac1_pl1_opinv` | Relative: (AC1 − PL1) / PL1, inverse of `op`         |
 
 The `direction` determines the IBCS color coding in charts and tables:
 
 - `pos` - green/teal when the value is favorable (a positive difference is good)
 - `neg` - red when the value is unfavorable (a positive difference is bad)
 - `neu` - gray, no direction judgment
+- `op` - follows the contribution to the result. In a Table with `type: opt` or `optnototal`, rows
+  with operation `+` and sum rows act like `pos`, rows with operation `-` act like `neg`; thereof
+  rows use the operation of their parent. In other tables and in ChartTime and ChartStructure the
+  values already carry the sign, so `op` acts like `pos`. Needs engine v1.0.0-next.34.
+- `opinv` - the full inverse of `op`, for reports where the main measure is a cost
+- ChartScatter and ChartBubble accept all suffixes and ignore them
 
 Components take the variances to display as a list of these tokens (in bino: the component's
 `variances` spec field, e.g. `variances: [dac1_pl1_pos, drac1_pl1_pos]`).

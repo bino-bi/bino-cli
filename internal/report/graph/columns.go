@@ -175,8 +175,8 @@ func (u *uses) add(role, field string, cols ...string) {
 
 var (
 	slotToken     = regexp.MustCompile(`^(?:ac|pp|fc|pl)[1-4]$`)
-	varianceToken = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)\d)_((?:ac|pp|fc|pl)\d)_(?:pos|neg|neu)$`)
-	measureToken  = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu))?$`)
+	varianceToken = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)\d)_((?:ac|pp|fc|pl)\d)_(?:pos|neg|neu|opinv|op)$`)
+	measureToken  = regexp.MustCompile(`^(?:dr|d)((?:ac|pp|fc|pl)[1-4])_((?:ac|pp|fc|pl)[1-4])(?:_(?:pos|neg|neu|opinv|op))?$`)
 )
 
 // addTokens adds a scenario or variance list. A variance reads both slots;

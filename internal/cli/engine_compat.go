@@ -75,6 +75,13 @@ func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig
 	return engineGateFinding(projectRoot, cfg, used, check, "grid-cell-layout-engine-version")
 }
 
+// operationSentimentEngineFinding reports a project that uses the variance
+// sentiments _op or _opinv on an engine older than the release with them.
+func operationSentimentEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := config.UsesOperationSentiment(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckOperationSentimentSupport, "operation-sentiment-engine-version")
+}
+
 // engineGateFinding runs a feature gate of the engine when the project uses
 // the feature, and reports a failure on the engine-version line of bino.toml.
 func engineGateFinding(projectRoot string, cfg *pathutil.ProjectConfig, used bool, check func(string) error, ruleID string) (lint.Finding, bool) {

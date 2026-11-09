@@ -96,6 +96,27 @@ func CheckSmallMultipleCardSupport(engineVersion string) error {
 	return nil
 }
 
+// OperationSentimentMinVersion is the first engine release that knows the
+// variance sentiment suffixes _op and _opinv. Older engines draw them grey in
+// charts and drop them in tables without an error. It is no floor of
+// SupportedEngineRanges: a project without them keeps working.
+const OperationSentimentMinVersion = "v1.0.0-next.34"
+
+// CheckOperationSentimentSupport returns an error when a project that uses _op
+// or _opinv uses an engine older than OperationSentimentMinVersion. An empty or
+// unreadable version is no finding, as in CheckAnnotationSupport.
+func CheckOperationSentimentSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(OperationSentimentMinVersion)) {
+		return fmt.Errorf("the variance sentiments _op and _opinv need template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", OperationSentimentMinVersion, engineVersion, OperationSentimentMinVersion)
+	}
+	return nil
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

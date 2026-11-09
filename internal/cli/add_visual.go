@@ -1259,8 +1259,9 @@ func promptDatasetSelection(out io.Writer, manifests []ManifestInfo) (string, er
 
 // measureTokenRegex validates XY chart measure tokens: a scenario slot
 // (ac1-ac4, pp1-pp4, fc1-fc4, pl1-pl4) or a variance token
-// (d/dr + base_delta with an optional _pos/_neg/_neu sentiment suffix).
-var measureTokenRegex = regexp.MustCompile(`^((ac|pp|fc|pl)[1-4]|(dr|d)(ac|pp|fc|pl)[1-4]_(ac|pp|fc|pl)[1-4](_(pos|neg|neu))?)$`)
+// (d/dr + base_delta with an optional _pos/_neg/_neu/_op/_opinv sentiment
+// suffix).
+var measureTokenRegex = regexp.MustCompile(`^((ac|pp|fc|pl)[1-4]|(dr|d)(ac|pp|fc|pl)[1-4]_(ac|pp|fc|pl)[1-4](_(pos|neg|neu|opinv|op))?)$`)
 
 // promptMeasureToken prompts for a required XY chart measure token until the
 // input is valid.

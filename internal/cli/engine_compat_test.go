@@ -211,3 +211,31 @@ func TestGridCellLayoutEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestOperationSentimentEngineFinding(t *testing.T) {
+	op := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"type":"opt","variances":["dac1_pl1_op"]}}`)}
+	plain := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"type":"opt","variances":["dac1_pl1_pos"]}}`)}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine with _op", "v1.0.0-next.33", []config.Document{op}, true},
+		{"old engine without _op", "v1.0.0-next.33", []config.Document{plain}, false},
+		{"new engine with _op", "v1.0.0-next.34", []config.Document{op}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := operationSentimentEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "operation-sentiment-engine-version" || finding.Line != 2) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
