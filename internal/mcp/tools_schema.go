@@ -23,12 +23,14 @@ type outlineKindInput struct {
 // outlineField is one spec field of a kind, addressed by a dotted path where
 // [] marks array items (attributes[].label).
 type outlineField struct {
-	Path        string   `json:"path"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Enum        []string `json:"enum,omitempty"`
-	Default     any      `json:"default,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Path     string   `json:"path"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Enum     []string `json:"enum,omitempty"`
+	// EnumOpen: the field also takes a pattern, so Enum lists only keywords.
+	EnumOpen    bool   `json:"enumOpen,omitempty"`
+	Default     any    `json:"default,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type outlineKindOutput struct {
@@ -201,6 +203,7 @@ func toField(p walk.PropInfo, path string) outlineField {
 		Type:        strings.Join(p.Types, "|"),
 		Required:    p.Required,
 		Enum:        p.Enum,
+		EnumOpen:    len(p.Enum) > 0 && p.Pattern != "",
 		Default:     p.Default,
 		Description: p.Description,
 	}

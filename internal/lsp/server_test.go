@@ -1051,3 +1051,38 @@ func TestHover_OperationSentiment(t *testing.T) {
 		}
 	}
 }
+
+func TestHover_OrderKeywordsAreNotTheWholeList(t *testing.T) {
+	const orderSchema = `{
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "Table"}}},
+     "then": {"properties": {"spec": {"properties": {
+        "dataset": {},
+        "order": {"type": "string", "description": "Sort keys.", "anyOf": [{"enum": ["auto", "category"]}, {"pattern": "^[a-z0-9_]+$"}]},
+        "orderDirection": {"enum": ["asc", "desc"]}
+     }}}}}
+  ]
+}`
+	be := &fakeBackend{schema: json.RawMessage(orderSchema)}
+	s := NewServer(be, logx.NewTerminalWithColor(io.Discard, io.Discard, false, true).Channel("test"), true, "/proj")
+	u := openDoc(t, s, "kind: Table\nmetadata:\n  name: t\nspec:\n  dataset: sales\n  order: dac1_pp1\n  orderDirection: asc\n")
+	for _, c := range []struct {
+		name      string
+		line, col uint32
+		want      string
+	}{
+		{"order value", 5, 12, "Keywords: `auto`"},
+		{"enum-only value", 6, 20, "One of: `asc`"},
+		{"order key", 5, 3, "Keywords: `auto`"},
+		{"enum-only key", 6, 3, "One of: `asc`"},
+	} {
+		h, _ := s.Hover(context.Background(), hoverParams(u, c.line, c.col))
+		if h == nil {
+			t.Fatalf("%s: expected hover", c.name)
+		}
+		mc, ok := h.Contents.(*protocol.MarkupContent)
+		if !ok || !strings.Contains(mc.Value, c.want) {
+			t.Errorf("%s: hover should contain %q (got %+v)", c.name, c.want, h.Contents)
+		}
+	}
+}
