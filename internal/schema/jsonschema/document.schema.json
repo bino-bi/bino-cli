@@ -2270,6 +2270,11 @@
       ],
       "additionalProperties": false
     },
+    "tableOrderList": {
+      "$comment": "Comma list of table order tokens: a dimension, a scenario or a variance (d/dr, optional sentiment), the last two optionally with @<interval setname>.",
+      "type": "string",
+      "pattern": "^(([cC]ategory|[rR]ow[gG]roup|[sS]ub[cC]ategory)([iI]ndex)?|((ac|fc|pp|pl)[1-4]|dr?(ac|fc|pp|pl)[1-4]_(ac|fc|pp|pl)[1-4](_(pos|neg|neu|opinv|op))?)(@[^,\\s]([^,]*[^,\\s])?)?)(\\s*,\\s*(([cC]ategory|[rR]ow[gG]roup|[sS]ub[cC]ategory)([iI]ndex)?|((ac|fc|pp|pl)[1-4]|dr?(ac|fc|pp|pl)[1-4]_(ac|fc|pp|pl)[1-4](_(pos|neg|neu|opinv|op))?)(@[^,\\s]([^,]*[^,\\s])?)?))*$"
+    },
     "datasetRef": {
       "description": "Single or multiple dataset references. Each reference can be a string name or an inline DataSet definition.",
       "oneOf": [
@@ -3588,9 +3593,12 @@
         },
         "titleOrder": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"],
+          "anyOf": [
+            { "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "subcategory", "subcategoryindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4"] },
+            { "$ref": "#/$defs/tableOrderList" }
+          ],
           "default": "category",
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. If empty, the order arrow is omitted."
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. If empty, the order arrow is omitted. A Table with order 'inherited-closest' or 'inherited-page' takes this value, so it accepts the same sort keys as Table order: a comma list of dimensions, scenarios and variances (e.g. dac1_pp1), a scenario or variance optionally with '@<setname>' of an interval block. Variance and '@' keys only sort tables and need template engine v1.0.0-next.35 or newer; the title ignores them."
         },
         "titleOrderDirection": {
           "type": "string",
@@ -3711,9 +3719,12 @@
         },
         "titleOrder": {
           "type": "string",
-          "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-page"],
+          "anyOf": [
+            { "enum": ["category", "categoryindex", "rowgroup", "rowgroupindex", "subcategory", "subcategoryindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-page"] },
+            { "$ref": "#/$defs/tableOrderList" }
+          ],
           "default": "category",
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-page' to inherit from the parent LayoutPage."
+          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. Set to 'inherited-page' to inherit from the parent LayoutPage. A Table with order 'inherited-closest' takes this value, so it accepts the same sort keys as Table order: a comma list of dimensions, scenarios and variances (e.g. dac1_pp1), a scenario or variance optionally with '@<setname>' of an interval block. Variance and '@' keys only sort tables and need template engine v1.0.0-next.35 or newer; the title ignores them."
         },
         "titleOrderDirection": {
           "type": "string",
@@ -5492,8 +5503,11 @@
         },
         "order": {
           "type": "string",
-          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
-          "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When left blank, the table sorts by 'category'. 'auto' uses the key suggested by the dataset instead (subCategory, then category, then rowGroup); if that key is subCategory, category rows keep the dataset order and thereof rows are sorted by subCategory in the opposite direction. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
+          "anyOf": [
+            { "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "subcategory", "subcategoryindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"] },
+            { "$ref": "#/$defs/tableOrderList" }
+          ],
+          "description": "Sort keys as a comma list: a dimension (category, rowgroup, subcategory, or their index form), a scenario (must be in the scenario list) or a variance like dac1_pp1. With interval 'setname', '@<setname>' after a scenario or variance sorts by one block (dac1_pp1_pos@_November). Variance and '@' keys sort inside row groups and need template engine v1.0.0-next.35. Blank sorts by category. 'auto' uses the dataset's suggested key (subCategory, then category, then rowGroup); with subCategory, category rows keep the dataset order and thereof rows sort by subCategory in the opposite direction. 'inherited-closest' inherits from the nearest LayoutCard or LayoutPage, 'inherited-page' from the LayoutPage only."
         },
         "orderDirection": {
           "type": "string",

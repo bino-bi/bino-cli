@@ -317,6 +317,26 @@ func TestResolveAt_RealSchema(t *testing.T) {
 		}
 		t.Error("scale prop not found on Table spec")
 	})
+
+	// order and titleOrder are an anyOf of keywords and a token pattern; the
+	// keywords must still complete.
+	t.Run("order keywords through anyOf", func(t *testing.T) {
+		for _, c := range []struct {
+			kind, field string
+			want        []string
+		}{
+			{"Table", "order", []string{"auto", "category", "subcategory", "ac1", "inherited-closest", "inherited-page"}},
+			{"LayoutPage", "titleOrder", []string{"category", "rowgroupindex", "pl1"}},
+			{"LayoutCard", "titleOrder", []string{"category", "ac1", "inherited-page"}},
+		} {
+			vals := m.ResolveAt([]string{"spec", c.field}, map[string]string{"": c.kind}).EnumValues()
+			for _, want := range c.want {
+				if !hasString(vals, want) {
+					t.Errorf("%s %s completion missing %q (got %v)", c.kind, c.field, want, vals)
+				}
+			}
+		}
+	})
 }
 
 // TestParse_EmbeddedSchemaKinds locks the walker to the embedded schema: the

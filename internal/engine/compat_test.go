@@ -272,3 +272,22 @@ func TestCheckOperationSentimentSupport(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckTableOrderMeasureSupport(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.35", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.34", false},
+		{"v1.0.0-alpha.19", false},
+		{"", true}, // nothing resolved: not this check's job
+		{"junk", true},
+	}
+	for _, c := range cases {
+		if err := CheckTableOrderMeasureSupport(c.version); (err == nil) != c.ok {
+			t.Errorf("CheckTableOrderMeasureSupport(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+	}
+}

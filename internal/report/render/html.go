@@ -363,6 +363,9 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
+	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
+		return Result{}, diags, err
+	}
 
 	targetOrientation := strings.TrimSpace(renderOrientation)
 
@@ -518,6 +521,9 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 		return FrameResult{}, diags, err
 	}
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {
+		return FrameResult{}, diags, err
+	}
+	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
 

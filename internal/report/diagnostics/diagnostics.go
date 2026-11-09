@@ -127,6 +127,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := operationSentimentEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := tableOrderMeasureEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
@@ -189,6 +192,12 @@ func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnos
 // sentiments _op or _opinv on an engine older than the release with them.
 func operationSentimentEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	return engineGateDiagnostic(dir, config.UsesOperationSentiment(docs), engine.CheckOperationSentimentSupport, "operation-sentiment-engine-version")
+}
+
+// tableOrderMeasureEngineDiagnostic reports a project that sorts a Table by a
+// variance or an interval block on an engine older than the release with it.
+func tableOrderMeasureEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	return engineGateDiagnostic(dir, config.UsesTableOrderMeasure(docs), engine.CheckTableOrderMeasureSupport, "table-order-engine-version")
 }
 
 // engineGateDiagnostic runs a feature gate of the engine when the project uses

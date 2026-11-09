@@ -1551,6 +1551,38 @@ func TestValidate_OrderRejectsUnknown(t *testing.T) {
 	}
 }
 
+// TestValidate_TableOrderTokens pins the Table order grammar: dimensions,
+// scenarios and variances, the last two with an optional @<setname> bucket.
+// titleOrder of a page or card feeds an inheriting Table, so it takes the same.
+func TestValidate_TableOrderTokens(t *testing.T) {
+	docs := map[string]func(order string) string{
+		"Table": func(o string) string {
+			return "kind: Table\nmetadata:\n  name: c\nspec:\n  dataset: d\n  order: '" + o + "'\n"
+		},
+		"LayoutPage": func(o string) string {
+			return "kind: LayoutPage\nmetadata:\n  name: p\nspec:\n  titleOrder: '" + o + "'\n"
+		},
+		"LayoutCard": func(o string) string {
+			return "kind: LayoutCard\nmetadata:\n  name: c\nspec:\n  titleOrder: '" + o + "'\n"
+		},
+	}
+	accepted := []string{"dac1_pp1", "dac1_pp1_pos", "drac1_pl1_pos@_November", "rowgroupindex,dac1_pp1", "subcategory",
+		"ac1@_November", "rowGroupIndex, drfc1_pp1_opinv", "dpp1_ac1_op@Q1 2026"}
+	rejected := []string{"dac1_pp1_xx", "dac5_pp1", "ac1@", "category@_November", "ac1,", "automatic"}
+	for kind, doc := range docs {
+		for _, order := range accepted {
+			if err := Validate([]byte("apiVersion: bino.bi/v1alpha1\n" + doc(order))); err != nil {
+				t.Errorf("%s order %q should be valid, got: %v", kind, order, err)
+			}
+		}
+		for _, order := range rejected {
+			if err := Validate([]byte("apiVersion: bino.bi/v1alpha1\n" + doc(order))); err == nil {
+				t.Errorf("%s order %q: expected validation error, got nil", kind, order)
+			}
+		}
+	}
+}
+
 // TestValidate_Internationalization pins the typed spec.content: built-in tokens
 // and free-form keys are both accepted, but values must be strings.
 //

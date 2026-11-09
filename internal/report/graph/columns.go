@@ -213,6 +213,14 @@ func (u *uses) addOrder(order string, blankIsAuto bool) {
 		u.add(RoleOrder, "order", ColumnAuto)
 	default:
 		for _, tok := range split(order) {
+			// A Table sorts by one interval block with "@bucket"; the block is no column.
+			if at := strings.IndexByte(tok, '@'); at >= 0 {
+				tok = strings.TrimSpace(tok[:at])
+			}
+			if m := measureToken.FindStringSubmatch(strings.ToLower(tok)); m != nil {
+				u.add(RoleVariance, "order", m[1], m[2])
+				continue
+			}
 			u.add(RoleOrder, "order", dimColumn(tok))
 		}
 	}
