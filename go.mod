@@ -14,7 +14,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/chromedp/cdproto v0.158.6
 	github.com/chromedp/chromedp v0.21.0
-	github.com/digitorus/pdfsign v1.0.0-rc3
+	github.com/digitorus/pdfsign v1.0.0
 	github.com/duckdb/duckdb-go-bindings v0.20000.0
 	github.com/duckdb/duckdb-go/v2 v2.20000.0
 	github.com/fatih/color v1.19.0
