@@ -555,3 +555,40 @@ func TestInheritedPropUnresolved_Disable(t *testing.T) {
 		t.Errorf("Apply kept %v, want inherited-prop-unresolved dropped", findingIDs(kept))
 	}
 }
+
+func TestChartOrderInheritsMeasure(t *testing.T) {
+	chart := func(order string) string { return inheritChild("ChartStructure", `"order":"`+order+`"`) }
+	table := inheritChild("Table", `"order":"inherited-closest"`)
+	tests := []struct {
+		name string
+		page Document
+		want []string
+	}{
+		{"page variance, closest", inheritPage("p", `"titleOrder":"dac1_pp1"`, chart("inherited-closest"), table),
+			[]string{"p.yaml spec.children.0.spec.order"}},
+		{"page bucket, page keyword", inheritPage("p", `"titleOrder":"ac1@_November"`, chart("inherited-page")),
+			[]string{"p.yaml spec.children.0.spec.order"}},
+		{"card scenario shadows page variance", inheritPage("p", `"titleOrder":"dac1_pp1"`,
+			inheritCard(`"titleOrder":"ac1"`, chart("inherited-closest"))), nil},
+		{"card variance, page keyword reads page", inheritPage("p", `"titleOrder":"ac1"`,
+			inheritCard(`"titleOrder":"dac1_pp1"`, chart("inherited-page"))), nil},
+		{"card variance, closest", inheritPage("p", `"titleOrder":"ac1"`,
+			inheritCard(`"titleOrder":"rowgroupindex,dac1_pp1_pos"`, chart("inherited-closest"))),
+			[]string{"p.yaml spec.children.0.spec.children.0.spec.order"}},
+		{"table only", inheritPage("p", `"titleOrder":"dac1_pp1"`, table), nil},
+		{"explicit chart order", inheritPage("p", `"titleOrder":"dac1_pp1"`, chart("ac1")), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, f := range inheritedPropUnresolved.Check(context.Background(), []Document{tt.page}) {
+				if f.RuleID == "chart-order-inherits-measure" {
+					got = append(got, filepath.Base(f.File)+" "+f.Path)
+				}
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("findings = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -14,6 +14,7 @@ import (
 // lint command. They are known IDs for [lint] purposes.
 var nonRuleFindingIDs = []string{
 	"missing-required-reference",         // emitted by page-layout-slots-used
+	"chart-order-inherits-measure",       // emitted by inherited-prop-unresolved
 	"schema-validation",                  // cli/lint.go schemaFindingsFromErrors
 	"manifest-load",                      // cli/lint.go schemaFindingsFromErrors
 	"engine-version-incompatible",        // cli/engine_compat.go

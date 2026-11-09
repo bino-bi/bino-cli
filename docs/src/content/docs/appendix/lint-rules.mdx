@@ -22,6 +22,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
 | `chart-time-field-no-effect`      | ChartTime Field Without Effect              | Warning  | `level`, `order`, `orderDirection` and `limit` have no effect on a ChartTime.                                               |
 | `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
+| `chart-order-inherits-measure`    | Chart Order Inherits Measure                | Warning  | A ChartStructure `order` inherits a `titleOrder` with a variance or `@` key, which a chart cannot sort by.                  |
 | `missing-required-reference`      | Missing Required Reference                  | Error    | Required child references (`ref`) must point to existing documents.                                                         |
 | `page-layout-slots-used`          | Page Layout Slots Used                      | Warning  | LayoutPage children count must match the expected slots for its `pageLayout`.                                               |
 | `card-layout-slots-used`          | Card Layout Slots Used                      | Warning  | LayoutCard children count must match the expected slots for its `cardLayout`.                                               |
@@ -258,6 +259,31 @@ spec:
 ```
 
 Only the plain string is a keyword. `Grid` and `Tree` are passed through: a component inside them inherits from the next card or from the page. A component used through `ref` is checked at every place it is used, with the inline `spec` merged over the referenced document, and the finding points at the key that holds the keyword. A standalone document that no page uses is not reported. A child whose `ref` names several documents is not checked, because the rule does not evaluate constraints.
+
+### chart-order-inherits-measure
+
+A `titleOrder` can hold variance keys (`dac1_pp1`) and `@<setname>` keys, so that a `Table` with `order: inherited-closest` or `inherited-page` sorts by them (see [Table sorting](/reference/table/#sorting)). A `ChartStructure` can inherit the same `titleOrder`, but it cannot sort by these keys: it sorts by `category`, without a warning from the engine. The rule finds the `titleOrder` the keyword resolves to, the same way as [`inherited-prop-unresolved`](#inherited-prop-unresolved), and reports the chart when it has such a key. It has its own ID, so `[lint] disable` can turn it off without turning off `inherited-prop-unresolved`.
+
+**Example problem:**
+
+```yaml
+kind: LayoutPage
+metadata:
+  name: sales
+spec:
+  titleOrder: dac1_pp1
+  children:
+    - kind: Table
+      spec:
+        dataset: sales-data
+        order: inherited-closest # sorts by the variance
+    - kind: ChartStructure
+      spec:
+        dataset: sales-data
+        order: inherited-closest # sorts by category
+```
+
+**Fix:** give the chart an explicit `order`, or set the variance key in the table's own `order` and keep `titleOrder` to dimensions and scenarios.
 
 ### missing-required-reference
 

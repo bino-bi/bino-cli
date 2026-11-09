@@ -15,7 +15,7 @@ func TestUsesTableOrderMeasure(t *testing.T) {
 		{"table variance with sentiment in a list", `{"kind":"Table","spec":{"order":"rowgroupindex, drac1_pl1_pos"}}`, true},
 		{"table scenario bucket", `{"kind":"Table","spec":{"order":"ac1@_November"}}`, true},
 		{"page titleOrder", `{"kind":"LayoutPage","spec":{"titleOrder":"dac1_pp1_neg"}}`, true},
-		{"nested table in a card", `{"kind":"LayoutPage","spec":{"children":[{"kind":"LayoutCard","spec":{"children":[{"kind":"Table","spec":{"order":"DAC1_PP1@Q1"}}]}}]}}`, true},
+		{"nested table in a card", `{"kind":"LayoutPage","spec":{"children":[{"kind":"LayoutCard","spec":{"children":[{"kind":"Table","spec":{"order":"dac1_pp1@Q1"}}]}}]}}`, true},
 		{"dimensions and scenarios", `{"kind":"Table","spec":{"order":"rowgroupindex,category,ac1"}}`, false},
 		{"keywords", `{"kind":"Table","spec":{"order":"inherited-closest"}}`, false},
 		{"chart order is no table order", `{"kind":"ChartStructure","spec":{"order":"dac1_pp1"}}`, false},

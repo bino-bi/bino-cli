@@ -104,11 +104,11 @@ In an `opt` table the variances of the sum rows follow the operation sign of the
 
 ## Sorting
 
-`order` takes one sort key or a comma list of keys, applied from left to right with `orderDirection`. A key is one of:
+`order` takes one sort key or a comma list of keys without spaces (`rowgroupindex,dac1_pp1`), applied from left to right with `orderDirection`. Scenario and variance keys are lowercase. A key is one of:
 
 | Key                                                                                              | Sorts by                                                                                                       |
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `subcategory`, `subcategoryindex`      | The dimension column. The case does not matter for the engine (`rowGroupIndex` works too).                     |
+| `category`, `categoryindex`, `rowgroup`, `rowgroupindex`, `subcategory`, `subcategoryindex`      | The dimension column. Write it lowercase or in camelCase (`rowGroupIndex`).                                    |
 | `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`                                               | The scenario. It must appear in `scenarios`.                                                                   |
 | a variance like `dac1_pp1` or `drac1_pl1_pos`                                                    | The variance, written like its column. The sentiment suffix is allowed and has no effect on the sort.          |
 | a scenario or variance with `@<setname>`, like `ac1@_November` or `dac1_pp1_pos@_November`        | The value in one block of `interval: setname`. Without `@` the sum over all blocks is used.                    |
@@ -133,7 +133,7 @@ A variance key or a key with `@` sorts the rows inside their row groups. The gro
 
 Variance keys and `@` need template engine **v1.0.0-next.35** or newer. Older engines sort by `category` instead, without an error. So with an older engine `bino build` and `bino lint` stop with [`table-order-engine-version`](/appendix/lint-rules/#table-order-engine-version), and `bino preview` shows that error. A project without these keys keeps working on its engine.
 
-`titleOrder` of a `LayoutPage` or `LayoutCard` accepts the same keys, because a table with `order: inherited-closest` or `inherited-page` takes it (see [Inherited props](#inherited-props)). The page and card titles ignore variance keys and `@`.
+`titleOrder` of a `LayoutPage` or `LayoutCard` accepts the same keys, because a table with `order: inherited-closest` or `inherited-page` takes it (see [Inherited props](#inherited-props)). The title itself only understands dimensions, scenarios and variances with a sentiment: for a variance without sentiment (`dac1_pp1`) or a key with `@` it shows an `order: invalid value(s)` warning. A `ChartStructure` that inherits such a `titleOrder` cannot sort by it and sorts by `category`; `bino lint` reports this with [`chart-order-inherits-measure`](/appendix/lint-rules/#chart-order-inherits-measure). So set variance and `@` keys in the table's own `order` where you can.
 
 ## Example: Grouped table with drilldown
 
@@ -253,10 +253,10 @@ spec:
 | Column prefix                      | Visualization                                                                            | Description                                                                                                      |
 | ---------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `d_` (absolute variance)           | Horizontal bar                                                                           | Bar extends left (negative) or right (positive) from the axis. The color comes from the sentiment (green good, red bad), the pattern from the minuend: AC and PY solid, FC hatched with an outline, PL outlined. |
-| `dr_` (relative variance)          | Pin chart                                                                                | Thin line in the sentiment color from the axis with a square head. The head takes the look of the minuend: AC solid dark, PY solid grey, FC hatched, PL a white square with a dark outline. The label sits next to the head. With a fixed `percentageScaling`, a pin that does not fit is cut and ends in an arrow, with its label inside the pin; auto scaling fits the largest pin. |
+| `dr_` (relative variance)          | Pin chart                                                                                | Thin line in the sentiment color from the axis with a square head. The head takes the look of the minuend: AC solid dark, PY solid gray, FC hatched, PL a white square with a dark outline. The label sits next to the head. With a fixed `percentageScaling`, a pin that does not fit is cut and ends in an arrow, with its label inside the pin; auto scaling fits the largest pin. |
 | `ac`, `pp`, `fc`, `pl` (scenarios) | IBCS grayscale bars, or an IBCS waterfall when grouping structure is present (see below) | AC: dark gray solid, PP: light gray solid, FC: dark gray hatched, PL: dark gray outlined.                        |
 
-The axis of variance bars and pins is drawn in the look of the reference scenario (the subtrahend): PY a thick grey line, AC a thick dark line, PL a double line, FC a dashed dark line. So `dac1_pp1` and `dac1_pl1` columns show at once which comparison they are. Bars start at the edge of the axis. This look needs template engine **v1.0.0-next.35** or newer. Older engines end a pin in a round dot.
+The axis of variance bars and pins is drawn in the look of the reference scenario (the subtrahend): PY a thick gray line, AC a thick dark line, PL a double line, FC a dashed dark line. So `dac1_pp1` and `dac1_pl1` columns show at once which comparison they are. Bars start at the edge of the axis. This look needs template engine **v1.0.0-next.35** or newer. Older engines end a pin in a round dot.
 
 ### Example: Scenario columns as bar charts
 

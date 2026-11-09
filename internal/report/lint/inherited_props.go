@@ -9,12 +9,16 @@ import (
 	"strconv"
 	"strings"
 
+	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/ref"
 )
 
 const (
 	inheritedClosest = "inherited-closest"
 	inheritedPage    = "inherited-page"
+
+	// measureTitleOrder marks a scope whose titleOrder has a variance or '@' key.
+	measureTitleOrder = "titleOrder@measure"
 )
 
 // inheritedProp pairs a spec prop that accepts an inheritance keyword with the
@@ -110,6 +114,8 @@ var inheritedPropUnresolved = Rule{
 				value := page.spec[p.field]
 				scope[p.field] = hasValue(value) && inheritKeyword(value) == ""
 			}
+			order, _ := page.spec["titleOrder"].(string)
+			scope[measureTitleOrder] = config.IsMeasureOrder(order)
 			w.children(page, "children", page.spec["children"], []inheritScope{scope}, nil)
 		}
 		return w.findings
@@ -200,8 +206,22 @@ func (w *inheritWalker) scope(kind string, n specNode, chain []inheritScope) inh
 		switch {
 		case keyword == "":
 			scope[p.field] = hasValue(value)
+			if p.field == "titleOrder" {
+				order, _ := value.(string)
+				scope[measureTitleOrder] = config.IsMeasureOrder(order)
+			}
 		case !inheritResolves(keyword, p.field, chain):
 			w.report(site, p, keyword)
+		case kind == "ChartStructure" && p.prop == "order" && inheritsMeasureOrder(keyword, chain):
+			w.add(Finding{
+				RuleID: "chart-order-inherits-measure",
+				Message: fmt.Sprintf("'order: %s' takes a titleOrder with a variance or '@' key; a ChartStructure "+
+					"cannot sort by it and sorts by category. Give 'order' an explicit value, or set the "+
+					"variance order on the Table instead of in titleOrder", keyword),
+				File:   site.doc.File,
+				DocIdx: site.doc.Position,
+				Path:   joinLintPath(site.path, p.prop),
+			})
 		}
 	}
 	return scope
@@ -295,6 +315,9 @@ func (w *inheritWalker) panelCardChains(n specNode, chain []inheritScope) [][]in
 		for _, p := range inheritedPropsOf("LayoutCard") {
 			if _, ok := itemCard[p.prop]; ok {
 				scope[p.field] = itemScope[p.field]
+				if p.field == "titleOrder" {
+					scope[measureTitleOrder] = itemScope[measureTitleOrder]
+				}
 			}
 		}
 		chains = append(chains, withScope(scope))
@@ -343,7 +366,12 @@ func (w *inheritWalker) report(site specSite, p inheritedProp, keyword string) {
 		DocIdx: site.doc.Position,
 		Path:   joinLintPath(site.path, p.prop),
 	}
-	// A document referenced several times on one page would repeat the finding.
+	w.add(finding)
+}
+
+// add records finding once: a document referenced several times on one page
+// would repeat it.
+func (w *inheritWalker) add(finding Finding) {
 	if !w.seen[finding] {
 		w.seen[finding] = true
 		w.findings = append(w.findings, finding)
@@ -357,6 +385,20 @@ func inheritResolves(keyword, field string, chain []inheritScope) bool {
 		return chain[0][field]
 	}
 	return slices.ContainsFunc(chain, func(scope inheritScope) bool { return scope[field] })
+}
+
+// inheritsMeasureOrder reports whether keyword resolves to a titleOrder with a
+// variance or '@' key. inherited-closest takes the innermost scope that sets it.
+func inheritsMeasureOrder(keyword string, chain []inheritScope) bool {
+	if keyword == inheritedPage {
+		return chain[0][measureTitleOrder]
+	}
+	for i := len(chain) - 1; i >= 0; i-- {
+		if chain[i]["titleOrder"] {
+			return chain[i][measureTitleOrder]
+		}
+	}
+	return false
 }
 
 // inheritKeyword returns the inheritance keyword a value holds, or "". Only the

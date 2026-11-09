@@ -28,12 +28,12 @@ func UsesTableOrderMeasure(docs []Document) bool {
 func usesTableOrderMeasure(v any) bool {
 	switch node := v.(type) {
 	case map[string]any:
-		if s, ok := node["titleOrder"].(string); ok && isMeasureOrder(s) {
+		if s, ok := node["titleOrder"].(string); ok && IsMeasureOrder(s) {
 			return true
 		}
 		if kind, _ := node["kind"].(string); kind == "Table" {
 			if spec, ok := node["spec"].(map[string]any); ok {
-				if s, ok := spec["order"].(string); ok && isMeasureOrder(s) {
+				if s, ok := spec["order"].(string); ok && IsMeasureOrder(s) {
 					return true
 				}
 			}
@@ -53,7 +53,8 @@ func usesTableOrderMeasure(v any) bool {
 	return false
 }
 
-func isMeasureOrder(order string) bool {
+// IsMeasureOrder reports whether an order list has a variance or an '@' key.
+func IsMeasureOrder(order string) bool {
 	for _, item := range strings.Split(order, ",") {
 		item = strings.ToLower(strings.TrimSpace(item))
 		if strings.Contains(item, "@") || orderVarianceToken.MatchString(item) {

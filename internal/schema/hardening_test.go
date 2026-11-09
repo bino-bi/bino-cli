@@ -1567,8 +1567,9 @@ func TestValidate_TableOrderTokens(t *testing.T) {
 		},
 	}
 	accepted := []string{"dac1_pp1", "dac1_pp1_pos", "drac1_pl1_pos@_November", "rowgroupindex,dac1_pp1", "subcategory",
-		"ac1@_November", "rowGroupIndex, drfc1_pp1_opinv", "dpp1_ac1_op@Q1 2026"}
-	rejected := []string{"dac1_pp1_xx", "dac5_pp1", "ac1@", "category@_November", "ac1,", "automatic"}
+		"ac1@_November", "rowGroupIndex,drfc1_pp1_opinv", "dpp1_ac1_op@Q1 2026"}
+	rejected := []string{"dac1_pp1_xx", "dac5_pp1", "ac1@", "category@_November", "ac1,", "automatic",
+		"rowgroupindex, ac1", "ac1 ,pp1", "AC1", "ROWGROUPINDEX"}
 	for kind, doc := range docs {
 		for _, order := range accepted {
 			if err := Validate([]byte("apiVersion: bino.bi/v1alpha1\n" + doc(order))); err != nil {
