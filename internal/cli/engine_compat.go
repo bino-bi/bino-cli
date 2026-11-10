@@ -104,14 +104,46 @@ func categoryIntervalPositionDefaultEngineFinding(projectRoot string, cfg *pathu
 	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
 }
 
+// tableCalculationSchemeEngineFinding reports a project whose Tables turn on
+// runningSum, thereofPosition or varianceWaterfall on an engine older than the
+// release with them.
+func tableCalculationSchemeEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	props := config.TableCalculationSchemeProps(documents)
+	return engineGateFinding(projectRoot, cfg, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
+}
+
+// tableCalculationSchemeDefaultEngineFinding is the same gate for fields that
+// only a dataset default turns on, which shows after the queries ran.
+func tableCalculationSchemeDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	props := dataset.DefaultsTableCalculationSchemeProps(results)
+	used := len(config.TableCalculationSchemeProps(documents)) == 0 && len(props) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
+}
+
 // tableEngineFindings returns the engine gate findings of the Table features.
 func tableEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) []lint.Finding {
 	var findings []lint.Finding
 	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document) (lint.Finding, bool){
 		categoryIntervalPositionEngineFinding,
 		tableOrderMeasureEngineFinding,
+		tableCalculationSchemeEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents); ok {
+			findings = append(findings, finding)
+		}
+	}
+	return findings
+}
+
+// tableDefaultEngineFindings returns the engine gate findings of the Table
+// features that only a dataset default turns on.
+func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) []lint.Finding {
+	var findings []lint.Finding
+	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document, []dataset.Result) (lint.Finding, bool){
+		categoryIntervalPositionDefaultEngineFinding,
+		tableCalculationSchemeDefaultEngineFinding,
+	} {
+		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)
 		}
 	}

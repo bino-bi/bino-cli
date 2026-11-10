@@ -480,6 +480,9 @@ type tableSpec struct {
 	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
 	Interval                 string                       `json:"interval"`
 	CategoryIntervalPosition *int                         `json:"categoryIntervalPosition"`
+	RunningSum               *bool                        `json:"runningSum"`
+	ThereofPosition          string                       `json:"thereofPosition"`
+	VarianceWaterfall        *bool                        `json:"varianceWaterfall"`
 	Attributes               reportspec.AttributesList    `json:"attributes"`
 	SelectedStyle            string                       `json:"selectedStyle"`
 	Ruleset                  string                       `json:"ruleset"`
@@ -516,6 +519,9 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
 	writeAttr(b, "interval", s.Interval)
 	writeIntAttr(b, "category-interval-position", s.CategoryIntervalPosition)
+	writeBoolAttr(b, "running-sum", s.RunningSum)
+	writeAttr(b, "thereof-position", s.ThereofPosition)
+	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
 	writeAttr(b, "attributes", s.Attributes.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)

@@ -557,3 +557,29 @@ func TestCategoryIntervalPositionFindings(t *testing.T) {
 		t.Fatalf("dataset default: findings = %+v", findings)
 	}
 }
+
+func TestTableCalculationSchemeEngineDiagnostic(t *testing.T) {
+	doc := func(spec string) []config.Document {
+		return []config.Document{{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{` + spec + `}}`)}}
+	}
+	project := func(engineVersion string) string {
+		dir := t.TempDir()
+		toml := "report-id = \"00000000-0000-0000-0000-000000000000\"\nengine-version = \"" + engineVersion + "\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	d, ok := tableCalculationSchemeEngineDiagnostic(project("v1.0.0-next.39"), doc(`"runningSum":true,"varianceWaterfall":true`))
+	if !ok || d.Code != "table-calculation-scheme-engine-version" || d.Severity != "error" || d.Line != 2 ||
+		!strings.Contains(d.Message, "runningSum, varianceWaterfall") {
+		t.Fatalf("diagnostic = %+v, ok = %v", d, ok)
+	}
+	if d, ok := tableCalculationSchemeEngineDiagnostic(project("v1.0.0-next.40"), doc(`"runningSum":true`)); ok {
+		t.Fatalf("new engine: %+v", d)
+	}
+	if d, ok := tableCalculationSchemeEngineDiagnostic(project("v1.0.0-next.39"), doc(`"thereofPosition":"below"`)); ok {
+		t.Fatalf("defaults: %+v", d)
+	}
+}

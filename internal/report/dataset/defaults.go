@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"bino.bi/bino/internal/report/spec"
 )
 
 // Dataset defaults
@@ -751,4 +753,17 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 		}
 	}
 	return false
+}
+
+// DefaultsTableCalculationSchemeProps returns the Table calculation scheme
+// fields that a dataset default turns on. The manifests do not show such a
+// value, so the engine gate asks here too.
+func DefaultsTableCalculationSchemeProps(results []Result) []string {
+	var props []string
+	for _, r := range results {
+		for _, token := range []string{AnyToken, "table"} {
+			props = spec.MergeTableCalculationSchemeProps(props, spec.RawTableCalculationSchemeProps(r.Defaults[token]))
+		}
+	}
+	return props
 }

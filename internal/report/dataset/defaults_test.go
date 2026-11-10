@@ -371,3 +371,19 @@ func TestMarkerLevelsAreDimensions(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultsTableCalculationSchemeProps(t *testing.T) {
+	results := []Result{
+		{Name: "a", Defaults: Defaults{"table": {"varianceWaterfall": json.RawMessage(`true`), "thereofPosition": json.RawMessage(`"below"`)}}},
+		{Name: "b", Defaults: Defaults{AnyToken: {"runningSum": json.RawMessage(`true`)}}},
+		{Name: "c", Defaults: Defaults{"chartbar": {"runningSum": json.RawMessage(`true`)}}},
+		{Name: "d"},
+	}
+	got := DefaultsTableCalculationSchemeProps(results)
+	if len(got) != 2 || got[0] != "runningSum" || got[1] != "varianceWaterfall" {
+		t.Fatalf("got %v", got)
+	}
+	if got := DefaultsTableCalculationSchemeProps(results[2:]); got != nil {
+		t.Fatalf("other kind: got %v", got)
+	}
+}

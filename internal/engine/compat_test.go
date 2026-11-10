@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -307,6 +308,30 @@ func TestCheckCategoryIntervalPositionSupport(t *testing.T) {
 	for _, c := range cases {
 		if err := CheckCategoryIntervalPositionSupport(c.version); (err == nil) != c.ok {
 			t.Errorf("CheckCategoryIntervalPositionSupport(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+	}
+}
+
+func TestTableCalculationSchemeCheck(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.40", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.39", false},
+		{"v1.0.0-alpha.19", false},
+		{"", true}, // nothing resolved: not this check's job
+		{"junk", true},
+	}
+	check := TableCalculationSchemeCheck([]string{"runningSum", "varianceWaterfall"})
+	for _, c := range cases {
+		err := check(c.version)
+		if (err == nil) != c.ok {
+			t.Errorf("TableCalculationSchemeCheck(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+		if err != nil && !strings.Contains(err.Error(), "a Table with runningSum, varianceWaterfall needs template engine v1.0.0-next.40") {
+			t.Errorf("message does not name the fields: %v", err)
 		}
 	}
 }

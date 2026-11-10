@@ -133,6 +133,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := categoryIntervalPositionEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := tableCalculationSchemeEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
@@ -207,6 +210,14 @@ func tableOrderMeasureEngineDiagnostic(dir string, docs []config.Document) (Diag
 // categoryIntervalPosition on an engine older than the release with it.
 func categoryIntervalPositionEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	return engineGateDiagnostic(dir, config.UsesCategoryIntervalPosition(docs), engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
+// tableCalculationSchemeEngineDiagnostic reports a project whose Tables turn
+// on runningSum, thereofPosition or varianceWaterfall on an engine older than
+// the release with them.
+func tableCalculationSchemeEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	props := config.TableCalculationSchemeProps(docs)
+	return engineGateDiagnostic(dir, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
 }
 
 // engineGateDiagnostic runs a feature gate of the engine when the project uses
@@ -316,6 +327,12 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		defaultUsed := !config.UsesCategoryIntervalPosition(docs) && dataset.DefaultsSetCategoryIntervalPosition(results)
 		if d, ok := engineGateDiagnostic(dir, defaultUsed, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version"); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
+		}
+		if len(config.TableCalculationSchemeProps(docs)) == 0 {
+			props := dataset.DefaultsTableCalculationSchemeProps(results)
+			if d, ok := engineGateDiagnostic(dir, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version"); ok && !runner.Skip(d.Code) {
+				diagnostics = append(diagnostics, d)
+			}
 		}
 		for _, f := range runner.Apply(dataFindings) {
 			diagnostics = append(diagnostics, Diagnostic{

@@ -25,6 +25,7 @@ var nonRuleFindingIDs = []string{
 	"table-order-engine-version",                      // cli/engine_compat.go
 	"table-category-interval-position-engine-version", // cli/engine_compat.go
 	"table-category-interval-position-too-large",      // needs data: CategoryIntervalPositionFindings, called by cli/lint.go
+	"table-calculation-scheme-engine-version",         // cli/engine_compat.go
 }
 
 // fixedSeverityIDs are known finding IDs whose weight is decided by the state
@@ -42,6 +43,7 @@ var fixedSeverityIDs = []string{
 	"operation-sentiment-engine-version",
 	"table-order-engine-version",
 	"table-category-interval-position-engine-version",
+	"table-calculation-scheme-engine-version",
 }
 
 // loadLintConfig reads the project's [lint] table into the runner. A nil cfg
