@@ -544,4 +544,16 @@ func TestCategoryIntervalPositionFindings(t *testing.T) {
 	if findings := CategoryIntervalPositionFindings([]config.Document{table(8)}, nil); len(findings) != 0 {
 		t.Fatalf("no results: findings = %+v, want none", findings)
 	}
+
+	// The interval and the position can come from a dataset default.
+	plain := config.Document{File: "/p/t.yaml", Position: 1, Kind: "Table", Name: "t",
+		Raw: json.RawMessage(`{"apiVersion":"bino.bi/v1","kind":"Table","metadata":{"name":"t"},"spec":{"dataset":"sales"}}`)}
+	results[0].Defaults = dataset.Defaults{
+		dataset.AnyToken: {"categoryIntervalPosition": json.RawMessage(`1`)},
+		"table":          {"interval": json.RawMessage(`"setname"`), "categoryIntervalPosition": json.RawMessage(`9`)},
+	}
+	findings = CategoryIntervalPositionFindings([]config.Document{plain}, results)
+	if len(findings) != 1 || !strings.Contains(findings[0].Message, "is 9 but there are only 3 interval group(s)") {
+		t.Fatalf("dataset default: findings = %+v", findings)
+	}
 }

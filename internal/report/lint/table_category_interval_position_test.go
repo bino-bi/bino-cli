@@ -17,8 +17,8 @@ func TestTableCategoryIntervalPositionUnused(t *testing.T) {
 		{"date interval", map[string]any{"dataset": "d", "interval": "month", "categoryIntervalPosition": 1}, ""},
 		{"zero without interval", map[string]any{"dataset": "d", "categoryIntervalPosition": 0}, ""},
 		{"not set", map[string]any{"dataset": "d"}, ""},
-		{"no interval", map[string]any{"dataset": "d", "categoryIntervalPosition": 1}, "the Table has no 'interval'"},
-		{"interval none", map[string]any{"dataset": "d", "interval": "none", "categoryIntervalPosition": 1}, "the Table has no 'interval'"},
+		{"no interval", map[string]any{"dataset": "d", "categoryIntervalPosition": 1}, "the Table sets no 'interval'"},
+		{"interval none", map[string]any{"dataset": "d", "interval": "none", "categoryIntervalPosition": 1}, "the Table sets no 'interval'"},
 		{
 			"columnthereof wins",
 			map[string]any{"dataset": "d", "interval": "setname", "categoryIntervalPosition": 1,
@@ -53,8 +53,8 @@ func TestTableCategoryIntervalPositionUnused(t *testing.T) {
 	}
 }
 
-// A child with a 'ref' inherits the interval of the referenced Table, and an
-// inline child is checked inside its page.
+// A child with a 'ref' inherits the interval and the position of the
+// referenced Table, and an inline child is checked inside its page.
 func TestTableCategoryIntervalPositionUnused_Children(t *testing.T) {
 	page := json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
@@ -64,7 +64,10 @@ func TestTableCategoryIntervalPositionUnused_Children(t *testing.T) {
 			"children": [
 				{"kind": "Table", "ref": "by_set", "spec": {"categoryIntervalPosition": 1}},
 				{"kind": "Table", "ref": "flat", "spec": {"categoryIntervalPosition": 1}},
-				{"kind": "Table", "spec": {"dataset": "d", "categoryIntervalPosition": 2}}
+				{"kind": "Table", "spec": {"dataset": "d", "categoryIntervalPosition": 2}},
+				{"kind": "Table", "ref": "moved", "spec": {"interval": "none"}},
+				{"kind": "Table", "ref": "moved"},
+				{"kind": "Table", "ref": "moved", "spec": {"interval": "none", "categoryIntervalPosition": 0}}
 			]
 		}
 	}`)
@@ -72,9 +75,10 @@ func TestTableCategoryIntervalPositionUnused_Children(t *testing.T) {
 		{File: "/p/page.yaml", Kind: "LayoutPage", Name: "page", Raw: page},
 		{File: "/p/a.yaml", Kind: "Table", Name: "by_set", Raw: rawDoc("Table", "by_set", map[string]any{"dataset": "d", "interval": "setname"})},
 		{File: "/p/b.yaml", Kind: "Table", Name: "flat", Raw: rawDoc("Table", "flat", map[string]any{"dataset": "d"})},
+		{File: "/p/c.yaml", Kind: "Table", Name: "moved", Raw: rawDoc("Table", "moved", map[string]any{"dataset": "d", "interval": "setname", "categoryIntervalPosition": 2})},
 	}
 	findings := tableCategoryIntervalPositionUnused.Check(context.Background(), docs)
-	want := []string{"spec.children.1.spec.categoryIntervalPosition", "spec.children.2.spec.categoryIntervalPosition"}
+	want := []string{"spec.children.1.spec.categoryIntervalPosition", "spec.children.2.spec.categoryIntervalPosition", "spec.children.3"}
 	if len(findings) != len(want) {
 		t.Fatalf("findings = %+v, want %v", findings, want)
 	}
@@ -115,7 +119,7 @@ func TestCategoryIntervalPositionFindings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			docs := []Document{{File: "/p/t.yaml", Position: 1, Kind: "Table", Name: "t", Raw: rawDoc("Table", "t", tt.spec)}}
-			findings := CategoryIntervalPositionFindings(docs, rows)
+			findings := CategoryIntervalPositionFindings(docs, rows, nil)
 			if tt.want == "" {
 				if len(findings) != 0 {
 					t.Fatalf("findings = %+v, want none", findings)
@@ -131,5 +135,50 @@ func TestCategoryIntervalPositionFindings(t *testing.T) {
 				t.Fatalf("finding = %+v", f)
 			}
 		})
+	}
+}
+
+// A child that overrides only the dataset keeps the position of the
+// referenced Table, and a dataset default fills what the manifest leaves out.
+func TestCategoryIntervalPositionFindings_Inherited(t *testing.T) {
+	data := map[string]json.RawMessage{
+		"sales": json.RawMessage(`[{"setname":"Jan"},{"setname":"Feb"},{"setname":"YTD"}]`),
+		"more":  json.RawMessage(`[{"setname":"Q1"}]`),
+	}
+	rows := func(binding string) json.RawMessage { return data[binding] }
+	defaults := func(binding string) map[string]any {
+		if binding == "more" {
+			return map[string]any{"interval": "setname", "categoryIntervalPosition": float64(9)}
+		}
+		return nil
+	}
+	page := json.RawMessage(`{
+		"apiVersion": "bino.bi/v1",
+		"kind": "LayoutPage",
+		"metadata": {"name": "page"},
+		"spec": {
+			"children": [
+				{"kind": "Table", "ref": "base", "spec": {"dataset": "more"}},
+				{"kind": "Table", "spec": {"dataset": "more"}},
+				{"kind": "Table", "spec": {"dataset": "more", "categoryIntervalPosition": 1}}
+			]
+		}
+	}`)
+	docs := []Document{
+		{File: "/p/page.yaml", Kind: "LayoutPage", Name: "page", Raw: page},
+		{File: "/p/base.yaml", Kind: "Table", Name: "base", Raw: rawDoc("Table", "base", map[string]any{"dataset": "sales", "interval": "setname", "categoryIntervalPosition": 3})},
+	}
+	findings := CategoryIntervalPositionFindings(docs, rows, defaults)
+	want := []struct{ path, message string }{
+		{"spec.children.0", "is 3 but there are only 1 interval group(s)"},
+		{"spec.children.1", "is 9 but there are only 1 interval group(s)"},
+	}
+	if len(findings) != len(want) {
+		t.Fatalf("findings = %+v, want %v", findings, want)
+	}
+	for i, f := range findings {
+		if f.Path != want[i].path || !strings.Contains(f.Message, want[i].message) {
+			t.Errorf("finding %d = %+v, want %v", i, f, want[i])
+		}
 	}
 }

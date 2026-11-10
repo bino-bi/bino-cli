@@ -18,20 +18,21 @@ var tableCategoryIntervalPositionUnused = Rule{
 		"which exist only with 'interval' set and without 'columnthereof'; other tables ignore the value.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		forEachCategoryIntervalPosition(docs, func(doc Document, t positionedTable) {
+		forEachCategoryIntervalPosition(docs, nil, func(doc Document, t positionedTable) {
 			if spec.TableIntervalActive(t.interval, t.columnthereof) {
 				return
 			}
-			reason := "the Table has no 'interval'"
+			// Only the data knows a dataset default, so the message leaves it open.
+			reason := "the Table sets no 'interval', so the category column stays first unless a dataset default sets one"
 			fix := "set 'interval'"
 			if t.columnthereof {
-				reason = "'columnthereof' turns the interval off"
+				reason = "'columnthereof' turns the interval off, so the category column stays first"
 				fix = "remove 'columnthereof'"
 			}
 			findings = append(findings, Finding{
 				RuleID: "table-category-interval-position-unused",
 				Message: "'spec.categoryIntervalPosition' is set but " + reason +
-					", so the category column stays first; " + fix + " or remove 'categoryIntervalPosition'",
+					"; " + fix + " or remove 'categoryIntervalPosition'",
 				File:   doc.File,
 				DocIdx: doc.Position,
 				Path:   t.path,
@@ -43,11 +44,12 @@ var tableCategoryIntervalPositionUnused = Rule{
 
 // CategoryIntervalPositionFindings checks the categoryIntervalPosition of the
 // Tables with interval setname against the data. rows returns the rows of a
-// dataset binding, nil when they are not known. Date intervals are left to the
-// engine: only it knows their buckets.
-func CategoryIntervalPositionFindings(docs []Document, rows func(binding string) json.RawMessage) []Finding {
+// dataset binding, nil when they are not known. defaults returns the Table
+// spec defaults that a dataset carries. Date intervals are left to the engine:
+// only it knows their buckets.
+func CategoryIntervalPositionFindings(docs []Document, rows func(binding string) json.RawMessage, defaults func(binding string) map[string]any) []Finding {
 	var findings []Finding
-	forEachCategoryIntervalPosition(docs, func(doc Document, t positionedTable) {
+	forEachCategoryIntervalPosition(docs, defaults, func(doc Document, t positionedTable) {
 		if t.columnthereof || !strings.EqualFold(strings.TrimSpace(t.interval), spec.TableIntervalSetname) {
 			return
 		}
@@ -79,20 +81,22 @@ func CategoryIntervalPositionFindings(docs []Document, rows func(binding string)
 	return findings
 }
 
-// positionedTable is a Table whose own spec sets categoryIntervalPosition
-// above 0, with the fields that decide what the value does.
+// positionedTable is a Table with a categoryIntervalPosition above 0, and the
+// fields that decide what the value does.
 type positionedTable struct {
-	path          string // path of spec.categoryIntervalPosition
+	path          string // path of spec.categoryIntervalPosition, or of the Table that inherits it
 	position      int
 	interval      string
 	columnthereof bool
 	datasets      spec.DatasetList
 }
 
-// forEachCategoryIntervalPosition visits every Table, at any depth, whose own
-// spec sets categoryIntervalPosition above 0. The other fields fall back to
-// the referenced Table for a child with a 'ref', as in effectiveTableType.
-func forEachCategoryIntervalPosition(docs []Document, visit func(Document, positionedTable)) {
+// forEachCategoryIntervalPosition visits every Table, at any depth, with a
+// categoryIntervalPosition above 0. Each field comes from the first place
+// that sets it, as at render time: the own spec, the referenced Table of a
+// child with a 'ref', then the defaults of the primary dataset. defaults may
+// be nil when the data is not known.
+func forEachCategoryIntervalPosition(docs []Document, defaults func(binding string) map[string]any, visit func(Document, positionedTable)) {
 	bases := tableSpecsByName(docs)
 	for _, doc := range docs {
 		var root any
@@ -101,20 +105,30 @@ func forEachCategoryIntervalPosition(docs []Document, visit func(Document, posit
 		}
 		walkTables(root, "", func(table map[string]any, path string) {
 			own, _ := table["spec"].(map[string]any)
-			position, _ := own["categoryIntervalPosition"].(float64)
-			if position <= 0 {
-				return
-			}
 			base := bases[stringField(table, "ref")]
+			var fallback map[string]any
 			field := func(key string) any {
 				if v, ok := own[key]; ok {
 					return v
 				}
-				return base[key]
+				if v, ok := base[key]; ok {
+					return v
+				}
+				return fallback[key]
 			}
-			t := positionedTable{
-				path:     joinLintPath(path, "spec.categoryIntervalPosition"),
-				position: int(position),
+			var t positionedTable
+			decodeField(field("dataset"), &t.datasets)
+			if entries := t.datasets.Entries(); defaults != nil && len(entries) > 0 && entries[0].IsRef() {
+				fallback = defaults(strings.TrimSpace(entries[0].Ref))
+			}
+			position, _ := field("categoryIntervalPosition").(float64)
+			if position <= 0 {
+				return
+			}
+			t.position = int(position)
+			t.path = path
+			if _, ok := own["categoryIntervalPosition"]; ok {
+				t.path = joinLintPath(path, "spec.categoryIntervalPosition")
 			}
 			if interval, ok := field("interval").(string); ok {
 				t.interval = interval
@@ -123,7 +137,6 @@ func forEachCategoryIntervalPosition(docs []Document, visit func(Document, posit
 			if decodeField(field("columnthereof"), &columnthereof) {
 				t.columnthereof = len(columnthereof) > 0
 			}
-			decodeField(field("dataset"), &t.datasets)
 			visit(doc, t)
 		})
 	}

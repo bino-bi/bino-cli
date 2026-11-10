@@ -366,7 +366,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
-	if err := checkCategoryIntervalPositionEngine(docs, engineVersion); err != nil {
+	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
 
@@ -529,7 +529,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
-	if err := checkCategoryIntervalPositionEngine(docs, engineVersion); err != nil {
+	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
 

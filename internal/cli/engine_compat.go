@@ -7,6 +7,7 @@ import (
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/schema"
 )
@@ -93,6 +94,13 @@ func tableOrderMeasureEngineFinding(projectRoot string, cfg *pathutil.ProjectCon
 // categoryIntervalPosition on an engine older than the release with it.
 func categoryIntervalPositionEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
 	used := config.UsesCategoryIntervalPosition(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
+// categoryIntervalPositionDefaultEngineFinding is the same gate for a value
+// that only a dataset default sets, which shows after the queries ran.
+func categoryIntervalPositionDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	used := !config.UsesCategoryIntervalPosition(documents) && dataset.DefaultsSetCategoryIntervalPosition(results)
 	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
 }
 

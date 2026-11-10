@@ -1871,5 +1871,12 @@ func renderStandaloneComponentDoc(doc config.Document, rc *renderCtx) (string, e
 	if err != nil {
 		return "", fmt.Errorf("apply dataset defaults to %s %q: %w", doc.Kind, doc.Name, err)
 	}
+	if doc.Kind == "Table" {
+		var s tableSpec
+		// ComponentFromSpec reports a spec that does not parse.
+		if json.Unmarshal(effectiveSpec, &s) == nil {
+			rc.checkCategoryIntervalPosition(doc.Name, s)
+		}
+	}
 	return ComponentFromSpec(doc.Kind, effectiveSpec, rc.assetURLs)
 }

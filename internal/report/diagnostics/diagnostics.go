@@ -263,12 +263,31 @@ func AnnotationPointFindings(ctx context.Context, docs []config.Document, result
 // Tables with interval setname against the executed datasets.
 func CategoryIntervalPositionFindings(docs []config.Document, results []dataset.Result) []lint.Finding {
 	raw := make(map[string]json.RawMessage, len(results))
+	defaults := make(map[string]dataset.Defaults, len(results))
 	for _, r := range results {
 		raw[r.Name] = r.Data
+		defaults[r.Name] = r.Defaults
 	}
 	return lint.CategoryIntervalPositionFindings(lint.DocumentsFromConfig(docs), func(binding string) json.RawMessage {
 		return raw[binding]
+	}, func(binding string) map[string]any {
+		return tableDefaults(defaults[binding])
 	})
+}
+
+// tableDefaults decodes the spec defaults a dataset carries for a Table: the
+// `table` defaults over the `any` defaults.
+func tableDefaults(defaults dataset.Defaults) map[string]any {
+	out := map[string]any{}
+	for _, token := range []string{dataset.AnyToken, "table"} {
+		for field, raw := range defaults[token] {
+			var v any
+			if json.Unmarshal(raw, &v) == nil {
+				out[field] = v
+			}
+		}
+	}
+	return out
 }
 
 // RunQueryValidation executes dataset queries with data validation enabled and
@@ -292,7 +311,13 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		})
 	} else {
 		dataFindings := append(AnnotationPointFindings(ctx, docs, results), CategoryIntervalPositionFindings(docs, results)...)
-		for _, f := range lint.NewProjectRunner(dir).Apply(dataFindings) {
+		runner := lint.NewProjectRunner(dir)
+		// Collect reports the gate for a value in a manifest; this one is for a dataset default.
+		defaultUsed := !config.UsesCategoryIntervalPosition(docs) && dataset.DefaultsSetCategoryIntervalPosition(results)
+		if d, ok := engineGateDiagnostic(dir, defaultUsed, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version"); ok && !runner.Skip(d.Code) {
+			diagnostics = append(diagnostics, d)
+		}
+		for _, f := range runner.Apply(dataFindings) {
 			diagnostics = append(diagnostics, Diagnostic{
 				File:     f.File,
 				Position: f.DocIdx,

@@ -207,6 +207,9 @@ with --fail-on-warnings.`),
 					dataValidationWarnings = warnings
 					findings = append(findings, runner.Apply(diagnostics.AnnotationPointFindings(ctx, documents, results))...)
 					findings = append(findings, runner.Apply(diagnostics.CategoryIntervalPositionFindings(documents, results))...)
+					if gate, ok := categoryIntervalPositionDefaultEngineFinding(projectRoot, projectCfg, documents, results); ok {
+						findings = append([]lint.Finding{gate}, findings...)
+					}
 				}
 			}
 

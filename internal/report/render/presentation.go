@@ -332,7 +332,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
-	if err := checkCategoryIntervalPositionEngine(docs, engineVersion); err != nil {
+	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
 
@@ -480,7 +480,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	if err := checkTableOrderMeasureEngine(docs, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
-	if err := checkCategoryIntervalPositionEngine(docs, engineVersion); err != nil {
+	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
 

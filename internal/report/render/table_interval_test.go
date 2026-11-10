@@ -68,6 +68,45 @@ func TestTableCategoryIntervalPosition_EngineGate(t *testing.T) {
 	}
 }
 
+// A position that only a dataset default sets needs the same engine.
+func TestTableCategoryIntervalPosition_EngineGateDatasetDefault(t *testing.T) {
+	docs := []config.Document{pageDoc(`{"children": [{"kind": "Table", "metadata": {"name": "t"}, "spec": {"dataset": "sales", "interval": "setname"}}]}`)}
+	results := []dataset.Result{{
+		Name:     "sales",
+		Data:     json.RawMessage(`[{"setname":"Jan","ac1":1},{"setname":"Feb","ac1":2}]`),
+		Defaults: dataset.Defaults{"table": {"categoryIntervalPosition": json.RawMessage(`1`)}},
+	}}
+	render := func(engineVersion string) (Result, error) {
+		result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, results, "en", "", "", ModeBuild, nil, nil, engineVersion, nil, nil, "", "", "")
+		return result, err
+	}
+	if _, err := render("v1.0.0-next.38"); err == nil || !strings.Contains(err.Error(), "table-category-interval-position-engine-version") {
+		t.Fatalf("err = %v", err)
+	}
+	result, err := render("v1.0.0-next.39")
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+	if !strings.Contains(string(result.HTML), `category-interval-position='1'`) {
+		t.Fatalf("expected the default position in HTML, got:\n%s", result.HTML)
+	}
+}
+
+// A Table rendered as the root component gets the same check as a child.
+func TestTableCategoryIntervalPosition_TooLargeWarningRootComponent(t *testing.T) {
+	table := config.Document{Kind: "Table", Name: "t", Raw: json.RawMessage(`{"apiVersion":"bino.bi/v1alpha1","kind":"Table","metadata":{"name":"t"},` +
+		`"spec":{"dataset":"sales","interval":"setname","categoryIntervalPosition":8}}`)}
+	results := []dataset.Result{{Name: "sales", Data: json.RawMessage(`[{"setname":"Jan","ac1":1},{"setname":"Feb","ac1":2}]`)}}
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), []config.Document{table}, results, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.39", nil, nil, "t", "", "")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "table-category-interval-position-too-large") ||
+		!strings.Contains(result.Warnings[0], "only 2 interval group(s)") {
+		t.Fatalf("warnings = %v", result.Warnings)
+	}
+}
+
 func TestTableCategoryIntervalPosition_TooLargeWarning(t *testing.T) {
 	rows := json.RawMessage(`[{"setname":"Jan","ac1":1},{"setname":"Feb","ac1":2},{"setname":"YTD","ac1":3}]`)
 	render := func(spec string) []string {

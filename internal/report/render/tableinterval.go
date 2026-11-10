@@ -7,13 +7,15 @@ import (
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	reportspec "bino.bi/bino/internal/report/spec"
 )
 
 // checkCategoryIntervalPositionEngine fails a render that uses
-// categoryIntervalPosition on an engine that would ignore it.
-func checkCategoryIntervalPositionEngine(docs []config.Document, engineVersion string) error {
-	if !config.UsesCategoryIntervalPosition(docs) {
+// categoryIntervalPosition, in a manifest or as a dataset default, on an
+// engine that would ignore it.
+func checkCategoryIntervalPositionEngine(docs []config.Document, results []dataset.Result, engineVersion string) error {
+	if !config.UsesCategoryIntervalPosition(docs) && !dataset.DefaultsSetCategoryIntervalPosition(results) {
 		return nil
 	}
 	if err := engine.CheckCategoryIntervalPositionSupport(engineVersion); err != nil {

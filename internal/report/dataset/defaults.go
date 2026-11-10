@@ -737,3 +737,18 @@ func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v) //nolint:errcheck // strings, numbers, bools, maps and slices of them always marshal
 	return b
 }
+
+// DefaultsSetCategoryIntervalPosition reports whether a dataset default sets
+// a Table categoryIntervalPosition above 0. The manifests do not show such a
+// value, so the engine gate asks here too.
+func DefaultsSetCategoryIntervalPosition(results []Result) bool {
+	for _, r := range results {
+		for _, token := range []string{AnyToken, "table"} {
+			var position float64
+			if json.Unmarshal(r.Defaults[token]["categoryIntervalPosition"], &position) == nil && position > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
