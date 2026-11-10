@@ -12,9 +12,9 @@ import (
 // varianceWaterfall. The defaults are the output of every engine. Each field
 // comes from the first place that sets it, as at render time: the own spec,
 // the referenced Table of a child with a 'ref', then the defaults of the
-// primary dataset. defaults returns the Table spec defaults that a dataset
-// carries; it may be nil when the data is not known.
-func TableCalculationSchemeProps(docs []Document, defaults func(binding string) map[string]any) []string {
+// primary dataset. defaults holds the Table spec defaults by dataset name; it
+// may be nil when the data is not known.
+func TableCalculationSchemeProps(docs []Document, defaults map[string]map[string]any) []string {
 	bases := map[string]map[string]any{}
 	roots := make([]any, 0, len(docs))
 	for _, doc := range docs {
@@ -34,11 +34,25 @@ func TableCalculationSchemeProps(docs []Document, defaults func(binding string) 
 	return props
 }
 
-func tableCalculationSchemeProps(v any, bases map[string]map[string]any, defaults func(string) map[string]any, props []string) []string {
+func tableCalculationSchemeProps(v any, bases, defaults map[string]map[string]any, props []string) []string {
 	switch node := v.(type) {
 	case map[string]any:
-		if kind, _ := node["kind"].(string); kind == "Table" {
-			props = spec.MergeTableCalculationSchemeProps(props, spec.TableCalculationSchemeProps(effectiveTableSpec(node, bases, defaults)))
+		switch kind, _ := node["kind"].(string); kind {
+		case "Table":
+			props = spec.MergeTableCalculationSchemeProps(props, tableProps(node, bases, defaults, false))
+		case "SmallMultiple":
+			// The panels get their dataset and the item spec at render time.
+			multiple, _ := node["spec"].(map[string]any)
+			if base, _ := multiple["base"].(map[string]any); base["kind"] == "Table" {
+				props = spec.MergeTableCalculationSchemeProps(props, tableProps(base, bases, defaults, true))
+				panels, _ := multiple["panels"].(map[string]any)
+				items, _ := panels["items"].([]any)
+				for _, item := range items {
+					fields, _ := item.(map[string]any)
+					itemSpec, _ := fields["spec"].(map[string]any)
+					props = spec.MergeTableCalculationSchemeProps(props, spec.TableCalculationSchemeProps(itemSpec))
+				}
+			}
 		}
 		for _, child := range node {
 			props = tableCalculationSchemeProps(child, bases, defaults, props)
@@ -51,10 +65,12 @@ func tableCalculationSchemeProps(v any, bases map[string]map[string]any, default
 	return props
 }
 
-// effectiveTableSpec returns the spec of a Table node as the render resolves
-// it: the dataset defaults under the referenced Table under the own spec. A
-// null counts as not set.
-func effectiveTableSpec(table map[string]any, bases map[string]map[string]any, defaults func(string) map[string]any) map[string]any {
+// tableProps returns the calculation scheme fields that a Table node turns on,
+// resolved as the render does: the own spec over the referenced Table over the
+// defaults of the primary dataset. A null counts as not set. With anyDataset,
+// or with a param placeholder in the dataset name, the primary dataset is only
+// known at render time: then the defaults of every dataset count.
+func tableProps(table map[string]any, bases, defaults map[string]map[string]any, anyDataset bool) []string {
 	merged := map[string]any{}
 	ref, _ := table["ref"].(string)
 	own, _ := table["spec"].(map[string]any)
@@ -63,20 +79,32 @@ func effectiveTableSpec(table map[string]any, bases map[string]map[string]any, d
 			merged[k] = v
 		}
 	}
-	var fallback map[string]any
-	if defaults != nil {
-		var datasets spec.DatasetList
-		if raw, err := json.Marshal(merged["dataset"]); err == nil && json.Unmarshal(raw, &datasets) == nil {
-			// A `$` DataSource binding gets no defaults.
-			if entries := datasets.Entries(); len(entries) > 0 && entries[0].IsRef() && !strings.HasPrefix(entries[0].Ref, "$") {
-				fallback = defaults(entries[0].Ref)
+	var fallbacks []map[string]any
+	var datasets spec.DatasetList
+	if raw, err := json.Marshal(merged["dataset"]); err == nil && json.Unmarshal(raw, &datasets) == nil {
+		if entries := datasets.Entries(); len(entries) > 0 && entries[0].IsRef() {
+			switch name := entries[0].Ref; {
+			case strings.Contains(name, "${"):
+				anyDataset = true
+			case !strings.HasPrefix(name, "$"): // a `$` DataSource binding gets no defaults
+				fallbacks = append(fallbacks, defaults[name])
 			}
 		}
 	}
-	for k, v := range fallback {
-		if merged[k] == nil {
-			merged[k] = v
+	if anyDataset {
+		for _, fallback := range defaults {
+			fallbacks = append(fallbacks, fallback)
 		}
 	}
-	return merged
+	props := spec.TableCalculationSchemeProps(merged)
+	for _, fallback := range fallbacks {
+		unset := map[string]any{}
+		for k, v := range fallback {
+			if merged[k] == nil {
+				unset[k] = v
+			}
+		}
+		props = spec.MergeTableCalculationSchemeProps(props, spec.TableCalculationSchemeProps(unset))
+	}
+	return props
 }

@@ -963,7 +963,7 @@ The check uses the values the table is rendered with: a child with a `ref` takes
 
 A `Table` sets `runningSum: true`, `thereofPosition: above` or `varianceWaterfall: true` and the engine is older than v1.0.0-next.40. The message names the fields in use. An older engine ignores them and renders the plain table, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves the three fields at their defaults keeps working on the older engine.
 
-A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too, for a Table that binds the dataset first and does not set the field itself. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
+A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too, for a Table that binds the dataset first and does not set the field itself. When the dataset of a Table is only known at render time, as with a `${PARAM}` placeholder in its name or a Table that is the base of a `SmallMultiple`, the defaults of all datasets count, so the rule can also fire for a default that the Table does not use. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.40 or newer, or remove the fields.
 

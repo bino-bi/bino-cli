@@ -759,20 +759,18 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 // a Table turns on, in a manifest or through a default of its primary dataset.
 // The manifests do not show such a default, so the engine gate asks here.
 func TableCalculationSchemeProps(docs []config.Document, results []Result) []string {
-	byName := make(map[string]Defaults, len(results))
+	defaults := make(map[string]map[string]any, len(results))
 	for _, r := range results {
-		byName[r.Name] = r.Defaults
-	}
-	return config.TableCalculationSchemeProps(docs, func(binding string) map[string]any {
 		out := map[string]any{}
 		for _, token := range []string{AnyToken, "table"} {
-			for field, raw := range byName[binding][token] {
+			for field, raw := range r.Defaults[token] {
 				var v any
 				if json.Unmarshal(raw, &v) == nil {
 					out[field] = v
 				}
 			}
 		}
-		return out
-	})
+		defaults[r.Name] = out
+	}
+	return config.TableCalculationSchemeProps(docs, defaults)
 }

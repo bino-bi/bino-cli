@@ -110,3 +110,41 @@ func TestTableCalculationScheme_EngineGateFollowsTheTable(t *testing.T) {
 		}
 	}
 }
+
+// A dataset that the Table only gets at render time still reaches the gate:
+// the dataset of a SmallMultiple or of a panel item, and a param placeholder.
+func TestTableCalculationScheme_EngineGateUnresolvedDataset(t *testing.T) {
+	results := []dataset.Result{{Name: "test", Data: json.RawMessage(`[]`), Defaults: dataset.Defaults{"table": {"runningSum": json.RawMessage(`true`)}}}}
+	page := func(child string) config.Document {
+		return pageDoc(`{"children": [` + child + `]}`)
+	}
+	multiple := func(spec string) []config.Document {
+		return []config.Document{page(`{"kind": "SmallMultiple", "metadata": {"name": "sm"}, "spec": {"scale": 1, "unitScaling": 1, ` + spec + `}}`)}
+	}
+	base := func(fields string) config.Document {
+		return config.Document{Kind: "Table", Name: "base", Raw: json.RawMessage(
+			`{"kind":"Table","metadata":{"name":"base"},"spec":{"dataset":"${DS}"` + fields + `}}`)}
+	}
+	child := page(`{"kind": "Table", "ref": "base", "params": {"DS": "test"}}`)
+	cases := []struct {
+		name string
+		docs []config.Document
+		hit  bool
+	}{
+		{"SmallMultiple dataset", multiple(`"dataset": "test", "base": {"kind": "Table", "spec": {"type": "optnototal"}}, "panels": {"by": "rowGroup"}`), true},
+		{"panel item dataset", multiple(`"base": {"kind": "Table", "spec": {"type": "optnototal"}}, "panels": {"items": [{"label": "a", "dataset": "test"}]}`), true},
+		{"SmallMultiple base turns it off", multiple(`"dataset": "test", "base": {"kind": "Table", "spec": {"runningSum": false}}, "panels": {"by": "rowGroup"}`), false},
+		{"SmallMultiple chart base", multiple(`"dataset": "test", "base": {"kind": "ChartTime", "spec": {}}, "panels": {"by": "rowGroup"}`), false},
+		{"param placeholder", []config.Document{child, base("")}, true},
+		{"param placeholder, base turns it off", []config.Document{child, base(`,"runningSum":false`)}, false},
+	}
+	for _, c := range cases {
+		err := checkTableCalculationSchemeEngine(c.docs, results, "v1.0.0-next.39")
+		if !c.hit && err != nil {
+			t.Errorf("%s: %v", c.name, err)
+		}
+		if c.hit && (err == nil || !strings.Contains(err.Error(), "a Table with runningSum needs")) {
+			t.Errorf("%s: err = %v", c.name, err)
+		}
+	}
+}
