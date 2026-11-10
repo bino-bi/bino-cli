@@ -121,8 +121,8 @@ func forEachCategoryIntervalPosition(docs []Document, defaults func(binding stri
 			if entries := t.datasets.Entries(); defaults != nil && len(entries) > 0 && entries[0].IsRef() {
 				fallback = defaults(strings.TrimSpace(entries[0].Ref))
 			}
-			position, _ := field("categoryIntervalPosition").(float64)
-			if position <= 0 {
+			position, ok := field("categoryIntervalPosition").(float64)
+			if !ok || position <= 0 {
 				return
 			}
 			t.position = int(position)
