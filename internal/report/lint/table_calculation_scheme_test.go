@@ -128,3 +128,42 @@ func TestTableVarianceWaterfallUnused_InheritedField(t *testing.T) {
 		t.Fatalf("findings = %+v", findings)
 	}
 }
+
+// A referenced Table may leave the list to the children that use it. It is
+// reported only when no child adds the list.
+func TestTableCalculationSchemeUnused_ListFromRefChild(t *testing.T) {
+	page := func(childSpec string) Document {
+		return Document{File: "/p/p.yaml", Position: 1, Kind: "LayoutPage", Name: "p", Raw: json.RawMessage(`{
+			"apiVersion": "bino.bi/v1",
+			"kind": "LayoutPage",
+			"metadata": {"name": "p"},
+			"spec": {"children": [{"kind": "LayoutCard", "spec": {"children": [{"kind": "Table", "ref": "base", "spec": ` + childSpec + `}]}}]}
+		}`)}
+	}
+	base := Document{File: "/p/b.yaml", Position: 1, Kind: "Table", Name: "base", Raw: rawDoc("Table", "base",
+		map[string]any{"dataset": "d", "thereofPosition": "above", "varianceWaterfall": true})}
+
+	withLists := []Document{base, page(`{"thereof": [{"rowGroup": "g", "category": "c", "subCategory": "s"}], "barColumns": ["dac1_pp1_pos"]}`)}
+	if findings := tableThereofPositionUnused.Check(context.Background(), withLists); len(findings) != 0 {
+		t.Fatalf("thereof findings = %+v, want none", findings)
+	}
+	if findings := tableVarianceWaterfallUnused.Check(context.Background(), withLists); len(findings) != 0 {
+		t.Fatalf("waterfall findings = %+v, want none", findings)
+	}
+
+	// The child adds no list: the referenced Table and the child are reported.
+	withoutLists := []Document{base, page(`{"title": "x"}`)}
+	for _, rule := range []Rule{tableThereofPositionUnused, tableVarianceWaterfallUnused} {
+		findings := rule.Check(context.Background(), withoutLists)
+		if len(findings) != 2 || findings[0].File != "/p/b.yaml" || findings[1].Path != "spec.children.0.spec.children.0" {
+			t.Fatalf("%s findings = %+v", rule.ID, findings)
+		}
+	}
+
+	// A child with a list that does not help is reported itself, the referenced Table is not.
+	badList := []Document{base, page(`{"barColumns": ["ac1"]}`)}
+	findings := tableVarianceWaterfallUnused.Check(context.Background(), badList)
+	if len(findings) != 1 || findings[0].File != "/p/p.yaml" {
+		t.Fatalf("findings = %+v", findings)
+	}
+}

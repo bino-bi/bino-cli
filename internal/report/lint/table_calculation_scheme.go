@@ -16,7 +16,7 @@ var tableThereofPositionUnused = Rule{
 		"so it does nothing on a table without a 'thereof' list.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		forEachCalculationSchemeTable(docs, "thereofPosition", func(doc Document, path string, field func(string) any) {
+		forEachCalculationSchemeTable(docs, "thereofPosition", "thereof", func(doc Document, path string, field func(string) any) {
 			var thereof spec.ThereofList
 			if decodeField(field("thereof"), &thereof) && len(thereof) > 0 {
 				return
@@ -44,7 +44,7 @@ var tableVarianceWaterfallUnused = Rule{
 		"so it does nothing when 'barColumns' lists no absolute variance.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
-		forEachCalculationSchemeTable(docs, "varianceWaterfall", func(doc Document, path string, field func(string) any) {
+		forEachCalculationSchemeTable(docs, "varianceWaterfall", "barColumns", func(doc Document, path string, field func(string) any) {
 			var barColumns spec.StringOrSlice
 			if decodeField(field("barColumns"), &barColumns) && spec.HasAbsoluteVarianceColumn(barColumns) {
 				return
@@ -66,15 +66,29 @@ var tableVarianceWaterfallUnused = Rule{
 // on the given calculation scheme field. field reads a spec field from the
 // first place that sets it, as at render time: the own spec, then the
 // referenced Table of a child with a 'ref'. path points at the field, or at
-// the Table that inherits it.
-func forEachCalculationSchemeTable(docs []Document, prop string, visit func(doc Document, path string, field func(string) any)) {
+// the Table that inherits it. A referenced Table is left out when a child
+// that uses it sets list, the field that prop works on: the child is visited
+// with the merged spec.
+func forEachCalculationSchemeTable(docs []Document, prop, list string, visit func(doc Document, path string, field func(string) any)) {
 	bases := tableSpecsByName(docs)
-	for _, doc := range docs {
-		var root any
-		if err := json.Unmarshal(doc.Raw, &root); err != nil {
+	roots := make([]any, len(docs))
+	listFromChild := map[string]bool{}
+	for i, doc := range docs {
+		if err := json.Unmarshal(doc.Raw, &roots[i]); err != nil {
 			continue // Schema validation reports malformed documents.
 		}
-		walkTables(root, "", func(table map[string]any, path string) {
+		walkNodes(roots[i], "", func(node map[string]any, _ string) {
+			own, _ := node["spec"].(map[string]any)
+			if ref := stringField(node, "ref"); ref != "" && stringField(node, "kind") == "Table" && own[list] != nil {
+				listFromChild[ref] = true
+			}
+		})
+	}
+	for i, doc := range docs {
+		walkTables(roots[i], "", func(table map[string]any, path string) {
+			if path == "" && doc.Kind == "Table" && listFromChild[doc.Name] {
+				return
+			}
 			own, _ := table["spec"].(map[string]any)
 			base := bases[stringField(table, "ref")]
 			field := func(key string) any {
