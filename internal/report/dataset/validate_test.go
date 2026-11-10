@@ -440,3 +440,39 @@ func TestFormatValidationErrors_Valid(t *testing.T) {
 		t.Errorf("expected empty output for valid result, got %q", output)
 	}
 }
+
+func TestValidateRows_SetnameIndex(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     string
+		wantCode string
+	}{
+		{"setname without index", `[{"setname": "Jan", "ac1": 1}]`, ""},
+		{"setname with index", `[{"setname": "Jan", "setnameIndex": 0, "ac1": 1}]`, ""},
+		{"numeric string index", `[{"setname": "Jan", "setnameIndex": "2"}]`, ""},
+		{"null index", `[{"setname": "Jan", "setnameIndex": null}]`, ""},
+		{"index is no number", `[{"setname": "Jan", "setnameIndex": "first"}]`, "invalid-type"},
+		{"index without setname", `[{"setnameIndex": 1, "ac1": 1}]`, "missing-dependent-required"},
+		{"index with null setname", `[{"setname": null, "setnameIndex": 1}]`, "missing-dependent-required"},
+		{"index with empty setname", `[{"setname": "", "setnameIndex": 1}]`, "missing-dependent-required"},
+		{"setName spelling", `[{"setName": "Jan", "setnameIndex": 1}]`, ""},
+		{"setNameIndex spelling without setname", `[{"setNameIndex": 1, "ac1": 1}]`, "missing-dependent-required"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ValidateRows("test", json.RawMessage(tt.data), 10)
+			if tt.wantCode == "" {
+				if !result.Valid {
+					t.Fatalf("expected valid data, got %v", result.Errors)
+				}
+				return
+			}
+			if len(result.Errors) != 1 || result.Errors[0].Code != tt.wantCode {
+				t.Fatalf("errors = %v, want one %s", result.Errors, tt.wantCode)
+			}
+			if tt.wantCode == "missing-dependent-required" && result.Errors[0].Field != "setname" {
+				t.Errorf("field = %q, want setname", result.Errors[0].Field)
+			}
+		})
+	}
+}

@@ -85,7 +85,7 @@ func TestColumnRefsPerKind(t *testing.T) {
 			name: "table interval setname",
 			kind: "Table",
 			spec: `{"scenarios":"ac1","interval":"setname"}`,
-			want: append([]string{"sales|scenario|scenarios|ac1", "sales|group|interval|setname"}, tableImplicit...),
+			want: append([]string{"sales|scenario|scenarios|ac1", "sales|group|interval|setname", "sales|group|interval|setnameIndex"}, tableImplicit...),
 		},
 		{
 			name: "table interval date",

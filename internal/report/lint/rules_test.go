@@ -473,6 +473,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"text-content-required",
 		"dataset-required",
 		"table-sum-title-unused",
+		"table-category-interval-position-unused",
 		"chart-time-field-no-effect",
 		"inherited-prop-unresolved",
 		"page-layout-slots-used",

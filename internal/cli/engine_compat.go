@@ -7,6 +7,7 @@ import (
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/pathutil"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 	"bino.bi/bino/internal/report/lint"
 	"bino.bi/bino/internal/schema"
 )
@@ -87,6 +88,34 @@ func operationSentimentEngineFinding(projectRoot string, cfg *pathutil.ProjectCo
 func tableOrderMeasureEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
 	used := config.UsesTableOrderMeasure(documents)
 	return engineGateFinding(projectRoot, cfg, used, engine.CheckTableOrderMeasureSupport, "table-order-engine-version")
+}
+
+// categoryIntervalPositionEngineFinding reports a project that sets a Table
+// categoryIntervalPosition on an engine older than the release with it.
+func categoryIntervalPositionEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := config.UsesCategoryIntervalPosition(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
+// categoryIntervalPositionDefaultEngineFinding is the same gate for a value
+// that only a dataset default sets, which shows after the queries ran.
+func categoryIntervalPositionDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	used := !config.UsesCategoryIntervalPosition(documents) && dataset.DefaultsSetCategoryIntervalPosition(results)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
+// tableEngineFindings returns the engine gate findings of the Table features.
+func tableEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) []lint.Finding {
+	var findings []lint.Finding
+	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document) (lint.Finding, bool){
+		categoryIntervalPositionEngineFinding,
+		tableOrderMeasureEngineFinding,
+	} {
+		if finding, ok := gate(projectRoot, cfg, documents); ok {
+			findings = append(findings, finding)
+		}
+	}
+	return findings
 }
 
 // engineGateFinding runs a feature gate of the engine when the project uses

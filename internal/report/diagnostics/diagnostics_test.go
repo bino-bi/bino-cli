@@ -2,13 +2,16 @@ package diagnostics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 )
 
 // TestFromLoadError_TypedDocumentError: the typed *config.DocumentError path
@@ -519,5 +522,38 @@ spec:
 	}
 	if !found {
 		t.Fatalf("expected a data-validation diagnostic %q, got %+v", want, diags)
+	}
+}
+
+func TestCategoryIntervalPositionFindings(t *testing.T) {
+	table := func(position int) config.Document {
+		raw := fmt.Sprintf(`{"apiVersion":"bino.bi/v1","kind":"Table","metadata":{"name":"t"},`+
+			`"spec":{"dataset":"sales","interval":"setname","categoryIntervalPosition":%d}}`, position)
+		return config.Document{File: "/p/t.yaml", Position: 1, Kind: "Table", Name: "t", Raw: json.RawMessage(raw)}
+	}
+	results := []dataset.Result{{Name: "sales", Data: json.RawMessage(`[{"setname":"Jan"},{"setname":"Feb"},{"setname":"YTD"}]`)}}
+
+	findings := CategoryIntervalPositionFindings([]config.Document{table(8)}, results)
+	if len(findings) != 1 || findings[0].RuleID != "table-category-interval-position-too-large" ||
+		!strings.Contains(findings[0].Message, "only 3 interval group(s)") {
+		t.Fatalf("findings = %+v", findings)
+	}
+	if findings := CategoryIntervalPositionFindings([]config.Document{table(3)}, results); len(findings) != 0 {
+		t.Fatalf("position 3 of 3: findings = %+v, want none", findings)
+	}
+	if findings := CategoryIntervalPositionFindings([]config.Document{table(8)}, nil); len(findings) != 0 {
+		t.Fatalf("no results: findings = %+v, want none", findings)
+	}
+
+	// The interval and the position can come from a dataset default.
+	plain := config.Document{File: "/p/t.yaml", Position: 1, Kind: "Table", Name: "t",
+		Raw: json.RawMessage(`{"apiVersion":"bino.bi/v1","kind":"Table","metadata":{"name":"t"},"spec":{"dataset":"sales"}}`)}
+	results[0].Defaults = dataset.Defaults{
+		dataset.AnyToken: {"categoryIntervalPosition": json.RawMessage(`1`)},
+		"table":          {"interval": json.RawMessage(`"setname"`), "categoryIntervalPosition": json.RawMessage(`9`)},
+	}
+	findings = CategoryIntervalPositionFindings([]config.Document{plain}, results)
+	if len(findings) != 1 || !strings.Contains(findings[0].Message, "is 9 but there are only 3 interval group(s)") {
+		t.Fatalf("dataset default: findings = %+v", findings)
 	}
 }

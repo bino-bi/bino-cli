@@ -185,10 +185,7 @@ with --fail-on-warnings.`),
 			if opGateFatal {
 				findings = append([]lint.Finding{opGateFinding}, findings...)
 			}
-			orderGateFinding, orderGateFatal := tableOrderMeasureEngineFinding(projectRoot, projectCfg, documents)
-			if orderGateFatal {
-				findings = append([]lint.Finding{orderGateFinding}, findings...)
-			}
+			findings = append(tableEngineFindings(projectRoot, projectCfg, documents), findings...)
 
 			// Step 3: Execute queries and validate data (optional)
 			var dataValidationWarnings []dataset.Warning
@@ -209,6 +206,10 @@ with --fail-on-warnings.`),
 					out.StepDone(fmt.Sprintf("Executed %d dataset(s)", len(results)), time.Since(queryStart))
 					dataValidationWarnings = warnings
 					findings = append(findings, runner.Apply(diagnostics.AnnotationPointFindings(ctx, documents, results))...)
+					findings = append(findings, runner.Apply(diagnostics.CategoryIntervalPositionFindings(documents, results))...)
+					if gate, ok := categoryIntervalPositionDefaultEngineFinding(projectRoot, projectCfg, documents, results); ok {
+						findings = append([]lint.Finding{gate}, findings...)
+					}
 				}
 			}
 

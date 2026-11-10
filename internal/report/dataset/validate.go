@@ -214,7 +214,34 @@ func validateRow(rowIndex int, row map[string]any) []DataValidationError {
 		}
 	}
 
+	if setnameIndexWithoutSetname(row) {
+		errors = append(errors, DataValidationError{
+			RowIndex: rowIndex,
+			Field:    "setname",
+			Code:     "missing-dependent-required",
+			Message:  `Field "setnameIndex" requires a non-empty "setname"`,
+			Expected: `"setname" when "setnameIndex" is set`,
+			Actual:   row["setname"],
+		})
+	}
+
 	return errors
+}
+
+// setnameIndexWithoutSetname reports a row with a setnameIndex and a blank
+// setname. The rule is one way only: setname is valid without an index. The
+// engine also reads the spellings setName and setNameIndex, and puts an empty
+// setname into the blank group.
+func setnameIndexWithoutSetname(row map[string]any) bool {
+	if !hasField(row, "setnameIndex") && !hasField(row, "setNameIndex") {
+		return false
+	}
+	for _, key := range []string{"setname", "setName"} {
+		if hasField(row, key) && row[key] != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // isNumber checks if a value is a numeric type or a string that represents a number.

@@ -450,38 +450,39 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 
 // tableSpec defines the structure for Table components.
 type tableSpec struct {
-	Dataset                 reportspec.DatasetList       `json:"dataset"`
-	SumTitle                string                       `json:"sumTitle"`
-	Filter                  string                       `json:"filter"`
-	Order                   string                       `json:"order"`
-	OrderDirection          string                       `json:"orderDirection"`
-	MeasureScale            string                       `json:"measureScale"`
-	MeasureType             string                       `json:"measureType"`
-	MeasureUnit             string                       `json:"measureUnit"`
-	I18nNamespace           string                       `json:"i18nNamespace"`
-	CategoryWidth           string                       `json:"categoryWidth"`
-	DataFormat              string                       `json:"dataFormat"`
-	DataFormatDigitsDecimal *int                         `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent *int                         `json:"dataFormatDigitsPercent"`
-	Grouped                 *bool                        `json:"grouped"`
-	ShowGroupTitle          *bool                        `json:"showGroupTitle"`
-	ShowMeasureScale        *bool                        `json:"showMeasureScale"`
-	Limit                   *int                         `json:"limit"`
-	Type                    string                       `json:"type"`
-	Scenarios               reportspec.StringOrSlice     `json:"scenarios"`
-	Variances               reportspec.StringOrSlice     `json:"variances"`
-	BarColumns              reportspec.StringOrSlice     `json:"barColumns"`
-	BarColumnWidth          string                       `json:"barColumnWidth"`
-	UnitScaling             reportspec.StringOrFloat     `json:"unitScaling"`
-	PercentageScaling       reportspec.StringOrFloat     `json:"percentageScaling"`
-	Scale                   reportspec.StringOrFloat     `json:"scale,omitempty"`
-	Thereof                 reportspec.ThereofList       `json:"thereof"`
-	Partof                  reportspec.PartofList        `json:"partof"`
-	Columnthereof           reportspec.ColumnthereofList `json:"columnthereof"`
-	Interval                string                       `json:"interval"`
-	Attributes              reportspec.AttributesList    `json:"attributes"`
-	SelectedStyle           string                       `json:"selectedStyle"`
-	Ruleset                 string                       `json:"ruleset"`
+	Dataset                  reportspec.DatasetList       `json:"dataset"`
+	SumTitle                 string                       `json:"sumTitle"`
+	Filter                   string                       `json:"filter"`
+	Order                    string                       `json:"order"`
+	OrderDirection           string                       `json:"orderDirection"`
+	MeasureScale             string                       `json:"measureScale"`
+	MeasureType              string                       `json:"measureType"`
+	MeasureUnit              string                       `json:"measureUnit"`
+	I18nNamespace            string                       `json:"i18nNamespace"`
+	CategoryWidth            string                       `json:"categoryWidth"`
+	DataFormat               string                       `json:"dataFormat"`
+	DataFormatDigitsDecimal  *int                         `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent  *int                         `json:"dataFormatDigitsPercent"`
+	Grouped                  *bool                        `json:"grouped"`
+	ShowGroupTitle           *bool                        `json:"showGroupTitle"`
+	ShowMeasureScale         *bool                        `json:"showMeasureScale"`
+	Limit                    *int                         `json:"limit"`
+	Type                     string                       `json:"type"`
+	Scenarios                reportspec.StringOrSlice     `json:"scenarios"`
+	Variances                reportspec.StringOrSlice     `json:"variances"`
+	BarColumns               reportspec.StringOrSlice     `json:"barColumns"`
+	BarColumnWidth           string                       `json:"barColumnWidth"`
+	UnitScaling              reportspec.StringOrFloat     `json:"unitScaling"`
+	PercentageScaling        reportspec.StringOrFloat     `json:"percentageScaling"`
+	Scale                    reportspec.StringOrFloat     `json:"scale,omitempty"`
+	Thereof                  reportspec.ThereofList       `json:"thereof"`
+	Partof                   reportspec.PartofList        `json:"partof"`
+	Columnthereof            reportspec.ColumnthereofList `json:"columnthereof"`
+	Interval                 string                       `json:"interval"`
+	CategoryIntervalPosition *int                         `json:"categoryIntervalPosition"`
+	Attributes               reportspec.AttributesList    `json:"attributes"`
+	SelectedStyle            string                       `json:"selectedStyle"`
+	Ruleset                  string                       `json:"ruleset"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -514,6 +515,7 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "partof", s.Partof.String())
 	writeAttr(b, "columnthereof", s.Columnthereof.String())
 	writeAttr(b, "interval", s.Interval)
+	writeIntAttr(b, "category-interval-position", s.CategoryIntervalPosition)
 	writeAttr(b, "attributes", s.Attributes.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)

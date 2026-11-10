@@ -16,10 +16,10 @@ import (
 
 // outlineSizeCeiling bounds the JSON size of every built-in outline. It guards
 // the projection against a schema change that re-inflates it: describe_kind is
-// ~88 KB for LayoutPage, the outline ~9 KB. The largest outlines today are
-// Table and ChartBubble at ~14 KB, most of it the inline dataset spec under
-// dataset.* and full field descriptions.
-const outlineSizeCeiling = 16 * 1024
+// ~88 KB for LayoutPage, the outline ~9 KB. The largest outline today is
+// Table at ~17 KB, most of it the inline dataset spec under dataset.* and full
+// field descriptions.
+const outlineSizeCeiling = 18 * 1024
 
 // kindNames returns every kind list_kinds reports.
 func kindNames(t *testing.T, cs *mcpsdk.ClientSession) []string {

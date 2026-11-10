@@ -1089,6 +1089,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render table child: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(child.Metadata.Name, s)
 		component = renderTableComponent(s)
 	case "ChartStructure":
 		var s chartStructureSpec
@@ -1440,6 +1441,7 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal table spec: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(node.ID, s)
 		return renderTableComponent(s), nil
 	case "ChartStructure":
 		var s chartStructureSpec
@@ -1625,6 +1627,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal table spec: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(child.Metadata.Name, s)
 		return renderTableComponent(s), nil
 	case "ChartStructure":
 		var s chartStructureSpec
@@ -1867,6 +1870,13 @@ func renderStandaloneComponentDoc(doc config.Document, rc *renderCtx) (string, e
 	effectiveSpec, err = applyDatasetDefaults(effectiveSpec, doc.Kind, doc.Name, rc)
 	if err != nil {
 		return "", fmt.Errorf("apply dataset defaults to %s %q: %w", doc.Kind, doc.Name, err)
+	}
+	if doc.Kind == "Table" {
+		var s tableSpec
+		// ComponentFromSpec reports a spec that does not parse.
+		if json.Unmarshal(effectiveSpec, &s) == nil {
+			rc.checkCategoryIntervalPosition(doc.Name, s)
+		}
 	}
 	return ComponentFromSpec(doc.Kind, effectiveSpec, rc.assetURLs)
 }
