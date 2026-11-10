@@ -20,6 +20,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `text-content-required`           | Text Content Required                       | Warning  | Text components must have a non-empty `spec.value` field.                                                                   |
 | `dataset-required`                | Dataset Required                            | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
 | `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
+| `table-category-interval-position-unused`| Table Category Interval Position Unused     | Warning  | `spec.categoryIntervalPosition` only works on a Table with an active `interval`.                                            |
 | `chart-time-field-no-effect`      | ChartTime Field Without Effect              | Warning  | `level`, `order`, `orderDirection` and `limit` have no effect on a ChartTime.                                               |
 | `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
 | `chart-order-inherits-measure`    | Chart Order Inherits Measure                | Warning  | A ChartStructure `order` inherits a `titleOrder` with a variance or `@` key, which a chart cannot sort by.                  |
@@ -50,6 +51,8 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
 | `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
 | `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
+| `table-category-interval-position-engine-version` | Table Category Interval Position Engine Version | Error | A Table `categoryIntervalPosition` above 0 needs template engine v1.0.0-next.39 or newer. Stops `bino lint` and `bino build`. |
+| `table-category-interval-position-too-large` | Table Category Interval Position Too Large | Warning | A Table `categoryIntervalPosition` must not be larger than the number of `setname` groups in the data. Needs the data: `--execute-queries`, build and preview. |
 | `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
@@ -182,6 +185,22 @@ spec:
 ```
 
 The rule also covers tables defined inline in `LayoutPage`, `LayoutCard` and `Grid` children, and in `Tree` nodes. A child that inherits its type from a referenced Table via `ref` is checked against the _effective_ type, so overriding only `sumTitle` on a `type: sum` component does not warn.
+
+### table-category-interval-position-unused
+
+`spec.categoryIntervalPosition` is the number of interval groups left of the category column. A Table has interval groups only with `interval` set to `setname` or a date value, and without `columnthereof`. On any other Table the value is ignored and the category column stays first.
+
+```yaml
+# Warning: no interval, the position does nothing
+kind: Table
+spec:
+  dataset: sales
+  categoryIntervalPosition: 2
+```
+
+**Fix:** set `interval`, or remove `categoryIntervalPosition`. With `columnthereof` the interval is off, so remove one of the two.
+
+The rule looks at the `interval` and `columnthereof` written in the manifest, and at the referenced Table for a child with a `ref`. An `interval` that comes from a [dataset default](/reference/dataset/#dataset-defaults) is not seen.
 
 ### chart-time-field-no-effect
 
@@ -871,6 +890,31 @@ A variance token of the project ends in `_op` or `_opinv` (in `variances`, `titl
 The `order` of a `Table`, or a `titleOrder` of a `LayoutPage` or `LayoutCard` that a table can inherit, has a variance key (like `dac1_pp1`) or a key with an `@<setname>` interval block (like `ac1@_November`), and the engine is older than v1.0.0-next.35. An older engine sorts by `category` instead, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these keys keeps working on that engine. See [Table sorting](/reference/table/#sorting).
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.35 or newer, or sort by a dimension or a scenario without `@`.
+
+### table-category-interval-position-engine-version
+
+A `Table` sets `categoryIntervalPosition` above 0 and the engine is older than v1.0.0-next.39. An older engine ignores the value and keeps the category column first, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without this setting keeps working on that engine. See [Position of the category column](/reference/table/#position-of-the-category-column).
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.39 or newer, or remove `categoryIntervalPosition`.
+
+### table-category-interval-position-too-large
+
+The `categoryIntervalPosition` of a `Table` with `interval: setname` is larger than the number of interval groups. The table then shows a warning and puts the category column last. A value equal to the number of groups is fine.
+
+```yaml
+# Warning: the dataset has 3 setname values (Jan, Feb, YTD)
+kind: Table
+spec:
+  dataset: sales_by_month
+  interval: setname
+  categoryIntervalPosition: 8
+```
+
+**Fix:** use a value from 0 to the number of groups.
+
+Bino counts the distinct `setname` values in all rows of the bound datasets, before the `filter` of the Table runs. Rows without a `setname` count as one group. So a filter that removes groups can still leave the value too large without this warning. Then the table itself shows the warning. Tables with a date interval are not checked here: only the engine knows their groups, and the table shows the warning.
+
+This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it. A Table that binds a `$datasource` is not checked.
 
 ### small-multiple-scale
 

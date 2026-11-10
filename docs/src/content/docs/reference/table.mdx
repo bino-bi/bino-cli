@@ -61,6 +61,7 @@ repeated here (see [Inherited props](#inherited-props)).
   - A positive number (`"0.5"`, `"1.2"`, …) - fixed factor applied to the base font size.
 - `thereof`, `partof`, `columnthereof` - drilldown configuration.
 - `interval` - repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band. Values: `none` (default), `setname`, or a date granularity (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`). Mutually exclusive with `columnthereof` (`columnthereof` wins). See [Interval column grouping](#interval-column-grouping).
+- `categoryIntervalPosition` - number of interval groups left of the category column. `0` (default) keeps the category column first. See [Position of the category column](#position-of-the-category-column).
 - `attributes` - computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
 - `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When unset, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
@@ -330,13 +331,92 @@ Values:
 | Value                                                                                | Behaviour                                                                                                                                                                       |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `none` (default)                                                                     | Feature disabled.                                                                                                                                                               |
-| `setname`                                                                            | Groups by the dataset's `setname` column (non-date comparison). Rows with a blank `setname` are grouped under a `-` bucket. Blocks are ordered by first appearance in the data. |
+| `setname`                                                                            | Groups by the dataset's `setname` column (non-date comparison). Rows with a blank `setname` are grouped under a `-` bucket. Blocks are ordered by the `setnameIndex` column, or by first appearance in the data without it. |
 | `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond` | Buckets rows by the dataset's `date` column at the given granularity.                                                                                                           |
 | `auto`                                                                               | Detects the date granularity from the dataset's date span.                                                                                                                      |
 
 `interval` and `columnthereof` are mutually exclusive; if both are set,
 `columnthereof` wins and `interval` is ignored. A date-based `interval` on a
 dataset with no date values is likewise ignored.
+
+### Order of the setname groups
+
+With `interval: setname` the optional dataset column `setnameIndex` sets the
+order of the groups: ascending by `setnameIndex`. The order then does not
+depend on the row order of the query. Example: three months, then a
+year-to-date block.
+
+```sql
+SELECT 'Jan' AS setname, 0 AS setnameIndex, category, categoryIndex, ac1, pp1 FROM jan
+UNION ALL
+SELECT 'Feb', 1, category, categoryIndex, ac1, pp1 FROM feb
+UNION ALL
+SELECT 'Mar', 2, category, categoryIndex, ac1, pp1 FROM mar
+UNION ALL
+SELECT 'YTD', 3, category, categoryIndex, ac1, pp1 FROM ytd
+```
+
+- No row has a numeric `setnameIndex`: the groups keep the order of first
+  appearance, as before.
+- A `setname` with several different indexes uses the smallest one. Bino warns
+  about such a dataset.
+- Groups without an index come after the indexed groups, in order of first
+  appearance. Groups with the same index keep the order of first appearance.
+- `setnameIndex` has no effect on date intervals.
+
+### Position of the category column
+
+`categoryIntervalPosition` is the number of interval groups that stand left of
+the category column. The default `0` keeps the category column first.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: revenue_by_month
+spec:
+  dataset: revenue_by_month
+  scenarios: ["ac1", "pp1"]
+  interval: setname
+  categoryIntervalPosition: 3
+```
+
+With the four groups from above:
+
+```text
+categoryIntervalPosition: 0 (default)
+
+| Category | Jan     | Feb     | Mar     | YTD     |
+|          | AC | PP | AC | PP | AC | PP | AC | PP |
+
+categoryIntervalPosition: 3
+
+| Jan     | Feb     | Mar     | Category | YTD     |
+| AC | PP | AC | PP | AC | PP |          | AC | PP |
+
+categoryIntervalPosition: 4
+
+| Jan     | Feb     | Mar     | YTD     | Category |
+| AC | PP | AC | PP | AC | PP | AC | PP |          |
+```
+
+- A value equal to the number of groups puts the category column last. With 8
+  groups, value 8 puts the category column last.
+- The category column means the whole row header block: the category label
+  together with the columns that belong to it, such as the
+  [attribute columns](#computed-attribute-columns). The block moves as one unit
+  in every row of the table.
+- The value works with `interval: setname` and with the date intervals.
+- A value larger than the number of groups is an error. The table shows a
+  warning and puts the category column last. With `interval: setname` Bino
+  reports it as
+  [`table-category-interval-position-too-large`](/appendix/lint-rules/#table-category-interval-position-too-large).
+- Without an active interval (`none`, not set, or `columnthereof` set) the
+  value is ignored. Bino reports it as
+  [`table-category-interval-position-unused`](/appendix/lint-rules/#table-category-interval-position-unused).
+
+`categoryIntervalPosition` above 0 needs template engine **v1.0.0-next.39** or newer. Older engines keep the category column first, without an error. So with an older engine `bino build` and `bino lint` stop with [`table-category-interval-position-engine-version`](/appendix/lint-rules/#table-category-interval-position-engine-version), and `bino preview` shows that error.
 
 ## Scaling
 
@@ -459,6 +539,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.columnthereof[].name`      | string                   | no              | -                       | Name of the drilled column group.                                                                                                                                                                                                                                                                                     | `name: "DE"`                       |
 | `spec.columnthereof[].subGroups` | array                    | no              | -                       | Sub-columns rendered under the drilled column.                                                                                                                                                                                                                                                                        | `subGroups: ["Berlin", "Hamburg"]` |
 | `spec.interval`                  | string                   | no              | `none`                  | Repeats the scenario/variance column block once per interval group. Values: `none`, `setname`, `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. Mutually exclusive with `columnthereof`. See [Interval column grouping](#interval-column-grouping).                      | `interval: year`                   |
+| `spec.categoryIntervalPosition`  | integer                  | no              | `0`                     | Number of interval groups left of the category column. Needs an active `interval`. A value equal to the number of groups puts the category column last. See [Position of the category column](#position-of-the-category-column).                                                                                      |
 | `spec.attributes`                | string or array          | no              | -                       | Computed attribute columns (header label → aggregate expression), in list order; also accepts a JSON object string whose key order defines the column order. See [Computed attribute columns](#computed-attribute-columns).                                                                                           | see below                          |
 | `spec.attributes[].label`        | string                   | yes (per entry) | -                       | Column header label.                                                                                                                                                                                                                                                                                                  | `label: "Verkaufsleiter"`          |
 | `spec.attributes[].expression`   | string                   | yes (per entry) | -                       | Aggregate expression: `set`, `first`, `last`, `min`, `max`, `avg`, `sum` over a dataset field or a custom `_`-prefixed field, or `lit(constant)`.                                                                                                                                                                     | `expression: "sum(ac1)"`           |

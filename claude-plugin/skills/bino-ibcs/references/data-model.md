@@ -145,7 +145,8 @@ quarter, month, …).
 
 | Field       | Type     | Description                                                    |
 | ----------- | -------- | -------------------------------------------------------------- |
-| `setname`   | `string` | Dataset identifier (used by structure charts)                  |
+| `setname`   | `string` | Dataset identifier (used by structure charts). A `Table` with `interval: setname` shows one column block per `setname` |
+| `setnameIndex` | `number` | Optional sort order of the `setname` blocks of such a `Table`, lower first. Needs `setname` |
 | `operation` | `string` | `"+"` (default) or `"-"` - determines the sign in aggregations |
 
 ### Custom fields
