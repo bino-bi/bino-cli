@@ -22,6 +22,8 @@ func DefaultRules() []Rule {
 		datasetRequired,
 		tableSumTitleUnused,
 		tableCategoryIntervalPositionUnused,
+		tableThereofPositionUnused,
+		tableVarianceWaterfallUnused,
 		chartTimeFieldNoEffect,
 		inheritedPropUnresolved,
 		pageLayoutSlotsUsed,

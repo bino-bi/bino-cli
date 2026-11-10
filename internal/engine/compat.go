@@ -160,6 +160,30 @@ func CheckCategoryIntervalPositionSupport(engineVersion string) error {
 	return nil
 }
 
+// TableCalculationSchemeMinVersion is the first engine release whose Table
+// knows runningSum, thereofPosition and varianceWaterfall. Older engines
+// ignore the attributes and render the plain table, without an error. It is
+// no floor of SupportedEngineRanges: a project without them keeps working.
+const TableCalculationSchemeMinVersion = "v1.0.0-next.40"
+
+// TableCalculationSchemeCheck returns the engine check for a project whose
+// Tables turn on the given calculation scheme fields. The check returns an
+// error on an engine older than TableCalculationSchemeMinVersion. An empty or
+// unreadable version is no finding.
+func TableCalculationSchemeCheck(props []string) func(string) error {
+	return func(engineVersion string) error {
+		v, err := semver.NewVersion(engineVersion)
+		if err != nil {
+			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+		}
+		if v.LessThan(semver.MustParse(TableCalculationSchemeMinVersion)) {
+			return fmt.Errorf("a Table with %s needs template engine %s or newer, this project uses %s.\n"+
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(props, ", "), TableCalculationSchemeMinVersion, engineVersion, TableCalculationSchemeMinVersion)
+		}
+		return nil
+	}
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

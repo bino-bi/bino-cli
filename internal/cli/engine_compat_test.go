@@ -327,3 +327,70 @@ func TestCategoryIntervalPositionDefaultEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestTableCalculationSchemeEngineFinding(t *testing.T) {
+	doc := func(spec string) []config.Document {
+		return []config.Document{{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{` + spec + `}}`)}}
+	}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		prop   string // empty: no finding
+	}{
+		{"old engine with runningSum", "v1.0.0-next.39", doc(`"runningSum":true`), "runningSum"},
+		{"old engine with thereofPosition above", "v1.0.0-next.39", doc(`"thereofPosition":"above"`), "thereofPosition"},
+		{"old engine with varianceWaterfall", "v1.0.0-next.39", doc(`"varianceWaterfall":true`), "varianceWaterfall"},
+		{"old engine with the defaults", "v1.0.0-next.39", doc(`"runningSum":false,"thereofPosition":"below","varianceWaterfall":false`), ""},
+		{"old engine without the fields", "v1.0.0-next.39", doc(`"type":"optnototal"`), ""},
+		{"new engine with all", "v1.0.0-next.40", doc(`"runningSum":true,"thereofPosition":"above","varianceWaterfall":true`), ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := tableCalculationSchemeEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != (c.prop != "") {
+				t.Fatalf("fatal = %v (%+v)", fatal, finding)
+			}
+			if fatal && (finding.RuleID != "table-calculation-scheme-engine-version" || finding.Line != 2 || !strings.Contains(finding.Message, c.prop)) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
+func TestTableCalculationSchemeDefaultEngineFinding(t *testing.T) {
+	plain := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl"}}`)}
+	running := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl","runningSum":true}}`)}
+	off := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl","varianceWaterfall":false}}`)}
+	chart := config.Document{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"pnl"}}`)}
+	withDefault := []dataset.Result{{Name: "pnl", Defaults: dataset.Defaults{"table": {"varianceWaterfall": json.RawMessage(`true`)}}}}
+	cases := []struct {
+		name    string
+		engine  string
+		docs    []config.Document
+		results []dataset.Result
+		fatal   bool
+	}{
+		{"old engine with default", "v1.0.0-next.39", []config.Document{plain}, withDefault, true},
+		{"old engine without default", "v1.0.0-next.39", []config.Document{plain}, []dataset.Result{{Name: "pnl"}}, false},
+		{"manifest turns the default off", "v1.0.0-next.39", []config.Document{off}, withDefault, false},
+		{"only a chart binds the dataset", "v1.0.0-next.39", []config.Document{chart}, withDefault, false},
+		{"manifest value is the other finding", "v1.0.0-next.39", []config.Document{running}, withDefault, false},
+		{"new engine with default", "v1.0.0-next.40", []config.Document{plain}, withDefault, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := tableCalculationSchemeDefaultEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs, c.results)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "table-calculation-scheme-engine-version" || !strings.Contains(finding.Message, "varianceWaterfall")) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}

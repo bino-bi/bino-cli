@@ -335,6 +335,9 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
+	if err := checkTableCalculationSchemeEngine(docs, datasetResults, engineVersion); err != nil {
+		return PresentationResult{}, diags, err
+	}
 
 	// Render each LayoutPage as a slide - the page is embedded as-is inside a <section>.
 	var slides strings.Builder
@@ -481,6 +484,9 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 		return PresentationFrameResult{}, diags, err
 	}
 	if err := checkCategoryIntervalPositionEngine(docs, datasetResults, engineVersion); err != nil {
+		return PresentationFrameResult{}, diags, err
+	}
+	if err := checkTableCalculationSchemeEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
 

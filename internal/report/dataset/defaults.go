@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"bino.bi/bino/internal/report/config"
 )
 
 // Dataset defaults
@@ -751,4 +753,24 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 		}
 	}
 	return false
+}
+
+// TableCalculationSchemeProps returns the Table calculation scheme fields that
+// a Table turns on, in a manifest or through a default of its primary dataset.
+// The manifests do not show such a default, so the engine gate asks here.
+func TableCalculationSchemeProps(docs []config.Document, results []Result) []string {
+	defaults := make(map[string]map[string]any, len(results))
+	for _, r := range results {
+		out := map[string]any{}
+		for _, token := range []string{AnyToken, "table"} {
+			for field, raw := range r.Defaults[token] {
+				var v any
+				if json.Unmarshal(raw, &v) == nil {
+					out[field] = v
+				}
+			}
+		}
+		defaults[r.Name] = out
+	}
+	return config.TableCalculationSchemeProps(docs, defaults)
 }

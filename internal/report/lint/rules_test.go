@@ -474,6 +474,8 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"dataset-required",
 		"table-sum-title-unused",
 		"table-category-interval-position-unused",
+		"table-thereof-position-unused",
+		"table-variance-waterfall-unused",
 		"chart-time-field-no-effect",
 		"inherited-prop-unresolved",
 		"page-layout-slots-used",

@@ -21,6 +21,8 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `dataset-required`                | Dataset Required                            | Warning  | Table, ChartStructure, ChartTime, ChartScatter, ChartBubble, and ChartBullet components must have a `spec.dataset` binding. |
 | `table-sum-title-unused`          | Table Sum Title Unused                      | Warning  | `spec.sumTitle` only labels the grand-total row of `type: sum` / `type: opt` tables.                                        |
 | `table-category-interval-position-unused`| Table Category Interval Position Unused     | Warning  | `spec.categoryIntervalPosition` only works on a Table with an active `interval`.                                            |
+| `table-thereof-position-unused` | Table Thereof Position Unused | Warning | `spec.thereofPosition: above` only works on a Table with a `thereof` list. |
+| `table-variance-waterfall-unused` | Table Variance Waterfall Unused | Warning | `spec.varianceWaterfall` only works when `barColumns` lists an absolute variance. |
 | `chart-time-field-no-effect`      | ChartTime Field Without Effect              | Warning  | `level`, `order`, `orderDirection` and `limit` have no effect on a ChartTime.                                               |
 | `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
 | `chart-order-inherits-measure`    | Chart Order Inherits Measure                | Warning  | A ChartStructure `order` inherits a `titleOrder` with a variance or `@` key, which a chart cannot sort by.                  |
@@ -53,6 +55,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
 | `table-category-interval-position-engine-version` | Table Category Interval Position Engine Version | Error | A Table `categoryIntervalPosition` above 0 needs template engine v1.0.0-next.39 or newer. Stops `bino lint` and `bino build`. |
 | `table-category-interval-position-too-large` | Table Category Interval Position Too Large | Warning | A Table `categoryIntervalPosition` must not be larger than the number of `setname` groups in the data. Needs the data: `--execute-queries`, build and preview. |
+| `table-calculation-scheme-engine-version` | Table Calculation Scheme Engine Version | Error | A Table with `runningSum`, `thereofPosition: above` or `varianceWaterfall` needs template engine v1.0.0-next.40 or newer. Stops `bino lint` and `bino build`. |
 | `small-multiple-scale` | Small Multiple Scale | Error | A SmallMultiple needs a fixed `scale` and, for ChartStructure, ChartTime and Table, a fixed `unitScaling`. |
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
@@ -203,6 +206,40 @@ spec:
 The rule looks at `categoryIntervalPosition`, `interval` and `columnthereof` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it.
 
 The rule does not run the queries, so it does not see a [dataset default](/reference/dataset/#dataset-defaults). A Table whose `interval` comes only from a dataset default gets this warning although the position works. Write `interval` in the manifest, or turn the rule off for that project in `[lint]`. A `columnthereof` that comes only from a dataset default turns the interval off without this warning.
+
+### table-thereof-position-unused
+
+`spec.thereofPosition: above` prints the `thereof` rows before their parent. A Table without a `thereof` list has no such rows, so the value does nothing.
+
+```yaml
+# Warning: no thereof list, nothing moves
+kind: Table
+spec:
+  dataset: income_statement
+  thereofPosition: above
+```
+
+**Fix:** add `thereof`, or remove `thereofPosition`.
+
+The rule looks at `thereofPosition` and `thereof` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. A referenced Table that leaves `thereof` to its children is not reported when a child sets `thereof`. The rule does not run the queries, so it does not see a `thereof` that comes only from a [dataset default](/reference/dataset/#dataset-defaults). Write `thereof` in the manifest, or turn the rule off for that project in `[lint]`.
+
+### table-variance-waterfall-unused
+
+`spec.varianceWaterfall` draws the absolute variance columns listed in `barColumns` as a waterfall. Absolute variances start with `d` and not with `dr`, like `dac1_pp1_pos`. Without such a column in `barColumns` no waterfall is drawn. Relative variances stay pins and scenario columns stay bars.
+
+```yaml
+# Warning: barColumns has only a relative variance
+kind: Table
+spec:
+  dataset: income_statement
+  variances: ["dac1_pp1_op", "drac1_pp1_op"]
+  barColumns: ["drac1_pp1_op"]
+  varianceWaterfall: true
+```
+
+**Fix:** add an absolute variance to `barColumns`, or remove `varianceWaterfall`.
+
+The rule looks at `varianceWaterfall` and `barColumns` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. A referenced Table that leaves `barColumns` to its children is not reported when a child sets `barColumns`. The rule does not run the queries, so it does not see `barColumns` that come only from a [dataset default](/reference/dataset/#dataset-defaults). It does not check `interval` and `columnthereof`, which also turn the waterfall off.
 
 ### chart-time-field-no-effect
 
@@ -921,6 +958,14 @@ Bino counts the distinct `setname` values in all rows of the bound datasets, bef
 This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it. A Table that binds a `$datasource` is not checked. A Table shown inside a markdown text with `:ref` is checked by `bino lint` only, not in the build log.
 
 The check uses the values the table is rendered with: a child with a `ref` takes missing fields from the referenced Table, and a [dataset default](/reference/dataset/#dataset-defaults) fills what both leave out.
+
+### table-calculation-scheme-engine-version
+
+A `Table` sets `runningSum: true`, `thereofPosition: above` or `varianceWaterfall: true` and the engine is older than v1.0.0-next.40. The message names the fields in use. An older engine ignores them and renders the plain table, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves the three fields at their defaults keeps working on the older engine.
+
+A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too, for a Table that binds the dataset first and does not set the field itself. When the dataset of a Table is only known at render time, as with a `${PARAM}` placeholder in its name or a Table that is the base of a `SmallMultiple`, the defaults of all datasets count, so the rule can also fire for a default that the Table does not use. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.40 or newer, or remove the fields.
 
 ### small-multiple-scale
 

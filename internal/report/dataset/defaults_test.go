@@ -3,7 +3,10 @@ package dataset
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
+
+	"bino.bi/bino/internal/report/config"
 )
 
 func rowsJSON(t *testing.T, rows ...map[string]any) json.RawMessage {
@@ -368,6 +371,35 @@ func TestMarkerLevelsAreDimensions(t *testing.T) {
 	for _, l := range append(append([]string{}, rowLevels...), columnLevels...) {
 		if !dims[l] {
 			t.Errorf("%s is not a string dimension column", l)
+		}
+	}
+}
+
+func TestTableCalculationSchemeProps(t *testing.T) {
+	results := []Result{
+		{Name: "a", Defaults: Defaults{"table": {"varianceWaterfall": json.RawMessage(`true`), "thereofPosition": json.RawMessage(`"below"`)}}},
+		{Name: "b", Defaults: Defaults{AnyToken: {"runningSum": json.RawMessage(`true`)}}},
+		{Name: "c", Defaults: Defaults{"chartbar": {"runningSum": json.RawMessage(`true`)}}},
+		{Name: "d"},
+	}
+	table := func(spec string) config.Document {
+		return config.Document{Kind: "LayoutPage", Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{"children":[{"kind":"Table","spec":{` + spec + `}}]}}`)}
+	}
+	cases := []struct {
+		name string
+		docs []config.Document
+		want []string
+	}{
+		{"table and any defaults", []config.Document{table(`"dataset":"a"`), table(`"dataset":"b"`)}, []string{"runningSum", "varianceWaterfall"}},
+		{"default of another kind", []config.Document{table(`"dataset":"c"`), table(`"dataset":"d"`)}, nil},
+		{"no Table binds the dataset", []config.Document{table(`"dataset":"d"`)}, nil},
+		{"manifest wins over the default", []config.Document{table(`"dataset":"a","varianceWaterfall":false`)}, nil},
+		{"manifest and default", []config.Document{table(`"dataset":"a","runningSum":true`)}, []string{"runningSum", "varianceWaterfall"}},
+		{"DataSource binding", []config.Document{table(`"dataset":"$a"`)}, nil},
+	}
+	for _, c := range cases {
+		if got := TableCalculationSchemeProps(c.docs, results); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
 }

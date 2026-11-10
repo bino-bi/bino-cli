@@ -1602,6 +1602,38 @@ func TestValidate_TableCategoryIntervalPosition(t *testing.T) {
 	}
 }
 
+// TestValidate_TableCalculationScheme pins the types of runningSum,
+// thereofPosition and varianceWaterfall.
+func TestValidate_TableCalculationScheme(t *testing.T) {
+	doc := func(field, value string) string {
+		return "apiVersion: bino.bi/v1alpha1\nkind: Table\nmetadata:\n  name: c\nspec:\n  dataset: d\n  " + field + ": " + value + "\n"
+	}
+	valid := map[string][]string{
+		"runningSum":        {"true", "false"},
+		"thereofPosition":   {"below", "above"},
+		"varianceWaterfall": {"true", "false"},
+	}
+	invalid := map[string][]string{
+		"runningSum":        {"1", "'true'", "group"},
+		"thereofPosition":   {"top", "Above", "true", "1"},
+		"varianceWaterfall": {"1", "'true'", "bars"},
+	}
+	for field, values := range valid {
+		for _, value := range values {
+			if err := Validate([]byte(doc(field, value))); err != nil {
+				t.Errorf("%s %s should be valid, got: %v", field, value, err)
+			}
+		}
+	}
+	for field, values := range invalid {
+		for _, value := range values {
+			if err := Validate([]byte(doc(field, value))); err == nil {
+				t.Errorf("%s %s: expected validation error, got nil", field, value)
+			}
+		}
+	}
+}
+
 // TestValidate_Internationalization pins the typed spec.content: built-in tokens
 // and free-form keys are both accepted, but values must be strings.
 //
