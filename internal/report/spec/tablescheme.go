@@ -1,7 +1,6 @@
 package spec
 
 import (
-	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -30,19 +29,6 @@ func TableCalculationSchemeProps(spec map[string]any) []string {
 		}
 	}
 	return props
-}
-
-// RawTableCalculationSchemeProps is TableCalculationSchemeProps for a spec
-// whose fields are still raw JSON, as in the defaults of a dataset.
-func RawTableCalculationSchemeProps(fields map[string]json.RawMessage) []string {
-	spec := map[string]any{}
-	for _, prop := range tableCalculationSchemeProps {
-		var v any
-		if json.Unmarshal(fields[prop], &v) == nil {
-			spec[prop] = v
-		}
-	}
-	return TableCalculationSchemeProps(spec)
 }
 
 // MergeTableCalculationSchemeProps joins lists of calculation scheme fields

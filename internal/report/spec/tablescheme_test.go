@@ -1,7 +1,6 @@
 package spec
 
 import (
-	"encoding/json"
 	"slices"
 	"testing"
 )
@@ -25,20 +24,6 @@ func TestTableCalculationSchemeProps(t *testing.T) {
 		if got := TableCalculationSchemeProps(c.spec); !slices.Equal(got, c.want) {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
-	}
-}
-
-func TestRawTableCalculationSchemeProps(t *testing.T) {
-	fields := map[string]json.RawMessage{
-		"runningSum":      json.RawMessage(`true`),
-		"thereofPosition": json.RawMessage(`"below"`),
-		"type":            json.RawMessage(`"optnototal"`),
-	}
-	if got := RawTableCalculationSchemeProps(fields); !slices.Equal(got, []string{"runningSum"}) {
-		t.Errorf("got %v", got)
-	}
-	if got := RawTableCalculationSchemeProps(nil); got != nil {
-		t.Errorf("nil fields: got %v", got)
 	}
 }
 

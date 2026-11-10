@@ -108,15 +108,15 @@ func categoryIntervalPositionDefaultEngineFinding(projectRoot string, cfg *pathu
 // runningSum, thereofPosition or varianceWaterfall on an engine older than the
 // release with them.
 func tableCalculationSchemeEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
-	props := config.TableCalculationSchemeProps(documents)
+	props := config.TableCalculationSchemeProps(documents, nil)
 	return engineGateFinding(projectRoot, cfg, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
 }
 
 // tableCalculationSchemeDefaultEngineFinding is the same gate for fields that
 // only a dataset default turns on, which shows after the queries ran.
 func tableCalculationSchemeDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
-	props := dataset.DefaultsTableCalculationSchemeProps(results)
-	used := len(config.TableCalculationSchemeProps(documents)) == 0 && len(props) > 0
+	props := dataset.TableCalculationSchemeProps(documents, results)
+	used := len(config.TableCalculationSchemeProps(documents, nil)) == 0 && len(props) > 0
 	return engineGateFinding(projectRoot, cfg, used, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
 }
 

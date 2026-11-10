@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"bino.bi/bino/internal/report/spec"
+	"bino.bi/bino/internal/report/config"
 )
 
 // Dataset defaults
@@ -755,15 +755,24 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 	return false
 }
 
-// DefaultsTableCalculationSchemeProps returns the Table calculation scheme
-// fields that a dataset default turns on. The manifests do not show such a
-// value, so the engine gate asks here too.
-func DefaultsTableCalculationSchemeProps(results []Result) []string {
-	var props []string
+// TableCalculationSchemeProps returns the Table calculation scheme fields that
+// a Table turns on, in a manifest or through a default of its primary dataset.
+// The manifests do not show such a default, so the engine gate asks here.
+func TableCalculationSchemeProps(docs []config.Document, results []Result) []string {
+	byName := make(map[string]Defaults, len(results))
 	for _, r := range results {
-		for _, token := range []string{AnyToken, "table"} {
-			props = spec.MergeTableCalculationSchemeProps(props, spec.RawTableCalculationSchemeProps(r.Defaults[token]))
-		}
+		byName[r.Name] = r.Defaults
 	}
-	return props
+	return config.TableCalculationSchemeProps(docs, func(binding string) map[string]any {
+		out := map[string]any{}
+		for _, token := range []string{AnyToken, "table"} {
+			for field, raw := range byName[binding][token] {
+				var v any
+				if json.Unmarshal(raw, &v) == nil {
+					out[field] = v
+				}
+			}
+		}
+		return out
+	})
 }

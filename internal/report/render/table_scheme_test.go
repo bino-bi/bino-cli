@@ -75,3 +75,38 @@ func TestTableCalculationScheme_EngineGateDatasetDefault(t *testing.T) {
 		t.Fatalf("no default: %v", err)
 	}
 }
+
+// The gate follows the Table that renders: a value in the manifest wins over
+// the dataset default, and a default counts only for a Table that binds it.
+func TestTableCalculationScheme_EngineGateFollowsTheTable(t *testing.T) {
+	results := []dataset.Result{{Name: "test", Data: json.RawMessage(`[]`), Defaults: dataset.Defaults{"table": {
+		"runningSum":      json.RawMessage(`true`),
+		"thereofPosition": json.RawMessage(`"above"`),
+	}}}}
+	page := func(child string) []config.Document {
+		return []config.Document{pageDoc(`{"children": [` + child + `]}`)}
+	}
+	base := config.Document{Kind: "Table", Name: "base", Raw: json.RawMessage(
+		`{"kind":"Table","metadata":{"name":"base"},"spec":{"dataset":"other","runningSum":false,"thereofPosition":"below"}}`)}
+	cases := []struct {
+		name string
+		docs []config.Document
+		prop string // empty: no error
+	}{
+		{"manifest turns both off", page(`{"kind": "Table", "metadata": {"name": "t"}, "spec": {"dataset": "test", "runningSum": false, "thereofPosition": "below"}}`), ""},
+		{"manifest turns one off", page(`{"kind": "Table", "metadata": {"name": "t"}, "spec": {"dataset": "test", "runningSum": false}}`), "thereofPosition"},
+		{"null leaves the default", page(`{"kind": "Table", "metadata": {"name": "t"}, "spec": {"dataset": "test", "runningSum": null, "thereofPosition": "below"}}`), "runningSum"},
+		{"only a chart binds the dataset", page(`{"kind": "ChartStructure", "metadata": {"name": "c"}, "spec": {"dataset": "test"}}`), ""},
+		{"not the primary dataset", page(`{"kind": "Table", "metadata": {"name": "t"}, "spec": {"dataset": ["other", "test"]}}`), ""},
+		{"referenced Table turns both off", append(page(`{"kind": "Table", "ref": "base", "spec": {"dataset": "test"}}`), base), ""},
+	}
+	for _, c := range cases {
+		err := checkTableCalculationSchemeEngine(c.docs, results, "v1.0.0-next.39")
+		if c.prop == "" && err != nil {
+			t.Errorf("%s: %v", c.name, err)
+		}
+		if c.prop != "" && (err == nil || !strings.Contains(err.Error(), "a Table with "+c.prop+" needs")) {
+			t.Errorf("%s: err = %v", c.name, err)
+		}
+	}
+}

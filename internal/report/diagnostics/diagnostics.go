@@ -216,7 +216,7 @@ func categoryIntervalPositionEngineDiagnostic(dir string, docs []config.Document
 // on runningSum, thereofPosition or varianceWaterfall on an engine older than
 // the release with them.
 func tableCalculationSchemeEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
-	props := config.TableCalculationSchemeProps(docs)
+	props := config.TableCalculationSchemeProps(docs, nil)
 	return engineGateDiagnostic(dir, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version")
 }
 
@@ -328,8 +328,8 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		if d, ok := engineGateDiagnostic(dir, defaultUsed, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version"); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
 		}
-		if len(config.TableCalculationSchemeProps(docs)) == 0 {
-			props := dataset.DefaultsTableCalculationSchemeProps(results)
+		if len(config.TableCalculationSchemeProps(docs, nil)) == 0 {
+			props := dataset.TableCalculationSchemeProps(docs, results)
 			if d, ok := engineGateDiagnostic(dir, len(props) > 0, engine.TableCalculationSchemeCheck(props), "table-calculation-scheme-engine-version"); ok && !runner.Skip(d.Code) {
 				diagnostics = append(diagnostics, d)
 			}

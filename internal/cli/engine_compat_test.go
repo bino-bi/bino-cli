@@ -363,6 +363,8 @@ func TestTableCalculationSchemeEngineFinding(t *testing.T) {
 func TestTableCalculationSchemeDefaultEngineFinding(t *testing.T) {
 	plain := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl"}}`)}
 	running := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl","runningSum":true}}`)}
+	off := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"pnl","varianceWaterfall":false}}`)}
+	chart := config.Document{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"pnl"}}`)}
 	withDefault := []dataset.Result{{Name: "pnl", Defaults: dataset.Defaults{"table": {"varianceWaterfall": json.RawMessage(`true`)}}}}
 	cases := []struct {
 		name    string
@@ -373,6 +375,8 @@ func TestTableCalculationSchemeDefaultEngineFinding(t *testing.T) {
 	}{
 		{"old engine with default", "v1.0.0-next.39", []config.Document{plain}, withDefault, true},
 		{"old engine without default", "v1.0.0-next.39", []config.Document{plain}, []dataset.Result{{Name: "pnl"}}, false},
+		{"manifest turns the default off", "v1.0.0-next.39", []config.Document{off}, withDefault, false},
+		{"only a chart binds the dataset", "v1.0.0-next.39", []config.Document{chart}, withDefault, false},
 		{"manifest value is the other finding", "v1.0.0-next.39", []config.Document{running}, withDefault, false},
 		{"new engine with default", "v1.0.0-next.40", []config.Document{plain}, withDefault, false},
 	}
