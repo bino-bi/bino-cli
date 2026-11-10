@@ -358,11 +358,15 @@ SELECT 'YTD', 3, category, categoryIndex, ac1, pp1 FROM ytd
 
 - No row has a numeric `setnameIndex`: the groups keep the order of first
   appearance, as before.
-- A `setname` with several different indexes uses the smallest one. Bino warns
-  about such a dataset.
+- A `setname` with several different indexes uses the smallest one.
 - Groups without an index come after the indexed groups, in order of first
   appearance. Groups with the same index keep the order of first appearance.
 - `setnameIndex` has no effect on date intervals.
+
+`setnameIndex` needs template engine **v1.0.0-next.39** or newer. Older engines
+ignore the column and keep the order of first appearance, without an error.
+Bino cannot check this, because the column is in the data: pin a new enough
+`engine-version` in `bino.toml`.
 
 ### Position of the category column
 
@@ -404,7 +408,8 @@ categoryIntervalPosition: 4
 - A value equal to the number of groups puts the category column last. With 8
   groups, value 8 puts the category column last.
 - The category column means the whole row header block: the category label
-  together with the columns that belong to it, such as the
+  together with the columns that belong to it. These are the operation column
+  (the sign column of an `opt` table) and the
   [attribute columns](#computed-attribute-columns). The block moves as one unit
   in every row of the table.
 - The value works with `interval: setname` and with the date intervals.
@@ -539,7 +544,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.columnthereof[].name`      | string                   | no              | -                       | Name of the drilled column group.                                                                                                                                                                                                                                                                                     | `name: "DE"`                       |
 | `spec.columnthereof[].subGroups` | array                    | no              | -                       | Sub-columns rendered under the drilled column.                                                                                                                                                                                                                                                                        | `subGroups: ["Berlin", "Hamburg"]` |
 | `spec.interval`                  | string                   | no              | `none`                  | Repeats the scenario/variance column block once per interval group. Values: `none`, `setname`, `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. Mutually exclusive with `columnthereof`. See [Interval column grouping](#interval-column-grouping).                      | `interval: year`                   |
-| `spec.categoryIntervalPosition`  | integer                  | no              | `0`                     | Number of interval groups left of the category column. Needs an active `interval`. A value equal to the number of groups puts the category column last. See [Position of the category column](#position-of-the-category-column).                                                                                      |
+| `spec.categoryIntervalPosition`  | integer                  | no              | `0`                     | Number of interval groups left of the category column. Needs an active `interval`. A value equal to the number of groups puts the category column last. See [Position of the category column](#position-of-the-category-column).                                                                                      | `categoryIntervalPosition: 1`      |
 | `spec.attributes`                | string or array          | no              | -                       | Computed attribute columns (header label → aggregate expression), in list order; also accepts a JSON object string whose key order defines the column order. See [Computed attribute columns](#computed-attribute-columns).                                                                                           | see below                          |
 | `spec.attributes[].label`        | string                   | yes (per entry) | -                       | Column header label.                                                                                                                                                                                                                                                                                                  | `label: "Verkaufsleiter"`          |
 | `spec.attributes[].expression`   | string                   | yes (per entry) | -                       | Aggregate expression: `set`, `first`, `last`, `min`, `max`, `avg`, `sum` over a dataset field or a custom `_`-prefixed field, or `lit(constant)`.                                                                                                                                                                     | `expression: "sum(ac1)"`           |

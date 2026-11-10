@@ -293,7 +293,7 @@ These fields determine how data is hierarchically organized and sorted.
 | `date`      | `string` | **Required for TimeCharts**. ISO 8601 date (e.g., `2024-01-15`) or datetime (e.g., `2024-01-15T08:30:00Z`). Used for time-series axes and normalization. |
 | `operation` | `string` | Aggregation sign: `'+'` (add) or `'-'` (subtract). Defaults to `'+'`. Useful for P&L structures where costs subtract from totals.                        |
 | `setname`   | `string` | Dataset identifier. Used by some charts to distinguish multiple query results. A Table with `interval: setname` shows one column block per `setname`.    |
-| `setnameIndex` | `number` | Optional sort order of the `setname` groups of a Table with `interval: setname`. Lower values come first. Needs `setname`. See [Order of the setname groups](/reference/table/#order-of-the-setname-groups).|
+| `setnameIndex` | `number` | Optional sort order of the `setname` groups of a Table with `interval: setname`. Lower values come first. Needs `setname` and template engine v1.0.0-next.39 or newer. See [Order of the setname groups](/reference/table/#order-of-the-setname-groups).|
 
 ### Custom `_` columns
 
@@ -508,9 +508,7 @@ bino can validate query results against the standard schema at build time. This 
 | Type validation    | Number fields (`ac1`, `categoryIndex`, etc.) must be numbers                                                                                                                                                         |
 | Enum validation    | `operation` must be `"+"` or `"-"`                                                                                                                                                                                   |
 | Date format        | `date` must be ISO 8601 (`YYYY-MM-DD`, or `YYYY-MM-DDThh:mm:ss` with an optional `Z` or `±hh:mm` offset)                                                                                                             |
-| Dependent required | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup`. `setnameIndex` requires `setname`, but `setname` works without an index |
-
-A `setname` with several different `setnameIndex` values is a warning and never an error, in every validation mode: the smallest index counts. This check reads every row.
+| Dependent required | Dimension pairs must appear together in both directions: `rowGroup` requires `rowGroupIndex` and `rowGroupIndex` requires `rowGroup`, and likewise for `category`, `subCategory`, `columnGroup` and `columnSubGroup`. `setnameIndex` requires a non-empty `setname`, but `setname` works without an index |
 
 The [`derive`/`assert` checks](#checks-and-diagnostics) are not part of this sampled validation: they run on every row, and their four error cases fail the build in every validation mode.
 

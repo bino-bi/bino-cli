@@ -11,7 +11,7 @@
         },
         "setnameIndex": {
             "type": "number",
-            "description": "Sort order for the setname groups of a Table with interval 'setname'. Lower values appear first. Optional: without it the groups keep the order of first appearance in the rows. If one setname has several indexes, the smallest counts. Groups without an index come after the indexed groups. Requires setname. No effect on date intervals."
+            "description": "Sort order for the setname groups of a Table with interval 'setname'. Lower values appear first. Optional: without it the groups keep the order of first appearance in the rows. If one setname has several indexes, the smallest counts. Groups without an index come after the indexed groups. Requires setname. No effect on date intervals. Needs template engine v1.0.0-next.39 or newer."
         },
         "date": {
             "type": "string",

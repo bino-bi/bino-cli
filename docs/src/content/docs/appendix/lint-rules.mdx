@@ -200,7 +200,9 @@ spec:
 
 **Fix:** set `interval`, or remove `categoryIntervalPosition`. With `columnthereof` the interval is off, so remove one of the two.
 
-The rule looks at the `interval` and `columnthereof` written in the manifest, and at the referenced Table for a child with a `ref`. An `interval` that comes from a [dataset default](/reference/dataset/#dataset-defaults) is not seen.
+The rule looks at `categoryIntervalPosition`, `interval` and `columnthereof` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it.
+
+The rule does not run the queries, so it does not see a [dataset default](/reference/dataset/#dataset-defaults). A Table whose `interval` comes only from a dataset default gets this warning although the position works. Write `interval` in the manifest, or turn the rule off for that project in `[lint]`. A `columnthereof` that comes only from a dataset default turns the interval off without this warning.
 
 ### chart-time-field-no-effect
 
@@ -895,6 +897,8 @@ The `order` of a `Table`, or a `titleOrder` of a `LayoutPage` or `LayoutCard` th
 
 A `Table` sets `categoryIntervalPosition` above 0 and the engine is older than v1.0.0-next.39. An older engine ignores the value and keeps the category column first, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without this setting keeps working on that engine. See [Position of the category column](/reference/table/#position-of-the-category-column).
 
+A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
+
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.39 or newer, or remove `categoryIntervalPosition`.
 
 ### table-category-interval-position-too-large
@@ -914,7 +918,9 @@ spec:
 
 Bino counts the distinct `setname` values in all rows of the bound datasets, before the `filter` of the Table runs. Rows without a `setname` count as one group. So a filter that removes groups can still leave the value too large without this warning. Then the table itself shows the warning. Tables with a date interval are not checked here: only the engine knows their groups, and the table shows the warning.
 
-This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it. A Table that binds a `$datasource` is not checked.
+This rule needs the data. `bino lint` reports it with `--execute-queries`, and so does `validate_project` of the MCP server with `execute_queries`. `bino build` and `bino preview` write it to their log, where `[lint] disable` does not hide it. A Table that binds a `$datasource` is not checked. A Table shown inside a markdown text with `:ref` is checked by `bino lint` only, not in the build log.
+
+The check uses the values the table is rendered with: a child with a `ref` takes missing fields from the referenced Table, and a [dataset default](/reference/dataset/#dataset-defaults) fills what both leave out.
 
 ### small-multiple-scale
 
