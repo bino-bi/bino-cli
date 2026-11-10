@@ -33,7 +33,7 @@ type StandardColumn struct {
 // constants.go). Inside that namespace, `_spec_` (`_spec_<kind>_<field>`,
 // `_spec_any_<field>`) is reserved for dataset defaults (defaults.go).
 var standardColumns = func() []StandardColumn {
-	cols := make([]StandardColumn, 0, 29)
+	cols := make([]StandardColumn, 0, 30)
 	for _, n := range []string{
 		"ac1", "ac2", "ac3", "ac4",
 		"pp1", "pp2", "pp3", "pp4",
@@ -57,6 +57,9 @@ var standardColumns = func() []StandardColumn {
 	for _, n := range []string{"date", "operation", "setname"} {
 		cols = append(cols, StandardColumn{Name: n, Kind: ColumnString, Group: "Metadata"})
 	}
+	// setnameIndex is no Pair of setname: setname works without an index.
+	// validate.go adds the one-way rule that the index needs its setname.
+	cols = append(cols, StandardColumn{Name: "setnameIndex", Kind: ColumnNumber, Group: "Metadata"})
 	return cols
 }()
 

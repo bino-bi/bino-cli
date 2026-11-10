@@ -145,6 +145,7 @@ function script(): string {
     { name: 'date', kind: 'string', group: 'Metadata' },
     { name: 'operation', kind: 'string', group: 'Metadata' },
     { name: 'setname', kind: 'string', group: 'Metadata' },
+    { name: 'setnameIndex', kind: 'number', group: 'Metadata' },
   ]);
   let DS_COLUMNS = [], DS_GROUPS = [], PAIRS = {};
   function applySchema(raw) {

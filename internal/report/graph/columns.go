@@ -327,7 +327,8 @@ func tableUses(f fields, anc ancestors) uses {
 		switch interval := strings.ToLower(f.str("interval")); interval {
 		case "", "none":
 		case "setname":
-			u.add(RoleGroup, "interval", "setname")
+			// setnameIndex is optional in the rows; it sorts the groups when present.
+			u.add(RoleGroup, "interval", "setname", "setnameIndex")
 		default:
 			u.add(RoleGroup, "interval", "date")
 		}

@@ -7,7 +7,11 @@
     "properties": {
         "setname": {
             "type": "string",
-            "description": "Dataset identifier or name. Used in StructureChart components for metadata identification. Can distinguish between different datasets when multiple are loaded."
+            "description": "Dataset identifier or name. Used in StructureChart components for metadata identification. Can distinguish between different datasets when multiple are loaded. A Table with interval 'setname' repeats its scenario and variance columns once per distinct setname."
+        },
+        "setnameIndex": {
+            "type": "number",
+            "description": "Sort order for the setname groups of a Table with interval 'setname'. Lower values appear first. Optional: without it the groups keep the order of first appearance in the rows. If one setname has several indexes, the smallest counts. Groups without an index come after the indexed groups. Requires setname. No effect on date intervals."
         },
         "date": {
             "type": "string",
@@ -135,6 +139,7 @@
         "columnGroup": ["columnGroupIndex"],
         "columnGroupIndex": ["columnGroup"],
         "columnSubGroup": ["columnSubGroupIndex"],
-        "columnSubGroupIndex": ["columnSubGroup"]
+        "columnSubGroupIndex": ["columnSubGroup"],
+        "setnameIndex": ["setname"]
     }
 }

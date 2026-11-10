@@ -4,8 +4,8 @@ import "testing"
 
 func TestStandardColumnsCanonical(t *testing.T) {
 	cols := StandardColumns()
-	if len(cols) != 29 {
-		t.Fatalf("StandardColumns() = %d columns, want 29", len(cols))
+	if len(cols) != 30 {
+		t.Fatalf("StandardColumns() = %d columns, want 30", len(cols))
 	}
 
 	byName := map[string]StandardColumn{}
@@ -27,6 +27,7 @@ func TestStandardColumnsCanonical(t *testing.T) {
 		{"columnSubGroup", ColumnString, "Dimensions", "columnSubGroupIndex"},
 		{"operation", ColumnString, "Metadata", ""},
 		{"setname", ColumnString, "Metadata", ""},
+		{"setnameIndex", ColumnNumber, "Metadata", ""},
 	}
 	for _, c := range checks {
 		got, ok := byName[c.name]
@@ -55,6 +56,10 @@ func TestStandardColumnsCanonical(t *testing.T) {
 	}
 	if !numberFields["ac1"] || !numberFields["categoryIndex"] || !stringFields["operation"] {
 		t.Error("derived field maps disagree with the schema")
+	}
+	// setnameIndex needs setname, setname needs nothing.
+	if dependentRequiredPairs["setnameIndex"] != "setname" || dependentRequiredPairs["setname"] != "" {
+		t.Errorf("setname pair = %q / %q, want setname / none", dependentRequiredPairs["setnameIndex"], dependentRequiredPairs["setname"])
 	}
 	if dependentRequiredPairs["category"] != "categoryIndex" {
 		t.Errorf("dependentRequiredPairs[category] = %q, want categoryIndex", dependentRequiredPairs["category"])

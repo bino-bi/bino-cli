@@ -548,3 +548,33 @@ func keysOf(m map[string]map[string]any) []string {
 	}
 	return out
 }
+
+func TestSetnameIndexConflicts(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want []string
+	}{
+		{"no index column", `[{"setname":"Jan"},{"setname":"Feb"}]`, nil},
+		{"one index per setname", `[{"setname":"Jan","setnameIndex":0},{"setname":"Jan","setnameIndex":0},{"setname":"YTD","setnameIndex":3}]`, nil},
+		{"index on some rows only", `[{"setname":"Jan","setnameIndex":0},{"setname":"Jan"},{"setname":"Jan","setnameIndex":null}]`, nil},
+		{
+			"two indexes for one setname",
+			`[{"setname":"Jan","setnameIndex":0},{"setname":"Feb","setnameIndex":1},{"setname":"Jan","setnameIndex":5}]`,
+			[]string{`setname "Jan" has 2 different setnameIndex values - a Table with interval setname uses the smallest`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			warnings := setnameIndexConflicts("sales", json.RawMessage(tt.data))
+			if len(warnings) != len(tt.want) {
+				t.Fatalf("warnings = %v, want %v", warnings, tt.want)
+			}
+			for i, w := range warnings {
+				if w.DataSet != "sales" || w.Message != tt.want[i] {
+					t.Errorf("warning %d = %+v, want %q", i, w, tt.want[i])
+				}
+			}
+		})
+	}
+}

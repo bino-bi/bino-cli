@@ -67,9 +67,14 @@ type DataValidationResult struct {
 // All three are derived from the canonical schema in schema.go so there is a
 // single source of truth.
 var (
-	dependentRequiredPairs = standardPairs()
-	stringFields           = fieldsOfKind(ColumnString)
-	numberFields           = fieldsOfKind(ColumnNumber)
+	dependentRequiredPairs = func() map[string]string {
+		m := standardPairs()
+		// One way only: setname is valid without setnameIndex.
+		m["setnameIndex"] = "setname"
+		return m
+	}()
+	stringFields = fieldsOfKind(ColumnString)
+	numberFields = fieldsOfKind(ColumnNumber)
 )
 
 // datePattern matches ISO 8601 dates (YYYY-MM-DD) and datetimes
