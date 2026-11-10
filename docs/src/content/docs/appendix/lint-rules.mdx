@@ -221,7 +221,7 @@ spec:
 
 **Fix:** add `thereof`, or remove `thereofPosition`.
 
-The rule looks at `thereofPosition` and `thereof` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. The rule does not run the queries, so it does not see a `thereof` that comes only from a [dataset default](/reference/dataset/#dataset-defaults). Write `thereof` in the manifest, or turn the rule off for that project in `[lint]`.
+The rule looks at `thereofPosition` and `thereof` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. A referenced Table that leaves `thereof` to its children is not reported when a child sets `thereof`. The rule does not run the queries, so it does not see a `thereof` that comes only from a [dataset default](/reference/dataset/#dataset-defaults). Write `thereof` in the manifest, or turn the rule off for that project in `[lint]`.
 
 ### table-variance-waterfall-unused
 
@@ -239,7 +239,7 @@ spec:
 
 **Fix:** add an absolute variance to `barColumns`, or remove `varianceWaterfall`.
 
-The rule looks at `varianceWaterfall` and `barColumns` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. The rule does not run the queries, so it does not see `barColumns` that come only from a [dataset default](/reference/dataset/#dataset-defaults). It does not check `interval` and `columnthereof`, which also turn the waterfall off.
+The rule looks at `varianceWaterfall` and `barColumns` as written in the manifest. A child with a `ref` takes each of them from the referenced Table when it does not set it. A referenced Table that leaves `barColumns` to its children is not reported when a child sets `barColumns`. The rule does not run the queries, so it does not see `barColumns` that come only from a [dataset default](/reference/dataset/#dataset-defaults). It does not check `interval` and `columnthereof`, which also turn the waterfall off.
 
 ### chart-time-field-no-effect
 
@@ -963,7 +963,7 @@ The check uses the values the table is rendered with: a child with a `ref` takes
 
 A `Table` sets `runningSum: true`, `thereofPosition: above` or `varianceWaterfall: true` and the engine is older than v1.0.0-next.40. The message names the fields in use. An older engine ignores them and renders the plain table, without an error. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves the three fields at their defaults keeps working on the older engine.
 
-A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
+A value that comes only from a [dataset default](/reference/dataset/#dataset-defaults) counts too, for a Table that binds the dataset first and does not set the field itself. It shows only after the queries ran: `bino build` and `bino preview` stop on it, and `bino lint` reports it with `--execute-queries`.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.40 or newer, or remove the fields.
 

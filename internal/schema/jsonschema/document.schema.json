@@ -5704,7 +5704,7 @@
         "runningSum": {
           "type": "boolean",
           "default": false,
-          "description": "With grouped rows, each group sum row holds the running result of all rows from the first group through its own. For calculation schemes such as an income statement, with type 'optnototal'. Needs template engine v1.0.0-next.40 or newer."
+          "description": "With grouped rows, each group sum row holds the running result of all rows from the first group through its own. For calculation schemes, with type 'optnototal'. No effect with 'columnthereof'. Needs template engine v1.0.0-next.40 or newer."
         },
         "thereofPosition": {
           "type": "string",
@@ -5715,7 +5715,7 @@
         "varianceWaterfall": {
           "type": "boolean",
           "default": false,
-          "description": "Draws the absolute variance columns of 'barColumns' as a waterfall down the rows: each bar starts where the previous one ended, sum rows are bars from the axis. A row with operation '-' and a positive variance moves left. With 'runningSum' the walk continues across the result rows, else every group restarts. Not with 'interval' or 'columnthereof' (plain bars then). The bars fit the column, 'unitScaling' does not apply. Needs template engine v1.0.0-next.40 or newer."
+          "description": "Draws the absolute variance columns of 'barColumns' as a waterfall down the rows: each bar starts where the previous one ended, sum rows are bars from the axis. In 'opt' and 'optnototal' tables a '-' row with a positive variance moves left. With 'runningSum' the walk continues across the result rows, else every group restarts. Not with 'interval' or 'columnthereof' (plain bars then). The bars fit the column, 'unitScaling' does not apply. Needs template engine v1.0.0-next.40 or newer."
         },
         "attributes": {
           "description": "Computed attribute columns rendered between the category and scenario columns, in list order. Maps a column header label to an aggregate expression over the rows behind each table row. Functions: set, first, last, min, max, avg, sum (dataset field or custom '_'-prefixed field) and lit (constant). Use the ordered array form, or a JSON object string whose key order defines column order. Example: [{\"label\": \"Verkaufsleiter\", \"expression\": \"set(_leiter)\"}]",

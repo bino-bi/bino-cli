@@ -62,7 +62,7 @@ repeated here (see [Inherited props](#inherited-props)).
 - `thereof`, `partof`, `columnthereof` - drilldown configuration.
 - `interval` - repeats the entire scenario/variance column block once per interval group, rendered under a spanning header band. Values: `none` (default), `setname`, or a date granularity (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`). Mutually exclusive with `columnthereof` (`columnthereof` wins). See [Interval column grouping](#interval-column-grouping).
 - `categoryIntervalPosition` - number of interval groups left of the category column. `0` (default) keeps the category column first. See [Position of the category column](#position-of-the-category-column).
-- `runningSum` - with `grouped`, each group sum row holds the running result of all rows from the first group through its own group. See [Calculation schemes](#calculation-schemes).
+- `runningSum` - with `grouped`, each group sum row holds the running result of all rows from the first group through its own group. No effect with `columnthereof`. See [Calculation schemes](#calculation-schemes).
 - `thereofPosition` - where the `thereof` rows print: `below` (default) or `above` their parent. See [Calculation schemes](#calculation-schemes).
 - `varianceWaterfall` - draws the absolute variance columns of `barColumns` as a waterfall down the rows. See [Variance waterfall](#variance-waterfall).
 - `attributes` - computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
@@ -437,6 +437,8 @@ income. Three fields build it. All three are off by default.
   row group is the result stage, and its name is the label of the result row.
   Use it with `type: optnototal`. With `type: opt` the grand total row is still
   printed and repeats the last result, because `runningSum` does not drop it.
+  The results add up in the order the groups are printed, so order the groups
+  by `rowGroupIndex`. Together with `columnthereof` it has no effect.
 - `thereofPosition: above` - the `thereof` rows print before their parent, in
   normal size, indented and without the thereof prefix. The parent row then
   looks like a subtotal. It keeps its operation sign and its positive value,
@@ -488,24 +490,25 @@ spec:
 The rows of the table, with the running results:
 
 ```
-                                   AC      PP    ΔPP
-+ Licences                      600.0   550.0  +50.0
-+ Consulting                    400.0   380.0  +20.0
-= Sales revenue               1,000.0   930.0  +70.0
-+ Other operating income         40.0    30.0  +10.0
-    Material expenses           250.0   240.0  +10.0
-    Personnel expenses          300.0   280.0  +20.0
-    Other expenses               50.0    60.0  -10.0
-- Operating expenses            600.0   580.0  +20.0
-= Operating result              440.0   380.0  +60.0
-+ Financial income               20.0    10.0  +10.0
-= Result before tax             460.0   390.0  +70.0
-- Income tax                    110.0    95.0  +15.0
-= Net income                    350.0   295.0  +55.0
+                                   PY      AC    ΔPY
++ Licences                      550.0   600.0  +50.0
++ Consulting                    380.0   400.0  +20.0
+= Sales revenue                 930.0 1,000.0  +70.0
++ Other operating income         30.0    40.0  +10.0
+    Material expenses           240.0   250.0  +10.0
+    Personnel expenses          280.0   300.0  +20.0
+    Other expenses               60.0    50.0  -10.0
+- Operating expenses            580.0   600.0  +20.0
+= Operating result              380.0   440.0  +60.0
++ Financial income               10.0    20.0  +10.0
+= Result before tax             390.0   460.0  +70.0
+- Income tax                     95.0   110.0  +15.0
+= Net income                    295.0   350.0  +55.0
 ```
 
-Operating result is 1,000.0 + 40.0 - 600.0 = 440.0: the sum of its own group
-plus the result before it. Without `runningSum` the row would show only its own
+The previous year column comes first. Operating result is
+1,000.0 + 40.0 - 600.0 = 440.0 in AC: the sum of its own group plus the result
+before it. Without `runningSum` the row would show only its own
 group, -560.0.
 
 ### Variance waterfall
@@ -515,9 +518,10 @@ group, -560.0.
 
 - Each bar starts where the bar of the row before ended. Connector lines join
   the bars.
-- A row with operation `-` and a positive variance moves left, as a rising cost
-  lowers the result. In the example above the +20.0 of Operating expenses moves
-  left.
+- In `opt` and `optnototal` tables a row with operation `-` and a positive
+  variance moves left, as a rising cost lowers the result. In the example above
+  the +20.0 of Operating expenses moves left. In the other types the values
+  already carry the sign, so the bar follows the printed variance.
 - Sum rows are bars from the axis. They show the variance of the result so far.
 - With `runningSum` the walk continues across the result rows, down to the last
   result. Without it every group restarts at the axis.
@@ -657,7 +661,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.columnthereof[].subGroups` | array                    | no              | -                       | Sub-columns rendered under the drilled column.                                                                                                                                                                                                                                                                        | `subGroups: ["Berlin", "Hamburg"]` |
 | `spec.interval`                  | string                   | no              | `none`                  | Repeats the scenario/variance column block once per interval group. Values: `none`, `setname`, `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`. Mutually exclusive with `columnthereof`. See [Interval column grouping](#interval-column-grouping).                      | `interval: year`                   |
 | `spec.categoryIntervalPosition`  | integer                  | no              | `0`                     | Number of interval groups left of the category column. Needs an active `interval`. A value equal to the number of groups puts the category column last. See [Position of the category column](#position-of-the-category-column).                                                                                      | `categoryIntervalPosition: 1`      |
-| `spec.runningSum`                | boolean                  | no              | `false`                 | With `grouped`, each group sum row holds the running result from the first group through its own. Use with `type: optnototal`. See [Calculation schemes](#calculation-schemes).                                                                                                                                       |
+| `spec.runningSum`                | boolean                  | no              | `false`                 | With `grouped`, each group sum row holds the running result from the first group through its own. Use with `type: optnototal`. No effect with `columnthereof`. See [Calculation schemes](#calculation-schemes).                                                                                                                                       |
 | `spec.thereofPosition`           | string                   | no              | `below`                 | Where the `thereof` rows print. Values: `below`, `above`. With `above` they print before their parent, indented and without the prefix.                                                                                                                                                                               |
 | `spec.varianceWaterfall`         | boolean                  | no              | `false`                 | Draws the absolute variance columns of `barColumns` as a waterfall down the rows. Not with `interval` or `columnthereof`. See [Variance waterfall](#variance-waterfall).                                                                                                                                              |
 | `spec.attributes`                | string or array          | no              | -                       | Computed attribute columns (header label → aggregate expression), in list order; also accepts a JSON object string whose key order defines the column order. See [Computed attribute columns](#computed-attribute-columns).                                                                                           | see below                          |
