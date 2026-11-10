@@ -57,9 +57,9 @@ func TestStandardColumnsCanonical(t *testing.T) {
 	if !numberFields["ac1"] || !numberFields["categoryIndex"] || !stringFields["operation"] {
 		t.Error("derived field maps disagree with the schema")
 	}
-	// setnameIndex needs setname, setname needs nothing.
-	if dependentRequiredPairs["setnameIndex"] != "setname" || dependentRequiredPairs["setname"] != "" {
-		t.Errorf("setname pair = %q / %q, want setname / none", dependentRequiredPairs["setnameIndex"], dependentRequiredPairs["setname"])
+	// The one-way rule of setnameIndex is no pair, see setnameIndexWithoutSetname.
+	if dependentRequiredPairs["setnameIndex"] != "" || dependentRequiredPairs["setname"] != "" {
+		t.Errorf("setname pair = %q / %q, want none", dependentRequiredPairs["setnameIndex"], dependentRequiredPairs["setname"])
 	}
 	if dependentRequiredPairs["category"] != "categoryIndex" {
 		t.Errorf("dependentRequiredPairs[category] = %q, want categoryIndex", dependentRequiredPairs["category"])

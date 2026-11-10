@@ -453,6 +453,10 @@ func TestValidateRows_SetnameIndex(t *testing.T) {
 		{"null index", `[{"setname": "Jan", "setnameIndex": null}]`, ""},
 		{"index is no number", `[{"setname": "Jan", "setnameIndex": "first"}]`, "invalid-type"},
 		{"index without setname", `[{"setnameIndex": 1, "ac1": 1}]`, "missing-dependent-required"},
+		{"index with null setname", `[{"setname": null, "setnameIndex": 1}]`, "missing-dependent-required"},
+		{"index with empty setname", `[{"setname": "", "setnameIndex": 1}]`, "missing-dependent-required"},
+		{"setName spelling", `[{"setName": "Jan", "setnameIndex": 1}]`, ""},
+		{"setNameIndex spelling without setname", `[{"setNameIndex": 1, "ac1": 1}]`, "missing-dependent-required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

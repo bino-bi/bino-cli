@@ -1,7 +1,6 @@
 package dataset
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -214,46 +213,6 @@ func allNullDerivedSlots(name string, data json.RawMessage, derive map[string]Sh
 			warnings = append(warnings, Warning{
 				DataSet: name,
 				Message: fmt.Sprintf("%s derived from %s is null on every row - the query window has no prior period", slot, derive[slot].From),
-			})
-		}
-	}
-	return warnings
-}
-
-// setnameIndexConflicts warns for every setname that carries more than one
-// setnameIndex. A Table with interval setname then sorts the group by the
-// smallest one, which is rarely what the query meant. It reads every row, as
-// the conflict can sit anywhere in the result.
-func setnameIndexConflicts(name string, data json.RawMessage) []Warning {
-	if !bytes.Contains(data, []byte(`"setnameIndex"`)) {
-		return nil
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil
-	}
-	seen := map[string]map[string]bool{}
-	var order []string
-	for _, row := range rows {
-		if !hasField(row, "setnameIndex") {
-			continue
-		}
-		set, ok := row["setname"].(string)
-		if !ok {
-			continue
-		}
-		if seen[set] == nil {
-			seen[set] = map[string]bool{}
-			order = append(order, set)
-		}
-		seen[set][fmt.Sprintf("%v", row["setnameIndex"])] = true
-	}
-	var warnings []Warning
-	for _, set := range order {
-		if len(seen[set]) > 1 {
-			warnings = append(warnings, Warning{
-				DataSet: name,
-				Message: fmt.Sprintf("setname %q has %d different setnameIndex values - a Table with interval setname uses the smallest", set, len(seen[set])),
 			})
 		}
 	}

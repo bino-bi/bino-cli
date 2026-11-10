@@ -58,7 +58,7 @@ var standardColumns = func() []StandardColumn {
 		cols = append(cols, StandardColumn{Name: n, Kind: ColumnString, Group: "Metadata"})
 	}
 	// setnameIndex is no Pair of setname: setname works without an index.
-	// validate.go adds the one-way rule that the index needs its setname.
+	// validate.go has the one-way rule that the index needs its setname.
 	cols = append(cols, StandardColumn{Name: "setnameIndex", Kind: ColumnNumber, Group: "Metadata"})
 	return cols
 }()

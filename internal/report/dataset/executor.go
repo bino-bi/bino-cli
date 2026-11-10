@@ -267,7 +267,6 @@ func Execute(ctx context.Context, workdir string, docs []config.Document, opts *
 				}
 			}
 			warnings = append(warnings, allNullDerivedSlots(result.doc.Name, result.data, result.spec.Derive)...)
-			warnings = append(warnings, setnameIndexConflicts(result.doc.Name, result.data)...)
 			defaults, defaultWarnings := FoldDefaults(result.doc.Name, result.data)
 			warnings = append(warnings, defaultWarnings...)
 			results = append(results, Result{Name: result.doc.Name, Data: result.data, Defaults: defaults})
@@ -549,7 +548,6 @@ func executeDataSets(ctx context.Context, workdir string, jobs []dataSetJob, all
 		}
 
 		warnings = append(warnings, allNullDerivedSlots(job.doc.Name, data, job.spec.Derive)...)
-		warnings = append(warnings, setnameIndexConflicts(job.doc.Name, data)...)
 		defaults, defaultWarnings := FoldDefaults(job.doc.Name, data)
 		warnings = append(warnings, defaultWarnings...)
 
