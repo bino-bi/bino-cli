@@ -1089,6 +1089,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render table child: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(child.Metadata.Name, s)
 		component = renderTableComponent(s)
 	case "ChartStructure":
 		var s chartStructureSpec
@@ -1440,6 +1441,7 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal table spec: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(node.ID, s)
 		return renderTableComponent(s), nil
 	case "ChartStructure":
 		var s chartStructureSpec
@@ -1625,6 +1627,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal table spec: %w", err)
 		}
+		rc.checkCategoryIntervalPosition(child.Metadata.Name, s)
 		return renderTableComponent(s), nil
 	case "ChartStructure":
 		var s chartStructureSpec

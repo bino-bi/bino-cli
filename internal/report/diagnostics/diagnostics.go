@@ -130,6 +130,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := tableOrderMeasureEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := categoryIntervalPositionEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 
 	if opts.EngineCompat != nil {
 		if d, ok := opts.EngineCompat(dir); ok && !runner.Skip(d.Code) {
@@ -200,6 +203,12 @@ func tableOrderMeasureEngineDiagnostic(dir string, docs []config.Document) (Diag
 	return engineGateDiagnostic(dir, config.UsesTableOrderMeasure(docs), engine.CheckTableOrderMeasureSupport, "table-order-engine-version")
 }
 
+// categoryIntervalPositionEngineDiagnostic reports a project that sets a Table
+// categoryIntervalPosition on an engine older than the release with it.
+func categoryIntervalPositionEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	return engineGateDiagnostic(dir, config.UsesCategoryIntervalPosition(docs), engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
 // engineGateDiagnostic runs a feature gate of the engine when the project uses
 // the feature, and reports a failure on the engine-version line of bino.toml.
 func engineGateDiagnostic(dir string, used bool, check func(string) error, code string) (Diagnostic, bool) {
@@ -250,6 +259,18 @@ func AnnotationPointFindings(ctx context.Context, docs []config.Document, result
 	})
 }
 
+// CategoryIntervalPositionFindings checks the categoryIntervalPosition of the
+// Tables with interval setname against the executed datasets.
+func CategoryIntervalPositionFindings(docs []config.Document, results []dataset.Result) []lint.Finding {
+	raw := make(map[string]json.RawMessage, len(results))
+	for _, r := range results {
+		raw[r.Name] = r.Data
+	}
+	return lint.CategoryIntervalPositionFindings(lint.DocumentsFromConfig(docs), func(binding string) json.RawMessage {
+		return raw[binding]
+	})
+}
+
 // RunQueryValidation executes dataset queries with data validation enabled and
 // maps the warnings to diagnostics, locating each warning's DataSet document
 // for file/position. It backs Collect's ExecuteQueries option and the daemon's
@@ -270,7 +291,8 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 			Code:     "data-validation-error",
 		})
 	} else {
-		for _, f := range lint.NewProjectRunner(dir).Apply(AnnotationPointFindings(ctx, docs, results)) {
+		dataFindings := append(AnnotationPointFindings(ctx, docs, results), CategoryIntervalPositionFindings(docs, results)...)
+		for _, f := range lint.NewProjectRunner(dir).Apply(dataFindings) {
 			diagnostics = append(diagnostics, Diagnostic{
 				File:     f.File,
 				Position: f.DocIdx,

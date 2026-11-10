@@ -291,3 +291,22 @@ func TestCheckTableOrderMeasureSupport(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckCategoryIntervalPositionSupport(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.39", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.38", false},
+		{"v1.0.0-alpha.19", false},
+		{"", true}, // nothing resolved: not this check's job
+		{"junk", true},
+	}
+	for _, c := range cases {
+		if err := CheckCategoryIntervalPositionSupport(c.version); (err == nil) != c.ok {
+			t.Errorf("CheckCategoryIntervalPositionSupport(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+	}
+}

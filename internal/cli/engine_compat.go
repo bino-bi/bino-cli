@@ -89,6 +89,27 @@ func tableOrderMeasureEngineFinding(projectRoot string, cfg *pathutil.ProjectCon
 	return engineGateFinding(projectRoot, cfg, used, engine.CheckTableOrderMeasureSupport, "table-order-engine-version")
 }
 
+// categoryIntervalPositionEngineFinding reports a project that sets a Table
+// categoryIntervalPosition on an engine older than the release with it.
+func categoryIntervalPositionEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	used := config.UsesCategoryIntervalPosition(documents)
+	return engineGateFinding(projectRoot, cfg, used, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version")
+}
+
+// tableEngineFindings returns the engine gate findings of the Table features.
+func tableEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) []lint.Finding {
+	var findings []lint.Finding
+	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document) (lint.Finding, bool){
+		categoryIntervalPositionEngineFinding,
+		tableOrderMeasureEngineFinding,
+	} {
+		if finding, ok := gate(projectRoot, cfg, documents); ok {
+			findings = append(findings, finding)
+		}
+	}
+	return findings
+}
+
 // engineGateFinding runs a feature gate of the engine when the project uses
 // the feature, and reports a failure on the engine-version line of bino.toml.
 func engineGateFinding(projectRoot string, cfg *pathutil.ProjectConfig, used bool, check func(string) error, ruleID string) (lint.Finding, bool) {

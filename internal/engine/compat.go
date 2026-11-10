@@ -138,6 +138,28 @@ func CheckTableOrderMeasureSupport(engineVersion string) error {
 	return nil
 }
 
+// CategoryIntervalPositionMinVersion is the first engine release whose Table
+// knows categoryIntervalPosition. Older engines ignore the attribute and keep
+// the category column first, without an error. It is no floor of
+// SupportedEngineRanges: a project without it keeps working.
+const CategoryIntervalPositionMinVersion = "v1.0.0-next.39"
+
+// CheckCategoryIntervalPositionSupport returns an error when a project that
+// sets a Table categoryIntervalPosition uses an engine older than
+// CategoryIntervalPositionMinVersion. An empty or unreadable version is no
+// finding.
+func CheckCategoryIntervalPositionSupport(engineVersion string) error {
+	v, err := semver.NewVersion(engineVersion)
+	if err != nil {
+		return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+	}
+	if v.LessThan(semver.MustParse(CategoryIntervalPositionMinVersion)) {
+		return fmt.Errorf("a Table categoryIntervalPosition needs template engine %s or newer, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", CategoryIntervalPositionMinVersion, engineVersion, CategoryIntervalPositionMinVersion)
+	}
+	return nil
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

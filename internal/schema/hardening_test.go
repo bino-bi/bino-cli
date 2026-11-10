@@ -1584,6 +1584,24 @@ func TestValidate_TableOrderTokens(t *testing.T) {
 	}
 }
 
+// TestValidate_TableCategoryIntervalPosition pins the type of the field: an
+// integer from 0 up.
+func TestValidate_TableCategoryIntervalPosition(t *testing.T) {
+	doc := func(value string) string {
+		return "apiVersion: bino.bi/v1alpha1\nkind: Table\nmetadata:\n  name: c\nspec:\n  dataset: d\n  interval: setname\n  categoryIntervalPosition: " + value + "\n"
+	}
+	for _, value := range []string{"0", "1", "8"} {
+		if err := Validate([]byte(doc(value))); err != nil {
+			t.Errorf("categoryIntervalPosition %s should be valid, got: %v", value, err)
+		}
+	}
+	for _, value := range []string{"-1", "1.5", "'2'", "last"} {
+		if err := Validate([]byte(doc(value))); err == nil {
+			t.Errorf("categoryIntervalPosition %s: expected validation error, got nil", value)
+		}
+	}
+}
+
 // TestValidate_Internationalization pins the typed spec.content: built-in tokens
 // and free-form keys are both accepted, but values must be strings.
 //

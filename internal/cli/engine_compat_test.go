@@ -267,3 +267,31 @@ func TestTableOrderMeasureEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestCategoryIntervalPositionEngineFinding(t *testing.T) {
+	moved := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"interval":"setname","categoryIntervalPosition":2}}`)}
+	plain := config.Document{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"interval":"setname"}}`)}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine with position", "v1.0.0-next.38", []config.Document{moved}, true},
+		{"old engine without position", "v1.0.0-next.38", []config.Document{plain}, false},
+		{"new engine with position", "v1.0.0-next.39", []config.Document{moved}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := categoryIntervalPositionEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "table-category-interval-position-engine-version" || finding.Line != 2) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
