@@ -124,6 +124,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := gridCellLayoutEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := smallMultipleSpanEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 	if d, ok := operationSentimentEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
@@ -192,6 +195,14 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))
 	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), check, "grid-cell-layout-engine-version")
+}
+
+// smallMultipleSpanEngineDiagnostic reports a project that uses cell spans,
+// cell backgrounds or the other fields of that engine release on an older
+// engine.
+func smallMultipleSpanEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	features := config.SmallMultipleSpanFeatures(docs)
+	return engineGateDiagnostic(dir, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
 }
 
 // operationSentimentEngineDiagnostic reports a project that uses the variance

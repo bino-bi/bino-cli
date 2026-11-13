@@ -181,6 +181,10 @@ with --fail-on-warnings.`),
 			if gridGateFatal {
 				findings = append([]lint.Finding{gridGateFinding}, findings...)
 			}
+			spanGateFinding, spanGateFatal := smallMultipleSpanEngineFinding(projectRoot, projectCfg, documents)
+			if spanGateFatal {
+				findings = append([]lint.Finding{spanGateFinding}, findings...)
+			}
 			opGateFinding, opGateFatal := operationSentimentEngineFinding(projectRoot, projectCfg, documents)
 			if opGateFatal {
 				findings = append([]lint.Finding{opGateFinding}, findings...)
@@ -279,6 +283,9 @@ with --fail-on-warnings.`),
 			}
 			if gridGateFatal {
 				return RuntimeErrorf("grid-cell-layout-engine-version")
+			}
+			if spanGateFatal {
+				return RuntimeErrorf("small-multiple-span-engine-version")
 			}
 
 			// Manifests that failed to load stay fatal even when [lint] hides

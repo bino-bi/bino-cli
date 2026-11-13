@@ -51,6 +51,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
+| `small-multiple-span-engine-version` | Small Multiple Span Engine Version | Error | Cell spans and backgrounds, `axisTitles`, `titleId`, `scenarios: []` and the other fields of that release need template engine v1.0.0-next.46 or newer. Stops `bino lint` and `bino build`. |
 | `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
 | `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
 | `table-category-interval-position-engine-version` | Table Category Interval Position Engine Version | Error | A Table `categoryIntervalPosition` above 0 needs template engine v1.0.0-next.39 or newer. Stops `bino lint` and `bino build`. |
@@ -923,6 +924,21 @@ The project has an `Annotation` and its engine is older than v1.0.0-next.30, whi
 The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `cellVerticalAlign` or `cellHorizontalAlign` to a value other than the default, or a grid child has a `caption`, and the engine is older than v1.0.0-next.32. An older engine ignores these settings without an error, so the grid would look wrong. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these settings and without a `SmallMultiple` keeps working on that engine. A `SmallMultiple` with `card` needs v1.0.0-next.33: older engines draw the cards but do not line up the axes inside them.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.32 or newer, or v1.0.0-next.33 or newer with `card`.
+
+### small-multiple-span-engine-version
+
+The project uses a field of template engine v1.0.0-next.46 and the engine is older. The message names what is in use. An older engine ignores these fields and renders without them, with no error. The fields are:
+
+- `rowSpan`, `columnSpan` and `background` of a `Grid` child, of a `panels.items` entry and of a `panels.overrides` entry of a `SmallMultiple`,
+- `axisTitles: rowEnd` of a `SmallMultiple`,
+- `titleId` of a `LayoutPage`,
+- `scenarios: []` of a `ChartTime` or `ChartStructure`, and `dataFormatDigitsDecimal` and `dataFormatDigitsPercent` with a value other than the default,
+- `axisLabelsStep` above 1, `scenarioSwitch: true` and `axisTitlePosition: right` or `none` of a `ChartTime`,
+- the style keys `bn-grid.cellBackground` and `bn-layout-card.titleFontSize` of a `ComponentStyle`.
+
+It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves these fields at their defaults keeps working on the older engine. A value that only a `_spec_` column of a dataset sets is not checked.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.46 or newer, or remove the fields.
 
 ### operation-sentiment-engine-version
 

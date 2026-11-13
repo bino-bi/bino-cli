@@ -76,6 +76,13 @@ func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig
 	return engineGateFinding(projectRoot, cfg, used, check, "grid-cell-layout-engine-version")
 }
 
+// smallMultipleSpanEngineFinding reports a project that uses cell spans, cell
+// backgrounds or the other fields of that engine release on an older engine.
+func smallMultipleSpanEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	features := config.SmallMultipleSpanFeatures(documents)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
+}
+
 // operationSentimentEngineFinding reports a project that uses the variance
 // sentiments _op or _opinv on an engine older than the release with them.
 func operationSentimentEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {

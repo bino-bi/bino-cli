@@ -184,6 +184,31 @@ func TableCalculationSchemeCheck(props []string) func(string) error {
 	}
 }
 
+// SmallMultipleSpanMinVersion is the first engine release whose bn-grid knows
+// row-span, column-span and cell-background on a cell. The same release adds
+// title-id of bn-layout-page, the scenario switch, the variance only mode and
+// the axis title position of the charts, and two style keys. Older engines
+// ignore all of them and render without, with no error. It is no floor of
+// SupportedEngineRanges: a project without them keeps working.
+const SmallMultipleSpanMinVersion = "v1.0.0-next.46"
+
+// SmallMultipleSpanCheck returns the engine check for a project that uses the
+// given features of SmallMultipleSpanMinVersion. The check returns an error on
+// an older engine. An empty or unreadable version is no finding.
+func SmallMultipleSpanCheck(features []string) func(string) error {
+	return func(engineVersion string) error {
+		v, err := semver.NewVersion(engineVersion)
+		if err != nil {
+			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+		}
+		if v.LessThan(semver.MustParse(SmallMultipleSpanMinVersion)) {
+			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), SmallMultipleSpanMinVersion, engineVersion, SmallMultipleSpanMinVersion)
+		}
+		return nil
+	}
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

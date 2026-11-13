@@ -21,6 +21,7 @@ var nonRuleFindingIDs = []string{
 	"annotation-point-missing",                        // needs data: AnnotationPointFindings, called by cli/lint.go
 	"annotation-engine-version",                       // cli/engine_compat.go
 	"grid-cell-layout-engine-version",                 // cli/engine_compat.go
+	"small-multiple-span-engine-version",              // cli/engine_compat.go
 	"operation-sentiment-engine-version",              // cli/engine_compat.go
 	"table-order-engine-version",                      // cli/engine_compat.go
 	"table-category-interval-position-engine-version", // cli/engine_compat.go
@@ -41,6 +42,7 @@ var fixedSeverityIDs = []string{
 	"engine-version-incompatible",
 	"annotation-engine-version",
 	"grid-cell-layout-engine-version",
+	"small-multiple-span-engine-version",
 	"operation-sentiment-engine-version",
 	"table-order-engine-version",
 	"table-category-interval-position-engine-version",
