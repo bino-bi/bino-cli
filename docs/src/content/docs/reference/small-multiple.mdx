@@ -170,6 +170,10 @@ axisTitles: rowEnd
 
 Spans, backgrounds and `axisTitles: rowEnd` need template engine **v1.0.0-next.46** or newer. With an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version).
 
+## Annotations on a panel
+
+An [`Annotation`](/reference/annotation/#one-panel-of-a-smallmultiple) can point at one panel, or at a data point in it: name the SmallMultiple and set `panel` to the label of the panel.
+
 ## Using it in a layout
 
 A `SmallMultiple` is a standalone document, or a child of a `LayoutPage` or `LayoutCard`, inline or by `ref`. It cannot be a cell of a `Grid` or a node of a `Tree`, and a `ScreenshotArtefact` cannot target it directly: wrap it in a `LayoutCard`.

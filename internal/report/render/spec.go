@@ -682,6 +682,9 @@ type gridChild struct {
 	RowSpan    int    `json:"rowSpan,omitempty"`
 	ColumnSpan int    `json:"columnSpan,omitempty"`
 	Background string `json:"background,omitempty"`
+	// annotationTarget is the page-unique target id of a SmallMultiple panel
+	// that an annotation points at.
+	annotationTarget string
 }
 
 // writeCellAttrs writes the attributes bn-grid reads from the child of a cell.

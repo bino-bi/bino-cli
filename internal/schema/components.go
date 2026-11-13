@@ -212,8 +212,10 @@ type AnnotationSpec struct {
 
 // AnnotationTarget names a component and optionally one data point in it.
 type AnnotationTarget struct {
-	Kind  string           `yaml:"kind" json:"kind"`
-	Name  string           `yaml:"name" json:"name"`
+	Kind string `yaml:"kind" json:"kind"`
+	Name string `yaml:"name" json:"name"`
+	// Panel is the label of one panel of a SmallMultiple.
+	Panel string           `yaml:"panel,omitempty" json:"panel,omitempty"`
 	Point *AnnotationPoint `yaml:"point,omitempty" json:"point,omitempty"`
 }
 

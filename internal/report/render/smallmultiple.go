@@ -237,6 +237,8 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 			RowSpan:    p.rowSpan,
 			ColumnSpan: p.columnSpan,
 			Background: p.background,
+
+			annotationTarget: rc.panelAnnotationTarget(name, s.Base.Kind, s.Panels.By, p, cellSpec),
 		}
 		if p.item != nil && isSet(p.item.Card) && !hasCard {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: panels.items[].card needs card", name, p.label)
@@ -251,6 +253,7 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		}
 		children = append(children, child)
 	}
+	rc.warnUnknownPanels(name, panels)
 
 	showBorders := false
 	if s.ShowBorders != nil {

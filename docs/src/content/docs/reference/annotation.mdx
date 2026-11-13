@@ -61,6 +61,7 @@ A field left out is a wildcard. The point must match **exactly one** rendered el
 | `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
 | `Table` | `rowGroup`, `category`, `subCategory`, and `date` in a column of a date `interval`. `scenario` selects the column. Without `scenario` the whole row is the target. |
 | `Text`, `Tree`, `Grid` | None: use a target without `point`. |
+| `SmallMultiple` | With `panel`: the fields of its base kind. Without `panel`: none. |
 
 A table point without `subCategory` means the row itself and not its thereof rows. All columns of one scenario with `columnthereof` or `interval: setname` have the same key, so a point cannot tell them apart.
 
@@ -151,6 +152,31 @@ spec:
 
 Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow` and not allowed for the other marks.
 
+### One panel of a SmallMultiple
+
+A [`SmallMultiple`](/reference/small-multiple/) draws one chart or table per panel. `panel` names one of them by its label: a value of `panels.by`, or the `label` of a `panels.items` entry. `point` is then a data point of the chart or table in this panel.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: berlin_2026
+spec:
+  target:
+    kind: SmallMultiple
+    name: net-profit-by-location
+    panel: Berlin
+    point: { date: "2026-01-01", scenario: ac1 }
+  title: Berlin 2026
+  text: The new site opened in March.
+```
+
+- With `panel` and without `point`, the mark goes on the panel as a whole.
+- Without `panel`, the target is the SmallMultiple as a whole, like a `Grid`. It has no data points then.
+- `panel` is only allowed with `kind: SmallMultiple`.
+- A panel that does not exist is reported by [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing). The labels of `panels.by` come from the data, so for them the rule needs `--execute-queries`, and `bino build` writes a warning to its log.
+- The point check looks at the rows of the panel only: for a `by` panel the rows with its value in the `by` column. It does not look at the `filter` of a `panels.items` entry.
+
 ## Numbers
 
 The CLI gives the numbers, per page and starting at 1:
@@ -174,7 +200,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 
 ## Limits
 
-- A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one.
+- A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one. A panel of a `SmallMultiple` can be a target, see [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple).
 - A `ScreenshotArtefact` of a single component does not show the marks: they are drawn over the page and not in the component.
 - A component embedded in the Markdown of a `DocumentArtefact` has no marks.
 - The presentation view shows annotations like `bino preview`.
@@ -186,8 +212,9 @@ The check does not look at the `filter` of a component, it skips a component tha
 | --- | --- | --- | --- | --- |
 | `spec.mark` | string | no | `marker` | `marker`, `frame` or `arrow`. |
 | `spec.color` | string | no | main color | Name of a color in the `bn-annotation` style. |
-| `spec.target.kind` | string | yes | - | `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Table`, `Text`, `Tree` or `Grid`. |
+| `spec.target.kind` | string | yes | - | `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Table`, `Text`, `Tree`, `Grid` or `SmallMultiple`. |
 | `spec.target.name` | string | yes | - | Name of the component. |
+| `spec.target.panel` | string | no | - | Label of one panel. Only with `kind: SmallMultiple`. See [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple). |
 | `spec.target.point` | object | no | whole component | See [The point](#the-point). |
 | `spec.to` | object | for `arrow` | - | The end of the arrow, the same shape as `target`. |
 | `spec.title` | string | no | - | Shown in bold in the list. |

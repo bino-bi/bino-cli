@@ -855,6 +855,8 @@ The `target` or `to` of an [`Annotation`](/reference/annotation/) resolves to no
 
 A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The message says so.
 
+A target with `panel` names one panel of a `SmallMultiple`. The rule also reports a `panel` that the SmallMultiple does not have. The labels of `panels.items` are checked always. The values of `panels.by` come from the data, so they are checked with `--execute-queries` only, and `bino build` writes a warning to its log.
+
 ```yaml
 kind: Annotation
 metadata:

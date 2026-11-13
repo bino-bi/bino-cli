@@ -2403,18 +2403,26 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid"],
+          "enum": ["ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid", "SmallMultiple"],
           "description": "Kind of the component."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the component: the document a layout child refs, or metadata.name of an inline child. A child of a Grid or a Tree cannot be a target."
+          "description": "Name of the component: the document a layout child refs, or metadata.name of an inline child. A child of a Grid or a Tree cannot be a target. One panel of a SmallMultiple can: see panel."
+        },
+        "panel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label of one panel of a SmallMultiple: a value of panels.by or the label of a panels.items entry. The mark then points at that panel, and point is a data point of its chart or table. Only with kind SmallMultiple."
         },
         "point": {
           "$ref": "#/$defs/annotationPoint",
-          "description": "One data point of the component. Without it the mark points at the component as a whole."
+          "description": "One data point of the component. Without it the mark points at the component as a whole. On a SmallMultiple a point needs panel."
         }
+      },
+      "dependentSchemas": {
+        "panel": { "properties": { "kind": { "const": "SmallMultiple" } } }
       },
       "additionalProperties": false
     },
