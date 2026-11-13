@@ -3553,6 +3553,10 @@
           "default": "",
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted. Supports inline Markdown (bold, italic, code, links, strikethrough) and inline HTML, converted to HTML at build time and sanitized before rendering. Use <br /> for an explicit line break. Block Markdown (headings, lists, tables) is not interpreted, so a value like '1. Quartal 2024' stays literal."
         },
+        "titleId": {
+          "type": "string",
+          "description": "Short id of the page, for example a template number like 13A. Shown at the top right of the title, on the level of its first line, in the font of the title and not bold. If empty, nothing is shown. Needs template engine v1.0.0-next.46 or newer."
+        },
         "titleNamespace": { "type": "string", "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children." },
         "i18nNamespace": {
           "type": "string",

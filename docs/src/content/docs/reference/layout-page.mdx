@@ -57,9 +57,17 @@ can be reused with different values, see [LayoutPage Parameters](#layoutpage-par
 
 Key fields (see JSON schema for full list):
 
-- Title row fields: `titleBusinessUnit`, `i18nNamespace` (`titleNamespace` is deprecated), `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
+- Title row fields: `titleBusinessUnit`, `titleId`, `i18nNamespace` (`titleNamespace` is deprecated), `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleMeasures`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`. The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values.
 - Page frame fields: `pageLayout`, `pageCustomTemplate`, `pageGridGap`, `pageFormat`, `pageOrientation`, `pageFitToContent`, `pageNumber`, `footerDisplayPageNumber`, `footerText`.
 - Message row: `messageImage`, `messageText`.
+
+`titleId` is a short id of the page, for example a template number like `13A`. It stands at the top right of the title, on the level of its first line, in the font of the title and not bold. Without it nothing is shown. It needs template engine **v1.0.0-next.46** or newer. With an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version).
+
+```yaml
+spec:
+  titleBusinessUnit: "Beta Corp., 25 locations"
+  titleId: 13A
+```
 - Styling: `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the page frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner page element. Inline children accept `selectedStyle` in their `spec` as well.
 - IBCS rules: `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) applied to the page title; child components inherit it via `ruleset: inherited-page` or `ruleset: inherited-closest`.
 - Annotations: an [`Annotation`](/reference/annotation/) on a child of this page draws over the page. An [`AnnotationList`](/reference/annotation-list/) child prints the numbered texts.
@@ -803,6 +811,7 @@ You can combine both: use constraints to filter which pages are included, and pa
 | Attribute                   | Type            | Required | Default    | Description                                                                                                                                                                                                   | Sample                                  |
 | --------------------------- | --------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `spec.titleBusinessUnit`    | string          | no       | `""`       | Business unit name in the title header. Supports [inline Markdown and HTML](#formatting-the-message-and-the-business-unit).                                                                                   | `titleBusinessUnit: "Sales"`            |
+| `spec.titleId`              | string          | no       | -          | Short id of the page, shown at the top right of the title, for example `13A`. Needs engine v1.0.0-next.46. |
 | `spec.titleNamespace`       | string          | no       | -          | Deprecated: use `i18nNamespace`. Namespace for title translations only; never applies to children. Setting it raises the `titleNamespace Deprecated` lint finding.                                            | `titleNamespace: audited`               |
 | `spec.i18nNamespace`        | string          | no       | -          | I18n namespace for the page title and, via inheritance, all children (their own `i18nNamespace` wins). Takes precedence over `titleNamespace`.                                                                | `i18nNamespace: audited`                |
 | `spec.titleDateStart`       | string          | no       | -          | Start date (ISO 8601 date or datetime).                                                                                                                                                                       | `titleDateStart: 2024-01-01`            |
