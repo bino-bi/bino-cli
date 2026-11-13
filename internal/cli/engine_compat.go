@@ -57,6 +57,30 @@ func engineCompatFinding(projectRoot, pinnedVersion string) (lint.Finding, bool)
 	}, true
 }
 
+// featureGateFindings runs the engine gates that make lint fail. It returns
+// their findings, the last gate first, and the id of the first failing gate.
+func featureGateFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (findings []lint.Finding, fatalID string) {
+	gates := []struct {
+		id    string
+		check func(string, *pathutil.ProjectConfig, []config.Document) (lint.Finding, bool)
+	}{
+		{"annotation-engine-version", annotationEngineFinding},
+		{"grid-cell-layout-engine-version", gridCellLayoutEngineFinding},
+		{"small-multiple-span-engine-version", smallMultipleSpanEngineFinding},
+	}
+	for _, g := range gates {
+		finding, fatal := g.check(projectRoot, cfg, documents)
+		if !fatal {
+			continue
+		}
+		findings = append([]lint.Finding{finding}, findings...)
+		if fatalID == "" {
+			fatalID = g.id
+		}
+	}
+	return findings, fatalID
+}
+
 // annotationEngineFinding reports a project with Annotation documents whose
 // engine is older than the release with the overlay. It is its own check, as a
 // project without annotations keeps working on that engine.

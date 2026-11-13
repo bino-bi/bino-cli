@@ -203,11 +203,12 @@ func (u *uses) addTokens(role, field, list string) {
 // scenario column: a chart then draws only its variances.
 func (u *uses) addScenarios(f fields, anc ancestors, emptyIsNone bool) {
 	scenarios := anc.inherit(f.joined("scenarios"), func(t *titles) string { return t.scenarios })
-	if emptyIsNone && f.emptyList("scenarios") {
+	switch {
+	case emptyIsNone && f.emptyList("scenarios"):
 		// no scenario of its own
-	} else if isAuto(scenarios) {
+	case isAuto(scenarios):
 		u.add(RoleScenario, "scenarios", ColumnAuto)
-	} else {
+	default:
 		u.addTokens(RoleScenario, "scenarios", scenarios)
 	}
 	u.addTokens(RoleVariance, "variances", anc.inherit(f.joined("variances"), func(t *titles) string { return t.variances }))

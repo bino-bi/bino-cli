@@ -172,19 +172,9 @@ with --fail-on-warnings.`),
 				findings = append([]lint.Finding{compatFinding}, findings...)
 			}
 
-			// A project with annotations needs a newer engine than one without.
-			annotationGateFinding, annotationGateFatal := annotationEngineFinding(projectRoot, projectCfg, documents)
-			if annotationGateFatal {
-				findings = append([]lint.Finding{annotationGateFinding}, findings...)
-			}
-			gridGateFinding, gridGateFatal := gridCellLayoutEngineFinding(projectRoot, projectCfg, documents)
-			if gridGateFatal {
-				findings = append([]lint.Finding{gridGateFinding}, findings...)
-			}
-			spanGateFinding, spanGateFatal := smallMultipleSpanEngineFinding(projectRoot, projectCfg, documents)
-			if spanGateFatal {
-				findings = append([]lint.Finding{spanGateFinding}, findings...)
-			}
+			// A feature like annotations needs a newer engine than a project without it.
+			gateFindings, gateFatalID := featureGateFindings(projectRoot, projectCfg, documents)
+			findings = append(gateFindings, findings...)
 			opGateFinding, opGateFatal := operationSentimentEngineFinding(projectRoot, projectCfg, documents)
 			if opGateFatal {
 				findings = append([]lint.Finding{opGateFinding}, findings...)
@@ -278,14 +268,8 @@ with --fail-on-warnings.`),
 			if compatFatal {
 				return RuntimeErrorf("engine-version-incompatible")
 			}
-			if annotationGateFatal {
-				return RuntimeErrorf("annotation-engine-version")
-			}
-			if gridGateFatal {
-				return RuntimeErrorf("grid-cell-layout-engine-version")
-			}
-			if spanGateFatal {
-				return RuntimeErrorf("small-multiple-span-engine-version")
+			if gateFatalID != "" {
+				return RuntimeErrorf("%s", gateFatalID)
 			}
 
 			// Manifests that failed to load stay fatal even when [lint] hides

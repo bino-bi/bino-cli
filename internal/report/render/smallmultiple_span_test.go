@@ -24,8 +24,9 @@ type spanCell struct {
 }
 
 func spanCells(html string) []spanCell {
-	var out []spanCell
-	for _, m := range spanCellPattern.FindAllStringSubmatch(html, -1) {
+	matches := spanCellPattern.FindAllStringSubmatch(html, -1)
+	out := make([]spanCell, 0, len(matches))
+	for _, m := range matches {
 		out = append(out, spanCell{slot: m[1], cell: attrsOf(m[2]), component: attrsOf(m[4])})
 	}
 	return out

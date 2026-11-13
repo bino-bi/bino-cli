@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"sort"
 	"strings"
 
@@ -91,12 +92,11 @@ func (w spanWalk) walk(v any) {
 
 // overlay is base with the fields of over on top, one level deep.
 func overlay(base, over map[string]any) map[string]any {
-	merged := make(map[string]any, len(base)+len(over))
-	for _, layer := range []map[string]any{base, over} {
-		for k, v := range layer {
-			merged[k] = v
-		}
+	merged := maps.Clone(base)
+	if merged == nil {
+		merged = map[string]any{}
 	}
+	maps.Copy(merged, over)
 	return merged
 }
 
