@@ -79,8 +79,16 @@ func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig
 // smallMultipleSpanEngineFinding reports a project that uses cell spans, cell
 // backgrounds or the other fields of that engine release on an older engine.
 func smallMultipleSpanEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
-	features := config.SmallMultipleSpanFeatures(documents)
+	features := config.SmallMultipleSpanFeatures(documents, nil)
 	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
+}
+
+// smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
+// only a dataset default sets, which shows after the queries ran.
+func smallMultipleSpanDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	features := dataset.SmallMultipleSpanFeatures(documents, results)
+	used := len(config.SmallMultipleSpanFeatures(documents, nil)) == 0 && len(features) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
 }
 
 // operationSentimentEngineFinding reports a project that uses the variance
@@ -142,13 +150,15 @@ func tableEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, docume
 	return findings
 }
 
-// tableDefaultEngineFindings returns the engine gate findings of the Table
-// features that only a dataset default turns on.
+// tableDefaultEngineFindings returns the engine gate findings of the features
+// that only a dataset default turns on: those of the Table, and the chart
+// fields of the cell span release.
 func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) []lint.Finding {
 	var findings []lint.Finding
 	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document, []dataset.Result) (lint.Finding, bool){
 		categoryIntervalPositionDefaultEngineFinding,
 		tableCalculationSchemeDefaultEngineFinding,
+		smallMultipleSpanDefaultEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)

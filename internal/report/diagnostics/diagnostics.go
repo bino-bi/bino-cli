@@ -201,7 +201,7 @@ func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnos
 // cell backgrounds or the other fields of that engine release on an older
 // engine.
 func smallMultipleSpanEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
-	features := config.SmallMultipleSpanFeatures(docs)
+	features := config.SmallMultipleSpanFeatures(docs, nil)
 	return engineGateDiagnostic(dir, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
 }
 
@@ -351,6 +351,12 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		defaultUsed := !config.UsesCategoryIntervalPosition(docs) && dataset.DefaultsSetCategoryIntervalPosition(results)
 		if d, ok := engineGateDiagnostic(dir, defaultUsed, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version"); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
+		}
+		if len(config.SmallMultipleSpanFeatures(docs, nil)) == 0 {
+			features := dataset.SmallMultipleSpanFeatures(docs, results)
+			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version"); ok && !runner.Skip(d.Code) {
+				diagnostics = append(diagnostics, d)
+			}
 		}
 		if len(config.TableCalculationSchemeProps(docs, nil)) == 0 {
 			props := dataset.TableCalculationSchemeProps(docs, results)

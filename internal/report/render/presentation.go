@@ -326,7 +326,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
-	if err := checkSmallMultipleSpanEngine(docs, engineVersion); err != nil {
+	if err := checkSmallMultipleSpanEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationResult{}, diags, err
 	}
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {
@@ -480,7 +480,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
-	if err := checkSmallMultipleSpanEngine(docs, engineVersion); err != nil {
+	if err := checkSmallMultipleSpanEngine(docs, datasetResults, engineVersion); err != nil {
 		return PresentationFrameResult{}, diags, err
 	}
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {

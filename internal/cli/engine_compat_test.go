@@ -221,6 +221,41 @@ func TestSmallMultipleSpanEngineFinding(t *testing.T) {
 	}
 }
 
+func TestSmallMultipleSpanDefaultEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`)}}
+	table := []config.Document{{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"sales"}}`)}}
+	inManifest := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","scenarioSwitch":true}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"charttime":      {"scenarioSwitch": json.RawMessage(`true`)},
+		dataset.AnyToken: {"dataFormatDigitsDecimal": json.RawMessage(`0`)},
+	}}}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine, chart on the dataset", "v1.0.0-next.45", chart, true},
+		{"old engine, table on the dataset", "v1.0.0-next.45", table, false},
+		{"old engine, the manifest gate reports it already", "v1.0.0-next.45", inManifest, false},
+		{"new engine", "v1.0.0-next.46", chart, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := smallMultipleSpanDefaultEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs, results)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "small-multiple-span-engine-version" ||
+				!strings.Contains(finding.Message, "ChartTime dataFormatDigitsDecimal, ChartTime scenarioSwitch")) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
 func TestGridCellLayoutEngineFinding(t *testing.T) {
 	grid := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{"cellHeight":"equal"}}`)}
 	plain := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{}}`)}

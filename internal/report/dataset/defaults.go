@@ -755,6 +755,29 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 	return false
 }
 
+// SmallMultipleSpanFeatures returns what the documents use of the template
+// engine release with cell spans, in a manifest or through a default of the
+// primary dataset of a chart. The manifests do not show such a default, so
+// the engine gate asks here.
+func SmallMultipleSpanFeatures(docs []config.Document, results []Result) []string {
+	defaults := make(map[string]map[string]map[string]any, len(results))
+	for _, r := range results {
+		byToken := map[string]map[string]any{}
+		for _, token := range []string{AnyToken, "charttime", "chartstructure"} {
+			fields := map[string]any{}
+			for field, raw := range r.Defaults[token] {
+				var v any
+				if json.Unmarshal(raw, &v) == nil {
+					fields[field] = v
+				}
+			}
+			byToken[token] = fields
+		}
+		defaults[r.Name] = byToken
+	}
+	return config.SmallMultipleSpanFeatures(docs, defaults)
+}
+
 // TableCalculationSchemeProps returns the Table calculation scheme fields that
 // a Table turns on, in a manifest or through a default of its primary dataset.
 // The manifests do not show such a default, so the engine gate asks here.

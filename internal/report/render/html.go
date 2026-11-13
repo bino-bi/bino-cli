@@ -360,7 +360,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
-	if err := checkSmallMultipleSpanEngine(docs, engineVersion); err != nil {
+	if err := checkSmallMultipleSpanEngine(docs, datasetResults, engineVersion); err != nil {
 		return Result{}, diags, err
 	}
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {
@@ -529,7 +529,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	if err := checkGridCellLayoutEngine(docs, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
-	if err := checkSmallMultipleSpanEngine(docs, engineVersion); err != nil {
+	if err := checkSmallMultipleSpanEngine(docs, datasetResults, engineVersion); err != nil {
 		return FrameResult{}, diags, err
 	}
 	if err := checkOperationSentimentEngine(docs, engineVersion); err != nil {

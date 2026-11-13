@@ -947,7 +947,11 @@ The project uses a field of template engine v1.0.0-next.46 and the engine is old
 - `axisLabelsStep` above 1, `scenarioSwitch: true` and `axisTitlePosition: right` or `none` of a `ChartTime`,
 - the style keys `bn-grid.cellBackground` and `bn-layout-card.titleFontSize` of a `ComponentStyle`.
 
-It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves these fields at their defaults keeps working on the older engine. A value that only a `_spec_` column of a dataset sets is not checked.
+It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves these fields at their defaults keeps working on the older engine. `cellBackground: transparent` is the default too.
+
+A chart field can also come from a [dataset default](/reference/dataset/#dataset-defaults): a `_spec_` column or `constants.spec` of the primary dataset of a `ChartTime` or `ChartStructure`. The manifests do not show such a value, so this part of the check runs after the queries: in `bino build`, `bino preview` and `bino lint --execute-queries`.
+
+An empty `scenarios` list on a chart is in this list because its meaning changed: it used to mean detection, and now it means "no scenarios". Write `scenarios: auto` or remove the field to keep the detection, on every engine.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.46 or newer, or remove the fields.
 

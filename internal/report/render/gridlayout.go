@@ -5,6 +5,7 @@ import (
 
 	"bino.bi/bino/internal/engine"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
 )
 
 // checkGridCellLayoutEngine fails a render that uses grid cell size, alignment
@@ -21,9 +22,10 @@ func checkGridCellLayoutEngine(docs []config.Document, engineVersion string) err
 
 // checkSmallMultipleSpanEngine fails a render that uses cell spans, cell
 // backgrounds or the other fields of that engine release on an engine that
-// would ignore them.
-func checkSmallMultipleSpanEngine(docs []config.Document, engineVersion string) error {
-	features := config.SmallMultipleSpanFeatures(docs)
+// would ignore them. The dataset results show the chart fields that a dataset
+// default sets.
+func checkSmallMultipleSpanEngine(docs []config.Document, results []dataset.Result, engineVersion string) error {
+	features := dataset.SmallMultipleSpanFeatures(docs, results)
 	if len(features) == 0 {
 		return nil
 	}

@@ -37,13 +37,86 @@ func TestSmallMultipleSpanFeatures(t *testing.T) {
 			[]string{"ComponentStyle bn-grid.cellBackground", "ComponentStyle bn-layout-card.titleFontSize"}},
 		{"style keys in a JSON string", `{"kind":"ComponentStyle","spec":{"content":"{\"bn-grid\":{\"cellBackground\":\"#eee\"}}"}}`,
 			[]string{"ComponentStyle bn-grid.cellBackground"}},
+		{"cell background at its default", `{"kind":"ComponentStyle","spec":{"content":{"bn-grid":{"cellBackground":" Transparent "}}}}`, nil},
+		{"empty cell background", `{"kind":"ComponentStyle","spec":{"content":{"bn-grid":{"cellBackground":""}}}}`, nil},
 		{"other style keys", `{"kind":"ComponentStyle","spec":{"content":{"bn-grid":{"captionFontSize":11}}}}`, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			docs := []Document{{Kind: "x", Raw: json.RawMessage(tt.raw)}}
-			if got := SmallMultipleSpanFeatures(docs); !slices.Equal(got, tt.want) {
+			if got := SmallMultipleSpanFeatures(docs, nil); !slices.Equal(got, tt.want) {
 				t.Fatalf("features = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A ref child that only overrides the items has no base of its own: the kind
+// of the base comes from the referenced SmallMultiple.
+func TestSmallMultipleSpanFeatures_RefOverride(t *testing.T) {
+	override := Document{Kind: "LayoutPage", Name: "p", Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{"children":[
+		{"kind":"SmallMultiple","ref":"sm","spec":{"panels":{"items":[{"label":"a","spec":{"scenarioSwitch":true,"scenarios":[]}}]}}}]}}`)}
+	want := []string{"ChartTime scenarioSwitch", "ChartTime scenarios: []"}
+
+	inline := Document{Kind: "SmallMultiple", Name: "sm", Raw: json.RawMessage(`{"kind":"SmallMultiple","metadata":{"name":"sm"},
+		"spec":{"base":{"kind":"ChartTime","spec":{}},"panels":{"items":[{"label":"a"}]}}}`)}
+	if got := SmallMultipleSpanFeatures([]Document{override, inline}, nil); !slices.Equal(got, want) {
+		t.Errorf("inline base: features = %v, want %v", got, want)
+	}
+	byRef := Document{Kind: "SmallMultiple", Name: "sm", Raw: json.RawMessage(`{"kind":"SmallMultiple","metadata":{"name":"sm"},
+		"spec":{"base":{"kind":"ChartTime","ref":"trend"},"panels":{"items":[{"label":"a"}]}}}`)}
+	if got := SmallMultipleSpanFeatures([]Document{byRef, override}, nil); !slices.Equal(got, want) {
+		t.Errorf("base by ref: features = %v, want %v", got, want)
+	}
+	table := Document{Kind: "SmallMultiple", Name: "sm", Raw: json.RawMessage(`{"kind":"SmallMultiple","metadata":{"name":"sm"},
+		"spec":{"base":{"kind":"Table","ref":"t"},"panels":{"items":[{"label":"a"}]}}}`)}
+	if got := SmallMultipleSpanFeatures([]Document{table, override}, nil); len(got) != 0 {
+		t.Errorf("table base: features = %v", got)
+	}
+}
+
+func TestSmallMultipleSpanFeatures_DatasetDefaults(t *testing.T) {
+	defaults := map[string]map[string]map[string]any{
+		"sales": {
+			"any":       {"dataFormatDigitsDecimal": float64(0)},
+			"charttime": {"scenarioSwitch": true, "axisLabelsStep": float64(2)},
+		},
+		"plain": {"any": {"dataFormatDigitsDecimal": float64(1)}},
+	}
+	doc := func(raw string) []Document { return []Document{{Kind: "x", Raw: json.RawMessage(raw)}} }
+	tests := []struct {
+		name string
+		docs []Document
+		want []string
+	}{
+		{"time chart", doc(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`),
+			[]string{"ChartTime axisLabelsStep", "ChartTime dataFormatDigitsDecimal", "ChartTime scenarioSwitch"}},
+		{"structure chart gets the any default only", doc(`{"kind":"ChartStructure","spec":{"dataset":"sales"}}`),
+			[]string{"ChartStructure dataFormatDigitsDecimal"}},
+		{"the spec wins over the default", doc(`{"kind":"ChartTime","spec":{"dataset":"sales","scenarioSwitch":false,"axisLabelsStep":1,"dataFormatDigitsDecimal":1}}`), nil},
+		{"only the primary dataset counts", doc(`{"kind":"ChartTime","spec":{"dataset":["plain","sales"]}}`), nil},
+		{"a default at the engine default", doc(`{"kind":"ChartTime","spec":{"dataset":"plain"}}`), nil},
+		{"a table had the digits before", doc(`{"kind":"Table","spec":{"dataset":"sales"}}`), nil},
+		{"a datasource binding gets no defaults", doc(`{"kind":"ChartTime","spec":{"dataset":"$sales"}}`), nil},
+		{"dataset name from a param", doc(`{"kind":"ChartTime","spec":{"dataset":"${SET}"}}`),
+			[]string{"ChartTime axisLabelsStep", "ChartTime dataFormatDigitsDecimal", "ChartTime scenarioSwitch"}},
+		{"ref child that sets the dataset", []Document{
+			{Kind: "ChartTime", Name: "trend", Raw: json.RawMessage(`{"kind":"ChartTime","metadata":{"name":"trend"},"spec":{"dataset":"plain","scenarioSwitch":false}}`)},
+			{Kind: "LayoutPage", Name: "p", Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{"children":[{"kind":"ChartTime","ref":"trend","spec":{"dataset":"sales"}}]}}`)},
+		}, []string{"ChartTime axisLabelsStep", "ChartTime dataFormatDigitsDecimal"}},
+		{"small multiple panels", doc(`{"kind":"SmallMultiple","spec":{"dataset":"sales","base":{"kind":"ChartTime","spec":{"axisLabelsStep":1}},"panels":{"by":"g"}}}`),
+			[]string{"ChartTime dataFormatDigitsDecimal", "ChartTime scenarioSwitch"}},
+		{"small multiple item dataset", doc(`{"kind":"SmallMultiple","spec":{"dataset":"plain","base":{"kind":"ChartStructure","spec":{}},"panels":{"items":[{"label":"a","dataset":"sales"}]}}}`),
+			[]string{"ChartStructure dataFormatDigitsDecimal"}},
+		{"small multiple with a table base", doc(`{"kind":"SmallMultiple","spec":{"dataset":"sales","base":{"kind":"Table","spec":{}},"panels":{"by":"g"}}}`), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SmallMultipleSpanFeatures(tt.docs, defaults); !slices.Equal(got, tt.want) {
+				t.Fatalf("features = %v, want %v", got, tt.want)
+			}
+			if got := SmallMultipleSpanFeatures(tt.docs, nil); len(got) != 0 {
+				t.Fatalf("without the defaults: features = %v", got)
 			}
 		})
 	}
