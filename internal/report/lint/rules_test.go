@@ -513,6 +513,9 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"small-multiple-base-dataset",
 		"small-multiple-by-datasource",
 		"small-multiple-card",
+		"small-multiple-span",
+		"small-multiple-axis-titles",
+		"grid-cell-span",
 	}
 
 	if len(rules) != len(expectedIDs) {

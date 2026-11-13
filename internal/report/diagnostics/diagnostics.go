@@ -286,6 +286,18 @@ func CategoryIntervalPositionFindings(docs []config.Document, results []dataset.
 	})
 }
 
+// SmallMultipleOverrideFindings checks the panels.overrides values of the
+// SmallMultiples against the executed datasets.
+func SmallMultipleOverrideFindings(docs []config.Document, results []dataset.Result) []lint.Finding {
+	raw := make(map[string]json.RawMessage, len(results))
+	for _, r := range results {
+		raw[r.Name] = r.Data
+	}
+	return lint.SmallMultipleOverrideFindings(lint.DocumentsFromConfig(docs), func(binding string) json.RawMessage {
+		return raw[binding]
+	})
+}
+
 // tableDefaults decodes the spec defaults a dataset carries for a Table: the
 // `table` defaults over the `any` defaults.
 func tableDefaults(defaults dataset.Defaults) map[string]any {
@@ -322,6 +334,7 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		})
 	} else {
 		dataFindings := append(AnnotationPointFindings(ctx, docs, results), CategoryIntervalPositionFindings(docs, results)...)
+		dataFindings = append(dataFindings, SmallMultipleOverrideFindings(docs, results)...)
 		runner := lint.NewProjectRunner(dir)
 		// Collect reports the gate for a value in a manifest; this one is for a dataset default.
 		defaultUsed := !config.UsesCategoryIntervalPosition(docs) && dataset.DefaultsSetCategoryIntervalPosition(results)

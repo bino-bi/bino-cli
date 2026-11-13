@@ -60,6 +60,10 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
 | `small-multiple-card` | Small Multiple Card | Warning / Error | A caption next to a `card` names each panel twice (warning). `panels.items[].card` without `card` (error). |
+| `small-multiple-span` | Small Multiple Span | Error | A `columnSpan` of a SmallMultiple panel must not be larger than `columns`. |
+| `small-multiple-axis-titles` | Small Multiple Axis Titles | Error | `axisTitles: rowEnd` of a SmallMultiple needs a `ChartTime` base. |
+| `small-multiple-override-unmatched` | Small Multiple Override Unmatched | Warning | A `panels.overrides` value of a SmallMultiple must be a value of the `by` column. Needs the data: `--execute-queries`, build and preview. |
+| `grid-cell-span` | Grid Cell Span | Error | A `rowSpan` or `columnSpan` of a Grid child must end inside the grid, and no child may sit in a position that a span covers. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
 | `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
 | `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
@@ -1006,6 +1010,50 @@ With `card`, every panel is a card whose title names the panel. Two cases are re
 - A `panels.items` entry has a `card`, but the SmallMultiple has none. An item card only changes the shared card, so the build fails. This is an error.
 
 **Fix:** remove `caption` when you use `card`, and set `card` on the SmallMultiple before you change it per item.
+
+### small-multiple-span
+
+A panel of a [`SmallMultiple`](/reference/small-multiple/#larger-panels-and-backgrounds) has a `columnSpan` that is larger than `columns`. Such a panel fits in no row, so the build fails. The rule checks `panels.items` and `panels.overrides`. Without `columns` the grid is never narrower than the widest panel, and the rule reports nothing.
+
+```yaml
+columns: 3
+panels:
+  by: rowGroup
+  overrides:
+    - value: Berlin
+      columnSpan: 4 # only 3 columns
+```
+
+**Fix:** lower `columnSpan` or raise `columns`.
+
+### small-multiple-axis-titles
+
+`axisTitles: rowEnd` moves the axis titles of the panels to the end of each row. Only a `ChartTime` can move its axis titles, so with another base kind the build fails.
+
+**Fix:** remove `axisTitles`, or use a `ChartTime` base.
+
+### small-multiple-override-unmatched
+
+An entry of `panels.overrides` names a `by` panel by its value, and no panel has this value. The entry does nothing. A panel that `limit` drops counts as missing too. The rule needs the rows of the dataset, so `bino lint` reports it with `--execute-queries` only. `bino build` and `bino preview` write it to their log.
+
+**Fix:** write the value as it is in the `by` column. Text is case-sensitive.
+
+### grid-cell-span
+
+A child of a [`Grid`](/reference/grid/#cell-span-and-background) has a span that cannot be drawn as written. Two cases are reported:
+
+- A child sits in a position that the `rowSpan` or `columnSpan` of another child covers. The grid draws no cell there, so the child is not shown.
+- A `rowSpan` goes beyond the last row, or a `columnSpan` beyond the last column. The grid cuts the span at its edge.
+
+```yaml
+rowHeaders: ["A", "B"]
+columnHeaders: ["X", "Y"]
+children:
+  - { row: 0, column: 0, columnSpan: 2, kind: Text, spec: { value: wide } }
+  - { row: 0, column: 1, kind: Text, spec: { value: hidden } } # covered by the first child
+```
+
+**Fix:** move or remove the covered child, or make the span smaller.
 
 ### duplicate-name
 

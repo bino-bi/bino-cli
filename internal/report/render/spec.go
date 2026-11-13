@@ -677,6 +677,22 @@ type gridChild struct {
 	Params   map[string]string `json:"params,omitempty"`
 	Spec     json.RawMessage   `json:"spec,omitempty"`
 	Caption  string            `json:"caption,omitempty"`
+	// RowSpan and ColumnSpan make the cell also take the positions below and
+	// right of it; 0 and 1 are one position.
+	RowSpan    int    `json:"rowSpan,omitempty"`
+	ColumnSpan int    `json:"columnSpan,omitempty"`
+	Background string `json:"background,omitempty"`
+}
+
+// writeCellAttrs writes the attributes bn-grid reads from the child of a cell.
+func (c gridChild) writeCellAttrs(b *strings.Builder) {
+	if c.RowSpan > 1 {
+		writeAttr(b, "row-span", strconv.Itoa(c.RowSpan))
+	}
+	if c.ColumnSpan > 1 {
+		writeAttr(b, "column-span", strconv.Itoa(c.ColumnSpan))
+	}
+	writeAttr(b, "cell-background", c.Background)
 }
 
 // stringOrInt is a type that can unmarshal from either a string or an integer,

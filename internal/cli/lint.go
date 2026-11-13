@@ -207,6 +207,7 @@ with --fail-on-warnings.`),
 					dataValidationWarnings = warnings
 					findings = append(findings, runner.Apply(diagnostics.AnnotationPointFindings(ctx, documents, results))...)
 					findings = append(findings, runner.Apply(diagnostics.CategoryIntervalPositionFindings(documents, results))...)
+					findings = append(findings, runner.Apply(diagnostics.SmallMultipleOverrideFindings(documents, results))...)
 					findings = append(tableDefaultEngineFindings(projectRoot, projectCfg, documents, results), findings...)
 				}
 			}

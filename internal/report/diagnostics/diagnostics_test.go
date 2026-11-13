@@ -583,3 +583,13 @@ func TestTableCalculationSchemeEngineDiagnostic(t *testing.T) {
 		t.Fatalf("defaults: %+v", d)
 	}
 }
+
+func TestSmallMultipleOverrideFindings(t *testing.T) {
+	sm := config.Document{Kind: "SmallMultiple", Name: "sm", Raw: json.RawMessage(`{"kind":"SmallMultiple","metadata":{"name":"sm"},
+		"spec":{"dataset":"profit","base":{"kind":"ChartTime","ref":"t"},"panels":{"by":"rowGroup","overrides":[{"value":"Berlin"},{"value":"Hamburg"}]}}}`)}
+	results := []dataset.Result{{Name: "profit", Data: json.RawMessage(`[{"rowGroup":"Berlin"}]`)}}
+	findings := SmallMultipleOverrideFindings([]config.Document{sm}, results)
+	if len(findings) != 1 || findings[0].RuleID != "small-multiple-override-unmatched" || !strings.Contains(findings[0].Message, `"Hamburg"`) {
+		t.Fatalf("findings = %+v", findings)
+	}
+}

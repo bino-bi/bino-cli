@@ -5132,7 +5132,7 @@
             { "if": { "not": { "required": ["ref"] } }, "then": { "required": ["spec"] } }
           ]
         },
-        "panels": { "anyOf": [{ "required": ["by"] }, { "required": ["items"] }] }
+        "panels": { "anyOf": [{ "required": ["by"] }, { "required": ["items"] }], "dependentRequired": { "overrides": ["by"] } }
       }
     },
     "smallMultipleSpecBase": {
@@ -5254,7 +5254,26 @@
                   "filter": { "type": "string", "description": "AlaSQL WHERE-clause fragment selecting the rows of this panel." },
                   "dataset": { "type": "string", "pattern": "^[^$]", "description": "DataSet name used for this panel instead of the SmallMultiple dataset. A $datasource is not allowed here." },
                   "spec": { "type": "object", "description": "Overrides of the panel spec for this panel only." },
-                  "card": { "type": "object", "description": "Changes the card of this panel, over the card of the SmallMultiple: the same fields as card. Needs card." }
+                  "card": { "type": "object", "description": "Changes the card of this panel, over the card of the SmallMultiple: the same fields as card. Needs card." },
+                  "rowSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid rows the panel takes. Needs template engine v1.0.0-next.46 or newer." },
+                  "columnSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid columns the panel takes. Not more than columns. Needs template engine v1.0.0-next.46 or newer." },
+                  "background": { "type": "string", "description": "Background color of the cell of the panel (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer." }
+                }
+              }
+            },
+            "overrides": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Span and background of single by panels, each named by its value. A value that no panel has is ignored with a warning. Needs by.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["value"],
+                "properties": {
+                  "value": { "type": ["string", "number", "boolean"], "description": "The value of the by column that names the panel, as in ${panel.value}." },
+                  "rowSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid rows the panel takes. Needs template engine v1.0.0-next.46 or newer." },
+                  "columnSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid columns the panel takes. Not more than columns. Needs template engine v1.0.0-next.46 or newer." },
+                  "background": { "type": "string", "description": "Background color of the cell of the panel (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer." }
                 }
               }
             }
@@ -5263,7 +5282,7 @@
         "columns": {
           "type": "integer",
           "minimum": 1,
-          "description": "Number of grid columns. Default: the square root of the panel count, rounded up."
+          "description": "Number of grid columns. Default: the square root of the panel count, rounded up. With spans, the square root of the positions the panels take, and at least the widest columnSpan."
         },
         "cellHeight": {
           "type": "string",
@@ -5285,6 +5304,12 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to draw lines between the panels."
+        },
+        "axisTitles": {
+          "type": "string",
+          "enum": ["each", "rowEnd"],
+          "default": "each",
+          "description": "Where the axis titles of the panels stand, for example the names of the variances. 'each' (default): every panel has its own. 'rowEnd': only the last panel of each row has them, at its right. ChartTime base only: it sets axisTitlePosition of the panels, and a panels.items[].spec that sets axisTitlePosition wins. Needs template engine v1.0.0-next.46 or newer."
         }
       }
     },
@@ -5464,6 +5489,22 @@
         "caption": {
           "type": "string",
           "description": "Caption drawn at the top left of the cell, above its content. Needs template engine v1.0.0-next.32 or newer."
+        },
+        "rowSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of rows the cell takes, from its own row down. The positions it covers must stay empty. Needs template engine v1.0.0-next.46 or newer."
+        },
+        "columnSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of columns the cell takes, from its own column to the right. The positions it covers must stay empty. Needs template engine v1.0.0-next.46 or newer."
+        },
+        "background": {
+          "type": "string",
+          "description": "Background color of the cell (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer."
         }
       },
       "allOf": [

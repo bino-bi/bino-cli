@@ -1558,7 +1558,14 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	// Render child content as slotted elements
 	var cells strings.Builder
 	rendered := make([]gridChild, 0, len(s.Children))
-	for _, child := range s.Children {
+	covered, _ := gridSpanLayout(s)
+	for i, child := range s.Children {
+		if by, ok := covered[i]; ok {
+			// bn-grid draws no cell there; lint reports it as grid-cell-span
+			rc.warn(fmt.Sprintf("Grid: the child in row %s, column %s is not shown: the span of the child in row %s, column %s covers its position",
+				child.Row, child.Column, s.Children[by].Row, s.Children[by].Column))
+			continue
+		}
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
 			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)
@@ -1570,7 +1577,9 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		slotName := gridSlotName(child)
 		cells.WriteString("\n  <div slot='")
 		cells.WriteString(html.EscapeString(slotName))
-		cells.WriteString("'>")
+		cells.WriteString("'")
+		child.writeCellAttrs(&cells)
+		cells.WriteString(">")
 		cells.WriteString(childContent)
 		cells.WriteString("</div>")
 	}

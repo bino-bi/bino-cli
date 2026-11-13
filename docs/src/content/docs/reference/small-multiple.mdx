@@ -123,6 +123,53 @@ The axes stay on one line also when the cards have titles of different height, f
 
 The panels are always aligned on their baselines, in both directions.
 
+## Larger panels and backgrounds
+
+A panel can take more than one position of the grid, and it can have a background color. Use this for the one location that needs more room, or to set a panel apart.
+
+```yaml
+columns: 4
+panels:
+  by: rowGroup
+  overrides:
+    - value: Berlin # the panel of this by value
+      rowSpan: 2
+      background: "#fff3c4"
+  items:
+    - label: Average of 25 locations
+      dataset: net_profit_avg
+      columnSpan: 2
+      background: "#f2f2f2"
+```
+
+- `rowSpan` and `columnSpan` are whole numbers from 1. Default: 1.
+- `background` is a CSS color for the cell of the panel. It wins over `cellBackground` of the [grid style](/reference/component-style/#grid-style-bn-grid), which colors every cell.
+- An entry of `panels.items` takes the three fields directly.
+- A `by` panel comes from the data, so it has no entry of its own. `panels.overrides` names it by its value: the same text as `${panel.value}`. `overrides` needs `by`. A value that no panel has does nothing. The build log says so, and `bino lint --execute-queries` reports it ([`small-multiple-override-unmatched`](/appendix/lint-rules/#small-multiple-override-unmatched)).
+
+Bino places the panels row by row, in their order. Each panel goes to the next free position where its span has room. A position that a panel skips stays empty, and later panels do not go back to fill it. The grid gets as many rows as the panels need.
+
+A `columnSpan` larger than `columns` cannot be placed. The build fails, and lint reports it ([`small-multiple-span`](/appendix/lint-rules/#small-multiple-span)). Without `columns`, the default is the square root of the number of positions that the panels take, rounded up, and never less than the widest `columnSpan`.
+
+With `cellHeight: equal` a panel over two rows is as tall as two rows. The scale does not change: the panel has more room, not larger bars.
+
+## Axis titles at the end of a row
+
+A `ChartTime` prints an axis title next to each of its axes: the chart title at the scenario axis, and the name of the variance at a variance axis. In a row of panels this repeats the same name in every panel. IBCS small multiples print it once, right of the last panel of a row.
+
+```yaml
+axisTitles: rowEnd
+```
+
+- `each` (default): every panel has its own axis titles.
+- `rowEnd`: only the last panel of each row has them, at its right. Bino sets [`axisTitlePosition`](/reference/chart-time/) of this panel to `right` and of all other panels to `none`. An `axisTitlePosition` in `base.spec` is replaced.
+- A panel that spans rows counts for the row it starts in.
+- An entry of `panels.items` that sets `axisTitlePosition` in its `spec` keeps its own value.
+
+`rowEnd` needs a `ChartTime` base. With another base kind the build fails, and lint reports it ([`small-multiple-axis-titles`](/appendix/lint-rules/#small-multiple-axis-titles)).
+
+Spans, backgrounds and `axisTitles: rowEnd` need template engine **v1.0.0-next.46** or newer. With an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version).
+
 ## Using it in a layout
 
 A `SmallMultiple` is a standalone document, or a child of a `LayoutPage` or `LayoutCard`, inline or by `ref`. It cannot be a cell of a `Grid` or a node of a `Tree`, and a `ScreenshotArtefact` cannot target it directly: wrap it in a `LayoutCard`.
@@ -159,7 +206,14 @@ spec:
 | `spec.panels.order`        | string           | no          | `dataset`          | `dataset`, `label`, or a column name, optionally followed by ` desc`.                                    |
 | `spec.panels.limit`        | integer          | no          | -                  | Most panels from `by`.                                                                                   |
 | `spec.panels.param`        | string           | no          | -                  | Pass the panel value to the referenced base as this parameter. Needs `base.ref`.                         |
-| `spec.panels.items`        | array            | conditional | -                  | Explicit panels after the `by` panels: `label` (required), `filter`, `dataset`, `spec`, `card`.          |
+| `spec.panels.items`        | array            | conditional | -                  | Explicit panels after the `by` panels: `label` (required), `filter`, `dataset`, `spec`, `card`, `rowSpan`, `columnSpan`, `background`. |
+| `spec.panels.items[].rowSpan`    | integer    | no          | `1`                | Number of grid rows the panel takes. Minimum: 1. Needs engine v1.0.0-next.46.                            |
+| `spec.panels.items[].columnSpan` | integer    | no          | `1`                | Number of grid columns the panel takes. Minimum: 1, not more than `columns`. Needs engine v1.0.0-next.46. |
+| `spec.panels.items[].background` | string     | no          | -                  | Background color of the cell of the panel (CSS color). Needs engine v1.0.0-next.46.                      |
+| `spec.panels.overrides`    | array            | no          | -                  | Span and background of single `by` panels: `value` (required), `rowSpan`, `columnSpan`, `background`. Needs `by`. |
+| `spec.panels.overrides[].value`  | string, number or boolean | yes | -           | The value of the `by` column that names the panel.                                                       |
+| `spec.panels.overrides[].rowSpan`, `columnSpan`, `background` | | no | -                 | As on an entry of `panels.items`.                                                                        |
+| `spec.axisTitles`          | string           | no          | `each`             | `each` or `rowEnd` (axis titles only right of the last panel of a row). `rowEnd` needs a `ChartTime` base and engine v1.0.0-next.46. |
 | `spec.columns`             | integer          | no          | square root        | Number of panel columns.                                                                                 |
 | `spec.cellHeight`          | string           | no          | `equal`            | `equal` or `auto`.                                                                                       |
 | `spec.cellWidth`           | string           | no          | `equal`            | `equal` or `auto`.                                                                                       |
