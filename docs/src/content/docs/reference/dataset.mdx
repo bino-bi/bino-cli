@@ -623,6 +623,12 @@ The Table renders with `scenarios="ac1,pl1"`, `bar-columns="ac1,pl1"` and `measu
 - The `_spec_` prefix is matched **case-sensitively**; a sheet header must spell it exactly.
 - A further `_` in the field part addresses the inside of an object-valued field: `_spec_table_thereof_0_rowGroup` is the `rowGroup` of the first `thereof` entry, see [Object-valued fields](#object-valued-fields).
 
+:::caution[`any` and the digits of the value labels]
+An `any` default reaches every kind that has the field, also a kind that gets the field in a later release. `dataFormatDigitsDecimal` and `dataFormatDigitsPercent` were `Table` fields only. After Bino v0.110.0, `ChartTime` and `ChartStructure` have them too. So `_spec_any_dataFormatDigitsDecimal` and `constants.spec.any.dataFormatDigitsDecimal` (and the same for `Percent`) now also set the digits of the charts that bind the dataset as their primary dataset. To keep them on tables only, use the table default: `_spec_table_dataFormatDigitsDecimal` or `constants.spec.table.dataFormatDigitsDecimal`.
+
+On a template engine older than **v1.0.0-next.46** a chart ignores these digits, so `bino build` and `bino lint` then stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version) when the value is not the default (1 and 2).
+:::
+
 ### Precedence
 
 Anything written in YAML beats anything the data says. Lowest first:

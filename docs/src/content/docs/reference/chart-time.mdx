@@ -243,7 +243,11 @@ spec:
 - `chartTitle` is not shown.
 - Without `variances` the chart is empty and warns.
 
-An empty list is not the same as a missing field. Without `scenarios` the chart detects the scenarios from the dataset.
+An empty list is not the same as a missing field. Without `scenarios`, or with `scenarios: auto`, the chart detects the scenarios from the dataset.
+
+:::caution[Changed behaviour]
+Up to Bino v0.110.0, `scenarios: []` on a `ChartTime` had the same effect as no `scenarios` at all: the scenarios were detected from the dataset. It was a way to clear a list that came from a `ref` or from a dataset default. Now an empty list means "no scenarios". To get the detection back, remove the field or write `scenarios: auto`. A `Table` is not changed: there an empty list still means detection.
+:::
 
 ```yaml
 ---
@@ -258,7 +262,11 @@ spec:
   variances: ["dac1_pp1_pos"]
 ```
 
-The fields of this section, `axisLabelsStep`, `axisTitlePosition` and the two `dataFormatDigits*` fields need template engine **v1.0.0-next.46** or newer. Older engines ignore them. So with an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). A chart that leaves them at their defaults keeps working on its engine.
+The fields of this section, `axisLabelsStep`, `axisTitlePosition` and the two `dataFormatDigits*` fields need template engine **v1.0.0-next.46** or newer. Older engines ignore them. So with an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). A chart that leaves them at their defaults keeps working on its engine. The check also sees a field that a [dataset default](/reference/dataset/#dataset-defaults) sets.
+
+:::caution[Dataset defaults]
+`dataFormatDigitsDecimal` and `dataFormatDigitsPercent` were `Table` fields only. A dataset default for every kind, `_spec_any_dataFormatDigitsDecimal` or `constants.spec.any.dataFormatDigitsDecimal` (and the same for `Percent`), now also reaches a `ChartTime` that binds this dataset as its primary dataset. To keep the digits on tables only, use the table default: `_spec_table_dataFormatDigitsDecimal` or `constants.spec.table.dataFormatDigitsDecimal`. See [Dataset defaults](/reference/dataset/#dataset-defaults).
+:::
 
 ## Example: Stacked columns by scenario
 
