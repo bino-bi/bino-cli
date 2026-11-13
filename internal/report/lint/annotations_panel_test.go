@@ -113,3 +113,50 @@ func TestAnnotationPointFindings_Panel(t *testing.T) {
 		wantFindings(t, AnnotationPointFindings([]Document{sm, note, pageWith(t, "p", smChild)}, unknown), "", 0, "")
 	})
 }
+
+// Lint builds the by panels as the build does: after order and limit.
+func TestAnnotationPointFindings_PanelLimitAndOrder(t *testing.T) {
+	rows := func(string) annotation.Rows {
+		return annotation.Rows{
+			{"rowGroup": "A", "ac1": 1}, {"rowGroup": "B", "ac1": 4}, {"rowGroup": "C", "ac1": 3}, {"rowGroup": "D", "ac1": 2},
+		}
+	}
+	run := func(panels, panel string) []Finding {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"profit","base":{"kind":"ChartTime"},"panels":`+panels+`}`)
+		return AnnotationPointFindings([]Document{sm, panelNote(t, panel, ""), pageWith(t, "p", smChild)}, rows)
+	}
+	wantFindings(t, run(`{"by":"rowGroup","limit":2}`, "B"), "", 0, "")
+	findings := run(`{"by":"rowGroup","limit":2}`, "C")
+	wantFindings(t, findings, "annotation-target-missing", 1, "error")
+	if findings[0].Path != "spec.target.panel" {
+		t.Errorf("path = %s", findings[0].Path)
+	}
+	// by ac1 descending the first two panels are B and C
+	wantFindings(t, run(`{"by":"rowGroup","order":"ac1 desc","limit":2}`, "C"), "", 0, "")
+	wantFindings(t, run(`{"by":"rowGroup","order":"ac1 desc","limit":2}`, "A"), "annotation-target-missing", 1, "error")
+}
+
+func TestAnnotationPanelAmbiguous(t *testing.T) {
+	rows := func(string) annotation.Rows {
+		return annotation.Rows{{"rowGroup": "Berlin", "date": "2024-01-01", "ac1": 1}, {"rowGroup": "Munich", "date": "2025-01-01", "ac1": 2}}
+	}
+	t.Run("two items with one label", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"profit","base":{"kind":"ChartTime"},"panels":{"items":[{"label":"North"},{"label":"North"},{"label":"South"}]}}`)
+		findings := runAnnotationRule(annotationTargetMissing, sm, panelNote(t, "North", ""), pageWith(t, "p", smChild))
+		wantFindings(t, findings, "annotation-panel-ambiguous", 1, "warning")
+		if findings[0].Path != "spec.target.panel" {
+			t.Errorf("path = %s", findings[0].Path)
+		}
+		wantFindings(t, runAnnotationRule(annotationTargetMissing, sm, panelNote(t, "South", ""), pageWith(t, "p", smChild)), "", 0, "")
+		// the data adds nothing to it
+		wantFindings(t, AnnotationPointFindings([]Document{sm, panelNote(t, "North", ""), pageWith(t, "p", smChild)}, rows), "", 0, "")
+	})
+	t.Run("a by value equal to an item label", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"profit","base":{"kind":"ChartTime"},"panels":{"by":"rowGroup","items":[{"label":"Berlin","filter":"1=1"}]}}`)
+		docs := []Document{sm, panelNote(t, "Berlin", ""), pageWith(t, "p", smChild)}
+		wantFindings(t, runAnnotationRule(annotationTargetMissing, docs...), "", 0, "")
+		wantFindings(t, AnnotationPointFindings(docs, rows), "annotation-panel-ambiguous", 1, "warning")
+		// the by panel is checked too: the item has the point, the by panel is one place more
+		wantFindings(t, AnnotationPointFindings([]Document{sm, panelNote(t, "Munich", ""), pageWith(t, "p", smChild)}, rows), "", 0, "")
+	})
+}

@@ -117,3 +117,38 @@ func TestSmallMultipleOverrideFindings(t *testing.T) {
 	wantFindings(t, SmallMultipleOverrideFindings([]Document{sm("other", "rowGroup", `{"value":"Hamburg"}`)}, rows), "", 0, "")
 	wantFindings(t, SmallMultipleOverrideFindings([]Document{sm("profit", "region", `{"value":"Hamburg"}`)}, rows), "", 0, "")
 }
+
+func TestSmallMultipleOverrideDuplicate(t *testing.T) {
+	check := func(overrides string) []Finding {
+		return smallMultipleOverrideDuplicate.Check(context.Background(), []Document{smDoc("LayoutPage", `{"panels":{"by":"g","overrides":[`+overrides+`]}}`)})
+	}
+	wantFindings(t, check(`{"value":"a","rowSpan":2},{"value":"b"},{"value":" a "},{"value":2024},{"value":"2025"}`), "", 0, "")
+
+	findings := check(`{"value":"a","columnSpan":2},{"value":"b"},{"value":"a","background":"red"}`)
+	wantFindings(t, findings, "small-multiple-override-duplicate", 1, "error")
+	if !strings.HasSuffix(findings[0].Path, "panels.overrides[2].value") || !strings.Contains(findings[0].Message, "panels.overrides[0]") {
+		t.Errorf("finding = %+v", findings[0])
+	}
+	// a number and its text name the same panel
+	wantFindings(t, check(`{"value":2024},{"value":"2024"}`), "small-multiple-override-duplicate", 1, "error")
+}
+
+// The override value is compared as written, like the panel label.
+func TestSmallMultipleOverrideFindings_NoTrim(t *testing.T) {
+	rows := func(string) json.RawMessage { return json.RawMessage(`[{"rowGroup":" A "}]`) }
+	sm := func(value string) Document {
+		return smDoc("SmallMultiple", `{"dataset":"profit","base":{"kind":"ChartTime"},"panels":{"by":"rowGroup","overrides":[{"value":"`+value+`"}]}}`)
+	}
+	wantFindings(t, SmallMultipleOverrideFindings([]Document{sm(" A ")}, rows), "", 0, "")
+	wantFindings(t, SmallMultipleOverrideFindings([]Document{sm("A")}, rows), "small-multiple-override-unmatched", 1, "warning")
+}
+
+func TestGridCellSpan_CoveringChildThatMayBeSkipped(t *testing.T) {
+	grid := func(wide string) Document {
+		return Document{Kind: "Grid", Name: "g", File: "g.yaml", Position: 1, Raw: json.RawMessage(`{"kind":"Grid","spec":{"rowHeaders":["a"],"columnHeaders":["x","y"],"children":[
+			{"row":0,"column":0,"kind":"Text","columnSpan":2` + wide + `},{"row":0,"column":1,"kind":"Text"}]}}`)}
+	}
+	wantFindings(t, gridCellSpan.Check(context.Background(), []Document{grid("")}), "grid-cell-span", 1, "error")
+	wantFindings(t, gridCellSpan.Check(context.Background(), []Document{grid(`,"ref":"wide","optional":true`)}), "", 0, "")
+	wantFindings(t, gridCellSpan.Check(context.Background(), []Document{grid(`,"metadata":{"constraints":["mode==build"]}`)}), "", 0, "")
+}

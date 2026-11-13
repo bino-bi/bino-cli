@@ -175,6 +175,8 @@ spec:
 - Without `panel`, the target is the SmallMultiple as a whole, like a `Grid`. It has no data points then.
 - `panel` is only allowed with `kind: SmallMultiple`.
 - A panel that does not exist is reported by [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing). The labels of `panels.by` come from the data, so for them the rule needs `--execute-queries`, and `bino build` writes a warning to its log.
+- A label should name one panel. When two panels have it, a `by` value that is also the `label` of a `panels.items` entry, or two entries with one label, the mark goes on each of them, with the same number. Lint and the build log report it as [`annotation-panel-ambiguous`](/appendix/lint-rules/#annotation-panel-ambiguous). Give the item another label.
+- A panel that `panels.limit` drops does not exist. Lint builds the `by` panels like the build: with `panels.order` and `panels.limit`.
 - The point check looks at the rows of the panel only: for a `by` panel the rows with its value in the `by` column. It does not look at the `filter` of a `panels.items` entry.
 
 ## Numbers

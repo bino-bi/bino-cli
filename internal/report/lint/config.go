@@ -28,6 +28,7 @@ var nonRuleFindingIDs = []string{
 	"table-category-interval-position-too-large",      // needs data: CategoryIntervalPositionFindings, called by cli/lint.go
 	"table-calculation-scheme-engine-version",         // cli/engine_compat.go
 	"small-multiple-override-unmatched",               // needs data: SmallMultipleOverrideFindings, called by cli/lint.go
+	"annotation-panel-ambiguous",                      // emitted by annotation-target-missing, and with data by AnnotationPointFindings
 }
 
 // fixedSeverityIDs are known finding IDs whose weight is decided by the state

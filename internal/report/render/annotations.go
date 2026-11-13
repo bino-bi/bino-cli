@@ -217,21 +217,26 @@ func (rc *renderCtx) panelAnnotationTarget(name, baseKind, by string, p panel, c
 	return id
 }
 
-// warnUnknownPanels reports the panels annotations name that the SmallMultiple
-// does not have. The values of panels.by are only known with the data, so lint
-// cannot always tell.
-func (rc *renderCtx) warnUnknownPanels(name string, panels []panel) {
+// warnPanelTargets reports the panels annotations name that the SmallMultiple
+// does not have, or has more than once. The values of panels.by are only known
+// with the data, so lint cannot always tell.
+func (rc *renderCtx) warnPanelTargets(name string, panels []panel) {
 	page := rc.panelPage
 	if page == nil {
 		return
 	}
 	for _, label := range page.panels[annotation.Key(schema.KindSmallMultiple, name)] {
-		found := false
+		count := 0
 		for _, p := range panels {
-			found = found || p.label == label
+			if p.label == label {
+				count++
+			}
 		}
-		if !found {
+		switch {
+		case count == 0:
 			rc.warn(fmt.Sprintf("annotation-target-missing: SmallMultiple %q has no panel %q", name, label))
+		case count > 1:
+			rc.warn(fmt.Sprintf("annotation-panel-ambiguous: SmallMultiple %q has %d panels with the label %q; the mark goes on each of them", name, count, label))
 		}
 	}
 }

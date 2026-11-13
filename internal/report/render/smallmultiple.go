@@ -253,7 +253,7 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		}
 		children = append(children, child)
 	}
-	rc.warnUnknownPanels(name, panels)
+	rc.warnPanelTargets(name, panels)
 
 	showBorders := false
 	if s.ShowBorders != nil {
@@ -393,8 +393,15 @@ func smallMultiplePanels(s smallMultipleSpec, name, primary string, baseFilter b
 			rc.warn(fmt.Sprintf("SmallMultiple %q: limit %d dropped %d panel(s)", name, limit, len(byPanels)-limit))
 			byPanels = byPanels[:limit]
 		}
+		seen := map[string]bool{}
 		for _, o := range s.Panels.Overrides {
-			value := scalarText(o.Value)
+			value := PanelValueText(o.Value)
+			if seen[value] {
+				// lint reports it as small-multiple-override-duplicate
+				rc.warn(fmt.Sprintf("SmallMultiple %q: panels.overrides: the value %q has more than one entry; only the first one counts", name, value))
+				continue
+			}
+			seen[value] = true
 			matched := false
 			for i := range byPanels {
 				if p := &byPanels[i]; p.label == value {
@@ -453,9 +460,15 @@ func SmallMultiplePanelLabels(rows json.RawMessage, by, order string, limit int)
 	return labels, true
 }
 
-// PanelValueText is a panels.overrides value as the label of its panel.
+// PanelValueText is a panels.overrides value as the label of its panel: a
+// string as written, a number or a boolean as its text. A string is not
+// trimmed, as the label of a panel is not either.
 func PanelValueText(value json.RawMessage) string {
-	return scalarText(value)
+	var s string
+	if json.Unmarshal(value, &s) == nil {
+		return s
+	}
+	return string(bytes.TrimSpace(value))
 }
 
 // panelsFromRows returns one panel per distinct value of column by, in order.

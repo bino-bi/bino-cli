@@ -1563,17 +1563,12 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	// Cells inherit the grid's effective style as their default.
 	childRC := rc.withInheritedStyle(s.SelectedStyle)
 
-	// Render child content as slotted elements
-	var cells strings.Builder
+	// Render the children first: a child that renders nothing (a missing
+	// optional ref, a ref that constraints filter out) takes no position, so
+	// its span must not hide another child.
 	rendered := make([]gridChild, 0, len(s.Children))
-	covered, _ := gridSpanLayout(s)
-	for i, child := range s.Children {
-		if by, ok := covered[i]; ok {
-			// bn-grid draws no cell there; lint reports it as grid-cell-span
-			rc.warn(fmt.Sprintf("Grid: the child in row %s, column %s is not shown: the span of the child in row %s, column %s covers its position",
-				child.Row, child.Column, s.Children[by].Row, s.Children[by].Column))
-			continue
-		}
+	contents := make([]string, 0, len(s.Children))
+	for _, child := range s.Children {
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
 			return "", fmt.Errorf("render grid child %s-%s: %w", child.Row, child.Column, err)
@@ -1582,23 +1577,38 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
 		rendered = append(rendered, child)
-		slotName := gridSlotName(child)
+		contents = append(contents, childContent)
+	}
+	placed := s
+	placed.Children = rendered
+	covered, _ := gridSpanLayout(placed)
+
+	var cells strings.Builder
+	shown := make([]gridChild, 0, len(rendered))
+	for i, child := range rendered {
+		if by, ok := covered[i]; ok {
+			// bn-grid draws no cell there; lint reports it as grid-cell-span
+			rc.warn(fmt.Sprintf("Grid: the child in row %s, column %s is not shown: the span of the child in row %s, column %s covers its position",
+				child.Row, child.Column, rendered[by].Row, rendered[by].Column))
+			continue
+		}
+		shown = append(shown, child)
 		cells.WriteString("\n  <div slot='")
-		cells.WriteString(html.EscapeString(slotName))
+		cells.WriteString(html.EscapeString(gridSlotName(child)))
 		cells.WriteString("'")
 		child.writeCellAttrs(&cells)
 		if child.Kind != "LayoutCard" {
 			writeAttr(&cells, "data-bino-annotation-target", child.annotationTarget)
 		}
 		cells.WriteString(">")
-		cells.WriteString(childContent)
+		cells.WriteString(contents[i])
 		cells.WriteString("</div>")
 	}
 
 	var b strings.Builder
 	b.WriteString("<bn-grid")
 	attrs := s
-	attrs.Children = rendered // a skipped cell gets no caption
+	attrs.Children = shown // a skipped cell gets no caption
 	attrs.writeAttrs(&b)
 	b.WriteString(">")
 	b.WriteString(cells.String())

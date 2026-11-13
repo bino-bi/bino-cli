@@ -145,7 +145,7 @@ panels:
 - `rowSpan` and `columnSpan` are whole numbers from 1. Default: 1.
 - `background` is a CSS color for the cell of the panel. It wins over `cellBackground` of the [grid style](/reference/component-style/#grid-style-bn-grid), which colors every cell.
 - An entry of `panels.items` takes the three fields directly.
-- A `by` panel comes from the data, so it has no entry of its own. `panels.overrides` names it by its value: the same text as `${panel.value}`. `overrides` needs `by`. A value that no panel has does nothing. The build log says so, and `bino lint --execute-queries` reports it ([`small-multiple-override-unmatched`](/appendix/lint-rules/#small-multiple-override-unmatched)).
+- A `by` panel comes from the data, so it has no entry of its own. `panels.overrides` names it by its value: the same text as `${panel.value}`. `overrides` needs `by`. The value is compared with the value of the column as it is: text is case-sensitive, and spaces count. A value may have only one entry: put all fields of a panel in it. Lint reports a second entry ([`small-multiple-override-duplicate`](/appendix/lint-rules/#small-multiple-override-duplicate)), and the build uses the first one and warns. A value that no panel has does nothing. The build log says so, and `bino lint --execute-queries` reports it ([`small-multiple-override-unmatched`](/appendix/lint-rules/#small-multiple-override-unmatched)).
 
 Bino places the panels row by row, in their order. Each panel goes to the next free position where its span has room. A position that a panel skips stays empty, and later panels do not go back to fill it. The grid gets as many rows as the panels need.
 

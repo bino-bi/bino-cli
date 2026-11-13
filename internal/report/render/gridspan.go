@@ -18,7 +18,9 @@ type GridSpanProblem struct {
 
 // GridSpanProblems checks the rowSpan and columnSpan of the children of a Grid
 // spec: a span must end inside the grid, and no child may sit in a position
-// that the span of another child covers. Lint and render share it.
+// that the span of another child covers. A covering child that is optional or
+// has constraints is no problem: it may not render, and then it covers
+// nothing. Lint and render share it.
 func GridSpanProblems(gridSpecRaw json.RawMessage) []GridSpanProblem {
 	var s gridSpec
 	if json.Unmarshal(gridSpecRaw, &s) != nil {
@@ -88,9 +90,13 @@ func gridSpanLayout(s gridSpec) (covered map[int]int, problems []GridSpanProblem
 			child := s.Children[i]
 			if by, taken := owner[[2]int{r, c}]; taken {
 				covered[i] = by
-				problems = append(problems, GridSpanProblem{Child: i, Message: fmt.Sprintf(
-					"the span of the child in row %s, column %s covers this position: the child is not shown",
-					s.Children[by].Row, s.Children[by].Column)})
+				// Whether a child with a condition renders is only known at
+				// render time, and when it does not, its span covers nothing.
+				if !mayBeSkipped(s.Children[by]) {
+					problems = append(problems, GridSpanProblem{Child: i, Message: fmt.Sprintf(
+						"the span of the child in row %s, column %s covers this position: the child is not shown",
+						s.Children[by].Row, s.Children[by].Column)})
+				}
 				continue
 			}
 			rowSpan, columnSpan := max(child.RowSpan, 1), max(child.ColumnSpan, 1)
@@ -119,4 +125,10 @@ func gridSpanLayout(s gridSpec) (covered map[int]int, problems []GridSpanProblem
 		}
 	}
 	return covered, problems
+}
+
+// mayBeSkipped reports whether a child can render nothing: an optional ref,
+// or constraints.
+func mayBeSkipped(child gridChild) bool {
+	return child.Optional || len(child.Metadata.Constraints) > 0
 }

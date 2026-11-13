@@ -62,6 +62,7 @@ func DefaultRules() []Rule {
 		smallMultipleByDatasource,
 		smallMultipleCard,
 		smallMultipleSpan,
+		smallMultipleOverrideDuplicate,
 		smallMultipleAxisTitles,
 		gridCellSpan,
 	}

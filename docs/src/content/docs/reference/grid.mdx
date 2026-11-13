@@ -237,10 +237,11 @@ children:
 
 - `rowSpan` and `columnSpan` are whole numbers from 1. The cell starts at its own `row` and `column` and also takes the positions below it and right of it.
 - A grid has no automatic flow. Every child names its own position, and the positions that a span covers must stay empty. A child in a covered position is not shown.
+- A child that renders nothing takes no position, so its span covers nothing: a child with `optional: true` whose `ref` is missing, or a child that its constraints leave out. You can put a wide child with a constraint and a narrow fallback child in the positions it would cover.
 - A span must end inside the grid.
 - `background` is a CSS color for this cell. It wins over `cellBackground` of the [grid style](/reference/component-style/#grid-style-bn-grid), which colors every data cell.
 
-Lint reports a child in a covered position and a span that goes beyond the last row or column ([`grid-cell-span`](/appendix/lint-rules/#grid-cell-span)). `bino build` leaves the covered child out and writes a warning to its log.
+Lint reports a child in a covered position and a span that goes beyond the last row or column ([`grid-cell-span`](/appendix/lint-rules/#grid-cell-span)). It does not report a covered position when the covering child is `optional` or has constraints, because only the build knows whether that child renders. `bino build` leaves the covered child out and writes a warning to its log.
 
 `rowSpan`, `columnSpan` and `background` need template engine **v1.0.0-next.46** or newer. With an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). A grid without them keeps working on its engine.
 

@@ -294,6 +294,35 @@ var smallMultipleSpan = Rule{
 	},
 }
 
+// smallMultipleOverrideDuplicate rejects two overrides of one panel.
+var smallMultipleOverrideDuplicate = Rule{
+	ID:          "small-multiple-override-duplicate",
+	Name:        "Small Multiple Override Duplicate",
+	Description: "A value may have only one entry in panels.overrides of a SmallMultiple.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			first := map[string]int{}
+			for i, override := range site.spec.Panels.Overrides {
+				value := render.PanelValueText(override.Value)
+				if j, ok := first[value]; ok {
+					findings = append(findings, Finding{
+						RuleID:   "small-multiple-override-duplicate",
+						Message:  fmt.Sprintf("the value %q already has an entry (panels.overrides[%d]); only the first one counts. Put all fields of the panel in one entry", value, j),
+						File:     site.doc.File,
+						DocIdx:   site.doc.Position,
+						Path:     joinLintPath(site.path, fmt.Sprintf("panels.overrides[%d].value", i)),
+						Severity: "error",
+					})
+					continue
+				}
+				first[value] = i
+			}
+		}
+		return findings
+	},
+}
+
 // smallMultipleAxisTitles rejects axisTitles rowEnd on a base without
 // axisTitlePosition.
 var smallMultipleAxisTitles = Rule{
