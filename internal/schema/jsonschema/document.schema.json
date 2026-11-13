@@ -4145,8 +4145,20 @@
           "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
           "examples": ["none", "auto", 0.5, 0.8, 1.2]
         },
+        "dataFormatDigitsDecimal": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Number of decimal digits of the value labels."
+        },
+        "dataFormatDigitsPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2,
+          "description": "Number of decimal digits of the percent labels of relative variances."
+        },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. An empty list ([]) draws no scenarios: the chart shows only its variances. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
@@ -4300,8 +4312,37 @@
           "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
           "examples": ["none", "auto", 0.5, 0.8, 1.2]
         },
+        "dataFormatDigitsDecimal": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Number of decimal digits of the value labels."
+        },
+        "dataFormatDigitsPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2,
+          "description": "Number of decimal digits of the percent labels of relative variances."
+        },
+        "axisLabelsStep": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period. Bar mode only."
+        },
+        "scenarioSwitch": {
+          "type": "boolean",
+          "default": false,
+          "description": "For a series that changes its scenario along the time axis, for example AC up to this year and PL after it. A scenario that only has values where the first scenario has none is drawn in its place, with value labels. A vertical line marks the change and the scenario names stand under the axis. Variances of one type over the same reference share one row. Bar mode without stack only."
+        },
+        "axisTitlePosition": {
+          "type": "string",
+          "enum": ["left", "right", "none"],
+          "default": "left",
+          "description": "Where the axis title stands: the chart title, or the name of a variance."
+        },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. An empty list ([]) draws no scenarios: the chart shows only its variances. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {

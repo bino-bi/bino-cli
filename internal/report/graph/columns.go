@@ -139,6 +139,12 @@ func (f fields) joined(name string) string {
 	return strings.TrimSpace(s.String())
 }
 
+// emptyList reports whether a field is an explicit empty list.
+func (f fields) emptyList(name string) bool {
+	var list []json.RawMessage
+	return json.Unmarshal(f[name], &list) == nil && list != nil && len(list) == 0
+}
+
 // decode unmarshals one field into v and reports success.
 func (f fields) decode(name string, v any) bool {
 	raw, ok := f[name]
@@ -193,10 +199,13 @@ func (u *uses) addTokens(role, field, list string) {
 
 // addScenarios adds the scenarios and variances of Table, ChartStructure and
 // ChartTime after inheritance. Blank or auto scenarios are auto-detected;
-// blank variances mean none.
-func (u *uses) addScenarios(f fields, anc ancestors) {
+// blank variances mean none. With emptyIsNone an explicit empty list reads no
+// scenario column: a chart then draws only its variances.
+func (u *uses) addScenarios(f fields, anc ancestors, emptyIsNone bool) {
 	scenarios := anc.inherit(f.joined("scenarios"), func(t *titles) string { return t.scenarios })
-	if isAuto(scenarios) {
+	if emptyIsNone && f.emptyList("scenarios") {
+		// no scenario of its own
+	} else if isAuto(scenarios) {
 		u.add(RoleScenario, "scenarios", ColumnAuto)
 	} else {
 		u.addTokens(RoleScenario, "scenarios", scenarios)
@@ -304,7 +313,7 @@ func attributeExpressions(f fields) []string {
 
 func tableUses(f fields, anc ancestors) uses {
 	var u uses
-	u.addScenarios(f, anc)
+	u.addScenarios(f, anc, false)
 	u.addOrder(anc.inherit(f.str("order"), func(t *titles) string { return t.order }), false)
 	if f.boolean("grouped") {
 		u.add(RoleGroup, "grouped", "rowGroup", "rowGroupIndex")
@@ -345,7 +354,7 @@ func tableUses(f fields, anc ancestors) uses {
 
 func chartStructureUses(f fields, anc ancestors) uses {
 	var u uses
-	u.addScenarios(f, anc)
+	u.addScenarios(f, anc, true)
 	level := strings.ToLower(f.str("level"))
 	if isAuto(level) {
 		u.add(RoleGroup, "level", ColumnAuto)
@@ -373,7 +382,7 @@ func chartStructureUses(f fields, anc ancestors) uses {
 
 func chartTimeUses(f fields, anc ancestors) uses {
 	var u uses
-	u.addScenarios(f, anc)
+	u.addScenarios(f, anc, true)
 	u.add(RoleFilter, "filter", filterColumns(f.str("filter"))...)
 	u.add(RoleImplicit, "", "date", "operation")
 	return u
