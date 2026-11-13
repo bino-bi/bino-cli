@@ -47,7 +47,8 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-table.REST":      "REST",
 		"bn-table.no-data":   "Keine Daten",
 
-		"bn-chart-time.no-data": "Keine Daten",
+		"bn-chart-time.no-data":                "Keine Daten",
+		"bn-chart-time.date-format-short-year": "yy",
 
 		"bn-chart-structure.no-data": "Keine Daten",
 		"bn-chart-structure.REST":    "REST",
@@ -139,7 +140,8 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-table.REST":      "REST",
 		"bn-table.no-data":   "No Data",
 
-		"bn-chart-time.no-data": "No Data",
+		"bn-chart-time.no-data":                "No Data",
+		"bn-chart-time.date-format-short-year": "yy",
 
 		"bn-chart-structure.no-data": "No Data",
 		"bn-chart-structure.REST":    "REST",

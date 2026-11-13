@@ -185,6 +185,77 @@ spec:
 	}
 }
 
+func TestSmallMultipleSpanEngineFinding(t *testing.T) {
+	doc := func(raw string) []config.Document {
+		return []config.Document{{Kind: "x", Raw: json.RawMessage(raw)}}
+	}
+	span := doc(`{"kind":"SmallMultiple","spec":{"base":{"kind":"ChartTime","ref":"t"},"panels":{"by":"g","overrides":[{"value":"a","rowSpan":2}]}}}`)
+	plain := doc(`{"kind":"SmallMultiple","spec":{"base":{"kind":"ChartTime","ref":"t"},"panels":{"by":"g"}}}`)
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		want   string
+	}{
+		{"old engine with a span", "v1.0.0-next.45", span, "SmallMultiple rowSpan: template engine v1.0.0-next.46 or newer is needed"},
+		{"old engine with a grid background", "v1.0.0-next.45", doc(`{"kind":"Grid","spec":{"children":[{"row":0,"column":0,"kind":"Text","background":"red"}]}}`), "Grid background: template engine"},
+		{"old engine with a page id", "v1.0.0-next.45", doc(`{"kind":"LayoutPage","spec":{"titleId":"13A"}}`), "LayoutPage titleId: template engine"},
+		{"old engine with a variance only chart", "v1.0.0-next.45", doc(`{"kind":"ChartTime","spec":{"scenarios":[]}}`), "ChartTime scenarios: []: template engine"},
+		{"old engine with a style key", "v1.0.0-next.45", doc(`{"kind":"ComponentStyle","spec":{"content":{"bn-layout-card":{"titleFontSize":14}}}}`), "ComponentStyle bn-layout-card.titleFontSize: template engine"},
+		{"old engine without the fields", "v1.0.0-next.45", plain, ""},
+		{"new engine with a span", "v1.0.0-next.46", span, ""},
+		{"local build with a span", "v1.0.0-next.960", span, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := smallMultipleSpanEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs)
+			if fatal != (c.want != "") {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.want != "", finding)
+			}
+			if fatal && (finding.RuleID != "small-multiple-span-engine-version" || finding.Line != 2 || !strings.Contains(finding.Message, c.want)) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
+func TestSmallMultipleSpanDefaultEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`)}}
+	table := []config.Document{{Kind: "Table", Raw: json.RawMessage(`{"kind":"Table","spec":{"dataset":"sales"}}`)}}
+	inManifest := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","scenarioSwitch":true}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"charttime":      {"scenarioSwitch": json.RawMessage(`true`)},
+		dataset.AnyToken: {"dataFormatDigitsDecimal": json.RawMessage(`0`)},
+	}}}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine, chart on the dataset", "v1.0.0-next.45", chart, true},
+		{"old engine, table on the dataset", "v1.0.0-next.45", table, false},
+		{"old engine, the manifest gate reports it already", "v1.0.0-next.45", inManifest, false},
+		{"new engine", "v1.0.0-next.46", chart, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := smallMultipleSpanDefaultEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs, results)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "small-multiple-span-engine-version" ||
+				!strings.Contains(finding.Message, "ChartTime dataFormatDigitsDecimal, ChartTime scenarioSwitch")) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
 func TestGridCellLayoutEngineFinding(t *testing.T) {
 	grid := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{"cellHeight":"equal"}}`)}
 	plain := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{}}`)}

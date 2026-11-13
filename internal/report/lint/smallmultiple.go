@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"bino.bi/bino/internal/report/render"
@@ -31,10 +32,29 @@ type smallMultipleLintSpec struct {
 	Card    json.RawMessage `json:"card"`
 	Panels  struct {
 		By    string `json:"by"`
+		Order string `json:"order"`
+		Limit int    `json:"limit"`
 		Items []struct {
-			Card json.RawMessage `json:"card"`
+			Label      string          `json:"label"`
+			Dataset    string          `json:"dataset"`
+			Card       json.RawMessage `json:"card"`
+			ColumnSpan int             `json:"columnSpan"`
 		} `json:"items"`
+		Overrides []struct {
+			Value      json.RawMessage `json:"value"`
+			ColumnSpan int             `json:"columnSpan"`
+		} `json:"overrides"`
 	} `json:"panels"`
+	Columns    int    `json:"columns"`
+	AxisTitles string `json:"axisTitles"`
+}
+
+// kindSite is one spec of a kind: a standalone document or an inline layout
+// child.
+type kindSite struct {
+	doc  Document
+	path string // JSON path of the spec in the document
+	raw  json.RawMessage
 }
 
 // smallMultipleSites finds the SmallMultiple specs: inline children at any
@@ -43,23 +63,32 @@ type smallMultipleLintSpec struct {
 // and a document is left out when every ref to it overrides it. Without, each
 // field is checked where it is written.
 func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
+	var sites []smallMultipleSite
+	for _, site := range kindSites(docs, "SmallMultiple", merged) {
+		var s smallMultipleLintSpec
+		if json.Unmarshal(site.raw, &s) == nil {
+			sites = append(sites, smallMultipleSite{doc: site.doc, path: site.path, spec: s})
+		}
+	}
+	return sites
+}
+
+// kindSites finds the specs of one kind, as smallMultipleSites describes.
+func kindSites(docs []Document, wanted string, merged bool) []kindSite {
 	byName := map[string]Document{}
 	for _, doc := range docs {
-		if doc.Kind == "SmallMultiple" {
+		if doc.Kind == wanted {
 			byName[doc.Name] = doc
 		}
 	}
-	var sites []smallMultipleSite
+	var sites []kindSite
 	overridden, plain := map[string]bool{}, map[string]bool{}
 	add := func(doc Document, path string, raw json.RawMessage) {
-		var s smallMultipleLintSpec
-		if json.Unmarshal(raw, &s) == nil {
-			sites = append(sites, smallMultipleSite{doc: doc, path: path, spec: s})
-		}
+		sites = append(sites, kindSite{doc: doc, path: path, raw: raw})
 	}
 	for _, doc := range docs {
 		var root map[string]json.RawMessage
-		if doc.Kind == "SmallMultiple" || json.Unmarshal(doc.Raw, &root) != nil {
+		if doc.Kind == wanted || json.Unmarshal(doc.Raw, &root) != nil {
 			continue
 		}
 		var walk func(raw json.RawMessage, path string)
@@ -67,10 +96,10 @@ func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
 			var obj map[string]json.RawMessage
 			if json.Unmarshal(raw, &obj) == nil {
 				kind, ref := rawString(obj["kind"]), rawString(obj["ref"])
-				if kind == "SmallMultiple" && ref != "" && obj["spec"] == nil {
+				if kind == wanted && ref != "" && obj["spec"] == nil {
 					plain[ref] = true
 				}
-				if kind == "SmallMultiple" && obj["spec"] != nil {
+				if kind == wanted && obj["spec"] != nil {
 					if ref == "" {
 						add(doc, joinLintPath(path, "spec"), obj["spec"])
 					} else if target, ok := byName[ref]; ok && merged {
@@ -94,7 +123,7 @@ func smallMultipleSites(docs []Document, merged bool) []smallMultipleSite {
 		walk(root["spec"], "spec")
 	}
 	for _, doc := range docs {
-		if doc.Kind == "SmallMultiple" && (!merged || !overridden[doc.Name] || plain[doc.Name]) {
+		if doc.Kind == wanted && (!merged || !overridden[doc.Name] || plain[doc.Name]) {
 			add(doc, "spec", specOf(doc))
 		}
 	}
@@ -227,4 +256,154 @@ var smallMultipleCard = Rule{
 		}
 		return findings
 	},
+}
+
+// smallMultipleSpan checks the spans of the panels against the grid.
+var smallMultipleSpan = Rule{
+	ID:          "small-multiple-span",
+	Name:        "Small Multiple Span",
+	Description: "A columnSpan of a SmallMultiple panel must not be larger than columns.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			columns := site.spec.Columns
+			if columns <= 0 {
+				continue // the default is never narrower than the widest panel
+			}
+			report := func(path string, span int) {
+				if span <= columns {
+					return
+				}
+				findings = append(findings, Finding{
+					RuleID:   "small-multiple-span",
+					Message:  fmt.Sprintf("columnSpan %d is larger than columns (%d)", span, columns),
+					File:     site.doc.File,
+					DocIdx:   site.doc.Position,
+					Path:     joinLintPath(site.path, path),
+					Severity: "error",
+				})
+			}
+			for i, item := range site.spec.Panels.Items {
+				report(fmt.Sprintf("panels.items[%d].columnSpan", i), item.ColumnSpan)
+			}
+			for i, override := range site.spec.Panels.Overrides {
+				report(fmt.Sprintf("panels.overrides[%d].columnSpan", i), override.ColumnSpan)
+			}
+		}
+		return findings
+	},
+}
+
+// smallMultipleOverrideDuplicate rejects two overrides of one panel.
+var smallMultipleOverrideDuplicate = Rule{
+	ID:          "small-multiple-override-duplicate",
+	Name:        "Small Multiple Override Duplicate",
+	Description: "A value may have only one entry in panels.overrides of a SmallMultiple.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			first := map[string]int{}
+			for i, override := range site.spec.Panels.Overrides {
+				value := render.PanelValueText(override.Value)
+				if j, ok := first[value]; ok {
+					findings = append(findings, Finding{
+						RuleID:   "small-multiple-override-duplicate",
+						Message:  fmt.Sprintf("the value %q already has an entry (panels.overrides[%d]); only the first one counts. Put all fields of the panel in one entry", value, j),
+						File:     site.doc.File,
+						DocIdx:   site.doc.Position,
+						Path:     joinLintPath(site.path, fmt.Sprintf("panels.overrides[%d].value", i)),
+						Severity: "error",
+					})
+					continue
+				}
+				first[value] = i
+			}
+		}
+		return findings
+	},
+}
+
+// smallMultipleAxisTitles rejects axisTitles rowEnd on a base without
+// axisTitlePosition.
+var smallMultipleAxisTitles = Rule{
+	ID:          "small-multiple-axis-titles",
+	Name:        "Small Multiple Axis Titles",
+	Description: "axisTitles: rowEnd needs a ChartTime base.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			if site.spec.AxisTitles != "rowEnd" || site.spec.Base.Kind == "ChartTime" || site.spec.Base.Kind == "" {
+				continue
+			}
+			findings = append(findings, Finding{
+				RuleID:   "small-multiple-axis-titles",
+				Message:  fmt.Sprintf("axisTitles: rowEnd needs a ChartTime base, not %s: only a ChartTime can move its axis titles", site.spec.Base.Kind),
+				File:     site.doc.File,
+				DocIdx:   site.doc.Position,
+				Path:     joinLintPath(site.path, "axisTitles"),
+				Severity: "error",
+			})
+		}
+		return findings
+	},
+}
+
+// gridCellSpan checks the spans of the children of a Grid.
+var gridCellSpan = Rule{
+	ID:          "grid-cell-span",
+	Name:        "Grid Cell Span",
+	Description: "A rowSpan or columnSpan of a Grid child must end inside the grid, and no child may sit in a position that a span covers.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range kindSites(docs, "Grid", true) {
+			for _, problem := range render.GridSpanProblems(site.raw) {
+				path := fmt.Sprintf("children[%d]", problem.Child)
+				if problem.Field != "" {
+					path += "." + problem.Field
+				}
+				findings = append(findings, Finding{
+					RuleID:   "grid-cell-span",
+					Message:  problem.Message,
+					File:     site.doc.File,
+					DocIdx:   site.doc.Position,
+					Path:     joinLintPath(site.path, path),
+					Severity: "error",
+				})
+			}
+		}
+		return findings
+	},
+}
+
+// SmallMultipleOverrideFindings reports the panels.overrides entries whose
+// value no panel has. The panels come from the data: rows returns the rows of
+// a DataSet, nil when they are not known.
+func SmallMultipleOverrideFindings(docs []Document, rows func(binding string) json.RawMessage) []Finding {
+	var findings []Finding
+	for _, site := range smallMultipleSites(docs, true) {
+		panels := site.spec.Panels
+		entries := site.spec.Dataset.Entries()
+		if panels.By == "" || len(panels.Overrides) == 0 || len(entries) == 0 || !entries[0].IsRef() {
+			continue
+		}
+		labels, known := render.SmallMultiplePanelLabels(rows(entries[0].Ref), panels.By, panels.Order, panels.Limit)
+		if !known {
+			continue
+		}
+		for i, override := range panels.Overrides {
+			value := render.PanelValueText(override.Value)
+			if slices.Contains(labels, value) {
+				continue
+			}
+			findings = append(findings, Finding{
+				RuleID:   "small-multiple-override-unmatched",
+				Message:  fmt.Sprintf("no panel has the value %q: the override does nothing", value),
+				File:     site.doc.File,
+				DocIdx:   site.doc.Position,
+				Path:     joinLintPath(site.path, fmt.Sprintf("panels.overrides[%d].value", i)),
+				Severity: "warning",
+			})
+		}
+	}
+	return findings
 }

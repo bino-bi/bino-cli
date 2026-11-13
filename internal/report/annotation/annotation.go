@@ -34,6 +34,30 @@ func HasContent(s schema.AnnotationSpec) bool {
 // Key identifies a component on a page.
 func Key(kind, name string) string { return kind + ":" + name }
 
+// TargetKey identifies what an end of an annotation points at: a component, or
+// one panel of a SmallMultiple.
+func TargetKey(t schema.AnnotationTarget) string {
+	if t.Panel == "" {
+		return Key(t.Kind, t.Name)
+	}
+	return Key(t.Kind, t.Name) + "\x00" + t.Panel
+}
+
+// PanelRows are the rows of one panel of a SmallMultiple with panels.by: those
+// whose by column has the label of the panel.
+func PanelRows(rows Rows, by, label string) Rows {
+	if rows == nil {
+		return nil
+	}
+	out := Rows{}
+	for _, row := range rows {
+		if value, ok := row[by]; ok && value != nil && text(value) == label {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
 // Rows are the rows of one dataset.
 type Rows []map[string]any
 
@@ -116,6 +140,9 @@ func CheckPoint(kind string, p *schema.AnnotationPoint, rows Rows) string {
 
 func checkFields(kind string, p *schema.AnnotationPoint) string {
 	allowed, ok := pointFields[kind]
+	if !ok && kind == schema.KindSmallMultiple {
+		return "a data point of a SmallMultiple sits in one panel, set panel"
+	}
 	if !ok {
 		return kind + " has no data points, use a target without point"
 	}

@@ -34,6 +34,7 @@ type smallMultipleSpec struct {
 	CellWidth         string                 `json:"cellWidth"`
 	CellGap           string                 `json:"cellGap"`
 	ShowBorders       *bool                  `json:"showBorders"`
+	AxisTitles        string                 `json:"axisTitles"`
 }
 
 type smallMultipleBase struct {
@@ -49,6 +50,15 @@ type smallMultiplePanelSpec struct {
 	Limit int                 `json:"limit"`
 	Param string              `json:"param"`
 	Items []smallMultipleItem `json:"items"`
+	// Overrides set the span and background of single by panels, by value.
+	Overrides []smallMultipleOverride `json:"overrides"`
+}
+
+type smallMultipleOverride struct {
+	Value      json.RawMessage `json:"value"`
+	RowSpan    int             `json:"rowSpan"`
+	ColumnSpan int             `json:"columnSpan"`
+	Background string          `json:"background"`
 }
 
 type smallMultipleItem struct {
@@ -57,6 +67,10 @@ type smallMultipleItem struct {
 	Dataset string          `json:"dataset"`
 	Spec    json.RawMessage `json:"spec"`
 	Card    json.RawMessage `json:"card"`
+
+	RowSpan    int    `json:"rowSpan"`
+	ColumnSpan int    `json:"columnSpan"`
+	Background string `json:"background"`
 }
 
 // panel is one cell of a SmallMultiple.
@@ -71,6 +85,14 @@ type panel struct {
 	// sort keys of a by panel
 	index float64
 	sum   float64
+
+	// rowSpan and columnSpan are at least 1 once the panels are listed.
+	rowSpan    int
+	columnSpan int
+	background string
+	// row and column are the position the placement gave the panel.
+	row    int
+	column int
 }
 
 const defaultPanelCaption = "${panel.label}"
@@ -163,11 +185,25 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		}
 	}
 
-	columns := s.Columns
-	if columns <= 0 {
-		columns = int(math.Ceil(math.Sqrt(float64(len(panels)))))
+	rowEnd := false
+	switch s.AxisTitles {
+	case "", "each":
+	case "rowEnd":
+		if s.Base.Kind != "ChartTime" {
+			return "", fmt.Errorf("SmallMultiple %q: axisTitles rowEnd needs a ChartTime base, not %s", name, s.Base.Kind)
+		}
+		rowEnd = true
+	default:
+		return "", fmt.Errorf("SmallMultiple %q: axisTitles must be each or rowEnd, not %q", name, s.AxisTitles)
 	}
-	rows := (len(panels) + columns - 1) / columns
+
+	columns := smallMultipleColumns(s.Columns, panels)
+	for _, p := range panels {
+		if p.columnSpan > columns {
+			return "", fmt.Errorf("SmallMultiple %q: panel %q: columnSpan %d is larger than the %d column(s) of the grid", name, p.label, p.columnSpan, columns)
+		}
+	}
+	rows := placePanels(panels, columns)
 
 	hasCard := isSet(s.Card)
 	caption := defaultPanelCaption
@@ -180,17 +216,29 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 
 	children := make([]gridChild, 0, len(panels))
 	for i, p := range panels {
-		cellSpec, err := smallMultipleCellSpec(s, p, i, baseSpec)
+		axisTitle := ""
+		if rowEnd {
+			axisTitle = "none"
+			if lastOfRow(panels, i) {
+				axisTitle = "right"
+			}
+		}
+		cellSpec, err := smallMultipleCellSpec(s, p, i, baseSpec, axisTitle)
 		if err != nil {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: %w", name, p.label, err)
 		}
 		child := gridChild{
-			Row:      stringOrInt(strconv.Itoa(i / columns)),
-			Column:   stringOrInt(strconv.Itoa(i % columns)),
-			Kind:     s.Base.Kind,
-			Metadata: layoutChildMeta{Name: fmt.Sprintf("%s-%d", name, i+1)},
-			Spec:     cellSpec,
-			Caption:  replacePanelPlaceholders(caption, p, i, func(v string) string { return v }),
+			Row:        stringOrInt(strconv.Itoa(p.row)),
+			Column:     stringOrInt(strconv.Itoa(p.column)),
+			Kind:       s.Base.Kind,
+			Metadata:   layoutChildMeta{Name: fmt.Sprintf("%s-%d", name, i+1)},
+			Spec:       cellSpec,
+			Caption:    replacePanelPlaceholders(caption, p, i, func(v string) string { return v }),
+			RowSpan:    p.rowSpan,
+			ColumnSpan: p.columnSpan,
+			Background: p.background,
+
+			annotationTarget: rc.panelAnnotationTarget(name, s.Base.Kind, s.Panels.By, p, cellSpec),
 		}
 		if p.item != nil && isSet(p.item.Card) && !hasCard {
 			return "", fmt.Errorf("SmallMultiple %q: panel %q: panels.items[].card needs card", name, p.label)
@@ -205,6 +253,7 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		}
 		children = append(children, child)
 	}
+	rc.warnPanelTargets(name, panels)
 
 	showBorders := false
 	if s.ShowBorders != nil {
@@ -228,6 +277,71 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 		Children:            children,
 	}
 	return renderGridComponent(grid, rc)
+}
+
+// smallMultipleColumns is the number of grid columns: the columns field, or
+// the square root of the positions the panels take, rounded up. Without a
+// span that is the square root of the panel count. The default is never
+// narrower than the widest panel.
+func smallMultipleColumns(columns int, panels []panel) int {
+	if columns > 0 {
+		return columns
+	}
+	area, widest := 0, 1
+	for _, p := range panels {
+		area += p.rowSpan * p.columnSpan
+		widest = max(widest, p.columnSpan)
+	}
+	return max(int(math.Ceil(math.Sqrt(float64(area)))), widest)
+}
+
+// placePanels gives every panel its row and column and returns the number of
+// rows. The panels flow row by row, as CSS grid auto placement does: each one
+// goes to the next position, in reading order after the panel before it, where
+// its span has room. Positions it skips stay empty. bn-grid has no auto flow,
+// so the positions come from here. columns must not be smaller than a span.
+func placePanels(panels []panel, columns int) (rows int) {
+	taken := map[[2]int]bool{}
+	fits := func(row, column int, p panel) bool {
+		if column+p.columnSpan > columns {
+			return false
+		}
+		for r := row; r < row+p.rowSpan; r++ {
+			for c := column; c < column+p.columnSpan; c++ {
+				if taken[[2]int{r, c}] {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	next := 0
+	for i := range panels {
+		p := &panels[i]
+		for !fits(next/columns, next%columns, *p) {
+			next++
+		}
+		p.row, p.column = next/columns, next%columns
+		for r := p.row; r < p.row+p.rowSpan; r++ {
+			for c := p.column; c < p.column+p.columnSpan; c++ {
+				taken[[2]int{r, c}] = true
+			}
+		}
+		rows = max(rows, p.row+p.rowSpan)
+		next++
+	}
+	return rows
+}
+
+// lastOfRow reports whether no panel starts right of panel i in its row. A
+// panel that spans rows counts for the row it starts in.
+func lastOfRow(panels []panel, i int) bool {
+	for _, p := range panels {
+		if p.row == panels[i].row && p.column > panels[i].column {
+			return false
+		}
+	}
+	return true
 }
 
 func orDefault(v, def string) string {
@@ -279,6 +393,26 @@ func smallMultiplePanels(s smallMultipleSpec, name, primary string, baseFilter b
 			rc.warn(fmt.Sprintf("SmallMultiple %q: limit %d dropped %d panel(s)", name, limit, len(byPanels)-limit))
 			byPanels = byPanels[:limit]
 		}
+		seen := map[string]bool{}
+		for _, o := range s.Panels.Overrides {
+			value := PanelValueText(o.Value)
+			if seen[value] {
+				// lint reports it as small-multiple-override-duplicate
+				rc.warn(fmt.Sprintf("SmallMultiple %q: panels.overrides: the value %q has more than one entry; only the first one counts", name, value))
+				continue
+			}
+			seen[value] = true
+			matched := false
+			for i := range byPanels {
+				if p := &byPanels[i]; p.label == value {
+					matched = true
+					p.rowSpan, p.columnSpan, p.background = o.RowSpan, o.ColumnSpan, o.Background
+				}
+			}
+			if !matched {
+				rc.warn(fmt.Sprintf("SmallMultiple %q: panels.overrides: no panel has the value %q", name, value))
+			}
+		}
 		panels = append(panels, byPanels...)
 	}
 	for i := range s.Panels.Items {
@@ -288,7 +422,10 @@ func smallMultiplePanels(s smallMultipleSpec, name, primary string, baseFilter b
 				rc.warn(fmt.Sprintf("SmallMultiple %q: panel %q: dataset %q has no rows", name, item.Label, item.Dataset))
 			}
 		}
-		panels = append(panels, panel{label: item.Label, item: item})
+		panels = append(panels, panel{label: item.Label, item: item, rowSpan: item.RowSpan, columnSpan: item.ColumnSpan, background: item.Background})
+	}
+	for i := range panels {
+		panels[i].rowSpan, panels[i].columnSpan = max(panels[i].rowSpan, 1), max(panels[i].columnSpan, 1)
 	}
 	return panels, nil
 }
@@ -304,6 +441,34 @@ func specHasFilter(spec json.RawMessage) bool {
 func isEmptyRows(rows json.RawMessage) bool {
 	var list []json.RawMessage
 	return json.Unmarshal(rows, &list) == nil && len(list) == 0
+}
+
+// SmallMultiplePanelLabels returns the labels of the panels that panels.by
+// makes from the rows of the first dataset. known is false when the rows do
+// not tell: there are none, or no row has the column.
+func SmallMultiplePanelLabels(rows json.RawMessage, by, order string, limit int) (labels []string, known bool) {
+	panels, err := panelsFromRows(rows, by, order)
+	if err != nil || panels == nil {
+		return nil, false
+	}
+	if limit > 0 && len(panels) > limit {
+		panels = panels[:limit]
+	}
+	for _, p := range panels {
+		labels = append(labels, p.label)
+	}
+	return labels, true
+}
+
+// PanelValueText is a panels.overrides value as the label of its panel: a
+// string as written, a number or a boolean as its text. A string is not
+// trimmed, as the label of a panel is not either.
+func PanelValueText(value json.RawMessage) string {
+	var s string
+	if json.Unmarshal(value, &s) == nil {
+		return s
+	}
+	return string(bytes.TrimSpace(value))
 }
 
 // panelsFromRows returns one panel per distinct value of column by, in order.
@@ -458,8 +623,9 @@ func resolveSmallMultipleBase(s smallMultipleSpec, rc *renderCtx) (spec json.Raw
 // smallMultipleCellSpec builds the spec of one panel. Precedence, lowest
 // first: the base, the item spec, the shared fields of the SmallMultiple, the
 // generated filter. The shared fields come after the item, so no panel leaves
-// the shared scale.
-func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMessage) (json.RawMessage, error) {
+// the shared scale. axisTitle, when not empty, is the axisTitlePosition of the
+// panel; it replaces the one of the base, and the item spec replaces it.
+func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMessage, axisTitle string) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(base, &fields); err != nil {
 		return nil, fmt.Errorf("base spec is not an object: %w", err)
@@ -478,6 +644,11 @@ func smallMultipleCellSpec(s smallMultipleSpec, p panel, i int, base json.RawMes
 		return nil, err
 	}
 	baseJSON = []byte(replacePanelPlaceholders(string(baseJSON), p, i, jsonEscape))
+	if axisTitle != "" {
+		if baseJSON, err = ref.MergeSpec(baseJSON, json.RawMessage(`{"axisTitlePosition":`+string(jsonString(axisTitle))+`}`)); err != nil {
+			return nil, err
+		}
+	}
 	if p.item != nil && len(p.item.Spec) > 0 {
 		itemSpec := replacePanelPlaceholders(string(p.item.Spec), p, i, jsonEscape)
 		if baseJSON, err = ref.MergeSpec(baseJSON, json.RawMessage(itemSpec)); err != nil {

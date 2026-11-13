@@ -16,6 +16,7 @@ type dateString = reportspec.DateString
 // layoutPageSpec defines the structure for LayoutPage components.
 type layoutPageSpec struct {
 	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
+	TitleID             string                   `json:"titleId"`
 	TitleNamespace      string                   `json:"titleNamespace"`
 	I18nNamespace       string                   `json:"i18nNamespace"`
 	TitleDateStart      dateString               `json:"titleDateStart"`
@@ -45,6 +46,7 @@ type layoutPageSpec struct {
 
 func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
 	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
+	writeAttr(b, "title-id", s.TitleID)
 	writeAttr(b, "title-namespace", s.TitleNamespace)
 	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "title-date-start", s.TitleDateStart.String())
@@ -185,6 +187,19 @@ type chartStructureSpec struct {
 	Scale             reportspec.StringOrFloat `json:"scale,omitempty"`
 	SelectedStyle     string                   `json:"selectedStyle"`
 	Ruleset           string                   `json:"ruleset"`
+
+	DataFormatDigitsDecimal *int `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int `json:"dataFormatDigitsPercent"`
+}
+
+// scenariosAttr is the scenarios attribute of a chart. An explicit empty list
+// means "draw no scenarios", which the engine spells none. A missing field
+// stays empty, so the engine detects the scenarios itself.
+func scenariosAttr(scenarios reportspec.StringOrSlice) string {
+	if scenarios != nil && len(scenarios) == 0 {
+		return "none"
+	}
+	return scenarios.String()
 }
 
 func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
@@ -203,12 +218,14 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "show-measure-scale", s.ShowMeasureScale)
 	writeIntAttr(b, "limit", s.Limit)
 	writeFloatAttr(b, "pixel-per-unit", s.PixelPerUnit)
-	writeAttr(b, "scenarios", s.Scenarios.String())
+	writeAttr(b, "scenarios", scenariosAttr(s.Scenarios))
 	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
+	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
+	writeIntAttr(b, "data-format-digits-percent", s.DataFormatDigitsPercent)
 }
 
 // chartTimeSpec defines the structure for ChartTime components.
@@ -238,6 +255,12 @@ type chartTimeSpec struct {
 	Scale             reportspec.StringOrFloat `json:"scale,omitempty"`
 	SelectedStyle     string                   `json:"selectedStyle"`
 	Ruleset           string                   `json:"ruleset"`
+
+	DataFormatDigitsDecimal *int   `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int   `json:"dataFormatDigitsPercent"`
+	AxisLabelsStep          *int   `json:"axisLabelsStep"`
+	ScenarioSwitch          *bool  `json:"scenarioSwitch"`
+	AxisTitlePosition       string `json:"axisTitlePosition"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -260,12 +283,17 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "percentage-scaling", s.PercentageScaling.String())
 	writeAttr(b, "unit-scaling", s.UnitScaling.String())
 	writeFloatAttr(b, "sync-space-left", s.SyncSpaceLeft)
-	writeAttr(b, "scenarios", s.Scenarios.String())
+	writeAttr(b, "scenarios", scenariosAttr(s.Scenarios))
 	writeAttr(b, "variances", s.Variances.String())
 	writeStackAttr(b, "stack", s.Stack)
 	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)
+	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
+	writeIntAttr(b, "data-format-digits-percent", s.DataFormatDigitsPercent)
+	writeIntAttr(b, "axis-labels-step", s.AxisLabelsStep)
+	writeBoolAttr(b, "scenario-switch", s.ScenarioSwitch)
+	writeAttr(b, "axis-title-position", s.AxisTitlePosition)
 }
 
 // chartScatterSpec defines the structure for ChartScatter components (bn-chart-scatter).
@@ -649,6 +677,25 @@ type gridChild struct {
 	Params   map[string]string `json:"params,omitempty"`
 	Spec     json.RawMessage   `json:"spec,omitempty"`
 	Caption  string            `json:"caption,omitempty"`
+	// RowSpan and ColumnSpan make the cell also take the positions below and
+	// right of it; 0 and 1 are one position.
+	RowSpan    int    `json:"rowSpan,omitempty"`
+	ColumnSpan int    `json:"columnSpan,omitempty"`
+	Background string `json:"background,omitempty"`
+	// annotationTarget is the page-unique target id of a SmallMultiple panel
+	// that an annotation points at.
+	annotationTarget string
+}
+
+// writeCellAttrs writes the attributes bn-grid reads from the child of a cell.
+func (c gridChild) writeCellAttrs(b *strings.Builder) {
+	if c.RowSpan > 1 {
+		writeAttr(b, "row-span", strconv.Itoa(c.RowSpan))
+	}
+	if c.ColumnSpan > 1 {
+		writeAttr(b, "column-span", strconv.Itoa(c.ColumnSpan))
+	}
+	writeAttr(b, "cell-background", c.Background)
 }
 
 // stringOrInt is a type that can unmarshal from either a string or an integer,

@@ -335,3 +335,28 @@ func TestTableCalculationSchemeCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestSmallMultipleSpanCheck(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"v1.0.0-next.46", true},
+		{"v1.0.0-next.960", true},
+		{"v1.0.0", true},
+		{"v1.0.0-next.45", false},
+		{"v1.0.0-next.33", false},
+		{"", true}, // nothing resolved: not this check's job
+		{"junk", true},
+	}
+	check := SmallMultipleSpanCheck([]string{"Grid rowSpan", "LayoutPage titleId"})
+	for _, c := range cases {
+		err := check(c.version)
+		if (err == nil) != c.ok {
+			t.Errorf("SmallMultipleSpanCheck(%q) = %v, want ok=%v", c.version, err, c.ok)
+		}
+		if err != nil && !strings.Contains(err.Error(), "Grid rowSpan, LayoutPage titleId: template engine v1.0.0-next.46 or newer is needed") {
+			t.Errorf("message does not name the features: %v", err)
+		}
+	}
+}

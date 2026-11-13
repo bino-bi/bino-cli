@@ -112,6 +112,24 @@ func TestColumnRefsPerKind(t *testing.T) {
 			want: append([]string{"sales|scenario|scenarios|ac1"}, tableImplicit...),
 		},
 		{
+			name: "time chart with an empty scenario list reads only its variances",
+			kind: "ChartTime",
+			spec: `{"scenarios":[],"variances":["dac1_pp1_pos"]}`,
+			want: []string{"sales|variance|variances|ac1", "sales|variance|variances|pp1", "sales|implicit||date", "sales|implicit||operation"},
+		},
+		{
+			name: "structure chart with an empty scenario list reads only its variances",
+			kind: "ChartStructure",
+			spec: `{"scenarios":[],"variances":"dac1_pl1_pos","level":"category"}`,
+			want: []string{"sales|variance|variances|ac1", "sales|variance|variances|pl1", "sales|group|level|category", "sales|order|order|auto", "sales|implicit||operation"},
+		},
+		{
+			name: "table with an empty scenario list still detects them",
+			kind: "Table",
+			spec: `{"scenarios":[]}`,
+			want: append([]string{"sales|scenario|scenarios|auto"}, tableImplicit...),
+		},
+		{
 			name:     "multi dataset repeats per binding",
 			kind:     "ChartTime",
 			spec:     `{"scenarios":"ac1"}`,

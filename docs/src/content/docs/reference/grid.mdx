@@ -131,6 +131,9 @@ Each child object has these properties:
 | `params`   | object            | No          | Parameter values (string map) passed to the referenced document. Only valid together with `ref`.                                  |
 | `spec`     | object            | Conditional | Component specification. Required for inline children, optional override for `ref` children.                                      |
 | `caption`  | string            | No          | Caption drawn at the top left of the cell, above its content.                                                                     |
+| `rowSpan`  | integer           | No          | Number of rows the cell takes, from its own row down (default: `1`). See [Cell span and background](#cell-span-and-background).    |
+| `columnSpan` | integer         | No          | Number of columns the cell takes, from its own column to the right (default: `1`).                                                |
+| `background` | string          | No          | Background color of the cell (CSS color).                                                                                         |
 | `metadata` | object            | No          | Optional metadata including `name` and `constraints`.                                                                             |
 
 ---
@@ -200,6 +203,47 @@ spec:
 A chart with `scale` unset or `auto` picks its font size from the size of its cell. With `cellWidth: equal` the cell width is a share of the grid width, so charts with different content get different factors. Pin `scale` when the charts must be comparable.
 
 These fields and `caption` need template engine **v1.0.0-next.32** or newer. With an older engine `bino build` and `bino lint` stop with `grid-cell-layout-engine-version`, and `bino preview` shows that error. A grid without them keeps working on its engine.
+
+---
+
+## Cell span and background
+
+A child can take more than one position of the grid, and it can have a background color:
+
+```yaml
+rowHeaders: ["Revenue", "Cost"]
+columnHeaders: ["2024", "2025", "Trend"]
+children:
+  - row: 0
+    column: 0
+    kind: Table
+    ref: revenue_2024
+  - row: 0
+    column: 1
+    kind: Table
+    ref: revenue_2025
+  - row: 0
+    column: 2
+    rowSpan: 2 # the trend chart stands next to both rows
+    background: "#f5f5f5"
+    kind: ChartTime
+    ref: margin_trend
+  - row: 1
+    column: 0
+    columnSpan: 2 # one table under both years
+    kind: Table
+    ref: cost_both_years
+```
+
+- `rowSpan` and `columnSpan` are whole numbers from 1. The cell starts at its own `row` and `column` and also takes the positions below it and right of it.
+- A grid has no automatic flow. Every child names its own position, and the positions that a span covers must stay empty. A child in a covered position is not shown.
+- A child that renders nothing takes no position, so its span covers nothing: a child with `optional: true` whose `ref` is missing, or a child that its constraints leave out. You can put a wide child with a constraint and a narrow fallback child in the positions it would cover.
+- A span must end inside the grid.
+- `background` is a CSS color for this cell. It wins over `cellBackground` of the [grid style](/reference/component-style/#grid-style-bn-grid), which colors every data cell.
+
+Lint reports a child in a covered position and a span that goes beyond the last row or column ([`grid-cell-span`](/appendix/lint-rules/#grid-cell-span)). It does not report a covered position when the covering child is `optional` or has constraints, because only the build knows whether that child renders. `bino build` leaves the covered child out and writes a warning to its log.
+
+`rowSpan`, `columnSpan` and `background` need template engine **v1.0.0-next.46** or newer. With an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). A grid without them keeps working on its engine.
 
 ---
 
@@ -579,4 +623,7 @@ spec:
 | `children[].params`   | object of string  | no          | -       | Parameter values passed to the referenced document, expanded as `${NAME}` in its spec. Only valid together with `ref`.                 | `params: { QUARTER: "q1" }`     |
 | `children[].spec`     | object            | conditional | -       | Component specification. Required for inline children, optional override for `ref` children.                                           | `spec: { dataset: sales-data }` |
 | `children[].caption`  | string            | no          | -       | Caption drawn at the top left of the cell, above its content. Needs engine v1.0.0-next.32.                                             | `caption: North`                |
+| `children[].rowSpan`  | integer           | no          | `1`     | Number of rows the cell takes, from its own row down. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `children[].columnSpan` | integer         | no          | `1`     | Number of columns the cell takes, from its own column to the right. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `children[].background` | string          | no          | -       | Background color of the cell (CSS color). Needs engine v1.0.0-next.46. |
 | `children[].metadata` | object            | no          | -       | Optional metadata including `name` and `constraints`.                                                                                  | `metadata: { name: cell-name }` |

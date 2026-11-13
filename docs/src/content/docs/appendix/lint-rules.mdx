@@ -49,8 +49,10 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `annotation-unlisted` | Annotation Unlisted | Info | An annotation with a title or a text should be shown by an AnnotationList on its page. |
 | `annotation-list-in-live` | Annotation List In Live | Warning | A page with an AnnotationList that a LiveReportArtefact serves has an empty slot there. |
 | `annotation-point-missing` | Annotation Point Missing | Warning | The `point` of an Annotation must exist in the data. Needs the data: `--execute-queries`, build and preview. |
+| `annotation-panel-ambiguous` | Annotation Panel Ambiguous | Warning | The `panel` of an Annotation target must name one panel of the SmallMultiple. A `by` value needs the data: `--execute-queries`, build and preview. |
 | `annotation-engine-version` | Annotation Engine Version | Error | Annotations need template engine v1.0.0-next.30 or newer. Stops `bino lint` and `bino build`. |
 | `grid-cell-layout-engine-version` | Grid Cell Layout Engine Version | Error | `SmallMultiple` and grid cell size, alignment and captions need template engine v1.0.0-next.32 or newer, a `SmallMultiple` with `card` v1.0.0-next.33. Stops `bino lint` and `bino build`. |
+| `small-multiple-span-engine-version` | Small Multiple Span Engine Version | Error | Cell spans and backgrounds, `axisTitles`, `titleId`, `scenarios: []` and the other fields of that release need template engine v1.0.0-next.46 or newer. Stops `bino lint` and `bino build`. |
 | `operation-sentiment-engine-version` | Operation Sentiment Engine Version | Error | The variance sentiments `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. Stops `bino lint` and `bino build`. |
 | `table-order-engine-version` | Table Order Engine Version | Error | A Table `order` by a variance or with `@<setname>` needs template engine v1.0.0-next.35 or newer. Stops `bino lint` and `bino build`. |
 | `table-category-interval-position-engine-version` | Table Category Interval Position Engine Version | Error | A Table `categoryIntervalPosition` above 0 needs template engine v1.0.0-next.39 or newer. Stops `bino lint` and `bino build`. |
@@ -60,6 +62,11 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `small-multiple-base-dataset` | Small Multiple Base Dataset | Warning | `base.spec.dataset` of a SmallMultiple is replaced by its `dataset`. |
 | `small-multiple-by-datasource` | Small Multiple By Datasource | Error | `panels.by` needs a DataSet as the first dataset, not a `$datasource`. |
 | `small-multiple-card` | Small Multiple Card | Warning / Error | A caption next to a `card` names each panel twice (warning). `panels.items[].card` without `card` (error). |
+| `small-multiple-span` | Small Multiple Span | Error | A `columnSpan` of a SmallMultiple panel must not be larger than `columns`. |
+| `small-multiple-override-duplicate` | Small Multiple Override Duplicate | Error | A value may have only one entry in `panels.overrides` of a SmallMultiple. |
+| `small-multiple-axis-titles` | Small Multiple Axis Titles | Error | `axisTitles: rowEnd` of a SmallMultiple needs a `ChartTime` base. |
+| `small-multiple-override-unmatched` | Small Multiple Override Unmatched | Warning | A `panels.overrides` value of a SmallMultiple must be a value of the `by` column. Needs the data: `--execute-queries`, build and preview. |
+| `grid-cell-span` | Grid Cell Span | Error | A `rowSpan` or `columnSpan` of a Grid child must end inside the grid, and no child may sit in a position that a span covers. |
 | `duplicate-name`                  | Duplicate Name                              | Error    | Documents of one kind must have unique names within each ReportArtefact after constraints are applied.                      |
 | `i18n-code-unused`                | Internationalization Code Unused            | Warning  | An Internationalization `spec.code` must exactly match an artefact `spec.language`.                                         |
 | `i18n-namespace-unreferenced`     | Internationalization Namespace Unreferenced | Warning  | A named `spec.namespace` is only read by components whose `i18nNamespace` points at it.                                     |
@@ -851,6 +858,8 @@ The `target` or `to` of an [`Annotation`](/reference/annotation/) resolves to no
 
 A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The message says so.
 
+A target with `panel` names one panel of a `SmallMultiple`. The rule also reports a `panel` that the SmallMultiple does not have. The labels of `panels.items` are checked always. The values of `panels.by` come from the data, so they are checked with `--execute-queries` only, and `bino build` writes a warning to its log. The panels are built as in the build, with `panels.order` and `panels.limit`: a panel that `limit` drops is missing.
+
 ```yaml
 kind: Annotation
 metadata:
@@ -891,6 +900,15 @@ A page with an `AnnotationList` is served by a `LiveReportArtefact`, through `ar
 
 **Fix:** use a page without the list for the live route, or accept the empty slot.
 
+### annotation-panel-ambiguous
+
+The `panel` of an [`Annotation`](/reference/annotation/#one-panel-of-a-smallmultiple) target is the label of more than one panel of the `SmallMultiple`. The mark then goes on each of these panels, with the same number. Two cases:
+
+- Two `panels.items` entries have this label. This is reported always.
+- A value of `panels.by` is also the label of a `panels.items` entry. The values come from the data, so `bino lint` reports this with `--execute-queries` only, and `bino build` writes it to its log.
+
+**Fix:** give the `panels.items` entry a label of its own.
+
 ### annotation-point-missing
 
 The `point` of an annotation cannot exist: no row of the dataset of the component has these values, the scenario has no value on those rows, or the component reports no such field (a `ChartTime` has no `category`).
@@ -917,6 +935,25 @@ The project has an `Annotation` and its engine is older than v1.0.0-next.30, whi
 The project has a `SmallMultiple`, or a `Grid` sets `cellHeight`, `cellWidth`, `cellVerticalAlign` or `cellHorizontalAlign` to a value other than the default, or a grid child has a `caption`, and the engine is older than v1.0.0-next.32. An older engine ignores these settings without an error, so the grid would look wrong. It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project without these settings and without a `SmallMultiple` keeps working on that engine. A `SmallMultiple` with `card` needs v1.0.0-next.33: older engines draw the cards but do not line up the axes inside them.
 
 **Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.32 or newer, or v1.0.0-next.33 or newer with `card`.
+
+### small-multiple-span-engine-version
+
+The project uses a field of template engine v1.0.0-next.46 and the engine is older. The message names what is in use. An older engine ignores these fields and renders without them, with no error. The fields are:
+
+- `rowSpan`, `columnSpan` and `background` of a `Grid` child, of a `panels.items` entry and of a `panels.overrides` entry of a `SmallMultiple`,
+- `axisTitles: rowEnd` of a `SmallMultiple`,
+- `titleId` of a `LayoutPage`,
+- `scenarios: []` of a `ChartTime` or `ChartStructure`, and `dataFormatDigitsDecimal` and `dataFormatDigitsPercent` with a value other than the default,
+- `axisLabelsStep` above 1, `scenarioSwitch: true` and `axisTitlePosition: right` or `none` of a `ChartTime`,
+- the style keys `bn-grid.cellBackground` and `bn-layout-card.titleFontSize` of a `ComponentStyle`.
+
+It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. The editor and `validate_project` of the MCP server report it too. A project that leaves these fields at their defaults keeps working on the older engine. `cellBackground: transparent` is the default too.
+
+A chart field can also come from a [dataset default](/reference/dataset/#dataset-defaults): a `_spec_` column or `constants.spec` of the primary dataset of a `ChartTime` or `ChartStructure`. The manifests do not show such a value, so this part of the check runs after the queries: in `bino build`, `bino preview` and `bino lint --execute-queries`.
+
+An empty `scenarios` list on a chart is in this list because its meaning changed: it used to mean detection, and now it means "no scenarios". Write `scenarios: auto` or remove the field to keep the detection, on every engine.
+
+**Fix:** set `engine-version` in `bino.toml` to v1.0.0-next.46 or newer, or remove the fields.
 
 ### operation-sentiment-engine-version
 
@@ -1006,6 +1043,56 @@ With `card`, every panel is a card whose title names the panel. Two cases are re
 - A `panels.items` entry has a `card`, but the SmallMultiple has none. An item card only changes the shared card, so the build fails. This is an error.
 
 **Fix:** remove `caption` when you use `card`, and set `card` on the SmallMultiple before you change it per item.
+
+### small-multiple-span
+
+A panel of a [`SmallMultiple`](/reference/small-multiple/#larger-panels-and-backgrounds) has a `columnSpan` that is larger than `columns`. Such a panel fits in no row, so the build fails. The rule checks `panels.items` and `panels.overrides`. Without `columns` the grid is never narrower than the widest panel, and the rule reports nothing.
+
+```yaml
+columns: 3
+panels:
+  by: rowGroup
+  overrides:
+    - value: Berlin
+      columnSpan: 4 # only 3 columns
+```
+
+**Fix:** lower `columnSpan` or raise `columns`.
+
+### small-multiple-override-duplicate
+
+Two entries of `panels.overrides` have the same `value`, so they name the same panel. The build uses the first entry and ignores the others, with a warning. A number and its text, `2024` and `"2024"`, are the same value.
+
+**Fix:** put `rowSpan`, `columnSpan` and `background` of the panel in one entry.
+
+### small-multiple-axis-titles
+
+`axisTitles: rowEnd` moves the axis titles of the panels to the end of each row. Only a `ChartTime` can move its axis titles, so with another base kind the build fails.
+
+**Fix:** remove `axisTitles`, or use a `ChartTime` base.
+
+### small-multiple-override-unmatched
+
+An entry of `panels.overrides` names a `by` panel by its value, and no panel has this value. The entry does nothing. A panel that `limit` drops counts as missing too. The rule needs the rows of the dataset, so `bino lint` reports it with `--execute-queries` only. `bino build` and `bino preview` write it to their log.
+
+**Fix:** write the value as it is in the `by` column. Text is case-sensitive, and spaces at the start or the end count.
+
+### grid-cell-span
+
+A child of a [`Grid`](/reference/grid/#cell-span-and-background) has a span that cannot be drawn as written. Two cases are reported:
+
+- A child sits in a position that the `rowSpan` or `columnSpan` of another child covers. The grid draws no cell there, so the child is not shown. This is not reported when the covering child has `optional: true` or constraints: such a child may not render, and then its span covers nothing.
+- A `rowSpan` goes beyond the last row, or a `columnSpan` beyond the last column. The grid cuts the span at its edge.
+
+```yaml
+rowHeaders: ["A", "B"]
+columnHeaders: ["X", "Y"]
+children:
+  - { row: 0, column: 0, columnSpan: 2, kind: Text, spec: { value: wide } }
+  - { row: 0, column: 1, kind: Text, spec: { value: hidden } } # covered by the first child
+```
+
+**Fix:** move or remove the covered child, or make the span smaller.
 
 ### duplicate-name
 

@@ -2403,18 +2403,26 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid"],
+          "enum": ["ChartTime", "ChartStructure", "ChartScatter", "ChartBubble", "ChartBullet", "Table", "Text", "Tree", "Grid", "SmallMultiple"],
           "description": "Kind of the component."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the component: the document a layout child refs, or metadata.name of an inline child. A child of a Grid or a Tree cannot be a target."
+          "description": "Name of the component: the document a layout child refs, or metadata.name of an inline child. A child of a Grid or a Tree cannot be a target. One panel of a SmallMultiple can: see panel."
+        },
+        "panel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label of one panel of a SmallMultiple: a value of panels.by or the label of a panels.items entry. The mark then points at that panel, and point is a data point of its chart or table. Only with kind SmallMultiple."
         },
         "point": {
           "$ref": "#/$defs/annotationPoint",
-          "description": "One data point of the component. Without it the mark points at the component as a whole."
+          "description": "One data point of the component. Without it the mark points at the component as a whole. On a SmallMultiple a point needs panel."
         }
+      },
+      "dependentSchemas": {
+        "panel": { "properties": { "kind": { "const": "SmallMultiple" } } }
       },
       "additionalProperties": false
     },
@@ -2546,6 +2554,7 @@
         "bn-chart-bullet": { "$ref": "#/$defs/bulletChartStyle" },
         "bn-tree": { "$ref": "#/$defs/treeStyle" },
         "bn-grid": { "$ref": "#/$defs/gridStyle" },
+        "bn-layout-card": { "$ref": "#/$defs/layoutCardStyle" },
         "bn-annotation": { "$ref": "#/$defs/annotationStyle" }
       },
       "additionalProperties": true
@@ -2925,6 +2934,22 @@
           "type": "number",
           "description": "Space below a cell caption in pixels. Default: 2. Needs template engine v1.0.0-next.32 or newer.",
           "default": 2
+        },
+        "cellBackground": {
+          "type": "string",
+          "description": "Background color of every data cell (CSS color). Default: transparent. The background of a single cell (background on a Grid child, a SmallMultiple item or override) wins. Needs template engine v1.0.0-next.46 or newer.",
+          "default": "transparent"
+        }
+      },
+      "additionalProperties": true
+    },
+    "layoutCardStyle": {
+      "type": "object",
+      "description": "Style settings for bn-layout-card (LayoutCard, and the panel cards of a SmallMultiple).",
+      "properties": {
+        "titleFontSize": {
+          "type": "number",
+          "description": "Font size of the card title in pixels. Without it the title has the font size of global.fontSizePx. Needs template engine v1.0.0-next.46 or newer."
         }
       },
       "additionalProperties": true
@@ -3312,6 +3337,10 @@
           "type": "string",
           "description": "Placeholder shown when the dataset yields no rows."
         },
+        "bn-chart-time.date-format-short-year": {
+          "type": "string",
+          "description": "Luxon pattern of the short year label of a time chart, for example ’yy. Default: yy. Needs template engine v1.0.0-next.46 or newer."
+        },
         "bn-chart-structure.no-data": {
           "type": "string",
           "description": "Placeholder shown when the dataset yields no rows."
@@ -3531,6 +3560,10 @@
           "type": "string",
           "default": "",
           "description": "Name of the business unit displayed in card header. If empty, the business unit row is omitted. Supports inline Markdown (bold, italic, code, links, strikethrough) and inline HTML, converted to HTML at build time and sanitized before rendering. Use <br /> for an explicit line break. Block Markdown (headings, lists, tables) is not interpreted, so a value like '1. Quartal 2024' stays literal."
+        },
+        "titleId": {
+          "type": "string",
+          "description": "Short id of the page, for example a template number like 13A. Shown at the top right of the title, on the level of its first line, in the font of the title and not bold. If empty, nothing is shown. Needs template engine v1.0.0-next.46 or newer."
         },
         "titleNamespace": { "type": "string", "description": "Deprecated: use i18nNamespace. Namespace used for title translations only; never applies to children." },
         "i18nNamespace": {
@@ -4124,8 +4157,20 @@
           "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
           "examples": ["none", "auto", 0.5, 0.8, 1.2]
         },
+        "dataFormatDigitsDecimal": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Number of decimal digits of the value labels."
+        },
+        "dataFormatDigitsPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2,
+          "description": "Number of decimal digits of the percent labels of relative variances."
+        },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. An empty list ([]) draws no scenarios: the chart shows only its variances. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
@@ -4279,8 +4324,37 @@
           "description": "Proportional scaling of the chart. 'none': no scaling. 'auto': auto-scale silently to fit parent. A positive number (e.g. '0.8'): fixed factor. When omitted, auto-scales and warns with the applied factor.",
           "examples": ["none", "auto", 0.5, 0.8, 1.2]
         },
+        "dataFormatDigitsDecimal": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Number of decimal digits of the value labels."
+        },
+        "dataFormatDigitsPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2,
+          "description": "Number of decimal digits of the percent labels of relative variances."
+        },
+        "axisLabelsStep": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period. Bar mode only."
+        },
+        "scenarioSwitch": {
+          "type": "boolean",
+          "default": false,
+          "description": "For a series that changes its scenario along the time axis, for example AC up to this year and PL after it. A scenario that only has values where the first scenario has none is drawn in its place, with value labels. A vertical line marks the change and the scenario names stand under the axis. Variances of one type over the same reference share one row. Bar mode without stack only."
+        },
+        "axisTitlePosition": {
+          "type": "string",
+          "enum": ["left", "right", "none"],
+          "default": "left",
+          "description": "Where the axis title stands: the chart title, or the name of a variance."
+        },
         "scenarios": {
-          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
+          "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. An empty list ([]) draws no scenarios: the chart shows only its variances. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
           "oneOf": [
             { "type": "string", "examples": ["inherited-closest", "inherited-page"] },
             {
@@ -5066,7 +5140,7 @@
             { "if": { "not": { "required": ["ref"] } }, "then": { "required": ["spec"] } }
           ]
         },
-        "panels": { "anyOf": [{ "required": ["by"] }, { "required": ["items"] }] }
+        "panels": { "anyOf": [{ "required": ["by"] }, { "required": ["items"] }], "dependentRequired": { "overrides": ["by"] } }
       }
     },
     "smallMultipleSpecBase": {
@@ -5188,7 +5262,26 @@
                   "filter": { "type": "string", "description": "AlaSQL WHERE-clause fragment selecting the rows of this panel." },
                   "dataset": { "type": "string", "pattern": "^[^$]", "description": "DataSet name used for this panel instead of the SmallMultiple dataset. A $datasource is not allowed here." },
                   "spec": { "type": "object", "description": "Overrides of the panel spec for this panel only." },
-                  "card": { "type": "object", "description": "Changes the card of this panel, over the card of the SmallMultiple: the same fields as card. Needs card." }
+                  "card": { "type": "object", "description": "Changes the card of this panel, over the card of the SmallMultiple: the same fields as card. Needs card." },
+                  "rowSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid rows the panel takes. Needs template engine v1.0.0-next.46 or newer." },
+                  "columnSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid columns the panel takes. Not more than columns. Needs template engine v1.0.0-next.46 or newer." },
+                  "background": { "type": "string", "description": "Background color of the cell of the panel (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer." }
+                }
+              }
+            },
+            "overrides": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Span and background of single by panels, each named by its value. A value that no panel has is ignored with a warning. Needs by.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["value"],
+                "properties": {
+                  "value": { "type": ["string", "number", "boolean"], "description": "The value of the by column that names the panel, as in ${panel.value}." },
+                  "rowSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid rows the panel takes. Needs template engine v1.0.0-next.46 or newer." },
+                  "columnSpan": { "type": "integer", "minimum": 1, "default": 1, "description": "Number of grid columns the panel takes. Not more than columns. Needs template engine v1.0.0-next.46 or newer." },
+                  "background": { "type": "string", "description": "Background color of the cell of the panel (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer." }
                 }
               }
             }
@@ -5197,7 +5290,7 @@
         "columns": {
           "type": "integer",
           "minimum": 1,
-          "description": "Number of grid columns. Default: the square root of the panel count, rounded up."
+          "description": "Number of grid columns. Default: the square root of the panel count, rounded up. With spans, the square root of the positions the panels take, and at least the widest columnSpan."
         },
         "cellHeight": {
           "type": "string",
@@ -5219,6 +5312,12 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to draw lines between the panels."
+        },
+        "axisTitles": {
+          "type": "string",
+          "enum": ["each", "rowEnd"],
+          "default": "each",
+          "description": "Where the axis titles of the panels stand, for example the names of the variances. 'each' (default): every panel has its own. 'rowEnd': only the last panel of each row has them, at its right. ChartTime base only: it sets axisTitlePosition of the panels, and a panels.items[].spec that sets axisTitlePosition wins. Needs template engine v1.0.0-next.46 or newer."
         }
       }
     },
@@ -5398,6 +5497,22 @@
         "caption": {
           "type": "string",
           "description": "Caption drawn at the top left of the cell, above its content. Needs template engine v1.0.0-next.32 or newer."
+        },
+        "rowSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of rows the cell takes, from its own row down. The positions it covers must stay empty. Needs template engine v1.0.0-next.46 or newer."
+        },
+        "columnSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of columns the cell takes, from its own column to the right. The positions it covers must stay empty. Needs template engine v1.0.0-next.46 or newer."
+        },
+        "background": {
+          "type": "string",
+          "description": "Background color of the cell (CSS color). Wins over cellBackground of the bn-grid style. Needs template engine v1.0.0-next.46 or newer."
         }
       },
       "allOf": [

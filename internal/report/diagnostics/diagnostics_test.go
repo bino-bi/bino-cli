@@ -583,3 +583,39 @@ func TestTableCalculationSchemeEngineDiagnostic(t *testing.T) {
 		t.Fatalf("defaults: %+v", d)
 	}
 }
+
+func TestSmallMultipleSpanEngineDiagnostic(t *testing.T) {
+	doc := func(spec string) []config.Document {
+		return []config.Document{{Kind: "LayoutPage", Raw: json.RawMessage(`{"kind":"LayoutPage","spec":{` + spec + `}}`)}}
+	}
+	project := func(engineVersion string) string {
+		dir := t.TempDir()
+		toml := "report-id = \"00000000-0000-0000-0000-000000000000\"\nengine-version = \"" + engineVersion + "\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.45"), doc(`"titleId":"13A"`))
+	if !ok || d.Code != "small-multiple-span-engine-version" || d.Severity != "error" || d.Line != 2 ||
+		!strings.Contains(d.Message, "LayoutPage titleId: template engine v1.0.0-next.46 or newer is needed") {
+		t.Fatalf("diagnostic = %+v, ok = %v", d, ok)
+	}
+	if d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.46"), doc(`"titleId":"13A"`)); ok {
+		t.Fatalf("new engine: %+v", d)
+	}
+	if d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.45"), doc(`"titleBusinessUnit":"x"`)); ok {
+		t.Fatalf("no new field: %+v", d)
+	}
+}
+
+func TestSmallMultipleOverrideFindings(t *testing.T) {
+	sm := config.Document{Kind: "SmallMultiple", Name: "sm", Raw: json.RawMessage(`{"kind":"SmallMultiple","metadata":{"name":"sm"},
+		"spec":{"dataset":"profit","base":{"kind":"ChartTime","ref":"t"},"panels":{"by":"rowGroup","overrides":[{"value":"Berlin"},{"value":"Hamburg"}]}}}`)}
+	results := []dataset.Result{{Name: "profit", Data: json.RawMessage(`[{"rowGroup":"Berlin"}]`)}}
+	findings := SmallMultipleOverrideFindings([]config.Document{sm}, results)
+	if len(findings) != 1 || findings[0].RuleID != "small-multiple-override-unmatched" || !strings.Contains(findings[0].Message, `"Hamburg"`) {
+		t.Fatalf("findings = %+v", findings)
+	}
+}

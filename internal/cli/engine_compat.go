@@ -57,6 +57,30 @@ func engineCompatFinding(projectRoot, pinnedVersion string) (lint.Finding, bool)
 	}, true
 }
 
+// featureGateFindings runs the engine gates that make lint fail. It returns
+// their findings, the last gate first, and the id of the first failing gate.
+func featureGateFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (findings []lint.Finding, fatalID string) {
+	gates := []struct {
+		id    string
+		check func(string, *pathutil.ProjectConfig, []config.Document) (lint.Finding, bool)
+	}{
+		{"annotation-engine-version", annotationEngineFinding},
+		{"grid-cell-layout-engine-version", gridCellLayoutEngineFinding},
+		{"small-multiple-span-engine-version", smallMultipleSpanEngineFinding},
+	}
+	for _, g := range gates {
+		finding, fatal := g.check(projectRoot, cfg, documents)
+		if !fatal {
+			continue
+		}
+		findings = append([]lint.Finding{finding}, findings...)
+		if fatalID == "" {
+			fatalID = g.id
+		}
+	}
+	return findings, fatalID
+}
+
 // annotationEngineFinding reports a project with Annotation documents whose
 // engine is older than the release with the overlay. It is its own check, as a
 // project without annotations keeps working on that engine.
@@ -74,6 +98,21 @@ func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig
 	used := config.UsesGridCellLayout(documents)
 	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(documents))
 	return engineGateFinding(projectRoot, cfg, used, check, "grid-cell-layout-engine-version")
+}
+
+// smallMultipleSpanEngineFinding reports a project that uses cell spans, cell
+// backgrounds or the other fields of that engine release on an older engine.
+func smallMultipleSpanEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	features := config.SmallMultipleSpanFeatures(documents, nil)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
+}
+
+// smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
+// only a dataset default sets, which shows after the queries ran.
+func smallMultipleSpanDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	features := dataset.SmallMultipleSpanFeatures(documents, results)
+	used := len(config.SmallMultipleSpanFeatures(documents, nil)) == 0 && len(features) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
 }
 
 // operationSentimentEngineFinding reports a project that uses the variance
@@ -135,13 +174,15 @@ func tableEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, docume
 	return findings
 }
 
-// tableDefaultEngineFindings returns the engine gate findings of the Table
-// features that only a dataset default turns on.
+// tableDefaultEngineFindings returns the engine gate findings of the features
+// that only a dataset default turns on: those of the Table, and the chart
+// fields of the cell span release.
 func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) []lint.Finding {
 	var findings []lint.Finding
 	for _, gate := range []func(string, *pathutil.ProjectConfig, []config.Document, []dataset.Result) (lint.Finding, bool){
 		categoryIntervalPositionDefaultEngineFinding,
 		tableCalculationSchemeDefaultEngineFinding,
+		smallMultipleSpanDefaultEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)

@@ -21,11 +21,14 @@ var nonRuleFindingIDs = []string{
 	"annotation-point-missing",                        // needs data: AnnotationPointFindings, called by cli/lint.go
 	"annotation-engine-version",                       // cli/engine_compat.go
 	"grid-cell-layout-engine-version",                 // cli/engine_compat.go
+	"small-multiple-span-engine-version",              // cli/engine_compat.go
 	"operation-sentiment-engine-version",              // cli/engine_compat.go
 	"table-order-engine-version",                      // cli/engine_compat.go
 	"table-category-interval-position-engine-version", // cli/engine_compat.go
 	"table-category-interval-position-too-large",      // needs data: CategoryIntervalPositionFindings, called by cli/lint.go
 	"table-calculation-scheme-engine-version",         // cli/engine_compat.go
+	"small-multiple-override-unmatched",               // needs data: SmallMultipleOverrideFindings, called by cli/lint.go
+	"annotation-panel-ambiguous",                      // emitted by annotation-target-missing, and with data by AnnotationPointFindings
 }
 
 // fixedSeverityIDs are known finding IDs whose weight is decided by the state
@@ -40,6 +43,7 @@ var fixedSeverityIDs = []string{
 	"engine-version-incompatible",
 	"annotation-engine-version",
 	"grid-cell-layout-engine-version",
+	"small-multiple-span-engine-version",
 	"operation-sentiment-engine-version",
 	"table-order-engine-version",
 	"table-category-interval-position-engine-version",

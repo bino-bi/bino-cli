@@ -76,7 +76,10 @@ type renderCtx struct {
 	ctx context.Context
 	// panelCard marks a LayoutCard that a SmallMultiple made around a panel:
 	// its child is no document, so it gets no source attributes.
-	panelCard     bool
+	panelCard bool
+	// panelTarget is the annotation target id of that panel, "" without one.
+	// It goes on the slot of the component inside the card.
+	panelTarget   string
 	docs          []config.Document
 	constraintCtx *spec.ConstraintContext
 	// docIndex maps kind+name to the document for ref resolution (from filtered docs).
@@ -115,6 +118,9 @@ type renderCtx struct {
 	// annotationPage collects the marks of the page being rendered; nil
 	// outside a page and on a page without annotations.
 	annotationPage *annotationPage
+	// panelPage is the annotation page while a SmallMultiple renders: its
+	// panels can be targets, the components in them cannot.
+	panelPage *annotationPage
 	// annotationData finds the rows behind a component for the point check.
 	annotationData *annotationData
 }
@@ -964,10 +970,10 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 
 	// Children inherit the card's effective style as their default.
 	childRC := rc.withInheritedStyle(cardSpec.SelectedStyle)
-	panelCard := rc.panelCard
+	panelCard, panelTarget := rc.panelCard, rc.panelTarget
 	if panelCard {
 		c := *childRC
-		c.panelCard = false
+		c.panelCard, c.panelTarget = false, ""
 		childRC = &c
 	}
 
@@ -985,6 +991,8 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		if !panelCard {
 			writeSourceAttrs(&b, child)
 			childRC.writeAnnotationTarget(&b, child)
+		} else {
+			writeAttr(&b, "data-bino-annotation-target", panelTarget)
 		}
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -1160,7 +1168,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if name == "" {
 			name = child.Metadata.Name
 		}
-		htmlOut, err := renderSmallMultipleComponent(s, name, rc.withoutAnnotationPage())
+		htmlOut, err := renderSmallMultipleComponent(s, name, rc.forSmallMultiple())
 		if err != nil {
 			return "", false, fmt.Errorf("render small multiple child: %w", err)
 		}
@@ -1555,9 +1563,11 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 	// Cells inherit the grid's effective style as their default.
 	childRC := rc.withInheritedStyle(s.SelectedStyle)
 
-	// Render child content as slotted elements
-	var cells strings.Builder
+	// Render the children first: a child that renders nothing (a missing
+	// optional ref, a ref that constraints filter out) takes no position, so
+	// its span must not hide another child.
 	rendered := make([]gridChild, 0, len(s.Children))
+	contents := make([]string, 0, len(s.Children))
 	for _, child := range s.Children {
 		childContent, err := renderGridChild(child, childRC)
 		if err != nil {
@@ -1567,18 +1577,38 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 			continue // Skip children that couldn't be rendered (e.g., filtered refs)
 		}
 		rendered = append(rendered, child)
-		slotName := gridSlotName(child)
+		contents = append(contents, childContent)
+	}
+	placed := s
+	placed.Children = rendered
+	covered, _ := gridSpanLayout(placed)
+
+	var cells strings.Builder
+	shown := make([]gridChild, 0, len(rendered))
+	for i, child := range rendered {
+		if by, ok := covered[i]; ok {
+			// bn-grid draws no cell there; lint reports it as grid-cell-span
+			rc.warn(fmt.Sprintf("Grid: the child in row %s, column %s is not shown: the span of the child in row %s, column %s covers its position",
+				child.Row, child.Column, rendered[by].Row, rendered[by].Column))
+			continue
+		}
+		shown = append(shown, child)
 		cells.WriteString("\n  <div slot='")
-		cells.WriteString(html.EscapeString(slotName))
-		cells.WriteString("'>")
-		cells.WriteString(childContent)
+		cells.WriteString(html.EscapeString(gridSlotName(child)))
+		cells.WriteString("'")
+		child.writeCellAttrs(&cells)
+		if child.Kind != "LayoutCard" {
+			writeAttr(&cells, "data-bino-annotation-target", child.annotationTarget)
+		}
+		cells.WriteString(">")
+		cells.WriteString(contents[i])
 		cells.WriteString("</div>")
 	}
 
 	var b strings.Builder
 	b.WriteString("<bn-grid")
 	attrs := s
-	attrs.Children = rendered // a skipped cell gets no caption
+	attrs.Children = shown // a skipped cell gets no caption
 	attrs.writeAttrs(&b)
 	b.WriteString(">")
 	b.WriteString(cells.String())
@@ -1678,6 +1708,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		}
 		panelRC := *rc
 		panelRC.panelCard = true
+		panelRC.panelTarget = child.annotationTarget
 		return renderLayoutCardContainer(s, &panelRC)
 	default:
 		name := child.Ref

@@ -53,7 +53,9 @@ and `orderDirection` can be inherited from the surrounding layout (see
 - `showCategories`, `showMeasureScale` - visibility flags.
 - `limit` - maximum bars per group; rows beyond the limit are cumulated as REST.
 - `pixelPerUnit` - explicit scaling override.
-- `scenarios` - list of scenarios (up to 4); values are `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. When omitted, they are detected from the dataset with a warning.
+- `scenarios` - list of scenarios (up to 4); values are `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. When omitted, they are detected from the dataset with a warning. An empty list (`scenarios: []`) draws no scenario: the chart shows only its variances, see [Variance only chart](#variance-only-chart).
+- `dataFormatDigitsDecimal` - number of decimal digits of the value labels. Default: `1`. Same meaning as on a [`Table`](/reference/table/).
+- `dataFormatDigitsPercent` - number of decimal digits of the percent labels: relative variances and the shares of a 100 % stack. Default: `2`. Same meaning as on a `Table`.
 - `variances` - list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu|op|opinv]`. The values of a chart already carry their sign, so `_op` acts like `_pos` and `_opinv` like `_neg`. `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. See [Variance sentiment](/reference/table/#variance-sentiment).
 - `scale` - proportional scaling of the chart (font size, spacings, and bar lengths all scale together). Scaling triggers on **height** overflow (vertical category labels cut off).
   - _omitted_ - auto-scale to fit the parent height; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value.
@@ -137,6 +139,40 @@ This staggered break position maintains the IBCS visual hierarchy between scenar
 
 Overdrive bars apply to bar mode only and do not affect stacked charts, relative variance needles, or auto-fit scaling.
 The existing overflow warning is still emitted alongside the visual treatment.
+
+## Variance only chart
+
+`scenarios: []` draws no scenario. The chart shows only its variances:
+
+- The scenarios that the variances need are still read from the dataset.
+- The first variance carries the category labels.
+- `chartTitle` is not shown.
+- Without `variances` the chart is empty and warns.
+
+An empty list is not the same as a missing field. Without `scenarios`, or with `scenarios: auto`, the chart detects the scenarios from the dataset.
+
+:::caution[Changed behaviour]
+Up to Bino v0.110.0, `scenarios: []` on a `ChartStructure` had the same effect as no `scenarios` at all: the scenarios were detected from the dataset. It was a way to clear a list that came from a `ref` or from a dataset default. Now an empty list means "no scenarios". To get the detection back, remove the field or write `scenarios: auto`. A `Table` is not changed: there an empty list still means detection.
+:::
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: revenue_variance_by_region
+spec:
+  dataset: revenue_by_region
+  level: category
+  scenarios: []
+  variances: ["dac1_pp1_pos"]
+```
+
+`scenarios: []` and the two `dataFormatDigits*` fields need template engine **v1.0.0-next.46** or newer. Older engines ignore them. So with an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). The check also sees a field that a [dataset default](/reference/dataset/#dataset-defaults) sets.
+
+:::caution[Dataset defaults]
+`dataFormatDigitsDecimal` and `dataFormatDigitsPercent` were `Table` fields only. A dataset default for every kind, `_spec_any_dataFormatDigitsDecimal` or `constants.spec.any.dataFormatDigitsDecimal` (and the same for `Percent`), now also reaches a `ChartStructure` that binds this dataset as its primary dataset. To keep the digits on tables only, use the table default: `_spec_table_dataFormatDigitsDecimal` or `constants.spec.table.dataFormatDigitsDecimal`. See [Dataset defaults](/reference/dataset/#dataset-defaults).
+:::
 
 ## Example: 100% stacked bars
 
@@ -255,7 +291,9 @@ children:
 | `spec.showCategories`    | boolean                  | no                   | `true`                   | Show category labels on bars.                                                                                                                                                                                                                                                                               | `showCategories: true`            |
 | `spec.showMeasureScale`  | boolean                  | no                   | `false`                  | Show measure unit in chart header.                                                                                                                                                                                                                                                                          | `showMeasureScale: true`          |
 | `spec.limit`             | integer                  | no                   | `0`                      | Maximum bars per group. Extra rows are cumulated as REST. `0` means unlimited.                                                                                                                                                                                                                              | `limit: 10`                       |
-| `spec.scenarios`         | string or array          | no                   | auto-detect with warning | Scenario measures (up to 4), as a YAML array or a JSON/CSV string. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. The string form also accepts `inherited-closest` or `inherited-page`.                                                                                                        | `scenarios: ["ac1", "pp1"]`       |
+| `spec.dataFormatDigitsDecimal` | integer            | no                   | `1`                      | Number of decimal digits of the value labels. Minimum: 0. Needs engine v1.0.0-next.46. |
+| `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                      | Number of decimal digits of the percent labels (relative variances, shares of a 100 % stack). Minimum: 0. Needs engine v1.0.0-next.46. |
+| `spec.scenarios`         | string or array          | no                   | auto-detect with warning | Scenario measures (up to 4), as a YAML array or a JSON/CSV string. Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`. The string form also accepts `inherited-closest` or `inherited-page`.                                                                                                        | `scenarios: ["ac1", "pp1"]` An empty list draws only the variances. |
 | `spec.variances`         | string or array          | no                   | -                        | Variance definitions calculated from the given scenarios. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu\|op\|opinv]`, with `dr…` for the relative variance. The string form also accepts `inherited-closest` or `inherited-page`.                                                                                  | `variances: ["dac1_pp1_pos"]`     |
 | `spec.scale`             | string or number         | no                   | auto-scale with warning  | Proportional scaling. Omitted: auto-scale to fit parent height with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number, as a number or a numeric string: fixed factor. An empty string is rejected.                                                                              | `scale: auto`                     |
 | `spec.i18nNamespace`     | string                   | no                   | -                        | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                                                            | `i18nNamespace: audited`          |

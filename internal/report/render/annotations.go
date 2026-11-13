@@ -28,10 +28,22 @@ type annotationPage struct {
 	wanted map[string]bool
 	// targets maps a component to the ids of its slots, one per place it sits.
 	targets map[string][]string
-	// specs maps a component to its effective specs, one per place it sits.
-	specs  map[string][]json.RawMessage
+	// places maps a component to what it draws, one per place it sits.
+	places map[string][]annotationPlace
+	// panels maps a SmallMultiple to the panel labels annotations point at.
+	panels map[string][]string
 	lists  []schema.AnnotationListSpec
 	nextID int
+}
+
+// annotationPlace is one place of a target: its effective spec and the kind
+// that draws it. For a panel of a SmallMultiple that is the base kind, and a
+// by panel only has the rows with its value in the by column.
+type annotationPlace struct {
+	kind  string
+	spec  json.RawMessage
+	by    string
+	label string
 }
 
 // annotationData looks up and decodes the rows of a binding once per render.
@@ -137,12 +149,21 @@ func (rc *renderCtx) withAnnotationPage() *renderCtx {
 		docs:    rc.annotations,
 		wanted:  map[string]bool{},
 		targets: map[string][]string{},
-		specs:   map[string][]json.RawMessage{},
+		places:  map[string][]annotationPlace{},
+		panels:  map[string][]string{},
+	}
+	want := func(end schema.AnnotationTarget) {
+		key := annotation.TargetKey(end)
+		if end.Panel != "" && !page.wanted[key] {
+			component := annotation.Key(end.Kind, end.Name)
+			page.panels[component] = append(page.panels[component], end.Panel)
+		}
+		page.wanted[key] = true
 	}
 	for _, a := range rc.annotations {
-		page.wanted[annotation.Key(a.spec.Target.Kind, a.spec.Target.Name)] = true
+		want(a.spec.Target)
 		if a.spec.To != nil {
-			page.wanted[annotation.Key(a.spec.To.Kind, a.spec.To.Name)] = true
+			want(*a.spec.To)
 		}
 	}
 	c.annotationPage = page
@@ -159,6 +180,65 @@ func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
 	c := *rc
 	c.annotationPage = nil
 	return &c
+}
+
+// forSmallMultiple ends the mark collection like withoutAnnotationPage, but
+// keeps the page for the panels: a panel can be a target.
+func (rc *renderCtx) forSmallMultiple() *renderCtx {
+	if rc.annotationPage == nil {
+		return rc
+	}
+	c := *rc
+	c.annotationPage = nil
+	c.panelPage = rc.annotationPage
+	return &c
+}
+
+// panelAnnotationTarget gives a panel that an annotation points at a target id
+// that is unique on the page, and keeps what the point check needs. It is ""
+// for a panel without annotation.
+func (rc *renderCtx) panelAnnotationTarget(name, baseKind, by string, p panel, cellSpec json.RawMessage) string {
+	page := rc.panelPage
+	if page == nil {
+		return ""
+	}
+	key := annotation.TargetKey(schema.AnnotationTarget{Kind: schema.KindSmallMultiple, Name: name, Panel: p.label})
+	if !page.wanted[key] {
+		return ""
+	}
+	page.nextID++
+	id := fmt.Sprintf("t%d", page.nextID)
+	page.targets[key] = append(page.targets[key], id)
+	place := annotationPlace{kind: baseKind, spec: cellSpec}
+	if p.item == nil {
+		place.by, place.label = by, p.label
+	}
+	page.places[key] = append(page.places[key], place)
+	return id
+}
+
+// warnPanelTargets reports the panels annotations name that the SmallMultiple
+// does not have, or has more than once. The values of panels.by are only known
+// with the data, so lint cannot always tell.
+func (rc *renderCtx) warnPanelTargets(name string, panels []panel) {
+	page := rc.panelPage
+	if page == nil {
+		return
+	}
+	for _, label := range page.panels[annotation.Key(schema.KindSmallMultiple, name)] {
+		count := 0
+		for _, p := range panels {
+			if p.label == label {
+				count++
+			}
+		}
+		switch {
+		case count == 0:
+			rc.warn(fmt.Sprintf("annotation-target-missing: SmallMultiple %q has no panel %q", name, label))
+		case count > 1:
+			rc.warn(fmt.Sprintf("annotation-panel-ambiguous: SmallMultiple %q has %d panels with the label %q; the mark goes on each of them", name, count, label))
+		}
+	}
 }
 
 // childKey is the component a layout child renders: the document it refs, or
@@ -178,7 +258,7 @@ func (rc *renderCtx) noteAnnotationSpec(child layoutChild, effectiveSpec json.Ra
 		return
 	}
 	if key := childKey(child); rc.annotationPage.wanted[key] {
-		rc.annotationPage.specs[key] = append(rc.annotationPage.specs[key], effectiveSpec)
+		rc.annotationPage.places[key] = append(rc.annotationPage.places[key], annotationPlace{kind: child.Kind, spec: effectiveSpec})
 	}
 }
 
@@ -246,7 +326,7 @@ func (rc *renderCtx) finishAnnotationPage(b *strings.Builder, selectedStyle stri
 
 // onPage reports whether the target of an annotation sits on this page.
 func (p *annotationPage) onPage(a annotationDoc) bool {
-	return len(p.targets[annotation.Key(a.spec.Target.Kind, a.spec.Target.Name)]) > 0
+	return len(p.targets[annotation.TargetKey(a.spec.Target)]) > 0
 }
 
 // number gives the annotations of this page their numbers: first in the order
@@ -301,8 +381,8 @@ func (p *annotationPage) listed(list schema.AnnotationListSpec) []annotationDoc 
 // canPlace reports whether the ends of an annotation are on this page and can
 // exist in the data. Why not goes to the build log.
 func (p *annotationPage) canPlace(rc *renderCtx, a annotationDoc) bool {
-	if a.spec.To != nil && len(p.targets[annotation.Key(a.spec.To.Kind, a.spec.To.Name)]) == 0 {
-		rc.warn(fmt.Sprintf("annotation-arrow-pages: annotation %s: %s %s is not on the page of its target", a.name, a.spec.To.Kind, a.spec.To.Name))
+	if a.spec.To != nil && len(p.targets[annotation.TargetKey(*a.spec.To)]) == 0 {
+		rc.warn(fmt.Sprintf("annotation-arrow-pages: annotation %s: %s is not on the page of its target", a.name, describeTarget(*a.spec.To)))
 		return false
 	}
 	ok := p.checkEnd(rc, a.name, a.spec.Target)
@@ -316,17 +396,28 @@ func (p *annotationPage) canPlace(rc *renderCtx, a annotationDoc) bool {
 // engine has the last word for the others.
 func (p *annotationPage) checkEnd(rc *renderCtx, name string, end schema.AnnotationTarget) bool {
 	reason := ""
-	for _, componentSpec := range p.specs[annotation.Key(end.Kind, end.Name)] {
+	for _, place := range p.places[annotation.TargetKey(end)] {
 		var rows annotation.Rows
 		if rc.annotationData != nil {
-			rows = rc.annotationData.rows(annotation.Binding(componentSpec))
+			rows = rc.annotationData.rows(annotation.Binding(place.spec))
 		}
-		if reason = annotation.CheckPoint(end.Kind, end.Point, rows); reason == "" {
+		if place.by != "" {
+			rows = annotation.PanelRows(rows, place.by, place.label)
+		}
+		if reason = annotation.CheckPoint(place.kind, end.Point, rows); reason == "" {
 			return true
 		}
 	}
-	rc.warn(fmt.Sprintf("annotation-point-missing: annotation %s on %s %s: %s", name, end.Kind, end.Name, reason))
+	rc.warn(fmt.Sprintf("annotation-point-missing: annotation %s on %s: %s", name, describeTarget(end), reason))
 	return false
+}
+
+// describeTarget names an end of an annotation in a message.
+func describeTarget(end schema.AnnotationTarget) string {
+	if end.Panel != "" {
+		return fmt.Sprintf("%s %s panel %q", end.Kind, end.Name, end.Panel)
+	}
+	return end.Kind + " " + end.Name
 }
 
 // layerItems builds the marks. A component that sits on the page twice gets its
@@ -337,10 +428,10 @@ func (p *annotationPage) layerItems(labels map[string]string, placed map[string]
 		if !placed[a.name] {
 			continue
 		}
-		ids := p.targets[annotation.Key(a.spec.Target.Kind, a.spec.Target.Name)]
+		ids := p.targets[annotation.TargetKey(a.spec.Target)]
 		var toIDs []string
 		if a.spec.To != nil {
-			toIDs = p.targets[annotation.Key(a.spec.To.Kind, a.spec.To.Name)]
+			toIDs = p.targets[annotation.TargetKey(*a.spec.To)]
 		}
 		count := max(len(ids), len(toIDs))
 		for i := range count {

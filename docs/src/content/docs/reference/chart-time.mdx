@@ -43,7 +43,12 @@ stacked columns or a stacked area with the `stack` block (see
 - `chartMode` - rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
 - `maxBars` - threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `lineFullWidth` - when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
-- `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label.
+- `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label. The short year label follows the translation key [`bn-chart-time.date-format-short-year`](/reference/internationalization/#time-and-structure-charts-bn-chart-time-bn-chart-structure-prefixes).
+- `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. Bar mode only.
+- `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right` or `none`.
+- `dataFormatDigitsDecimal` - number of decimal digits of the value labels. Default: `1`. Same meaning as on a [`Table`](/reference/table/).
+- `dataFormatDigitsPercent` - number of decimal digits of the percent labels of relative variances. Default: `2`. Same meaning as on a `Table`.
+- `scenarioSwitch` - for a series that changes its scenario along the time axis, for example AC up to this year and PL after it. Default: `false`. See [Scenario switch](#scenario-switch).
 - `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` - optional filter expression.
 - `measureScale`, `measureUnit` - SI prefix and unit string.
@@ -53,7 +58,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `unitScaling` - data units displayed per 1 em of bar height (map-scale semantics: larger value = smaller bars), `auto` to fit the available height, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
 - `percentageScaling` - percentage points per 1 em of pin/bar length for relative variances (`10` → a +10 % pin is 1 em long); same `auto`/group-name options.
 - `syncSpaceLeft` - space reserved left of the axis for the scenario labels and the chart title, in px. `-1` (default) measures the widest label. Set the same value on several charts to align their axes; a value smaller than the widest label clips it.
-- `scenarios` - list of scenarios (up to 4); values like `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning.
+- `scenarios` - list of scenarios (up to 4); values like `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, or `auto`. When set to `auto`, scenarios are detected from the dataset silently. When left blank, they are detected with a warning. An empty list (`scenarios: []`) draws no scenario: the chart shows only its variances, see [Variance only chart](#variance-only-chart).
 - `variances` - list of variance definitions of the form `d<scenarioB>_<scenarioA>_[pos|neg|neu|op|opinv]`. The values of a chart already carry their sign, so `_op` acts like `_pos` and `_opinv` like `_neg`. `_op` and `_opinv` need template engine v1.0.0-next.34 or newer. See [Variance sentiment](/reference/table/#variance-sentiment).
 - `scale` - proportional scaling of the chart (font size, spacings, and bar/column dimensions all scale together). Scaling triggers on **width** overflow (horizontal axis labels cut off).
   - _not set_ - auto-scale to fit the parent width; emits an `AUTO_scale` warning with the applied factor. An empty string is not a valid value; omit the key instead.
@@ -197,6 +202,72 @@ This staggered break position maintains the IBCS visual hierarchy between scenar
 Overdrive bars apply to bar mode only and do not affect line charts, stacked charts, or auto-fit scaling.
 The existing overflow warning is still emitted alongside the visual treatment.
 
+### Cut of a large relative variance
+
+A relative variance above 145 % is cut, so one outlier does not take the whole height. When `percentageScaling` is a fixed number, the pin is cut only when the full pin does not fit the available height. A pin that fits is drawn in full length. With `percentageScaling: auto` or without `percentageScaling`, the cut at 145 % stays. This needs template engine **v1.0.0-next.46** or newer. Older engines cut at 145 % in every case.
+
+## Scenario switch
+
+A plan often continues the actual values: AC up to this year, PL after it. In the data these are two scenarios, each with values in its own periods. Without `scenarioSwitch` the chart draws them as two series, and every period has a gap for the scenario without a value.
+
+With `scenarioSwitch: true` the chart draws one series:
+
+- A scenario that only has values in periods where the first scenario has none is drawn in its place, as a full column with value labels.
+- A vertical line marks the change, and the scenario names stand under the axis.
+- Variances of one type over the same reference share one row: `dac1_pp1_pos` and `dpl1_pp1_pos` are one row of variances from `pp1`. The plan variances are outlined.
+- If two of them have a value in the same period, the first one wins and the chart warns.
+
+It works in bar mode without `stack` only.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: net_profit_actual_and_plan
+spec:
+  dataset: net_profit_yearly
+  chartTitle: "Net profit"
+  dateInterval: year
+  scenarios: ["ac1", "pl1"] # ac1 has values up to 2026, pl1 from 2027
+  variances: ["dac1_pp1_pos", "dpl1_pp1_pos"]
+  scenarioSwitch: true
+```
+
+## Variance only chart
+
+`scenarios: []` draws no scenario. The chart shows only its variances:
+
+- The scenarios that the variances need are still read from the dataset.
+- The first variance carries the category labels.
+- `chartTitle` is not shown.
+- Without `variances` the chart is empty and warns.
+
+An empty list is not the same as a missing field. Without `scenarios`, or with `scenarios: auto`, the chart detects the scenarios from the dataset.
+
+:::caution[Changed behaviour]
+Up to Bino v0.110.0, `scenarios: []` on a `ChartTime` had the same effect as no `scenarios` at all: the scenarios were detected from the dataset. It was a way to clear a list that came from a `ref` or from a dataset default. Now an empty list means "no scenarios". To get the detection back, remove the field or write `scenarios: auto`. A `Table` is not changed: there an empty list still means detection.
+:::
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: net_profit_variance_only
+spec:
+  dataset: net_profit_yearly
+  dateInterval: year
+  scenarios: []
+  variances: ["dac1_pp1_pos"]
+```
+
+The fields of this section, `axisLabelsStep`, `axisTitlePosition` and the two `dataFormatDigits*` fields need template engine **v1.0.0-next.46** or newer. Older engines ignore them. So with an older engine `bino build` and `bino lint` stop with [`small-multiple-span-engine-version`](/appendix/lint-rules/#small-multiple-span-engine-version). A chart that leaves them at their defaults keeps working on its engine. The check also sees a field that a [dataset default](/reference/dataset/#dataset-defaults) sets.
+
+:::caution[Dataset defaults]
+`dataFormatDigitsDecimal` and `dataFormatDigitsPercent` were `Table` fields only. A dataset default for every kind, `_spec_any_dataFormatDigitsDecimal` or `constants.spec.any.dataFormatDigitsDecimal` (and the same for `Percent`), now also reaches a `ChartTime` that binds this dataset as its primary dataset. To keep the digits on tables only, use the table default: `_spec_table_dataFormatDigitsDecimal` or `constants.spec.table.dataFormatDigitsDecimal`. See [Dataset defaults](/reference/dataset/#dataset-defaults).
+:::
+
 ## Example: Stacked columns by scenario
 
 Stack AC and PP values as additive columns:
@@ -310,6 +381,11 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.maxBars`           | integer                  | no                   | `28`                         | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1.                                                                                                                                                                        | `maxBars: 15`                     |
 | `spec.lineFullWidth`     | boolean                  | no                   | `true`                       | Stretch line charts to fill full parent width. Has no effect in bar mode.                                                                                                                                                                                              | `lineFullWidth: true`             |
 | `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`.       | `axisLabelsMode: short`           |
+| `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. Bar mode only. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `none`. Needs engine v1.0.0-next.46. |
+| `spec.dataFormatDigitsDecimal` | integer            | no                   | `1`                          | Number of decimal digits of the value labels. Minimum: 0. Needs engine v1.0.0-next.46. |
+| `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                          | Number of decimal digits of the percent labels of relative variances. Minimum: 0. Needs engine v1.0.0-next.46. |
+| `spec.scenarioSwitch`    | boolean                  | no                   | `false`                      | Draw a scenario that only has values where the first scenario has none in its place. See [Scenario switch](#scenario-switch). Needs engine v1.0.0-next.46. |
 | `spec.dateInterval`      | string                   | no                   | auto-detect                  | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`.                                                                                                                                                | `dateInterval: month`             |
 | `spec.filter`            | string                   | no                   | `""`                         | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                           | `filter: "region_group = 'EMEA'"` |
 | `spec.measureScale`      | string                   | no                   | largest value in the dataset | SI prefix for measure scaling; `_` means no prefix, `GREATEST` uses the largest and `LEAST` the smallest value in the dataset. Values (case-sensitive): `_`, `k`, `M`, `G`, `T`, `P`, `E`, `Z`, `Y`, `m`, `μ`, `n`, `p`, `f`, `a`, `z`, `y`, `GREATEST`, `LEAST`.      | `measureScale: M`                 |
@@ -322,7 +398,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.showOverlayAvg`    | boolean                  | no                   | `true`                       | Show average overlay line.                                                                                                                                                                                                                                             | `showOverlayAvg: true`            |
 | `spec.showOverlayMedian` | boolean                  | no                   | `false`                      | Show median overlay line.                                                                                                                                                                                                                                              | `showOverlayMedian: true`         |
 | `spec.intervalSpanLimit` | integer                  | no                   | `28`                         | Maximum number of columns used to calculate the axis date interval; only applies when `dateInterval` is `auto` or unset. Minimum: 0.                                                                                                                                   | `intervalSpanLimit: 50`           |
-| `spec.scenarios`         | string or array          | no                   | -                            | Scenario measures (up to 4). Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `auto`, `inherited-closest`, `inherited-page`.                                                                                                                                | `scenarios: ["ac1", "fc1"]`       |
+| `spec.scenarios`         | string or array          | no                   | -                            | Scenario measures (up to 4). Values: `ac1`-`ac4`, `fc1`-`fc4`, `pp1`-`pp4`, `pl1`-`pl4`, `auto`, `inherited-closest`, `inherited-page`. An empty list draws only the variances.                                                                                                                           | `scenarios: ["ac1", "fc1"]`       |
 | `spec.variances`         | string or array          | no                   | -                            | Variance definitions. Pattern: `d<scenarioB>_<scenarioA>_[pos\|neg\|neu\|op\|opinv]`. Also accepts `inherited-closest` or `inherited-page`.                                                                                                                                       | `variances: ["dfc1_ac1_pos"]`     |
 | `spec.scale`             | string or number         | no                   | auto-scale with warning      | Proportional scaling; font size, spacings, and bar dimensions scale together. Omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (`0.5`, `1.2`, …). An empty string is rejected. | `scale: auto`                     |
 | `spec.i18nNamespace`     | string                   | no                   | -                            | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                       | `i18nNamespace: audited`          |

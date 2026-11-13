@@ -11,6 +11,7 @@ import (
 	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
 	"bino.bi/bino/internal/report/ref"
+	"bino.bi/bino/internal/report/render"
 	"bino.bi/bino/internal/report/spec"
 	"bino.bi/bino/internal/schema"
 )
@@ -18,7 +19,7 @@ import (
 var annotationTargetMissing = Rule{
 	ID:          "annotation-target-missing",
 	Name:        "Annotation Target Missing",
-	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A child of a Grid or a Tree cannot be a target.",
+	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A child of a Grid or a Tree cannot be a target. A panel must be a panel of the SmallMultiple.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		views := annotationViews(docs)
 		var findings []Finding
@@ -26,6 +27,7 @@ var annotationTargetMissing = Rule{
 			for _, end := range annotationEnds(a) {
 				key := annotation.Key(end.target.Kind, end.target.Name)
 				included, onSlot, nested := false, false, false
+				var multiples []smallMultipleLintSpec
 				for _, view := range views {
 					if _, ok := view.annotations[doc.Name]; !ok {
 						continue
@@ -34,7 +36,21 @@ var annotationTargetMissing = Rule{
 					for _, page := range view.pages {
 						onSlot = onSlot || page.slots[key]
 						nested = nested || page.nested[key]
+						multiples = append(multiples, page.multiples[key]...)
 					}
+				}
+				if onSlot && end.target.Panel != "" && !panelCanExist(multiples, end.target.Panel) {
+					findings = append(findings, Finding{
+						RuleID:   "annotation-target-missing",
+						Message:  fmt.Sprintf("SmallMultiple %q has no panel %q", end.target.Name, end.target.Panel),
+						File:     doc.File,
+						DocIdx:   doc.Position,
+						Path:     "spec." + end.field + ".panel",
+						Severity: "error",
+					})
+				}
+				if onSlot && end.target.Panel != "" && duplicateItemLabel(multiples, end.target.Panel) {
+					findings = append(findings, ambiguousPanelFinding(doc, end))
 				}
 				if onSlot || !included {
 					continue
@@ -203,15 +219,39 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 		for _, end := range annotationEnds(a) {
 			key := annotation.Key(end.target.Kind, end.target.Name)
 			reason := ""
+			panelMissing, panelAmbiguous := false, false
 			for _, view := range views {
 				if _, ok := view.annotations[doc.Name]; !ok {
 					continue
 				}
 				for _, page := range view.pages {
+					if end.target.Panel != "" {
+						missing, ambiguous, r := panelPointProblem(end.target, page.multiples[key], rows)
+						if r != "" && reason == "" {
+							reason = page.doc.Name + ": " + r
+						}
+						panelMissing = panelMissing || missing
+						panelAmbiguous = panelAmbiguous || ambiguous
+						continue
+					}
 					if r := pointProblem(end.target, page.bindings[key], rows); r != "" && reason == "" {
 						reason = page.doc.Name + ": " + r
 					}
 				}
+			}
+			if panelAmbiguous {
+				findings = append(findings, ambiguousPanelFinding(doc, end))
+			}
+			if panelMissing {
+				findings = append(findings, Finding{
+					RuleID:   "annotation-target-missing",
+					Message:  fmt.Sprintf("SmallMultiple %q has no panel %q in the data", end.target.Name, end.target.Panel),
+					File:     doc.File,
+					DocIdx:   doc.Position,
+					Path:     "spec." + end.field + ".panel",
+					Severity: "error",
+				})
+				continue
 			}
 			// Not on a page is annotation-target-missing, and no place means no problem here.
 			if reason != "" {
@@ -243,6 +283,138 @@ func pointProblem(target schema.AnnotationTarget, bindings []string, rows func(s
 		}
 	}
 	return reason
+}
+
+// ambiguousPanelFinding reports a panel label that more than one panel of the
+// SmallMultiple has: the mark goes on each of them.
+func ambiguousPanelFinding(doc Document, end annotationEnd) Finding {
+	return Finding{
+		RuleID:   "annotation-panel-ambiguous",
+		Message:  fmt.Sprintf("SmallMultiple %q has more than one panel with the label %q: the mark goes on each of them", end.target.Name, end.target.Panel),
+		File:     doc.File,
+		DocIdx:   doc.Position,
+		Path:     "spec." + end.field + ".panel",
+		Severity: "warning",
+	}
+}
+
+// panelCanExist reports whether a panel can be one of a SmallMultiple in one
+// of its places: an item with that label, or any value of panels.by, which
+// only the data knows.
+func panelCanExist(multiples []smallMultipleLintSpec, label string) bool {
+	for _, m := range multiples {
+		if m.Panels.By != "" {
+			return true
+		}
+		for _, item := range m.Panels.Items {
+			if item.Label == label {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// panelPlace is one panel with the label an annotation names.
+type panelPlace struct {
+	binding string
+	// by is the panels.by column of a by panel, "" for an item.
+	by string
+}
+
+// panelPlaces lists the panels of one SmallMultiple that have the label, as
+// the renderer builds them: the by panels after order and limit, then the
+// items. known is false when the rows of panels.by are not known, so a by
+// panel with the label may or may not exist.
+func panelPlaces(m smallMultipleLintSpec, label string, rows func(string) annotation.Rows) (places []panelPlace, known bool) {
+	primary := ""
+	if entries := m.Dataset.Entries(); len(entries) > 0 && entries[0].IsRef() {
+		primary = entries[0].Ref
+	}
+	known = true
+	if m.Panels.By != "" {
+		var data annotation.Rows
+		if primary != "" {
+			data = rows(primary)
+		}
+		if data == nil {
+			known = false
+		} else if raw, err := json.Marshal(data); err == nil {
+			labels, _ := render.SmallMultiplePanelLabels(raw, m.Panels.By, m.Panels.Order, m.Panels.Limit)
+			if slices.Contains(labels, label) {
+				places = append(places, panelPlace{binding: primary, by: m.Panels.By})
+			}
+		}
+	}
+	for _, item := range m.Panels.Items {
+		if item.Label != label {
+			continue
+		}
+		binding := primary
+		if item.Dataset != "" {
+			binding = item.Dataset
+		}
+		places = append(places, panelPlace{binding: binding})
+	}
+	return places, known
+}
+
+// panelPointProblem judges a panel target on one page as the renderer does. A
+// by panel only has the rows with its value; the filter of an item is not
+// looked at. missing means the data has no such panel in any place. ambiguous
+// means a by panel and another panel share the label: only the data shows
+// that, two items with one label are found without it.
+func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultipleLintSpec, rows func(string) annotation.Rows) (missing, ambiguous bool, reason string) {
+	fine := false
+	for _, m := range multiples {
+		places, known := panelPlaces(m, target.Panel, rows)
+		if len(places) == 0 {
+			if known {
+				missing = true
+				continue
+			}
+			// the by panels are not known: judge the fields of the point only
+			places = []panelPlace{{}}
+		}
+		if len(places) > 1 && places[0].by != "" {
+			ambiguous = true
+		}
+		for _, place := range places {
+			var data annotation.Rows
+			if place.binding != "" {
+				data = rows(place.binding)
+			}
+			if place.by != "" {
+				data = annotation.PanelRows(data, place.by, target.Panel)
+			}
+			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
+				fine = true
+			} else if reason == "" {
+				reason = r
+			}
+		}
+	}
+	if fine {
+		return false, ambiguous, ""
+	}
+	return missing && reason == "", ambiguous, reason
+}
+
+// duplicateItemLabel reports whether two panels.items entries of a
+// SmallMultiple have the label.
+func duplicateItemLabel(multiples []smallMultipleLintSpec, label string) bool {
+	for _, m := range multiples {
+		count := 0
+		for _, item := range m.Panels.Items {
+			if item.Label == label {
+				count++
+			}
+		}
+		if count > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 type annotationEnd struct {
@@ -316,7 +488,9 @@ type annotationPageView struct {
 	// bindings maps a component to the dataset of each place it sits, "" when
 	// that place binds none or several.
 	bindings map[string][]string
-	lists    annotationListUses
+	// multiples maps a SmallMultiple to its spec in each place it sits.
+	multiples map[string][]smallMultipleLintSpec
+	lists     annotationListUses
 }
 
 type annotationListUse struct {
@@ -424,7 +598,7 @@ func walkAnnotationPages(docs []Document, ctx *spec.ConstraintContext, selected 
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}}
+		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}, multiples: map[string][]smallMultipleLintSpec{}}
 		page.walk(payload.Spec.Children, doc, "spec.children", ctx, refs, map[string]bool{})
 		pages = append(pages, page)
 	}
@@ -463,6 +637,10 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 		if name != "" {
 			p.slots[key] = true
 			p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
+			var multiple smallMultipleLintSpec
+			if child.Kind == schema.KindSmallMultiple && json.Unmarshal(effective, &multiple) == nil {
+				p.multiples[key] = append(p.multiples[key], multiple)
+			}
 		}
 		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree || child.Kind == schema.KindSmallMultiple {
 			p.addNested(effective)
