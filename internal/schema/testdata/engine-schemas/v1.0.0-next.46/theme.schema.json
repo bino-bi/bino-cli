@@ -33,6 +33,9 @@
         "bn-grid": {
           "$ref": "#/definitions/GridStyle"
         },
+        "bn-layout-card": {
+          "$ref": "#/definitions/LayoutCardStyle"
+        },
         "bn-annotation": {
           "$ref": "#/definitions/AnnotationStyle"
         }
@@ -578,6 +581,10 @@
         "cellPadding": {
           "type": "number"
         },
+        "cellBackground": {
+          "type": "string",
+          "description": "Background colour of every data cell. `cell-background` on the child of a cell wins."
+        },
         "captionFontSize": {
           "type": "number",
           "description": "Cell caption (`cell-captions`): font size in px."
@@ -595,6 +602,17 @@
       },
       "additionalProperties": false,
       "description": "Visual properties for `bn-grid` headers, borders, and cell spacing."
+    },
+    "LayoutCardStyle": {
+      "type": "object",
+      "properties": {
+        "titleFontSize": {
+          "type": "number",
+          "description": "Font size of the card title in px. Without it the title has the font size of `global.fontSizePx`."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional overrides for `bn-layout-card`."
     },
     "AnnotationStyle": {
       "type": "object",

@@ -2546,6 +2546,7 @@
         "bn-chart-bullet": { "$ref": "#/$defs/bulletChartStyle" },
         "bn-tree": { "$ref": "#/$defs/treeStyle" },
         "bn-grid": { "$ref": "#/$defs/gridStyle" },
+        "bn-layout-card": { "$ref": "#/$defs/layoutCardStyle" },
         "bn-annotation": { "$ref": "#/$defs/annotationStyle" }
       },
       "additionalProperties": true
@@ -2925,6 +2926,22 @@
           "type": "number",
           "description": "Space below a cell caption in pixels. Default: 2. Needs template engine v1.0.0-next.32 or newer.",
           "default": 2
+        },
+        "cellBackground": {
+          "type": "string",
+          "description": "Background color of every data cell (CSS color). Default: transparent. The background of a single cell (background on a Grid child, a SmallMultiple item or override) wins. Needs template engine v1.0.0-next.46 or newer.",
+          "default": "transparent"
+        }
+      },
+      "additionalProperties": true
+    },
+    "layoutCardStyle": {
+      "type": "object",
+      "description": "Style settings for bn-layout-card (LayoutCard, and the panel cards of a SmallMultiple).",
+      "properties": {
+        "titleFontSize": {
+          "type": "number",
+          "description": "Font size of the card title in pixels. Without it the title has the font size of global.fontSizePx. Needs template engine v1.0.0-next.46 or newer."
         }
       },
       "additionalProperties": true
@@ -3311,6 +3328,10 @@
         "bn-chart-time.no-data": {
           "type": "string",
           "description": "Placeholder shown when the dataset yields no rows."
+        },
+        "bn-chart-time.date-format-short-year": {
+          "type": "string",
+          "description": "Luxon pattern of the short year label of a time chart, for example ’yy. Default: yy. Needs template engine v1.0.0-next.46 or newer."
         },
         "bn-chart-structure.no-data": {
           "type": "string",

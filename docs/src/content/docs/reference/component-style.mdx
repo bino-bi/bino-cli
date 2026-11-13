@@ -93,6 +93,7 @@ The style object has the following top-level sections:
 | `bn-chart-bullet`    | Style settings for bullet charts                                                            |
 | `bn-tree`            | Style settings for hierarchical tree diagrams                                               |
 | `bn-grid`            | Style settings for grid layouts with row/column headers                                     |
+| `bn-layout-card`     | Style settings for cards: the font size of the card title                                   |
 
 The style object accepts additional keys beyond these sections, so unknown or
 misspelled style keys pass validation without a diagnostic.
@@ -247,8 +248,11 @@ Style settings for grid layouts with row and column headers.
 | `captionFontWeight` | string | `"bold"`    | Font weight of a cell caption (CSS font-weight)         |
 | `captionColor`      | string | `"#000000"` | Color of a cell caption (CSS color)                     |
 | `captionGap`        | number | `2`         | Space below a cell caption in pixels                    |
+| `cellBackground`    | string | `"transparent"` | Background color of every data cell (CSS color)     |
 
 The `caption*` keys style the `caption` of a [grid child](/reference/grid/#cell-size-and-alignment) and need template engine v1.0.0-next.32 or newer.
+
+`cellBackground` colors every data cell of the grid. The `background` of a single [grid child](/reference/grid/#cell-span-and-background) or [SmallMultiple panel](/reference/small-multiple/#larger-panels-and-backgrounds) wins over it. It needs template engine v1.0.0-next.46 or newer.
 
 ```yaml
 bn-grid:
@@ -257,6 +261,23 @@ bn-grid:
   borderWidth: 1
   cellPadding: 8
 ```
+
+---
+
+## Card style (`bn-layout-card`)
+
+Style settings for a [`LayoutCard`](/reference/layout-card/), and for the panel cards of a [`SmallMultiple`](/reference/small-multiple/#cards).
+
+| Property        | Type   | Default                      | Description                             |
+| --------------- | ------ | ---------------------------- | --------------------------------------- |
+| `titleFontSize` | number | the value of `global.fontSizePx` | Font size of the card title in pixels |
+
+```yaml
+bn-layout-card:
+  titleFontSize: 16
+```
+
+A card reads the key from the style that its own `selectedStyle` names, or from the style it inherits. It needs template engine v1.0.0-next.46 or newer.
 
 ---
 
@@ -480,6 +501,7 @@ spec:
 | `spec.content.bn-chart-bubble`    | object           | no       | -       | Style settings for bubble charts: `scaleFactors`, `axisStyles`, `seriesColors`, `padding`.                                                                                                              | `bn-chart-bubble: {}`                                     |
 | `spec.content.bn-chart-bullet`    | object           | no       | -       | Style settings for bullet charts: `scaleFactors`, `axisStyles`, `barStyles`, `varianceStyles`, `rangeColors`, `padding`.                                                                                | `bn-chart-bullet: {}`                                     |
 | `spec.content.bn-tree`            | object           | no       | -       | Style settings for hierarchical tree diagrams. See [Tree chart style](#tree-chart-style-bn-tree).                                                                                                       | `bn-tree: { edgeColor: "#606060" }`                       |
+| `spec.content.bn-layout-card`     | object           | no       | -       | Style settings for cards. See [Card style](#card-style-bn-layout-card). |
 | `spec.content.bn-grid`            | object           | no       | -       | Style settings for grid layouts. See [Grid style](#grid-style-bn-grid).                                                                                                                                 | `bn-grid: { cellPadding: 8 }`                             |
 
 Components reference a named style through their own `spec.selectedStyle` attribute; see [Using named styles](#using-named-styles).

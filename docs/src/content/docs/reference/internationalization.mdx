@@ -124,17 +124,34 @@ names, but they are deprecated. Use `bn-title.SEPARATOR_WS` and
 
 ### Time and structure charts (`bn-chart-time.`, `bn-chart-structure.` prefixes)
 
-| Key                          | de          | en      | What it labels                                     |
-| ---------------------------- | ----------- | ------- | -------------------------------------------------- |
-| `bn-chart-time.no-data`      | Keine Daten | No Data | Placeholder when the dataset yields no rows        |
-| `bn-chart-structure.no-data` | Keine Daten | No Data | Placeholder when the dataset yields no rows        |
-| `bn-chart-structure.REST`    | REST        | REST    | The bar aggregating everything beyond `spec.limit` |
+| Key                                    | de          | en      | What it labels                                                   |
+| -------------------------------------- | ----------- | ------- | ---------------------------------------------------------------- |
+| `bn-chart-time.no-data`                | Keine Daten | No Data | Placeholder when the dataset yields no rows                      |
+| `bn-chart-time.date-format-short-year` | yy          | yy      | Pattern of the short year label on the time axis, see below      |
+| `bn-chart-structure.no-data`           | Keine Daten | No Data | Placeholder when the dataset yields no rows                      |
+| `bn-chart-structure.REST`              | REST        | REST    | The bar aggregating everything beyond `spec.limit`               |
 
 :::note
-These three keys need a template engine that reads them. On older engines the
+The `no-data` and `REST` keys need a template engine that reads them. On older engines the
 manifest still validates and the override is simply ignored, leaving that
 engine's old built-in placeholder in place.
 :::
+
+`bn-chart-time.date-format-short-year` is not a label but a [Luxon](https://moment.github.io/luxon/#/formatting?id=table-of-tokens) pattern.
+A time chart prints its short year labels with it. Set it to `’yy` to get `’24` instead of `24`:
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: Internationalization
+metadata:
+  name: short_year
+spec:
+  code: en
+  content:
+    bn-chart-time.date-format-short-year: "’yy"
+```
+
+It needs template engine **v1.0.0-next.46** or newer. Older engines ignore the key.
 
 ### Chart labels (`bn-chart-scatter.`, `bn-chart-bubble.`, `bn-chart-bullet.` prefixes)
 
