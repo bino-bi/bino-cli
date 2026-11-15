@@ -209,6 +209,10 @@ func runLSPPreviewDataSet(ctx context.Context, dir string, payloadJSON []byte, o
 		baseDir = absDir
 	}
 
+	// The plugins bring their DuckDB macros, which a DataSet query may call.
+	_, stopPlugins := loadLSPKindProvider(ctx, absDir)
+	defer stopPlugins()
+
 	// Sibling documents let database sources resolve their ConnectionSecret.
 	docs, _ := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true}) //nolint:errcheck // lenient load; the wizard works with whatever parses
 	docs, _ = config.ResolveForIntrospection(docs)

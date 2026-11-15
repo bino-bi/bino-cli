@@ -2,9 +2,10 @@ package duckdb
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
-	"sort"
+	"strings"
 	"sync"
 )
 
@@ -29,7 +30,8 @@ var pluginMacroState struct {
 	sessions map[*Session]struct{}
 }
 
-// PluginMacros returns the macros every session gets, sorted by name.
+// PluginMacros returns the macros every session gets, in the order they are
+// created: the order given to SetPluginMacros.
 func PluginMacros() []PluginMacro {
 	pluginMacroState.mu.Lock()
 	defer pluginMacroState.mu.Unlock()
@@ -41,8 +43,9 @@ func PluginMacros() []PluginMacro {
 // in line right away: removed macros are dropped, new and changed ones are
 // created. Errors from open sessions are joined; the new set is kept anyway.
 func SetPluginMacros(ctx context.Context, macros []PluginMacro) error {
+	// Kept in the given order, the one CheckPluginMacros ran: a macro may
+	// call one that is declared before it.
 	next := append([]PluginMacro(nil), macros...)
-	sort.Slice(next, func(i, j int) bool { return next[i].Name < next[j].Name })
 
 	pluginMacroState.mu.Lock()
 	defer pluginMacroState.mu.Unlock()
@@ -59,11 +62,18 @@ func SetPluginMacros(ctx context.Context, macros []PluginMacro) error {
 			drop = append(drop, m.Name)
 		}
 	}
+	// A changed macro is dropped first: scalar and table macros are separate
+	// catalog entries, so a replace would leave the other kind behind.
 	var create []PluginMacro
 	for _, m := range next {
-		if sql, ok := current[m.Name]; !ok || sql != m.SQL {
-			create = append(create, m)
+		sql, ok := current[m.Name]
+		if ok && sql == m.SQL {
+			continue
 		}
+		if ok {
+			drop = append(drop, m.Name)
+		}
+		create = append(create, m)
 	}
 	pluginMacroState.macros = next
 
@@ -104,6 +114,9 @@ func CheckPluginMacros(ctx context.Context, macros []PluginMacro) error {
 		if n > 0 {
 			return fmt.Errorf("macro %q: a function with this name already exists", m.Name)
 		}
+		if err := s.prepareSingle(ctx, m.SQL); err != nil {
+			return fmt.Errorf("macro %q: sql: %w", m.Name, err)
+		}
 		if _, err := s.db.ExecContext(ctx, m.SQL); err != nil {
 			return fmt.Errorf("macro %q: %w", m.Name, err)
 		}
@@ -119,6 +132,9 @@ func CheckPluginMacros(ctx context.Context, macros []PluginMacro) error {
 		if m.SmokeSQL == "" {
 			continue
 		}
+		if err := s.prepareSingle(ctx, m.SmokeSQL); err != nil {
+			return fmt.Errorf("macro %q: smoke query: %w", m.Name, err)
+		}
 		rows, err := s.db.QueryContext(ctx, m.SmokeSQL)
 		if err != nil {
 			return fmt.Errorf("macro %q: smoke query: %w", m.Name, err)
@@ -132,6 +148,32 @@ func CheckPluginMacros(ctx context.Context, macros []PluginMacro) error {
 		}
 	}
 	return nil
+}
+
+// prepareSingle prepares query without running it and fails when it is not
+// exactly one statement. Exec runs every statement of a string, so this is
+// the only place that counts them, and it uses DuckDB's own parser: the
+// driver's plain Prepare refuses a string with more than one statement.
+func (s *Session) prepareSingle(ctx context.Context, query string) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close() //nolint:errcheck // releases the pooled connection
+	return conn.Raw(func(dc any) error {
+		dconn, ok := dc.(driver.Conn)
+		if !ok {
+			return fmt.Errorf("unexpected driver connection %T", dc)
+		}
+		stmt, err := dconn.Prepare(query)
+		if err != nil {
+			if strings.Contains(err.Error(), "multi-statement") {
+				return fmt.Errorf("must be exactly one statement")
+			}
+			return err
+		}
+		return stmt.Close()
+	})
 }
 
 // trackPluginMacros registers the current plugin macros in s and keeps s in

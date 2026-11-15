@@ -13,31 +13,6 @@ import (
 	"bino.bi/bino/pkg/duckdb"
 )
 
-func TestSingleStatement(t *testing.T) {
-	cases := map[string]bool{
-		"CREATE OR REPLACE MACRO a_b(x) AS x":                       true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x;":                      true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x ; \n":                  true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x || ';'":                true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x || 'it''s; fine'":      true,
-		`CREATE OR REPLACE MACRO a_b(x) AS "odd;col" + x`:           true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x -- note; here":         true,
-		"CREATE OR REPLACE MACRO a_b(x) AS /* a; b */ x":            true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x || $$a;b$$":            true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x || $t$a;b$t$":          true,
-		"CREATE OR REPLACE MACRO a_b(x) AS x; DROP TABLE t":         false,
-		"CREATE OR REPLACE MACRO a_b(x) AS x;;":                     false,
-		"CREATE OR REPLACE MACRO a_b(x) AS x -- c\n; DROP TABLE t":  false,
-		"CREATE OR REPLACE MACRO a_b(x) AS x /* c */; DROP TABLE t": false,
-		"CREATE OR REPLACE MACRO a_b(x) AS 'open":                   false,
-	}
-	for sql, want := range cases {
-		if got := singleStatement(sql); got != want {
-			t.Errorf("singleStatement(%q) = %v, want %v", sql, got, want)
-		}
-	}
-}
-
 func TestCheckSessionMacros_Validation(t *testing.T) {
 	ctx := context.Background()
 	good := SessionMacro{Name: "stats_twice", SQL: "create or replace macro stats_twice(x) as x * 2", SmokeSQL: "SELECT stats_twice(1)"}
@@ -66,8 +41,8 @@ func TestCheckSessionMacros_Validation(t *testing.T) {
 		{"not a create", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE TABLE stats_twice(x INT)"}}, "CREATE OR REPLACE MACRO stats_twice"},
 		{"other macro name", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE OR REPLACE MACRO stats_thrice(x) AS x"}}, "CREATE OR REPLACE MACRO stats_twice"},
 		{"temp macro", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE OR REPLACE TEMP MACRO stats_twice(x) AS x"}}, "CREATE OR REPLACE MACRO stats_twice"},
-		{"two statements", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE OR REPLACE MACRO stats_twice(x) AS x; CREATE TABLE t(a INT)"}}, "exactly one statement"},
-		{"two smoke statements", "stats", []SessionMacro{{Name: "stats_twice", SQL: good.SQL, SmokeSQL: "SELECT 1; SELECT 2"}}, "smoke_sql must be exactly one"},
+		{"two statements", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE OR REPLACE MACRO stats_twice(x) AS x; CREATE TABLE t(a INT)"}}, "must be exactly one statement"},
+		{"two smoke statements", "stats", []SessionMacro{{Name: "stats_twice", SQL: good.SQL, SmokeSQL: "SELECT 1; SELECT 2"}}, "smoke query: must be exactly one statement"},
 		{"declared twice", "stats", []SessionMacro{good, good}, "declared twice"},
 		{"syntax error", "stats", []SessionMacro{{Name: "stats_twice", SQL: "CREATE OR REPLACE MACRO stats_twice(x) AS x +"}}, "syntax error"},
 		{"failing smoke", "stats", []SessionMacro{{Name: "stats_twice", SQL: good.SQL, SmokeSQL: "SELECT stats_twice(nocol)"}}, "smoke query"},

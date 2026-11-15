@@ -61,16 +61,31 @@ func TestSetPluginMacros_OpenAndNewSessions(t *testing.T) {
 		t.Fatalf("table macro demo_rows(7) = %d, %v; want 7", n, err)
 	}
 
+	// The scalar form is gone, in the open session too.
+	if _, err := scalarInt(t, before, "SELECT demo_rows(7)"); err == nil {
+		t.Fatal("the scalar demo_rows still works after it became a table macro")
+	}
+	rows.SQL = "CREATE OR REPLACE MACRO demo_rows(x) AS x + 1"
+	if err := SetPluginMacros(ctx, []PluginMacro{twice, rows}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scalarInt(t, before, "SELECT v FROM demo_rows(7)"); err == nil {
+		t.Fatal("the table demo_rows still works after it became a scalar macro")
+	}
+	if n, err := scalarInt(t, before, "SELECT demo_rows(7)"); err != nil || n != 8 {
+		t.Fatalf("scalar demo_rows(7) = %d, %v; want 8", n, err)
+	}
+
 	got := PluginMacros()
-	if len(got) != 2 || got[0].Name != "demo_rows" || got[1].Name != "demo_twice" {
-		t.Fatalf("PluginMacros() = %v, want demo_rows then demo_twice", got)
+	if len(got) != 2 || got[0].Name != "demo_twice" || got[1].Name != "demo_rows" {
+		t.Fatalf("PluginMacros() = %v, want the given order", got)
 	}
 
 	// Removed macros are dropped, scalar and table.
 	if err := SetPluginMacros(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, q := range []string{"SELECT demo_twice(2)", "SELECT v FROM demo_rows(7)"} {
+	for _, q := range []string{"SELECT demo_twice(2)", "SELECT demo_rows(7)"} {
 		if _, err := scalarInt(t, before, q); err == nil {
 			t.Fatalf("%q still works after the macro was removed", q)
 		}
@@ -144,5 +159,65 @@ func TestCheckPluginMacros(t *testing.T) {
 				t.Fatalf("error %q should name %q and contain %q", err, tc.macro.Name, tc.want)
 			}
 		})
+	}
+}
+
+// A macro may call one declared before it, whatever the names sort to.
+func TestSetPluginMacros_KeepsDeclaredOrder(t *testing.T) {
+	ctx := context.Background()
+	t.Cleanup(func() { _ = SetPluginMacros(ctx, nil) })
+	macros := []PluginMacro{
+		{Plugin: "demo", Name: "demo_z", SQL: "CREATE OR REPLACE MACRO demo_z(x) AS x * 2"},
+		{Plugin: "demo", Name: "demo_a", SQL: "CREATE OR REPLACE MACRO demo_a(x) AS demo_z(x) + 1", SmokeSQL: "SELECT demo_a(1)"},
+	}
+	if err := CheckPluginMacros(ctx, macros); err != nil {
+		t.Fatal(err)
+	}
+	open, err := OpenSession(ctx, Options{CacheDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Close()
+	if err := SetPluginMacros(ctx, macros); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := OpenSession(ctx, Options{CacheDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer fresh.Close()
+	for name, s := range map[string]*Session{"open session": open, "new session": fresh} {
+		if n, err := scalarInt(t, s, "SELECT demo_a(1)"); err != nil || n != 3 {
+			t.Fatalf("%s: demo_a(1) = %d, %v; want 3", name, n, err)
+		}
+	}
+}
+
+func TestCheckPluginMacros_OneStatement(t *testing.T) {
+	ctx := context.Background()
+	cases := map[string]bool{
+		"CREATE OR REPLACE MACRO d_f(x) AS x":                                                 true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x ; \n":                                            true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x; -- done":                                        true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x || ';'":                                          true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x || 'it''s; fine'":                                true,
+		"CREATE OR REPLACE MACRO d_f(x) AS /* a; b */ x":                                      true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x || $$a;b$$":                                      true,
+		"CREATE OR REPLACE MACRO d_f(x) AS x; CREATE TABLE t(a INT)":                          false,
+		"CREATE OR REPLACE MACRO d_f() AS E'\\''; CREATE TABLE t AS SELECT 1; --'":            false,
+		"CREATE OR REPLACE MACRO d_f(x$y$) AS 1; CREATE TABLE t AS SELECT 1 AS z$y$":          false,
+		"CREATE OR REPLACE MACRO d_f() AS 1 /* /* */ ' */ ; CREATE TABLE t AS SELECT 1; -- '": false,
+	}
+	for sql, want := range cases {
+		err := CheckPluginMacros(ctx, []PluginMacro{{Name: "d_f", SQL: sql}})
+		if (err == nil) != want {
+			t.Errorf("CheckPluginMacros(%q) = %v, want ok=%v", sql, err, want)
+		}
+		if !want && !strings.Contains(err.Error(), "exactly one statement") {
+			t.Errorf("CheckPluginMacros(%q) = %v, want the one-statement error", sql, err)
+		}
+	}
+	if err := CheckPluginMacros(ctx, []PluginMacro{{Name: "d_f", SQL: "CREATE OR REPLACE MACRO d_f(x) AS x", SmokeSQL: "SELECT d_f(1); SELECT 2"}}); err == nil || !strings.Contains(err.Error(), "smoke query: must be exactly one statement") {
+		t.Errorf("two smoke statements: %v", err)
 	}
 }

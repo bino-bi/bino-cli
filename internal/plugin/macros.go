@@ -37,7 +37,7 @@ func checkBuiltinKinds(m PluginManifest) error {
 }
 
 // checkSessionMacros validates the macros of one plugin and runs them once in
-// a throwaway DuckDB session. It returns the macros in the form sessions use.
+// a throwaway DuckDB session, which also refuses SQL with several statements. It returns the macros in the form sessions use.
 func checkSessionMacros(ctx context.Context, m PluginManifest) ([]duckdb.PluginMacro, error) {
 	if len(m.SessionMacros) == 0 {
 		return nil, nil
@@ -80,67 +80,5 @@ func validateSessionMacro(prefix string, sm SessionMacro) error {
 	if !create.MatchString(sm.SQL) {
 		return fmt.Errorf("sql must be one \"CREATE OR REPLACE MACRO %s(...)\" statement", sm.Name)
 	}
-	if !singleStatement(sm.SQL) {
-		return fmt.Errorf("sql must be exactly one statement")
-	}
-	if sm.SmokeSQL != "" && !singleStatement(sm.SmokeSQL) {
-		return fmt.Errorf("smoke_sql must be exactly one statement")
-	}
 	return nil
-}
-
-// singleStatement reports whether sql holds one statement: no semicolon
-// outside quotes and comments, except at the very end. DuckDB runs every
-// statement of a string, so the host has to check this itself.
-func singleStatement(sql string) bool {
-	rest := strings.TrimRight(sql, " \t\r\n")
-	rest = strings.TrimSuffix(rest, ";")
-	for i := 0; i < len(rest); i++ {
-		switch c := rest[i]; {
-		case c == ';':
-			return false
-		case c == '\'' || c == '"':
-			// A doubled quote inside is two adjacent literals to this scanner,
-			// which gives the same answer.
-			end := strings.IndexByte(rest[i+1:], c)
-			if end < 0 {
-				return false
-			}
-			i += end + 1
-		case c == '-' && strings.HasPrefix(rest[i:], "--"):
-			end := strings.IndexByte(rest[i:], '\n')
-			if end < 0 {
-				return true
-			}
-			i += end
-		case c == '/' && strings.HasPrefix(rest[i:], "/*"):
-			end := strings.Index(rest[i+2:], "*/")
-			if end < 0 {
-				return false
-			}
-			i += end + 3
-		case c == '$':
-			// Dollar-quoted string: $$...$$ or $tag$...$tag$.
-			tagEnd := strings.IndexByte(rest[i+1:], '$')
-			if tagEnd < 0 || !dollarTag(rest[i+1:i+1+tagEnd]) {
-				continue
-			}
-			tag := rest[i : i+tagEnd+2]
-			end := strings.Index(rest[i+len(tag):], tag)
-			if end < 0 {
-				return false
-			}
-			i += len(tag) + end + len(tag) - 1
-		}
-	}
-	return true
-}
-
-func dollarTag(s string) bool {
-	for _, r := range s {
-		if r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
-			return false
-		}
-	}
-	return true
 }

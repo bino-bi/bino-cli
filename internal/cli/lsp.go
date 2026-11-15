@@ -197,6 +197,10 @@ func runLSPColumns(ctx context.Context, dir, name string, out io.Writer) error {
 		return outputJSON(out, result)
 	}
 
+	// The plugins bring their DuckDB macros, which a DataSet query may call.
+	_, stopPlugins := loadLSPKindProvider(ctx, absDir)
+	defer stopPlugins()
+
 	// Use lenient mode to skip non-bino YAML files and continue on errors
 	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
 	if err != nil {
@@ -342,6 +346,10 @@ func runLSPRows(ctx context.Context, dir, name string, limit int, out io.Writer)
 		result.Error = fmt.Sprintf("resolve project root: %v", err)
 		return outputJSON(out, result)
 	}
+
+	// The plugins bring their DuckDB macros, which a DataSet query may call.
+	_, stopPlugins := loadLSPKindProvider(ctx, absDir)
+	defer stopPlugins()
 
 	// Use lenient mode to skip non-bino YAML files and continue on errors
 	docs, err := config.LoadDirWithOptions(ctx, absDir, config.LoadOptions{Lenient: true})
