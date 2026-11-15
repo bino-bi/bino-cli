@@ -38,7 +38,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `inline-naming-conflict`          | Inline Naming Conflict                      | Warning  | Document names must not start with `_inline_` as this prefix is reserved.                                                   |
 | `ref-params`                      | Ref Params                                  | Warning  | `metadata.params` declarations and the parameter values passed to referenced documents must match.                          |
 | `dataset-derive-conflict`         | DataSet Derive Conflict                     | Warning  | A previous-period slot may be declared in `derive` or `assert`, not both.                                                   |
-| `reserved-name-prefix`            | Reserved Name Prefix                        | Warning  | DataSource and DataSet names must not start with `bino_` or `_bino_`.                                                       |
+| `reserved-name-prefix`            | Reserved Name Prefix                        | Warning  | DataSource and DataSet names must not start with `bino_`, `_bino_`, or the macro prefix of a plugin.                        |
 | `dataset-dependency-undeclared`   | DataSet Dependency Undeclared               | Warning  | A DataSource that a DataSet query reads must be listed in `spec.dependencies`.                                              |
 | `dataset-dependency-unused`       | DataSet Dependency Unused                   | Info     | A DataSource listed in `spec.dependencies` should be read by the DataSet query.                                             |
 | `dataset-constants-spec`          | DataSet Constants Spec                      | Warning  | `constants.spec.<kind>.<field>` must name a known kind token and a field of that kind's spec.                               |
@@ -732,6 +732,8 @@ spec:
 ### reserved-name-prefix
 
 Names starting with `bino_` are reserved for the functions and macros the CLI registers in every DuckDB session (`op`, `iop`, `bino_shift`), and names starting with `_bino_` for the views it creates while executing a dataset with `derive` or `assert`. A DataSource or DataSet with such a name can shadow one of them. The executor also refuses to run a project with a `_bino_` name.
+
+A plugin that registers [DuckDB macros](/guides/plugins/#duckdb-macros) reserves `<plugin>_` in the same way, for example `stats_` for the plugin `stats`. The finding names the plugin.
 
 **Example problem:**
 

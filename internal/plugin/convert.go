@@ -30,6 +30,14 @@ func manifestFromProto(pb *pluginv1.PluginManifest) PluginManifest {
 		m.Commands = append(m.Commands, commandFromProto(c))
 	}
 
+	for _, sm := range pb.GetSessionMacros() {
+		m.SessionMacros = append(m.SessionMacros, SessionMacro{
+			Name:     sm.GetName(),
+			SQL:      sm.GetSql(),
+			SmokeSQL: sm.GetSmokeSql(),
+		})
+	}
+
 	return m
 }
 

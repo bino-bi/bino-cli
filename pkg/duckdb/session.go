@@ -122,7 +122,12 @@ func DefaultOptions() (Options, error) {
 var cwdWritableOnce = sync.OnceValue(cwdWritable)
 
 // OpenSession bootstraps DuckDB, configures extension caching, and validates connectivity.
+// The session gets the built-in functions and the macros set by SetPluginMacros.
 func OpenSession(ctx context.Context, opts Options) (*Session, error) {
+	return openSession(ctx, opts, true)
+}
+
+func openSession(ctx context.Context, opts Options, pluginMacros bool) (*Session, error) {
 	if opts.CacheDir == "" {
 		cache, err := defaultCacheDir()
 		if err != nil {
@@ -166,6 +171,13 @@ func OpenSession(ctx context.Context, opts Options) (*Session, error) {
 	if err := s.registerBuiltinUDFs(ctx); err != nil {
 		db.Close() //nolint:errcheck // best-effort teardown on the init error path
 		return nil, err
+	}
+
+	if pluginMacros {
+		if err := s.trackPluginMacros(ctx); err != nil {
+			db.Close() //nolint:errcheck // best-effort teardown on the init error path
+			return nil, err
+		}
 	}
 
 	return s, nil
@@ -222,6 +234,7 @@ func (s *Session) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.untrackPluginMacros()
 	s.mu.Lock()
 	dir := s.scratchDir
 	s.scratchDir = ""

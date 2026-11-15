@@ -548,3 +548,89 @@ func keysOf(m map[string]map[string]any) []string {
 	}
 	return out
 }
+
+func TestExecute_PluginMacroInQueryAndCacheKey(t *testing.T) {
+	// Not parallel: sets the process-wide plugin macros.
+	ctx := context.Background()
+	t.Cleanup(func() { _ = duckdb.SetPluginMacros(ctx, nil) })
+	workdir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(workdir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("plain.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: plain
+spec:
+  query: SELECT 1 AS ac1
+`)
+	docs, err := config.LoadDir(ctx, workdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := parseDataSetSpec(docs[0].Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyWithoutMacros, _ := computeDigestWithDeps(docs[0], spec, nil)
+
+	write("scaled.yaml", `
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: scaled
+spec:
+  query: SELECT demo_scale(2) AS ac1
+`)
+	run := func() string {
+		t.Helper()
+		docs, err := config.LoadDir(ctx, workdir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, _, err := Execute(ctx, workdir, docs, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range results {
+			if r.Name == "scaled" {
+				return string(r.Data)
+			}
+		}
+		t.Fatal("no result for dataset scaled")
+		return ""
+	}
+
+	macro := duckdb.PluginMacro{Plugin: "demo", Name: "demo_scale", SQL: "CREATE OR REPLACE MACRO demo_scale(x) AS x * 2"}
+	if err := duckdb.SetPluginMacros(ctx, []duckdb.PluginMacro{macro}); err != nil {
+		t.Fatal(err)
+	}
+	if got := run(); !strings.Contains(got, `"ac1":4`) {
+		t.Fatalf("rows = %s, want ac1 = 4", got)
+	}
+	keyWithMacro, _ := computeDigestWithDeps(docs[0], spec, nil)
+	if keyWithMacro == keyWithoutMacros {
+		t.Fatal("a registered plugin macro did not change the cache key")
+	}
+
+	// A new macro body must not serve the rows cached with the old one.
+	macro.SQL = "CREATE OR REPLACE MACRO demo_scale(x) AS x * 5"
+	if err := duckdb.SetPluginMacros(ctx, []duckdb.PluginMacro{macro}); err != nil {
+		t.Fatal(err)
+	}
+	if got := run(); !strings.Contains(got, `"ac1":10`) {
+		t.Fatalf("rows after the macro changed = %s, want ac1 = 10", got)
+	}
+
+	// Without plugin macros the key is the one from before.
+	if err := duckdb.SetPluginMacros(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := computeDigestWithDeps(docs[0], spec, nil); again != keyWithoutMacros {
+		t.Fatalf("key without macros changed: %s != %s", again, keyWithoutMacros)
+	}
+}

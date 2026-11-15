@@ -95,7 +95,9 @@ for Go.
 ### When a plugin does not load
 
 A plugin declared in `bino.toml` must load. If it does not (the binary is
-missing, its `Init` returns an error, or it does not match the `version` pin),
+missing, its `Init` returns an error, it does not match the `version` pin, one
+of its kinds has the name of a built-in kind, or one of its
+[DuckDB macros](#duckdb-macros) fails its check),
 `bino build`, `preview`, `serve`, `lint`, `graph` and `schema` stop with exit
 code 1:
 
@@ -198,6 +200,12 @@ spec:
   chartType: bar
   title: Monthly Revenue
 ```
+
+A plugin kind must not have the name of a built-in kind such as `ChartTime` or
+`Table`. bino refuses to load such a plugin and names the kind. A later bino
+release can add a built-in kind with a name your plugin already uses, and then
+the plugin stops loading. To stay safe, start every kind of a plugin with the
+same prefix, for example `ExampleChart` and `ExampleGauge`.
 
 The plugin generates HTML (e.g., `<example-chart ...>`) and provides the
 JS/CSS assets that implement the Web Component. The HTML and the scripts follow
@@ -350,6 +358,67 @@ Limits:
 - `_spec_` dataset defaults do not apply to plugin kinds. The rows still carry
   the `_spec_` columns.
 - Plugin components are not part of layout state or the layout inspector.
+
+### DuckDB macros
+
+A plugin can add SQL macros to DuckDB. bino registers them in every DuckDB
+session, after its own functions, so a DataSet query calls them like any other
+function. This is the way to reduce large data (summaries, bins) in the query,
+before bino turns the rows into JSON:
+
+```go
+sdk.Serve(&sdk.PluginOpts{
+    Name: "stats",
+    SessionMacros: []sdk.SessionMacro{{
+        Name:     "stats_spread",
+        SQL:      "CREATE OR REPLACE MACRO stats_spread(x) AS max(x) - min(x)",
+        SmokeSQL: "SELECT stats_spread(v) FROM (VALUES (1), (3)) t(v)",
+    }},
+})
+```
+
+```yaml
+kind: DataSet
+metadata:
+  name: spread_by_region
+spec:
+  query: SELECT region, stats_spread(amount) AS ac1 FROM sales GROUP BY region
+```
+
+Session macros need Go SDK v0.0.6 or later. An older bino ignores them, so the
+query then fails with an unknown function.
+
+bino checks the macros when it loads the plugin. If a check fails, the plugin
+[does not load](#when-a-plugin-does-not-load) and the error names the macro:
+
+- The plugin name must match `^[a-z][a-z0-9]*$`.
+- A macro name must match `^[a-z][a-z0-9_]*$` and start with `<plugin>_`, for
+  example `stats_` for the plugin `stats`. Names that start with `bino_` or
+  `_bino_` are refused.
+- `SQL` is exactly one `CREATE OR REPLACE MACRO <name>(...)` statement. Scalar
+  and table macros both work. `TEMP` macros and schema-qualified names do not.
+- A macro cannot replace a function that exists already, built-in or from
+  another plugin.
+- bino creates all macros of the plugin in a throwaway in-memory session and
+  then runs each `SmokeSQL`. `SmokeSQL` is optional: one query that calls the
+  macro on a few inline rows. Write one for every macro. DuckDB checks at
+  creation only what does not depend on the arguments. A table macro that
+  reads a table given by the caller (`query_table`) is bound only in a call,
+  so without a smoke query a wrong column name shows up only in a user's
+  query.
+
+How macros behave afterwards:
+
+- **Reload.** When `bino preview` restarts the plugins after a rebuild, it
+  replaces changed macros and drops removed ones in the sessions that are
+  open, before it runs the DataSets again.
+- **Cache.** The name and SQL of every plugin macro are part of each DataSet's
+  cache key. A changed macro body runs every query again. Without plugin
+  macros the keys are the same as before.
+- **Names.** While a plugin registers macros, DataSource and DataSet names
+  must not start with `<plugin>_`
+  ([`reserved-name-prefix`](/appendix/lint-rules/#reserved-name-prefix)): they
+  are views in the same catalog as the macros.
 
 ### Lint rules
 

@@ -917,7 +917,7 @@ This means inline definitions are fully compatible with caching, the dependency 
 
 ### Naming restrictions
 
-User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this. Names starting with `bino_` or `_bino_` are reserved as well, for the functions and macros bino registers in every session and the views it creates for `derive`/`assert` ([`reserved-name-prefix`](/appendix/lint-rules/#reserved-name-prefix)).
+User-defined document names must **not** start with `_inline_` as this prefix is reserved for generated inline definitions. The lint rule `inline-naming-conflict` enforces this. Names starting with `bino_` or `_bino_` are reserved as well, for the functions and macros bino registers in every session and the views it creates for `derive`/`assert` ([`reserved-name-prefix`](/appendix/lint-rules/#reserved-name-prefix)). A plugin that registers DuckDB macros reserves `<plugin>_` too.
 
 ## Attribute Reference
 

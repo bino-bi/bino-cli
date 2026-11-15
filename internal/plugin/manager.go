@@ -18,6 +18,7 @@ import (
 
 	"bino.bi/bino/internal/logx"
 	"bino.bi/bino/internal/pathutil"
+	"bino.bi/bino/pkg/duckdb"
 )
 
 // Manager handles plugin discovery, launching, and lifecycle.
@@ -35,6 +36,7 @@ type Manager struct {
 	binoVersion string
 	configStamp fileStamp
 	binaries    []binaryStamp
+	macros      []duckdb.PluginMacro // session macros of the plugins loaded so far
 }
 
 // fileStamp identifies one version of a file. The zero value means the file
@@ -105,11 +107,25 @@ func (m *Manager) LoadAll(ctx context.Context, cfg *pathutil.ProjectConfig, proj
 	m.projectRoot = projectRoot
 	m.binoVersion = binoVersion
 	m.configStamp = stampFile(pathutil.ProjectConfigPath(projectRoot))
-	return m.loadAllLocked(ctx, cfg)
+	if err := m.loadAllLocked(ctx, cfg); err != nil {
+		return err
+	}
+	m.publishMacrosLocked(ctx)
+	return nil
+}
+
+// publishMacrosLocked makes the loaded plugins' macros the set every DuckDB
+// session has, open ones included. The macros already passed the load check,
+// so a failure here only concerns one open session and is logged.
+func (m *Manager) publishMacrosLocked(ctx context.Context) {
+	if err := duckdb.SetPluginMacros(ctx, m.macros); err != nil {
+		m.logger.Warnf("updating plugin macros in open DuckDB sessions: %v", err)
+	}
 }
 
 func (m *Manager) loadAllLocked(ctx context.Context, cfg *pathutil.ProjectConfig) error {
 	m.binaries = nil
+	m.macros = nil
 	if len(cfg.Plugins) == 0 {
 		return nil
 	}
@@ -125,6 +141,7 @@ func (m *Manager) loadAllLocked(ctx context.Context, cfg *pathutil.ProjectConfig
 		decl := cfg.Plugins[name]
 		if err := m.loadPlugin(ctx, name, decl, m.projectRoot, m.binoVersion); err != nil {
 			m.shutdownAllLocked(ctx)
+			m.macros = nil
 			return fmt.Errorf("loading plugin %q: %w", name, err)
 		}
 	}
@@ -165,13 +182,17 @@ func (m *Manager) Reload(ctx context.Context) error {
 	cfg, err := pathutil.LoadProjectConfig(m.projectRoot)
 	if err != nil {
 		m.binaries = nil
+		m.macros = nil
+		m.publishMacrosLocked(ctx)
 		return err
 	}
-	if err := m.loadAllLocked(ctx, cfg); err != nil {
+	err = m.loadAllLocked(ctx, cfg)
+	if err != nil {
 		m.registry.reset()
-		return err
 	}
-	return nil
+	// Before the caller runs DataSets again, so they see the new macro bodies.
+	m.publishMacrosLocked(ctx)
+	return err
 }
 
 func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.PluginDeclaration, projectRoot string, binoVersion string) error {
@@ -267,7 +288,24 @@ func (m *Manager) loadPlugin(ctx context.Context, name string, decl pathutil.Plu
 		}
 	}
 
-	// 8. Register in registry.
+	// 8. Refuse kinds that a built-in kind hides, then check the DuckDB macros.
+	if err := checkBuiltinKinds(p.manifest); err != nil {
+		return err
+	}
+	macros, err := checkSessionMacros(ctx, p.manifest)
+	if err != nil {
+		return err
+	}
+	for _, macro := range macros {
+		for _, other := range m.macros {
+			if other.Name == macro.Name {
+				return fmt.Errorf("macro %q is already registered by plugin %q", macro.Name, other.Plugin)
+			}
+		}
+	}
+	m.macros = append(m.macros, macros...)
+
+	// 9. Register in registry.
 	m.registry.Register(p)
 
 	m.logger.Infof("loaded plugin %q v%s (%d kinds)", p.manifest.Name, p.manifest.Version, len(p.manifest.Kinds))
