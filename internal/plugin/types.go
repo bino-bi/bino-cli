@@ -50,6 +50,7 @@ type PluginManifest struct {
 	ProvidesAssets   bool
 	Commands         []CommandDescriptor
 	Hooks            []string // checkpoint names this plugin subscribes to
+	SessionMacros    []SessionMacro
 
 	// HookTimeout is the per-plugin hook timeout from the bino.toml
 	// declaration (host-side configuration, not reported by the plugin).

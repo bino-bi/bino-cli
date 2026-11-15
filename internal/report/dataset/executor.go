@@ -363,6 +363,13 @@ func computeDigestWithDeps(doc config.Document, spec dataSetSpec, dataSourceInde
 		fmt.Fprintf(h, "%s:%d", duckdb.ShiftMacroName, shiftMacroRevision)
 	}
 
+	// Any query may call a plugin macro, so a changed macro body must not
+	// reuse rows computed with the old one. Nothing is written when no plugin
+	// registers macros, which keeps every existing key.
+	for _, m := range duckdb.PluginMacros() {
+		fmt.Fprintf(h, "macro:%s:%s\x00", m.Name, m.SQL)
+	}
+
 	// Include external query file hashes if using $file reference
 	baseDir := filepath.Dir(doc.File)
 	if spec.Query.HasFile() {

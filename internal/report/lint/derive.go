@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
+
+	"bino.bi/bino/pkg/duckdb"
 )
 
 // reservedNamePrefixes are prefixes of DataSource/DataSet names the CLI keeps
@@ -64,9 +67,17 @@ var datasetDeriveConflict = Rule{
 var reservedNamePrefix = Rule{
 	ID:          "reserved-name-prefix",
 	Name:        "Reserved Name Prefix",
-	Description: "DataSource and DataSet names must not start with 'bino_' or '_bino_'; the CLI reserves them for its session functions and views.",
+	Description: "DataSource and DataSet names must not start with 'bino_' or '_bino_' (reserved for the CLI's session functions and views) or with '<plugin>_' of a plugin that registers DuckDB macros.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
+
+		var macroPlugins []string
+		for _, m := range duckdb.PluginMacros() {
+			if !slices.Contains(macroPlugins, m.Plugin) {
+				macroPlugins = append(macroPlugins, m.Plugin)
+			}
+		}
+		sort.Strings(macroPlugins)
 
 		for _, doc := range docs {
 			if doc.Kind != "DataSource" && doc.Kind != "DataSet" {
@@ -82,6 +93,22 @@ var reservedNamePrefix = Rule{
 				findings = append(findings, Finding{
 					RuleID:  "reserved-name-prefix",
 					Message: fmt.Sprintf("%s name %q starts with the reserved prefix %q; choose another name", doc.Kind, doc.Name, prefix),
+					File:    doc.File,
+					DocIdx:  doc.Position,
+					Path:    "metadata.name",
+				})
+				break
+			}
+			// A plugin that registers DuckDB macros owns "<plugin>_" in the
+			// same catalog, so a view with such a name could hide a macro.
+			for _, pluginName := range macroPlugins {
+				prefix := pluginName + "_"
+				if !strings.HasPrefix(doc.Name, prefix) {
+					continue
+				}
+				findings = append(findings, Finding{
+					RuleID:  "reserved-name-prefix",
+					Message: fmt.Sprintf("%s name %q starts with %q, which is reserved for the DuckDB macros of plugin %q; choose another name", doc.Kind, doc.Name, prefix, pluginName),
 					File:    doc.File,
 					DocIdx:  doc.Position,
 					Path:    "metadata.name",

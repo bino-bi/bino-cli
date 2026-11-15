@@ -3,6 +3,8 @@ package lint
 import (
 	"context"
 	"testing"
+
+	"bino.bi/bino/pkg/duckdb"
 )
 
 func TestDatasetDeriveConflict(t *testing.T) {
@@ -64,5 +66,32 @@ func TestReservedNamePrefix(t *testing.T) {
 	}
 	if findings[1].Path != "metadata.name" || findings[1].RuleID != "reserved-name-prefix" {
 		t.Errorf("unexpected finding %+v", findings[1])
+	}
+}
+
+func TestReservedNamePrefix_PluginMacros(t *testing.T) {
+	// Not parallel: sets the process-wide plugin macros.
+	ctx := context.Background()
+	docs := []Document{
+		{Kind: "DataSet", Name: "stats_sales", Raw: rawDoc("DataSet", "stats_sales", map[string]any{"query": "SELECT 1"})},
+		{Kind: "DataSet", Name: "statistics", Raw: rawDoc("DataSet", "statistics", map[string]any{"query": "SELECT 1"})},
+	}
+	if findings := reservedNamePrefix.Check(ctx, docs); len(findings) != 0 {
+		t.Fatalf("no plugin registers macros, got %+v", findings)
+	}
+
+	t.Cleanup(func() { _ = duckdb.SetPluginMacros(ctx, nil) })
+	if err := duckdb.SetPluginMacros(ctx, []duckdb.PluginMacro{
+		{Plugin: "stats", Name: "stats_twice", SQL: "CREATE OR REPLACE MACRO stats_twice(x) AS x * 2"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	findings := reservedNamePrefix.Check(ctx, docs)
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d: %+v", len(findings), findings)
+	}
+	want := `DataSet name "stats_sales" starts with "stats_", which is reserved for the DuckDB macros of plugin "stats"; choose another name`
+	if findings[0].Message != want || findings[0].RuleID != "reserved-name-prefix" || findings[0].Path != "metadata.name" {
+		t.Errorf("unexpected finding %+v", findings[0])
 	}
 }
