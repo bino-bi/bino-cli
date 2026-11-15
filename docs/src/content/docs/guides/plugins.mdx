@@ -359,6 +359,62 @@ Limits:
   the `_spec_` columns.
 - Plugin components are not part of layout state or the layout inspector.
 
+#### Matching the engine's notation
+
+A plugin chart should look like the template engine's charts on the same
+page: same font, same scenario looks, same scaling. Do not copy the engine's
+colours into your plugin. Read them from the page. Every page body sits in a
+`<bn-context>` element, and from template engine `v1.0.0-next.47` it has a
+method `getNotation(styleName?)`:
+
+```js
+async function notationFor(el, styleName) {
+  await customElements.whenDefined("bn-context");
+  const ctx = el.closest("bn-context");
+  await ctx.componentOnReady();
+  if (typeof ctx.getNotation !== "function") {
+    throw new Error('template engine too old: pin engine-version = "v1.0.0-next.47" or newer in bino.toml');
+  }
+  return ctx.getNotation(styleName);
+}
+```
+
+The promise resolves when the styles and scaling groups of the context are
+ready. It returns:
+
+| Field | Content |
+|-------|---------|
+| `apiVersion` | `1`. New fields can appear without a new version. A removed or renamed field raises it. |
+| `fontFamily`, `fontSizePx` | The font of the page. |
+| `scenarios.ac`, `.pp`, `.fc`, `.pl` | The looks of the four scenarios, each with `bar` (`stroke`, `fill`, `width`, optional `fillpattern` and `dasharray`), `line` (`color`, optional `dashArray`), `marker` (`fill`, `stroke`) and `area` (`fill`, `opacity`, `lineColor`, optional `dashArray`). A `width` is a multiple of the font size. |
+| `variance.pos`, `.neg`, `.neu` | The variance looks, same fields as `bar`. |
+| `scalingGroups` | The value of each `ScalingGroup` on the page, by name. |
+
+Pass the name of the ComponentStyle that applies to your component as
+`styleName` (your own style field, else `RenderRequest.InheritedStyle`). The
+result is then the same merge the engine's charts use: system defaults, the
+`_default` style, then the named style. An unknown name gives the defaults.
+
+`<bn-context>` dispatches a `bnNotationChange` event when a ComponentStyle or
+a ScalingGroup changes, for example after an edit in `bino preview`. Listen
+for it, call `getNotation` again and redraw. One change can fire the event
+more than once.
+
+**Scaling.** In the engine's charts `unitScaling` means data units per 1 em
+of length, and 1 em is `fontSizePx` times the chart's `scale`. A plugin chart
+that follows the same rule, with a value from `scalingGroups` and a fixed
+scale, draws one unit as long as a `ChartTime` in the same ScalingGroup, so
+the two can be compared. An engine chart without a fixed `scale` fits itself
+to its width and is then not comparable.
+
+**Pin the engine.** `bino setup` and `bino update` install the newest engine
+release that is not a pre-release, and that one has no `getNotation`. A project
+that uses a plugin with this API must pin the engine in `bino.toml`:
+
+```toml
+engine-version = "v1.0.0-next.47"
+```
+
 ### DuckDB macros
 
 A plugin can add SQL macros to DuckDB. bino registers them in every DuckDB
