@@ -255,6 +255,37 @@ func TestSmallMultipleSpanDefaultEngineFinding(t *testing.T) {
 	}
 }
 
+func TestStackSeriesDefaultEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","stack":{"by":"dimensions"}}}`)}}
+	inManifest := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","axisLabelsMode":"two-row"}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"charttime": {"stack": json.RawMessage(`{"notation":"scenario"}`)},
+	}}}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+	}{
+		{"old engine, stack key from the dataset", "v1.0.0-next.48", chart, true},
+		{"old engine, the manifest gate reports it already", "v1.0.0-next.48", inManifest, false},
+		{"new engine", "v1.0.0-next.49", chart, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			finding, fatal := stackSeriesDefaultEngineFinding(dir, &pathutil.ProjectConfig{EngineVersion: c.engine}, c.docs, results)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "stack-series-engine-version" || !strings.Contains(finding.Message, "ChartTime stack.notation")) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
 func TestGridCellLayoutEngineFinding(t *testing.T) {
 	grid := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{"cellHeight":"equal"}}`)}
 	plain := config.Document{Kind: "Grid", Raw: json.RawMessage(`{"kind":"Grid","spec":{}}`)}

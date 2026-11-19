@@ -363,6 +363,12 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		if d, ok := engineGateDiagnostic(dir, defaultUsed, engine.CheckCategoryIntervalPositionSupport, "table-category-interval-position-engine-version"); ok && !runner.Skip(d.Code) {
 			diagnostics = append(diagnostics, d)
 		}
+		if len(config.StackSeriesFeatures(docs, nil)) == 0 {
+			features := dataset.StackSeriesFeatures(docs, results)
+			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version"); ok && !runner.Skip(d.Code) {
+				diagnostics = append(diagnostics, d)
+			}
+		}
 		if len(config.SmallMultipleSpanFeatures(docs, nil)) == 0 {
 			features := dataset.SmallMultipleSpanFeatures(docs, results)
 			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version"); ok && !runner.Skip(d.Code) {
