@@ -100,16 +100,39 @@ type Sums struct {
 	Level string
 }
 
-// SumsOf reads the sum rows of a component spec. Only a ChartStructure has them.
-func SumsOf(componentSpec json.RawMessage) Sums {
+// SumsOf reads the sum rows of a component spec. Only a ChartStructure has
+// them. defaults are the fields that the primary dataset of the chart sets for
+// what the spec leaves out: the renderer merges them before it draws.
+func SumsOf(componentSpec json.RawMessage, defaults ...map[string]json.RawMessage) Sums {
 	var p struct {
-		Sums     string `json:"sums"`
-		SumTitle string `json:"sumTitle"`
-		Level    string `json:"level"`
+		Sums     *string `json:"sums"`
+		SumTitle *string `json:"sumTitle"`
+		Level    *string `json:"level"`
 	}
 	if json.Unmarshal(componentSpec, &p) != nil {
 		return Sums{}
 	}
+	fields := map[string]**string{"sums": &p.Sums, "sumTitle": &p.SumTitle, "level": &p.Level}
+	for _, set := range defaults {
+		for name, field := range fields {
+			var value string
+			if *field == nil && json.Unmarshal(set[name], &value) == nil && len(set[name]) > 0 {
+				*field = &value
+			}
+		}
+	}
+	return sumsOf(deref(p.Sums), deref(p.SumTitle), deref(p.Level))
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func sumsOf(sums, sumTitle, chartLevel string) Sums {
+	p := struct{ Sums, SumTitle, Level string }{sums, sumTitle, chartLevel}
 	s := Sums{Groups: p.Sums == "groups" || p.Sums == "all"}
 	if p.Sums == "total" || p.Sums == "all" {
 		s.Total = p.SumTitle

@@ -387,3 +387,34 @@ func TestAnnotationList_CountsAsASlotWithoutSpec(t *testing.T) {
 		t.Fatalf("count = %d, findings = %+v", count, findings)
 	}
 }
+
+func TestAnnotationPointFindings_SumRows(t *testing.T) {
+	rows := func(string) annotation.Rows {
+		return annotation.Rows{
+			{"category": "Spain", "rowGroup": "Europe", "ac1": 1},
+			{"category": "USA", "ac1": 2},
+		}
+	}
+	child := `{"kind":"ChartStructure","ref":"bars"}`
+	note := func(category string) Document {
+		return lintDoc(t, "Annotation", "a", `{"target":{"kind":"ChartStructure","name":"bars","point":{"category":"`+category+`","part":"total"}}}`)
+	}
+	find := func(chartSpec, category string, defaults map[string]json.RawMessage) []Finding {
+		chart := lintDoc(t, "ChartStructure", "bars", chartSpec)
+		return AnnotationPointFindingsWithDefaults([]Document{chart, note(category), pageWith(t, "p", child)}, rows,
+			func(string) map[string]json.RawMessage { return defaults })
+	}
+
+	// the manifest turns the sum rows on
+	wantFindings(t, find(`{"dataset":"sales","level":"category","sums":"all","sumTitle":"World"}`, "World", nil), "", 0, "")
+	wantFindings(t, find(`{"dataset":"sales","level":"category","sums":"all","sumTitle":"World"}`, "Europe", nil), "", 0, "")
+	wantFindings(t, find(`{"dataset":"sales","level":"category"}`, "World", nil), "annotation-point-missing", 1, "warning")
+
+	// a default of the dataset turns them on
+	byDefault := map[string]json.RawMessage{"sums": json.RawMessage(`"total"`), "sumTitle": json.RawMessage(`"World"`)}
+	wantFindings(t, find(`{"dataset":"sales","level":"category"}`, "World", byDefault), "", 0, "")
+	wantFindings(t, find(`{"dataset":"sales","level":"category"}`, "Europe", byDefault), "annotation-point-missing", 1, "warning")
+	// the manifest wins over the default
+	wantFindings(t, find(`{"dataset":"sales","level":"category","sums":"none"}`, "World", byDefault), "annotation-point-missing", 1, "warning")
+	wantFindings(t, find(`{"dataset":"sales","level":"category","sumTitle":"All"}`, "All", byDefault), "", 0, "")
+}
