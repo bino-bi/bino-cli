@@ -4294,6 +4294,10 @@
           "type": "string",
           "description": "Label of the sum row over all rows."
         },
+        "valueSuffix": {
+          "type": "string",
+          "description": "Text printed right after every value label, for example '%' when each row shows the unit. Variance labels do not get it. Needs template engine v1.0.0-next.56, older engines print the values without it."
+        },
         "scenarioLabelPosition": {
           "type": "string",
           "enum": ["bottom", "top"],
