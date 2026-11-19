@@ -389,7 +389,7 @@ func GeneratePresentationHTML(ctx context.Context, docs []config.Document, datas
 		revealJSCDN, revealJSCDN,
 		html.EscapeString(presCfg.Theme),
 		headMarkup,
-		i18nNamespaceAttr(artifact.Spec.I18nNamespace),
+		i18nNamespaceAttr(artifact.Spec.I18nNamespace)+groupSeparatorAttr(docs, locale),
 		html.EscapeString(locale),
 		contextBody.String(),
 		slides.String(),
@@ -534,7 +534,7 @@ func GeneratePresentationFrameAndContext(ctx context.Context, docs []config.Docu
 
 	// Context: bn-context block with slides for SSE delivery
 	contextMarkup := fmt.Sprintf(presentationContextTemplate,
-		i18nNamespaceAttr(artifact.Spec.I18nNamespace),
+		i18nNamespaceAttr(artifact.Spec.I18nNamespace)+groupSeparatorAttr(docs, locale),
 		html.EscapeString(locale),
 		contextBody.String(),
 		slides.String(),

@@ -2359,9 +2359,9 @@
       "properties": {
         "mark": {
           "type": "string",
-          "enum": ["marker", "frame", "arrow", "difference"],
+          "enum": ["marker", "frame", "arrow", "difference", "pointer", "bracket"],
           "default": "marker",
-          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to. difference: the difference of two values of a chart, from target to to, with a reference line, a bar and the value 'to minus target' as label; a point of a stacked chart without category means the sum of the stack. difference needs template engine v1.0.0-next.49 or newer."
+          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to. difference: the difference of two values of a chart, from target to to, with a reference line, a bar and the value 'to minus target' as label; a point of a stacked chart without category means the sum of the stack. difference needs template engine v1.0.0-next.49 or newer. pointer: a thick arrow that points down at the value end of a bar. bracket: a line around the rows of a ChartStructure from target to to, with markText or, with percent, the share of these rows in all rows. pointer, bracket and a difference on a ChartStructure need template engine v1.0.0-next.51 or newer."
         },
         "color": {
           "type": "string",
@@ -2374,16 +2374,16 @@
         },
         "to": {
           "$ref": "#/$defs/annotationTarget",
-          "description": "The end of an arrow, or the second value of a difference. Required for mark: arrow and mark: difference, not allowed otherwise. Must be on the same page as target."
+          "description": "The end of an arrow, the second value of a difference, or the last row of a bracket. Required for mark: arrow, difference and bracket, not allowed otherwise. Must be on the same page as target."
         },
         "markText": {
           "type": "string",
-          "description": "For mark: frame. A short text that is printed on the target with the frame around it, for example a share that the chart does not show. Needs template engine v1.0.0-next.49 or newer."
+          "description": "For mark: frame. A short text that is printed on the target with the frame around it, for example a share that the chart does not show. On a value label of a chart (part label or total) it stands right of the label. For mark: bracket it is the text of the bracket. Needs template engine v1.0.0-next.49 or newer."
         },
         "percent": {
           "type": "boolean",
           "default": false,
-          "description": "For mark: difference. Also prints the relative difference in brackets, for example +12.2 (+12%)."
+          "description": "For mark: difference. Also prints the relative difference in brackets, for example +12.2 (+12%). For mark: bracket without markText: prints the share of the rows of the bracket in all rows of the chart."
         },
         "digits": {
           "type": "integer",
@@ -2414,12 +2414,12 @@
       },
       "dependentSchemas": {
         "mark": {
-          "if": { "properties": { "mark": { "enum": ["arrow", "difference"] } } },
+          "if": { "properties": { "mark": { "enum": ["arrow", "difference", "bracket"] } } },
           "then": { "required": ["to"] }
         },
         "to": {
           "required": ["mark"],
-          "properties": { "mark": { "enum": ["arrow", "difference"] } }
+          "properties": { "mark": { "enum": ["arrow", "difference", "bracket"] } }
         }
       },
       "additionalProperties": false
@@ -3204,6 +3204,12 @@
           "default": "_system",
           "description": "Lookup namespace the translations are stored under. Defaults to '_system', the namespace every component reads; entries merge over the built-in labels. A named namespace is only consulted by components whose i18nNamespace points at it."
         },
+        "groupSeparator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12,
+          "description": "Group separator of every number of a document in this language, in place of the one of the locale: 'thin-space', 'space', 'none', or the separator itself. The first Internationalization of the language that sets it wins. Needs template engine v1.0.0-next.51."
+        },
         "content": {
           "description": "Internationalization payload: a flat map of dotted translation keys to label strings, or a JSON string holding the same map.",
           "oneOf": [
@@ -3864,6 +3870,11 @@
           "default": "\"a b\" \"c d\"",
           "description": "CSS grid-template-areas string for custom-template layout mode."
         },
+        "cardOverlayArea": {
+          "type": "string",
+          "pattern": "^\\d+(\\s*/\\s*\\d+){3}$",
+          "description": "Puts the child after the last slot of the layout on top of the grid, in the cells of this CSS grid-area in line numbers: 'row-start / column-start / row-end / column-end'. For a text or an AnnotationList in the free part of a chart. Needs template engine v1.0.0-next.51."
+        },
         "cardGridGap": {
           "type": "string",
           "default": "0",
@@ -4234,8 +4245,60 @@
               "enum": ["asc", "desc", "dataset"],
               "default": "dataset",
               "description": "Segment order within each stack."
+            },
+            "percentMark": {
+              "type": "boolean",
+              "default": false,
+              "description": "Mode 'relative': prints the shares as plain numbers and one '100%' mark at the end of the bars. Needs template engine v1.0.0-next.51."
+            },
+            "labels": {
+              "type": "string",
+              "enum": ["share", "value"],
+              "default": "share",
+              "description": "Mode 'relative': 'value' prints the value of each segment and the total of the bar, not the shares. Needs template engine v1.0.0-next.51."
+            },
+            "thickness": {
+              "type": "string",
+              "enum": ["equal", "total"],
+              "default": "equal",
+              "description": "'total' makes a bar as thick as the total of its row is large. Needs template engine v1.0.0-next.51."
+            },
+            "totalTitle": {
+              "type": "string",
+              "description": "A name above the totals of the bars, on the line of the series names. Needs template engine v1.0.0-next.51."
             }
           }
+        },
+        "sums": {
+          "type": "string",
+          "enum": ["none", "groups", "total", "all"],
+          "default": "none",
+          "description": "Sum rows. 'groups' adds a row below the rows of each rowGroup (level category), 'total' a row over all rows, 'all' both. Needs template engine v1.0.0-next.51."
+        },
+        "sumTitle": {
+          "type": "string",
+          "description": "Label of the sum row over all rows."
+        },
+        "scenarioLabelPosition": {
+          "type": "string",
+          "enum": ["bottom", "top"],
+          "default": "bottom",
+          "description": "Where the name of the scenario of a chart with plain bars stands: below the last bar or above the first one. Needs template engine v1.0.0-next.51."
+        },
+        "referenceLine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "description": "A line across the bars at one value of the axis. In a 100 % stack the value is a percent. Needs template engine v1.0.0-next.51.",
+          "properties": {
+            "value": { "type": "number" },
+            "label": { "type": "string" }
+          }
+        },
+        "italicCategories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Values of the level column whose row is printed in italics, for example the rest rows. Needs template engine v1.0.0-next.51."
         }
       }
     },

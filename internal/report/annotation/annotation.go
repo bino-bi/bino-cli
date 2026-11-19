@@ -89,6 +89,76 @@ func Binding(componentSpec json.RawMessage) string {
 	return ""
 }
 
+// Sums are the sum rows a ChartStructure draws below its data rows. A sum row
+// can be a point: its category is the name of the rowGroup, or the sum title.
+type Sums struct {
+	Groups bool
+	Total  string
+}
+
+// SumsOf reads the sum rows of a component spec. Only a ChartStructure has them.
+func SumsOf(componentSpec json.RawMessage) Sums {
+	var p struct {
+		Sums     string `json:"sums"`
+		SumTitle string `json:"sumTitle"`
+	}
+	if json.Unmarshal(componentSpec, &p) != nil {
+		return Sums{}
+	}
+	s := Sums{Groups: p.Sums == "groups" || p.Sums == "all"}
+	if p.Sums == "total" || p.Sums == "all" {
+		s.Total = p.SumTitle
+		if s.Total == "" {
+			s.Total = "SUM_TOTAL"
+		}
+	}
+	return s
+}
+
+// Rows adds one row per sum row to the rows of the dataset. A sum row has the
+// columns that any of its rows fills. Nil rows stay nil.
+func (s Sums) Rows(rows Rows) Rows {
+	if rows == nil || (!s.Groups && s.Total == "") {
+		return rows
+	}
+	sum := func(category string, members Rows) map[string]any {
+		row := map[string]any{}
+		for _, member := range members {
+			for column, value := range member {
+				if value != nil {
+					row[column] = value
+				}
+			}
+		}
+		delete(row, "rowGroup")
+		delete(row, "subCategory")
+		row["category"] = category
+		return row
+	}
+	out := append(Rows{}, rows...)
+	if s.Groups {
+		groups := map[string]Rows{}
+		var order []string
+		for _, row := range rows {
+			if row["rowGroup"] == nil || text(row["rowGroup"]) == "" {
+				continue
+			}
+			name := text(row["rowGroup"])
+			if _, known := groups[name]; !known {
+				order = append(order, name)
+			}
+			groups[name] = append(groups[name], row)
+		}
+		for _, name := range order {
+			out = append(out, sum(name, groups[name]))
+		}
+	}
+	if s.Total != "" {
+		out = append(out, sum(s.Total, rows))
+	}
+	return out
+}
+
 // pointFields are the point fields the engine reports per kind. A kind that is
 // missing here has no data points at all.
 var pointFields = map[string][]string{

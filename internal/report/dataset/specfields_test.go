@@ -77,7 +77,7 @@ func TestObjectKeys(t *testing.T) {
 		t.Errorf("thereof keys = %v required = %v", keys, required)
 	}
 	keys, required = ObjectKeys("ChartStructure", []string{"stack"})
-	if fmt.Sprint(keys) != "[by mode order]" || fmt.Sprint(required) != "[by]" {
+	if fmt.Sprint(keys) != "[by labels mode order percentMark thickness totalTitle]" || fmt.Sprint(required) != "[by]" {
 		t.Errorf("stack keys = %v required = %v", keys, required)
 	}
 	if !IsListOfObjects("Table", "thereof") || IsListOfObjects("ChartStructure", "stack") || IsListOfObjects("Table", "barColumns") {

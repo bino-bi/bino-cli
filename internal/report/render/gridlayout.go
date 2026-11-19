@@ -30,6 +30,11 @@ func checkSmallMultipleSpanEngine(docs []config.Document, results []dataset.Resu
 			return fmt.Errorf("render: stack-series-engine-version: %w", err)
 		}
 	}
+	if sums := dataset.StructureSumsFeatures(docs, results); len(sums) > 0 {
+		if err := engine.StructureSumsCheck(sums)(engineVersion); err != nil {
+			return fmt.Errorf("render: structure-sums-engine-version: %w", err)
+		}
+	}
 	features := dataset.SmallMultipleSpanFeatures(docs, results)
 	if len(features) == 0 {
 		return nil

@@ -49,6 +49,29 @@ func TestChartStructure_NewFields(t *testing.T) {
 	}
 }
 
+func TestChartStructure_SumFields(t *testing.T) {
+	html, err := ComponentFromSpec("ChartStructure", json.RawMessage(`{
+		"dataset": "revenue",
+		"sums": "all", "sumTitle": "World", "scenarioLabelPosition": "top",
+		"referenceLine": {"value": 50, "label": "50%"},
+		"italicCategories": ["Rest of world", "It's"],
+		"stack": {"by": "scenarios", "mode": "relative", "percentMark": true, "labels": "value", "thickness": "total", "totalTitle": "All"}
+	}`), nil)
+	if err != nil {
+		t.Fatalf("ComponentFromSpec: %v", err)
+	}
+	for _, want := range []string{
+		" sums='all'", " sum-title='World'", " scenario-label-position='top'",
+		` reference-line='{&#34;value&#34;:50,&#34;label&#34;:&#34;50%&#34;}'`,
+		`&#34;labels&#34;:&#34;value&#34;`, `&#34;thickness&#34;:&#34;total&#34;`, `&#34;totalTitle&#34;:&#34;All&#34;`,
+		` italic-categories='[&#34;Rest of world&#34;,&#34;It&#39;s&#34;]'`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected %s in HTML, got:\n%s", want, html)
+		}
+	}
+}
+
 // A chart that sets none of the new fields renders as before.
 func TestCharts_NewFieldsAbsentByDefault(t *testing.T) {
 	for _, kind := range []string{"ChartTime", "ChartStructure"} {
@@ -56,7 +79,7 @@ func TestCharts_NewFieldsAbsentByDefault(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ComponentFromSpec: %v", err)
 		}
-		for _, absent := range []string{" data-format-digits", " axis-labels-step=", " scenario-switch=", " axis-title-position=", " scenarios="} {
+		for _, absent := range []string{" data-format-digits", " axis-labels-step=", " scenario-switch=", " axis-title-position=", " scenarios=", " sums=", " sum-title=", " scenario-label-position=", " reference-line=", " italic-categories="} {
 			if strings.Contains(html, absent) {
 				t.Errorf("%s: expected no%s attribute, got:\n%s", kind, absent, html)
 			}
@@ -341,5 +364,37 @@ func TestCharts_ScenariosNoneBeatsDatasetDefault(t *testing.T) {
 	}
 	if got := attrsOf(openTag(t, string(res.HTML), "bn-chart-time"))["scenarios"]; got != "none" {
 		t.Fatalf("scenarios = %q, want none", got)
+	}
+}
+
+func TestGroupSeparatorAttr(t *testing.T) {
+	doc := func(raw string) config.Document {
+		return config.Document{Kind: "Internationalization", Raw: json.RawMessage(raw)}
+	}
+	docs := []config.Document{
+		doc(`{"spec":{"code":"de","groupSeparator":"space","content":{}}}`),
+		doc(`{"spec":{"code":"en","content":{}}}`),
+		doc(`{"spec":{"code":"en","groupSeparator":"thin-space","content":{}}}`),
+		doc(`{"spec":{"code":"en","groupSeparator":"'","content":{}}}`),
+	}
+	if got := groupSeparatorAttr(docs, "en"); got != " group-separator='thin-space'" {
+		t.Errorf("en: got %q", got)
+	}
+	if got := groupSeparatorAttr(docs, "de"); got != " group-separator='space'" {
+		t.Errorf("de: got %q", got)
+	}
+	if got := groupSeparatorAttr(docs, "fr"); got != "" {
+		t.Errorf("a language without the field: got %q", got)
+	}
+	if got := groupSeparatorAttr(docs[3:], "en"); got != " group-separator='&#39;'" {
+		t.Errorf("the value is escaped: got %q", got)
+	}
+}
+
+func TestLayoutCard_OverlayArea(t *testing.T) {
+	var b strings.Builder
+	layoutCardSpec{CardLayout: "full", CardOverlayArea: "3 / 3 / 5 / 4"}.writeAttrs(&b, nil)
+	if !strings.Contains(b.String(), " card-overlay-area='3 / 3 / 5 / 4'") {
+		t.Errorf("got %s", b.String())
 	}
 }

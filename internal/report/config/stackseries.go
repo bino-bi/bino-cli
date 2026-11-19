@@ -15,7 +15,7 @@ import (
 // primary dataset, which may be nil.
 func StackSeriesFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
 	found := map[string]bool{}
-	for _, feature := range walkedFeatures(docs, defaults, true) {
+	for _, feature := range walkedFeatures(docs, defaults, stackSeriesPrefix) {
 		found[feature] = true
 	}
 	for _, doc := range docs {
@@ -60,5 +60,81 @@ func stackSeriesChart(spec map[string]any, found map[string]bool) {
 	}
 	if stack["percentMark"] == true {
 		found[stackSeriesPrefix+"ChartTime stack.percentMark"] = true
+	}
+}
+
+// StructureSumsFeatures returns what the documents use of the template engine
+// release with sum rows in a structure chart, as names for a message, sorted.
+// It is empty when every such field is left at its default. The features are:
+// sums, scenarioLabelPosition top, referenceLine, italicCategories and the
+// stack keys percentMark, labels value, thickness total and totalTitle of a
+// ChartStructure, cardOverlayArea of a LayoutCard, groupSeparator of an
+// Internationalization, and the marks pointer and bracket and a difference on
+// a ChartStructure of an Annotation. The chart fields are found like those of
+// StackSeriesFeatures.
+func StructureSumsFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
+	found := map[string]bool{}
+	for _, feature := range walkedFeatures(docs, defaults, structureSumsPrefix) {
+		found[feature] = true
+	}
+	for _, doc := range docs {
+		if doc.Kind != "Annotation" {
+			continue
+		}
+		var node struct {
+			Spec struct {
+				Mark   string `json:"mark"`
+				Target struct {
+					Kind string `json:"kind"`
+				} `json:"target"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &node) != nil {
+			continue
+		}
+		switch node.Spec.Mark {
+		case "pointer", "bracket":
+			found["Annotation mark: "+node.Spec.Mark] = true
+		case "difference":
+			if node.Spec.Target.Kind == "ChartStructure" {
+				found["Annotation mark: difference on a ChartStructure"] = true
+			}
+		}
+	}
+	features := make([]string, 0, len(found))
+	for feature := range found {
+		features = append(features, feature)
+	}
+	sort.Strings(features)
+	return features
+}
+
+// structureSumsChart notes the structure sums fields of a ChartStructure spec.
+func structureSumsChart(spec map[string]any, found map[string]bool) {
+	note := func(field string) { found[structureSumsPrefix+"ChartStructure "+field] = true }
+	if sums, _ := spec["sums"].(string); sums != "" && sums != "none" {
+		note("sums")
+	}
+	if spec["scenarioLabelPosition"] == "top" {
+		note("scenarioLabelPosition")
+	}
+	if spec["referenceLine"] != nil {
+		note("referenceLine")
+	}
+	if rows, _ := spec["italicCategories"].([]any); len(rows) > 0 {
+		note("italicCategories")
+	}
+	stack, _ := spec["stack"].(map[string]any)
+	if stack["percentMark"] == true {
+		note("stack.percentMark")
+	}
+	if stack["labels"] == "value" {
+		note("stack.labels")
+	}
+	if stack["thickness"] == "total" {
+		note("stack.thickness")
+	}
+	if title, _ := stack["totalTitle"].(string); title != "" {
+		note("stack.totalTitle")
 	}
 }

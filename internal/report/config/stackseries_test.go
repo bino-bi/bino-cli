@@ -64,3 +64,66 @@ func TestStackSeriesFeatures(t *testing.T) {
 		t.Errorf("stack keys of a dataset default: got %v", got)
 	}
 }
+
+func TestStructureSumsFeatures(t *testing.T) {
+	doc := func(raw string) Document {
+		var head struct {
+			Kind string `json:"kind"`
+		}
+		_ = json.Unmarshal([]byte(raw), &head)
+		return Document{Kind: head.Kind, Raw: []byte(raw)}
+	}
+
+	plain := []Document{
+		doc(`{"kind":"ChartStructure","spec":{"sums":"none","scenarioLabelPosition":"bottom","italicCategories":[],"stack":{"by":"scenarios","labels":"share","thickness":"equal"}}}`),
+		doc(`{"kind":"ChartTime","spec":{"stack":{"by":"dimensions","percentMark":true}}}`),
+		doc(`{"kind":"Annotation","spec":{"mark":"difference","target":{"kind":"ChartTime","name":"c"}}}`),
+		doc(`{"kind":"LayoutCard","spec":{"cardLayout":"full"}}`),
+		doc(`{"kind":"Internationalization","spec":{"code":"en","content":{}}}`),
+	}
+	if got := StructureSumsFeatures(plain, nil); len(got) != 0 {
+		t.Errorf("defaults: got %v, want none", got)
+	}
+
+	used := []Document{
+		doc(`{"kind":"Grid","spec":{"children":[{"kind":"ChartStructure","ref":"c","spec":{"sums":"total","scenarioLabelPosition":"top"}}]}}`),
+		doc(`{"kind":"ChartStructure","spec":{"referenceLine":{"value":50},"italicCategories":["Rest"],"stack":{"by":"scenarios","mode":"relative","percentMark":true,"labels":"value","thickness":"total","totalTitle":"All"}}}`),
+		doc(`{"kind":"LayoutCard","spec":{"cardOverlayArea":"3 / 3 / 5 / 4"}}`),
+		doc(`{"kind":"Internationalization","spec":{"code":"en","groupSeparator":"thin-space","content":{}}}`),
+		doc(`{"kind":"Annotation","spec":{"mark":"pointer","target":{"kind":"ChartTime","name":"c"}}}`),
+		doc(`{"kind":"Annotation","spec":{"mark":"bracket","target":{"kind":"ChartStructure","name":"c"}}}`),
+		doc(`{"kind":"Annotation","spec":{"mark":"difference","target":{"kind":"ChartStructure","name":"c"}}}`),
+	}
+	want := []string{
+		"Annotation mark: bracket",
+		"Annotation mark: difference on a ChartStructure",
+		"Annotation mark: pointer",
+		"ChartStructure italicCategories",
+		"ChartStructure referenceLine",
+		"ChartStructure scenarioLabelPosition",
+		"ChartStructure stack.labels",
+		"ChartStructure stack.percentMark",
+		"ChartStructure stack.thickness",
+		"ChartStructure stack.totalTitle",
+		"ChartStructure sums",
+		"Internationalization groupSeparator",
+		"LayoutCard cardOverlayArea",
+	}
+	if got := StructureSumsFeatures(used, nil); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	// each gate reports only its own fields
+	if got := SmallMultipleSpanFeatures(used, nil); len(got) != 0 {
+		t.Errorf("the span gate must not report structure sums fields, got %v", got)
+	}
+	if got := StackSeriesFeatures(used, nil); !reflect.DeepEqual(got, []string{"Annotation mark: difference"}) {
+		t.Errorf("the stack series gate: got %v", got)
+	}
+
+	byDefault := []Document{doc(`{"kind":"ChartStructure","spec":{"dataset":"sales","stack":{"by":"scenarios"}}}`)}
+	defaults := map[string]map[string]map[string]any{"sales": {"chartstructure": {"sums": "total", "stack": map[string]any{"thickness": "total"}}}}
+	wantDefault := []string{"ChartStructure stack.thickness", "ChartStructure sums"}
+	if got := StructureSumsFeatures(byDefault, defaults); !reflect.DeepEqual(got, wantDefault) {
+		t.Errorf("dataset default: got %v, want %v", got, wantDefault)
+	}
+}

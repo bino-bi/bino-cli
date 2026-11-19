@@ -266,6 +266,9 @@ type InternationalizationSpec struct {
 	// Empty means the renderer's default namespace ("_system").
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
+	// GroupSeparator replaces the group separator of the locale in every number.
+	GroupSeparator string `yaml:"groupSeparator,omitempty" json:"groupSeparator,omitempty"`
+
 	// Content is a map of translation keys to values.
 	Content map[string]string `yaml:"content,omitempty" json:"content,omitempty"`
 }

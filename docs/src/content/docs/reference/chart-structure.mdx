@@ -63,9 +63,17 @@ and `orderDirection` can be inherited from the surrounding layout (see
   - `"auto"` - auto-scale to fit the parent height silently (no warning).
   - `"0.5"`, `"1.2"`, … - fixed factor applied to the base font size. All dimensions scale proportionally.
 - `stack` - optional object to enable stacked bar rendering:
-  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning.
+  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` auto-derives the stack column from the `level` prop (`rowGroup`→`category`, `category`→`subCategory`). When using `dimensions`, only the first scenario is used; additional scenarios are discarded with a warning. From template engine v1.0.0-next.51 on, the series come in the order of the index column of the stack dimension (`categoryIndex`, `subCategoryIndex`), and every bar has a place for every series, so a series keeps its place and color when a bar has no value for it.
   - `mode` - stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` - segment order within each stack: `asc`, `desc`, or `dataset` (default). With `by: scenarios` and `order: dataset`, segments stack in the order given in `scenarios`.
+  - `percentMark` - with `mode: relative`: prints the shares as plain numbers and draws one `100%` mark at the end of the bars.
+  - `labels` - with `mode: relative`: `value` prints the value of each segment and the total of the bar. The lengths stay shares. Default: `share`.
+  - `thickness` - `total` makes a bar as thick as the total of its row is large. The chart keeps its height. Default: `equal`.
+  - `totalTitle` - a name above the totals of the bars, on the line of the series names.
+- `sums` - sum rows, see [Sum rows](#sum-rows). `sumTitle` names the row over all rows.
+- `scenarioLabelPosition` - where the name of the scenario of a chart with plain bars stands: `bottom` (default) below the last bar, `top` above the first one.
+- `referenceLine` - a line across the bars at one value, with an optional `label`: `{ value: 50, label: "50%" }`. In a 100 % stack the value is a percent. The line runs from the top to the last row that reaches it, or over all rows when the first row does not reach it.
+- `italicCategories` - values of the level column whose row is printed in italics, for example the rest rows.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
@@ -139,6 +147,73 @@ This staggered break position maintains the IBCS visual hierarchy between scenar
 
 Overdrive bars apply to bar mode only and do not affect stacked charts, relative variance needles, or auto-fit scaling.
 The existing overflow warning is still emitted alongside the visual treatment.
+
+## Sum rows
+
+`sums` adds rows that the dataset does not have:
+
+| Value | Rows |
+| --- | --- |
+| `groups` | One row below the rows of each `rowGroup`, with the name of the group. Only with `level: category`. The rows of a group stay together, the groups come in the order of `rowGroupIndex`. A row without a `rowGroup` comes after the groups and is in no group sum. |
+| `total` | One row over all rows at the end. `sumTitle` is its label. |
+| `all` | Both. |
+
+A sum row is bold and has a thin line above it. It has no bar, so it does not change the scale:
+
+- In a chart with plain bars it prints the sum of the first scenario as a number.
+- In a stack it prints one number per series, with a small square in the color of the series, and then the total.
+- In a 100 % stack (`mode: relative`) it is a bar with the shares of the sums.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: sales_by_country
+spec:
+  dataset: sales_by_country
+  level: category
+  order: categoryindex
+  scenarios: [ac1, ac2, ac3]
+  sums: all
+  sumTitle: World
+  italicCategories: [Rest of Europe, Rest of world]
+  stack:
+    by: scenarios
+```
+
+A sum row can be the point of an [`Annotation`](/reference/annotation/): its `category` is the name of the `rowGroup`, or the `sumTitle`. A group must not have the name of a row.
+
+Sum rows, `scenarioLabelPosition`, `referenceLine`, `italicCategories` and the stack keys `percentMark`, `labels`, `thickness` and `totalTitle` need template engine **v1.0.0-next.51** or newer. With an older engine `bino build` and `bino lint` stop with [`structure-sums-engine-version`](/appendix/lint-rules/#structure-sums-engine-version).
+
+## Example: 100 % bars with values and rows by total
+
+Each bar is 100 % long and as thick as its total is large. The labels are the values, and the total stands behind the bar.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: sales_structure
+spec:
+  dataset: sales_by_country
+  level: category
+  order: categoryindex
+  scenarios: [ac1, ac2, ac3]
+  unitScaling: 0.02
+  sums: total
+  sumTitle: World
+  stack:
+    by: scenarios
+    mode: relative
+    labels: value
+    thickness: total
+    percentMark: true
+    totalTitle: "All channels"
+```
+
+A thin bar has little room for its label. Raise `scaleFactors.categoryWidth` and `scaleFactors.barWidth` of `bn-chart-structure` in a [`ComponentStyle`](/reference/component-style/) until the thinnest bar is as high as a line of text.
 
 ## Variance only chart
 
@@ -301,6 +376,11 @@ children:
 | `spec.stack.by`          | string                   | yes (inside `stack`) | -                        | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives the stack column from `level` (`rowGroup`→`category`, `category`→`subCategory`).                                                                                                                              | `by: scenarios`                   |
 | `spec.stack.mode`        | string                   | no                   | `absolute`               | Stacking mode. Values: `absolute` (additive), `relative` (100% stacked), `absolute-relative` (absolute height with percentage labels).                                                                                                                                                                      | `mode: relative`                  |
 | `spec.stack.order`       | string                   | no                   | `dataset`                | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                                                                                                                                                                                                          | `order: dataset`                  |
+| `spec.sums`              | string                   | no                   | `none`                   | Sum rows: `groups`, `total`, `all`. See [Sum rows](#sum-rows). Needs engine v1.0.0-next.51. | `sums: all` |
+| `spec.sumTitle`          | string                   | no                   | -                        | Label of the sum row over all rows. | `sumTitle: World` |
+| `spec.scenarioLabelPosition` | string               | no                   | `bottom`                 | Where the scenario name of a chart with plain bars stands: `bottom` or `top`. Needs engine v1.0.0-next.51. | `scenarioLabelPosition: top` |
+| `spec.referenceLine`     | object                   | no                   | -                        | A line across the bars: `value` (required) and `label`. Needs engine v1.0.0-next.51. | `referenceLine: { value: 50, label: "50%" }` |
+| `spec.italicCategories`  | array of strings         | no                   | -                        | Rows printed in italics, by their value of the level column. Needs engine v1.0.0-next.51. | `italicCategories: [Rest of world]` |
 | `spec.selectedStyle`     | string                   | no                   | -                        | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                                                                  | `selectedStyle: corporate-style`  |
 | `spec.ruleset`           | string                   | no                   | -                        | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute.                                                             | `ruleset: corporate-rules`        |
 
@@ -312,6 +392,10 @@ spec:
     by: scenarios # scenarios | dimensions
     mode: absolute # absolute | relative | absolute-relative
     order: dataset # asc | desc | dataset
+    percentMark: false # mode relative: plain shares and one 100% mark
+    labels: share # mode relative: share | value
+    thickness: equal # equal | total
+    totalTitle: "" # a name above the totals
 ```
 
 | Property      | Type   | Required | Default    | Description                                                                                                                 |
@@ -319,3 +403,7 @@ spec:
 | `stack.by`    | string | yes      | -          | Stacking dimension. `scenarios`: stacks scenario slots end-to-end. `dimensions`: auto-derives from `level` prop.            |
 | `stack.mode`  | string | no       | `absolute` | Stacking mode. `absolute`: additive. `relative`: 100% stacked. `absolute-relative`: absolute height with percentage labels. |
 | `stack.order` | string | no       | `dataset`  | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                          |
+| `stack.percentMark` | boolean | no | `false` | With `mode: relative`: plain shares and one `100%` mark. Needs engine v1.0.0-next.51. |
+| `stack.labels` | string | no | `share` | With `mode: relative`: `value` prints the values and the total of the bar. Needs engine v1.0.0-next.51. |
+| `stack.thickness` | string | no | `equal` | `total`: a bar is as thick as the total of its row is large. Needs engine v1.0.0-next.51. |
+| `stack.totalTitle` | string | no | - | A name above the totals of the bars. Needs engine v1.0.0-next.51. |

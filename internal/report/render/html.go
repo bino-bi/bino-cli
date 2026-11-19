@@ -419,7 +419,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	}
 
 	fontMarkup := renderFontLinks(fontAssets)
-	contextAttrs := i18nNamespaceAttr(artefactNamespace)
+	contextAttrs := i18nNamespaceAttr(artefactNamespace) + groupSeparatorAttr(docs, locale)
 	// render-orientation is only added in build mode for PDF generation
 	if mode == ModeBuild {
 		if trimmed := strings.TrimSpace(renderOrientation); trimmed != "" {
@@ -607,7 +607,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 
 	// Context: standalone <bn-context> block for SSE delivery
 	// No render-orientation in preview mode
-	contextMarkup := fmt.Sprintf(contextTemplate, i18nNamespaceAttr(artefactNamespace), html.EscapeString(locale), body.String())
+	contextMarkup := fmt.Sprintf(contextTemplate, i18nNamespaceAttr(artefactNamespace)+groupSeparatorAttr(docs, locale), html.EscapeString(locale), body.String())
 
 	return FrameResult{
 		FrameHTML:   []byte(frameMarkup),
