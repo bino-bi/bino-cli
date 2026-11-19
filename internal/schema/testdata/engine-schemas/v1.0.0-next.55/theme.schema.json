@@ -285,6 +285,10 @@
             "type": "string"
           }
         },
+        "titleBold": {
+          "type": "boolean",
+          "description": "The title above the axis in bold: the chart title, or the name of the variance."
+        },
         "padding": {
           "type": "object",
           "properties": {
@@ -627,6 +631,14 @@
             "type": "string"
           },
           "description": "The colours a mark can name in its `color`."
+        },
+        "markerStyle": {
+          "type": "string",
+          "enum": [
+            "filled",
+            "outlined"
+          ],
+          "description": "A numbered circle is filled with the colour, or white with a ring and a number in the colour."
         }
       },
       "additionalProperties": false,

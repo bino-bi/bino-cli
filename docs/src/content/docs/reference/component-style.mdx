@@ -185,6 +185,7 @@ Style settings for horizontal bar charts (structure visualizations).
 | `barStyles`      | object   | SVG styles for bar elements by scenario                                                |
 | `varianceStyles` | object   | SVG styles for variance indicators                                                     |
 | `stackColors`    | string[] | Ordered CSS colors for stacked segments (default: `["#000000", "#c0c0c0", "#808080"]`) |
+| `titleBold`      | boolean  | Print the chart title in bold (default: `false`). Needs template engine v1.0.0-next.55 |
 | `padding`        | object   | Padding around the chart area                                                          |
 
 ### Scale factors (structure chart)
@@ -300,6 +301,7 @@ spec:
 | --- | --- |
 | `color` | The color of a mark without a `color`, of a mark with a name that `colors` does not have, and of the circles of the list. |
 | `colors` | The names a mark can use in its `color`, with their colors. |
+| `markerStyle` | Look of the numbered circles on the page and in the list. `filled` (default) is a circle in the color with a white number. `outlined` is a white circle with a ring and a number in the color. Needs template engine v1.0.0-next.55. |
 
 The section works like any other: in `_default` for all marks, or in a named style. The marks read the style of their page, a list reads its own `selectedStyle`, which it inherits from the page.
 
