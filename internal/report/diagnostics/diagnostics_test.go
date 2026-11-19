@@ -597,12 +597,12 @@ func TestSmallMultipleSpanEngineDiagnostic(t *testing.T) {
 		return dir
 	}
 
-	d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.45"), doc(`"titleId":"13A"`))
+	d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.45"), doc(`"children":[{"kind":"Grid","spec":{"children":[{"row":0,"column":0,"kind":"Text","rowSpan":2}]}}]`))
 	if !ok || d.Code != "small-multiple-span-engine-version" || d.Severity != "error" || d.Line != 2 ||
-		!strings.Contains(d.Message, "LayoutPage titleId: template engine v1.0.0-next.46 or newer is needed") {
+		!strings.Contains(d.Message, "Grid rowSpan: template engine v1.0.0-next.46 or newer is needed") {
 		t.Fatalf("diagnostic = %+v, ok = %v", d, ok)
 	}
-	if d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.46"), doc(`"titleId":"13A"`)); ok {
+	if d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.46"), doc(`"children":[{"kind":"Grid","spec":{"children":[{"row":0,"column":0,"kind":"Text","rowSpan":2}]}}]`)); ok {
 		t.Fatalf("new engine: %+v", d)
 	}
 	if d, ok := smallMultipleSpanEngineDiagnostic(project("v1.0.0-next.45"), doc(`"titleBusinessUnit":"x"`)); ok {

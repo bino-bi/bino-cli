@@ -199,7 +199,6 @@ func TestSmallMultipleSpanEngineFinding(t *testing.T) {
 	}{
 		{"old engine with a span", "v1.0.0-next.45", span, "SmallMultiple rowSpan: template engine v1.0.0-next.46 or newer is needed"},
 		{"old engine with a grid background", "v1.0.0-next.45", doc(`{"kind":"Grid","spec":{"children":[{"row":0,"column":0,"kind":"Text","background":"red"}]}}`), "Grid background: template engine"},
-		{"old engine with a page id", "v1.0.0-next.45", doc(`{"kind":"LayoutPage","spec":{"titleId":"13A"}}`), "LayoutPage titleId: template engine"},
 		{"old engine with a variance only chart", "v1.0.0-next.45", doc(`{"kind":"ChartTime","spec":{"scenarios":[]}}`), "ChartTime scenarios: []: template engine"},
 		{"old engine with a style key", "v1.0.0-next.45", doc(`{"kind":"ComponentStyle","spec":{"content":{"bn-layout-card":{"titleFontSize":14}}}}`), "ComponentStyle bn-layout-card.titleFontSize: template engine"},
 		{"old engine without the fields", "v1.0.0-next.45", plain, ""},

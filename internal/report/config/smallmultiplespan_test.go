@@ -25,8 +25,6 @@ func TestSmallMultipleSpanFeatures(t *testing.T) {
 		{"small multiple base and item spec", `{"kind":"SmallMultiple","spec":{"base":{"kind":"ChartTime","spec":{"scenarios":[]}},"panels":{"items":[{"label":"a","spec":{"scenarioSwitch":true}}]}}}`,
 			[]string{"ChartTime scenarioSwitch", "ChartTime scenarios: []"}},
 		{"item spec of a table base", `{"kind":"SmallMultiple","spec":{"base":{"kind":"Table","spec":{}},"panels":{"items":[{"label":"a","spec":{"scenarios":[]}}]}}}`, nil},
-		{"page title id", `{"kind":"LayoutPage","spec":{"titleId":"13A","children":[]}}`, []string{"LayoutPage titleId"}},
-		{"empty page title id", `{"kind":"LayoutPage","spec":{"titleId":"","children":[]}}`, nil},
 		{"time chart at its defaults", `{"kind":"ChartTime","spec":{"dataFormatDigitsDecimal":1,"dataFormatDigitsPercent":2,"axisLabelsStep":1,"scenarioSwitch":false,"axisTitlePosition":"left","scenarios":["ac1"]}}`, nil},
 		{"time chart, every field", `{"kind":"ChartTime","spec":{"dataFormatDigitsDecimal":0,"dataFormatDigitsPercent":0,"axisLabelsStep":2,"scenarioSwitch":true,"axisTitlePosition":"none","scenarios":[]}}`,
 			[]string{"ChartTime axisLabelsStep", "ChartTime axisTitlePosition", "ChartTime dataFormatDigitsDecimal", "ChartTime dataFormatDigitsPercent", "ChartTime scenarioSwitch", "ChartTime scenarios: []"}},

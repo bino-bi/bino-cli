@@ -186,8 +186,8 @@ func TableCalculationSchemeCheck(props []string) func(string) error {
 
 // SmallMultipleSpanMinVersion is the first engine release whose bn-grid knows
 // row-span, column-span and cell-background on a cell. The same release adds
-// title-id of bn-layout-page, the scenario switch, the variance only mode and
-// the axis title position of the charts, and two style keys. Older engines
+// the scenario switch, the variance only mode and the axis title position of
+// the charts, and two style keys. Older engines
 // ignore all of them and render without, with no error. It is no floor of
 // SupportedEngineRanges: a project without them keeps working.
 const SmallMultipleSpanMinVersion = "v1.0.0-next.46"

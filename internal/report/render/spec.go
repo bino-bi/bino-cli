@@ -16,7 +16,6 @@ type dateString = reportspec.DateString
 // layoutPageSpec defines the structure for LayoutPage components.
 type layoutPageSpec struct {
 	TitleBusinessUnit   string                   `json:"titleBusinessUnit"`
-	TitleID             string                   `json:"titleId"`
 	TitleNamespace      string                   `json:"titleNamespace"`
 	I18nNamespace       string                   `json:"i18nNamespace"`
 	TitleDateStart      dateString               `json:"titleDateStart"`
@@ -46,7 +45,6 @@ type layoutPageSpec struct {
 
 func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]string) {
 	writeAttr(b, "title-business-unit", renderInlineMarkdown(s.TitleBusinessUnit, assetURLs))
-	writeAttr(b, "title-id", s.TitleID)
 	writeAttr(b, "title-namespace", s.TitleNamespace)
 	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "title-date-start", s.TitleDateStart.String())
