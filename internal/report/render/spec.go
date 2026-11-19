@@ -200,6 +200,7 @@ type chartStructureSpec struct {
 	Sums                  string          `json:"sums"`
 	SumTitle              string          `json:"sumTitle"`
 	ScenarioLabelPosition string          `json:"scenarioLabelPosition"`
+	ValueSuffix           string          `json:"valueSuffix"`
 	ReferenceLine         json.RawMessage `json:"referenceLine,omitempty"`
 	ItalicCategories      []string        `json:"italicCategories,omitempty"`
 }
@@ -241,6 +242,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "sums", s.Sums)
 	writeAttr(b, "sum-title", s.SumTitle)
 	writeAttr(b, "scenario-label-position", s.ScenarioLabelPosition)
+	writeAttr(b, "value-suffix", s.ValueSuffix)
 	writeJSONObjAttr(b, "reference-line", s.ReferenceLine)
 	if len(s.ItalicCategories) > 0 {
 		if data, err := json.Marshal(s.ItalicCategories); err == nil {

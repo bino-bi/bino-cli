@@ -52,7 +52,7 @@ func TestChartStructure_NewFields(t *testing.T) {
 func TestChartStructure_SumFields(t *testing.T) {
 	html, err := ComponentFromSpec("ChartStructure", json.RawMessage(`{
 		"dataset": "revenue",
-		"sums": "all", "sumTitle": "World", "scenarioLabelPosition": "top",
+		"sums": "all", "sumTitle": "World", "scenarioLabelPosition": "top", "valueSuffix": "%",
 		"referenceLine": {"value": 50, "label": "50%"},
 		"italicCategories": ["Rest of world", "It's"],
 		"stack": {"by": "scenarios", "mode": "relative", "percentMark": true, "labels": "value", "thickness": "total", "totalTitle": "All"}
@@ -61,7 +61,7 @@ func TestChartStructure_SumFields(t *testing.T) {
 		t.Fatalf("ComponentFromSpec: %v", err)
 	}
 	for _, want := range []string{
-		" sums='all'", " sum-title='World'", " scenario-label-position='top'",
+		" sums='all'", " sum-title='World'", " scenario-label-position='top'", " value-suffix='%'",
 		` reference-line='{&#34;value&#34;:50,&#34;label&#34;:&#34;50%&#34;}'`,
 		`&#34;labels&#34;:&#34;value&#34;`, `&#34;thickness&#34;:&#34;total&#34;`, `&#34;totalTitle&#34;:&#34;All&#34;`,
 		` italic-categories='[&#34;Rest of world&#34;,&#34;It&#39;s&#34;]'`,

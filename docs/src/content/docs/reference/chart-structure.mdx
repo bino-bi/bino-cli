@@ -74,6 +74,7 @@ and `orderDirection` can be inherited from the surrounding layout (see
 - `scenarioLabelPosition` - where the name of the scenario of a chart with plain bars stands: `bottom` (default) below the last bar, `top` above the first one.
 - `referenceLine` - a line across the bars at one value, with an optional `label`: `{ value: 50, label: "50%" }`. In a 100 % stack the value is a percent. The line runs from the top to the last row that reaches it, or over all rows when the first row does not reach it.
 - `italicCategories` - values of the level column whose row is printed in italics, for example the rest rows.
+- `valueSuffix` - text printed right after every value label, for example `%` when each row shows the unit. Variance labels do not get it. Needs template engine v1.0.0-next.56. An older engine prints the values without it.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
 
@@ -382,6 +383,7 @@ children:
 | `spec.scenarioLabelPosition` | string               | no                   | `bottom`                 | Where the scenario name of a chart with plain bars stands: `bottom` or `top`. Needs engine v1.0.0-next.51. | `scenarioLabelPosition: top` |
 | `spec.referenceLine`     | object                   | no                   | -                        | A line across the bars: `value` (required) and `label`. Needs engine v1.0.0-next.51. | `referenceLine: { value: 50, label: "50%" }` |
 | `spec.italicCategories`  | array of strings         | no                   | -                        | Rows printed in italics, by their value of the level column. Needs engine v1.0.0-next.51. | `italicCategories: [Rest of world]` |
+| `spec.valueSuffix`       | string                   | no                   | -                        | Text printed right after every value label. Variance labels do not get it. Needs engine v1.0.0-next.56. | `valueSuffix: "%"` |
 | `spec.selectedStyle`     | string                   | no                   | -                        | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                                                                  | `selectedStyle: corporate-style`  |
 | `spec.ruleset`           | string                   | no                   | -                        | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute.                                                             | `ruleset: corporate-rules`        |
 
