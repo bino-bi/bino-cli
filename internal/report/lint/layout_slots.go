@@ -73,6 +73,7 @@ type layoutPageSpecForLint struct {
 type layoutCardSpecForLint struct {
 	CardLayout         string            `json:"cardLayout"`
 	CardCustomTemplate string            `json:"cardCustomTemplate"`
+	CardOverlayArea    string            `json:"cardOverlayArea"`
 	Children           []layoutChildSpec `json:"children"`
 }
 
@@ -340,6 +341,10 @@ var cardLayoutSlotsUsed = Rule{
 
 					// Get expected slots
 					expected := expectedSlots(cardSpec.Spec.CardLayout, cardSpec.Spec.CardCustomTemplate)
+					if cardSpec.Spec.CardOverlayArea != "" {
+						// the overlay takes the child after the last slot
+						expected++
+					}
 
 					// Count effective children
 					var effectiveCount int
@@ -374,6 +379,12 @@ var cardLayoutSlotsUsed = Rule{
 							"cardLayout %q expects %d slot(s) but card has %d effective children (for artefact %q)",
 							cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
 						)
+						if cardSpec.Spec.CardOverlayArea != "" {
+							msg = fmt.Sprintf(
+								"cardLayout %q with cardOverlayArea expects %d children, one of them for the overlay, but card has %d effective children (for artefact %q)",
+								cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
+							)
+						}
 						findings = append(findings, Finding{
 							RuleID:  "card-layout-slots-used",
 							Message: msg,

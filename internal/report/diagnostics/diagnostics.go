@@ -127,6 +127,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := stackSeriesEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := structureSumsEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 	if d, ok := smallMultipleSpanEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
@@ -198,6 +201,13 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))
 	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), check, "grid-cell-layout-engine-version")
+}
+
+// structureSumsEngineDiagnostic reports a project that uses the sum rows of a
+// structure chart or another field of that engine release on an older engine.
+func structureSumsEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	features := config.StructureSumsFeatures(docs, nil)
+	return engineGateDiagnostic(dir, len(features) > 0, engine.StructureSumsCheck(features), "structure-sums-engine-version")
 }
 
 // stackSeriesEngineDiagnostic reports a project that uses the stack fields,
@@ -366,6 +376,12 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 		if len(config.StackSeriesFeatures(docs, nil)) == 0 {
 			features := dataset.StackSeriesFeatures(docs, results)
 			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version"); ok && !runner.Skip(d.Code) {
+				diagnostics = append(diagnostics, d)
+			}
+		}
+		if len(config.StructureSumsFeatures(docs, nil)) == 0 {
+			features := dataset.StructureSumsFeatures(docs, results)
+			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.StructureSumsCheck(features), "structure-sums-engine-version"); ok && !runner.Skip(d.Code) {
 				diagnostics = append(diagnostics, d)
 			}
 		}

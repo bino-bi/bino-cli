@@ -234,7 +234,7 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 						panelAmbiguous = panelAmbiguous || ambiguous
 						continue
 					}
-					if r := pointProblem(end.target, page.bindings[key], rows); r != "" && reason == "" {
+					if r := pointProblem(end.target, page.bindings[key], page.sums[key], rows); r != "" && reason == "" {
 						reason = page.doc.Name + ": " + r
 					}
 				}
@@ -271,12 +271,15 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 
 // pointProblem judges one page as the renderer does: the mark stays when the
 // point can exist in one place of the component there.
-func pointProblem(target schema.AnnotationTarget, bindings []string, rows func(string) annotation.Rows) string {
+func pointProblem(target schema.AnnotationTarget, bindings []string, sums []annotation.Sums, rows func(string) annotation.Rows) string {
 	reason := ""
-	for _, binding := range bindings {
+	for i, binding := range bindings {
 		var data annotation.Rows
 		if binding != "" {
 			data = rows(binding)
+		}
+		if i < len(sums) {
+			data = sums[i].Rows(data)
 		}
 		if reason = annotation.CheckPoint(target.Kind, target.Point, data); reason == "" {
 			return ""
@@ -387,6 +390,8 @@ func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultiple
 			if place.by != "" {
 				data = annotation.PanelRows(data, place.by, target.Panel)
 			}
+			// each panel is a chart of its own, with its own sum rows
+			data = annotation.SumsOf(m.Base.Spec).Rows(data)
 			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
 				fine = true
 			} else if reason == "" {
@@ -488,6 +493,8 @@ type annotationPageView struct {
 	// bindings maps a component to the dataset of each place it sits, "" when
 	// that place binds none or several.
 	bindings map[string][]string
+	// sums maps a component to the sum rows of each place it sits, like bindings.
+	sums map[string][]annotation.Sums
 	// multiples maps a SmallMultiple to its spec in each place it sits.
 	multiples map[string][]smallMultipleLintSpec
 	lists     annotationListUses
@@ -598,7 +605,7 @@ func walkAnnotationPages(docs []Document, ctx *spec.ConstraintContext, selected 
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}, multiples: map[string][]smallMultipleLintSpec{}}
+		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}, sums: map[string][]annotation.Sums{}, multiples: map[string][]smallMultipleLintSpec{}}
 		page.walk(payload.Spec.Children, doc, "spec.children", ctx, refs, map[string]bool{})
 		pages = append(pages, page)
 	}
@@ -637,6 +644,7 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 		if name != "" {
 			p.slots[key] = true
 			p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
+			p.sums[key] = append(p.sums[key], annotation.SumsOf(effective))
 			var multiple smallMultipleLintSpec
 			if child.Kind == schema.KindSmallMultiple && json.Unmarshal(effective, &multiple) == nil {
 				p.multiples[key] = append(p.multiples[key], multiple)
@@ -736,6 +744,7 @@ func (p *annotationPageView) addGridChildren(raw json.RawMessage, ctx *spec.Cons
 		}
 		p.slots[key] = true
 		p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
+		p.sums[key] = append(p.sums[key], annotation.SumsOf(effective))
 		if child.Kind == schema.KindGrid {
 			p.addGridChildren(effective, ctx, refs)
 		}

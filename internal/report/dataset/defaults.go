@@ -770,6 +770,13 @@ func StackSeriesFeatures(docs []config.Document, results []Result) []string {
 	return config.StackSeriesFeatures(docs, chartDefaults(results))
 }
 
+// StructureSumsFeatures returns what the documents use of the template engine
+// release with sum rows in a structure chart, in a manifest or through a
+// default of the primary dataset of a chart.
+func StructureSumsFeatures(docs []config.Document, results []Result) []string {
+	return config.StructureSumsFeatures(docs, chartDefaults(results))
+}
+
 // chartDefaults are the chart defaults of the datasets, by dataset name and
 // kind token.
 func chartDefaults(results []Result) map[string]map[string]map[string]any {

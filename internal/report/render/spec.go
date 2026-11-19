@@ -94,6 +94,7 @@ type layoutCardSpec struct {
 	FooterText          string                   `json:"footerText"`
 	CardLayout          string                   `json:"cardLayout"`
 	CardCustomTemplate  string                   `json:"cardCustomTemplate"`
+	CardOverlayArea     string                   `json:"cardOverlayArea"`
 	CardGridGap         string                   `json:"cardGridGap"`
 	CardFitToContent    *bool                    `json:"cardFitToContent"`
 	CardShowBorder      *bool                    `json:"cardShowBorder"`
@@ -119,6 +120,7 @@ func (s layoutCardSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	writeAttr(b, "footer-text", s.FooterText)
 	writeAttr(b, "card-layout", s.CardLayout)
 	writeAttr(b, "card-custom-template", s.CardCustomTemplate)
+	writeAttr(b, "card-overlay-area", s.CardOverlayArea)
 	writeAttr(b, "card-grid-gap", s.CardGridGap)
 	writeBoolAttr(b, "card-fit-to-content", s.CardFitToContent)
 	writeBoolAttr(b, "card-show-border", s.CardShowBorder)
@@ -163,6 +165,9 @@ type stackConfig struct {
 	Notation    string `json:"notation,omitempty"`
 	Legend      string `json:"legend,omitempty"`
 	PercentMark bool   `json:"percentMark,omitempty"`
+	Labels      string `json:"labels,omitempty"`
+	Thickness   string `json:"thickness,omitempty"`
+	TotalTitle  string `json:"totalTitle,omitempty"`
 }
 
 // chartStructureSpec defines the structure for ChartStructure components.
@@ -191,6 +196,12 @@ type chartStructureSpec struct {
 
 	DataFormatDigitsDecimal *int `json:"dataFormatDigitsDecimal"`
 	DataFormatDigitsPercent *int `json:"dataFormatDigitsPercent"`
+
+	Sums                  string          `json:"sums"`
+	SumTitle              string          `json:"sumTitle"`
+	ScenarioLabelPosition string          `json:"scenarioLabelPosition"`
+	ReferenceLine         json.RawMessage `json:"referenceLine,omitempty"`
+	ItalicCategories      []string        `json:"italicCategories,omitempty"`
 }
 
 // scenariosAttr is the scenarios attribute of a chart. An explicit empty list
@@ -227,6 +238,15 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
 	writeIntAttr(b, "data-format-digits-percent", s.DataFormatDigitsPercent)
+	writeAttr(b, "sums", s.Sums)
+	writeAttr(b, "sum-title", s.SumTitle)
+	writeAttr(b, "scenario-label-position", s.ScenarioLabelPosition)
+	writeJSONObjAttr(b, "reference-line", s.ReferenceLine)
+	if len(s.ItalicCategories) > 0 {
+		if data, err := json.Marshal(s.ItalicCategories); err == nil {
+			writeAttr(b, "italic-categories", string(data))
+		}
+	}
 }
 
 // chartTimeSpec defines the structure for ChartTime components.

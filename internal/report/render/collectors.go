@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -78,9 +79,29 @@ func (s ruleSetSpec) normalizedContent() (string, error) {
 
 // internationalizationSpec defines the structure for Internationalization manifests.
 type internationalizationSpec struct {
-	Code      string          `json:"code"`
-	Namespace string          `json:"namespace"`
-	Content   json.RawMessage `json:"content"`
+	Code           string          `json:"code"`
+	Namespace      string          `json:"namespace"`
+	Content        json.RawMessage `json:"content"`
+	GroupSeparator string          `json:"groupSeparator"`
+}
+
+// GroupSeparatorAttr is the group-separator attribute of the context: the
+// first groupSeparator of an Internationalization of the locale. Empty when
+// none sets it, so the numbers keep the separator of the locale.
+func GroupSeparatorAttr(docs []config.Document, locale string) string {
+	for _, doc := range docs {
+		if doc.Kind != "Internationalization" {
+			continue
+		}
+		var payload struct {
+			Spec internationalizationSpec `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &payload) != nil || payload.Spec.Code != locale || payload.Spec.GroupSeparator == "" {
+			continue
+		}
+		return fmt.Sprintf(" group-separator='%s'", html.EscapeString(payload.Spec.GroupSeparator))
+	}
+	return ""
 }
 
 func (s internationalizationSpec) normalizedContent() (string, error) {

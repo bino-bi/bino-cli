@@ -23,6 +23,7 @@ var nonRuleFindingIDs = []string{
 	"grid-cell-layout-engine-version",                 // cli/engine_compat.go
 	"small-multiple-span-engine-version",              // cli/engine_compat.go
 	"stack-series-engine-version",                     // cli/engine_compat.go
+	"structure-sums-engine-version",                   // cli/engine_compat.go
 	"operation-sentiment-engine-version",              // cli/engine_compat.go
 	"table-order-engine-version",                      // cli/engine_compat.go
 	"table-category-interval-position-engine-version", // cli/engine_compat.go
@@ -46,6 +47,7 @@ var fixedSeverityIDs = []string{
 	"grid-cell-layout-engine-version",
 	"small-multiple-span-engine-version",
 	"stack-series-engine-version",
+	"structure-sums-engine-version",
 	"operation-sentiment-engine-version",
 	"table-order-engine-version",
 	"table-category-interval-position-engine-version",

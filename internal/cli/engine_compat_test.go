@@ -495,3 +495,42 @@ func TestTableCalculationSchemeDefaultEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestStructureSumsEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","sums":"total"}}`)}}
+	byDefault := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales"}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"chartstructure": {"sums": json.RawMessage(`"all"`)},
+	}}}
+	cases := []struct {
+		name   string
+		engine string
+		docs   []config.Document
+		fatal  bool
+		byData bool
+	}{
+		{"old engine with sums", "v1.0.0-next.50", chart, true, false},
+		{"old engine without the fields", "v1.0.0-next.50", byDefault, false, false},
+		{"new engine with sums", "v1.0.0-next.51", chart, false, false},
+		{"old engine, sums from the dataset", "v1.0.0-next.50", byDefault, true, true},
+		{"old engine, the manifest gate reports it already", "v1.0.0-next.50", chart, false, true},
+		{"new engine, sums from the dataset", "v1.0.0-next.51", byDefault, false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+			finding, fatal := structureSumsEngineFinding(dir, cfg, c.docs)
+			if c.byData {
+				finding, fatal = structureSumsDefaultEngineFinding(dir, cfg, c.docs, results)
+			}
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "structure-sums-engine-version" || !strings.Contains(finding.Message, "ChartStructure sums")) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}

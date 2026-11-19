@@ -25,16 +25,20 @@ import (
 // ("charttime", "chartstructure", "any"); it may be nil when the data is not
 // known.
 func SmallMultipleSpanFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
-	return walkedFeatures(docs, defaults, false)
+	return walkedFeatures(docs, defaults, "")
 }
 
 // stackSeriesPrefix marks a feature of the stack series engine release in the
 // findings of the walk, which belong to two engine gates.
 const stackSeriesPrefix = "stack-series\x00"
 
+// structureSumsPrefix marks a feature of the engine release with sum rows in a
+// structure chart, like stackSeriesPrefix.
+const structureSumsPrefix = "structure-sums\x00"
+
 // walkedFeatures runs the walk and returns the features of one engine gate:
-// the stack series ones, or all others.
-func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]any, stackSeries bool) []string {
+// those with the prefix of the gate, or with "" those without a prefix.
+func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]any, gate string) []string {
 	w := spanWalk{found: map[string]bool{}, bases: map[string]map[string]any{}, defaults: defaults}
 	roots := make([]any, 0, len(docs))
 	for _, doc := range docs {
@@ -52,8 +56,14 @@ func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]a
 	}
 	features := make([]string, 0, len(w.found))
 	for feature := range w.found {
-		name, isStack := strings.CutPrefix(feature, stackSeriesPrefix)
-		if isStack == stackSeries {
+		own := ""
+		name := feature
+		for _, prefix := range []string{stackSeriesPrefix, structureSumsPrefix} {
+			if rest, ok := strings.CutPrefix(feature, prefix); ok {
+				own, name = prefix, rest
+			}
+		}
+		if own == gate {
 			features = append(features, name)
 		}
 	}
@@ -87,6 +97,14 @@ func (w spanWalk) walk(v any) {
 				w.chartDefaults(kind, merged, merged["dataset"])
 			case "ComponentStyle":
 				styleFeatures(spec["content"], w.found)
+			case "LayoutCard":
+				if area, _ := spec["cardOverlayArea"].(string); area != "" {
+					w.found[structureSumsPrefix+"LayoutCard cardOverlayArea"] = true
+				}
+			case "Internationalization":
+				if separator, _ := spec["groupSeparator"].(string); separator != "" {
+					w.found[structureSumsPrefix+"Internationalization groupSeparator"] = true
+				}
 			}
 		}
 		for _, child := range node {
@@ -230,6 +248,7 @@ func chartFeatures(kind string, spec map[string]any, found map[string]bool) {
 		found[kind+" dataFormatDigitsPercent"] = true
 	}
 	if kind != "ChartTime" {
+		structureSumsChart(spec, found)
 		return
 	}
 	if n, ok := spec["axisLabelsStep"].(float64); ok && n > 1 {

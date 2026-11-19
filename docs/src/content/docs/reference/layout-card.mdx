@@ -45,7 +45,7 @@ Important fields mirror `LayoutPage` but are scoped to a card:
 
 - Header: `titleImage`, `titleBusinessUnit`, `titleScenarios`, `titleVariances`, `titleOrder`, `titleOrderDirection`, `titleMeasures`, `titleDateStart`, `titleDateEnd`, `titleDateFormat`, `titleDateLink`, `titleNamespace`, `i18nNamespace` (which takes precedence over the deprecated `titleNamespace`). The date fields accept both date (`2024-01-01`) and datetime (`2024-01-01T14:30:00Z`) values. `titleBusinessUnit` supports inline Markdown and inline HTML, including `<br />` for an explicit line break - see [LayoutPage](/reference/layout-page/#formatting-the-message-and-the-business-unit).
 - Footer: `footerText` (plain text).
-- Layout: `cardLayout`, `cardCustomTemplate`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
+- Layout: `cardLayout`, `cardCustomTemplate`, `cardOverlayArea`, `cardGridGap`, `cardFitToContent`, `cardShowBorder`.
 - Styling: `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply to the card frame; merged over the `_system` and `_default` styles. Requires a template engine release that forwards `selected-style` to the inner card element. The style section [`bn-layout-card`](/reference/component-style/#card-style-bn-layout-card) sets the font size of the card title (`titleFontSize`).
 - IBCS rules: `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) applied to the card title; also accepts `inherited-page` to reuse the surrounding page's rule set. Child components inherit it via `ruleset: inherited-closest`.
 - Content: `children` - array of `layoutChild` objects. A standalone LayoutCard document may leave it empty or omitted while scaffolding (the `card-layout-slots-used` lint rule warns when a used card does not fill its layout slots); a card defined inline as a child still requires at least one entry.
@@ -227,6 +227,34 @@ spec:
 
 Child components inside a card can use `inherited-closest` to resolve from the nearest card or page that sets the field, or `inherited-page` to skip the card and resolve directly from the page. See the [ChartStructure inherited props](/reference/chart-structure/#inherited-props) section for details.
 
+## Overlay area
+
+A slot of a layout never overlaps another one. `cardOverlayArea` adds one child on top of the grid. Use it for a text or an `AnnotationList` in the part of a chart that is free, for example the lower right corner of a bar chart that is sorted by value.
+
+```yaml
+apiVersion: bino.bi/v1alpha1
+kind: LayoutCard
+metadata:
+  name: sales_card
+spec:
+  cardLayout: custom-template
+  cardCustomTemplate: '"a a a" "a a a" "a a a" "a a a"'
+  cardOverlayArea: "3 / 3 / 5 / 4"
+  children:
+    - kind: ChartStructure
+      ref: sales_chart
+    - kind: AnnotationList
+      spec:
+        annotations: [comment_1, comment_2]
+```
+
+- The chart is the only slot `a` and takes the whole card: 3 columns and 4 rows.
+- The value is `row-start / column-start / row-end / column-end`, as grid line numbers. Line 1 is the upper or left edge. `3 / 3 / 5 / 4` is the third column in the rows 3 and 4.
+- The overlay takes the child after the last slot of the layout. So a card with an overlay has one child more than its layout has slots.
+- The overlay does not make room: what is below it stays where it is.
+
+Needs template engine **v1.0.0-next.51** or newer.
+
 ## Attribute Reference
 
 ### Common Metadata
@@ -274,6 +302,7 @@ Child components inside a card can use `inherited-closest` to resolve from the n
 | ------------------------- | ------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `spec.cardLayout`         | string  | no       | `full`        | Grid layout preset. Values: `full`, `split-horizontal`, `split-vertical`, `2x2`, `3x3`, `4x4`, `1-over-2`, `1-over-3`, `2-over-1`, `3-over-1`, `custom-template`.                                                               | `cardLayout: split-horizontal`      |
 | `spec.cardCustomTemplate` | string  | no       | `"a b" "c d"` | CSS `grid-template-areas` string. Used with `cardLayout: custom-template`.                                                                                                                                                      | `cardCustomTemplate: '"a b" "c d"'` |
+| `spec.cardOverlayArea` | string | no | - | Puts the child after the last slot of the layout on top of the grid, in the cells of this CSS `grid-area` in line numbers: `row-start / column-start / row-end / column-end`. See [Overlay area](#overlay-area). Needs engine v1.0.0-next.51. | `cardOverlayArea: "3 / 3 / 5 / 4"` |
 | `spec.cardGridGap`        | string  | no       | `"0"`         | Gap between grid cells.                                                                                                                                                                                                         | `cardGridGap: "0.5rem"`             |
 | `spec.cardFitToContent`   | boolean | no       | `false`       | When `true`, the card shrinks to fit its content. When `false` (default), it stretches to fill its parent. Use `false` when the card contains auto-scaling components (e.g. `unitScaling: auto`).                               | `cardFitToContent: false`           |
 | `spec.cardShowBorder`     | boolean | no       | `true`        | Display a border around the card.                                                                                                                                                                                               | `cardShowBorder: true`              |

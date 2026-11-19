@@ -464,6 +464,7 @@ func (p *annotationPage) checkEnd(rc *renderCtx, name string, end schema.Annotat
 		if place.by != "" {
 			rows = annotation.PanelRows(rows, place.by, place.label)
 		}
+		rows = annotation.SumsOf(place.spec).Rows(rows)
 		if reason = annotation.CheckPoint(place.kind, end.Point, rows); reason == "" {
 			return true
 		}
@@ -502,6 +503,9 @@ func (p *annotationPage) layerItems(labels map[string]string, placed map[string]
 				Target: ids[min(i, len(ids)-1)],
 				Point:  a.spec.Target.Point,
 				Text:   a.spec.MarkText,
+			}
+			if a.spec.Mark == "bracket" {
+				item.Percent = a.spec.Percent
 			}
 			if a.spec.Mark == "difference" {
 				item.Percent = a.spec.Percent

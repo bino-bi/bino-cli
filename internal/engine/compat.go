@@ -234,6 +234,32 @@ func StackSeriesCheck(features []string) func(string) error {
 	}
 }
 
+// StructureSumsMinVersion is the first engine release with sum rows, the 100 %
+// mark, value labels, rows by total and a reference line in a structure chart,
+// with the overlay area of a card, the group separator of a document, and with
+// the marks pointer and bracket and the difference of two bars of an
+// annotation. Older engines ignore all of them and render without, with no
+// error. It is no floor of
+// SupportedEngineRanges: a project without them keeps working.
+const StructureSumsMinVersion = "v1.0.0-next.51"
+
+// StructureSumsCheck returns the engine check for a project that uses the given
+// features of StructureSumsMinVersion. The check returns an error on an older
+// engine. An empty or unreadable version is no finding.
+func StructureSumsCheck(features []string) func(string) error {
+	return func(engineVersion string) error {
+		v, err := semver.NewVersion(engineVersion)
+		if err != nil {
+			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
+		}
+		if v.LessThan(semver.MustParse(StructureSumsMinVersion)) {
+			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
+				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), StructureSumsMinVersion, engineVersion, StructureSumsMinVersion)
+		}
+		return nil
+	}
+}
+
 // GridCellLayoutCheck is the engine check for what the documents use: the
 // card check when a SmallMultiple has a card, else the grid cell layout check.
 func GridCellLayoutCheck(usesCard bool) func(string) error {

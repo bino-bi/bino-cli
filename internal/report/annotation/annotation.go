@@ -89,6 +89,112 @@ func Binding(componentSpec json.RawMessage) string {
 	return ""
 }
 
+// Sums are the sum rows a ChartStructure draws below its data rows. A sum row
+// can be a point: the name of the rowGroup, or the sum title, is its value of
+// the level column of the chart.
+type Sums struct {
+	Groups bool
+	Total  string
+	// Level is the point field of the level: rowGroup, category or subCategory.
+	// Empty means the chart detects it from the data.
+	Level string
+}
+
+// SumsOf reads the sum rows of a component spec. Only a ChartStructure has them.
+func SumsOf(componentSpec json.RawMessage) Sums {
+	var p struct {
+		Sums     string `json:"sums"`
+		SumTitle string `json:"sumTitle"`
+		Level    string `json:"level"`
+	}
+	if json.Unmarshal(componentSpec, &p) != nil {
+		return Sums{}
+	}
+	s := Sums{Groups: p.Sums == "groups" || p.Sums == "all"}
+	if p.Sums == "total" || p.Sums == "all" {
+		s.Total = p.SumTitle
+		if s.Total == "" {
+			s.Total = "SUM_TOTAL"
+		}
+	}
+	if !s.Groups && s.Total == "" {
+		return Sums{}
+	}
+	switch level := strings.ToLower(p.Level); {
+	case strings.HasPrefix(level, "rowgroup"):
+		s.Level = "rowGroup"
+	case strings.HasPrefix(level, "subcategory"):
+		s.Level = "subCategory"
+	case strings.HasPrefix(level, "category"):
+		s.Level = "category"
+	}
+	return s
+}
+
+// levelOf is the level column of the chart: the one of the spec, or like the
+// engine detects it: the lowest dimension that the rows fill.
+func (s Sums) levelOf(rows Rows) string {
+	if s.Level != "" {
+		return s.Level
+	}
+	for _, column := range []string{"subCategory", "category"} {
+		for _, row := range rows {
+			if row[column] != nil && text(row[column]) != "" {
+				return column
+			}
+		}
+	}
+	return "rowGroup"
+}
+
+// Rows adds one row per sum row to the rows of the dataset. A sum row has the
+// columns that any of its rows fills. Rows that are not known or empty stay as
+// they are: a chart without rows draws no sum row. Group sums exist at level
+// category only, as in the engine.
+func (s Sums) Rows(rows Rows) Rows {
+	if len(rows) == 0 || (!s.Groups && s.Total == "") {
+		return rows
+	}
+	level := s.levelOf(rows)
+	sum := func(name string, members Rows) map[string]any {
+		row := map[string]any{}
+		for _, member := range members {
+			for column, value := range member {
+				if value != nil {
+					row[column] = value
+				}
+			}
+		}
+		for _, dimension := range []string{"rowGroup", "category", "subCategory"} {
+			delete(row, dimension)
+		}
+		row[level] = name
+		return row
+	}
+	out := append(Rows{}, rows...)
+	if s.Groups && level == "category" {
+		groups := map[string]Rows{}
+		var order []string
+		for _, row := range rows {
+			if row["rowGroup"] == nil || text(row["rowGroup"]) == "" {
+				continue
+			}
+			name := text(row["rowGroup"])
+			if _, known := groups[name]; !known {
+				order = append(order, name)
+			}
+			groups[name] = append(groups[name], row)
+		}
+		for _, name := range order {
+			out = append(out, sum(name, groups[name]))
+		}
+	}
+	if s.Total != "" {
+		out = append(out, sum(s.Total, rows))
+	}
+	return out
+}
+
 // pointFields are the point fields the engine reports per kind. A kind that is
 // missing here has no data points at all.
 var pointFields = map[string][]string{

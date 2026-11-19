@@ -68,6 +68,7 @@ func featureGateFindings(projectRoot string, cfg *pathutil.ProjectConfig, docume
 		{"grid-cell-layout-engine-version", gridCellLayoutEngineFinding},
 		{"small-multiple-span-engine-version", smallMultipleSpanEngineFinding},
 		{"stack-series-engine-version", stackSeriesEngineFinding},
+		{"structure-sums-engine-version", structureSumsEngineFinding},
 	}
 	for _, g := range gates {
 		finding, fatal := g.check(projectRoot, cfg, documents)
@@ -122,6 +123,21 @@ func stackSeriesDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectCo
 	features := dataset.StackSeriesFeatures(documents, results)
 	used := len(config.StackSeriesFeatures(documents, nil)) == 0 && len(features) > 0
 	return engineGateFinding(projectRoot, cfg, used, engine.StackSeriesCheck(features), "stack-series-engine-version")
+}
+
+// structureSumsEngineFinding reports a project that uses the sum rows of a
+// structure chart or another field of that engine release on an older engine.
+func structureSumsEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	features := config.StructureSumsFeatures(documents, nil)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.StructureSumsCheck(features), "structure-sums-engine-version")
+}
+
+// structureSumsDefaultEngineFinding is the same gate for chart fields that
+// only a dataset default sets, which shows after the queries ran.
+func structureSumsDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	features := dataset.StructureSumsFeatures(documents, results)
+	used := len(config.StructureSumsFeatures(documents, nil)) == 0 && len(features) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.StructureSumsCheck(features), "structure-sums-engine-version")
 }
 
 // smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
@@ -201,6 +217,7 @@ func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig,
 		tableCalculationSchemeDefaultEngineFinding,
 		smallMultipleSpanDefaultEngineFinding,
 		stackSeriesDefaultEngineFinding,
+		structureSumsDefaultEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)

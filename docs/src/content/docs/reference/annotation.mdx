@@ -1,6 +1,6 @@
 ---
 title: Annotation
-description: Point at a number with a numbered marker, a frame, an arrow or a difference.
+description: Point at a number with a numbered marker, a frame, an arrow, a difference, a pointer or a bracket.
 ---
 
 An `Annotation` points at a component, or at one data point of it, and draws a mark over the page:
@@ -8,6 +8,9 @@ An `Annotation` points at a component, or at one data point of it, and draws a m
 - `marker` (default): a numbered circle.
 - `frame`: a rounded frame around a value. A frame around a text is an oval.
 - `arrow`: a straight arrow between two data points.
+- `difference`: the difference of two values of a chart.
+- `pointer`: a thick arrow that points down at the end of a bar.
+- `bracket`: a line around some rows of a `ChartStructure`, with a text or their share.
 
 An annotation with a `title` or a `text` gets a number. An [`AnnotationList`](/reference/annotation-list/) on the same page prints the numbered texts.
 
@@ -56,7 +59,7 @@ A field left out is a wildcard. The point must match **exactly one** rendered el
 | Kind | Fields of a data point |
 | --- | --- |
 | `ChartTime` | `date` and `scenario`. With `stack.by: dimensions` a segment also has `category`, the name of its series. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
-| `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. |
+| `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. A [sum row](/reference/chart-structure/#sum-rows) has the name of its `rowGroup`, or the `sumTitle`, in the dimension of `level`. |
 | `ChartScatter`, `ChartBubble` | The dimensions of the point level, the series level and the facet level. |
 | `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
 | `Table` | `rowGroup`, `category`, `subCategory`, and `date` in a column of a date `interval`. `scenario` selects the column. Without `scenario` the whole row is the target. |
@@ -95,7 +98,7 @@ spec:
   text: Behind plan in every quarter.
 ```
 
-On a table cell the marker sits next to the number, not on it. A dense table has no room for that: there it is smaller and sits in the wider gap next to the number.
+On a table cell the marker sits next to the number, not on it. The same holds for a value label of a chart (`part: label` or `part: total`) from template engine v1.0.0-next.51 on: the marker sits right of the label. A dense table has no room for that: there it is smaller and sits in the wider gap next to the number.
 
 ### Subtotal and total rows
 
@@ -150,7 +153,7 @@ spec:
     point: { date: "2028-01-01", part: total }
 ```
 
-Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow` and `mark: difference` and not allowed for the other marks.
+Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow`, `mark: difference` and `mark: bracket` and not allowed for the other marks.
 
 ### Difference between two values
 
@@ -180,10 +183,47 @@ spec:
 - `digits` sets the digits of the absolute difference. Default: 1.
 - The bar has the color `positive` for a higher value and `negative` for a lower one. `sentiment: good-down` turns that around, for costs. A `color` on the annotation wins.
 - A difference has no part: the point always means the bars.
+- On a `ChartStructure` the bars run from left to right. There the bar of the difference lies below the second row, or above it when that row is the upper one. This needs template engine v1.0.0-next.51.
+
+### Pointer at the end of a bar
+
+`mark: pointer` draws a thick arrow that points down at the value end of a bar: the right end of a bar of a `ChartStructure`, the top of a column of a `ChartTime`. A point of a stack without a scenario means the whole stack. Needs template engine v1.0.0-next.51.
+
+```yaml
+spec:
+  mark: pointer
+  target:
+    kind: ChartStructure
+    name: sales_by_country
+    point: { category: Switzerland }
+```
+
+### Bracket around rows
+
+`mark: bracket` marks the rows of a `ChartStructure` from `target` to `to`. A line runs below the last row to the end of its bar, and from there up to the end of the bar of the first row. The text stands in a frame at the upper left. With `percent: true` the text is the share of these rows in all rows of the chart, for the bars the point names. `markText` sets another text. Needs template engine v1.0.0-next.51.
+
+```yaml
+spec:
+  mark: bracket
+  percent: true
+  target:
+    kind: ChartStructure
+    name: sales_by_country
+    point: { category: France, scenario: ac1 }
+  to:
+    kind: ChartStructure
+    name: sales_by_country
+    point: { category: Germany, scenario: ac1 }
+```
+
+- Both ends must be in one chart.
+- The share counts the rows with a bar. A sum row is not a part of it.
 
 ### Frame with its own text
 
 A `frame` with `markText` prints that text on the target and draws the frame around it. Use it for a number the chart does not show, for example a share. Needs template engine v1.0.0-next.49.
+
+On a value label of a chart (`part: label` or `part: total`) the text stands right of the label, so both can be read. This needs template engine v1.0.0-next.51. An older engine prints the text on the label.
 
 ```yaml
 spec:
@@ -255,9 +295,9 @@ The check does not look at the `filter` of a component, it skips a component tha
 
 | Attribute | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `spec.mark` | string | no | `marker` | `marker`, `frame`, `arrow` or `difference`. |
-| `spec.markText` | string | no | - | For `frame`: a text printed on the target, with the frame around it. |
-| `spec.percent` | boolean | no | `false` | For `difference`: also print the relative difference. |
+| `spec.mark` | string | no | `marker` | `marker`, `frame`, `arrow`, `difference`, `pointer` or `bracket`. |
+| `spec.markText` | string | no | - | For `frame`: a text printed on the target, with the frame around it. For `bracket`: its text. |
+| `spec.percent` | boolean | no | `false` | For `difference`: also print the relative difference. For `bracket`: print the share of its rows. |
 | `spec.digits` | integer | no | `1` | For `difference`: digits of the absolute difference. |
 | `spec.sentiment` | string | no | `good-up` | For `difference`: `good-up` or `good-down`. |
 | `spec.highlight` | boolean | no | `false` | For `difference` with `percent`: a frame around the relative difference. |
@@ -266,7 +306,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 | `spec.target.name` | string | yes | - | Name of the component. |
 | `spec.target.panel` | string | no | - | Label of one panel. Only with `kind: SmallMultiple`. See [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple). |
 | `spec.target.point` | object | no | whole component | See [The point](#the-point). |
-| `spec.to` | object | for `arrow` and `difference` | - | The end of the arrow or the second value of the difference, the same shape as `target`. |
+| `spec.to` | object | for `arrow`, `difference` and `bracket` | - | The end of the arrow, the second value of the difference or the last row of the bracket, the same shape as `target`. |
 | `spec.title` | string | no | - | Shown in bold in the list. |
 | `spec.text` | string | no | - | Inline Markdown shown in the list. |
 
