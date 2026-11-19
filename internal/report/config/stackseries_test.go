@@ -57,4 +57,10 @@ func TestStackSeriesFeatures(t *testing.T) {
 	if got := StackSeriesFeatures(byDefault, defaults); !reflect.DeepEqual(got, []string{"ChartTime axisLabelsMode: two-row"}) {
 		t.Errorf("dataset default: got %v", got)
 	}
+
+	partial := []Document{doc(`{"kind":"ChartTime","spec":{"dataset":"sales","stack":{"by":"dimensions","legend":"left"}}}`)}
+	stackDefault := map[string]map[string]map[string]any{"sales": {"charttime": {"stack": map[string]any{"notation": "scenario", "legend": "both"}}}}
+	if got := StackSeriesFeatures(partial, stackDefault); !reflect.DeepEqual(got, []string{"ChartTime stack.notation"}) {
+		t.Errorf("stack keys of a dataset default: got %v", got)
+	}
 }

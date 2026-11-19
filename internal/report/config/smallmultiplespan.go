@@ -142,6 +142,20 @@ func (w spanWalk) chartDefaults(kind string, spec map[string]any, datasetField a
 					unset[field] = value
 				}
 			}
+			// the render merges the keys of stack one by one
+			own, hasOwn := spec["stack"].(map[string]any)
+			if fromSet, ok := set[token]["stack"].(map[string]any); ok && hasOwn {
+				keys, _ := unset["stack"].(map[string]any)
+				if keys == nil {
+					keys = map[string]any{}
+				}
+				for key, value := range fromSet {
+					if own[key] == nil {
+						keys[key] = value
+					}
+				}
+				unset["stack"] = keys
+			}
 		}
 		chartFeatures(kind, unset, w.found)
 	}
