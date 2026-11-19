@@ -15,8 +15,8 @@ import (
 // It is empty when every such field is left at its default, which is the
 // output of every engine. The features are: rowSpan, columnSpan and background
 // of a Grid child and of a SmallMultiple panel, axisTitles of a SmallMultiple,
-// titleId of a LayoutPage, an empty scenarios list, the digits, axisLabelsStep,
-// scenarioSwitch and axisTitlePosition of a chart, and the style keys
+// an empty scenarios list, the digits, axisLabelsStep, scenarioSwitch and
+// axisTitlePosition of a chart, and the style keys
 // bn-grid.cellBackground and bn-layout-card.titleFontSize. Documents are
 // searched at any depth.
 //
@@ -68,10 +68,6 @@ func (w spanWalk) walk(v any) {
 				cellFeatures("Grid", children, w.found)
 			case "SmallMultiple":
 				w.smallMultiple(spec, w.bases[kind+":"+ref])
-			case "LayoutPage":
-				if id, _ := spec["titleId"].(string); id != "" {
-					w.found["LayoutPage titleId"] = true
-				}
 			case "ChartTime", "ChartStructure":
 				chartFeatures(kind, spec, w.found)
 				merged := overlay(w.bases[kind+":"+ref], spec)
