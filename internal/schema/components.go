@@ -206,6 +206,10 @@ type AnnotationSpec struct {
 	// MarkText is a text a frame is drawn around, on the target.
 	MarkText string `yaml:"markText,omitempty" json:"markText,omitempty"`
 
+	// MarkTextPosition is beside (default) or above: where the text of a frame
+	// on a value label of a chart stands.
+	MarkTextPosition string `yaml:"markTextPosition,omitempty" json:"markTextPosition,omitempty"`
+
 	// Percent adds the relative difference to a difference.
 	Percent bool `yaml:"percent,omitempty" json:"percent,omitempty"`
 

@@ -63,6 +63,8 @@ type annotationLayerItem struct {
 	ToPoint *schema.AnnotationPoint `json:"toPoint,omitempty"`
 	// Text is the text a frame is drawn around.
 	Text string `json:"text,omitempty"`
+	// TextPosition is "above" when the text of a frame stands above a value label.
+	TextPosition string `json:"textPosition,omitempty"`
 	// Percent, Digits, Sentiment and Highlight belong to a difference.
 	Percent   bool   `json:"percent,omitempty"`
 	Digits    *int   `json:"digits,omitempty"`
@@ -529,6 +531,9 @@ func (p *annotationPage) layerItems(labels map[string]string, placed map[string]
 				Target: ids[min(i, len(ids)-1)],
 				Point:  a.spec.Target.Point,
 				Text:   a.spec.MarkText,
+			}
+			if a.spec.MarkText != "" && a.spec.MarkTextPosition == "above" {
+				item.TextPosition = "above"
 			}
 			if a.spec.Mark == "bracket" {
 				item.Percent = a.spec.Percent

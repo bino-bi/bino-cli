@@ -223,7 +223,7 @@ spec:
 
 A `frame` with `markText` prints that text on the target and draws the frame around it. Use it for a number the chart does not show, for example a share. Needs template engine v1.0.0-next.49.
 
-On a value label of a chart (`part: label` or `part: total`) the text stands right of the label, so both can be read. This needs template engine v1.0.0-next.51. An older engine prints the text on the label.
+On a value label of a chart (`part: label` or `part: total`) the text stands right of the label, so both can be read. This needs template engine v1.0.0-next.51. An older engine prints the text on the label. `markTextPosition: above` puts the text above the label and not right of it (template engine v1.0.0-next.54).
 
 ```yaml
 spec:
@@ -297,6 +297,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 | --- | --- | --- | --- | --- |
 | `spec.mark` | string | no | `marker` | `marker`, `frame`, `arrow`, `difference`, `pointer` or `bracket`. |
 | `spec.markText` | string | no | - | For `frame`: a text printed on the target, with the frame around it. For `bracket`: its text. |
+| `spec.markTextPosition` | string | no | `beside` | For `frame` with `markText` on a value label of a chart: `beside` or `above`. |
 | `spec.percent` | boolean | no | `false` | For `difference`: also print the relative difference. For `bracket`: print the share of its rows. |
 | `spec.digits` | integer | no | `1` | For `difference`: digits of the absolute difference. |
 | `spec.sentiment` | string | no | `good-up` | For `difference`: `good-up` or `good-down`. |
