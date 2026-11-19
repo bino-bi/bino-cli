@@ -100,16 +100,40 @@ type Sums struct {
 	Level string
 }
 
-// SumsOf reads the sum rows of a component spec. Only a ChartStructure has them.
-func SumsOf(componentSpec json.RawMessage) Sums {
+// SumsOf reads the sum rows of a component spec. Only a ChartStructure has
+// them. defaults are the fields that the primary dataset of the chart sets for
+// what the spec leaves out: the renderer merges them before it draws.
+func SumsOf(componentSpec json.RawMessage, defaults ...map[string]json.RawMessage) Sums {
 	var p struct {
-		Sums     string `json:"sums"`
-		SumTitle string `json:"sumTitle"`
-		Level    string `json:"level"`
+		Sums     *string `json:"sums"`
+		SumTitle *string `json:"sumTitle"`
+		Level    *string `json:"level"`
 	}
-	if json.Unmarshal(componentSpec, &p) != nil {
+	// a component without a spec of its own still gets the defaults
+	if len(componentSpec) > 0 && json.Unmarshal(componentSpec, &p) != nil {
 		return Sums{}
 	}
+	fields := map[string]**string{"sums": &p.Sums, "sumTitle": &p.SumTitle, "level": &p.Level}
+	for _, set := range defaults {
+		for name, field := range fields {
+			var value string
+			if *field == nil && json.Unmarshal(set[name], &value) == nil && len(set[name]) > 0 {
+				*field = &value
+			}
+		}
+	}
+	return sumsOf(deref(p.Sums), deref(p.SumTitle), deref(p.Level))
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func sumsOf(sums, sumTitle, chartLevel string) Sums {
+	p := struct{ Sums, SumTitle, Level string }{sums, sumTitle, chartLevel}
 	s := Sums{Groups: p.Sums == "groups" || p.Sums == "all"}
 	if p.Sums == "total" || p.Sums == "all" {
 		s.Total = p.SumTitle
@@ -132,19 +156,31 @@ func SumsOf(componentSpec json.RawMessage) Sums {
 }
 
 // levelOf is the level column of the chart: the one of the spec, or like the
-// engine detects it: the lowest dimension that the rows fill.
+// engine detects it: the lowest dimension that the rows fill, and category
+// when they fill none.
 func (s Sums) levelOf(rows Rows) string {
 	if s.Level != "" {
 		return s.Level
 	}
-	for _, column := range []string{"subCategory", "category"} {
+	for _, column := range []string{"subCategory", "category", "rowGroup"} {
 		for _, row := range rows {
 			if row[column] != nil && text(row[column]) != "" {
 				return column
 			}
 		}
 	}
-	return "rowGroup"
+	return "category"
+}
+
+// WithLevelOf fixes the level of a chart without one from the rows of its
+// dataset. The engine detects the level on the whole dataset, also for a panel
+// that shows a part of it: call this before the rows are cut down to the panel.
+// Rows that are not known leave the level open.
+func (s Sums) WithLevelOf(rows Rows) Sums {
+	if s.Level == "" && len(rows) > 0 {
+		s.Level = s.levelOf(rows)
+	}
+	return s
 }
 
 // Rows adds one row per sum row to the rows of the dataset. A sum row has the

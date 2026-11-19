@@ -26,6 +26,7 @@ type smallMultipleLintSpec struct {
 	Scale             json.RawMessage  `json:"scale"`
 	Base              struct {
 		Kind string          `json:"kind"`
+		Ref  string          `json:"ref"`
 		Spec json.RawMessage `json:"spec"`
 	} `json:"base"`
 	Caption *string         `json:"caption"`
@@ -37,6 +38,7 @@ type smallMultipleLintSpec struct {
 		Items []struct {
 			Label      string          `json:"label"`
 			Dataset    string          `json:"dataset"`
+			Spec       json.RawMessage `json:"spec"`
 			Card       json.RawMessage `json:"card"`
 			ColumnSpan int             `json:"columnSpan"`
 		} `json:"items"`
@@ -47,6 +49,10 @@ type smallMultipleLintSpec struct {
 	} `json:"panels"`
 	Columns    int    `json:"columns"`
 	AxisTitles string `json:"axisTitles"`
+
+	// baseUnknown is set when base.ref names a document that is not there: the
+	// spec of the panels is then not known.
+	baseUnknown bool
 }
 
 // kindSite is one spec of a kind: a standalone document or an inline layout

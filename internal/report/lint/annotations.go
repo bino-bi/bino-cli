@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -213,6 +214,17 @@ var annotationListInLive = Rule{
 // rows returns the rows of a binding ("$name" for a DataSource), nil when they
 // are not known.
 func AnnotationPointFindings(docs []Document, rows func(binding string) annotation.Rows) []Finding {
+	return AnnotationPointFindingsWithDefaults(docs, rows, nil)
+}
+
+// AnnotationPointFindingsWithDefaults is AnnotationPointFindings for a caller
+// that knows the dataset defaults. defaults returns the ChartStructure fields
+// that a dataset sets, nil for a binding without any: a default can turn on the
+// sum rows of a chart, and a sum row is a point.
+func AnnotationPointFindingsWithDefaults(docs []Document, rows func(binding string) annotation.Rows, defaults func(binding string) map[string]json.RawMessage) []Finding {
+	if defaults == nil {
+		defaults = func(string) map[string]json.RawMessage { return nil }
+	}
 	views := annotationViews(docs)
 	var findings []Finding
 	forEachAnnotation(docs, func(doc Document, a schema.AnnotationSpec) {
@@ -226,7 +238,7 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 				}
 				for _, page := range view.pages {
 					if end.target.Panel != "" {
-						missing, ambiguous, r := panelPointProblem(end.target, page.multiples[key], rows)
+						missing, ambiguous, r := panelPointProblem(end.target, page.multiples[key], rows, defaults)
 						if r != "" && reason == "" {
 							reason = page.doc.Name + ": " + r
 						}
@@ -234,7 +246,7 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 						panelAmbiguous = panelAmbiguous || ambiguous
 						continue
 					}
-					if r := pointProblem(end.target, page.bindings[key], page.sums[key], rows); r != "" && reason == "" {
+					if r := pointProblem(end.target, page.bindings[key], page.specs[key], rows, defaults); r != "" && reason == "" {
 						reason = page.doc.Name + ": " + r
 					}
 				}
@@ -271,15 +283,15 @@ func AnnotationPointFindings(docs []Document, rows func(binding string) annotati
 
 // pointProblem judges one page as the renderer does: the mark stays when the
 // point can exist in one place of the component there.
-func pointProblem(target schema.AnnotationTarget, bindings []string, sums []annotation.Sums, rows func(string) annotation.Rows) string {
+func pointProblem(target schema.AnnotationTarget, bindings []string, specs []json.RawMessage, rows func(string) annotation.Rows, defaults func(string) map[string]json.RawMessage) string {
 	reason := ""
 	for i, binding := range bindings {
 		var data annotation.Rows
 		if binding != "" {
 			data = rows(binding)
 		}
-		if i < len(sums) {
-			data = sums[i].Rows(data)
+		if i < len(specs) && target.Kind == schema.KindChartStructure {
+			data = annotation.SumsOf(specs[i], defaults(binding)).Rows(data)
 		}
 		if reason = annotation.CheckPoint(target.Kind, target.Point, data); reason == "" {
 			return ""
@@ -323,6 +335,8 @@ type panelPlace struct {
 	binding string
 	// by is the panels.by column of a by panel, "" for an item.
 	by string
+	// spec is the spec of an item, which goes on top of the base spec.
+	spec json.RawMessage
 }
 
 // panelPlaces lists the panels of one SmallMultiple that have the label, as
@@ -357,7 +371,7 @@ func panelPlaces(m smallMultipleLintSpec, label string, rows func(string) annota
 		if item.Dataset != "" {
 			binding = item.Dataset
 		}
-		places = append(places, panelPlace{binding: binding})
+		places = append(places, panelPlace{binding: binding, spec: item.Spec})
 	}
 	return places, known
 }
@@ -367,7 +381,7 @@ func panelPlaces(m smallMultipleLintSpec, label string, rows func(string) annota
 // looked at. missing means the data has no such panel in any place. ambiguous
 // means a by panel and another panel share the label: only the data shows
 // that, two items with one label are found without it.
-func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultipleLintSpec, rows func(string) annotation.Rows) (missing, ambiguous bool, reason string) {
+func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultipleLintSpec, rows func(string) annotation.Rows, defaults func(string) map[string]json.RawMessage) (missing, ambiguous bool, reason string) {
 	fine := false
 	for _, m := range multiples {
 		places, known := panelPlaces(m, target.Panel, rows)
@@ -383,15 +397,34 @@ func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultiple
 			ambiguous = true
 		}
 		for _, place := range places {
+			// The spec of the panel as the build has it: the base, the item on
+			// top, and the label of the panel filled in.
+			cell := render.SmallMultiplePanelSpec(overlaySpec(m.Base.Spec, place.spec), target.Panel)
+			binding := place.binding
+			if binding == "" {
+				binding = annotation.Binding(cell) // the dataset can come from the base alone
+			}
 			var data annotation.Rows
-			if place.binding != "" {
-				data = rows(place.binding)
+			if binding != "" {
+				data = rows(binding)
+			}
+			// Each panel is a chart of its own, with its own sum rows, and its
+			// level comes from the whole dataset. A base document that is not
+			// there, or a sum field with a param that only the build fills in:
+			// the spec is not known, so only the fields of the point are judged.
+			isStructure := m.Base.Kind == schema.KindChartStructure
+			unknown := m.baseUnknown || (isStructure && sumFieldsOpen(cell))
+			var sums annotation.Sums
+			if isStructure && !unknown {
+				sums = annotation.SumsOf(cell, defaults(binding)).WithLevelOf(data)
 			}
 			if place.by != "" {
 				data = annotation.PanelRows(data, place.by, target.Panel)
 			}
-			// each panel is a chart of its own, with its own sum rows
-			data = annotation.SumsOf(m.Base.Spec).Rows(data)
+			data = sums.Rows(data)
+			if unknown {
+				data = nil
+			}
 			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
 				fine = true
 			} else if reason == "" {
@@ -493,8 +526,8 @@ type annotationPageView struct {
 	// bindings maps a component to the dataset of each place it sits, "" when
 	// that place binds none or several.
 	bindings map[string][]string
-	// sums maps a component to the sum rows of each place it sits, like bindings.
-	sums map[string][]annotation.Sums
+	// specs maps a component to its spec in each place it sits, like bindings.
+	specs map[string][]json.RawMessage
 	// multiples maps a SmallMultiple to its spec in each place it sits.
 	multiples map[string][]smallMultipleLintSpec
 	lists     annotationListUses
@@ -605,7 +638,7 @@ func walkAnnotationPages(docs []Document, ctx *spec.ConstraintContext, selected 
 		if json.Unmarshal(doc.Raw, &payload) != nil {
 			continue
 		}
-		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}, sums: map[string][]annotation.Sums{}, multiples: map[string][]smallMultipleLintSpec{}}
+		page := &annotationPageView{doc: doc, slots: map[string]bool{}, nested: map[string]bool{}, bindings: map[string][]string{}, specs: map[string][]json.RawMessage{}, multiples: map[string][]smallMultipleLintSpec{}}
 		page.walk(payload.Spec.Children, doc, "spec.children", ctx, refs, map[string]bool{})
 		pages = append(pages, page)
 	}
@@ -644,9 +677,17 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 		if name != "" {
 			p.slots[key] = true
 			p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
-			p.sums[key] = append(p.sums[key], annotation.SumsOf(effective))
+			p.specs[key] = append(p.specs[key], effective)
 			var multiple smallMultipleLintSpec
 			if child.Kind == schema.KindSmallMultiple && json.Unmarshal(effective, &multiple) == nil {
+				// the panels draw the document base.ref names, with base.spec on top
+				if multiple.Base.Ref != "" {
+					if base, ok := refs[annotation.Key(multiple.Base.Kind, multiple.Base.Ref)]; ok {
+						multiple.Base.Spec = mergedSpec(base, multiple.Base.Spec)
+					} else {
+						multiple.baseUnknown = true
+					}
+				}
 				p.multiples[key] = append(p.multiples[key], multiple)
 			}
 		}
@@ -744,7 +785,7 @@ func (p *annotationPageView) addGridChildren(raw json.RawMessage, ctx *spec.Cons
 		}
 		p.slots[key] = true
 		p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
-		p.sums[key] = append(p.sums[key], annotation.SumsOf(effective))
+		p.specs[key] = append(p.specs[key], effective)
 		if child.Kind == schema.KindGrid {
 			p.addGridChildren(effective, ctx, refs)
 		}
@@ -789,6 +830,40 @@ func mergedSpec(doc Document, override json.RawMessage) json.RawMessage {
 		return base
 	}
 	merged, err := ref.MergeSpec(base, override)
+	if err != nil {
+		return base
+	}
+	return merged
+}
+
+// sumFieldsOpen reports a spec whose sums, sumTitle or level still has a
+// ${...} placeholder: a param of a referenced document or the index of a panel.
+func sumFieldsOpen(cell json.RawMessage) bool {
+	var p struct {
+		Sums     json.RawMessage `json:"sums"`
+		SumTitle json.RawMessage `json:"sumTitle"`
+		Level    json.RawMessage `json:"level"`
+	}
+	if json.Unmarshal(cell, &p) != nil {
+		return false
+	}
+	for _, field := range []json.RawMessage{p.Sums, p.SumTitle, p.Level} {
+		if bytes.Contains(field, []byte("${")) {
+			return true
+		}
+	}
+	return false
+}
+
+// overlaySpec is base with the fields of over on top. One of them can be empty.
+func overlaySpec(base, over json.RawMessage) json.RawMessage {
+	if len(over) == 0 {
+		return base
+	}
+	if len(base) == 0 {
+		return over
+	}
+	merged, err := ref.MergeSpec(base, over)
 	if err != nil {
 		return base
 	}

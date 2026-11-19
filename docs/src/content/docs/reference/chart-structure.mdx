@@ -160,7 +160,8 @@ The existing overflow warning is still emitted alongside the visual treatment.
 
 A sum row is bold and has a thin line above it. It has no bar, so it does not change the scale:
 
-- In a chart with plain bars it prints the sum of the first scenario as a number.
+- In a chart with plain bars it prints the sum as a number. With several scenarios it prints one number per scenario, with a small square in the look of the scenario. This needs template engine v1.0.0-next.52, v1.0.0-next.51 prints the first scenario only.
+- In a variance chart next to the bars it is a bar like the other rows, with a bold number.
 - In a stack it prints one number per series, with a small square in the color of the series, and then the total.
 - In a 100 % stack (`mode: relative`) it is a bar with the shares of the sums.
 
@@ -182,7 +183,7 @@ spec:
     by: scenarios
 ```
 
-A sum row can be the point of an [`Annotation`](/reference/annotation/): the name of the `rowGroup`, or the `sumTitle`, is its value of the dimension of `level`, so `category` at `level: category`. A group must not have the name of a row. `bino lint` does not know a sum row that only a [dataset default](/reference/dataset/#dataset-defaults) turns on: it then reports [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) for it, while the build draws the mark.
+A sum row can be the point of an [`Annotation`](/reference/annotation/): the name of the `rowGroup`, or the `sumTitle`, is its value of the dimension of `level`, so `category` at `level: category`. A group must not have the name of a row.
 
 Sum rows, `scenarioLabelPosition`, `referenceLine`, `italicCategories` and the stack keys `percentMark`, `labels`, `thickness` and `totalTitle` need template engine **v1.0.0-next.51** or newer. With an older engine `bino build` and `bino lint` stop with [`structure-sums-engine-version`](/appendix/lint-rules/#structure-sums-engine-version).
 

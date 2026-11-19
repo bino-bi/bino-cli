@@ -279,7 +279,23 @@ func AnnotationPointFindings(ctx context.Context, docs []config.Document, result
 	}
 	collected := false
 	decoded := map[string]annotation.Rows{}
-	return lint.AnnotationPointFindings(lint.DocumentsFromConfig(docs), func(binding string) annotation.Rows {
+	// the ChartStructure fields a dataset sets by default, as the renderer merges them: any, then the kind
+	defaults := func(binding string) map[string]json.RawMessage {
+		for _, r := range results {
+			if r.Name != binding {
+				continue
+			}
+			fields := map[string]json.RawMessage{}
+			for _, token := range []string{dataset.AnyToken, "chartstructure"} {
+				for field, value := range r.Defaults[token] {
+					fields[field] = value
+				}
+			}
+			return fields
+		}
+		return nil
+	}
+	return lint.AnnotationPointFindingsWithDefaults(lint.DocumentsFromConfig(docs), func(binding string) annotation.Rows {
 		if rows, ok := decoded[binding]; ok {
 			return rows
 		}
@@ -299,7 +315,7 @@ func AnnotationPointFindings(ctx context.Context, docs []config.Document, result
 		}
 		decoded[binding] = rows
 		return rows
-	})
+	}, defaults)
 }
 
 // CategoryIntervalPositionFindings checks the categoryIntervalPosition of the

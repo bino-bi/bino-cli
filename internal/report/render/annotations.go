@@ -458,19 +458,45 @@ func (p *annotationPage) checkEnd(rc *renderCtx, name string, end schema.Annotat
 	reason := ""
 	for _, place := range p.places[annotation.TargetKey(end)] {
 		var rows annotation.Rows
+		binding := annotation.Binding(place.spec)
 		if rc.annotationData != nil {
-			rows = rc.annotationData.rows(annotation.Binding(place.spec))
+			rows = rc.annotationData.rows(binding)
 		}
+		// the spec of a panel is noted before the dataset defaults are merged
+		sums := annotation.SumsOf(place.spec, rc.chartStructureDefaults(place.kind, binding)).WithLevelOf(rows)
 		if place.by != "" {
 			rows = annotation.PanelRows(rows, place.by, place.label)
 		}
-		rows = annotation.SumsOf(place.spec).Rows(rows)
+		rows = sums.Rows(rows)
 		if reason = annotation.CheckPoint(place.kind, end.Point, rows); reason == "" {
 			return true
 		}
 	}
 	rc.warn(fmt.Sprintf("annotation-point-missing: annotation %s on %s: %s", name, describeTarget(end), reason))
 	return false
+}
+
+// chartStructureDefaults are the fields that the defaults of a dataset give a
+// ChartStructure that binds it: `any` defaults, then those of the kind. Nil for
+// another kind, for a DataSource and for a dataset without defaults.
+func (rc *renderCtx) chartStructureDefaults(kind, binding string) map[string]json.RawMessage {
+	if kind != schema.KindChartStructure || binding == "" || strings.HasPrefix(binding, "$") {
+		return nil
+	}
+	defaults := rc.datasetDefaults[binding]
+	if len(defaults) == 0 {
+		return nil
+	}
+	fields := map[string]json.RawMessage{}
+	for field, value := range defaults[dataset.AnyToken] {
+		if _, ok := dataset.SpecField(kind, field); ok {
+			fields[field] = value
+		}
+	}
+	for field, value := range defaults[kindTokenOf(kind)] {
+		fields[field] = value
+	}
+	return fields
 }
 
 // describeTarget names an end of an annotation in a message.

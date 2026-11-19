@@ -199,3 +199,50 @@ func TestSumsRows(t *testing.T) {
 		t.Errorf("detected level category: %s", reason)
 	}
 }
+
+func TestSumsLevelAndDefaults(t *testing.T) {
+	defaults := map[string]json.RawMessage{"sums": json.RawMessage(`"total"`), "sumTitle": json.RawMessage(`"World"`)}
+	// a component without a spec of its own still gets the defaults
+	for _, spec := range []json.RawMessage{nil, json.RawMessage(`{}`)} {
+		if got := SumsOf(spec, defaults); got != (Sums{Total: "World"}) {
+			t.Errorf("SumsOf(%q) = %+v", spec, got)
+		}
+	}
+	if got := SumsOf(json.RawMessage(`not json`), defaults); got != (Sums{}) {
+		t.Errorf("a broken spec has no sum rows, got %+v", got)
+	}
+
+	total := Sums{Total: "World"}
+	last := func(rows Rows) map[string]any { out := total.Rows(rows); return out[len(out)-1] }
+	// the level is the lowest dimension the rows fill, and category when they fill none
+	if row := last(Rows{{"ac1": 1}}); row["category"] != "World" {
+		t.Errorf("no dimension: %v", row)
+	}
+	if row := last(Rows{{"rowGroup": "Europe", "ac1": 1}}); row["rowGroup"] != "World" {
+		t.Errorf("only rowGroup: %v", row)
+	}
+	if row := last(Rows{{"rowGroup": "Europe", "category": "Spain", "ac1": 1}}); row["category"] != "World" {
+		t.Errorf("rowGroup and category: %v", row)
+	}
+
+	// a panel shows a part of the dataset, but the level comes from all of it
+	all := Rows{
+		{"region": "North", "category": "Spain", "ac1": 1},
+		{"region": "South", "category": "USA", "subCategory": "East", "ac1": 2},
+	}
+	north := PanelRows(all, "region", "North")
+	if row := last(north); row["category"] != "World" {
+		t.Errorf("level from the panel rows alone: %v", row)
+	}
+	fixed := total.WithLevelOf(all).Rows(north)
+	if row := fixed[len(fixed)-1]; row["subCategory"] != "World" {
+		t.Errorf("level from the whole dataset: %v", row)
+	}
+	// unknown rows leave the level open, a level of the spec stays
+	if got := total.WithLevelOf(nil); got.Level != "" {
+		t.Errorf("unknown rows: %+v", got)
+	}
+	if got := (Sums{Total: "World", Level: "rowGroup"}).WithLevelOf(all); got.Level != "rowGroup" {
+		t.Errorf("the level of the spec stays: %+v", got)
+	}
+}

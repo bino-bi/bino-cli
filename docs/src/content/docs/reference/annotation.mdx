@@ -277,7 +277,7 @@ A component that sits on a page twice gets the mark twice, with the same number.
 
 This is a warning and not a failure. The rule [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) compares the point with the rows of the component's dataset. `bino build` and `bino preview` write it to their log. `bino lint --execute-queries` reports it as a finding, which fails only with `--fail-on-warnings` or a severity you set in `bino.toml`.
 
-The check does not look at the `filter` of a component, it skips a component that binds several datasets, and it cannot see whether a wildcard matches several elements. In these cases the engine draws nothing and writes a warning to the browser console. The entry in the list keeps its place and loses its circle, the other numbers stay as they are.
+The check does not look at the `filter` of a component, it skips a component that binds several datasets, and it cannot see whether a wildcard matches several elements. For a panel of a `SmallMultiple` whose `sums`, `sumTitle` or `level` holds a param of the base document, `bino lint` does not judge the point: only the build knows the value. In these cases the engine draws nothing and writes a warning to the browser console. The entry in the list keeps its place and loses its circle, the other numbers stay as they are.
 
 ## Colors
 
