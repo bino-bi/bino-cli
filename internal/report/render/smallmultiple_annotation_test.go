@@ -1,11 +1,16 @@
 package render
 
 import (
+	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
 
+	"bino.bi/bino/internal/report/annotation"
 	"bino.bi/bino/internal/report/config"
+	"bino.bi/bino/internal/report/dataset"
+	"bino.bi/bino/internal/schema"
 )
 
 func panelAnnotation(name, panel, point string) config.Document {
@@ -98,5 +103,56 @@ func TestSmallMultiple_AnnotationWithoutPanel(t *testing.T) {
 	}
 	if strings.Count(html, "data-bino-annotation-target=") != 1 {
 		t.Errorf("want exactly one target in:\n%s", html)
+	}
+}
+
+// A sum row that only a dataset default turns on is a point too. The spec of a
+// panel is noted before the defaults are merged, so the check merges them.
+func TestCheckEnd_SumRowFromDatasetDefault(t *testing.T) {
+	rows := `[{"category":"Spain","rowGroup":"Europe","ac1":1},{"category":"USA","ac1":2}]`
+	sets := []dataset.Result{{
+		Name: "sales",
+		Data: json.RawMessage(rows),
+		Defaults: dataset.Defaults{
+			"chartstructure": {"sums": json.RawMessage(`"total"`), "sumTitle": json.RawMessage(`"World"`)},
+		},
+	}}
+	target := func(category string) schema.AnnotationTarget {
+		return schema.AnnotationTarget{
+			Kind:  schema.KindChartStructure,
+			Name:  "bars",
+			Point: &schema.AnnotationPoint{Category: category, Part: "total"},
+		}
+	}
+	check := func(spec, category string, withDefaults bool) (bool, []string) {
+		var warnings []string
+		rc := &renderCtx{ctx: context.Background(), warnings: &warnings, annotationData: newAnnotationData(sets, nil)}
+		if withDefaults {
+			rc.datasetDefaults = map[string]dataset.Defaults{"sales": sets[0].Defaults}
+		}
+		end := target(category)
+		page := &annotationPage{places: map[string][]annotationPlace{
+			annotation.TargetKey(end): {{kind: schema.KindChartStructure, spec: json.RawMessage(spec)}},
+		}}
+		return page.checkEnd(rc, "note", end), warnings
+	}
+
+	plain := `{"dataset":"sales","level":"category"}`
+	if ok, warnings := check(plain, "World", true); !ok || len(warnings) != 0 {
+		t.Errorf("the default turns the sum row on: ok = %v, warnings = %v", ok, warnings)
+	}
+	if ok, warnings := check(plain, "World", false); ok || len(warnings) != 1 || !strings.Contains(warnings[0], "annotation-point-missing") {
+		t.Errorf("without the default there is no sum row: ok = %v, warnings = %v", ok, warnings)
+	}
+	// the manifest wins over the default
+	if ok, _ := check(`{"dataset":"sales","level":"category","sums":"none"}`, "World", true); ok {
+		t.Error("sums: none in the manifest turns the sum row off")
+	}
+	if ok, _ := check(`{"dataset":"sales","level":"category","sumTitle":"All"}`, "All", true); !ok {
+		t.Error("the sum title of the manifest names the row")
+	}
+	// a row of the data is a point with and without the default
+	if ok, _ := check(plain, "Spain", false); !ok {
+		t.Error("Spain is a row of the dataset")
 	}
 }
