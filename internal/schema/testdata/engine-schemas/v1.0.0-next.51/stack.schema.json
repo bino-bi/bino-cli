@@ -34,7 +34,27 @@
     },
     "percentMark": {
       "type": "boolean",
-      "description": "`bn-chart-time`, mode `relative`: plain shares and one `100%` mark. Default: `false`."
+      "description": "Mode `relative`: plain shares and one `100%` mark. Default: `false`."
+    },
+    "labels": {
+      "type": "string",
+      "enum": [
+        "share",
+        "value"
+      ],
+      "description": "`bn-chart-structure`, mode `relative`: `value` prints the value of a segment and the total of the bar. Default: `share`."
+    },
+    "thickness": {
+      "type": "string",
+      "enum": [
+        "equal",
+        "total"
+      ],
+      "description": "`bn-chart-structure`: `total` makes a bar as thick as the total of its row is large. Default: `equal`."
+    },
+    "totalTitle": {
+      "type": "string",
+      "description": "`bn-chart-structure`: a name above the totals of the bars."
     }
   },
   "required": [
