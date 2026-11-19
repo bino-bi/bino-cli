@@ -398,3 +398,19 @@ func TestLayoutCard_OverlayArea(t *testing.T) {
 		t.Errorf("got %s", b.String())
 	}
 }
+
+func TestAnnotationLayerItem_TextPosition(t *testing.T) {
+	item := annotationLayerItem{Mark: "frame", Target: "t1", Text: "8%", TextPosition: "above"}
+	data, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"textPosition":"above"`) {
+		t.Errorf("got %s", data)
+	}
+	// the default is left out: an older engine puts the text beside the label anyway
+	plain, _ := json.Marshal(annotationLayerItem{Mark: "frame", Target: "t1", Text: "8%"})
+	if strings.Contains(string(plain), "textPosition") {
+		t.Errorf("got %s", plain)
+	}
+}

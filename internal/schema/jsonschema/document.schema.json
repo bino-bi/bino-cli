@@ -2380,6 +2380,12 @@
           "type": "string",
           "description": "For mark: frame. A short text that is printed on the target with the frame around it, for example a share that the chart does not show. On a value label of a chart (part label or total) it stands right of the label. For mark: bracket it is the text of the bracket. Needs template engine v1.0.0-next.49 or newer."
         },
+        "markTextPosition": {
+          "type": "string",
+          "enum": ["beside", "above"],
+          "default": "beside",
+          "description": "For mark: frame with markText on a value label of a chart (part label or total): the text stands right of the label, or above it. Needs template engine v1.0.0-next.54, older engines put it beside."
+        },
         "percent": {
           "type": "boolean",
           "default": false,
