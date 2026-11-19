@@ -85,10 +85,10 @@ type internationalizationSpec struct {
 	GroupSeparator string          `json:"groupSeparator"`
 }
 
-// groupSeparatorAttr is the group-separator attribute of the context: the
+// GroupSeparatorAttr is the group-separator attribute of the context: the
 // first groupSeparator of an Internationalization of the locale. Empty when
 // none sets it, so the numbers keep the separator of the locale.
-func groupSeparatorAttr(docs []config.Document, locale string) string {
+func GroupSeparatorAttr(docs []config.Document, locale string) string {
 	for _, doc := range docs {
 		if doc.Kind != "Internationalization" {
 			continue

@@ -379,6 +379,12 @@ var cardLayoutSlotsUsed = Rule{
 							"cardLayout %q expects %d slot(s) but card has %d effective children (for artefact %q)",
 							cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
 						)
+						if cardSpec.Spec.CardOverlayArea != "" {
+							msg = fmt.Sprintf(
+								"cardLayout %q with cardOverlayArea expects %d children, one of them for the overlay, but card has %d effective children (for artefact %q)",
+								cardSpec.Spec.CardLayout, expected, effectiveCount, artifact.Name,
+							)
+						}
 						findings = append(findings, Finding{
 							RuleID:  "card-layout-slots-used",
 							Message: msg,

@@ -90,38 +90,55 @@ func Binding(componentSpec json.RawMessage) string {
 }
 
 // Sums are the sum rows a ChartStructure draws below its data rows. A sum row
-// can be a point: its category is the name of the rowGroup, or the sum title.
+// can be a point: the name of the rowGroup, or the sum title, is its value of
+// the level column of the chart.
 type Sums struct {
 	Groups bool
 	Total  string
+	// Column is the point field of the level: rowGroup, category or subCategory.
+	Column string
 }
 
-// SumsOf reads the sum rows of a component spec. Only a ChartStructure has them.
+// SumsOf reads the sum rows of a component spec. Only a ChartStructure has
+// them. Group sums exist at level category only, as in the engine.
 func SumsOf(componentSpec json.RawMessage) Sums {
 	var p struct {
 		Sums     string `json:"sums"`
 		SumTitle string `json:"sumTitle"`
+		Level    string `json:"level"`
 	}
 	if json.Unmarshal(componentSpec, &p) != nil {
 		return Sums{}
 	}
-	s := Sums{Groups: p.Sums == "groups" || p.Sums == "all"}
+	level := strings.ToLower(p.Level)
+	s := Sums{Column: "category"}
+	switch {
+	case strings.HasPrefix(level, "rowgroup"):
+		s.Column = "rowGroup"
+	case strings.HasPrefix(level, "subcategory"):
+		s.Column = "subCategory"
+	}
+	s.Groups = (p.Sums == "groups" || p.Sums == "all") && s.Column == "category"
 	if p.Sums == "total" || p.Sums == "all" {
 		s.Total = p.SumTitle
 		if s.Total == "" {
 			s.Total = "SUM_TOTAL"
 		}
 	}
+	if !s.Groups && s.Total == "" {
+		return Sums{}
+	}
 	return s
 }
 
 // Rows adds one row per sum row to the rows of the dataset. A sum row has the
-// columns that any of its rows fills. Nil rows stay nil.
+// columns that any of its rows fills. Rows that are not known or empty stay as
+// they are: a chart without rows draws no sum row.
 func (s Sums) Rows(rows Rows) Rows {
-	if rows == nil || (!s.Groups && s.Total == "") {
+	if len(rows) == 0 || (!s.Groups && s.Total == "") {
 		return rows
 	}
-	sum := func(category string, members Rows) map[string]any {
+	sum := func(name string, members Rows) map[string]any {
 		row := map[string]any{}
 		for _, member := range members {
 			for column, value := range member {
@@ -130,9 +147,10 @@ func (s Sums) Rows(rows Rows) Rows {
 				}
 			}
 		}
-		delete(row, "rowGroup")
-		delete(row, "subCategory")
-		row["category"] = category
+		for _, dimension := range []string{"rowGroup", "category", "subCategory"} {
+			delete(row, dimension)
+		}
+		row[s.Column] = name
 		return row
 	}
 	out := append(Rows{}, rows...)

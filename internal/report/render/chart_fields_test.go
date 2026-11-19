@@ -377,16 +377,16 @@ func TestGroupSeparatorAttr(t *testing.T) {
 		doc(`{"spec":{"code":"en","groupSeparator":"thin-space","content":{}}}`),
 		doc(`{"spec":{"code":"en","groupSeparator":"'","content":{}}}`),
 	}
-	if got := groupSeparatorAttr(docs, "en"); got != " group-separator='thin-space'" {
+	if got := GroupSeparatorAttr(docs, "en"); got != " group-separator='thin-space'" {
 		t.Errorf("en: got %q", got)
 	}
-	if got := groupSeparatorAttr(docs, "de"); got != " group-separator='space'" {
+	if got := GroupSeparatorAttr(docs, "de"); got != " group-separator='space'" {
 		t.Errorf("de: got %q", got)
 	}
-	if got := groupSeparatorAttr(docs, "fr"); got != "" {
+	if got := GroupSeparatorAttr(docs, "fr"); got != "" {
 		t.Errorf("a language without the field: got %q", got)
 	}
-	if got := groupSeparatorAttr(docs[3:], "en"); got != " group-separator='&#39;'" {
+	if got := GroupSeparatorAttr(docs[3:], "en"); got != " group-separator='&#39;'" {
 		t.Errorf("the value is escaped: got %q", got)
 	}
 }

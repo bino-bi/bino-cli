@@ -77,6 +77,23 @@ func StructureSumsFeatures(docs []Document, defaults map[string]map[string]map[s
 	for _, feature := range walkedFeatures(docs, defaults, structureSumsPrefix) {
 		found[feature] = true
 	}
+	// a SmallMultiple document with ChartStructure panels, by name
+	structurePanels := map[string]bool{}
+	for _, doc := range docs {
+		if doc.Kind != "SmallMultiple" {
+			continue
+		}
+		var node struct {
+			Spec struct {
+				Base struct {
+					Kind string `json:"kind"`
+				} `json:"base"`
+			} `json:"spec"`
+		}
+		if json.Unmarshal(doc.Raw, &node) == nil && node.Spec.Base.Kind == "ChartStructure" {
+			structurePanels[doc.Name] = true
+		}
+	}
 	for _, doc := range docs {
 		if doc.Kind != "Annotation" {
 			continue
@@ -86,17 +103,19 @@ func StructureSumsFeatures(docs []Document, defaults map[string]map[string]map[s
 				Mark   string `json:"mark"`
 				Target struct {
 					Kind string `json:"kind"`
+					Name string `json:"name"`
 				} `json:"target"`
 			} `json:"spec"`
 		}
 		if json.Unmarshal(doc.Raw, &node) != nil {
 			continue
 		}
+		target := node.Spec.Target
 		switch node.Spec.Mark {
 		case "pointer", "bracket":
 			found["Annotation mark: "+node.Spec.Mark] = true
 		case "difference":
-			if node.Spec.Target.Kind == "ChartStructure" {
+			if target.Kind == "ChartStructure" || (target.Kind == "SmallMultiple" && structurePanels[target.Name]) {
 				found["Annotation mark: difference on a ChartStructure"] = true
 			}
 		}

@@ -696,8 +696,13 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 	}
 
 	// Use the full template
+	groupSeparator := ""
+	if rc != nil {
+		groupSeparator = render.GroupSeparatorAttr(rc.Documents, locale)
+	}
 	data := fullTemplateData{
 		Locale:        locale,
+		ContextAttrs:  htmltemplate.HTMLAttr(groupSeparator), //nolint:gosec // G203: built and escaped by render.GroupSeparatorAttr
 		EngineVersion: engineVersion,
 		Title:         opts.Title,
 		IncludeKatex:  opts.Math,
@@ -718,7 +723,7 @@ func WrapDocumentWithContext(content []byte, opts FullDocumentOptions) ([]byte, 
 		buf.WriteString(html.EscapeString(opts.Title))
 		buf.WriteString("</title></head><body><bn-context locale='")
 		buf.WriteString(html.EscapeString(locale))
-		buf.WriteString("'>")
+		buf.WriteString("'" + groupSeparator + ">")
 		buf.Write(content)
 		buf.WriteString("</bn-context></body></html>")
 	}
@@ -786,7 +791,9 @@ func writeAttr(b *strings.Builder, name, value string) {
 
 // fullTemplateData holds data for the full document template.
 type fullTemplateData struct {
-	Locale        string
+	Locale string
+	// ContextAttrs are further attributes of the bn-context, with a leading space.
+	ContextAttrs  htmltemplate.HTMLAttr
 	EngineVersion string
 	Title         string
 	IncludeKatex  bool
@@ -1064,7 +1071,7 @@ var fullDocumentTemplate = mustParseTemplate("fullDocument", `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <bn-context locale='{{.Locale}}'>
+  <bn-context locale='{{.Locale}}'{{.ContextAttrs}}>
 {{.ContextBody}}
   </bn-context>
 </body>

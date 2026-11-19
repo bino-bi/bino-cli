@@ -182,7 +182,7 @@ spec:
     by: scenarios
 ```
 
-A sum row can be the point of an [`Annotation`](/reference/annotation/): its `category` is the name of the `rowGroup`, or the `sumTitle`. A group must not have the name of a row.
+A sum row can be the point of an [`Annotation`](/reference/annotation/): the name of the `rowGroup`, or the `sumTitle`, is its value of the dimension of `level`, so `category` at `level: category`. A group must not have the name of a row. `bino lint` does not know a sum row that only a [dataset default](/reference/dataset/#dataset-defaults) turns on: it then reports [`annotation-point-missing`](/appendix/lint-rules/#annotation-point-missing) for it, while the build draws the mark.
 
 Sum rows, `scenarioLabelPosition`, `referenceLine`, `italicCategories` and the stack keys `percentMark`, `labels`, `thickness` and `totalTitle` need template engine **v1.0.0-next.51** or newer. With an older engine `bino build` and `bino lint` stop with [`structure-sums-engine-version`](/appendix/lint-rules/#structure-sums-engine-version).
 

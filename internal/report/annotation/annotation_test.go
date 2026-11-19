@@ -144,7 +144,7 @@ func TestSumsRows(t *testing.T) {
 	}
 
 	all := SumsOf(json.RawMessage(`{"sums":"all","sumTitle":"World"}`))
-	if all != (Sums{Groups: true, Total: "World"}) {
+	if all != (Sums{Groups: true, Total: "World", Column: "category"}) {
 		t.Fatalf("all: got %+v", all)
 	}
 	for _, p := range []*schema.AnnotationPoint{point("Europe", "ac1"), point("Europe", "ac2"), point("World", "ac1"), point("Spain", "ac1")} {
@@ -157,7 +157,7 @@ func TestSumsRows(t *testing.T) {
 	}
 
 	total := SumsOf(json.RawMessage(`{"sums":"total"}`))
-	if total != (Sums{Total: "SUM_TOTAL"}) {
+	if total != (Sums{Total: "SUM_TOTAL", Column: "category"}) {
 		t.Errorf("total without a title: got %+v", total)
 	}
 	if reason := CheckPoint(schema.KindChartStructure, point("Europe", ""), total.Rows(rows)); reason == "" {
@@ -165,5 +165,24 @@ func TestSumsRows(t *testing.T) {
 	}
 	if got := all.Rows(nil); got != nil {
 		t.Errorf("unknown rows stay unknown, got %v", got)
+	}
+	// a chart without rows draws no sum row
+	if got := all.Rows(Rows{}); len(got) != 0 {
+		t.Errorf("empty rows: got %v", got)
+	}
+
+	// the sum row has the level column of the chart, and group sums exist at level category only
+	byGroup := SumsOf(json.RawMessage(`{"sums":"all","sumTitle":"World","level":"rowGroup"}`))
+	if byGroup != (Sums{Total: "World", Column: "rowGroup"}) {
+		t.Fatalf("level rowGroup: got %+v", byGroup)
+	}
+	if reason := CheckPoint(schema.KindChartStructure, &schema.AnnotationPoint{RowGroup: "World"}, byGroup.Rows(rows)); reason != "" {
+		t.Errorf("rowGroup=World: %s", reason)
+	}
+	if reason := CheckPoint(schema.KindChartStructure, point("World", ""), byGroup.Rows(rows)); reason == "" {
+		t.Error("at level rowGroup the sum row is no category")
+	}
+	if got := SumsOf(json.RawMessage(`{"sums":"groups","level":"subCategory"}`)); got != (Sums{}) {
+		t.Errorf("groups at level subCategory: got %+v", got)
 	}
 }

@@ -390,6 +390,8 @@ func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultiple
 			if place.by != "" {
 				data = annotation.PanelRows(data, place.by, target.Panel)
 			}
+			// each panel is a chart of its own, with its own sum rows
+			data = annotation.SumsOf(m.Base.Spec).Rows(data)
 			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
 				fine = true
 			} else if reason == "" {
