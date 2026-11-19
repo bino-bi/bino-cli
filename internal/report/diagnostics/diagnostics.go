@@ -204,7 +204,7 @@ func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnos
 // the two-row axis labels or the annotation marks of that engine release on an
 // older engine.
 func stackSeriesEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
-	features := config.StackSeriesFeatures(docs)
+	features := config.StackSeriesFeatures(docs, nil)
 	return engineGateDiagnostic(dir, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version")
 }
 

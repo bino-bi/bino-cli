@@ -280,7 +280,7 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 			return nil, errors.New("--mark arrow needs --to")
 		}
 	default:
-		return nil, fmt.Errorf("unknown mark %q: use marker, frame or arrow", data.Mark)
+		return nil, fmt.Errorf("unknown mark %q: use marker, frame or arrow (write a difference by hand)", data.Mark)
 	}
 
 	target, err := parseAnnotationTarget(data.Target, data.Point)

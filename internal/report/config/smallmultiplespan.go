@@ -25,6 +25,16 @@ import (
 // ("charttime", "chartstructure", "any"); it may be nil when the data is not
 // known.
 func SmallMultipleSpanFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
+	return walkedFeatures(docs, defaults, false)
+}
+
+// stackSeriesPrefix marks a feature of the stack series engine release in the
+// findings of the walk, which belong to two engine gates.
+const stackSeriesPrefix = "stack-series\x00"
+
+// walkedFeatures runs the walk and returns the features of one engine gate:
+// the stack series ones, or all others.
+func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]any, stackSeries bool) []string {
 	w := spanWalk{found: map[string]bool{}, bases: map[string]map[string]any{}, defaults: defaults}
 	roots := make([]any, 0, len(docs))
 	for _, doc := range docs {
@@ -42,7 +52,10 @@ func SmallMultipleSpanFeatures(docs []Document, defaults map[string]map[string]m
 	}
 	features := make([]string, 0, len(w.found))
 	for feature := range w.found {
-		features = append(features, feature)
+		name, isStack := strings.CutPrefix(feature, stackSeriesPrefix)
+		if isStack == stackSeries {
+			features = append(features, name)
+		}
 	}
 	sort.Strings(features)
 	return features
@@ -214,6 +227,7 @@ func chartFeatures(kind string, spec map[string]any, found map[string]bool) {
 	if position, _ := spec["axisTitlePosition"].(string); position != "" && position != "left" {
 		found["ChartTime axisTitlePosition"] = true
 	}
+	stackSeriesChart(spec, found)
 }
 
 // styleFeatures notes the new keys of a ComponentStyle content, which is an

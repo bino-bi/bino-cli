@@ -760,6 +760,19 @@ func DefaultsSetCategoryIntervalPosition(results []Result) bool {
 // primary dataset of a chart. The manifests do not show such a default, so
 // the engine gate asks here.
 func SmallMultipleSpanFeatures(docs []config.Document, results []Result) []string {
+	return config.SmallMultipleSpanFeatures(docs, chartDefaults(results))
+}
+
+// StackSeriesFeatures returns what the documents use of the template engine
+// release with stacks by series, in a manifest or through a default of the
+// primary dataset of a chart.
+func StackSeriesFeatures(docs []config.Document, results []Result) []string {
+	return config.StackSeriesFeatures(docs, chartDefaults(results))
+}
+
+// chartDefaults are the chart defaults of the datasets, by dataset name and
+// kind token.
+func chartDefaults(results []Result) map[string]map[string]map[string]any {
 	defaults := make(map[string]map[string]map[string]any, len(results))
 	for _, r := range results {
 		byToken := map[string]map[string]any{}
@@ -775,7 +788,7 @@ func SmallMultipleSpanFeatures(docs []config.Document, results []Result) []strin
 		}
 		defaults[r.Name] = byToken
 	}
-	return config.SmallMultipleSpanFeatures(docs, defaults)
+	return defaults
 }
 
 // TableCalculationSchemeProps returns the Table calculation scheme fields that

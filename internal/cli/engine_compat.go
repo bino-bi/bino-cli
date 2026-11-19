@@ -112,7 +112,7 @@ func smallMultipleSpanEngineFinding(projectRoot string, cfg *pathutil.ProjectCon
 // two-row axis labels or the annotation marks of that engine release on an
 // older engine.
 func stackSeriesEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
-	features := config.StackSeriesFeatures(documents)
+	features := config.StackSeriesFeatures(documents, nil)
 	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version")
 }
 
