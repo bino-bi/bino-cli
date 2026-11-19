@@ -838,13 +838,13 @@ func mergedSpec(doc Document, override json.RawMessage) json.RawMessage {
 
 // sumFieldsOpen reports a spec whose sums, sumTitle or level still has a
 // ${...} placeholder: a param of a referenced document or the index of a panel.
-func sumFieldsOpen(spec json.RawMessage) bool {
+func sumFieldsOpen(cell json.RawMessage) bool {
 	var p struct {
 		Sums     json.RawMessage `json:"sums"`
 		SumTitle json.RawMessage `json:"sumTitle"`
 		Level    json.RawMessage `json:"level"`
 	}
-	if json.Unmarshal(spec, &p) != nil {
+	if json.Unmarshal(cell, &p) != nil {
 		return false
 	}
 	for _, field := range []json.RawMessage{p.Sums, p.SumTitle, p.Level} {
