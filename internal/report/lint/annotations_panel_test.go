@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -158,5 +159,59 @@ func TestAnnotationPanelAmbiguous(t *testing.T) {
 		wantFindings(t, AnnotationPointFindings(docs, rows), "annotation-panel-ambiguous", 1, "warning")
 		// the by panel is checked too: the item has the point, the by panel is one place more
 		wantFindings(t, AnnotationPointFindings([]Document{sm, panelNote(t, "Munich", ""), pageWith(t, "p", smChild)}, rows), "", 0, "")
+	})
+}
+
+// The sum rows of a panel come from the same spec as in the build: the document
+// base.ref names, base.spec on top, then the spec of the item, and under all of
+// it the defaults of the dataset.
+func TestAnnotationPointFindings_PanelSumRows(t *testing.T) {
+	rows := func(binding string) annotation.Rows {
+		if binding != "sales" {
+			return nil
+		}
+		return annotation.Rows{
+			{"region": "North", "category": "Spain", "ac1": 1},
+			{"region": "North", "category": "France", "ac1": 2},
+			{"region": "South", "category": "USA", "subCategory": "East", "ac1": 3},
+		}
+	}
+	world := func(field string) Document {
+		return panelNote(t, "North", `{"`+field+`":"World","part":"total"}`)
+	}
+	find := func(defaults map[string]json.RawMessage, docs ...Document) []Finding {
+		docs = append(docs, pageWith(t, "p", smChild))
+		return AnnotationPointFindingsWithDefaults(docs, rows, func(string) map[string]json.RawMessage { return defaults })
+	}
+	bars := lintDoc(t, "ChartStructure", "bars", `{"level":"category","sums":"total","sumTitle":"World"}`)
+	byDefault := map[string]json.RawMessage{"sums": json.RawMessage(`"total"`), "sumTitle": json.RawMessage(`"World"`)}
+
+	t.Run("base.ref", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","ref":"bars"},"panels":{"by":"region"}}`)
+		wantFindings(t, find(nil, sm, bars, world("category")), "", 0, "")
+	})
+	t.Run("base.spec wins over base.ref", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","ref":"bars","spec":{"sums":"none"}},"panels":{"by":"region"}}`)
+		wantFindings(t, find(nil, sm, bars, world("category")), "annotation-point-missing", 1, "warning")
+	})
+	t.Run("a base.ref that is not there is not judged", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","ref":"gone"},"panels":{"by":"region"}}`)
+		wantFindings(t, find(nil, sm, world("category")), "", 0, "")
+	})
+	t.Run("the spec of an item", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","spec":{"level":"category"}},
+			"panels":{"items":[{"label":"North","spec":{"sums":"total","sumTitle":"World"}}]}}`)
+		wantFindings(t, find(nil, sm, world("category")), "", 0, "")
+	})
+	t.Run("the spec of an item wins over a default", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","spec":{"level":"category"}},
+			"panels":{"items":[{"label":"North","spec":{"sums":"none"}}]}}`)
+		wantFindings(t, find(byDefault, sm, world("category")), "annotation-point-missing", 1, "warning")
+	})
+	t.Run("a base without a spec gets the default", func(t *testing.T) {
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure"},"panels":{"by":"region"}}`)
+		// no level: the dataset fills subCategory, so that is the level of every panel
+		wantFindings(t, find(byDefault, sm, world("subCategory")), "", 0, "")
+		wantFindings(t, find(byDefault, sm, world("category")), "annotation-point-missing", 1, "warning")
 	})
 }

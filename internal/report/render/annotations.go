@@ -462,11 +462,12 @@ func (p *annotationPage) checkEnd(rc *renderCtx, name string, end schema.Annotat
 		if rc.annotationData != nil {
 			rows = rc.annotationData.rows(binding)
 		}
+		// the spec of a panel is noted before the dataset defaults are merged
+		sums := annotation.SumsOf(place.spec, rc.chartStructureDefaults(place.kind, binding)).WithLevelOf(rows)
 		if place.by != "" {
 			rows = annotation.PanelRows(rows, place.by, place.label)
 		}
-		// the spec of a panel is noted before the dataset defaults are merged
-		rows = annotation.SumsOf(place.spec, rc.chartStructureDefaults(place.kind, binding)).Rows(rows)
+		rows = sums.Rows(rows)
 		if reason = annotation.CheckPoint(place.kind, end.Point, rows); reason == "" {
 			return true
 		}

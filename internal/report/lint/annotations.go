@@ -334,6 +334,8 @@ type panelPlace struct {
 	binding string
 	// by is the panels.by column of a by panel, "" for an item.
 	by string
+	// spec is the spec of an item, which goes on top of the base spec.
+	spec json.RawMessage
 }
 
 // panelPlaces lists the panels of one SmallMultiple that have the label, as
@@ -368,7 +370,7 @@ func panelPlaces(m smallMultipleLintSpec, label string, rows func(string) annota
 		if item.Dataset != "" {
 			binding = item.Dataset
 		}
-		places = append(places, panelPlace{binding: binding})
+		places = append(places, panelPlace{binding: binding, spec: item.Spec})
 	}
 	return places, known
 }
@@ -398,12 +400,19 @@ func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultiple
 			if place.binding != "" {
 				data = rows(place.binding)
 			}
+			// each panel is a chart of its own, with its own sum rows. Its spec is the
+			// base spec with the one of the item on top, and its level comes from
+			// the whole dataset.
+			var sums annotation.Sums
+			if m.Base.Kind == schema.KindChartStructure && !m.baseUnknown {
+				sums = annotation.SumsOf(overlaySpec(m.Base.Spec, place.spec), defaults(place.binding)).WithLevelOf(data)
+			}
 			if place.by != "" {
 				data = annotation.PanelRows(data, place.by, target.Panel)
 			}
-			// each panel is a chart of its own, with its own sum rows
-			if m.Base.Kind == schema.KindChartStructure {
-				data = annotation.SumsOf(m.Base.Spec, defaults(place.binding)).Rows(data)
+			data = sums.Rows(data)
+			if m.baseUnknown {
+				data = nil // the spec is not known: judge the fields of the point only
 			}
 			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
 				fine = true
@@ -660,6 +669,14 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 			p.specs[key] = append(p.specs[key], effective)
 			var multiple smallMultipleLintSpec
 			if child.Kind == schema.KindSmallMultiple && json.Unmarshal(effective, &multiple) == nil {
+				// the panels draw the document base.ref names, with base.spec on top
+				if multiple.Base.Ref != "" {
+					if base, ok := refs[annotation.Key(multiple.Base.Kind, multiple.Base.Ref)]; ok {
+						multiple.Base.Spec = mergedSpec(base, multiple.Base.Spec)
+					} else {
+						multiple.baseUnknown = true
+					}
+				}
 				p.multiples[key] = append(p.multiples[key], multiple)
 			}
 		}
@@ -802,6 +819,21 @@ func mergedSpec(doc Document, override json.RawMessage) json.RawMessage {
 		return base
 	}
 	merged, err := ref.MergeSpec(base, override)
+	if err != nil {
+		return base
+	}
+	return merged
+}
+
+// overlaySpec is base with the fields of over on top. One of them can be empty.
+func overlaySpec(base, over json.RawMessage) json.RawMessage {
+	if len(over) == 0 {
+		return base
+	}
+	if len(base) == 0 {
+		return over
+	}
+	merged, err := ref.MergeSpec(base, over)
 	if err != nil {
 		return base
 	}

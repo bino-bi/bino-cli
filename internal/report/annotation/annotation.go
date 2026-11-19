@@ -109,7 +109,8 @@ func SumsOf(componentSpec json.RawMessage, defaults ...map[string]json.RawMessag
 		SumTitle *string `json:"sumTitle"`
 		Level    *string `json:"level"`
 	}
-	if json.Unmarshal(componentSpec, &p) != nil {
+	// a component without a spec of its own still gets the defaults
+	if len(componentSpec) > 0 && json.Unmarshal(componentSpec, &p) != nil {
 		return Sums{}
 	}
 	fields := map[string]**string{"sums": &p.Sums, "sumTitle": &p.SumTitle, "level": &p.Level}
@@ -155,19 +156,31 @@ func sumsOf(sums, sumTitle, chartLevel string) Sums {
 }
 
 // levelOf is the level column of the chart: the one of the spec, or like the
-// engine detects it: the lowest dimension that the rows fill.
+// engine detects it: the lowest dimension that the rows fill, and category
+// when they fill none.
 func (s Sums) levelOf(rows Rows) string {
 	if s.Level != "" {
 		return s.Level
 	}
-	for _, column := range []string{"subCategory", "category"} {
+	for _, column := range []string{"subCategory", "category", "rowGroup"} {
 		for _, row := range rows {
 			if row[column] != nil && text(row[column]) != "" {
 				return column
 			}
 		}
 	}
-	return "rowGroup"
+	return "category"
+}
+
+// WithLevelOf fixes the level of a chart without one from the rows of its
+// dataset. The engine detects the level on the whole dataset, also for a panel
+// that shows a part of it: call this before the rows are cut down to the panel.
+// Rows that are not known leave the level open.
+func (s Sums) WithLevelOf(rows Rows) Sums {
+	if s.Level == "" && len(rows) > 0 {
+		s.Level = s.levelOf(rows)
+	}
+	return s
 }
 
 // Rows adds one row per sum row to the rows of the dataset. A sum row has the
