@@ -27,11 +27,14 @@ type AnnotationManifestData struct {
 	ToPoint     []string // field=value
 	Title       string
 	Text        string
+	// Percent adds the relative difference to a difference.
+	Percent bool
 }
 
 func newAddAnnotationCommand() *cobra.Command { //nolint:gocognit // mirrors the other wizards
 	var (
 		flagMark       string
+		flagPercent    bool
 		flagColor      string
 		flagTarget     string
 		flagPoint      []string
@@ -88,6 +91,7 @@ scenario, row, part.
 				Description: flagDesc,
 				Constraints: flagConstraint,
 				Mark:        flagMark,
+				Percent:     flagPercent,
 				Color:       flagColor,
 				Target:      flagTarget,
 				Point:       flagPoint,
@@ -153,11 +157,12 @@ scenario, row, part.
 				}
 			}
 			if data.Mark == "" {
-				marks := []string{"marker", "frame", "arrow"}
+				marks := []string{"marker", "frame", "arrow", "difference"}
 				idx, err := addPromptSelect("Mark", []SelectOption{
 					{Label: "Numbered marker"},
 					{Label: "Frame around the value"},
 					{Label: "Arrow between two data points"},
+					{Label: "Difference between two values of a chart"},
 				})
 				if err != nil {
 					return canceled(err)
@@ -174,9 +179,9 @@ scenario, row, part.
 					return canceled(err)
 				}
 			}
-			if data.Mark == "arrow" {
+			if data.Mark == "arrow" || data.Mark == "difference" {
 				if data.To == "" {
-					if data.To, err = promptAnnotationEnd(manifests, "End of the arrow"); err != nil {
+					if data.To, err = promptAnnotationEnd(manifests, "End of the arrow, or the second value"); err != nil {
 						return canceled(err)
 					}
 				}
@@ -210,11 +215,12 @@ scenario, row, part.
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().StringVar(&flagMark, "mark", "", "Mark: marker (default), frame or arrow")
+	cmd.Flags().StringVar(&flagMark, "mark", "", "Mark: marker (default), frame, arrow or difference")
+	cmd.Flags().BoolVar(&flagPercent, "percent", false, "For --mark difference: also print the relative difference")
 	cmd.Flags().StringVar(&flagColor, "color", "", "Color name from the bn-annotation style, e.g. negative")
 	cmd.Flags().StringVar(&flagTarget, "target", "", "Target component as Kind:name")
 	cmd.Flags().StringArrayVar(&flagPoint, "point", nil, "Point of the target as field=value (repeatable)")
-	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow as Kind:name")
+	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow or second value of a difference as Kind:name")
 	cmd.Flags().StringArrayVar(&flagToPoint, "to-point", nil, "Point of the end as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Title in the AnnotationList")
 	cmd.Flags().StringVar(&flagText, "text", "", "Text in the AnnotationList (inline Markdown)")
@@ -273,14 +279,17 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 	switch data.Mark {
 	case "", "marker", "frame":
 		if data.To != "" {
-			return nil, errors.New("--to needs --mark arrow")
+			return nil, errors.New("--to needs --mark arrow or --mark difference")
 		}
-	case "arrow":
+	case "arrow", "difference":
 		if data.To == "" {
-			return nil, errors.New("--mark arrow needs --to")
+			return nil, fmt.Errorf("--mark %s needs --to", data.Mark)
 		}
 	default:
-		return nil, fmt.Errorf("unknown mark %q: use marker, frame or arrow (write a difference by hand)", data.Mark)
+		return nil, fmt.Errorf("unknown mark %q: use marker, frame, arrow or difference", data.Mark)
+	}
+	if data.Percent && data.Mark != "difference" {
+		return nil, errors.New("--percent needs --mark difference")
 	}
 
 	target, err := parseAnnotationTarget(data.Target, data.Point)
@@ -299,6 +308,7 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 	if data.Mark != "marker" {
 		spec.Mark = data.Mark
 	}
+	spec.Percent = data.Percent
 	if data.To != "" {
 		to, err := parseAnnotationTarget(data.To, data.ToPoint)
 		if err != nil {

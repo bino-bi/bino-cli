@@ -116,6 +116,14 @@ func stackSeriesEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, d
 	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version")
 }
 
+// stackSeriesDefaultEngineFinding is the same gate for stack fields that only
+// a dataset default sets, which shows after the queries ran.
+func stackSeriesDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	features := dataset.StackSeriesFeatures(documents, results)
+	used := len(config.StackSeriesFeatures(documents, nil)) == 0 && len(features) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.StackSeriesCheck(features), "stack-series-engine-version")
+}
+
 // smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
 // only a dataset default sets, which shows after the queries ran.
 func smallMultipleSpanDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
@@ -192,6 +200,7 @@ func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig,
 		categoryIntervalPositionDefaultEngineFinding,
 		tableCalculationSchemeDefaultEngineFinding,
 		smallMultipleSpanDefaultEngineFinding,
+		stackSeriesDefaultEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)

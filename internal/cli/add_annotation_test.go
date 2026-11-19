@@ -50,12 +50,14 @@ func TestBuildAnnotationDocument_DefaultMarkIsLeftOut(t *testing.T) {
 
 func TestBuildAnnotationDocument_Errors(t *testing.T) {
 	tests := map[string]AnnotationManifestData{
-		"--mark arrow needs --to": {Name: "a", Mark: "arrow", Target: "Table:t"},
-		"--to needs --mark arrow": {Name: "a", To: "Table:t", Target: "Table:t"},
-		"unknown mark":            {Name: "a", Mark: "ring", Target: "Table:t"},
-		"use Kind:name":           {Name: "a", Target: "t"},
-		"use field=value":         {Name: "a", Target: "Table:t", Point: []string{"year=2024"}},
-		"--to-point needs --to":   {Name: "a", Target: "Table:t", ToPoint: []string{"date=2024-01-01"}},
+		"--mark arrow needs --to":           {Name: "a", Mark: "arrow", Target: "Table:t"},
+		"--mark difference needs --to":      {Name: "a", Mark: "difference", Target: "ChartTime:c"},
+		"--to needs --mark arrow":           {Name: "a", To: "Table:t", Target: "Table:t"},
+		"--percent needs --mark difference": {Name: "a", Percent: true, Target: "Table:t"},
+		"unknown mark":                      {Name: "a", Mark: "ring", Target: "Table:t"},
+		"use Kind:name":                     {Name: "a", Target: "t"},
+		"use field=value":                   {Name: "a", Target: "Table:t", Point: []string{"year=2024"}},
+		"--to-point needs --to":             {Name: "a", Target: "Table:t", ToPoint: []string{"date=2024-01-01"}},
 	}
 	for want, data := range tests {
 		if _, err := buildAnnotationDocument(data); err == nil || !strings.Contains(err.Error(), want) {
@@ -79,5 +81,20 @@ func TestSplitPointEntries(t *testing.T) {
 	}
 	if got := splitPointEntries("category=Food, Beverages , scenario=ac1"); got[0] != "category=Food, Beverages" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestBuildAnnotationDocument_Difference(t *testing.T) {
+	doc, err := buildAnnotationDocument(AnnotationManifestData{
+		Name: "growth", Mark: "difference", Percent: true,
+		Target: "ChartTime:sales", Point: []string{"date=2025-01-01"},
+		To: "ChartTime:sales", ToPoint: []string{"date=2026-01-01", "category=Software"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := doc.Spec.(*schema.AnnotationSpec)
+	if spec.Mark != "difference" || !spec.Percent || spec.To == nil || spec.To.Point.Category != "Software" {
+		t.Fatalf("spec = %+v", spec)
 	}
 }
