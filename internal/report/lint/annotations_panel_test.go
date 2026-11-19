@@ -208,6 +208,30 @@ func TestAnnotationPointFindings_PanelSumRows(t *testing.T) {
 			"panels":{"items":[{"label":"North","spec":{"sums":"none"}}]}}`)
 		wantFindings(t, find(byDefault, sm, world("category")), "annotation-point-missing", 1, "warning")
 	})
+	t.Run("the dataset comes from the base document alone", func(t *testing.T) {
+		withData := lintDoc(t, "ChartStructure", "bars", `{"dataset":"sales","level":"category","sums":"total","sumTitle":"World"}`)
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"base":{"kind":"ChartStructure","ref":"bars"},"panels":{"items":[{"label":"North"}]}}`)
+		wantFindings(t, find(nil, sm, withData, world("category")), "", 0, "")
+		nowhere := panelNote(t, "North", `{"category":"Nowhere"}`)
+		wantFindings(t, find(nil, sm, withData, nowhere), "annotation-point-missing", 1, "warning")
+	})
+	t.Run("the label of the panel in the sum title", func(t *testing.T) {
+		total := func(title string) Document {
+			return panelNote(t, "North", `{"category":"`+title+`","part":"total"}`)
+		}
+		inBase := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","spec":{"level":"category","sums":"total","sumTitle":"${panel.label} total"}},"panels":{"by":"region"}}`)
+		wantFindings(t, find(nil, inBase, total("North total")), "", 0, "")
+		wantFindings(t, find(nil, inBase, total("South total")), "annotation-point-missing", 1, "warning")
+		inItem := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","spec":{"level":"category"}},
+			"panels":{"items":[{"label":"North","spec":{"sums":"total","sumTitle":"${panel.value} total"}}]}}`)
+		wantFindings(t, find(nil, inItem, total("North total")), "", 0, "")
+	})
+	t.Run("a sum title with a param is not judged", func(t *testing.T) {
+		withParam := lintDoc(t, "ChartStructure", "bars", `{"level":"category","sums":"total","sumTitle":"${TITLE} total"}`)
+		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure","ref":"bars"},"panels":{"by":"region","param":"TITLE"}}`)
+		// the build fills the param in, lint does not know its value
+		wantFindings(t, find(nil, sm, withParam, panelNote(t, "North", `{"category":"North total","part":"total"}`)), "", 0, "")
+	})
 	t.Run("a base without a spec gets the default", func(t *testing.T) {
 		sm := lintDoc(t, "SmallMultiple", "sm", `{"dataset":"sales","base":{"kind":"ChartStructure"},"panels":{"by":"region"}}`)
 		// no level: the dataset fills subCategory, so that is the level of every panel

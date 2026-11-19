@@ -795,6 +795,17 @@ func joinFilters(parts ...string) string {
 	return "(" + strings.Join(kept, ") AND (") + ")"
 }
 
+// SmallMultiplePanelSpec fills the label of a panel into the spec of its chart:
+// ${panel.label} and ${panel.value}, as the renderer does. ${panel.index} stays,
+// it is only known with the order of the panels.
+func SmallMultiplePanelSpec(spec json.RawMessage, label string) json.RawMessage {
+	if !bytes.Contains(spec, []byte("${panel.")) {
+		return spec
+	}
+	escaped := jsonEscape(label)
+	return json.RawMessage(strings.NewReplacer("${panel.label}", escaped, "${panel.value}", escaped).Replace(string(spec)))
+}
+
 // replacePanelPlaceholders replaces ${panel.label}, ${panel.value} and
 // ${panel.index} (1-based); escape makes a value safe for the target text.
 func replacePanelPlaceholders(text string, p panel, i int, escape func(string) string) string {

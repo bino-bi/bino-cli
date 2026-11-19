@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -396,23 +397,33 @@ func panelPointProblem(target schema.AnnotationTarget, multiples []smallMultiple
 			ambiguous = true
 		}
 		for _, place := range places {
-			var data annotation.Rows
-			if place.binding != "" {
-				data = rows(place.binding)
+			// The spec of the panel as the build has it: the base, the item on
+			// top, and the label of the panel filled in.
+			cell := render.SmallMultiplePanelSpec(overlaySpec(m.Base.Spec, place.spec), target.Panel)
+			binding := place.binding
+			if binding == "" {
+				binding = annotation.Binding(cell) // the dataset can come from the base alone
 			}
-			// each panel is a chart of its own, with its own sum rows. Its spec is the
-			// base spec with the one of the item on top, and its level comes from
-			// the whole dataset.
+			var data annotation.Rows
+			if binding != "" {
+				data = rows(binding)
+			}
+			// Each panel is a chart of its own, with its own sum rows, and its
+			// level comes from the whole dataset. A base document that is not
+			// there, or a sum field with a param that only the build fills in:
+			// the spec is not known, so only the fields of the point are judged.
+			isStructure := m.Base.Kind == schema.KindChartStructure
+			unknown := m.baseUnknown || (isStructure && sumFieldsOpen(cell))
 			var sums annotation.Sums
-			if m.Base.Kind == schema.KindChartStructure && !m.baseUnknown {
-				sums = annotation.SumsOf(overlaySpec(m.Base.Spec, place.spec), defaults(place.binding)).WithLevelOf(data)
+			if isStructure && !unknown {
+				sums = annotation.SumsOf(cell, defaults(binding)).WithLevelOf(data)
 			}
 			if place.by != "" {
 				data = annotation.PanelRows(data, place.by, target.Panel)
 			}
 			data = sums.Rows(data)
-			if m.baseUnknown {
-				data = nil // the spec is not known: judge the fields of the point only
+			if unknown {
+				data = nil
 			}
 			if r := annotation.CheckPoint(m.Base.Kind, target.Point, data); r == "" {
 				fine = true
@@ -823,6 +834,25 @@ func mergedSpec(doc Document, override json.RawMessage) json.RawMessage {
 		return base
 	}
 	return merged
+}
+
+// sumFieldsOpen reports a spec whose sums, sumTitle or level still has a
+// ${...} placeholder: a param of a referenced document or the index of a panel.
+func sumFieldsOpen(spec json.RawMessage) bool {
+	var p struct {
+		Sums     json.RawMessage `json:"sums"`
+		SumTitle json.RawMessage `json:"sumTitle"`
+		Level    json.RawMessage `json:"level"`
+	}
+	if json.Unmarshal(spec, &p) != nil {
+		return false
+	}
+	for _, field := range []json.RawMessage{p.Sums, p.SumTitle, p.Level} {
+		if bytes.Contains(field, []byte("${")) {
+			return true
+		}
+	}
+	return false
 }
 
 // overlaySpec is base with the fields of over on top. One of them can be empty.
