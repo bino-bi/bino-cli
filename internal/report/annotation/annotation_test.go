@@ -39,7 +39,8 @@ func TestCheckPoint(t *testing.T) {
 		{"a tree has no data points", schema.KindTree, &schema.AnnotationPoint{Part: "element"}, nil, "no data points"},
 
 		{"unknown data is judged by fields only", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01"}, nil, ""},
-		{"a time chart has no category", schema.KindChartTime, &schema.AnnotationPoint{Category: "x"}, nil, "has no category"},
+		{"a time chart has no row group", schema.KindChartTime, &schema.AnnotationPoint{RowGroup: "x"}, nil, "has no rowGroup"},
+		{"a time chart has a category: the series of a stack", schema.KindChartTime, &schema.AnnotationPoint{Category: "x"}, nil, ""},
 		{"a scatter chart has no scenario", schema.KindChartScatter, &schema.AnnotationPoint{Category: "x", Scenario: "ac1"}, nil, "has no scenario"},
 		{"a table has no label part", schema.KindTable, &schema.AnnotationPoint{Category: "x", Part: "label"}, nil, "no part"},
 

@@ -1,6 +1,6 @@
 ---
 title: Annotation
-description: Point at a number with a numbered marker, a frame or an arrow.
+description: Point at a number with a numbered marker, a frame, an arrow or a difference.
 ---
 
 An `Annotation` points at a component, or at one data point of it, and draws a mark over the page:
@@ -55,7 +55,7 @@ A field left out is a wildcard. The point must match **exactly one** rendered el
 
 | Kind | Fields of a data point |
 | --- | --- |
-| `ChartTime` | `date` and `scenario`. The chart adds up the rows of a period, so it knows no other dimension. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
+| `ChartTime` | `date` and `scenario`. With `stack.by: dimensions` a segment also has `category`, the name of its series. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
 | `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. |
 | `ChartScatter`, `ChartBubble` | The dimensions of the point level, the series level and the facet level. |
 | `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
@@ -150,7 +150,50 @@ spec:
     point: { date: "2028-01-01", part: total }
 ```
 
-Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow` and not allowed for the other marks.
+Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow` and `mark: difference` and not allowed for the other marks.
+
+### Difference between two values
+
+`mark: difference` shows how far two values of a chart are apart. A thin line runs from the level of each value to a bar behind the second one, and the label is `to` minus `target`. Needs template engine v1.0.0-next.49.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: Annotation
+metadata:
+  name: plan_growth
+spec:
+  mark: difference
+  percent: true
+  target:
+    kind: ChartTime
+    name: sales_by_area_chart
+    point: { date: "2025-01-01" }
+  to:
+    kind: ChartTime
+    name: sales_by_area_chart
+    point: { date: "2026-01-01" }
+```
+
+- A point of a stacked chart without `category` means the sum of the stack. With `category` it means one series.
+- `percent: true` adds the relative difference in brackets: `+12.2 (+12%)`. `highlight: true` draws a frame around it.
+- `digits` sets the digits of the absolute difference. Default: 1.
+- The bar has the color `positive` for a higher value and `negative` for a lower one. `sentiment: good-down` turns that around, for costs. A `color` on the annotation wins.
+- A difference has no part: the point always means the bars.
+
+### Frame with its own text
+
+A `frame` with `markText` prints that text on the target and draws the frame around it. Use it for a number the chart does not show, for example a share. Needs template engine v1.0.0-next.49.
+
+```yaml
+spec:
+  mark: frame
+  markText: "61%"
+  target:
+    kind: ChartTime
+    name: sales_by_area_chart
+    point: { date: "2025-12-01", category: Software }
+```
 
 ### One panel of a SmallMultiple
 
@@ -202,7 +245,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 
 ## Limits
 
-- A child of a `Grid` or a `Tree` has no slot of its own and cannot be a target yet. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one. A panel of a `SmallMultiple` can be a target, see [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple).
+- A direct child of a `Grid` can be a target. A child of a `Tree`, and a component in a card that sits in a `Grid`, cannot. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one. A panel of a `SmallMultiple` can be a target, see [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple).
 - A `ScreenshotArtefact` of a single component does not show the marks: they are drawn over the page and not in the component.
 - A component embedded in the Markdown of a `DocumentArtefact` has no marks.
 - The presentation view shows annotations like `bino preview`.
@@ -212,13 +255,18 @@ The check does not look at the `filter` of a component, it skips a component tha
 
 | Attribute | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `spec.mark` | string | no | `marker` | `marker`, `frame` or `arrow`. |
+| `spec.mark` | string | no | `marker` | `marker`, `frame`, `arrow` or `difference`. |
+| `spec.markText` | string | no | - | For `frame`: a text printed on the target, with the frame around it. |
+| `spec.percent` | boolean | no | `false` | For `difference`: also print the relative difference. |
+| `spec.digits` | integer | no | `1` | For `difference`: digits of the absolute difference. |
+| `spec.sentiment` | string | no | `good-up` | For `difference`: `good-up` or `good-down`. |
+| `spec.highlight` | boolean | no | `false` | For `difference` with `percent`: a frame around the relative difference. |
 | `spec.color` | string | no | main color | Name of a color in the `bn-annotation` style. |
 | `spec.target.kind` | string | yes | - | `ChartTime`, `ChartStructure`, `ChartScatter`, `ChartBubble`, `ChartBullet`, `Table`, `Text`, `Tree`, `Grid` or `SmallMultiple`. |
 | `spec.target.name` | string | yes | - | Name of the component. |
 | `spec.target.panel` | string | no | - | Label of one panel. Only with `kind: SmallMultiple`. See [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple). |
 | `spec.target.point` | object | no | whole component | See [The point](#the-point). |
-| `spec.to` | object | for `arrow` | - | The end of the arrow, the same shape as `target`. |
+| `spec.to` | object | for `arrow` and `difference` | - | The end of the arrow or the second value of the difference, the same shape as `target`. |
 | `spec.title` | string | no | - | Shown in bold in the list. |
 | `spec.text` | string | no | - | Inline Markdown shown in the list. |
 

@@ -395,3 +395,50 @@ func TestAnnotations_MarkupInTextIsEscapedInTheAttribute(t *testing.T) {
 		t.Fatalf("items = %+v", items)
 	}
 }
+
+func TestAnnotations_GridChildIsATarget(t *testing.T) {
+	grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":0,"column":0,"kind":"ChartTime","ref":"trend"}]}}`
+	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, missingPoint, annotationTestPage(grid+","+annotationsAll))
+	if !regexp.MustCompile(`<div slot='[^']*'[^>]*data-bino-annotation-target='t1'`).MatchString(out) {
+		t.Fatalf("no target on the grid cell:\n%s", out)
+	}
+	// the point check runs for a grid child too: the missing point gets no mark
+	if items := layerItems(t, out); len(items) != 1 || items[0].Label != "1" || items[0].Target != "t1" {
+		t.Fatalf("layer = %+v", items)
+	}
+}
+
+func TestAnnotations_ACardInAGridHasNoTargets(t *testing.T) {
+	grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"rowHeaders":["r"],"columnHeaders":["c"],"children":[{"row":0,"column":0,"kind":"LayoutCard","spec":{"children":[` + chartRefChild + `]}}]}}`
+	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, annotationTestPage(grid))
+	if strings.Contains(out, "data-bino-annotation-target") || strings.Contains(out, "bn-annotation-layer") {
+		t.Fatalf("a card in a grid must not count as a slot:\n%s", out)
+	}
+}
+
+func TestAnnotations_DifferenceAndFrameText(t *testing.T) {
+	difference := annotationDocument("growth", `{"mark":"difference","percent":true,"highlight":true,"digits":0,"sentiment":"good-down","target":{"kind":"ChartTime","name":"trend","point":{"date":"2024-01-01"}},"to":{"kind":"ChartTime","name":"trend","point":{"date":"2025-01-01"}}}`)
+	share := annotationDocument("share", `{"mark":"frame","markText":"61%","target":{"kind":"ChartTime","name":"trend","point":{"date":"2025-01-01"}}}`)
+	docs := []config.Document{chartDoc, difference, share, annotationTestPage(chartRefChild)}
+
+	result, _, err := GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, salesData, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.49", nil, nil, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := layerItems(t, string(result.HTML))
+	if len(items) != 2 {
+		t.Fatalf("layer = %+v", items)
+	}
+	d := items[0]
+	if d.Mark != "difference" || !d.Percent || !d.Highlight || d.Digits == nil || *d.Digits != 0 || d.Sentiment != "good-down" || d.ToPoint.Date != "2025-01-01" {
+		t.Errorf("difference = %+v", d)
+	}
+	if f := items[1]; f.Mark != "frame" || f.Text != "61%" || f.Percent {
+		t.Errorf("frame = %+v", f)
+	}
+
+	_, _, err = GenerateHTMLFromDocumentsWithDatasets(context.Background(), docs, salesData, "en", "", "", ModeBuild, nil, nil, "v1.0.0-next.48", nil, nil, "", "", "")
+	if err == nil || !strings.Contains(err.Error(), "stack-series-engine-version") {
+		t.Errorf("an older engine must fail the render, got %v", err)
+	}
+}

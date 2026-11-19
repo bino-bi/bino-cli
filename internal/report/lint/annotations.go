@@ -19,7 +19,7 @@ import (
 var annotationTargetMissing = Rule{
 	ID:          "annotation-target-missing",
 	Name:        "Annotation Target Missing",
-	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A child of a Grid or a Tree cannot be a target. A panel must be a panel of the SmallMultiple.",
+	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A direct child of a Grid can be a target. A child of a Tree and a component in a card of a Grid cannot. A panel must be a panel of the SmallMultiple.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		views := annotationViews(docs)
 		var findings []Finding
@@ -57,7 +57,7 @@ var annotationTargetMissing = Rule{
 				}
 				message := fmt.Sprintf("%s %q is not on any rendered page", end.target.Kind, end.target.Name)
 				if nested {
-					message = fmt.Sprintf("%s %q sits inside a Grid or a Tree: grid and tree children are not supported yet", end.target.Kind, end.target.Name)
+					message = fmt.Sprintf("%s %q sits inside a Tree or inside a card of a Grid: only a direct child of a Grid can be a target there", end.target.Kind, end.target.Name)
 				}
 				findings = append(findings, Finding{
 					RuleID:   "annotation-target-missing",
@@ -645,6 +645,9 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 		if child.Kind == schema.KindGrid || child.Kind == schema.KindTree || child.Kind == schema.KindSmallMultiple {
 			p.addNested(effective)
 		}
+		if child.Kind == schema.KindGrid {
+			p.addGridChildren(effective, ctx, refs)
+		}
 	}
 }
 
@@ -700,6 +703,43 @@ func overrides(childSpec json.RawMessage, field string) bool {
 	}
 	_, ok := fields[field]
 	return ok
+}
+
+// addGridChildren records the direct children of a Grid as slots: each of them
+// can be a target. A card in a cell and what sits in it stay nested.
+func (p *annotationPageView) addGridChildren(raw json.RawMessage, ctx *spec.ConstraintContext, refs map[string]Document) {
+	var grid struct {
+		Children []layoutChildSpec `json:"children"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &grid) != nil {
+		return
+	}
+	for _, child := range grid.Children {
+		if child.Kind == schema.KindLayoutCard || !childIncluded(child, ctx) {
+			continue
+		}
+		name := child.Ref
+		if name == "" {
+			name = child.Metadata.Name
+		}
+		if name == "" {
+			continue
+		}
+		key := annotation.Key(child.Kind, name)
+		referenced, isRef := refs[key]
+		if child.Ref != "" && !isRef {
+			continue
+		}
+		effective := child.Spec
+		if child.Ref != "" {
+			effective = mergedSpec(referenced, child.Spec)
+		}
+		p.slots[key] = true
+		p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
+		if child.Kind == schema.KindGrid {
+			p.addGridChildren(effective, ctx, refs)
+		}
+	}
 }
 
 // addNested records every component named below a Grid or a Tree.

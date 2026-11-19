@@ -92,7 +92,7 @@ func Binding(componentSpec json.RawMessage) string {
 // pointFields are the point fields the engine reports per kind. A kind that is
 // missing here has no data points at all.
 var pointFields = map[string][]string{
-	schema.KindChartTime:      {"date", "scenario"},
+	schema.KindChartTime:      {"date", "scenario", "category"},
 	schema.KindChartStructure: {"rowGroup", "category", "subCategory", "scenario"},
 	schema.KindChartScatter:   {"rowGroup", "category", "subCategory"},
 	schema.KindChartBubble:    {"rowGroup", "category", "subCategory"},

@@ -191,7 +191,7 @@ type RuleSetSpec struct {
 
 // AnnotationSpec represents the spec section of an Annotation manifest.
 type AnnotationSpec struct {
-	// Mark is marker (default), frame or arrow.
+	// Mark is marker (default), frame, arrow or difference.
 	Mark string `yaml:"mark,omitempty" json:"mark,omitempty"`
 
 	// Color names a color of the bn-annotation style section.
@@ -200,8 +200,23 @@ type AnnotationSpec struct {
 	// Target is what the mark points at.
 	Target AnnotationTarget `yaml:"target" json:"target"`
 
-	// To is the end of an arrow.
+	// To is the end of an arrow, or the second value of a difference.
 	To *AnnotationTarget `yaml:"to,omitempty" json:"to,omitempty"`
+
+	// MarkText is a text a frame is drawn around, on the target.
+	MarkText string `yaml:"markText,omitempty" json:"markText,omitempty"`
+
+	// Percent adds the relative difference to a difference.
+	Percent bool `yaml:"percent,omitempty" json:"percent,omitempty"`
+
+	// Digits are the digits of the absolute difference. Nil means 1.
+	Digits *int `yaml:"digits,omitempty" json:"digits,omitempty"`
+
+	// Sentiment of a difference is good-up (default) or good-down.
+	Sentiment string `yaml:"sentiment,omitempty" json:"sentiment,omitempty"`
+
+	// Highlight draws a frame around the relative difference.
+	Highlight bool `yaml:"highlight,omitempty" json:"highlight,omitempty"`
 
 	// Title is shown in bold in the AnnotationList.
 	Title string `yaml:"title,omitempty" json:"title,omitempty"`

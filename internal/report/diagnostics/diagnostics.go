@@ -124,6 +124,9 @@ func Collect(ctx context.Context, dir string, opts Options) []Diagnostic {
 	if d, ok := gridCellLayoutEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
+	if d, ok := stackSeriesEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
+		diagnostics = append(diagnostics, d)
+	}
 	if d, ok := smallMultipleSpanEngineDiagnostic(dir, docs); ok && !runner.Skip(d.Code) {
 		diagnostics = append(diagnostics, d)
 	}
@@ -195,6 +198,14 @@ func annotationEngineDiagnostic(dir string, docs []config.Document) (Diagnostic,
 func gridCellLayoutEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
 	check := engine.GridCellLayoutCheck(config.UsesSmallMultipleCard(docs))
 	return engineGateDiagnostic(dir, config.UsesGridCellLayout(docs), check, "grid-cell-layout-engine-version")
+}
+
+// stackSeriesEngineDiagnostic reports a project that uses the stack fields,
+// the two-row axis labels or the annotation marks of that engine release on an
+// older engine.
+func stackSeriesEngineDiagnostic(dir string, docs []config.Document) (Diagnostic, bool) {
+	features := config.StackSeriesFeatures(docs)
+	return engineGateDiagnostic(dir, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version")
 }
 
 // smallMultipleSpanEngineDiagnostic reports a project that uses cell spans,

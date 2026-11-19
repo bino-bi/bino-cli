@@ -82,9 +82,9 @@ func TestAnnotationPointFindings_Panel(t *testing.T) {
 		}
 	})
 	t.Run("a field the base kind does not have", func(t *testing.T) {
-		findings := run(panelNote(t, "Berlin", `{"category":"x"}`))
+		findings := run(panelNote(t, "Berlin", `{"rowGroup":"x"}`))
 		wantFindings(t, findings, "annotation-point-missing", 1, "warning")
-		if !strings.Contains(findings[0].Message, "a data point of ChartTime has no category") {
+		if !strings.Contains(findings[0].Message, "a data point of ChartTime has no rowGroup") {
 			t.Errorf("message = %s", findings[0].Message)
 		}
 	})

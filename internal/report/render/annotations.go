@@ -61,6 +61,13 @@ type annotationLayerItem struct {
 	Point   *schema.AnnotationPoint `json:"point,omitempty"`
 	To      string                  `json:"to,omitempty"`
 	ToPoint *schema.AnnotationPoint `json:"toPoint,omitempty"`
+	// Text is the text a frame is drawn around.
+	Text string `json:"text,omitempty"`
+	// Percent, Digits, Sentiment and Highlight belong to a difference.
+	Percent   bool   `json:"percent,omitempty"`
+	Digits    *int   `json:"digits,omitempty"`
+	Sentiment string `json:"sentiment,omitempty"`
+	Highlight bool   `json:"highlight,omitempty"`
 }
 
 // annotationListItem is one entry of the items attribute of bn-annotation-list.
@@ -170,16 +177,68 @@ func (rc *renderCtx) withAnnotationPage() *renderCtx {
 	return &c
 }
 
-// withoutAnnotationPage ends the mark collection below a Grid or a Tree. Their
-// children cannot be targets, and a card inside one must not make its own an
+// withoutAnnotationPage ends the mark collection below a Tree. Its children
+// cannot be targets, and a card inside one must not make its own an
 // exception: lint reports them all alike.
 func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
+	if rc.annotationPage == nil && rc.gridPage == nil {
+		return rc
+	}
+	c := *rc
+	c.annotationPage = nil
+	c.gridPage = nil
+	return &c
+}
+
+// forGrid ends the mark collection for what sits deeper, but keeps the page
+// for the direct children of the Grid: each of them can be a target. A card
+// in a cell stays without targets.
+func (rc *renderCtx) forGrid() *renderCtx {
 	if rc.annotationPage == nil {
 		return rc
 	}
 	c := *rc
 	c.annotationPage = nil
+	c.gridPage = rc.annotationPage
 	return &c
+}
+
+// gridChildKey is the component a Grid child renders.
+func gridChildKey(child gridChild) string {
+	name := child.Ref
+	if name == "" {
+		name = child.Metadata.Name
+	}
+	return annotation.Key(child.Kind, name)
+}
+
+// noteGridAnnotationSpec keeps the effective spec of a Grid child an
+// annotation points at, for the point check.
+func (rc *renderCtx) noteGridAnnotationSpec(child gridChild, effectiveSpec json.RawMessage) {
+	page := rc.gridPage
+	if page == nil || child.annotationTarget != "" || child.Kind == schema.KindLayoutCard {
+		return
+	}
+	if key := gridChildKey(child); page.wanted[key] {
+		page.places[key] = append(page.places[key], annotationPlace{kind: child.Kind, spec: effectiveSpec})
+	}
+}
+
+// gridAnnotationTarget gives a Grid child that an annotation points at a
+// target id that is unique on the page. It is "" for a child without one.
+func (rc *renderCtx) gridAnnotationTarget(child gridChild) string {
+	page := rc.gridPage
+	if page == nil {
+		return ""
+	}
+	key := gridChildKey(child)
+	if !page.wanted[key] {
+		return ""
+	}
+	page.nextID++
+	id := fmt.Sprintf("t%d", page.nextID)
+	page.targets[key] = append(page.targets[key], id)
+	return id
 }
 
 // forSmallMultiple ends the mark collection like withoutAnnotationPage, but
@@ -190,6 +249,7 @@ func (rc *renderCtx) forSmallMultiple() *renderCtx {
 	}
 	c := *rc
 	c.annotationPage = nil
+	c.gridPage = nil
 	c.panelPage = rc.annotationPage
 	return &c
 }
@@ -441,6 +501,13 @@ func (p *annotationPage) layerItems(labels map[string]string, placed map[string]
 				Color:  a.spec.Color,
 				Target: ids[min(i, len(ids)-1)],
 				Point:  a.spec.Target.Point,
+				Text:   a.spec.MarkText,
+			}
+			if a.spec.Mark == "difference" {
+				item.Percent = a.spec.Percent
+				item.Digits = a.spec.Digits
+				item.Sentiment = a.spec.Sentiment
+				item.Highlight = a.spec.Highlight
 			}
 			if item.Mark == "" {
 				item.Mark = "marker"

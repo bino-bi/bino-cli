@@ -67,6 +67,7 @@ func featureGateFindings(projectRoot string, cfg *pathutil.ProjectConfig, docume
 		{"annotation-engine-version", annotationEngineFinding},
 		{"grid-cell-layout-engine-version", gridCellLayoutEngineFinding},
 		{"small-multiple-span-engine-version", smallMultipleSpanEngineFinding},
+		{"stack-series-engine-version", stackSeriesEngineFinding},
 	}
 	for _, g := range gates {
 		finding, fatal := g.check(projectRoot, cfg, documents)
@@ -105,6 +106,14 @@ func gridCellLayoutEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig
 func smallMultipleSpanEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
 	features := config.SmallMultipleSpanFeatures(documents, nil)
 	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.SmallMultipleSpanCheck(features), "small-multiple-span-engine-version")
+}
+
+// stackSeriesEngineFinding reports a project that uses the stack fields, the
+// two-row axis labels or the annotation marks of that engine release on an
+// older engine.
+func stackSeriesEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	features := config.StackSeriesFeatures(documents)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.StackSeriesCheck(features), "stack-series-engine-version")
 }
 
 // smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
