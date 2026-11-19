@@ -121,6 +121,9 @@ type renderCtx struct {
 	// panelPage is the annotation page while a SmallMultiple renders: its
 	// panels can be targets, the components in them cannot.
 	panelPage *annotationPage
+	// gridPage is the annotation page while a Grid renders: a direct child of
+	// the Grid can be a target.
+	gridPage *annotationPage
 	// annotationData finds the rows behind a component for the point check.
 	annotationData *annotationData
 }
@@ -1154,7 +1157,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
-		htmlOut, err := renderGridComponent(s, rc.withoutAnnotationPage())
+		htmlOut, err := renderGridComponent(s, rc.forGrid())
 		if err != nil {
 			return "", false, fmt.Errorf("render grid child: %w", err)
 		}
@@ -1598,7 +1601,11 @@ func renderGridComponent(s gridSpec, rc *renderCtx) (string, error) {
 		cells.WriteString("'")
 		child.writeCellAttrs(&cells)
 		if child.Kind != "LayoutCard" {
-			writeAttr(&cells, "data-bino-annotation-target", child.annotationTarget)
+			target := child.annotationTarget
+			if target == "" {
+				target = rc.gridAnnotationTarget(child)
+			}
+			writeAttr(&cells, "data-bino-annotation-target", target)
 		}
 		cells.WriteString(">")
 		cells.WriteString(contents[i])
@@ -1644,6 +1651,7 @@ func renderGridChild(child gridChild, rc *renderCtx) (string, error) {
 		return "", fmt.Errorf("apply dataset defaults to %s grid child: %w", child.Kind, err)
 	}
 	rc.recordDataRefs(effectiveSpec)
+	rc.noteGridAnnotationSpec(child, effectiveSpec)
 
 	switch child.Kind {
 	case "Text":

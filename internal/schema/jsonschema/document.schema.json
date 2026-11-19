@@ -2359,9 +2359,9 @@
       "properties": {
         "mark": {
           "type": "string",
-          "enum": ["marker", "frame", "arrow"],
+          "enum": ["marker", "frame", "arrow", "difference"],
           "default": "marker",
-          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to."
+          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to. difference: the difference of two values of a chart, from target to to, with a reference line, a bar and the value 'to minus target' as label; a point of a stacked chart without category means the sum of the stack. difference needs template engine v1.0.0-next.49 or newer."
         },
         "color": {
           "type": "string",
@@ -2374,7 +2374,34 @@
         },
         "to": {
           "$ref": "#/$defs/annotationTarget",
-          "description": "The end of an arrow. Required for mark: arrow, not allowed otherwise. Must be on the same page as target."
+          "description": "The end of an arrow, or the second value of a difference. Required for mark: arrow and mark: difference, not allowed otherwise. Must be on the same page as target."
+        },
+        "markText": {
+          "type": "string",
+          "description": "For mark: frame. A short text that is printed on the target with the frame around it, for example a share that the chart does not show. Needs template engine v1.0.0-next.49 or newer."
+        },
+        "percent": {
+          "type": "boolean",
+          "default": false,
+          "description": "For mark: difference. Also prints the relative difference in brackets, for example +12.2 (+12%)."
+        },
+        "digits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "default": 1,
+          "description": "For mark: difference. Digits of the absolute difference."
+        },
+        "sentiment": {
+          "type": "string",
+          "enum": ["good-up", "good-down"],
+          "default": "good-up",
+          "description": "For mark: difference. good-up: a higher value is good and the bar has the color positive, a lower one negative. good-down: the other way round. A color set on the annotation wins."
+        },
+        "highlight": {
+          "type": "boolean",
+          "default": false,
+          "description": "For mark: difference with percent. Draws a frame around the relative difference."
         },
         "title": {
           "type": "string",
@@ -2387,12 +2414,12 @@
       },
       "dependentSchemas": {
         "mark": {
-          "if": { "properties": { "mark": { "const": "arrow" } } },
+          "if": { "properties": { "mark": { "enum": ["arrow", "difference"] } } },
           "then": { "required": ["to"] }
         },
         "to": {
           "required": ["mark"],
-          "properties": { "mark": { "const": "arrow" } }
+          "properties": { "mark": { "enum": ["arrow", "difference"] } }
         }
       },
       "additionalProperties": false
@@ -4232,8 +4259,8 @@
         },
         "axisLabelsMode": {
           "type": "string",
-          "enum": ["smart", "long", "short"],
-          "description": "Axis labels mode. 'smart' only displays relevant information when a change/transition occurs (e.g., year displayed only on Jan 1st). 'long' and 'short' use respective date styles."
+          "enum": ["smart", "long", "short", "two-row"],
+          "description": "Axis labels mode. 'smart' only displays relevant information when a change/transition occurs (e.g., year displayed only on Jan 1st). 'long' and 'short' use respective date styles. 'two-row' prints short labels and puts the parent period (the year of a month, quarter or week) in a second row, under the first period and where it changes; with scenarioSwitch the scenario names stand in the same row. 'two-row' needs template engine v1.0.0-next.49 or newer."
         },
         "dateInterval": {
           "type": "string",
@@ -4341,7 +4368,7 @@
         "scenarioSwitch": {
           "type": "boolean",
           "default": false,
-          "description": "For a series that changes its scenario along the time axis, for example AC up to this year and PL after it. A scenario that only has values where the first scenario has none is drawn in its place, with value labels. A vertical line marks the change and the scenario names stand under the axis. Variances of one type over the same reference share one row. Bar mode without stack only."
+          "description": "For a series that changes its scenario along the time axis, for example AC up to this year and PL after it. A scenario that only has values where the first scenario has none is drawn in its place, with value labels. A vertical line marks the change and the scenario names stand under the axis. Variances of one type over the same reference share one row. A chart with one scenario gets the name of that scenario under the axis. Bar mode, without stack or with stack.by 'dimensions'."
         },
         "axisTitlePosition": {
           "type": "string",
@@ -4394,7 +4421,7 @@
             "by": {
               "type": "string",
               "enum": ["scenarios", "dimensions"],
-              "description": "Stacking dimension. 'scenarios' stacks scenario slots end-to-end. 'dimensions' draws only the first scenario, one segment per period; further scenarios are dropped with a warning."
+              "description": "Stacking dimension. 'scenarios' stacks up to four scenario slots end-to-end. 'dimensions' stacks one segment per value of the dataset column 'category', in the order of first appearance, with no limit on the number of series; it draws the first scenario, and with scenarioSwitch the scenario that has values in the period. Series from 'category' need template engine v1.0.0-next.49 or newer; older engines draw one segment per period."
             },
             "mode": {
               "type": "string",
@@ -4407,6 +4434,23 @@
               "enum": ["asc", "desc", "dataset"],
               "default": "dataset",
               "description": "Segment order within each stack."
+            },
+            "notation": {
+              "type": "string",
+              "enum": ["none", "scenario"],
+              "default": "none",
+              "description": "'scenario': a segment takes the look of its scenario. A forecast segment is hatched over the shade of its series, a plan segment is outlined, and the first series takes the fill of the scenario. Needs template engine v1.0.0-next.49 or newer."
+            },
+            "legend": {
+              "type": "string",
+              "enum": ["left", "right", "both", "none"],
+              "default": "left",
+              "description": "Where the series names stand: left of the first column, right of the last column with a value, at both, or nowhere. Needs template engine v1.0.0-next.49 or newer."
+            },
+            "percentMark": {
+              "type": "boolean",
+              "default": false,
+              "description": "With mode 'relative': the shares are plain numbers without the % sign, with dataFormatDigitsPercent digits, and one '100%' mark stands at the upper end of the stack on the side of the series names. Needs template engine v1.0.0-next.49 or newer."
             }
           }
         }

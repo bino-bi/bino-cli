@@ -157,9 +157,12 @@ type textSpec struct {
 
 // stackConfig defines the stacking configuration for chart components.
 type stackConfig struct {
-	By    string `json:"by"`
-	Mode  string `json:"mode,omitempty"`
-	Order string `json:"order,omitempty"`
+	By          string `json:"by"`
+	Mode        string `json:"mode,omitempty"`
+	Order       string `json:"order,omitempty"`
+	Notation    string `json:"notation,omitempty"`
+	Legend      string `json:"legend,omitempty"`
+	PercentMark bool   `json:"percentMark,omitempty"`
 }
 
 // chartStructureSpec defines the structure for ChartStructure components.

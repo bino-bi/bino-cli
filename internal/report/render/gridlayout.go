@@ -25,6 +25,11 @@ func checkGridCellLayoutEngine(docs []config.Document, engineVersion string) err
 // would ignore them. The dataset results show the chart fields that a dataset
 // default sets.
 func checkSmallMultipleSpanEngine(docs []config.Document, results []dataset.Result, engineVersion string) error {
+	if stack := dataset.StackSeriesFeatures(docs, results); len(stack) > 0 {
+		if err := engine.StackSeriesCheck(stack)(engineVersion); err != nil {
+			return fmt.Errorf("render: stack-series-engine-version: %w", err)
+		}
+	}
 	features := dataset.SmallMultipleSpanFeatures(docs, results)
 	if len(features) == 0 {
 		return nil

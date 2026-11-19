@@ -86,14 +86,19 @@ func TestAnnotationTargetMissing(t *testing.T) {
 			t.Errorf("path = %s", findings[0].Path)
 		}
 	})
+	t.Run("grid child", func(t *testing.T) {
+		parent := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[{"row":"a","column":"b","kind":"Table","ref":"t"}]}}`
+		findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", parent))
+		wantFindings(t, findings, "", 0, "")
+	})
 	for name, parent := range map[string]string{
-		"grid child": `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[{"row":"a","column":"b","kind":"Table","ref":"t"}]}}`,
-		"tree child": `{"kind":"Tree","metadata":{"name":"g"},"spec":{"nodes":[{"id":"n","kind":"Table","ref":"t"}]}}`,
+		"child of a card in a grid": `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[{"row":"a","column":"b","kind":"LayoutCard","spec":{"children":[{"kind":"Table","ref":"t"}]}}]}}`,
+		"tree child":                `{"kind":"Tree","metadata":{"name":"g"},"spec":{"nodes":[{"id":"n","kind":"Table","ref":"t"}]}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", parent))
 			wantFindings(t, findings, "annotation-target-missing", 1, "error")
-			if !strings.Contains(findings[0].Message, "not supported yet") {
+			if !strings.Contains(findings[0].Message, "only a direct child of a Grid") {
 				t.Errorf("message = %s", findings[0].Message)
 			}
 		})

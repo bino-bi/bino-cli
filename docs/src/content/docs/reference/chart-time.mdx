@@ -43,7 +43,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `chartMode` - rendering mode: `bar` (default), `line`, or `auto`. When set to `auto`, the chart automatically switches to line mode when data points exceed `maxBars`.
 - `maxBars` - threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `lineFullWidth` - when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
-- `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label. The short year label follows the translation key [`bn-chart-time.date-format-short-year`](/reference/internationalization/#time-and-structure-charts-bn-chart-time-bn-chart-structure-prefixes).
+- `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label; `two-row` prints short labels and puts the year of a month, quarter or week in a second row, under the first period and where it changes. The short year label follows the translation key [`bn-chart-time.date-format-short-year`](/reference/internationalization/#time-and-structure-charts-bn-chart-time-bn-chart-structure-prefixes).
 - `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. Bar mode only.
 - `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right` or `none`.
 - `dataFormatDigitsDecimal` - number of decimal digits of the value labels. Default: `1`. Same meaning as on a [`Table`](/reference/table/).
@@ -66,7 +66,10 @@ stacked columns or a stacked area with the `stack` block (see
   - `"auto"` - auto-scale to fit the parent width silently (no warning).
   - `"0.5"`, `"1.2"`, … - fixed factor applied to the base font size. All dimensions scale proportionally.
 - `stack` - optional object to enable stacked rendering:
-  - `by` - (required) stacking dimension: `scenarios` stacks scenario slots end-to-end; `dimensions` draws only the first scenario, one segment per period; additional scenarios are discarded with a warning.
+  - `by` - (required) stacking dimension. `scenarios` stacks up to four scenario slots end-to-end. `dimensions` stacks one segment per value of the dataset column `category`, see [Stack by series](#stack-by-series).
+  - `notation` - `scenario` gives each segment the look of its scenario. Default: `none`.
+  - `legend` - where the series names stand: `left` (default), `right`, `both` or `none`.
+  - `percentMark` - for `mode: relative`: plain shares and one `100%` mark. Default: `false`.
   - `mode` - stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` - segment order within each stack: `asc`, `desc`, or `dataset` (default).
   - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
@@ -217,7 +220,9 @@ With `scenarioSwitch: true` the chart draws one series:
 - Variances of one type over the same reference share one row: `dac1_pp1_pos` and `dpl1_pp1_pos` are one row of variances from `pp1`. The plan variances are outlined.
 - If two of them have a value in the same period, the first one wins and the chart warns.
 
-It works in bar mode without `stack` only.
+A chart with exactly one scenario gets the name of that scenario under the axis.
+
+It works in bar mode, without `stack` or with `stack.by: dimensions`. A stack by scenarios draws its scenarios on top of each other, so there is nothing to switch.
 
 ```yaml
 ---
@@ -288,6 +293,50 @@ spec:
     by: scenarios
     mode: absolute
 ```
+
+## Stack by series
+
+`stack.by: dimensions` takes the series from the dataset. Each value of the `category` column is one segment. The order comes from `categoryIndex`. There is no limit of four series, and a series keeps its colour in every period, also when it has no value there. Needs template engine v1.0.0-next.49: older engines draw one segment per period.
+
+The dataset has one row per period and series. The scenario is the slot that holds the value:
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSet
+metadata:
+  name: sales_by_area
+spec:
+  query: |
+    SELECT make_date(year, 1, 1) AS date, area AS category, area_index AS categoryIndex,
+      CASE WHEN scenario = 'AC' THEN value END AS ac1,
+      CASE WHEN scenario = 'PL' THEN value END AS pl1
+    FROM sales
+  dependencies: [sales]
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: sales_by_area_chart
+spec:
+  dataset: sales_by_area
+  dateInterval: year
+  scenarios: [ac1, pl1]
+  scenarioSwitch: true
+  stack:
+    by: dimensions
+    notation: scenario
+    legend: left
+```
+
+- With `scenarioSwitch: true` each period stacks the scenario that has values there. One axis can go from AC to FC to PL, with the line at the change and the names under the axis. Without it only the first scenario is drawn.
+- `notation: scenario` marks the scenario on every segment. A forecast segment is hatched over the shade of its series and a plan segment is outlined. The first series takes the fill of the scenario from `barStyles`, so it is white in a forecast and in a plan.
+- `legend` puts the series names left of the first column, right of the last column with a value, at both sides, or nowhere.
+- The shades come from `stackColors` of the `bn-chart-time` style. Give it one colour per series.
+- For a 100% stack, set `mode: relative` and `percentMark: true`. The segment labels are the shares as plain numbers with `dataFormatDigitsPercent` digits, and one `100%` mark stands at the top of the stack on the side of the names.
+- With `axisLabelsMode: two-row` a month chart prints the year in the second row, together with the scenario name: `2025 AC`.
+
+An [`Annotation`](/reference/annotation/) can point at one segment with `date` and `category`.
 
 ## Example: 100% stacked columns
 
@@ -380,7 +429,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.chartMode`         | string                   | no                   | `bar`                        | Rendering mode. Values: `bar`, `line`, `auto`. When `auto`, switches to line when data points exceed `maxBars`.                                                                                                                                                        | `chartMode: line`                 |
 | `spec.maxBars`           | integer                  | no                   | `28`                         | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1.                                                                                                                                                                        | `maxBars: 15`                     |
 | `spec.lineFullWidth`     | boolean                  | no                   | `true`                       | Stretch line charts to fill full parent width. Has no effect in bar mode.                                                                                                                                                                                              | `lineFullWidth: true`             |
-| `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`.       | `axisLabelsMode: short`           |
+| `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`, `two-row` (needs engine v1.0.0-next.49).       | `axisLabelsMode: short`           |
 | `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. Bar mode only. Minimum: 1. Needs engine v1.0.0-next.46. |
 | `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `none`. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatDigitsDecimal` | integer            | no                   | `1`                          | Number of decimal digits of the value labels. Minimum: 0. Needs engine v1.0.0-next.46. |
@@ -403,9 +452,12 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.scale`             | string or number         | no                   | auto-scale with warning      | Proportional scaling; font size, spacings, and bar dimensions scale together. Omitted: auto-scale to fit parent width with warning. `"none"`: no scaling. `"auto"`: auto-scale silently. Positive number: fixed factor (`0.5`, `1.2`, …). An empty string is rejected. | `scale: auto`                     |
 | `spec.i18nNamespace`     | string                   | no                   | -                            | I18n namespace for this component's labels; missing keys fall back to `_system`. Resolved at runtime from the nearest ancestor carrying one (card, page, tree, grid, or the artefact) when not set. Maps to the `i18n-namespace` HTML attribute.                       | `i18nNamespace: audited`          |
 | `spec.stack`             | object                   | no                   | -                            | Stacked rendering configuration. When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces stacked area chart. See [Stack configuration](#stack-configuration).                                                                        | see below                         |
-| `spec.stack.by`          | string                   | yes (within `stack`) | -                            | Stacking dimension. Values: `scenarios` (stacks scenario slots end-to-end), `dimensions` (draws only the first scenario, one segment per period).                                                                                                                      | `by: scenarios`                   |
+| `spec.stack.by`          | string                   | yes (within `stack`) | -                            | Stacking dimension. Values: `scenarios` (stacks scenario slots end-to-end), `dimensions` (one segment per value of the `category` column, see [Stack by series](#stack-by-series)).                                                                                                                      | `by: scenarios`                   |
 | `spec.stack.mode`        | string                   | no                   | `absolute`                   | Stacking mode. Values: `absolute` (additive), `relative` (100% stacked), `absolute-relative` (absolute height with percentage labels).                                                                                                                                 | `mode: relative`                  |
 | `spec.stack.order`       | string                   | no                   | `dataset`                    | Segment order within each stack. Values: `asc`, `desc`, `dataset`.                                                                                                                                                                                                     | `order: desc`                     |
+| `spec.stack.notation` | string | no | `none` | `scenario`: a segment takes the look of its scenario. Values: `none`, `scenario`. Needs engine v1.0.0-next.49. | `notation: scenario` |
+| `spec.stack.legend` | string | no | `left` | Where the series names stand. Values: `left`, `right`, `both`, `none`. Needs engine v1.0.0-next.49. | `legend: both` |
+| `spec.stack.percentMark` | boolean | no | `false` | With `mode: relative`: plain shares and one `100%` mark. Needs engine v1.0.0-next.49. | `percentMark: true` |
 | `spec.selectedStyle`     | string                   | no                   | -                            | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                             | `selectedStyle: corporate-style`  |
 | `spec.ruleset`           | string                   | no                   | -                            | Name of a [`RuleSet`](/reference/ruleset/) manifest to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set. Merged over the `_system` and `_default` rule sets. Maps to the `ruleset` HTML attribute.                        | `ruleset: corporate-rules`        |
 
