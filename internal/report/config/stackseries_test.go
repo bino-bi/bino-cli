@@ -129,6 +129,14 @@ func TestStructureSumsFeatures(t *testing.T) {
 		t.Errorf("panel of a SmallMultiple: got %v", got)
 	}
 
+	inline := []Document{
+		doc(`{"kind":"LayoutPage","metadata":{"name":"page"},"spec":{"children":[{"kind":"SmallMultiple","metadata":{"name":"by_region"},"spec":{"base":{"kind":"ChartStructure"}}}]}}`),
+		doc(`{"kind":"Annotation","spec":{"mark":"difference","target":{"kind":"SmallMultiple","name":"by_region","panel":"North"}}}`),
+	}
+	if got := StructureSumsFeatures(inline, nil); !reflect.DeepEqual(got, []string{"Annotation mark: difference on a ChartStructure"}) {
+		t.Errorf("inline SmallMultiple: got %v", got)
+	}
+
 	byDefault := []Document{doc(`{"kind":"ChartStructure","spec":{"dataset":"sales","stack":{"by":"scenarios"}}}`)}
 	defaults := map[string]map[string]map[string]any{"sales": {"chartstructure": {"sums": "total", "stack": map[string]any{"thickness": "total"}}}}
 	wantDefault := []string{"ChartStructure stack.thickness", "ChartStructure sums"}

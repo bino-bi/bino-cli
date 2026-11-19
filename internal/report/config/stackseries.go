@@ -77,21 +77,35 @@ func StructureSumsFeatures(docs []Document, defaults map[string]map[string]map[s
 	for _, feature := range walkedFeatures(docs, defaults, structureSumsPrefix) {
 		found[feature] = true
 	}
-	// a SmallMultiple document with ChartStructure panels, by name
+	// a SmallMultiple with ChartStructure panels, by name: a document, or an inline child at any depth
 	structurePanels := map[string]bool{}
+	var collect func(v any, name string)
+	collect = func(v any, name string) {
+		switch node := v.(type) {
+		case map[string]any:
+			if metadata, ok := node["metadata"].(map[string]any); ok {
+				if own, _ := metadata["name"].(string); own != "" {
+					name = own
+				}
+			}
+			spec, _ := node["spec"].(map[string]any)
+			base, _ := spec["base"].(map[string]any)
+			if node["kind"] == "SmallMultiple" && base["kind"] == "ChartStructure" && name != "" {
+				structurePanels[name] = true
+			}
+			for _, child := range node {
+				collect(child, "")
+			}
+		case []any:
+			for _, child := range node {
+				collect(child, "")
+			}
+		}
+	}
 	for _, doc := range docs {
-		if doc.Kind != "SmallMultiple" {
-			continue
-		}
-		var node struct {
-			Spec struct {
-				Base struct {
-					Kind string `json:"kind"`
-				} `json:"base"`
-			} `json:"spec"`
-		}
-		if json.Unmarshal(doc.Raw, &node) == nil && node.Spec.Base.Kind == "ChartStructure" {
-			structurePanels[doc.Name] = true
+		var v any
+		if json.Unmarshal(doc.Raw, &v) == nil {
+			collect(v, doc.Name)
 		}
 	}
 	for _, doc := range docs {

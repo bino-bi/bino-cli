@@ -144,7 +144,7 @@ func TestSumsRows(t *testing.T) {
 	}
 
 	all := SumsOf(json.RawMessage(`{"sums":"all","sumTitle":"World"}`))
-	if all != (Sums{Groups: true, Total: "World", Column: "category"}) {
+	if all != (Sums{Groups: true, Total: "World"}) {
 		t.Fatalf("all: got %+v", all)
 	}
 	for _, p := range []*schema.AnnotationPoint{point("Europe", "ac1"), point("Europe", "ac2"), point("World", "ac1"), point("Spain", "ac1")} {
@@ -157,7 +157,7 @@ func TestSumsRows(t *testing.T) {
 	}
 
 	total := SumsOf(json.RawMessage(`{"sums":"total"}`))
-	if total != (Sums{Total: "SUM_TOTAL", Column: "category"}) {
+	if total != (Sums{Total: "SUM_TOTAL"}) {
 		t.Errorf("total without a title: got %+v", total)
 	}
 	if reason := CheckPoint(schema.KindChartStructure, point("Europe", ""), total.Rows(rows)); reason == "" {
@@ -173,7 +173,7 @@ func TestSumsRows(t *testing.T) {
 
 	// the sum row has the level column of the chart, and group sums exist at level category only
 	byGroup := SumsOf(json.RawMessage(`{"sums":"all","sumTitle":"World","level":"rowGroup"}`))
-	if byGroup != (Sums{Total: "World", Column: "rowGroup"}) {
+	if byGroup != (Sums{Groups: true, Total: "World", Level: "rowGroup"}) {
 		t.Fatalf("level rowGroup: got %+v", byGroup)
 	}
 	if reason := CheckPoint(schema.KindChartStructure, &schema.AnnotationPoint{RowGroup: "World"}, byGroup.Rows(rows)); reason != "" {
@@ -182,7 +182,20 @@ func TestSumsRows(t *testing.T) {
 	if reason := CheckPoint(schema.KindChartStructure, point("World", ""), byGroup.Rows(rows)); reason == "" {
 		t.Error("at level rowGroup the sum row is no category")
 	}
-	if got := SumsOf(json.RawMessage(`{"sums":"groups","level":"subCategory"}`)); got != (Sums{}) {
-		t.Errorf("groups at level subCategory: got %+v", got)
+	if got := len(byGroup.Rows(rows)); got != len(rows)+1 {
+		t.Errorf("level rowGroup: %d rows, want the rows and one total", got)
+	}
+
+	// without a level the chart takes the lowest dimension the rows fill
+	deep := Rows{{"category": "Spain", "subCategory": "Madrid", "rowGroup": "Europe", "ac1": 1}}
+	auto := SumsOf(json.RawMessage(`{"sums":"all","sumTitle":"World","level":"auto"}`))
+	if reason := CheckPoint(schema.KindChartStructure, &schema.AnnotationPoint{SubCategory: "World"}, auto.Rows(deep)); reason != "" {
+		t.Errorf("detected level subCategory: %s", reason)
+	}
+	if reason := CheckPoint(schema.KindChartStructure, point("Europe", ""), auto.Rows(deep)); reason == "" {
+		t.Error("no group sum at the detected level subCategory")
+	}
+	if reason := CheckPoint(schema.KindChartStructure, point("World", ""), auto.Rows(rows)); reason != "" {
+		t.Errorf("detected level category: %s", reason)
 	}
 }
