@@ -2604,6 +2604,11 @@
           "type": "object",
           "description": "The names a mark can use in its color, with their colors. Built in: negative, positive.",
           "additionalProperties": { "type": "string" }
+        },
+        "markerStyle": {
+          "type": "string",
+          "enum": ["filled", "outlined"],
+          "description": "Look of the numbered circles on the page and in the AnnotationList. filled (default): a circle in the color with a white number. outlined: a white circle with a ring and a number in the color. Needs template engine v1.0.0-next.55."
         }
       },
       "additionalProperties": false
@@ -2691,6 +2696,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Ordered list of CSS colors for stacked segments. Segments cycle through these colors. Default: [\"#000000\", \"#c0c0c0\", \"#808080\"]."
+        },
+        "titleBold": {
+          "type": "boolean",
+          "description": "Print the chart title in bold. Default: false. Needs template engine v1.0.0-next.55."
         },
         "padding": { "$ref": "#/$defs/paddingStyle" }
       },
