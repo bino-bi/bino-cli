@@ -346,25 +346,50 @@ func CheckCompatibility(engineVersion string) error {
 }
 
 // TimeTotalsMinVersion is the first engine release with the total columns of
-// a time chart in the form the CLI passes on, and with its scaling indicator
-// and the labels of relative variances without the percent sign. Older engines
-// ignore all of them and render without, with no error. It is no floor of
-// SupportedEngineRanges: a project without them keeps working.
-const TimeTotalsMinVersion = "v1.0.0-next.64"
+// a time chart in the form the CLI passes on. TimeIndicatorMinVersion is the
+// first one with the scaling indicator of a time chart and with the labels of
+// relative variances without the percent sign. Older engines ignore them and
+// render without, with no error. Neither is a floor of SupportedEngineRanges:
+// a project without them keeps working.
+const (
+	TimeTotalsMinVersion    = "v1.0.0-next.64"
+	TimeIndicatorMinVersion = "v1.0.0-next.60"
+)
+
+// TimeTotalsFeature is the name of the totals of a time chart in the features
+// of TimeTotalsCheck. Only it needs TimeTotalsMinVersion.
+const TimeTotalsFeature = "ChartTime totals"
 
 // TimeTotalsCheck returns the engine check for a project that uses the given
-// features of TimeTotalsMinVersion. The check returns an error on an older
-// engine. An empty or unreadable version is no finding.
+// features: the totals need TimeTotalsMinVersion, the others
+// TimeIndicatorMinVersion. The check returns an error on an older engine and
+// names the features that this engine does not have. An empty or unreadable
+// version is no finding.
 func TimeTotalsCheck(features []string) func(string) error {
 	return func(engineVersion string) error {
 		v, err := semver.NewVersion(engineVersion)
 		if err != nil {
 			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 		}
-		if v.LessThan(semver.MustParse(TimeTotalsMinVersion)) {
-			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), TimeTotalsMinVersion, engineVersion, TimeTotalsMinVersion)
+		floor := ""
+		var missing []string
+		for _, feature := range features {
+			need := TimeIndicatorMinVersion
+			if feature == TimeTotalsFeature {
+				need = TimeTotalsMinVersion
+			}
+			if !v.LessThan(semver.MustParse(need)) {
+				continue
+			}
+			missing = append(missing, feature)
+			if floor == "" || semver.MustParse(need).GreaterThan(semver.MustParse(floor)) {
+				floor = need
+			}
 		}
-		return nil
+		if len(missing) == 0 {
+			return nil
+		}
+		return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, floor)
 	}
 }
