@@ -567,6 +567,29 @@ func TestStructureWaterfallEngineFinding(t *testing.T) {
 	}
 }
 
+func TestStructureWaterfallDefaultEngineFinding(t *testing.T) {
+	// the manifest uses a field of an older release, a dataset default adds the waterfall
+	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","sums":"total"}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"chartstructure": {"varianceWaterfall": json.RawMessage(`true`)},
+	}}}
+	for _, c := range []struct {
+		engine string
+		fatal  bool
+	}{{"v1.0.0-next.60", true}, {"v1.0.0-next.69", false}} {
+		dir := t.TempDir()
+		writeProjectWithEngine(t, dir, c.engine)
+		cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+		finding, fatal := structureSumsDefaultEngineFinding(dir, cfg, chart, results)
+		if fatal != c.fatal {
+			t.Fatalf("%s: fatal = %v, want %v (%+v)", c.engine, fatal, c.fatal, finding)
+		}
+		if fatal && (!strings.Contains(finding.Message, "ChartStructure varianceWaterfall") || strings.Contains(finding.Message, "ChartStructure sums")) {
+			t.Fatalf("%s: finding = %+v", c.engine, finding)
+		}
+	}
+}
+
 func TestTimeTotalsEngineFinding(t *testing.T) {
 	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","totals":{"unitScaling":280}}}`)}}
 	byDefault := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`)}}

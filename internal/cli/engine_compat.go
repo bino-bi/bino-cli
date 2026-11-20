@@ -136,9 +136,9 @@ func structureSumsEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig,
 // structureSumsDefaultEngineFinding is the same gate for chart fields that
 // only a dataset default sets, which shows after the queries ran.
 func structureSumsDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
-	features := dataset.StructureSumsFeatures(documents, results)
-	used := len(config.StructureSumsFeatures(documents, nil)) == 0 && len(features) > 0
-	return engineGateFinding(projectRoot, cfg, used, engine.StructureSumsCheck(features), "structure-sums-engine-version")
+	// the manifest gate reports what the manifests use: here only what a default adds
+	features := dataset.StructureSumsDefaultFeatures(documents, results)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.StructureSumsCheck(features), "structure-sums-engine-version")
 }
 
 // timeTotalsEngineFinding reports a project that uses the total columns of a

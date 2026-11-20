@@ -564,7 +564,9 @@ func TestChartOrderInheritsMeasure(t *testing.T) {
 		page Document
 		want []string
 	}{
-		{"page variance, closest", inheritPage("p", `"titleOrder":"dac1_pp1"`, chart("inherited-closest"), table),
+		// a chart sorts by a plain variance since template engine v1.0.0-next.69
+		{"page variance, closest", inheritPage("p", `"titleOrder":"dac1_pp1"`, chart("inherited-closest"), table), nil},
+		{"page variance with a bucket, closest", inheritPage("p", `"titleOrder":"dac1_pp1@_November"`, chart("inherited-closest"), table),
 			[]string{"p.yaml spec.children.0.spec.order"}},
 		{"page bucket, page keyword", inheritPage("p", `"titleOrder":"ac1@_November"`, chart("inherited-page")),
 			[]string{"p.yaml spec.children.0.spec.order"}},
@@ -573,7 +575,7 @@ func TestChartOrderInheritsMeasure(t *testing.T) {
 		{"card variance, page keyword reads page", inheritPage("p", `"titleOrder":"ac1"`,
 			inheritCard(`"titleOrder":"dac1_pp1"`, chart("inherited-page"))), nil},
 		{"card variance, closest", inheritPage("p", `"titleOrder":"ac1"`,
-			inheritCard(`"titleOrder":"rowgroupindex,dac1_pp1_pos"`, chart("inherited-closest"))),
+			inheritCard(`"titleOrder":"rowgroupindex,dac1_pp1_pos@_November"`, chart("inherited-closest"))),
 			[]string{"p.yaml spec.children.0.spec.children.0.spec.order"}},
 		{"table only", inheritPage("p", `"titleOrder":"dac1_pp1"`, table), nil},
 		{"explicit chart order", inheritPage("p", `"titleOrder":"dac1_pp1"`, chart("ac1")), nil},

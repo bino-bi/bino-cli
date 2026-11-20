@@ -777,6 +777,24 @@ func StructureSumsFeatures(docs []config.Document, results []Result) []string {
 	return config.StructureSumsFeatures(docs, chartDefaults(results))
 }
 
+// StructureSumsDefaultFeatures returns the features of StructureSumsFeatures
+// that only a dataset default brings: the manifests alone do not use them.
+// The fields have two engine floors, so a default can need a newer engine than
+// what the manifests use.
+func StructureSumsDefaultFeatures(docs []config.Document, results []Result) []string {
+	inManifest := map[string]bool{}
+	for _, feature := range config.StructureSumsFeatures(docs, nil) {
+		inManifest[feature] = true
+	}
+	var extra []string
+	for _, feature := range StructureSumsFeatures(docs, results) {
+		if !inManifest[feature] {
+			extra = append(extra, feature)
+		}
+	}
+	return extra
+}
+
 // TimeTotalsFeatures returns what the documents use of the template engine
 // release with the total columns of a time chart, in a manifest or through a
 // default of the primary dataset of a chart.

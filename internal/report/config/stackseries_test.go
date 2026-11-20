@@ -175,6 +175,17 @@ func TestTimeTotalsFeatures(t *testing.T) {
 	if got := TimeTotalsFeatures(doc(`{"dataset":"d","varianceWaterfall":false,"referenceColumn":false}`), nil); len(got) != 0 {
 		t.Fatalf("false is no feature, got %v", got)
 	}
+	// totals without a field are totals at the scale of the chart
+	wantEmpty := []string{"ChartTime totals", "ChartTime totals without unitScaling"}
+	if got := TimeTotalsFeatures(doc(`{"dataset":"d","totals":{}}`), nil); !reflect.DeepEqual(got, wantEmpty) {
+		t.Fatalf("empty totals: got %v, want %v", got, wantEmpty)
+	}
+	// an override of a referenced chart has no dataset: its unitScaling can come from the chart below it
+	override := []Document{{Kind: "LayoutCard", Name: "card", Raw: json.RawMessage(
+		`{"kind":"LayoutCard","spec":{"children":[{"kind":"ChartTime","ref":"base","spec":{"totals":{"label":"2025"}}}]}}`)}}
+	if got := TimeTotalsFeatures(override, nil); !reflect.DeepEqual(got, []string{"ChartTime totals"}) {
+		t.Fatalf("override: got %v", got)
+	}
 	// the other gates do not report them
 	if got := StackSeriesFeatures(used, nil); len(got) != 0 {
 		t.Fatalf("stack series gate got %v", got)
