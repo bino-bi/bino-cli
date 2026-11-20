@@ -4448,7 +4448,7 @@
         },
         "totalColumn": {
           "type": "object",
-          "description": "A column right of the last period for the total of all periods, at its own scale. It stacks one part per scenario of the series (with scenarioSwitch: the first scenario and the ones that follow it), with the first other scenario as the reference behind. Each variance row gets the variance of the totals. With scalingIndicator the column has its own band, and a line links the two bands. Plain columns only: not with stack, not in line mode. Needs template engine v1.0.0-next.61.",
+          "description": "A column right of the last period for the total of all periods, at its own scale. It stacks one part per scenario of the series (with scenarioSwitch: the first scenario and the ones that follow it), with the first other scenario as the reference behind. Each variance row gets the variance of the totals. With scalingIndicator the column has its own band, and a line links the two bands. Plain columns only: not with stack, not in line mode. Needs template engine v1.0.0-next.62.",
           "additionalProperties": false,
           "required": ["unitScaling"],
           "properties": {
