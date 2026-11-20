@@ -35,6 +35,11 @@ func checkSmallMultipleSpanEngine(docs []config.Document, results []dataset.Resu
 			return fmt.Errorf("render: structure-sums-engine-version: %w", err)
 		}
 	}
+	if totals := dataset.TimeTotalsFeatures(docs, results); len(totals) > 0 {
+		if err := engine.TimeTotalsCheck(totals)(engineVersion); err != nil {
+			return fmt.Errorf("render: time-totals-engine-version: %w", err)
+		}
+	}
 	features := dataset.SmallMultipleSpanFeatures(docs, results)
 	if len(features) == 0 {
 		return nil

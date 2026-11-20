@@ -69,6 +69,7 @@ func featureGateFindings(projectRoot string, cfg *pathutil.ProjectConfig, docume
 		{"small-multiple-span-engine-version", smallMultipleSpanEngineFinding},
 		{"stack-series-engine-version", stackSeriesEngineFinding},
 		{"structure-sums-engine-version", structureSumsEngineFinding},
+		{"time-totals-engine-version", timeTotalsEngineFinding},
 	}
 	for _, g := range gates {
 		finding, fatal := g.check(projectRoot, cfg, documents)
@@ -138,6 +139,21 @@ func structureSumsDefaultEngineFinding(projectRoot string, cfg *pathutil.Project
 	features := dataset.StructureSumsFeatures(documents, results)
 	used := len(config.StructureSumsFeatures(documents, nil)) == 0 && len(features) > 0
 	return engineGateFinding(projectRoot, cfg, used, engine.StructureSumsCheck(features), "structure-sums-engine-version")
+}
+
+// timeTotalsEngineFinding reports a project that uses the total columns of a
+// time chart or another field of that engine release on an older engine.
+func timeTotalsEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document) (lint.Finding, bool) {
+	features := config.TimeTotalsFeatures(documents, nil)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.TimeTotalsCheck(features), "time-totals-engine-version")
+}
+
+// timeTotalsDefaultEngineFinding is the same gate for chart fields that only
+// a dataset default sets, which shows after the queries ran.
+func timeTotalsDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
+	features := dataset.TimeTotalsFeatures(documents, results)
+	used := len(config.TimeTotalsFeatures(documents, nil)) == 0 && len(features) > 0
+	return engineGateFinding(projectRoot, cfg, used, engine.TimeTotalsCheck(features), "time-totals-engine-version")
 }
 
 // smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that
@@ -218,6 +234,7 @@ func tableDefaultEngineFindings(projectRoot string, cfg *pathutil.ProjectConfig,
 		smallMultipleSpanDefaultEngineFinding,
 		stackSeriesDefaultEngineFinding,
 		structureSumsDefaultEngineFinding,
+		timeTotalsDefaultEngineFinding,
 	} {
 		if finding, ok := gate(projectRoot, cfg, documents, results); ok {
 			findings = append(findings, finding)

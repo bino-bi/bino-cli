@@ -4444,11 +4444,11 @@
         "scalingIndicator": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Scaling indicator: a light band behind the columns from the axis up to this value, with the value at its right end. Use the same value on charts with different scales. Bar mode only. Needs template engine v1.0.0-next.60."
+          "description": "Scaling indicator: a light band behind the columns from the axis up to this value, with the value at its right end. Use the same value on charts with different scales. Bar mode only. Needs template engine v1.0.0-next.64."
         },
         "totals": {
           "type": "object",
-          "description": "Total columns at their own scale: one for all periods, or one per year, quarter, month or week. Each variance row gets the variance of each total. Plain columns only, with a fixed unitScaling. Needs template engine v1.0.0-next.63.",
+          "description": "Total columns at their own scale: one for all periods, or one per year, quarter, month or week. Each variance row gets the variance of each total. Plain columns only, with a fixed unitScaling. Needs template engine v1.0.0-next.64.",
           "additionalProperties": false,
           "required": ["unitScaling"],
           "properties": {
@@ -4462,7 +4462,7 @@
               "type": "string",
               "enum": ["sum", "average", "last"],
               "default": "sum",
-              "description": "How the periods become one value. sum stacks one part per scenario of the series, average and last give one column. Not used with dataset."
+              "description": "How the periods become one value. sum stacks one part per scenario of the series, average and last give one column."
             },
             "dataset": {
               "type": "string",
@@ -4488,7 +4488,7 @@
         "dataFormatPercentSign": {
           "type": "boolean",
           "default": true,
-          "description": "False prints the labels of relative variances without the percent sign (+11.6). The title of the row still names the unit. Needs template engine v1.0.0-next.60."
+          "description": "False prints the labels of relative variances without the percent sign (+11.6). The title of the row still names the unit. Needs template engine v1.0.0-next.64."
         },
         "axisLabelsStep": {
           "type": "integer",
