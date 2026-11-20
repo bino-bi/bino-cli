@@ -175,7 +175,8 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 // TimeTotalsFeatures returns what the documents use of the template engine
 // release with the total columns of a time chart, as names for a message,
 // sorted. It is empty when every such field is left at its default. The
-// features are totals, scalingIndicator and dataFormatPercentSign false of a
+// features are totals (also without their own unitScaling), scalingIndicator,
+// dataFormatPercentSign false, varianceWaterfall and referenceColumn of a
 // ChartTime. They are found like those of StackSeriesFeatures.
 func TimeTotalsFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
 	return walkedFeatures(docs, defaults, timeTotalsPrefix)
@@ -185,6 +186,15 @@ func TimeTotalsFeatures(docs []Document, defaults map[string]map[string]map[stri
 func timeTotalsChart(spec map[string]any, found map[string]bool) {
 	if totals, ok := spec["totals"].(map[string]any); ok && len(totals) > 0 {
 		found[timeTotalsPrefix+"ChartTime totals"] = true
+		if scaling, set := totals["unitScaling"]; !set || scaling == nil || scaling == "" {
+			found[timeTotalsPrefix+"ChartTime totals without unitScaling"] = true
+		}
+	}
+	if spec["varianceWaterfall"] == true {
+		found[timeTotalsPrefix+"ChartTime varianceWaterfall"] = true
+	}
+	if spec["referenceColumn"] == true {
+		found[timeTotalsPrefix+"ChartTime referenceColumn"] = true
 	}
 	if n, ok := spec["scalingIndicator"].(float64); ok && n > 0 {
 		found[timeTotalsPrefix+"ChartTime scalingIndicator"] = true

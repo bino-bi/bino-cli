@@ -541,6 +541,7 @@ func TestTimeTotalsEngineFinding(t *testing.T) {
 	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
 		"charttime": {"scalingIndicator": json.RawMessage(`100`)},
 	}}}
+	waterfall := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","varianceWaterfall":true,"totals":{"by":"all"}}}`)}}
 	cases := []struct {
 		name    string
 		engine  string
@@ -549,6 +550,10 @@ func TestTimeTotalsEngineFinding(t *testing.T) {
 		byData  bool
 		feature string
 	}{
+		{"old engine with the waterfall", "v1.0.0-next.67", waterfall, true, false, "ChartTime varianceWaterfall"},
+		{"old engine with totals at the scale of the chart", "v1.0.0-next.67", waterfall, true, false, "ChartTime totals without unitScaling"},
+		{"new engine with the waterfall", "v1.0.0-next.68", waterfall, false, false, ""},
+		{"totals with their own scale need no new engine", "v1.0.0-next.67", chart, false, false, ""},
 		{"old engine with totals", "v1.0.0-next.63", chart, true, false, "ChartTime totals"},
 		{"old engine without the fields", "v1.0.0-next.63", byDefault, false, false, ""},
 		{"new engine with totals", "v1.0.0-next.64", chart, false, false, ""},

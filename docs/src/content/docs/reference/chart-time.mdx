@@ -51,6 +51,8 @@ stacked columns or a stacked area with the `stack` block (see
 - `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. Default: `true`. Needs template engine v1.0.0-next.60.
 - `scalingIndicator` - a value on the scale of the columns. The chart draws a light band behind the columns from the axis up to this value and prints the value at the right end. Two charts with different scales that show the same value make the difference visible. Bar mode only, not for a 100% stack. Needs template engine v1.0.0-next.60.
 - `totals` - total columns at their own scale: one for all periods, or one per year, quarter, month or week. See [Totals](#totals). Needs template engine v1.0.0-next.64.
+- `varianceWaterfall` - draws each row of absolute variances as a walk, and with totals at the scale of the chart as a bridge between the totals. Default: `false`. See [Variance waterfall](#variance-waterfall). Needs template engine v1.0.0-next.68.
+- `referenceColumn` - with `scenarioSwitch`: draws the reference (the first scenario that is not part of the series) as a column behind the series, in place of the marker. Further scenarios stay markers. Default: `false`. Needs template engine v1.0.0-next.68.
 - `scenarioSwitch` - for a series that changes its scenario along the time axis, for example AC up to this year and PL after it. Default: `false`. See [Scenario switch](#scenario-switch).
 - `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` - optional filter expression.
@@ -267,6 +269,10 @@ spec:
     width: 1.6
 ```
 
+**The scale: `unitScaling`**
+
+`totals.unitScaling` gives the total columns their own scale. Leave it out and they use the scale of the chart (needs template engine v1.0.0-next.68). A total is then as high as the sum of its periods, so the chart needs the room.
+
 **What a total covers: `by`**
 
 - `all` (default): one column for all periods of the chart. It stands right of the last period, with a gap and its own axis. The names of its parts stand at its right.
@@ -298,6 +304,48 @@ totals:
 - With an older engine `bino lint` and `bino build` stop with [`time-totals-engine-version`](/appendix/lint-rules/#time-totals-engine-version). The same holds for `scalingIndicator` and `dataFormatPercentSign: false`.
 - It works for plain columns: not with `stack`, not in line mode and not with `scenarios: []`. The chart needs a fixed `unitScaling`. Every part of a total must be positive: when one is not, the chart draws no total columns.
 - A group where the series has no value gets no total. `by` must be coarser than the periods of the chart: `by: month` on a month chart gives no totals.
+
+## Variance waterfall
+
+With `varianceWaterfall: true` a row of absolute variances is a walk: each column starts where the column before ended, and thin lines join them. The row shows how the variance adds up over the periods. A period without a value keeps the level. Relative variances stay pins. With `scenarioSwitch` the variances of a forecast are hatched as before.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: net_sales_bridge
+spec:
+  dataset: net_sales_monthly
+  dateInterval: month
+  unitScaling: 9
+  scenarios: [ac1, pl1, fc1] # ac1 has values up to August, fc1 from September
+  variances: [dac1_pl1_pos, dfc1_pl1_pos, drac1_pl1_pos, drfc1_pl1_pos]
+  scenarioSwitch: true
+  varianceWaterfall: true
+  totals:
+    by: all
+    label: "2025"
+    width: 1.6
+```
+
+**The bridge.** When the chart also has `totals` with `by: all`, `aggregation: sum` and no `unitScaling` of their own, the first row of absolute variances becomes a bridge in the chart itself:
+
+- The reference total stands left of the first period, with its value and the name of its scenario.
+- The total of the series stands right of the last period, as before.
+- The walk starts at the end of the reference total and ends at the end of the total of the series.
+- The variance of the total is a thin bar between the two levels, right of the total column. An `Annotation` points at its label with `point: { row: total, scenario: dac1_pl1_pos, part: label }`.
+
+The other variance rows stay where they are. The chart draws the plain walk in its own row and warns when a bridge is not possible:
+
+- the totals have their own `unitScaling`, another `by` or another `aggregation`,
+- the total has no reference (the reference misses a value in a period of the series),
+- the variances of the row are not the series against the reference of the total,
+- `syncSpaceLeft` is set: the reference total has no room in a synced space,
+- the reference total plus the variances is not the total of the series, for example with totals from a `dataset` that do not match the periods,
+- the walk would cross the columns of the periods. This happens with few periods, when one period is a large part of the total.
+
+A walk has no break marks. Behind a total column on the axis (`totals.by` other than `all`) a walk starts again. It works for plain columns: not with `stack` and not in line mode.
 
 ## Variance only chart
 
