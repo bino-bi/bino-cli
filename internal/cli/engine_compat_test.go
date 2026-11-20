@@ -593,6 +593,25 @@ func TestStructureRowLinesEngineFinding(t *testing.T) {
 	}
 }
 
+func TestStructureRowLinesListEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","rowLines":[4,9,14],"orderMark":true}}`)}}
+	for _, c := range []struct {
+		engine string
+		fatal  bool
+	}{{"v1.0.0-next.71", true}, {"v1.0.0-next.72", false}} {
+		dir := t.TempDir()
+		writeProjectWithEngine(t, dir, c.engine)
+		cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+		finding, fatal := structureSumsEngineFinding(dir, cfg, chart)
+		if fatal != c.fatal {
+			t.Fatalf("%s: fatal = %v, want %v (%+v)", c.engine, fatal, c.fatal, finding)
+		}
+		if fatal && (!strings.Contains(finding.Message, "rowLines as a list") || strings.Contains(finding.Message, "orderMark") || !strings.Contains(finding.Message, "v1.0.0-next.72")) {
+			t.Fatalf("%s: finding = %+v", c.engine, finding)
+		}
+	}
+}
+
 func TestStructureWaterfallDefaultEngineFinding(t *testing.T) {
 	// the manifest uses a field of an older release, a dataset default adds the waterfall
 	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","sums":"total"}}`)}}

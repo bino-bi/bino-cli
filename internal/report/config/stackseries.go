@@ -176,6 +176,9 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 	if lines, _ := spec["rowLines"].(float64); lines >= 1 {
 		note("rowLines")
 	}
+	if list, _ := spec["rowLines"].([]any); len(list) > 0 {
+		note("rowLines as a list")
+	}
 	if spec["orderMark"] == true {
 		note("orderMark")
 	}

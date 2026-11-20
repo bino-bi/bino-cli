@@ -194,14 +194,14 @@ type chartStructureSpec struct {
 	SelectedStyle     string                   `json:"selectedStyle"`
 	Ruleset           string                   `json:"ruleset"`
 
-	DataFormatDigitsDecimal *int     `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent *int     `json:"dataFormatDigitsPercent"`
-	DataFormatPercentSign   *bool    `json:"dataFormatPercentSign"`
-	VarianceWaterfall       *bool    `json:"varianceWaterfall"`
-	SumScenarios            []string `json:"sumScenarios,omitempty"`
-	SumDataset              string   `json:"sumDataset"`
-	RowLines                *int     `json:"rowLines"`
-	OrderMark               *bool    `json:"orderMark"`
+	DataFormatDigitsDecimal *int            `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int            `json:"dataFormatDigitsPercent"`
+	DataFormatPercentSign   *bool           `json:"dataFormatPercentSign"`
+	VarianceWaterfall       *bool           `json:"varianceWaterfall"`
+	SumScenarios            []string        `json:"sumScenarios,omitempty"`
+	SumDataset              string          `json:"sumDataset"`
+	RowLines                json.RawMessage `json:"rowLines,omitempty"`
+	OrderMark               *bool           `json:"orderMark"`
 
 	Sums                  string          `json:"sums"`
 	SumTitle              string          `json:"sumTitle"`
@@ -249,7 +249,7 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
 	writeAttr(b, "sum-scenarios", strings.Join(s.SumScenarios, ","))
 	writeAttr(b, "sum-dataset", s.SumDataset)
-	writeIntAttr(b, "row-lines", s.RowLines)
+	writeRowLinesAttr(b, s.RowLines)
 	writeBoolAttr(b, "order-mark", s.OrderMark)
 	writeAttr(b, "sums", s.Sums)
 	writeAttr(b, "sum-title", s.SumTitle)
@@ -614,6 +614,19 @@ func writeIntAttr(b *strings.Builder, name string, value *int) {
 		return
 	}
 	writeAttr(b, name, strconv.Itoa(*value))
+}
+
+// writeRowLinesAttr writes row-lines: a number as it is, a list as a JSON array.
+func writeRowLinesAttr(b *strings.Builder, raw json.RawMessage) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, trimmed); err != nil {
+		return
+	}
+	writeAttr(b, "row-lines", buf.String())
 }
 
 // writeFloatAttr writes a float attribute if the value is non-nil.

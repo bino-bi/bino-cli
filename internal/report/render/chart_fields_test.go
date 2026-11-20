@@ -48,6 +48,13 @@ func TestChartStructure_NewFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComponentFromSpec: %v", err)
 	}
+	list, err := ComponentFromSpec("ChartStructure", json.RawMessage(`{"dataset": "revenue", "rowLines": [4, 9, 14]}`), nil)
+	if err != nil {
+		t.Fatalf("ComponentFromSpec: %v", err)
+	}
+	if !strings.Contains(list, " row-lines='[4,9,14]'") {
+		t.Errorf("expected the list of row lines in HTML, got:\n%s", list)
+	}
 	for _, want := range []string{
 		" data-format-digits-decimal='2'", " data-format-digits-percent='0'", " row-lines='5'", " order-mark='true'",
 	} {
