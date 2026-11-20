@@ -94,6 +94,10 @@ func TestStructureSumsFeatures(t *testing.T) {
 	if got, want := StructureSumsFeatures(lines, nil), []string{"ChartStructure orderMark", "ChartStructure rowLines"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("row lines: got %v, want %v", got, want)
 	}
+	listed := []Document{doc(`{"kind":"ChartStructure","spec":{"rowLines":[4,9,14]}}`)}
+	if got, want := StructureSumsFeatures(listed, nil), []string{"ChartStructure rowLines as a list"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("row lines as a list: got %v, want %v", got, want)
+	}
 	byScenario := []Document{doc(`{"kind":"ChartStructure","spec":{"varianceWaterfall":false,"dataFormatPercentSign":true,"order":"ac1","orderMark":false}}`)}
 	if got := StructureSumsFeatures(byScenario, nil); len(got) != 0 {
 		t.Errorf("order by a scenario: got %v, want none", got)

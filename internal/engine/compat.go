@@ -253,6 +253,10 @@ const StructureWaterfallMinVersion = "v1.0.0-next.69"
 // and the mark of the order of a structure chart.
 const StructureRowLinesMinVersion = "v1.0.0-next.71"
 
+// StructureRowLinesListMinVersion is the first engine release that takes a list
+// of rows for the row lines of a structure chart.
+const StructureRowLinesListMinVersion = "v1.0.0-next.72"
+
 // structureFeatureFloors holds the features of StructureSumsCheck that need a
 // newer engine than StructureSumsMinVersion.
 var structureFeatureFloors = map[string]string{
@@ -263,6 +267,7 @@ var structureFeatureFloors = map[string]string{
 	"ChartStructure sumDataset":            StructureWaterfallMinVersion,
 	"ChartStructure rowLines":              StructureRowLinesMinVersion,
 	"ChartStructure orderMark":             StructureRowLinesMinVersion,
+	"ChartStructure rowLines as a list":    StructureRowLinesListMinVersion,
 }
 
 // StructureSumsCheck returns the engine check for a project that uses the given

@@ -4317,9 +4317,11 @@
           "description": "Name of a DataSet with the values of the total row: the scenario columns. The chart then adds up no total. A scenario column the chart does not draw is shown at the total only. Needs template engine v1.0.0-next.69."
         },
         "rowLines": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "A thin line after every n-th row, over all segments of the chart. The count starts again behind a sum row. Needs template engine v1.0.0-next.71."
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 1 } }
+          ],
+          "description": "Thin lines between the rows, over all segments of the chart. A number: after every n-th row. A list: after each of these rows, counted from the first row, for example [4, 9, 14]. The count starts again behind a sum row. Needs template engine v1.0.0-next.71, the list v1.0.0-next.72."
         },
         "orderMark": {
           "type": "boolean",
