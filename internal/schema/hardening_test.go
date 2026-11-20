@@ -779,6 +779,58 @@ spec:
 			wantErr: true,
 		},
 		{
+			name: "scatter tick step, iso factor and label side",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: { measure: ac1, min: 0, max: 150, step: 10 }
+  y: ac2
+  iso:
+    values: [0.5, 1, 2]
+    factor: 0.001
+  labels:
+    points: [T18, { name: T15, side: nw }, { name: M32 }]
+`,
+			wantErr: false,
+		},
+		{
+			name: "scatter label side unknown rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  labels:
+    points: [{ name: T15, side: up }]
+`,
+			wantErr: true,
+		},
+		{
+			name: "scatter iso factor of 0 rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartScatter
+metadata:
+  name: products
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  iso:
+    values: auto
+    factor: 0
+`,
+			wantErr: true,
+		},
+		{
 			name: "scatter iso values auto",
 			yaml: `
 apiVersion: bino.bi/v1alpha1
@@ -1742,7 +1794,8 @@ func TestValidate_Annotation(t *testing.T) {
 		{"date with time", head + "  target: { kind: ChartTime, name: c, point: { date: \"2024-01-01T09:00:00\" } }\n", false},
 		{"arrow without to", head + "  mark: arrow\n" + target, true},
 		{"to on a marker", head + target + "  to: { kind: ChartTime, name: c }\n", true},
-		{"to on a frame", head + "  mark: frame\n" + target + "  to: { kind: ChartTime, name: c }\n", true},
+		{"frame around two points", head + "  mark: frame\n" + target + "  to: { kind: ChartTime, name: c }\n", false},
+		{"to on a pointer", head + "  mark: pointer\n" + target + "  to: { kind: ChartTime, name: c }\n", true},
 		{"unknown mark", head + "  mark: circle\n" + target, true},
 		{"no target", head + "  title: T\n", true},
 		{"target without name", head + "  target: { kind: ChartTime }\n", true},

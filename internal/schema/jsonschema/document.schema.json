@@ -2361,7 +2361,7 @@
           "type": "string",
           "enum": ["marker", "frame", "arrow", "difference", "pointer", "bracket"],
           "default": "marker",
-          "description": "marker: a numbered circle. frame: a rounded frame around the target. arrow: a straight arrow from target to to. difference: the difference of two values of a chart, from target to to, with a reference line, a bar and the value 'to minus target' as label; a point of a stacked chart without category means the sum of the stack. difference needs template engine v1.0.0-next.49 or newer. pointer: a thick arrow that points down at the value end of a bar. bracket: a line around the rows of a ChartStructure from target to to, with markText or, with percent, the share of these rows in all rows. pointer, bracket and a difference on a ChartStructure need template engine v1.0.0-next.51 or newer."
+          "description": "marker: a numbered circle. frame: a rounded frame around the target; with to, one oval around both data points, which needs template engine v1.0.0-next.75 or newer. arrow: a straight arrow from target to to. difference: the difference of two values of a chart, from target to to, with a reference line, a bar and the value 'to minus target' as label; a point of a stacked chart without category means the sum of the stack. difference needs template engine v1.0.0-next.49 or newer. pointer: a thick arrow that points down at the value end of a bar. bracket: a line around the rows of a ChartStructure from target to to, with markText or, with percent, the share of these rows in all rows. pointer, bracket and a difference on a ChartStructure need template engine v1.0.0-next.51 or newer."
         },
         "color": {
           "type": "string",
@@ -2374,7 +2374,7 @@
         },
         "to": {
           "$ref": "#/$defs/annotationTarget",
-          "description": "The end of an arrow, the second value of a difference, or the last row of a bracket. Required for mark: arrow, difference and bracket, not allowed otherwise. Must be on the same page as target."
+          "description": "The end of an arrow, the second value of a difference, the last row of a bracket, or the second data point of a frame around two. Required for mark: arrow, difference and bracket, optional for frame, not allowed otherwise. Must be on the same page as target."
         },
         "markText": {
           "type": "string",
@@ -2425,7 +2425,7 @@
         },
         "to": {
           "required": ["mark"],
-          "properties": { "mark": { "enum": ["arrow", "difference", "bracket"] } }
+          "properties": { "mark": { "enum": ["frame", "arrow", "difference", "bracket"] } }
         }
       },
       "additionalProperties": false
@@ -2911,6 +2911,15 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Ordered list of CSS colors for the series. Series cycle through these colors."
+        },
+        "markStyles": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Look of a filled point or bubble. Needs template engine v1.0.0-next.75 or newer.",
+          "properties": {
+            "stroke": { "type": "string", "default": "#ffffff", "description": "CSS color of the line around the mark." },
+            "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 1, "description": "Opacity of the fill, from 0 (clear) to 1 (solid)." }
+          }
         },
         "padding": { "$ref": "#/$defs/paddingStyle" }
       },
@@ -4677,6 +4686,11 @@
               "type": "number",
               "description": "Upper axis domain bound. Must be greater than min or both overrides are dropped."
             },
+            "step": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Distance between two ticks. Without it the chart picks a step for the size of the plot. A step that gives more than 50 ticks is not used. Needs template engine v1.0.0-next.75 or newer."
+            },
             "refLine": {
               "type": "number",
               "description": "Draws a reference line perpendicular to this axis at the given value."
@@ -4697,10 +4711,10 @@
     "xyIso": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Hyperbolic iso-lines x*y = k for a third derived measure. Requires a strictly positive domain on both axes.",
+      "description": "Hyperbolic iso-lines x*y*factor = value for a third derived measure. No axis may start below 0. An axis that starts at 0 needs template engine v1.0.0-next.75 or newer, before that both axes had to start above 0.",
       "properties": {
         "values": {
-          "description": "Iso-line constants: 'auto' derives them from the data, or provide explicit k values.",
+          "description": "Values of the iso-lines, in the unit of the lines: 'auto' derives them from the data, or provide explicit values.",
           "oneOf": [
             { "const": "auto" },
             { "type": "array", "items": { "type": "number" }, "minItems": 1 }
@@ -4714,10 +4728,16 @@
           "type": "string",
           "description": "Unit suffix for the iso-line caption."
         },
+        "factor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1,
+          "description": "Brings the product x*y to the unit of the lines: a line with the value v runs where x*y*factor = v. Use 0.01 when one axis is a percentage, 0.001 for lines in millions over axes in units and thousands. Needs template engine v1.0.0-next.75 or newer."
+        },
         "highlight": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Shades the region where x*y >= from.",
+          "description": "Shades the region where x*y*factor >= from.",
           "properties": {
             "from": { "type": "number", "description": "Iso value the shading starts at." }
           }
@@ -4748,10 +4768,30 @@
       "description": "Point label configuration. Defaults differ per kind: ChartScatter uses points 'auto' without values, ChartBubble labels all bubbles with values.",
       "properties": {
         "points": {
-          "description": "Which points get a name label: 'auto' picks up to max collision-free candidates, 'all' labels every point, 'none' disables labels, or list explicit point names.",
+          "description": "Which points get a name label: 'auto' picks up to max collision-free candidates, 'all' labels every point, 'none' disables labels, or list explicit point names. An entry of the list can be an object with name and side: the label then stands on that side of its point, also outside the plot or on another mark. The object form needs template engine v1.0.0-next.75 or newer.",
           "oneOf": [
             { "enum": ["auto", "none", "all"] },
-            { "type": "array", "items": { "type": "string" } }
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name"],
+                    "properties": {
+                      "name": { "type": "string", "description": "Name of the point." },
+                      "side": {
+                        "type": "string",
+                        "enum": ["n", "ne", "e", "se", "s", "sw", "w", "nw"],
+                        "description": "Side of the point the label stands on: n is above, e is right, s is below, w is left. Without it the chart picks a free side."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           ]
         },
         "values": {

@@ -66,7 +66,7 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-chart-scatter.xy-label-unknown":   "Unbekannte Label-Namen: {{names}}.",
 		"bn-chart-scatter.xy-series-overflow": "Mehr Serien als Palettenfarben; Farben wiederholen sich aufgehellt.",
 		"bn-chart-scatter.xy-point-budget":    "{{count}} Punkte überschreiten das Budget von 5000 Punkten; 'limit' erwägen.",
-		"bn-chart-scatter.xy-iso-domain":      "Iso-Linien benötigen einen strikt positiven Wertebereich auf beiden Achsen; übersprungen.",
+		"bn-chart-scatter.xy-iso-domain":      "Iso-Linien benötigen Achsen, die nicht unter 0 beginnen; übersprungen.",
 
 		"bn-chart-bubble.axis.in":                    "in",
 		"bn-chart-bubble.legend.title":               "",
@@ -159,7 +159,7 @@ var defaultI18nTokens = map[string]map[string]string{
 		"bn-chart-scatter.xy-label-unknown":   "Unknown label name(s): {{names}}.",
 		"bn-chart-scatter.xy-series-overflow": "More series than palette colors; colors repeat with a tint step.",
 		"bn-chart-scatter.xy-point-budget":    "{{count}} points exceed the 5000-point budget; consider 'limit'.",
-		"bn-chart-scatter.xy-iso-domain":      "Iso-lines need a strictly positive domain on both axes; skipped.",
+		"bn-chart-scatter.xy-iso-domain":      "Iso-lines need axes that do not start below 0; skipped.",
 
 		"bn-chart-bubble.axis.in":                    "in",
 		"bn-chart-bubble.legend.title":               "",
