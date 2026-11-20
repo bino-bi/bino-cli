@@ -17,7 +17,8 @@ const (
 	inheritedClosest = "inherited-closest"
 	inheritedPage    = "inherited-page"
 
-	// measureTitleOrder marks a scope whose titleOrder has a variance or '@' key.
+	// measureTitleOrder marks a scope whose titleOrder has an '@' key. A chart
+	// sorts by a plain variance since template engine v1.0.0-next.69.
 	measureTitleOrder = "titleOrder@measure"
 )
 
@@ -115,7 +116,7 @@ var inheritedPropUnresolved = Rule{
 				scope[p.field] = hasValue(value) && inheritKeyword(value) == ""
 			}
 			order, _ := page.spec["titleOrder"].(string)
-			scope[measureTitleOrder] = config.IsMeasureOrder(order)
+			scope[measureTitleOrder] = config.IsMeasureOrder(order) && strings.Contains(order, "@")
 			w.children(page, "children", page.spec["children"], []inheritScope{scope}, nil)
 		}
 		return w.findings
@@ -208,16 +209,16 @@ func (w *inheritWalker) scope(kind string, n specNode, chain []inheritScope) inh
 			scope[p.field] = hasValue(value)
 			if p.field == "titleOrder" {
 				order, _ := value.(string)
-				scope[measureTitleOrder] = config.IsMeasureOrder(order)
+				scope[measureTitleOrder] = config.IsMeasureOrder(order) && strings.Contains(order, "@")
 			}
 		case !inheritResolves(keyword, p.field, chain):
 			w.report(site, p, keyword)
 		case kind == "ChartStructure" && p.prop == "order" && inheritsMeasureOrder(keyword, chain):
 			w.add(Finding{
 				RuleID: "chart-order-inherits-measure",
-				Message: fmt.Sprintf("'order: %s' takes a titleOrder with a variance or '@' key; a ChartStructure "+
+				Message: fmt.Sprintf("'order: %s' takes a titleOrder with an '@' key; a ChartStructure "+
 					"cannot sort by it and sorts by category. Give 'order' an explicit value, or set the "+
-					"variance order on the Table instead of in titleOrder", keyword),
+					"'@' order on the Table instead of in titleOrder", keyword),
 				File:   site.doc.File,
 				DocIdx: site.doc.Position,
 				Path:   joinLintPath(site.path, p.prop),

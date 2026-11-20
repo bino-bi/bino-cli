@@ -277,12 +277,18 @@ func (rc *renderCtx) recordDataRefs(specRaw json.RawMessage) {
 	}
 	var p struct {
 		Dataset spec.DatasetList `json:"dataset"`
+		// the totals of a chart can come from a dataset of their own
+		SumDataset string `json:"sumDataset"`
+		Totals     struct {
+			Dataset string `json:"dataset"`
+		} `json:"totals"`
 	}
 	if json.Unmarshal(specRaw, &p) != nil {
 		return
 	}
-	for _, name := range strings.Split(p.Dataset.Join(","), ",") {
-		if name != "" {
+	names := append(strings.Split(p.Dataset.Join(","), ","), p.SumDataset, p.Totals.Dataset)
+	for _, name := range names {
+		if name = strings.TrimSpace(name); name != "" {
 			rc.dataRefs[name] = true
 		}
 	}

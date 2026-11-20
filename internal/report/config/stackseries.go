@@ -203,9 +203,12 @@ func TimeTotalsFeatures(docs []Document, defaults map[string]map[string]map[stri
 
 // timeTotalsChart notes the time totals fields of a ChartTime spec.
 func timeTotalsChart(spec map[string]any, found map[string]bool) {
-	if totals, ok := spec["totals"].(map[string]any); ok && len(totals) > 0 {
+	if totals, ok := spec["totals"].(map[string]any); ok {
 		found[timeTotalsPrefix+"ChartTime totals"] = true
-		if scaling, set := totals["unitScaling"]; !set || scaling == nil || scaling == "" {
+		// only a spec that stands alone tells: an override of a referenced chart, of a
+		// SmallMultiple base or of a dataset default has no dataset, and the unitScaling can come from below it
+		scaling, set := totals["unitScaling"]
+		if _, whole := spec["dataset"]; whole && (!set || scaling == nil || scaling == "") {
 			found[timeTotalsPrefix+"ChartTime totals without unitScaling"] = true
 		}
 		if list, _ := totals["scenarios"].([]any); len(list) > 0 {

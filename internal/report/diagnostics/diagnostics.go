@@ -405,9 +405,9 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 				diagnostics = append(diagnostics, d)
 			}
 		}
-		if len(config.StructureSumsFeatures(docs, nil)) == 0 {
-			features := dataset.StructureSumsFeatures(docs, results)
-			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.StructureSumsCheck(features), "structure-sums-engine-version"); ok && !runner.Skip(d.Code) {
+		// the manifest check reports what the manifests use: here only what a default adds
+		if features := dataset.StructureSumsDefaultFeatures(docs, results); len(features) > 0 {
+			if d, ok := engineGateDiagnostic(dir, true, engine.StructureSumsCheck(features), "structure-sums-engine-version"); ok && !runner.Skip(d.Code) {
 				diagnostics = append(diagnostics, d)
 			}
 		}

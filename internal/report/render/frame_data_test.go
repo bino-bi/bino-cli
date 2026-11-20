@@ -145,12 +145,15 @@ func TestGenerateFrameAndContext_ServeFollowsRenderedComponents(t *testing.T) {
 			]}},
 			{"kind": "Table", "ref": "base_table", "spec": {"dataset": "override_ds"}},
 			{"kind": "Table", "spec": {"dataset": "$dollar_ds"}},
+			{"kind": "ChartStructure", "spec": {"dataset": "card_ds", "sums": "total", "sumDataset": "sum_ds"}},
+			{"kind": "ChartTime", "spec": {"dataset": "grid_ds", "unitScaling": 10, "totals": {"dataset": "totals_ds"}}},
 			{"kind": "FakeChart", "spec": {"dataset": "plugin_ds"}}
 		]}`),
 		// xga is the render format, so this page is skipped.
 		specDoc("LayoutPage", "skipped", `{"pageFormat": "a4", "children": [{"kind": "Table", "spec": {"dataset": "skipped_ds"}}]}`),
 	}
-	present := []string{"card_ds", "grid_ds", "label_ds", "param_ds", "override_ds", "dollar_ds", "plugin_ds"}
+	// the datasets of the totals of a chart are bound too
+	present := []string{"card_ds", "grid_ds", "label_ds", "param_ds", "override_ds", "dollar_ds", "plugin_ds", "sum_ds", "totals_ds"}
 	absent := []string{"base_ds", "skipped_ds", "unused_ds"}
 
 	ctxHTML := string(frame(t, docs, datasetResults(slices.Concat(present, absent)...), "xga", ModeServe, DataModeInline).ContextHTML)
