@@ -180,6 +180,14 @@ func TestTimeTotalsFeatures(t *testing.T) {
 	if got := TimeTotalsFeatures(waterfall, nil); !reflect.DeepEqual(got, wantWaterfall) {
 		t.Fatalf("got %v, want %v", got, wantWaterfall)
 	}
+	area := doc(`{"dataset":"d","chartMode":"line","stack":{"by":"dimensions"},"axisLabelsMode":"two-row","periodLines":1,"pointPosition":"end"}`)
+	wantArea := []string{"ChartTime periodLines", "ChartTime pointPosition", "ChartTime stacked area by series", "ChartTime two-row labels in line mode"}
+	if got := TimeTotalsFeatures(area, nil); !reflect.DeepEqual(got, wantArea) {
+		t.Fatalf("area = %v, want %v", got, wantArea)
+	}
+	if got := TimeTotalsFeatures(doc(`{"dataset":"d","stack":{"by":"dimensions"},"axisLabelsMode":"two-row","pointPosition":"center"}`), nil); len(got) != 0 {
+		t.Fatalf("columns by series = %v, want none", got)
+	}
 	if got := TimeTotalsFeatures(doc(`{"dataset":"d","varianceWaterfall":false,"referenceColumn":false}`), nil); len(got) != 0 {
 		t.Fatalf("false is no feature, got %v", got)
 	}

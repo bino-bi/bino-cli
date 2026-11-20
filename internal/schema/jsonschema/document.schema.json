@@ -4532,7 +4532,18 @@
           "type": "integer",
           "minimum": 1,
           "default": 1,
-          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period. Bar mode only."
+          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period."
+        },
+        "periodLines": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stacked area: a thin line at every n-th period. Needs engine v1.0.0-next.73."
+        },
+        "pointPosition": {
+          "type": "string",
+          "enum": ["center", "end"],
+          "default": "center",
+          "description": "Stacked area: end puts the points on the right border of their period. Needs engine v1.0.0-next.73."
         },
         "scenarioSwitch": {
           "type": "boolean",

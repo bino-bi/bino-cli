@@ -44,7 +44,9 @@ stacked columns or a stacked area with the `stack` block (see
 - `maxBars` - threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `lineFullWidth` - when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
 - `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label; `two-row` prints short labels and puts the year of a month, quarter or week in a second row, under the first period and where it changes. The short year label follows the translation key [`bn-chart-time.date-format-short-year`](/reference/internationalization/#time-and-structure-charts-bn-chart-time-bn-chart-structure-prefixes).
-- `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. Bar mode only.
+- `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. In line mode it works since template engine v1.0.0-next.73. An older engine ignores it there.
+- `periodLines` - for a stacked area: a thin line at every n-th period, from the axis to the top of the stack. `1` draws one at every period. With it the dashed line at the change of the year is not drawn. Needs template engine v1.0.0-next.73.
+- `pointPosition` - for a stacked area: where the point of a period stands. `center` (default) is the middle of the period, above its label. `end` is the right border of the period, for values at the end of a period such as a stock. Needs template engine v1.0.0-next.73.
 - `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right` or `none`.
 - `dataFormatDigitsDecimal` - number of decimal digits of the value labels. Default: `1`. Same meaning as on a [`Table`](/reference/table/).
 - `dataFormatDigitsPercent` - number of decimal digits of the percent labels of relative variances. Default: `2`. Same meaning as on a `Table`.
@@ -77,7 +79,7 @@ stacked columns or a stacked area with the `stack` block (see
   - `percentMark` - for `mode: relative`: plain shares and one `100%` mark. Default: `false`.
   - `mode` - stacking mode: `absolute` (additive, default), `relative` (100% stacked), or `absolute-relative` (absolute height with percentage labels).
   - `order` - segment order within each stack: `asc`, `desc`, or `dataset` (default).
-  - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart.
+  - When `chartMode` is `bar`, produces stacked columns. When `chartMode` is `line`, produces a stacked area chart, see [Stacked area by series](#stacked-area-by-series).
 - `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When not set, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
 - `ruleset` - optional name of a [`RuleSet`](/reference/ruleset/) to apply, or `inherited-closest` / `inherited-page` to inherit the surrounding layout's rule set; merged over the `_system` and `_default` rule sets.
@@ -506,6 +508,43 @@ spec:
     mode: absolute
 ```
 
+## Stacked area by series
+
+With `stack.by: dimensions` each value of the `category` column is one layer of the area, as for [stacked columns by series](#stack-by-series). There is no limit of four layers. Needs template engine v1.0.0-next.73: older engines draw one area with the sum of the series. `chartMode: auto` draws the same area when the chart has more periods than `maxBars`.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: incidents_by_priority
+spec:
+  dataset: incidents_by_priority   # date, category, categoryIndex, ac1
+  chartMode: line
+  dateInterval: month
+  scenarios: [ac1]
+  unitScaling: auto
+  dataFormatDigitsDecimal: 0
+  axisLabelsMode: two-row
+  periodLines: 1
+  stack:
+    by: dimensions
+    legend: right
+```
+
+- The layers stack in the order of `categoryIndex`, the first series at the axis. The first scenario is drawn.
+- Each layer prints its value in its middle at each period. A layer that is lower than a line of text prints no value.
+- The total is a line on top of the stack, with a marker and the total at each period.
+- A label that would lie on another one is left out. The chart starts with the last period, so the last values are always there. To print all of them, give the chart more width or a smaller `scale`.
+- The labels of the first and the last period stand on their point like the others. Half of such a label lies beside the area, so it has the white box of a plain label.
+- A period where no series has a value has no total. The total of a stack with a negative total stands at its lower edge.
+- `legend` puts the names of the series left of the first period, right of the last one, at both sides, or nowhere. Each name stands at half the height of its layer.
+- The colours come from `stackColors` of the `bn-chart-time` style, one per series. The default has three colours that repeat.
+- `axisLabelsMode: two-row` prints the year in a second row. `periodLines` and `pointPosition` are for areas only.
+- With `mode: relative` the layers are shares of 100% and the labels are percent values. There is no total line then, and no `100%` mark.
+- `order`, `notation`, `percentMark` and `scenarioSwitch` have no effect on an area.
+- A dataset without a `category` column stays one area.
+
 ## Inherited props
 
 Instead of repeating `scenarios` and `variances` on every component, you can inherit them from an ancestor `LayoutPage` or `LayoutCard`. Set either of them to a special keyword:
@@ -555,7 +594,9 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.maxBars`           | integer                  | no                   | `28`                         | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1.                                                                                                                                                                        | `maxBars: 15`                     |
 | `spec.lineFullWidth`     | boolean                  | no                   | `true`                       | Stretch line charts to fill full parent width. Has no effect in bar mode.                                                                                                                                                                                              | `lineFullWidth: true`             |
 | `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`, `two-row` (needs engine v1.0.0-next.49).       | `axisLabelsMode: short`           |
-| `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. Bar mode only. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. In line mode it works since engine v1.0.0-next.73. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `spec.periodLines` | integer | no | - | Stacked area: a thin line at every n-th period, from the axis to the top of the stack. Replaces the dashed line at the change of the year. Minimum: 1. Needs engine v1.0.0-next.73. | `periodLines: 1` |
+| `spec.pointPosition` | string | no | `center` | Stacked area: where the point of a period stands. Values: `center`, `end` (the right border of the period). Needs engine v1.0.0-next.73. | `pointPosition: end` |
 | `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `none`. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatDigitsDecimal` | integer            | no                   | `1`                          | Number of decimal digits of the value labels. Minimum: 0. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                          | Number of decimal digits of the percent labels of relative variances. Minimum: 0. Needs engine v1.0.0-next.46. |
