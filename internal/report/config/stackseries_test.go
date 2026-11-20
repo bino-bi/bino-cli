@@ -157,6 +157,14 @@ func TestTimeTotalsFeatures(t *testing.T) {
 	if got := TimeTotalsFeatures(used, nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
+	waterfall := doc(`{"dataset":"d","totals":{"by":"all"},"varianceWaterfall":true,"referenceColumn":true}`)
+	wantWaterfall := []string{"ChartTime referenceColumn", "ChartTime totals", "ChartTime totals without unitScaling", "ChartTime varianceWaterfall"}
+	if got := TimeTotalsFeatures(waterfall, nil); !reflect.DeepEqual(got, wantWaterfall) {
+		t.Fatalf("got %v, want %v", got, wantWaterfall)
+	}
+	if got := TimeTotalsFeatures(doc(`{"dataset":"d","varianceWaterfall":false,"referenceColumn":false}`), nil); len(got) != 0 {
+		t.Fatalf("false is no feature, got %v", got)
+	}
 	// the other gates do not report them
 	if got := StackSeriesFeatures(used, nil); len(got) != 0 {
 		t.Fatalf("stack series gate got %v", got)

@@ -356,13 +356,27 @@ const (
 	TimeIndicatorMinVersion = "v1.0.0-next.60"
 )
 
+// TimeWaterfallMinVersion is the first engine release with the variance
+// waterfall of a time chart, its reference column, and totals at the scale of
+// the chart (no unitScaling in totals).
+const TimeWaterfallMinVersion = "v1.0.0-next.68"
+
+// timeFeatureFloors holds the features of TimeTotalsCheck that do not need
+// TimeIndicatorMinVersion, with the engine release they need.
+var timeFeatureFloors = map[string]string{
+	TimeTotalsFeature:                      TimeTotalsMinVersion,
+	"ChartTime varianceWaterfall":          TimeWaterfallMinVersion,
+	"ChartTime referenceColumn":            TimeWaterfallMinVersion,
+	"ChartTime totals without unitScaling": TimeWaterfallMinVersion,
+}
+
 // TimeTotalsFeature is the name of the totals of a time chart in the features
 // of TimeTotalsCheck. Only it needs TimeTotalsMinVersion.
 const TimeTotalsFeature = "ChartTime totals"
 
 // TimeTotalsCheck returns the engine check for a project that uses the given
-// features: the totals need TimeTotalsMinVersion, the others
-// TimeIndicatorMinVersion. The check returns an error on an older engine and
+// features: the totals need TimeTotalsMinVersion, the waterfall fields
+// TimeWaterfallMinVersion, the others TimeIndicatorMinVersion. The check returns an error on an older engine and
 // names the features that this engine does not have. An empty or unreadable
 // version is no finding.
 func TimeTotalsCheck(features []string) func(string) error {
@@ -375,8 +389,8 @@ func TimeTotalsCheck(features []string) func(string) error {
 		var missing []string
 		for _, feature := range features {
 			need := TimeIndicatorMinVersion
-			if feature == TimeTotalsFeature {
-				need = TimeTotalsMinVersion
+			if floor, ok := timeFeatureFloors[feature]; ok {
+				need = floor
 			}
 			if !v.LessThan(semver.MustParse(need)) {
 				continue

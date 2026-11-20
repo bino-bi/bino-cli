@@ -4448,9 +4448,8 @@
         },
         "totals": {
           "type": "object",
-          "description": "Total columns at their own scale: one for all periods, or one per year, quarter, month or week. Each variance row gets the variance of each total. Plain columns only, with a fixed unitScaling. Needs template engine v1.0.0-next.64.",
+          "description": "Total columns: one for all periods, or one per year, quarter, month or week. Each variance row gets the variance of each total. Plain columns only, with a fixed unitScaling. Needs template engine v1.0.0-next.64.",
           "additionalProperties": false,
-          "required": ["unitScaling"],
           "properties": {
             "by": {
               "type": "string",
@@ -4471,7 +4470,7 @@
             "unitScaling": {
               "type": "number",
               "exclusiveMinimum": 0,
-              "description": "Data units per em of column height for the total columns."
+              "description": "Data units per em for the totals. Left out: the scale of the chart."
             },
             "label": {
               "type": "string",
@@ -4500,6 +4499,16 @@
           "type": "boolean",
           "default": false,
           "description": "For a series that changes its scenario along the time axis, for example AC up to this year and PL after it. A scenario that only has values where the first scenario has none is drawn in its place, with value labels. A vertical line marks the change and the scenario names stand under the axis. Variances of one type over the same reference share one row. A chart with one scenario gets the name of that scenario under the axis. Bar mode, without stack or with stack.by 'dimensions'."
+        },
+        "varianceWaterfall": {
+          "type": "boolean",
+          "default": false,
+          "description": "Absolute variances as a walk: a column starts where the one before ended. With totals (by 'all', no unitScaling) the first row is a bridge between the totals. Needs template engine v1.0.0-next.68."
+        },
+        "referenceColumn": {
+          "type": "boolean",
+          "default": false,
+          "description": "With scenarioSwitch: the reference is a column behind the series. Needs engine v1.0.0-next.68."
         },
         "axisTitlePosition": {
           "type": "string",
