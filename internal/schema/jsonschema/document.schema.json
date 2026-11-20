@@ -4532,18 +4532,18 @@
           "type": "integer",
           "minimum": 1,
           "default": 1,
-          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period. In line mode it needs template engine v1.0.0-next.73."
+          "description": "Print only every n-th category label, starting with the first period. 2 labels every second period."
         },
         "periodLines": {
           "type": "integer",
           "minimum": 1,
-          "description": "Stacked area: a thin line at every n-th period, from the axis to the top of the stack. 1 draws one at every period. With it the dashed line at the change of the year is not drawn. Needs template engine v1.0.0-next.73."
+          "description": "Stacked area: a thin line at every n-th period. Needs engine v1.0.0-next.73."
         },
         "pointPosition": {
           "type": "string",
           "enum": ["center", "end"],
           "default": "center",
-          "description": "Stacked area: where the point of a period stands. center is the middle of the period, end is its right border, for values at the end of a period such as a stock. Needs template engine v1.0.0-next.73."
+          "description": "Stacked area: end puts the points on the right border of their period. Needs engine v1.0.0-next.73."
         },
         "scenarioSwitch": {
           "type": "boolean",
