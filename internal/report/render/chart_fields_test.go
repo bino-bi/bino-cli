@@ -42,12 +42,15 @@ func TestChartTime_NewFields(t *testing.T) {
 
 func TestChartStructure_NewFields(t *testing.T) {
 	html, err := ComponentFromSpec("ChartStructure", json.RawMessage(`{
-		"dataset": "revenue", "dataFormatDigitsDecimal": 2, "dataFormatDigitsPercent": 0
+		"dataset": "revenue", "dataFormatDigitsDecimal": 2, "dataFormatDigitsPercent": 0,
+		"rowLines": 5, "orderMark": true
 	}`), nil)
 	if err != nil {
 		t.Fatalf("ComponentFromSpec: %v", err)
 	}
-	for _, want := range []string{" data-format-digits-decimal='2'", " data-format-digits-percent='0'"} {
+	for _, want := range []string{
+		" data-format-digits-decimal='2'", " data-format-digits-percent='0'", " row-lines='5'", " order-mark='true'",
+	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("expected%s in HTML, got:\n%s", want, html)
 		}

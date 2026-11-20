@@ -200,6 +200,8 @@ type chartStructureSpec struct {
 	VarianceWaterfall       *bool    `json:"varianceWaterfall"`
 	SumScenarios            []string `json:"sumScenarios,omitempty"`
 	SumDataset              string   `json:"sumDataset"`
+	RowLines                *int     `json:"rowLines"`
+	OrderMark               *bool    `json:"orderMark"`
 
 	Sums                  string          `json:"sums"`
 	SumTitle              string          `json:"sumTitle"`
@@ -247,6 +249,8 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
 	writeAttr(b, "sum-scenarios", strings.Join(s.SumScenarios, ","))
 	writeAttr(b, "sum-dataset", s.SumDataset)
+	writeIntAttr(b, "row-lines", s.RowLines)
+	writeBoolAttr(b, "order-mark", s.OrderMark)
 	writeAttr(b, "sums", s.Sums)
 	writeAttr(b, "sum-title", s.SumTitle)
 	writeAttr(b, "scenario-label-position", s.ScenarioLabelPosition)
