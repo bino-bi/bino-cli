@@ -266,7 +266,13 @@ func TestCheckOverflow(t *testing.T) {
 			c.Diagnostics = tt.diagnostics
 			c.Regions = tt.regions
 
-			got := Analyze(snapshot([]Component{c}, nil))
+			// an unrelated warning is a finding of its own rule
+			var got []Finding
+			for _, f := range Analyze(snapshot([]Component{c}, nil)) {
+				if f.Rule != RuleWarning {
+					got = append(got, f)
+				}
+			}
 
 			if !tt.want {
 				if len(got) != 0 {
@@ -609,5 +615,29 @@ func TestDecodeSnapshot(t *testing.T) {
 	want := []string{RuleEmptyComponent, RuleOverflow, RuleScaleMismatch}
 	if !slices.Equal(got, want) {
 		t.Errorf("Analyze(fixture) rules = %v, want %v", got, want)
+	}
+}
+
+func TestCheckWarnings(t *testing.T) {
+	c := Component{ID: "bn-chart-scatter[0]", Diagnostics: []Diagnostic{
+		{ID: "WARN_xy_iso_domain", Type: "warning", Message: "Iso-lines need axes that do not start below 0; skipped."},
+		{ID: "WARN_overflow", Type: "warning", Message: "too wide"},
+		{ID: "AUTO_scale", Type: "warning", Message: "Auto-scaled font by factor 0.9"},
+		{ID: "ERR_sql", Type: "error", Message: "bad query"},
+		{ID: "WARN_xy_label_unknown", Type: "warning"},
+	}}
+
+	got := checkWarnings(c, Source{})
+	if len(got) != 2 {
+		t.Fatalf("got %d findings, want 2: %v", len(got), got)
+	}
+	if got[0].Rule != RuleWarning || got[0].Severity != SeverityWarning {
+		t.Errorf("finding = %+v, want rule %s as a warning", got[0], RuleWarning)
+	}
+	if got[0].Message != "Iso-lines need axes that do not start below 0; skipped." || got[0].Hint != "WARN_xy_iso_domain" {
+		t.Errorf("finding = %+v, want the message and the id of the engine", got[0])
+	}
+	if got[1].Message == "" || got[1].Hint != "WARN_xy_label_unknown" {
+		t.Errorf("finding = %+v, want a message for a warning without one", got[1])
 	}
 }

@@ -25,6 +25,7 @@ func DefaultRules() []Rule {
 		tableThereofPositionUnused,
 		tableVarianceWaterfallUnused,
 		chartTimeFieldNoEffect,
+		chartScatterIsoAxisBelowZero,
 		inheritedPropUnresolved,
 		pageLayoutSlotsUsed,
 		cardLayoutSlotsUsed,

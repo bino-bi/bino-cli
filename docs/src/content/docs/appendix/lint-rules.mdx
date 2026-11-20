@@ -24,6 +24,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `table-thereof-position-unused` | Table Thereof Position Unused | Warning | `spec.thereofPosition: above` only works on a Table with a `thereof` list. |
 | `table-variance-waterfall-unused` | Table Variance Waterfall Unused | Warning | `spec.varianceWaterfall` only works when `barColumns` lists an absolute variance. |
 | `chart-time-field-no-effect`      | ChartTime Field Without Effect              | Warning  | `level`, `order`, `orderDirection` and `limit` have no effect on a ChartTime.                                               |
+| `chart-scatter-iso-axis-below-zero` | ChartScatter Iso-Lines On An Axis Below 0 | Warning | The iso-lines of a ChartScatter are not drawn when `x.min` or `y.min` is below 0. |
 | `inherited-prop-unresolved`       | Inherited Prop Unresolved                   | Warning  | `inherited-closest` / `inherited-page` need an enclosing LayoutCard or LayoutPage that sets the matching field.             |
 | `chart-order-inherits-measure`    | Chart Order Inherits Measure                | Warning  | A ChartStructure `order` inherits a `titleOrder` with an `@` key, which a chart cannot sort by.                  |
 | `missing-required-reference`      | Missing Required Reference                  | Error    | Required child references (`ref`) must point to existing documents.                                                         |
@@ -277,6 +278,30 @@ With a template engine before **v1.0.0-next.29** the time chart reports the noti
 The rule also covers a `ChartTime` defined inline in `children` or `nodes`. On `Table` and `ChartStructure` these fields work and are not reported.
 
 **See also:** [ChartTime](/reference/chart-time/)
+
+### chart-scatter-iso-axis-below-zero
+
+The iso-lines of a `ChartScatter` are hyperbolas `x·y·factor = value`. They exist only where both values are positive, so the template engine draws them only when no axis goes below 0. On an axis below 0 it leaves all lines and the `iso.highlight` area out. The build stays green then.
+
+**Example problem:**
+
+```yaml
+kind: ChartScatter
+metadata:
+  name: product_portfolio
+spec:
+  dataset: products
+  x: { measure: ac1, min: -5, max: 40 } # below 0
+  y: { measure: ac2, min: 0 }
+  iso:
+    values: [1, 2, 3]
+```
+
+**Fix:** Start the axis at 0 or above, or remove `iso`.
+
+The rule reads the typed `min` only. An axis without `min` starts at the smallest value of the data, and the rule cannot see a negative value there. For that case `bino build --layout-state` reports [`layout-component-warning`](/cli/layout-state/) with the message of the engine.
+
+**See also:** [ChartScatter](/reference/chart-scatter/)
 
 ### inherited-prop-unresolved
 

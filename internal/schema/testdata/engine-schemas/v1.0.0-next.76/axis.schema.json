@@ -31,6 +31,14 @@
         "step": {
           "type": "number",
           "description": "Distance between two ticks. Default: a nice step for the size of the plot."
+        },
+        "titlePosition": {
+          "type": "string",
+          "enum": [
+            "outside",
+            "beside"
+          ],
+          "description": "Where the title stands. `outside` (default): in a row of its own, above the plot for y and below the tick labels for x. `beside`: in two lines beside the end of the axis, left of the top of the y axis and right of the end of the x axis."
         }
       },
       "required": [

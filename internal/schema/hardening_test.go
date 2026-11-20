@@ -787,8 +787,9 @@ metadata:
   name: products
 spec:
   dataset: product_data
-  x: { measure: ac1, min: 0, max: 150, step: 10 }
+  x: { measure: ac1, min: 0, max: 150, step: 10, titlePosition: beside }
   y: ac2
+  legend: { align: center }
   iso:
     values: [0.5, 1, 2]
     factor: 0.001

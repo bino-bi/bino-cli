@@ -4691,6 +4691,12 @@
               "exclusiveMinimum": 0,
               "description": "Distance between two ticks. Without it the chart picks a step for the size of the plot. A step that gives more than 50 ticks is not used. Needs template engine v1.0.0-next.75 or newer."
             },
+            "titlePosition": {
+              "type": "string",
+              "enum": ["outside", "beside"],
+              "default": "outside",
+              "description": "Where the axis title stands. outside: in a row of its own, above the plot for y and below the tick labels for x. beside: in two lines beside the end of the axis, the label and below it the unit, left of the top of the y axis and right of the end of the x axis. Needs template engine v1.0.0-next.76 or newer."
+            },
             "refLine": {
               "type": "number",
               "description": "Draws a reference line perpendicular to this axis at the given value."
@@ -4818,6 +4824,12 @@
           "type": "string",
           "enum": ["right", "bottom"],
           "description": "Legend placement. Defaults to 'right'."
+        },
+        "align": {
+          "type": "string",
+          "enum": ["start", "center", "end"],
+          "default": "start",
+          "description": "Moves the legend along its side. start is the top of a right legend and the left of a bottom one. Needs template engine v1.0.0-next.76 or newer."
         }
       }
     },
