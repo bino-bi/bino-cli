@@ -18,6 +18,8 @@ func TestChartTime_NewFields(t *testing.T) {
 		"dataset": "revenue",
 		"dataFormatDigitsDecimal": 0,
 		"dataFormatDigitsPercent": 1,
+		"dataFormatPercentSign": false,
+		"scalingIndicator": 100,
 		"axisLabelsStep": 2,
 		"scenarioSwitch": true,
 		"axisTitlePosition": "right"
@@ -27,6 +29,7 @@ func TestChartTime_NewFields(t *testing.T) {
 	}
 	for _, want := range []string{
 		" data-format-digits-decimal='0'", " data-format-digits-percent='1'", " axis-labels-step='2'",
+		" data-format-percent-sign='false'", " scaling-indicator='100'",
 		" scenario-switch='true'", " axis-title-position='right'",
 	} {
 		if !strings.Contains(html, want) {
