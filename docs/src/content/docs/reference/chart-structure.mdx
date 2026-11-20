@@ -152,9 +152,9 @@ AC scenario bars break at a wider point than PP, FC, and PL bars.
 This staggered break position maintains the IBCS visual hierarchy between scenario types.
 
 Overdrive bars apply to bar mode only and do not affect stacked charts, relative variance needles, or auto-fit scaling.
+The existing overflow warning is still emitted alongside the visual treatment.
 
 A chart with variances has one segment per variance beside the bars. With a fixed `unitScaling` (and a fixed `percentageScaling` when the chart has a relative variance) the segments share the width of the chart: a segment that needs less than its equal share leaves the rest to the others. So bars get break marks only when the whole chart does not fit. This needs template engine v1.0.0-next.71. Older engines give each segment its equal share only.
-The existing overflow warning is still emitted alongside the visual treatment.
 
 ## Sum rows
 
