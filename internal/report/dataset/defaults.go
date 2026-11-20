@@ -784,6 +784,24 @@ func TimeTotalsFeatures(docs []config.Document, results []Result) []string {
 	return config.TimeTotalsFeatures(docs, chartDefaults(results))
 }
 
+// TimeTotalsDefaultFeatures returns the features of TimeTotalsFeatures that
+// only a dataset default brings: the manifests alone do not use them. Each
+// field has its own engine floor, so a default can need a newer engine than
+// what the manifests use.
+func TimeTotalsDefaultFeatures(docs []config.Document, results []Result) []string {
+	inManifest := map[string]bool{}
+	for _, feature := range config.TimeTotalsFeatures(docs, nil) {
+		inManifest[feature] = true
+	}
+	var extra []string
+	for _, feature := range TimeTotalsFeatures(docs, results) {
+		if !inManifest[feature] {
+			extra = append(extra, feature)
+		}
+	}
+	return extra
+}
+
 // chartDefaults are the chart defaults of the datasets, by dataset name and
 // kind token.
 func chartDefaults(results []Result) map[string]map[string]map[string]any {
