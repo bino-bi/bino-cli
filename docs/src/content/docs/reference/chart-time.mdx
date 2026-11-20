@@ -340,10 +340,12 @@ The other variance rows stay where they are. The chart draws the plain walk in i
 
 - the totals have their own `unitScaling`, another `by` or another `aggregation`,
 - the total has no reference (the reference misses a value in a period of the series),
+- the variances of the row are not the series against the reference of the total,
+- `syncSpaceLeft` is set: the reference total has no room in a synced space,
 - the reference total plus the variances is not the total of the series, for example with totals from a `dataset` that do not match the periods,
 - the walk would cross the columns of the periods. This happens with few periods, when one period is a large part of the total.
 
-A walk has no break marks. It works for plain columns: not with `stack` and not in line mode.
+A walk has no break marks. Behind a total column on the axis (`totals.by` other than `all`) a walk starts again. It works for plain columns: not with `stack` and not in line mode.
 
 ## Variance only chart
 
