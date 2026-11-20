@@ -234,7 +234,7 @@ func (s Sums) Rows(rows Rows) Rows {
 // pointFields are the point fields the engine reports per kind. A kind that is
 // missing here has no data points at all.
 var pointFields = map[string][]string{
-	schema.KindChartTime:      {"date", "scenario", "category"},
+	schema.KindChartTime:      {"date", "scenario", "category", "row"},
 	schema.KindChartStructure: {"rowGroup", "category", "subCategory", "scenario"},
 	schema.KindChartScatter:   {"rowGroup", "category", "subCategory"},
 	schema.KindChartBubble:    {"rowGroup", "category", "subCategory"},
