@@ -237,6 +237,8 @@ func timeTotalsChart(spec map[string]any, found map[string]bool) {
 	if spec["dataFormatPercentSign"] == false {
 		found[timeTotalsPrefix+"ChartTime dataFormatPercentSign"] = true
 	}
+	// only a spec that names both tells: chartMode in one layer (a ref override, a SmallMultiple base,
+	// a dataset default) and the stack in another is not seen, and chartMode auto depends on the data
 	if spec["chartMode"] == "line" {
 		if stack, _ := spec["stack"].(map[string]any); stack["by"] == "dimensions" {
 			found[timeTotalsPrefix+"ChartTime stacked area by series"] = true

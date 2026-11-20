@@ -44,7 +44,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `maxBars` - threshold for auto-switching to line mode (default: 28). Only applies when `chartMode` is `auto`.
 - `lineFullWidth` - when `true` (default in the renderer), line charts stretch to fill the full parent width instead of using fixed per-data-point spacing. Has no effect in bar mode.
 - `axisLabelsMode` - how the date labels along the time axis are written. `smart` (default) prints only the part that changed since the previous label, so the year appears only where a new year starts; `long` and `short` use the long or the short date style for every label; `two-row` prints short labels and puts the year of a month, quarter or week in a second row, under the first period and where it changes. The short year label follows the translation key [`bn-chart-time.date-format-short-year`](/reference/internationalization/#time-and-structure-charts-bn-chart-time-bn-chart-structure-prefixes).
-- `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. In line mode it needs template engine v1.0.0-next.73.
+- `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. In line mode it works since template engine v1.0.0-next.73. An older engine ignores it there.
 - `periodLines` - for a stacked area: a thin line at every n-th period, from the axis to the top of the stack. `1` draws one at every period. With it the dashed line at the change of the year is not drawn. Needs template engine v1.0.0-next.73.
 - `pointPosition` - for a stacked area: where the point of a period stands. `center` (default) is the middle of the period, above its label. `end` is the right border of the period, for values at the end of a period such as a stock. Needs template engine v1.0.0-next.73.
 - `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right` or `none`.
@@ -510,7 +510,7 @@ spec:
 
 ## Stacked area by series
 
-With `stack.by: dimensions` each value of the `category` column is one layer of the area, as for [stacked columns by series](#stack-by-series). There is no limit of four layers. Needs template engine v1.0.0-next.73: older engines draw one area with the sum of the series.
+With `stack.by: dimensions` each value of the `category` column is one layer of the area, as for [stacked columns by series](#stack-by-series). There is no limit of four layers. Needs template engine v1.0.0-next.73: older engines draw one area with the sum of the series. `chartMode: auto` draws the same area when the chart has more periods than `maxBars`.
 
 ```yaml
 ---
@@ -594,7 +594,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.maxBars`           | integer                  | no                   | `28`                         | Threshold for auto-switching to line mode. Only applies when `chartMode` is `auto`. Minimum: 1.                                                                                                                                                                        | `maxBars: 15`                     |
 | `spec.lineFullWidth`     | boolean                  | no                   | `true`                       | Stretch line charts to fill full parent width. Has no effect in bar mode.                                                                                                                                                                                              | `lineFullWidth: true`             |
 | `spec.axisLabelsMode`    | string                   | no                   | `smart`                      | Format of the date labels along the time axis. `smart` prints only the part that changed since the previous label (the year only at a year boundary); `long` and `short` use the long or the short date style for every label. Values: `smart`, `long`, `short`, `two-row` (needs engine v1.0.0-next.49).       | `axisLabelsMode: short`           |
-| `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. In line mode it needs engine v1.0.0-next.73. Minimum: 1. Needs engine v1.0.0-next.46. |
+| `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. In line mode it works since engine v1.0.0-next.73. Minimum: 1. Needs engine v1.0.0-next.46. |
 | `spec.periodLines` | integer | no | - | Stacked area: a thin line at every n-th period, from the axis to the top of the stack. Replaces the dashed line at the change of the year. Minimum: 1. Needs engine v1.0.0-next.73. | `periodLines: 1` |
 | `spec.pointPosition` | string | no | `center` | Stacked area: where the point of a period stands. Values: `center`, `end` (the right border of the period). Needs engine v1.0.0-next.73. | `pointPosition: end` |
 | `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `none`. Needs engine v1.0.0-next.46. |

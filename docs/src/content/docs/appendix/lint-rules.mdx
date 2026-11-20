@@ -977,7 +977,7 @@ The project uses a field of a `ChartTime` that its template engine does not have
 - `totals`: needs template engine v1.0.0-next.64,
 - `varianceWaterfall`, `referenceColumn` and `totals` without `unitScaling`: need template engine v1.0.0-next.68,
 - `totals.scenarios`: needs template engine v1.0.0-next.69,
-- `stack.by: dimensions` with `chartMode: line` (a stacked area by series), `periodLines`, `pointPosition: end`, and `axisLabelsMode: two-row` with `chartMode: line`: need template engine v1.0.0-next.73,
+- `stack.by: dimensions` with `chartMode: line` (a stacked area by series), `periodLines`, `pointPosition: end`, and `axisLabelsMode: two-row` with `chartMode: line`: need template engine v1.0.0-next.73. The check sees these two pairs only when `chartMode: line` stands in the same spec as the other field. It does not see `chartMode: auto`, which turns into a line by the number of periods, and it does not see a pair that is split between a chart and a dataset default, a reference and its override, or the base and an item of a SmallMultiple,
 - `scalingIndicator` and `dataFormatPercentSign: false`: need template engine v1.0.0-next.60.
 
 It stops `bino lint` and `bino build`, whatever the severity, and `bino preview` shows the error. A project without these fields keeps working on that engine. The check also sees a chart field that a [dataset default](/reference/dataset/#dataset-defaults) sets.
