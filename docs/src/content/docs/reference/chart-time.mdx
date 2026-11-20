@@ -50,7 +50,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `dataFormatDigitsPercent` - number of decimal digits of the percent labels of relative variances. Default: `2`. Same meaning as on a `Table`.
 - `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. Default: `true`. Needs template engine v1.0.0-next.60.
 - `scalingIndicator` - a value on the scale of the columns. The chart draws a light band behind the columns from the axis up to this value and prints the value at the right end. Two charts with different scales that show the same value make the difference visible. Bar mode only, not for a 100% stack. Needs template engine v1.0.0-next.60.
-- `totalColumn` - a column right of the last period for the total of all periods, at its own scale. See [Total column](#total-column). Needs template engine v1.0.0-next.62.
+- `totals` - total columns at their own scale: one for all periods, or one per year, quarter, month or week. See [Totals](#totals). Needs template engine v1.0.0-next.63.
 - `scenarioSwitch` - for a series that changes its scenario along the time axis, for example AC up to this year and PL after it. Default: `false`. See [Scenario switch](#scenario-switch).
 - `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` - optional filter expression.
@@ -242,9 +242,9 @@ spec:
   scenarioSwitch: true
 ```
 
-## Total column
+## Totals
 
-Twelve months and their year do not fit on one scale: the year is about twelve times as high. `totalColumn` adds one column right of the last period for the total of all periods, with its own `unitScaling`.
+Twelve months and their year do not fit on one scale: the year is about twelve times as high. `totals` adds total columns with their own `unitScaling`.
 
 ```yaml
 ---
@@ -260,18 +260,43 @@ spec:
   variances: [dac1_pp1_pos, dfc1_pp1_pos, drac1_pp1_pos, drfc1_pp1_pos]
   scenarioSwitch: true
   scalingIndicator: 100
-  totalColumn:
+  totals:
+    by: all
     unitScaling: 280
     label: "2025"
     width: 1.6
 ```
 
-- The column stacks one part per scenario of the series: the first scenario, and with `scenarioSwitch` the scenarios that follow it, each in its look. Each part prints its value, the names stand at the right and the total above.
-- The first other scenario is the reference. Its total is a column behind the total column.
-- Each variance row gets the variance of the totals, at the scale of the row. So the tiers of the total line up with the tiers of the periods. It is the sum of the series minus the sum of the reference, over the periods where both have a value.
-- With `scalingIndicator` the column has its own band at its own scale, and a line links it to the band of the periods.
-- An [`Annotation`](/reference/annotation/) points at the column with `row: total` in place of a `date`: `point: { row: total, scenario: dac1_pp1_pos, part: label }` is the label of the total variance.
-- It works for plain columns: not with `stack` and not in line mode.
+**What a total covers: `by`**
+
+- `all` (default): one column for all periods of the chart. It stands right of the last period, with a gap and its own axis. The names of its parts stand at its right.
+- `year`, `quarter`, `month`, `week`: one column behind the periods of each year, quarter, month or week. It stands on the axis of the periods, and the periods after it move on. Its name is the name of its period. So twelve months get four quarter columns with `by: quarter`, and four weeks of days get four week columns with `by: week`.
+
+**How the periods become one value: `aggregation`**
+
+- `sum` (default): the column stacks one part per scenario of the series: the first scenario, and with `scenarioSwitch` the scenarios that follow it, each in its look. Each part prints its value, the total stands above.
+- `average` and `last`: for a measure that cannot be added up, like a stock, a price or a ratio. The column is one value: the average of the periods, or the value of the last period with a value. It is hatched when a forecast is in the value and outlined for a plan.
+
+**Values from the data: `dataset`**
+
+With `dataset` the chart computes nothing. It takes the values from a `DataSet` with one row per total: a `date` and the scenario columns of the chart. A `0` counts as no value. A row belongs to the total whose period holds its date, with `by: all` every row counts. Use it when the total is not the sum of the periods shown, for example three months and the full year. `aggregation` is not used then.
+
+```yaml
+totals:
+  by: all
+  dataset: contribution_year # date, ac1, pp1
+  unitScaling: 600
+  label: "2025"
+```
+
+**In every case**
+
+- The first other scenario is the reference. Its value is a column behind the total column. It counts in the periods where the series has a value, so a total of January to March stands against the reference of January to March.
+- Each variance row gets the variance of each total, at the scale of the row. So the tiers of a total line up with the tiers of the periods. The variance is put together like the total: the sum, the average or the last value of the series against the same of the reference, over the periods where both have a value.
+- With `scalingIndicator` a total column has its own band at its own scale. With `by: all` a line links it to the band of the periods.
+- An [`Annotation`](/reference/annotation/) points at a total with `row: total`. With `by: all` there is no `date`: `point: { row: total, scenario: dac1_pp1_pos, part: label }` is the label of the total variance. With the other values `date` is the first day of the period of the total.
+- It works for plain columns: not with `stack`, not in line mode and not with `scenarios: []`. The chart needs a fixed `unitScaling`. Every part of a total must be positive: when one is not, the chart draws no total columns.
+- A group where the series has no value gets no total. `by` must be coarser than the periods of the chart: `by: month` on a month chart gives no totals.
 
 ## Variance only chart
 
@@ -471,10 +496,13 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                          | Number of decimal digits of the percent labels of relative variances. Minimum: 0. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatPercentSign` | boolean | no | `true` | `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. The title of the row (`ΔPY%`) still names the unit. Needs engine v1.0.0-next.60. | `dataFormatPercentSign: false` |
 | `spec.scalingIndicator` | number | no | - | Value of the scaling indicator: a light band behind the columns up to this value, with the value at its right end. Greater than 0. Needs engine v1.0.0-next.60. | `scalingIndicator: 100` |
-| `spec.totalColumn` | object | no | - | A column for the total of all periods, right of the last period. See [Total column](#total-column). Needs engine v1.0.0-next.62. | see below |
-| `spec.totalColumn.unitScaling` | number | yes (within `totalColumn`) | - | Data units per em of column height for the total column. Greater than 0. | `unitScaling: 280` |
-| `spec.totalColumn.label` | string | no | `""` | Text under the column. | `label: "2025"` |
-| `spec.totalColumn.width` | number | no | `1` | Width of the column in widths of a period column. | `width: 1.6` |
+| `spec.totals` | object | no | - | Total columns at their own scale. See [Totals](#totals). Needs engine v1.0.0-next.63. | see below |
+| `spec.totals.unitScaling` | number | yes (within `totals`) | - | Data units per em of column height for the total columns. Greater than 0. | `unitScaling: 280` |
+| `spec.totals.by` | string | no | `all` | What a total covers. `all`: one column right of the last period. `year`, `quarter`, `month`, `week`: one column behind the periods of each of them. | `by: quarter` |
+| `spec.totals.aggregation` | string | no | `sum` | How the periods become one value. Values: `sum`, `average`, `last`. | `aggregation: average` |
+| `spec.totals.dataset` | string | no | - | Name of a `DataSet` with one row per total. The chart takes the values from it. | `dataset: year_totals` |
+| `spec.totals.label` | string | no | `""` | Text under the column of `by: all`. | `label: "2025"` |
+| `spec.totals.width` | number | no | `1` | Width of a column in widths of a period column. | `width: 1.6` |
 | `spec.scenarioSwitch`    | boolean                  | no                   | `false`                      | Draw a scenario that only has values where the first scenario has none in its place. See [Scenario switch](#scenario-switch). Needs engine v1.0.0-next.46. |
 | `spec.dateInterval`      | string                   | no                   | auto-detect                  | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`.                                                                                                                                                | `dateInterval: month`             |
 | `spec.filter`            | string                   | no                   | `""`                         | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                           | `filter: "region_group = 'EMEA'"` |
