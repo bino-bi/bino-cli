@@ -63,6 +63,34 @@ func TestSmallMultipleAxisTitles(t *testing.T) {
 	}
 }
 
+func TestSmallMultipleXYFacet(t *testing.T) {
+	tests := []struct {
+		name  string
+		spec  string
+		fires bool
+	}{
+		{"bubble by rowGroup", `{"base":{"kind":"ChartBubble"},"panels":{"by":"rowGroup"}}`, true},
+		{"scatter by category", `{"base":{"kind":"ChartScatter"},"panels":{"by":"category"}}`, true},
+		{"time chart", `{"base":{"kind":"ChartTime"},"panels":{"by":"rowGroup"}}`, false},
+		{"by a column facet cannot split on", `{"base":{"kind":"ChartBubble"},"panels":{"by":"subCategory"}}`, false},
+		{"with a card", `{"base":{"kind":"ChartBubble"},"card":{},"panels":{"by":"rowGroup"}}`, false},
+		{"with an item", `{"base":{"kind":"ChartBubble"},"panels":{"by":"rowGroup","items":[{"label":"Average"}]}}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := smallMultipleXYFacet.Check(context.Background(), []Document{smDoc("LayoutPage", tt.spec)})
+			if !tt.fires {
+				wantFindings(t, findings, "", 0, "")
+				return
+			}
+			wantFindings(t, findings, "small-multiple-xy-facet", 1, "info")
+			if !strings.HasSuffix(findings[0].Path, "spec.base.kind") {
+				t.Errorf("path = %s", findings[0].Path)
+			}
+		})
+	}
+}
+
 func TestGridCellSpan(t *testing.T) {
 	grid := func(children string) string {
 		return `{"rowHeaders":["a","b"],"columnHeaders":["x","y"],"children":[` + children + `]}`

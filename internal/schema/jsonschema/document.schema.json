@@ -2921,6 +2921,11 @@
             "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 1, "description": "Opacity of the fill, from 0 (clear) to 1 (solid)." }
           }
         },
+        "seriesNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of the series the entries of seriesColors, seriesFills and shareColors are for. A named series keeps its entry in every chart, also when the data of a chart misses some series. Other series follow after the named ones. Needs template engine v1.0.0-next.78 or newer."
+        },
         "seriesFills": {
           "type": "array",
           "items": { "type": "string", "enum": ["solid", "outline"] },
@@ -4816,6 +4821,10 @@
                         "type": "string",
                         "enum": ["n", "ne", "e", "se", "s", "sw", "w", "nw"],
                         "description": "Side of the point the label stands on: n is above, e is right, s is below, w is left. Without it the chart picks a free side."
+                      },
+                      "panel": {
+                        "type": "string",
+                        "description": "With facet: the side holds for the panel with this name only. An entry without panel holds for all panels. Needs template engine v1.0.0-next.78 or newer."
                       }
                     }
                   }
@@ -4825,8 +4834,8 @@
           ]
         },
         "values": {
-          "type": "boolean",
-          "description": "Render the measure value with the label (inside the bubble for ChartBubble)."
+          "description": "Render the measure value with the label (inside the bubble for ChartBubble). A bubble value that is wider than its bubble is left out. always prints it also then (template engine v1.0.0-next.78 or newer.).",
+          "oneOf": [{ "type": "boolean" }, { "const": "always" }]
         },
         "max": {
           "type": "integer",
@@ -4846,8 +4855,8 @@
         },
         "position": {
           "type": "string",
-          "enum": ["right", "bottom"],
-          "description": "Legend placement. Defaults to 'right'."
+          "enum": ["right", "bottom", "inside"],
+          "description": "Legend placement. Defaults to 'right'. inside puts the legend into the top right corner of the plot, so it takes no room beside it (template engine v1.0.0-next.78 or newer)."
         },
         "align": {
           "type": "string",
@@ -5021,7 +5030,14 @@
               "additionalProperties": false,
               "required": ["measure"],
               "properties": {
-                "measure": { "$ref": "#/$defs/xyMeasureToken" }
+                "measure": { "$ref": "#/$defs/xyMeasureToken" },
+                "labels": {
+                  "description": "Which bubbles print the value of their slice (size times share) next to it: 'none' (default), 'all', or a list of point names. Needs template engine v1.0.0-next.78 or newer.",
+                  "oneOf": [
+                    { "enum": ["none", "all"] },
+                    { "type": "array", "items": { "type": "string" } }
+                  ]
+                }
               }
             }
           ]

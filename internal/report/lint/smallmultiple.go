@@ -329,6 +329,42 @@ var smallMultipleOverrideDuplicate = Rule{
 	},
 }
 
+// smallMultipleXYFacet points a SmallMultiple of scatter or bubble charts to
+// the facet field of the chart. Both give one panel per value. facet draws
+// them in one chart, with tick labels at the outer panels only, each axis
+// title and the legend once, and one number format. Items and cards are
+// things only the SmallMultiple has, so with them it says nothing.
+var smallMultipleXYFacet = Rule{
+	ID:          "small-multiple-xy-facet",
+	Name:        "Small Multiple XY Facet",
+	Description: "A SmallMultiple of ChartScatter or ChartBubble by rowGroup or category repeats axes and legend in every panel; facet on the chart shares them.",
+	Check: func(_ context.Context, docs []Document) []Finding {
+		var findings []Finding
+		for _, site := range smallMultipleSites(docs, true) {
+			s := site.spec
+			if s.Base.Kind != "ChartScatter" && s.Base.Kind != "ChartBubble" {
+				continue
+			}
+			if s.Panels.By != "rowGroup" && s.Panels.By != "category" {
+				continue
+			}
+			hasCard := len(s.Card) > 0 && string(s.Card) != "null"
+			if hasCard || len(s.Panels.Items) > 0 {
+				continue
+			}
+			findings = append(findings, Finding{
+				RuleID:   "small-multiple-xy-facet",
+				Message:  fmt.Sprintf("every panel draws its own tick labels, axis titles and legend; facet: { level: %s } on the %s draws the panels in one chart and shares them", strings.ToLower(s.Panels.By), s.Base.Kind),
+				File:     site.doc.File,
+				DocIdx:   site.doc.Position,
+				Path:     joinLintPath(site.path, "base.kind"),
+				Severity: "info",
+			})
+		}
+		return findings
+	},
+}
+
 // smallMultipleAxisTitles rejects axisTitles rowEnd on a base without
 // axisTitlePosition.
 var smallMultipleAxisTitles = Rule{

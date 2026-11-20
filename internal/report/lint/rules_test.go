@@ -517,6 +517,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"small-multiple-span",
 		"small-multiple-override-duplicate",
 		"small-multiple-axis-titles",
+		"small-multiple-xy-facet",
 		"grid-cell-span",
 		"total-only-scenario",
 	}
