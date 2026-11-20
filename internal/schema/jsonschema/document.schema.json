@@ -4326,7 +4326,7 @@
         "orderMark": {
           "type": "boolean",
           "default": false,
-          "description": "An arrow marks the scenario or the variance that comes first in order. No mark for an order by a dimension, and none with stack. Needs template engine v1.0.0-next.71."
+          "description": "An arrow marks the scenario, the variance or the names the rows are sorted by. None with stack. Needs template engine v1.0.0-next.71, for a dimension and with varianceWaterfall v1.0.0-next.74."
         },
         "valueSuffix": {
           "type": "string",
