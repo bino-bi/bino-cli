@@ -799,6 +799,61 @@ spec:
 			wantErr: false,
 		},
 		{
+			name: "bubble decimals, legend exclude and style fills",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: product_data
+  x: { measure: ac1, decimals: 2 }
+  y: { measure: ac2, label: "Relative\nmarket share", titlePosition: beside }
+  size: { measure: ac3, decimals: 0 }
+  legend: { exclude: ["Existing"] }
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: total_outlined
+spec:
+  content:
+    bn-chart-bubble:
+      seriesFills: [solid, outline]
+      shareColors: ["#FFCC55"]
+`,
+			wantErr: false,
+		},
+		{
+			name: "bubble decimals below 0 rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  size: { measure: ac3, decimals: -1 }
+`,
+			wantErr: true,
+		},
+		{
+			name: "series fill unknown rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: total_outlined
+spec:
+  content:
+    bn-chart-bubble:
+      seriesFills: [hollow]
+`,
+			wantErr: true,
+		},
+		{
 			name: "scatter label side unknown rejected",
 			yaml: `
 apiVersion: bino.bi/v1alpha1

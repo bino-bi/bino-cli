@@ -2921,6 +2921,16 @@
             "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 1, "description": "Opacity of the fill, from 0 (clear) to 1 (solid)." }
           }
         },
+        "seriesFills": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["solid", "outline"] },
+          "description": "Fill per series, in the order of seriesColors. solid is the default. outline draws the series as a line in its color around a nearly clear fill, with its values in the series color, so the marks behind it stay visible. Needs template engine v1.0.0-next.77 or newer."
+        },
+        "shareColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "CSS color of the share slice of a bubble per series, in the order of seriesColors. Without an entry the slice is a darker shade of the series color. Needs template engine v1.0.0-next.77 or newer."
+        },
         "padding": { "$ref": "#/$defs/paddingStyle" }
       },
       "additionalProperties": true
@@ -3450,6 +3460,10 @@
           "type": "string",
           "description": "Diagnostic: one or more label names are unknown. Placeholder: {{names}}."
         },
+        "bn-chart-scatter.xy-label-dropped": {
+          "type": "string",
+          "description": "Diagnostic: a label of a typed labels.points list found no place. Placeholder: {{names}}."
+        },
         "bn-chart-scatter.xy-series-overflow": {
           "type": "string",
           "description": "Diagnostic: more series than palette colours, so colours repeat with a tint step."
@@ -3513,6 +3527,10 @@
         "bn-chart-bubble.xy-label-unknown": {
           "type": "string",
           "description": "Diagnostic: one or more label names are unknown. Placeholder: {{names}}."
+        },
+        "bn-chart-bubble.xy-label-dropped": {
+          "type": "string",
+          "description": "Diagnostic: a label of a typed labels.points list found no place. Placeholder: {{names}}."
         },
         "bn-chart-bubble.xy-series-overflow": {
           "type": "string",
@@ -4672,7 +4690,7 @@
             "measure": { "$ref": "#/$defs/xyMeasureToken" },
             "label": {
               "type": "string",
-              "description": "Axis title displayed next to the axis."
+              "description": "Axis title displayed next to the axis. With titlePosition beside, a line break in the label starts a new line of the title (template engine v1.0.0-next.77 or newer)."
             },
             "unit": {
               "type": "string",
@@ -4696,6 +4714,12 @@
               "enum": ["outside", "beside"],
               "default": "outside",
               "description": "Where the axis title stands. outside: in a row of its own, above the plot for y and below the tick labels for x. beside: in two lines beside the end of the axis, the label and below it the unit, left of the top of the y axis and right of the end of the x axis. Needs template engine v1.0.0-next.76 or newer."
+            },
+            "decimals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "Decimals of the tick labels. Without it the chart takes what the ticks need. Needs template engine v1.0.0-next.77 or newer."
             },
             "refLine": {
               "type": "number",
@@ -4830,6 +4854,11 @@
           "enum": ["start", "center", "end"],
           "default": "start",
           "description": "Moves the legend along its side. start is the top of a right legend and the left of a bottom one. Needs template engine v1.0.0-next.76 or newer."
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of series that get no legend entry. Needs template engine v1.0.0-next.77 or newer."
         }
       }
     },
@@ -4972,13 +5001,19 @@
                 "group": {
                   "type": "string",
                   "description": "Name of a ScalingGroup manifest (metadata.name) for cross-chart value-to-area synchronization. Every chart referencing the same group renders an identical value-to-area mapping; the group value is the bubble area in px^2 per data unit. An unknown group name is a blocking render error."
+                },
+                "decimals": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10,
+                  "description": "Decimals of the value labels in the bubbles. Without it the chart shows three significant digits of its largest value. Needs template engine v1.0.0-next.77 or newer."
                 }
               }
             }
           ]
         },
         "share": {
-          "description": "Pie-share measure: a fraction between 0 and 1 rendered as a pie slice from 12 o'clock in the hue's dark shade. A bare measure token or an object with a measure.",
+          "description": "Pie-share measure: a fraction between 0 and 1 rendered as a pie slice from 12 o'clock, in a darker shade of the series color or in the shareColors entry of the style. A bare measure token or an object with a measure.",
           "oneOf": [
             { "$ref": "#/$defs/xyMeasureToken" },
             {
