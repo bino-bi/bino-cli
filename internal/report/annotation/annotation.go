@@ -235,7 +235,7 @@ func (s Sums) Rows(rows Rows) Rows {
 // missing here has no data points at all.
 var pointFields = map[string][]string{
 	schema.KindChartTime:      {"date", "scenario", "category", "row"},
-	schema.KindChartStructure: {"rowGroup", "category", "subCategory", "scenario"},
+	schema.KindChartStructure: {"rowGroup", "category", "subCategory", "scenario", "row"},
 	schema.KindChartScatter:   {"rowGroup", "category", "subCategory"},
 	schema.KindChartBubble:    {"rowGroup", "category", "subCategory"},
 	schema.KindChartBullet:    {"rowGroup", "category", "subCategory", "scenario"},

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"regexp"
 	"sort"
 )
 
@@ -142,6 +143,9 @@ func StructureSumsFeatures(docs []Document, defaults map[string]map[string]map[s
 	return features
 }
 
+// structureOrderVariance matches an order of a ChartStructure by a variance.
+var structureOrderVariance = regexp.MustCompile(`^dr?(ac|fc|pp|pl)[1-4]_(ac|fc|pp|pl)[1-4](_(pos|neg|neu|opinv|op))?$`)
+
 // structureSumsChart notes the structure sums fields of a ChartStructure spec.
 func structureSumsChart(spec map[string]any, found map[string]bool) {
 	note := func(field string) { found[structureSumsPrefix+"ChartStructure "+field] = true }
@@ -156,6 +160,15 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 	}
 	if rows, _ := spec["italicCategories"].([]any); len(rows) > 0 {
 		note("italicCategories")
+	}
+	if spec["varianceWaterfall"] == true {
+		note("varianceWaterfall")
+	}
+	if spec["dataFormatPercentSign"] == false {
+		note("dataFormatPercentSign")
+	}
+	if order, _ := spec["order"].(string); structureOrderVariance.MatchString(order) {
+		note("order by a variance")
 	}
 	stack, _ := spec["stack"].(map[string]any)
 	if stack["percentMark"] == true {

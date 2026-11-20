@@ -4151,7 +4151,10 @@
         },
         "order": {
           "type": "string",
-          "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"],
+          "anyOf": [
+            { "enum": ["auto", "category", "categoryindex", "rowgroup", "rowgroupindex", "ac1", "ac2", "ac3", "ac4", "fc1", "fc2", "fc3", "fc4", "pp1", "pp2", "pp3", "pp4", "pl1", "pl2", "pl3", "pl4", "inherited-closest", "inherited-page"] },
+            { "pattern": "^dr?(ac|fc|pp|pl)[1-4]_(ac|fc|pp|pl)[1-4](_(pos|neg|neu|opinv|op))?$" }
+          ],
           "description": "Primary scenario on which the order direction is applied. If order is set to a scenario, it must also exist in the scenario list. When set to 'auto', the sort key is detected silently; when left blank, it is detected with a warning. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only."
         },
         "orderDirection": {
@@ -4293,6 +4296,16 @@
         "sumTitle": {
           "type": "string",
           "description": "Label of the sum row over all rows."
+        },
+        "varianceWaterfall": {
+          "type": "boolean",
+          "default": false,
+          "description": "Absolute variances as a walk down the rows: a bar starts where the one before ended. With sums 'total' and a fixed unitScaling the first absolute variance is a bridge between a reference total bar and the total bar of the series. Not with stack. Needs template engine v1.0.0-next.69."
+        },
+        "dataFormatPercentSign": {
+          "type": "boolean",
+          "default": true,
+          "description": "False prints the labels of relative variances without the percent sign (+22). Needs template engine v1.0.0-next.69."
         },
         "valueSuffix": {
           "type": "string",

@@ -243,20 +243,50 @@ func StackSeriesCheck(features []string) func(string) error {
 // SupportedEngineRanges: a project without them keeps working.
 const StructureSumsMinVersion = "v1.0.0-next.51"
 
+// StructureWaterfallMinVersion is the first engine release with the variance
+// waterfall of a structure chart, its order by a variance and its labels of
+// relative variances without the percent sign.
+const StructureWaterfallMinVersion = "v1.0.0-next.69"
+
+// structureFeatureFloors holds the features of StructureSumsCheck that need a
+// newer engine than StructureSumsMinVersion.
+var structureFeatureFloors = map[string]string{
+	"ChartStructure varianceWaterfall":     StructureWaterfallMinVersion,
+	"ChartStructure dataFormatPercentSign": StructureWaterfallMinVersion,
+	"ChartStructure order by a variance":   StructureWaterfallMinVersion,
+}
+
 // StructureSumsCheck returns the engine check for a project that uses the given
-// features of StructureSumsMinVersion. The check returns an error on an older
-// engine. An empty or unreadable version is no finding.
+// features: the waterfall fields need StructureWaterfallMinVersion, the others
+// StructureSumsMinVersion. The check returns an error on an older engine and
+// names the features that this engine does not have. An empty or unreadable
+// version is no finding.
 func StructureSumsCheck(features []string) func(string) error {
 	return func(engineVersion string) error {
 		v, err := semver.NewVersion(engineVersion)
 		if err != nil {
 			return nil //nolint:nilerr // CheckCompatibility reports an unreadable version
 		}
-		if v.LessThan(semver.MustParse(StructureSumsMinVersion)) {
-			return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
-				"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(features, ", "), StructureSumsMinVersion, engineVersion, StructureSumsMinVersion)
+		floor := ""
+		var missing []string
+		for _, feature := range features {
+			need := StructureSumsMinVersion
+			if own, ok := structureFeatureFloors[feature]; ok {
+				need = own
+			}
+			if !v.LessThan(semver.MustParse(need)) {
+				continue
+			}
+			missing = append(missing, feature)
+			if floor == "" || semver.MustParse(need).GreaterThan(semver.MustParse(floor)) {
+				floor = need
+			}
 		}
-		return nil
+		if len(missing) == 0 {
+			return nil
+		}
+		return fmt.Errorf("%s: template engine %s or newer is needed, this project uses %s.\n"+
+			"Pin a newer engine in bino.toml: engine-version = %q", strings.Join(missing, ", "), floor, engineVersion, floor)
 	}
 }
 

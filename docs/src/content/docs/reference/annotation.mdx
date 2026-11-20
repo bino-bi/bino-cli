@@ -59,7 +59,7 @@ A field left out is a wildcard. The point must match **exactly one** rendered el
 | Kind | Fields of a data point |
 | --- | --- |
 | `ChartTime` | `date` and `scenario`. With `stack.by: dimensions` a segment also has `category`, the name of its series. A stack total has `date` only, or also `scenario: ac` when the stack overlays families and each one has its own total. |
-| `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. A [sum row](/reference/chart-structure/#sum-rows) has the name of its `rowGroup`, or the `sumTitle`, in the dimension of `level`. |
+| `ChartStructure` | The dimension of `level` and `scenario`. With `stack` by dimensions a segment also has the next lower dimension. A [sum row](/reference/chart-structure/#sum-rows) has the name of its `rowGroup`, or the `sumTitle`, in the dimension of `level`. With template engine v1.0.0-next.69 it also has `row`: `total` for the row over all rows, `subtotal` for the row of a group. |
 | `ChartScatter`, `ChartBubble` | The dimensions of the point level, the series level and the facet level. |
 | `ChartBullet` | The dimension of `level` and the actual measure as `scenario`. |
 | `Table` | `rowGroup`, `category`, `subCategory`, and `date` in a column of a date `interval`. `scenario` selects the column. Without `scenario` the whole row is the target. |

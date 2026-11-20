@@ -85,6 +85,16 @@ func TestStructureSumsFeatures(t *testing.T) {
 		t.Errorf("defaults: got %v, want none", got)
 	}
 
+	waterfall := []Document{doc(`{"kind":"ChartStructure","spec":{"varianceWaterfall":true,"dataFormatPercentSign":false,"order":"dac1_pp1_pos"}}`)}
+	wantWaterfall := []string{"ChartStructure dataFormatPercentSign", "ChartStructure order by a variance", "ChartStructure varianceWaterfall"}
+	if got := StructureSumsFeatures(waterfall, nil); !reflect.DeepEqual(got, wantWaterfall) {
+		t.Errorf("waterfall: got %v, want %v", got, wantWaterfall)
+	}
+	byScenario := []Document{doc(`{"kind":"ChartStructure","spec":{"varianceWaterfall":false,"dataFormatPercentSign":true,"order":"ac1"}}`)}
+	if got := StructureSumsFeatures(byScenario, nil); len(got) != 0 {
+		t.Errorf("order by a scenario: got %v, want none", got)
+	}
+
 	used := []Document{
 		doc(`{"kind":"Grid","spec":{"children":[{"kind":"ChartStructure","ref":"c","spec":{"sums":"total","scenarioLabelPosition":"top"}}]}}`),
 		doc(`{"kind":"ChartStructure","spec":{"referenceLine":{"value":50},"italicCategories":["Rest"],"stack":{"by":"scenarios","mode":"relative","percentMark":true,"labels":"value","thickness":"total","totalTitle":"All"}}}`),
