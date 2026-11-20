@@ -20,7 +20,7 @@ func TestChartTime_NewFields(t *testing.T) {
 		"dataFormatDigitsPercent": 1,
 		"dataFormatPercentSign": false,
 		"scalingIndicator": 100,
-		"totalColumn": {"unitScaling": 280, "label": "2025"},
+		"totals": {"by": "quarter", "unitScaling": 80},
 		"axisLabelsStep": 2,
 		"scenarioSwitch": true,
 		"axisTitlePosition": "right"
@@ -31,7 +31,7 @@ func TestChartTime_NewFields(t *testing.T) {
 	for _, want := range []string{
 		" data-format-digits-decimal='0'", " data-format-digits-percent='1'", " axis-labels-step='2'",
 		" data-format-percent-sign='false'", " scaling-indicator='100'",
-		" total-column='{&#34;unitScaling&#34;:280,&#34;label&#34;:&#34;2025&#34;}'",
+		" totals='{&#34;by&#34;:&#34;quarter&#34;,&#34;unitScaling&#34;:80}'",
 		" scenario-switch='true'", " axis-title-position='right'",
 	} {
 		if !strings.Contains(html, want) {
