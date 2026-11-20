@@ -70,6 +70,7 @@ sees the manifests.
 | `layout-scale-mismatch`  | Components showing the same measure that ended on different units-per-em. The engine auto-fits each component independently, so this happens silently; IBCS requires one scale so bars stay comparable. The finding names the value to pin. |
 | `layout-overflow`        | Content that does not fit its component, with the engine's measured magnitude. Tables report height overflow from engine v1.0.0-next.26 on; older engines stay silent about a clipped table.                                                |
 | `layout-font-shrunk`     | A font auto-fitted down to make content fit. The report still renders, so nothing else surfaces it - but type size then differs between pages.                                                                                              |
+| `layout-component-warning` | A warning the component itself reports about its data or its settings, with the message and the id of the engine (`WARN_...`): something was left out or changed and the page still renders. For example iso-lines of a scatter chart on an axis below 0, a label name that matches no point, or two rows for one point. |
 
 `layout-scale-mismatch` needs to know which components show the same measure, and
 groups by `measureUnit`. Components that declare no unit are skipped rather than

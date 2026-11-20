@@ -477,6 +477,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"table-thereof-position-unused",
 		"table-variance-waterfall-unused",
 		"chart-time-field-no-effect",
+		"chart-scatter-iso-axis-below-zero",
 		"inherited-prop-unresolved",
 		"page-layout-slots-used",
 		"card-layout-slots-used",

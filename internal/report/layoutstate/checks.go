@@ -15,6 +15,7 @@ const (
 	RuleScaleMismatch  = "layout-scale-mismatch"
 	RuleOverflow       = "layout-overflow"
 	RuleFontShrunk     = "layout-font-shrunk"
+	RuleWarning        = "layout-component-warning"
 )
 
 // Severity of a finding, matching the engine's diagnostic vocabulary.
@@ -87,6 +88,7 @@ func Analyze(snap Snapshot) []Finding {
 		if f, ok := checkFontShrunk(c, src); ok {
 			findings = append(findings, f)
 		}
+		findings = append(findings, checkWarnings(c, src)...)
 	}
 	return append(findings, checkScaleMismatch(snap)...)
 }
@@ -207,6 +209,30 @@ func checkFontShrunk(c Component, src Source) (Finding, bool) {
 		return newFinding(c, src, RuleFontShrunk, SeverityWarning, msg, hint), true
 	}
 	return Finding{}, false
+}
+
+// warningPrefix marks the engine diagnostics about the data or the settings of
+// a component: something was left out or changed, and the page still renders.
+const warningPrefix = "warn_"
+
+// checkWarnings passes on the warnings a component reports about its data or
+// its settings, for example iso-lines that are left out on an axis below 0 or
+// a label name that matches no point. Without this they are only in the
+// snapshot. Overflow has its own rule with a magnitude.
+func checkWarnings(c Component, src Source) []Finding {
+	var out []Finding
+	for _, d := range c.Diagnostics {
+		id := strings.ToLower(d.ID)
+		if !strings.HasPrefix(id, warningPrefix) || strings.Contains(id, "overflow") || !strings.EqualFold(d.Type, string(SeverityWarning)) {
+			continue
+		}
+		msg := d.Message
+		if msg == "" {
+			msg = "the component reports a warning"
+		}
+		out = append(out, newFinding(c, src, RuleWarning, SeverityWarning, msg, d.ID))
+	}
+	return out
 }
 
 // scaleGroup collects the components whose resolved scale should agree.

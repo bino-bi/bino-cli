@@ -236,7 +236,24 @@ spec:
     point: { rowGroup: VA, category: VA-328 }
 ```
 
-A text of its own (`markText`) is not printed on such a frame.
+The two ends can also be the mark and the name label of one point. The oval then goes around both:
+
+```yaml
+spec:
+  mark: frame
+  target:
+    kind: ChartScatter
+    name: product_portfolio
+    point: { rowGroup: VA, category: VA-07 }
+  to:
+    kind: ChartScatter
+    name: product_portfolio
+    point: { rowGroup: VA, category: VA-07, part: label }
+```
+
+- Both ends must be data points, not a component as a whole.
+- A text of its own (`markText`) is not printed on such a frame.
+- When the oval has no room on the page, the frame is drawn close around both ends with round ends.
 
 ### Frame with its own text
 
