@@ -297,6 +297,8 @@ type chartTimeSpec struct {
 	ScalingIndicator        *float64        `json:"scalingIndicator"`
 	Totals                  json.RawMessage `json:"totals"`
 	AxisLabelsStep          *int            `json:"axisLabelsStep"`
+	PeriodLines             *int            `json:"periodLines"`
+	PointPosition           string          `json:"pointPosition"`
 	ScenarioSwitch          *bool           `json:"scenarioSwitch"`
 	VarianceWaterfall       *bool           `json:"varianceWaterfall"`
 	ReferenceColumn         *bool           `json:"referenceColumn"`
@@ -335,6 +337,8 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "scaling-indicator", s.ScalingIndicator)
 	writeJSONObjAttr(b, "totals", s.Totals)
 	writeIntAttr(b, "axis-labels-step", s.AxisLabelsStep)
+	writeIntAttr(b, "period-lines", s.PeriodLines)
+	writeAttr(b, "point-position", s.PointPosition)
 	writeBoolAttr(b, "scenario-switch", s.ScenarioSwitch)
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
 	writeBoolAttr(b, "reference-column", s.ReferenceColumn)

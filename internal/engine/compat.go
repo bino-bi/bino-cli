@@ -405,14 +405,23 @@ const (
 // the chart (no unitScaling in totals).
 const TimeWaterfallMinVersion = "v1.0.0-next.68"
 
+// TimeAreaSeriesMinVersion is the first engine release that draws a stacked
+// area by series, with period lines and the point position, and that knows
+// the two-row axis labels in line mode.
+const TimeAreaSeriesMinVersion = "v1.0.0-next.73"
+
 // timeFeatureFloors holds the features of TimeTotalsCheck that do not need
 // TimeIndicatorMinVersion, with the engine release they need.
 var timeFeatureFloors = map[string]string{
-	TimeTotalsFeature:                      TimeTotalsMinVersion,
-	"ChartTime varianceWaterfall":          TimeWaterfallMinVersion,
-	"ChartTime referenceColumn":            TimeWaterfallMinVersion,
-	"ChartTime totals without unitScaling": TimeWaterfallMinVersion,
-	"ChartTime totals.scenarios":           StructureWaterfallMinVersion,
+	TimeTotalsFeature:                       TimeTotalsMinVersion,
+	"ChartTime varianceWaterfall":           TimeWaterfallMinVersion,
+	"ChartTime referenceColumn":             TimeWaterfallMinVersion,
+	"ChartTime totals without unitScaling":  TimeWaterfallMinVersion,
+	"ChartTime totals.scenarios":            StructureWaterfallMinVersion,
+	"ChartTime stacked area by series":      TimeAreaSeriesMinVersion,
+	"ChartTime two-row labels in line mode": TimeAreaSeriesMinVersion,
+	"ChartTime periodLines":                 TimeAreaSeriesMinVersion,
+	"ChartTime pointPosition":               TimeAreaSeriesMinVersion,
 }
 
 // TimeTotalsFeature is the name of the totals of a time chart in the features

@@ -205,7 +205,8 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 // sorted. It is empty when every such field is left at its default. The
 // features are totals (also without their own unitScaling), scalingIndicator,
 // dataFormatPercentSign false, varianceWaterfall and referenceColumn of a
-// ChartTime. They are found like those of StackSeriesFeatures.
+// ChartTime, and of its stacked area the stack by dimensions, two-row labels,
+// periodLines and pointPosition end. They are found like those of StackSeriesFeatures.
 func TimeTotalsFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
 	return walkedFeatures(docs, defaults, timeTotalsPrefix)
 }
@@ -235,5 +236,19 @@ func timeTotalsChart(spec map[string]any, found map[string]bool) {
 	}
 	if spec["dataFormatPercentSign"] == false {
 		found[timeTotalsPrefix+"ChartTime dataFormatPercentSign"] = true
+	}
+	if spec["chartMode"] == "line" {
+		if stack, _ := spec["stack"].(map[string]any); stack["by"] == "dimensions" {
+			found[timeTotalsPrefix+"ChartTime stacked area by series"] = true
+		}
+		if spec["axisLabelsMode"] == "two-row" {
+			found[timeTotalsPrefix+"ChartTime two-row labels in line mode"] = true
+		}
+	}
+	if n, ok := spec["periodLines"].(float64); ok && n >= 1 {
+		found[timeTotalsPrefix+"ChartTime periodLines"] = true
+	}
+	if spec["pointPosition"] == "end" {
+		found[timeTotalsPrefix+"ChartTime pointPosition"] = true
 	}
 }

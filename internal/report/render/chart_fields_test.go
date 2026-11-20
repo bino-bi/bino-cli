@@ -22,6 +22,8 @@ func TestChartTime_NewFields(t *testing.T) {
 		"scalingIndicator": 100,
 		"totals": {"by": "quarter", "unitScaling": 80},
 		"axisLabelsStep": 2,
+		"periodLines": 1,
+		"pointPosition": "end",
 		"scenarioSwitch": true,
 		"axisTitlePosition": "right"
 	}`), nil)
@@ -33,6 +35,7 @@ func TestChartTime_NewFields(t *testing.T) {
 		" data-format-percent-sign='false'", " scaling-indicator='100'",
 		" totals='{&#34;by&#34;:&#34;quarter&#34;,&#34;unitScaling&#34;:80}'",
 		" scenario-switch='true'", " axis-title-position='right'",
+		" period-lines='1'", " point-position='end'",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("expected%s in HTML, got:\n%s", want, html)
