@@ -552,7 +552,8 @@ func TestTimeTotalsEngineFinding(t *testing.T) {
 		{"old engine with totals", "v1.0.0-next.63", chart, true, false, "ChartTime totals"},
 		{"old engine without the fields", "v1.0.0-next.63", byDefault, false, false, ""},
 		{"new engine with totals", "v1.0.0-next.64", chart, false, false, ""},
-		{"old engine, the indicator from the dataset", "v1.0.0-next.63", byDefault, true, true, "ChartTime scalingIndicator"},
+		{"old engine, the indicator from the dataset", "v1.0.0-next.59", byDefault, true, true, "ChartTime scalingIndicator"},
+		{"the indicator needs no engine with totals", "v1.0.0-next.60", byDefault, false, true, ""},
 		{"old engine, the manifest gate reports it already", "v1.0.0-next.63", chart, false, true, ""},
 		{"new engine, the indicator from the dataset", "v1.0.0-next.64", byDefault, false, true, ""},
 	}

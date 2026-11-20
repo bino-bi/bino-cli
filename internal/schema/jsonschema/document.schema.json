@@ -4444,7 +4444,7 @@
         "scalingIndicator": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Scaling indicator: a light band behind the columns from the axis up to this value, with the value at its right end. Use the same value on charts with different scales. Bar mode only. Needs template engine v1.0.0-next.64."
+          "description": "Scaling indicator: a light band behind the columns from the axis up to this value, with the value at its right end. Use the same value on charts with different scales. Bar mode only. Needs template engine v1.0.0-next.60."
         },
         "totals": {
           "type": "object",
@@ -4488,7 +4488,7 @@
         "dataFormatPercentSign": {
           "type": "boolean",
           "default": true,
-          "description": "False prints the labels of relative variances without the percent sign (+11.6). The title of the row still names the unit. Needs template engine v1.0.0-next.64."
+          "description": "False prints the labels of relative variances without the percent sign (+11.6). The title of the row still names the unit. Needs template engine v1.0.0-next.60."
         },
         "axisLabelsStep": {
           "type": "integer",
