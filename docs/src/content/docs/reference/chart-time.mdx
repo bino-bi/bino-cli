@@ -295,6 +295,22 @@ totals:
   label: "2025"
 ```
 
+**Scenarios at the total only: `scenarios`**
+
+A total can show one more scenario that the periods do not show, for example the previous year next to a plan. List it in `totals.scenarios`. It must not be in `scenarios` of the chart ([`total-only-scenario`](/appendix/lint-rules/#total-only-scenario)). The chart adds it up from its dataset over the periods the total counts. A scenario with a gap in these periods has no value, like a reference. Needs template engine v1.0.0-next.69.
+
+```yaml
+scenarios: [ac1, pl1, fc1]
+totals:
+  by: all
+  scenarios: [pp1] # the dataset has pp1 per month
+```
+
+With `dataset` the list is not needed: every scenario column of a row that the chart does not draw is shown at the total only. A list then limits them.
+
+- In a [bridge](#variance-waterfall) the scenario is one more total column before the reference total, with its value and its name. Its variance to the total of the series is a thin bar right of the variance of the total.
+- Without a bridge it is a column behind the total column. With `by: all` its variance stands right of the total column.
+
 **In every case**
 
 - The first other scenario is the reference. Its value is a column behind the total column. It counts in the periods where the series has a value, so a total of January to March stands against the reference of January to March.

@@ -244,8 +244,9 @@ func StackSeriesCheck(features []string) func(string) error {
 const StructureSumsMinVersion = "v1.0.0-next.51"
 
 // StructureWaterfallMinVersion is the first engine release with the variance
-// waterfall of a structure chart, its order by a variance and its labels of
-// relative variances without the percent sign.
+// waterfall of a structure chart, its order by a variance, its labels of
+// relative variances without the percent sign, and with scenarios that a
+// structure chart or a time chart draws at its total only.
 const StructureWaterfallMinVersion = "v1.0.0-next.69"
 
 // structureFeatureFloors holds the features of StructureSumsCheck that need a
@@ -254,6 +255,8 @@ var structureFeatureFloors = map[string]string{
 	"ChartStructure varianceWaterfall":     StructureWaterfallMinVersion,
 	"ChartStructure dataFormatPercentSign": StructureWaterfallMinVersion,
 	"ChartStructure order by a variance":   StructureWaterfallMinVersion,
+	"ChartStructure sumScenarios":          StructureWaterfallMinVersion,
+	"ChartStructure sumDataset":            StructureWaterfallMinVersion,
 }
 
 // StructureSumsCheck returns the engine check for a project that uses the given
@@ -398,6 +401,7 @@ var timeFeatureFloors = map[string]string{
 	"ChartTime varianceWaterfall":          TimeWaterfallMinVersion,
 	"ChartTime referenceColumn":            TimeWaterfallMinVersion,
 	"ChartTime totals without unitScaling": TimeWaterfallMinVersion,
+	"ChartTime totals.scenarios":           StructureWaterfallMinVersion,
 }
 
 // TimeTotalsFeature is the name of the totals of a time chart in the features

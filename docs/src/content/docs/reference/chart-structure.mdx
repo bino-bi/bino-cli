@@ -71,6 +71,7 @@ and `orderDirection` can be inherited from the surrounding layout (see
   - `thickness` - `total` makes a bar as thick as the total of its row is large. The chart keeps its height. Default: `equal`.
   - `totalTitle` - a name above the totals of the bars, on the line of the series names.
 - `sums` - sum rows, see [Sum rows](#sum-rows). `sumTitle` names the row over all rows.
+- `sumScenarios`, `sumDataset` - scenarios that are shown at the total row only, and a dataset with the values of the total row. See [Scenarios at the total only](#scenarios-at-the-total-only). Need template engine v1.0.0-next.69.
 - `varianceWaterfall` - draws each absolute variance as a walk down the rows, and with `sums: total` as a bridge between two total bars. Default: `false`. See [Variance waterfall](#variance-waterfall). Needs template engine v1.0.0-next.69.
 - `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+22` in place of `+22%`. Default: `true`. Needs template engine v1.0.0-next.69.
 - `scenarioLabelPosition` - where the name of the scenario of a chart with plain bars stands: `bottom` (default) below the last bar, `top` above the first one.
@@ -233,6 +234,25 @@ The other variances stay where they are. The chart draws the plain walk next to 
 A walk has no break marks. `varianceWaterfall` has no effect with `stack`.
 
 An [`Annotation`](/reference/annotation/) points at the total row with `row: total`: `point: { row: total, scenario: dac1_pp1_pos, part: label }` is the label of the variance of the total.
+
+## Scenarios at the total only
+
+The total row can show one more scenario that the rows do not show, for example a plan next to the previous year. There are two ways to name it:
+
+- `sumScenarios: [pl1]` - the dataset of the chart has the scenario per row, and the chart adds it up. Use this when the values exist in the data. The scenario must not be in `scenarios` ([`total-only-scenario`](/appendix/lint-rules/#total-only-scenario)).
+- `sumDataset: state_totals` - a `DataSet` with the scenario columns of the total row, in one row. Use this when a value exists as a total only, or when the total is not the sum of the rows. The chart then adds up no total: every value of the total row comes from that dataset. A scenario column that the chart does not draw is shown at the total only. With both fields the list limits these scenarios.
+
+```yaml
+scenarios: [ac1, pp1]
+sums: total
+sumDataset: state_totals # one row: ac1, pp1, pl1
+```
+
+Both need `sums: total` or `sums: all`, and neither works with `stack`.
+
+- In a [bridge](#variance-waterfall) the scenario is a bar above the reference total, with a bold value and its name. Its variance to the total of the series is a thin bar below the variance of the total.
+- Without a bridge its number stands in the total row behind the others, with a small square in its look.
+- With `sumDataset` a bridge needs totals that match the rows: when the reference total plus the variances is not the total of the series, the chart draws the plain walk and warns.
 
 ## Example: 100 % bars with values and rows by total
 

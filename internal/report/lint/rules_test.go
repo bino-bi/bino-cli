@@ -517,6 +517,7 @@ func TestDefaultRulesIncludesAllRules(t *testing.T) {
 		"small-multiple-override-duplicate",
 		"small-multiple-axis-titles",
 		"grid-cell-span",
+		"total-only-scenario",
 	}
 
 	if len(rules) != len(expectedIDs) {

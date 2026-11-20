@@ -85,8 +85,8 @@ func TestStructureSumsFeatures(t *testing.T) {
 		t.Errorf("defaults: got %v, want none", got)
 	}
 
-	waterfall := []Document{doc(`{"kind":"ChartStructure","spec":{"varianceWaterfall":true,"dataFormatPercentSign":false,"order":"dac1_pp1_pos"}}`)}
-	wantWaterfall := []string{"ChartStructure dataFormatPercentSign", "ChartStructure order by a variance", "ChartStructure varianceWaterfall"}
+	waterfall := []Document{doc(`{"kind":"ChartStructure","spec":{"varianceWaterfall":true,"dataFormatPercentSign":false,"order":"dac1_pp1_pos","sumScenarios":["pl1"],"sumDataset":"totals"}}`)}
+	wantWaterfall := []string{"ChartStructure dataFormatPercentSign", "ChartStructure order by a variance", "ChartStructure sumDataset", "ChartStructure sumScenarios", "ChartStructure varianceWaterfall"}
 	if got := StructureSumsFeatures(waterfall, nil); !reflect.DeepEqual(got, wantWaterfall) {
 		t.Errorf("waterfall: got %v, want %v", got, wantWaterfall)
 	}
@@ -167,8 +167,8 @@ func TestTimeTotalsFeatures(t *testing.T) {
 	if got := TimeTotalsFeatures(used, nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-	waterfall := doc(`{"dataset":"d","totals":{"by":"all"},"varianceWaterfall":true,"referenceColumn":true}`)
-	wantWaterfall := []string{"ChartTime referenceColumn", "ChartTime totals", "ChartTime totals without unitScaling", "ChartTime varianceWaterfall"}
+	waterfall := doc(`{"dataset":"d","totals":{"by":"all","scenarios":["pp1"]},"varianceWaterfall":true,"referenceColumn":true}`)
+	wantWaterfall := []string{"ChartTime referenceColumn", "ChartTime totals", "ChartTime totals without unitScaling", "ChartTime totals.scenarios", "ChartTime varianceWaterfall"}
 	if got := TimeTotalsFeatures(waterfall, nil); !reflect.DeepEqual(got, wantWaterfall) {
 		t.Fatalf("got %v, want %v", got, wantWaterfall)
 	}

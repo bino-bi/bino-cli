@@ -170,6 +170,12 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 	if order, _ := spec["order"].(string); structureOrderVariance.MatchString(order) {
 		note("order by a variance")
 	}
+	if list, _ := spec["sumScenarios"].([]any); len(list) > 0 {
+		note("sumScenarios")
+	}
+	if name, _ := spec["sumDataset"].(string); name != "" {
+		note("sumDataset")
+	}
 	stack, _ := spec["stack"].(map[string]any)
 	if stack["percentMark"] == true {
 		note("stack.percentMark")
@@ -201,6 +207,9 @@ func timeTotalsChart(spec map[string]any, found map[string]bool) {
 		found[timeTotalsPrefix+"ChartTime totals"] = true
 		if scaling, set := totals["unitScaling"]; !set || scaling == nil || scaling == "" {
 			found[timeTotalsPrefix+"ChartTime totals without unitScaling"] = true
+		}
+		if list, _ := totals["scenarios"].([]any); len(list) > 0 {
+			found[timeTotalsPrefix+"ChartTime totals.scenarios"] = true
 		}
 	}
 	if spec["varianceWaterfall"] == true {
