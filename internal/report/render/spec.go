@@ -279,11 +279,13 @@ type chartTimeSpec struct {
 	SelectedStyle     string                   `json:"selectedStyle"`
 	Ruleset           string                   `json:"ruleset"`
 
-	DataFormatDigitsDecimal *int   `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent *int   `json:"dataFormatDigitsPercent"`
-	AxisLabelsStep          *int   `json:"axisLabelsStep"`
-	ScenarioSwitch          *bool  `json:"scenarioSwitch"`
-	AxisTitlePosition       string `json:"axisTitlePosition"`
+	DataFormatDigitsDecimal *int     `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int     `json:"dataFormatDigitsPercent"`
+	DataFormatPercentSign   *bool    `json:"dataFormatPercentSign"`
+	ScalingIndicator        *float64 `json:"scalingIndicator"`
+	AxisLabelsStep          *int     `json:"axisLabelsStep"`
+	ScenarioSwitch          *bool    `json:"scenarioSwitch"`
+	AxisTitlePosition       string   `json:"axisTitlePosition"`
 }
 
 func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
@@ -314,6 +316,8 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeAttr(b, "ruleset", s.Ruleset)
 	writeIntAttr(b, "data-format-digits-decimal", s.DataFormatDigitsDecimal)
 	writeIntAttr(b, "data-format-digits-percent", s.DataFormatDigitsPercent)
+	writeBoolAttr(b, "data-format-percent-sign", s.DataFormatPercentSign)
+	writeFloatAttr(b, "scaling-indicator", s.ScalingIndicator)
 	writeIntAttr(b, "axis-labels-step", s.AxisLabelsStep)
 	writeBoolAttr(b, "scenario-switch", s.ScenarioSwitch)
 	writeAttr(b, "axis-title-position", s.AxisTitlePosition)
