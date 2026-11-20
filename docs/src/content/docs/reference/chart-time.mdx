@@ -219,7 +219,7 @@ With `scenarioSwitch: true` the chart draws one series:
 
 - A scenario that only has values in periods where the first scenario has none is drawn in its place, as a full column with value labels.
 - A vertical line marks the change, and the scenario names stand under the axis.
-- Variances of one type over the same reference share one row: `dac1_pp1_pos` and `dpl1_pp1_pos` are one row of variances from `pp1`. The plan variances are outlined.
+- Variances of one type over the same reference share one row: `dac1_pp1_pos` and `dpl1_pp1_pos` are one row of variances from `pp1`. The plan variances are outlined. With template engine v1.0.0-next.60 the forecast variances are hatched, also the head of a forecast pin, and the row is named by the reference only (`ΔPY`).
 - If two of them have a value in the same period, the first one wins and the chart warns.
 
 A chart with exactly one scenario gets the name of that scenario under the axis.
@@ -332,6 +332,7 @@ spec:
 ```
 
 - With `scenarioSwitch: true` each period stacks the scenario that has values there. One axis can go from AC to FC to PL, with the line at the change and the names under the axis. Without it only the first scenario is drawn.
+- One period can mix scenarios (needs template engine v1.0.0-next.60). A series without a value in the scenario of the period takes the scenario that has its value. So a year can be one column with the actual months as the first series and the forecast months as the second, hatched with `notation: scenario`. A scenario with values for the same series as the visible one is the reference: the chart draws its total as a column behind the stack. A 0 counts as no value here.
 - `notation: scenario` marks the scenario on every segment. A forecast segment is hatched over the shade of its series and a plan segment is outlined. The first series takes the fill of the scenario from `barStyles`, so it is white in a forecast and in a plan.
 - `legend` puts the series names left of the first column, right of the last column with a value, at both sides, or nowhere.
 - The shades come from `stackColors` of the `bn-chart-time` style. Give it one colour per series.
