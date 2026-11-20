@@ -194,10 +194,12 @@ type chartStructureSpec struct {
 	SelectedStyle     string                   `json:"selectedStyle"`
 	Ruleset           string                   `json:"ruleset"`
 
-	DataFormatDigitsDecimal *int  `json:"dataFormatDigitsDecimal"`
-	DataFormatDigitsPercent *int  `json:"dataFormatDigitsPercent"`
-	DataFormatPercentSign   *bool `json:"dataFormatPercentSign"`
-	VarianceWaterfall       *bool `json:"varianceWaterfall"`
+	DataFormatDigitsDecimal *int     `json:"dataFormatDigitsDecimal"`
+	DataFormatDigitsPercent *int     `json:"dataFormatDigitsPercent"`
+	DataFormatPercentSign   *bool    `json:"dataFormatPercentSign"`
+	VarianceWaterfall       *bool    `json:"varianceWaterfall"`
+	SumScenarios            []string `json:"sumScenarios,omitempty"`
+	SumDataset              string   `json:"sumDataset"`
 
 	Sums                  string          `json:"sums"`
 	SumTitle              string          `json:"sumTitle"`
@@ -243,6 +245,8 @@ func (s chartStructureSpec) writeAttrs(b *strings.Builder) {
 	writeIntAttr(b, "data-format-digits-percent", s.DataFormatDigitsPercent)
 	writeBoolAttr(b, "data-format-percent-sign", s.DataFormatPercentSign)
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
+	writeAttr(b, "sum-scenarios", strings.Join(s.SumScenarios, ","))
+	writeAttr(b, "sum-dataset", s.SumDataset)
 	writeAttr(b, "sums", s.Sums)
 	writeAttr(b, "sum-title", s.SumTitle)
 	writeAttr(b, "scenario-label-position", s.ScenarioLabelPosition)
