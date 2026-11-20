@@ -36,6 +36,10 @@ const stackSeriesPrefix = "stack-series\x00"
 // structure chart, like stackSeriesPrefix.
 const structureSumsPrefix = "structure-sums\x00"
 
+// timeTotalsPrefix marks a feature of the engine release with the total
+// columns of a time chart, like stackSeriesPrefix.
+const timeTotalsPrefix = "time-totals\x00"
+
 // walkedFeatures runs the walk and returns the features of one engine gate:
 // those with the prefix of the gate, or with "" those without a prefix.
 func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]any, gate string) []string {
@@ -58,7 +62,7 @@ func walkedFeatures(docs []Document, defaults map[string]map[string]map[string]a
 	for feature := range w.found {
 		own := ""
 		name := feature
-		for _, prefix := range []string{stackSeriesPrefix, structureSumsPrefix} {
+		for _, prefix := range []string{stackSeriesPrefix, structureSumsPrefix, timeTotalsPrefix} {
 			if rest, ok := strings.CutPrefix(feature, prefix); ok {
 				own, name = prefix, rest
 			}
@@ -251,6 +255,7 @@ func chartFeatures(kind string, spec map[string]any, found map[string]bool) {
 		structureSumsChart(spec, found)
 		return
 	}
+	timeTotalsChart(spec, found)
 	if n, ok := spec["axisLabelsStep"].(float64); ok && n > 1 {
 		found["ChartTime axisLabelsStep"] = true
 	}

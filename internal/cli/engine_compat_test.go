@@ -534,3 +534,43 @@ func TestStructureSumsEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestTimeTotalsEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","totals":{"unitScaling":280}}}`)}}
+	byDefault := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"charttime": {"scalingIndicator": json.RawMessage(`100`)},
+	}}}
+	cases := []struct {
+		name    string
+		engine  string
+		docs    []config.Document
+		fatal   bool
+		byData  bool
+		feature string
+	}{
+		{"old engine with totals", "v1.0.0-next.63", chart, true, false, "ChartTime totals"},
+		{"old engine without the fields", "v1.0.0-next.63", byDefault, false, false, ""},
+		{"new engine with totals", "v1.0.0-next.64", chart, false, false, ""},
+		{"old engine, the indicator from the dataset", "v1.0.0-next.63", byDefault, true, true, "ChartTime scalingIndicator"},
+		{"old engine, the manifest gate reports it already", "v1.0.0-next.63", chart, false, true, ""},
+		{"new engine, the indicator from the dataset", "v1.0.0-next.64", byDefault, false, true, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+			finding, fatal := timeTotalsEngineFinding(dir, cfg, c.docs)
+			if c.byData {
+				finding, fatal = timeTotalsDefaultEngineFinding(dir, cfg, c.docs, results)
+			}
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if fatal && (finding.RuleID != "time-totals-engine-version" || !strings.Contains(finding.Message, c.feature)) {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}

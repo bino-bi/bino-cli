@@ -777,6 +777,13 @@ func StructureSumsFeatures(docs []config.Document, results []Result) []string {
 	return config.StructureSumsFeatures(docs, chartDefaults(results))
 }
 
+// TimeTotalsFeatures returns what the documents use of the template engine
+// release with the total columns of a time chart, in a manifest or through a
+// default of the primary dataset of a chart.
+func TimeTotalsFeatures(docs []config.Document, results []Result) []string {
+	return config.TimeTotalsFeatures(docs, chartDefaults(results))
+}
+
 // chartDefaults are the chart defaults of the datasets, by dataset name and
 // kind token.
 func chartDefaults(results []Result) map[string]map[string]map[string]any {

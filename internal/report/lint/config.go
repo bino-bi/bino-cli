@@ -24,6 +24,7 @@ var nonRuleFindingIDs = []string{
 	"small-multiple-span-engine-version",              // cli/engine_compat.go
 	"stack-series-engine-version",                     // cli/engine_compat.go
 	"structure-sums-engine-version",                   // cli/engine_compat.go
+	"time-totals-engine-version",                      // cli/engine_compat.go
 	"operation-sentiment-engine-version",              // cli/engine_compat.go
 	"table-order-engine-version",                      // cli/engine_compat.go
 	"table-category-interval-position-engine-version", // cli/engine_compat.go
@@ -48,6 +49,7 @@ var fixedSeverityIDs = []string{
 	"small-multiple-span-engine-version",
 	"stack-series-engine-version",
 	"structure-sums-engine-version",
+	"time-totals-engine-version",
 	"operation-sentiment-engine-version",
 	"table-order-engine-version",
 	"table-category-interval-position-engine-version",

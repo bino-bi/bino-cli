@@ -144,3 +144,26 @@ func TestStructureSumsFeatures(t *testing.T) {
 		t.Errorf("dataset default: got %v, want %v", got, wantDefault)
 	}
 }
+
+func TestTimeTotalsFeatures(t *testing.T) {
+	doc := func(spec string) []Document {
+		return []Document{{Kind: "ChartTime", Name: "c", Raw: json.RawMessage(`{"kind":"ChartTime","metadata":{"name":"c"},"spec":` + spec + `}`)}}
+	}
+	if got := TimeTotalsFeatures(doc(`{"dataset":"d","dataFormatPercentSign":true,"scalingIndicator":0}`), nil); len(got) != 0 {
+		t.Fatalf("defaults are no feature, got %v", got)
+	}
+	used := doc(`{"dataset":"d","totals":{"unitScaling":280},"scalingIndicator":100,"dataFormatPercentSign":false}`)
+	want := []string{"ChartTime dataFormatPercentSign", "ChartTime scalingIndicator", "ChartTime totals"}
+	if got := TimeTotalsFeatures(used, nil); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	// the other gates do not report them
+	if got := StackSeriesFeatures(used, nil); len(got) != 0 {
+		t.Fatalf("stack series gate got %v", got)
+	}
+	// a structure chart has no such fields
+	structure := []Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"d","totals":{"unitScaling":1}}}`)}}
+	if got := TimeTotalsFeatures(structure, nil); len(got) != 0 {
+		t.Fatalf("structure chart got %v", got)
+	}
+}

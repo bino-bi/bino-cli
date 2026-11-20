@@ -171,3 +171,25 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 		note("stack.totalTitle")
 	}
 }
+
+// TimeTotalsFeatures returns what the documents use of the template engine
+// release with the total columns of a time chart, as names for a message,
+// sorted. It is empty when every such field is left at its default. The
+// features are totals, scalingIndicator and dataFormatPercentSign false of a
+// ChartTime. They are found like those of StackSeriesFeatures.
+func TimeTotalsFeatures(docs []Document, defaults map[string]map[string]map[string]any) []string {
+	return walkedFeatures(docs, defaults, timeTotalsPrefix)
+}
+
+// timeTotalsChart notes the time totals fields of a ChartTime spec.
+func timeTotalsChart(spec map[string]any, found map[string]bool) {
+	if totals, ok := spec["totals"].(map[string]any); ok && len(totals) > 0 {
+		found[timeTotalsPrefix+"ChartTime totals"] = true
+	}
+	if n, ok := spec["scalingIndicator"].(float64); ok && n > 0 {
+		found[timeTotalsPrefix+"ChartTime scalingIndicator"] = true
+	}
+	if spec["dataFormatPercentSign"] == false {
+		found[timeTotalsPrefix+"ChartTime dataFormatPercentSign"] = true
+	}
+}
