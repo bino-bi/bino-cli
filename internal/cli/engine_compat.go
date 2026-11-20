@@ -151,9 +151,9 @@ func timeTotalsEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, do
 // timeTotalsDefaultEngineFinding is the same gate for chart fields that only
 // a dataset default sets, which shows after the queries ran.
 func timeTotalsDefaultEngineFinding(projectRoot string, cfg *pathutil.ProjectConfig, documents []config.Document, results []dataset.Result) (lint.Finding, bool) {
-	features := dataset.TimeTotalsFeatures(documents, results)
-	used := len(config.TimeTotalsFeatures(documents, nil)) == 0 && len(features) > 0
-	return engineGateFinding(projectRoot, cfg, used, engine.TimeTotalsCheck(features), "time-totals-engine-version")
+	// the manifest gate reports what the manifests use: here only what a default adds
+	features := dataset.TimeTotalsDefaultFeatures(documents, results)
+	return engineGateFinding(projectRoot, cfg, len(features) > 0, engine.TimeTotalsCheck(features), "time-totals-engine-version")
 }
 
 // smallMultipleSpanDefaultEngineFinding is the same gate for chart fields that

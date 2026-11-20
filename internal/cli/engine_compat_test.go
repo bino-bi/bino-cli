@@ -575,3 +575,21 @@ func TestTimeTotalsEngineFinding(t *testing.T) {
 		})
 	}
 }
+
+func TestTimeTotalsDefaultOnTopOfManifest(t *testing.T) {
+	// the manifest uses the indicator, a dataset default adds the totals, which need a newer engine
+	docs := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","scalingIndicator":100}}`)}}
+	results := []dataset.Result{{Name: "sales", Defaults: dataset.Defaults{
+		"charttime": {"totals": json.RawMessage(`{"unitScaling":280}`)},
+	}}}
+	dir := t.TempDir()
+	writeProjectWithEngine(t, dir, "v1.0.0-next.62")
+	cfg := &pathutil.ProjectConfig{EngineVersion: "v1.0.0-next.62"}
+	if _, fatal := timeTotalsEngineFinding(dir, cfg, docs); fatal {
+		t.Fatal("the manifest alone needs v1.0.0-next.60 only")
+	}
+	finding, fatal := timeTotalsDefaultEngineFinding(dir, cfg, docs, results)
+	if !fatal || !strings.Contains(finding.Message, "ChartTime totals") || strings.Contains(finding.Message, "scalingIndicator") {
+		t.Fatalf("fatal = %v, finding = %+v", fatal, finding)
+	}
+}

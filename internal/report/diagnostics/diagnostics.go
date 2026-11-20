@@ -411,9 +411,9 @@ func RunQueryValidation(ctx context.Context, dir string, docs []config.Document)
 				diagnostics = append(diagnostics, d)
 			}
 		}
-		if len(config.TimeTotalsFeatures(docs, nil)) == 0 {
-			features := dataset.TimeTotalsFeatures(docs, results)
-			if d, ok := engineGateDiagnostic(dir, len(features) > 0, engine.TimeTotalsCheck(features), "time-totals-engine-version"); ok && !runner.Skip(d.Code) {
+		// the manifest check reports what the manifests use: here only what a default adds
+		if features := dataset.TimeTotalsDefaultFeatures(docs, results); len(features) > 0 {
+			if d, ok := engineGateDiagnostic(dir, true, engine.TimeTotalsCheck(features), "time-totals-engine-version"); ok && !runner.Skip(d.Code) {
 				diagnostics = append(diagnostics, d)
 			}
 		}
