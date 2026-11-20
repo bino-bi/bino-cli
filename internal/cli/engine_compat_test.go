@@ -535,6 +535,38 @@ func TestStructureSumsEngineFinding(t *testing.T) {
 	}
 }
 
+func TestStructureWaterfallEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","sums":"total","varianceWaterfall":true,"order":"dac1_pp1"}}`)}}
+	cases := []struct {
+		engine string
+		fatal  bool
+	}{
+		{"v1.0.0-next.68", true},
+		{"v1.0.0-next.69", false},
+	}
+	for _, c := range cases {
+		t.Run(c.engine, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectWithEngine(t, dir, c.engine)
+			cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+			finding, fatal := structureSumsEngineFinding(dir, cfg, chart)
+			if fatal != c.fatal {
+				t.Fatalf("fatal = %v, want %v (%+v)", fatal, c.fatal, finding)
+			}
+			if !fatal {
+				return
+			}
+			// the sum row is in that engine: only the waterfall fields are named
+			if !strings.Contains(finding.Message, "ChartStructure varianceWaterfall") ||
+				!strings.Contains(finding.Message, "ChartStructure order by a variance") ||
+				strings.Contains(finding.Message, "ChartStructure sums") ||
+				!strings.Contains(finding.Message, "v1.0.0-next.69") {
+				t.Fatalf("finding = %+v", finding)
+			}
+		})
+	}
+}
+
 func TestTimeTotalsEngineFinding(t *testing.T) {
 	chart := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales","totals":{"unitScaling":280}}}`)}}
 	byDefault := []config.Document{{Kind: "ChartTime", Raw: json.RawMessage(`{"kind":"ChartTime","spec":{"dataset":"sales"}}`)}}

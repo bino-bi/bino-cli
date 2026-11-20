@@ -65,6 +65,8 @@ func DefaultRules() []Rule {
 		smallMultipleOverrideDuplicate,
 		smallMultipleAxisTitles,
 		gridCellSpan,
+		// Scenarios at a total only
+		totalOnlyScenarios,
 	}
 }
 

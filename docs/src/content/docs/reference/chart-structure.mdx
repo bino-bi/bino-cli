@@ -44,7 +44,7 @@ and `orderDirection` can be inherited from the surrounding layout (see
 - `chartTitle` - optional custom title.
 - `filter` - optional filter expression.
 - `level` - aggregation level: `rowgroup`, `category`, `subcategory`, one of the index variants (`rowgroupindex`, `categoryindex`, `subcategoryindex` - keep the original dataset order instead of sorting), or `auto`. When set to `auto`, the level is detected from the dataset silently. When omitted, it is detected with a warning.
-- `order` / `orderDirection` - sort key and direction; if you use a scenario, it must appear in `scenarios`. When `order` is set to `auto`, it is detected from the dataset silently. When omitted, it is detected with a warning.
+- `order` / `orderDirection` - sort key and direction; if you use a scenario, it must appear in `scenarios`. A variance like `dac1_pp1` or `drac1_pp1` sorts by the absolute or relative variance of each row, and its scenarios need not appear in `scenarios` (needs template engine v1.0.0-next.69). A row with the category `REST` stays last under every order. When `order` is set to `auto`, it is detected from the dataset silently. When omitted, it is detected with a warning.
 - `measureScale` - SI prefix (`_`, `k`, `M`, `G`, ... or `GREATEST` / `LEAST`).
 - `measureUnit` - unit string, for example `mEUR`.
 - `unitScaling` - data units displayed per 1 em of bar width (map-scale semantics: larger value = smaller bars), `auto` to fit the available width, or the name of a [ScalingGroup](/reference/scaling-group/). Unset or invalid values auto-fit with a warning that reports the resolved value.
@@ -71,6 +71,9 @@ and `orderDirection` can be inherited from the surrounding layout (see
   - `thickness` - `total` makes a bar as thick as the total of its row is large. The chart keeps its height. Default: `equal`.
   - `totalTitle` - a name above the totals of the bars, on the line of the series names.
 - `sums` - sum rows, see [Sum rows](#sum-rows). `sumTitle` names the row over all rows.
+- `sumScenarios`, `sumDataset` - scenarios that are shown at the total row only, and a dataset with the values of the total row. See [Scenarios at the total only](#scenarios-at-the-total-only). Need template engine v1.0.0-next.69.
+- `varianceWaterfall` - draws each absolute variance as a walk down the rows, and with `sums: total` as a bridge between two total bars. Default: `false`. See [Variance waterfall](#variance-waterfall). Needs template engine v1.0.0-next.69.
+- `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+22` in place of `+22%`. Default: `true`. Needs template engine v1.0.0-next.69.
 - `scenarioLabelPosition` - where the name of the scenario of a chart with plain bars stands: `bottom` (default) below the last bar, `top` above the first one.
 - `referenceLine` - a line across the bars at one value, with an optional `label`: `{ value: 50, label: "50%" }`. In a 100 % stack the value is a percent. The line runs from the top to the last row that reaches it, or over all rows when the first row does not reach it.
 - `italicCategories` - values of the level column whose row is printed in italics, for example the rest rows.
@@ -187,6 +190,71 @@ spec:
 A sum row can be the point of an [`Annotation`](/reference/annotation/): the name of the `rowGroup`, or the `sumTitle`, is its value of the dimension of `level`, so `category` at `level: category`. A group must not have the name of a row.
 
 Sum rows, `scenarioLabelPosition`, `referenceLine`, `italicCategories` and the stack keys `percentMark`, `labels`, `thickness` and `totalTitle` need template engine **v1.0.0-next.51** or newer. With an older engine `bino build` and `bino lint` stop with [`structure-sums-engine-version`](/appendix/lint-rules/#structure-sums-engine-version).
+
+## Variance waterfall
+
+With `varianceWaterfall: true` an absolute variance is a walk down the rows: each bar starts where the bar of the row above ended, and thin lines join them. A row without a value keeps the level. A sum row is a bar from the axis, and the rows after the sum row of a group start again. Relative variances stay pins.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartStructure
+metadata:
+  name: net_sales_by_state
+spec:
+  dataset: net_sales_by_state
+  level: category
+  unitScaling: 45
+  scenarios: [ac1, pp1]
+  variances: [dac1_pp1_pos, drac1_pp1_pos]
+  varianceWaterfall: true
+  sums: total
+  sumTitle: AC
+  order: dac1_pp1
+  orderDirection: desc
+```
+
+**The bridge.** With `sums: total` and a fixed `unitScaling` the first absolute variance becomes a bridge in the bar chart itself:
+
+- The reference total is a bar above the first row, with a bold value and the name of its scenario.
+- The total of the series is a bar in the total row, with a bold value. Both bars use the scale of the rows, so the chart needs the room: a total is as long as the sum of its rows.
+- The walk starts at the end of the reference total and ends at the end of the total of the series.
+- The variance of the total is a thin bar between the two levels, below the total row.
+- The bars of the rows carry no scenario names then. The two total bars name the scenarios.
+
+Sorted by the same variance (`order: dac1_pp1`) the walk is a staircase.
+
+The other variances stay where they are. The chart draws the plain walk next to the bars and warns when a bridge is not possible:
+
+- `unitScaling` is not a fixed value, or `sums` is `groups` or `all`,
+- a total is missing or not positive, or the series is not the first scenario,
+- the chart has more scenarios than the series and its reference,
+- a scenario at the total only has no positive total,
+- the reference total plus the variances is not the total of the series, for example when a row has no reference value,
+- the walk would cross the bars of the rows. This happens with few rows, when one row is a large part of the total.
+
+A walk has no break marks. `varianceWaterfall` has no effect with `stack`.
+
+An [`Annotation`](/reference/annotation/) points at the total row with `row: total`: `point: { row: total, scenario: dac1_pp1_pos, part: label }` is the label of the variance of the total.
+
+## Scenarios at the total only
+
+The total row can show one more scenario that the rows do not show, for example a plan next to the previous year. There are two ways to name it:
+
+- `sumScenarios: [pl1]` - the dataset of the chart has the scenario per row, and the chart adds it up. Use this when the values exist in the data. The scenario must not be in `scenarios` ([`total-only-scenario`](/appendix/lint-rules/#total-only-scenario)).
+- `sumDataset: state_totals` - a `DataSet` with the scenario columns of the total row, in one row. Use this when a value exists as a total only, or when the total is not the sum of the rows. The chart then adds up no total: every value of the total row comes from that dataset. A scenario column that the chart does not draw is shown at the total only. With both fields the list limits these scenarios.
+
+```yaml
+scenarios: [ac1, pp1]
+sums: total
+sumDataset: state_totals # one row: ac1, pp1, pl1
+```
+
+Both need `sums: total` or `sums: all`, and neither works with `stack`.
+
+- In a [bridge](#variance-waterfall) the scenario is a bar above the reference total, with a bold value and its name. Its variance to the total of the series is a thin bar below the variance of the total.
+- Without a bridge its number stands in the total row behind the others, with a small square in its look.
+- With `sumDataset` a bridge needs totals that match the rows: when the reference total plus the variances is not the total of the series, the chart draws the plain walk and warns.
 
 ## Example: 100 % bars with values and rows by total
 
