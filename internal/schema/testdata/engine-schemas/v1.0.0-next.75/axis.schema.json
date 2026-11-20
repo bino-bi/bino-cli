@@ -27,6 +27,10 @@
         },
         "highlight": {
           "$ref": "#/definitions/HighlightRange"
+        },
+        "step": {
+          "type": "number",
+          "description": "Distance between two ticks. Default: a nice step for the size of the plot."
         }
       },
       "required": [

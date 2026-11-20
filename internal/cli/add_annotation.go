@@ -222,7 +222,7 @@ scenario, row, part.
 	cmd.Flags().StringVar(&flagColor, "color", "", "Color name from the bn-annotation style, e.g. negative")
 	cmd.Flags().StringVar(&flagTarget, "target", "", "Target component as Kind:name")
 	cmd.Flags().StringArrayVar(&flagPoint, "point", nil, "Point of the target as field=value (repeatable)")
-	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow, second value of a difference or last row of a bracket as Kind:name")
+	cmd.Flags().StringVar(&flagTo, "to", "", "End of an arrow, second value of a difference, last row of a bracket or second data point of a frame as Kind:name")
 	cmd.Flags().StringArrayVar(&flagToPoint, "to-point", nil, "Point of the end as field=value (repeatable)")
 	cmd.Flags().StringVar(&flagTitle, "title", "", "Title in the AnnotationList")
 	cmd.Flags().StringVar(&flagText, "text", "", "Text in the AnnotationList (inline Markdown)")
@@ -279,10 +279,11 @@ func buildAnnotationDocument(data AnnotationManifestData) (*schema.Document, err
 		return nil, errors.New("--to-point needs --to")
 	}
 	switch data.Mark {
-	case "", "marker", "frame", "pointer":
+	case "", "marker", "pointer":
 		if data.To != "" {
-			return nil, errors.New("--to needs --mark arrow, --mark difference or --mark bracket")
+			return nil, errors.New("--to needs --mark frame, --mark arrow, --mark difference or --mark bracket")
 		}
+	case "frame":
 	case "arrow", "difference", "bracket":
 		if data.To == "" {
 			return nil, fmt.Errorf("--mark %s needs --to", data.Mark)

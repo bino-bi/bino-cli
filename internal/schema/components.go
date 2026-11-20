@@ -200,7 +200,8 @@ type AnnotationSpec struct {
 	// Target is what the mark points at.
 	Target AnnotationTarget `yaml:"target" json:"target"`
 
-	// To is the end of an arrow, or the second value of a difference.
+	// To is the end of an arrow, the second value of a difference, the last
+	// row of a bracket or the second data point of a frame.
 	To *AnnotationTarget `yaml:"to,omitempty" json:"to,omitempty"`
 
 	// MarkText is a text a frame is drawn around, on the target.

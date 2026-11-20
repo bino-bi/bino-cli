@@ -153,7 +153,7 @@ spec:
     point: { date: "2028-01-01", part: total }
 ```
 
-Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow`, `mark: difference` and `mark: bracket` and not allowed for the other marks.
+Both ends are data points, never free coordinates, and both must be on one page. `to` is required for `mark: arrow`, `mark: difference` and `mark: bracket`, optional for `mark: frame` and not allowed for the other marks.
 
 ### Difference between two values
 
@@ -218,6 +218,25 @@ spec:
 
 - Both ends must be in one chart.
 - The share counts the rows with a bar. A sum row is not a part of it.
+
+### Frame around two data points
+
+A `frame` with `to` is one oval around both data points: the ellipse through the corners of the box that holds both. Use it for a group of points in a `ChartScatter`: name the two points that lie farthest apart, and the points between them are inside. Needs template engine v1.0.0-next.75.
+
+```yaml
+spec:
+  mark: frame
+  target:
+    kind: ChartScatter
+    name: product_portfolio
+    point: { rowGroup: VA, category: VA-303 }
+  to:
+    kind: ChartScatter
+    name: product_portfolio
+    point: { rowGroup: VA, category: VA-328 }
+```
+
+A text of its own (`markText`) is not printed on such a frame.
 
 ### Frame with its own text
 
@@ -307,7 +326,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 | `spec.target.name` | string | yes | - | Name of the component. |
 | `spec.target.panel` | string | no | - | Label of one panel. Only with `kind: SmallMultiple`. See [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple). |
 | `spec.target.point` | object | no | whole component | See [The point](#the-point). |
-| `spec.to` | object | for `arrow`, `difference` and `bracket` | - | The end of the arrow, the second value of the difference or the last row of the bracket, the same shape as `target`. |
+| `spec.to` | object | for `arrow`, `difference` and `bracket` | - | The end of the arrow, the second value of the difference, the last row of the bracket or the second data point of a frame, the same shape as `target`. |
 | `spec.title` | string | no | - | Shown in bold in the list. |
 | `spec.text` | string | no | - | Inline Markdown shown in the list. |
 

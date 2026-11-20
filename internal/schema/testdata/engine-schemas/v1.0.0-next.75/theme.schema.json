@@ -393,6 +393,19 @@
             "type": "string"
           }
         },
+        "markStyles": {
+          "type": "object",
+          "properties": {
+            "stroke": {
+              "type": "string"
+            },
+            "opacity": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The outline of a filled dot or bubble, and the opacity (0 to 1) of its fill."
+        },
         "padding": {
           "type": "object",
           "properties": {

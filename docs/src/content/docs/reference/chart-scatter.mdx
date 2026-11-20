@@ -77,20 +77,31 @@ as delivered (no auto-SI scaling).
 - `facet` splits the plot into small-multiple panels on a level above the
   series level.
 
-Iso-lines require a strictly positive domain on both axes.
+Iso-lines need axes that do not start below 0. An axis that starts at 0 is
+fine with template engine v1.0.0-next.75 or newer, before that both axes had
+to start above 0. On an axis below 0 the lines are left out, and only the
+file of `bino build --layout-state` says so (`WARN_xy_iso_domain`).
+
+The value of a line is `x·y·factor`. Without `factor` it is the plain
+product, which is seldom the number you want to print: a margin of 25 (%)
+times net sales of 20 (mUSD) is 500, not a gross profit of 5 mUSD. Set
+`factor: 0.01` for this case, or `factor: 0.001` for lines in millions over
+axes in units and thousands. `values` and `highlight.from` are then written
+in the unit of the lines.
 
 ## Fields
 
 - `dataset` - required dataset name, inline definition, or array of either.
 - `x`, `y` - required axis measure mappings (token or object with
-  `measure`, `label`, `unit`, `min`, `max`, `refLine`, and `highlight` with
+  `measure`, `label`, `unit`, `min`, `max`, `step`, `refLine`, and `highlight` with
   `from`/`to`; an open end runs to the domain edge).
-- `iso` - optional iso-line configuration (`values`, `label`, `unit`,
-  `highlight.from` shades the region where `x·y >= from`).
+- `iso` - optional iso-line configuration (`values`, `label`, `unit`, `factor`,
+  `highlight.from` shades the region where `x·y·factor >= from`).
 - `level`, `seriesLevel` - point identity and series grouping levels.
 - `facet` - small-multiple configuration (`level` required, `columns`).
 - `labels` - point labels: `points` is `auto` (up to `max` collision-free
-  candidates), `all`, `none`, or an explicit list of point names; `values`
+  candidates), `all`, `none`, or an explicit list of point names, where an
+  entry can be `{ name, side }` to fix the side of the label; `values`
   adds the measure value. Defaults: `points: auto`, `values: false`,
   `max: 12`.
 - `legend` - series legend (`show` defaults to `true`, `position` to
@@ -146,10 +157,13 @@ spec:
   x: { measure: ac1, label: "Margin", unit: "%", min: 0, max: 40 }
   y: { measure: ac2, label: "Net sales", unit: "mUSD", min: 0 }
   iso:
-    values: [100, 200, 300]
+    values: [1, 2, 3]
     label: "Gross profit"
     unit: "mUSD"
-    highlight: { from: 300 }
+    factor: 0.01 # the margin is in percent
+    highlight: { from: 3 }
+  labels:
+    points: [RX-4, { name: RX-2000, side: n }]
 ```
 
 ## Example: Variance scatter with small multiples
@@ -196,6 +210,7 @@ spec:
 | `spec.x.unit`             | string                     | no                        | -                                          | Unit suffix after the axis title. Values are drawn as delivered - scale in the DataSet SQL.                                                                                                                                                      | `unit: "% of net sales"`             |
 | `spec.x.min`              | number                     | no                        | data minimum                               | Lower axis domain bound. Points outside an explicit domain are clipped with a warning.                                                                                                                                                           | `min: 0`                             |
 | `spec.x.max`              | number                     | no                        | data maximum                               | Upper axis domain bound. Must be greater than `min` or both overrides are dropped.                                                                                                                                                               | `max: 40`                            |
+| `spec.x.step` | number | no | picked by the chart | Distance between two ticks. A step that gives more than 50 ticks is not used. Needs template engine v1.0.0-next.75 or newer. | `step: 10` |
 | `spec.x.refLine`          | number                     | no                        | -                                          | Draws a reference line perpendicular to this axis at the given value.                                                                                                                                                                            | `refLine: 20`                        |
 | `spec.x.highlight`        | object                     | no                        | -                                          | Shades a band of the plot along this axis.                                                                                                                                                                                                       | `highlight: { from: 30 }`            |
 | `spec.x.highlight.from`   | number                     | no                        | domain start                               | Band start value.                                                                                                                                                                                                                                | `from: 30`                           |
@@ -206,15 +221,17 @@ spec:
 | `spec.y.unit`             | string                     | no                        | -                                          | Unit suffix after the axis title. Values are drawn as delivered - scale in the DataSet SQL.                                                                                                                                                      | `unit: "mUSD"`                       |
 | `spec.y.min`              | number                     | no                        | data minimum                               | Lower axis domain bound. Points outside an explicit domain are clipped with a warning.                                                                                                                                                           | `min: 0`                             |
 | `spec.y.max`              | number                     | no                        | data maximum                               | Upper axis domain bound. Must be greater than `min` or both overrides are dropped.                                                                                                                                                               | `max: 100`                           |
+| `spec.y.step` | number | no | picked by the chart | Distance between two ticks. A step that gives more than 50 ticks is not used. Needs template engine v1.0.0-next.75 or newer. | `step: 10` |
 | `spec.y.refLine`          | number                     | no                        | -                                          | Draws a reference line perpendicular to this axis at the given value.                                                                                                                                                                            | `refLine: 20`                        |
 | `spec.y.highlight`        | object                     | no                        | -                                          | Shades a band of the plot along this axis.                                                                                                                                                                                                       | `highlight: { from: 30 }`            |
 | `spec.y.highlight.from`   | number                     | no                        | domain start                               | Band start value.                                                                                                                                                                                                                                | `from: 30`                           |
 | `spec.y.highlight.to`     | number                     | no                        | domain end                                 | Band end value.                                                                                                                                                                                                                                  | `to: 60`                             |
-| `spec.iso`                | object                     | no                        | -                                          | Hyperbolic iso-lines `x·y = k`. Requires a strictly positive domain on both axes. Maps to the `iso` HTML attribute.                                                                                                                              | `iso: { values: [100, 200] }`        |
-| `spec.iso.values`         | string or array of numbers | no                        | -                                          | Iso-line constants: `auto` derives them from the data, or list explicit `k` values.                                                                                                                                                              | `values: [100, 200, 300]`            |
+| `spec.iso`                | object                     | no                        | -                                          | Hyperbolic iso-lines `x·y·factor = value`. No axis may start below 0. Maps to the `iso` HTML attribute.                                                                                                                              | `iso: { values: [100, 200] }`        |
+| `spec.iso.values`         | string or array of numbers | no                        | -                                          | Values of the lines, in the unit of the lines: `auto` derives them from the data, or list explicit values.                                                                                                                                                              | `values: [100, 200, 300]`            |
 | `spec.iso.label`          | string                     | no                        | -                                          | Caption of the derived measure, rendered at the iso-line exits.                                                                                                                                                                                  | `label: "Gross profit"`              |
 | `spec.iso.unit`           | string                     | no                        | -                                          | Unit suffix for the iso-line caption.                                                                                                                                                                                                            | `unit: "mUSD"`                       |
-| `spec.iso.highlight`      | object                     | no                        | -                                          | Shades the region where `x·y >= from`.                                                                                                                                                                                                           | `highlight: { from: 300 }`           |
+| `spec.iso.factor` | number | no | `1` | Brings the product `x·y` to the unit of the lines: `0.01` when one axis is a percentage, `0.001` for millions from units and thousands. Needs template engine v1.0.0-next.75 or newer. | `factor: 0.01` |
+| `spec.iso.highlight`      | object                     | no                        | -                                          | Shades the region where `x·y·factor >= from`.                                                                                                                                                                                                           | `highlight: { from: 300 }`           |
 | `spec.iso.highlight.from` | number                     | no                        | -                                          | Iso value the shading starts at.                                                                                                                                                                                                                 | `from: 300`                          |
 | `spec.level`              | string                     | no                        | `auto`                                     | Point identity level (one row = one point, duplicates are dropped with a warning). Values: `auto`, `category`, `subcategory`.                                                                                                                    | `level: category`                    |
 | `spec.seriesLevel`        | string                     | no                        | `auto`                                     | Series/color level, strictly above the point level. Values: `auto`, `rowgroup`, `category`, `none`. Maps to the `series-level` HTML attribute.                                                                                                   | `seriesLevel: rowgroup`              |
@@ -222,7 +239,7 @@ spec:
 | `spec.facet.level`        | string                     | yes (when `facet` is set) | -                                          | Hierarchy level whose values become the facet panels. Values: `rowgroup`, `category`.                                                                                                                                                            | `level: rowgroup`                    |
 | `spec.facet.columns`      | integer                    | no                        | all panels in one row                      | Number of panels per row (≥ 1).                                                                                                                                                                                                                  | `columns: 3`                         |
 | `spec.labels`             | object                     | no                        | `points: auto`, `values: false`, `max: 12` | Point label configuration.                                                                                                                                                                                                                       | `labels: { points: all }`            |
-| `spec.labels.points`      | string or array of strings | no                        | `auto`                                     | Which points get a name label: `auto` picks up to `max` collision-free candidates, `all` labels every point, `none` disables labels, or list explicit point names.                                                                               | `points: none`                       |
+| `spec.labels.points`      | string or array of strings | no                        | `auto`                                     | Which points get a name label: `auto` picks up to `max` collision-free candidates, `all` labels every point, `none` disables labels, or list explicit point names. An entry can be `{ name: RX-4, side: n }`: the label then stands on that side of its point (`n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`), also outside the plot or on another mark. Needs template engine v1.0.0-next.75 or newer for this form.                                                                               | `points: none`                       |
 | `spec.labels.values`      | boolean                    | no                        | `false`                                    | Render the measure value with the label.                                                                                                                                                                                                         | `values: true`                       |
 | `spec.labels.max`         | integer                    | no                        | `12`                                       | Candidate cap when `points` is `auto` (≥ 1).                                                                                                                                                                                                     | `max: 8`                             |
 | `spec.legend`             | object                     | no                        | `show: true`, `position: right`            | Series legend configuration.                                                                                                                                                                                                                     | `legend: { position: bottom }`       |

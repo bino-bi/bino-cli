@@ -50,16 +50,16 @@ func TestBuildAnnotationDocument_DefaultMarkIsLeftOut(t *testing.T) {
 
 func TestBuildAnnotationDocument_Errors(t *testing.T) {
 	tests := map[string]AnnotationManifestData{
-		"--mark arrow needs --to":                                      {Name: "a", Mark: "arrow", Target: "Table:t"},
-		"--mark difference needs --to":                                 {Name: "a", Mark: "difference", Target: "ChartTime:c"},
-		"--to needs --mark arrow":                                      {Name: "a", To: "Table:t", Target: "Table:t"},
-		"--percent needs --mark difference or --mark bracket":          {Name: "a", Percent: true, Target: "Table:t"},
-		"--mark bracket needs --to":                                    {Name: "a", Mark: "bracket", Target: "ChartStructure:c"},
-		"--to needs --mark arrow, --mark difference or --mark bracket": {Name: "a", Mark: "pointer", Target: "ChartStructure:c", To: "ChartStructure:c"},
-		"unknown mark":                                                 {Name: "a", Mark: "ring", Target: "Table:t"},
-		"use Kind:name":                                                {Name: "a", Target: "t"},
-		"use field=value":                                              {Name: "a", Target: "Table:t", Point: []string{"year=2024"}},
-		"--to-point needs --to":                                        {Name: "a", Target: "Table:t", ToPoint: []string{"date=2024-01-01"}},
+		"--mark arrow needs --to":                             {Name: "a", Mark: "arrow", Target: "Table:t"},
+		"--mark difference needs --to":                        {Name: "a", Mark: "difference", Target: "ChartTime:c"},
+		"--to needs --mark frame":                             {Name: "a", To: "Table:t", Target: "Table:t"},
+		"--percent needs --mark difference or --mark bracket": {Name: "a", Percent: true, Target: "Table:t"},
+		"--mark bracket needs --to":                           {Name: "a", Mark: "bracket", Target: "ChartStructure:c"},
+		"--to needs --mark frame, --mark arrow, --mark difference or --mark bracket": {Name: "a", Mark: "pointer", Target: "ChartStructure:c", To: "ChartStructure:c"},
+		"unknown mark":          {Name: "a", Mark: "ring", Target: "Table:t"},
+		"use Kind:name":         {Name: "a", Target: "t"},
+		"use field=value":       {Name: "a", Target: "Table:t", Point: []string{"year=2024"}},
+		"--to-point needs --to": {Name: "a", Target: "Table:t", ToPoint: []string{"date=2024-01-01"}},
 	}
 	for want, data := range tests {
 		if _, err := buildAnnotationDocument(data); err == nil || !strings.Contains(err.Error(), want) {
