@@ -249,6 +249,10 @@ const StructureSumsMinVersion = "v1.0.0-next.51"
 // structure chart or a time chart draws at its total only.
 const StructureWaterfallMinVersion = "v1.0.0-next.69"
 
+// StructureRowLinesMinVersion is the first engine release with the row lines
+// and the mark of the order of a structure chart.
+const StructureRowLinesMinVersion = "v1.0.0-next.71"
+
 // structureFeatureFloors holds the features of StructureSumsCheck that need a
 // newer engine than StructureSumsMinVersion.
 var structureFeatureFloors = map[string]string{
@@ -257,6 +261,8 @@ var structureFeatureFloors = map[string]string{
 	"ChartStructure order by a variance":   StructureWaterfallMinVersion,
 	"ChartStructure sumScenarios":          StructureWaterfallMinVersion,
 	"ChartStructure sumDataset":            StructureWaterfallMinVersion,
+	"ChartStructure rowLines":              StructureRowLinesMinVersion,
+	"ChartStructure orderMark":             StructureRowLinesMinVersion,
 }
 
 // StructureSumsCheck returns the engine check for a project that uses the given

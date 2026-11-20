@@ -4316,6 +4316,16 @@
           "type": "string",
           "description": "Name of a DataSet with the values of the total row: the scenario columns. The chart then adds up no total. A scenario column the chart does not draw is shown at the total only. Needs template engine v1.0.0-next.69."
         },
+        "rowLines": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A thin line after every n-th row, over all segments of the chart. The count starts again behind a sum row. Needs template engine v1.0.0-next.71."
+        },
+        "orderMark": {
+          "type": "boolean",
+          "default": false,
+          "description": "An arrow marks the scenario or the variance that comes first in order. No mark for an order by a dimension, and none with stack. Needs template engine v1.0.0-next.71."
+        },
         "valueSuffix": {
           "type": "string",
           "description": "Text printed right after every value label, for example '%' when each row shows the unit. Variance labels do not get it. Needs template engine v1.0.0-next.56, older engines print the values without it."

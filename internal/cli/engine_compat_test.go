@@ -567,6 +567,32 @@ func TestStructureWaterfallEngineFinding(t *testing.T) {
 	}
 }
 
+func TestStructureRowLinesEngineFinding(t *testing.T) {
+	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","order":"dac1_pp1","rowLines":5,"orderMark":true}}`)}}
+	for _, c := range []struct {
+		engine string
+		fatal  bool
+	}{{"v1.0.0-next.70", true}, {"v1.0.0-next.71", false}} {
+		dir := t.TempDir()
+		writeProjectWithEngine(t, dir, c.engine)
+		cfg := &pathutil.ProjectConfig{EngineVersion: c.engine}
+		finding, fatal := structureSumsEngineFinding(dir, cfg, chart)
+		if fatal != c.fatal {
+			t.Fatalf("%s: fatal = %v, want %v (%+v)", c.engine, fatal, c.fatal, finding)
+		}
+		if !fatal {
+			continue
+		}
+		// the order by a variance is in that engine: only the two new fields are named
+		if !strings.Contains(finding.Message, "ChartStructure rowLines") ||
+			!strings.Contains(finding.Message, "ChartStructure orderMark") ||
+			strings.Contains(finding.Message, "order by a variance") ||
+			!strings.Contains(finding.Message, "v1.0.0-next.71") {
+			t.Fatalf("%s: finding = %+v", c.engine, finding)
+		}
+	}
+}
+
 func TestStructureWaterfallDefaultEngineFinding(t *testing.T) {
 	// the manifest uses a field of an older release, a dataset default adds the waterfall
 	chart := []config.Document{{Kind: "ChartStructure", Raw: json.RawMessage(`{"kind":"ChartStructure","spec":{"dataset":"sales","sums":"total"}}`)}}

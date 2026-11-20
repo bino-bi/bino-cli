@@ -173,6 +173,12 @@ func structureSumsChart(spec map[string]any, found map[string]bool) {
 	if list, _ := spec["sumScenarios"].([]any); len(list) > 0 {
 		note("sumScenarios")
 	}
+	if lines, _ := spec["rowLines"].(float64); lines >= 1 {
+		note("rowLines")
+	}
+	if spec["orderMark"] == true {
+		note("orderMark")
+	}
 	if name, _ := spec["sumDataset"].(string); name != "" {
 		note("sumDataset")
 	}
