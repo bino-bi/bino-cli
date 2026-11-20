@@ -29,6 +29,7 @@ var sharedXYTokenSuffixes = []string{
 	"xy-point-clipped",
 	"xy-variance-nodata",
 	"xy-label-unknown",
+	"xy-label-dropped",
 	"xy-series-overflow",
 	"xy-point-budget",
 }

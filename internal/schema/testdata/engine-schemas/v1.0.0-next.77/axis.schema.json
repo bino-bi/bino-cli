@@ -39,6 +39,10 @@
             "beside"
           ],
           "description": "Where the title stands. `outside` (default): in a row of its own, above the plot for y and below the tick labels for x. `beside`: in two lines beside the end of the axis, left of the top of the y axis and right of the end of the x axis."
+        },
+        "decimals": {
+          "type": "number",
+          "description": "Decimals of the tick labels. Default: what the ticks need."
         }
       },
       "required": [

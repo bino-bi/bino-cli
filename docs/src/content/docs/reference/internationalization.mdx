@@ -193,7 +193,8 @@ Prefix each suffix with the chart you are overriding - for example
 | `xy-duplicate-point` | `{{count}} duplicate point identitie(s) dropped (first row wins): {{names}}. Aggregate in the DataSet SQL.` | Two rows share a point identity             |
 | `xy-point-clipped`   | `{{count}} point(s) outside the explicit min/max excluded.`                                                 | Points fall outside an explicit axis range  |
 | `xy-variance-nodata` | `{{count}} row(s) without variance data excluded.`                                                          | Rows lack the data a variance measure needs |
-| `xy-label-unknown`   | `Unknown label name(s): {{names}}.`                                                                         | A configured label names no known column    |
+| `xy-label-unknown`   | `Unknown label name(s): {{names}}.`                                                                         | A name of `labels.points` is in no panel of the chart |
+| `xy-label-dropped`   | `No room for the label of: {{names}}.`                                                                      | A label of a typed `labels.points` list found no place |
 | `xy-series-overflow` | `More series than palette colors; colors repeat with a tint step.`                                          | More series than the palette has colours    |
 | `xy-point-budget`    | `{{count}} points exceed the 5000-point budget; consider 'limit'.`                                          | The point budget is exceeded                |
 

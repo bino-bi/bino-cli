@@ -406,6 +406,20 @@
           "additionalProperties": false,
           "description": "The outline of a filled dot or bubble, and the opacity (0 to 1) of its fill."
         },
+        "seriesFills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fill per series, in the order of `seriesColors`: `solid` or `outline` (a line in the series colour around a nearly clear fill)."
+        },
+        "shareColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Colour of the share slice of a bubble per series, in the order of `seriesColors`. Without an entry: a darker shade of the series colour."
+        },
         "padding": {
           "type": "object",
           "properties": {
