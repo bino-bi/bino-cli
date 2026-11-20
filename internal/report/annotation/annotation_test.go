@@ -42,6 +42,7 @@ func TestCheckPoint(t *testing.T) {
 		{"unknown data is judged by fields only", schema.KindChartTime, &schema.AnnotationPoint{Date: "2024-01-01"}, nil, ""},
 		{"a time chart has no row group", schema.KindChartTime, &schema.AnnotationPoint{RowGroup: "x"}, nil, "has no rowGroup"},
 		{"a time chart has a category: the series of a stack", schema.KindChartTime, &schema.AnnotationPoint{Category: "x"}, nil, ""},
+		{"a time chart has a total column", schema.KindChartTime, &schema.AnnotationPoint{Row: "total", Scenario: "dac1_pp1_pos"}, yearly, ""},
 		{"a scatter chart has no scenario", schema.KindChartScatter, &schema.AnnotationPoint{Category: "x", Scenario: "ac1"}, nil, "has no scenario"},
 		{"a table has no label part", schema.KindTable, &schema.AnnotationPoint{Category: "x", Part: "label"}, nil, "no part"},
 

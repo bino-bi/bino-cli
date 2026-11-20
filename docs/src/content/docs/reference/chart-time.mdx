@@ -50,6 +50,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `dataFormatDigitsPercent` - number of decimal digits of the percent labels of relative variances. Default: `2`. Same meaning as on a `Table`.
 - `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. Default: `true`. Needs template engine v1.0.0-next.60.
 - `scalingIndicator` - a value on the scale of the columns. The chart draws a light band behind the columns from the axis up to this value and prints the value at the right end. Two charts with different scales that show the same value make the difference visible. Bar mode only, not for a 100% stack. Needs template engine v1.0.0-next.60.
+- `totalColumn` - a column right of the last period for the total of all periods, at its own scale. See [Total column](#total-column). Needs template engine v1.0.0-next.61.
 - `scenarioSwitch` - for a series that changes its scenario along the time axis, for example AC up to this year and PL after it. Default: `false`. See [Scenario switch](#scenario-switch).
 - `dateInterval` - desired time granularity; `auto` lets the renderer choose based on dataset meta.
 - `filter` - optional filter expression.
@@ -240,6 +241,37 @@ spec:
   variances: ["dac1_pp1_pos", "dpl1_pp1_pos"]
   scenarioSwitch: true
 ```
+
+## Total column
+
+Twelve months and their year do not fit on one scale: the year is about twelve times as high. `totalColumn` adds one column right of the last period for the total of all periods, with its own `unitScaling`.
+
+```yaml
+---
+apiVersion: bino.bi/v1alpha1
+kind: ChartTime
+metadata:
+  name: contribution_months_and_year
+spec:
+  dataset: contribution_monthly
+  dateInterval: month
+  unitScaling: 28
+  scenarios: [ac1, fc1, pp1] # ac1 has values up to September, fc1 from October
+  variances: [dac1_pp1_pos, dfc1_pp1_pos, drac1_pp1_pos, drfc1_pp1_pos]
+  scenarioSwitch: true
+  scalingIndicator: 100
+  totalColumn:
+    unitScaling: 280
+    label: "2025"
+    width: 1.6
+```
+
+- The column stacks one part per scenario of the series: the first scenario, and with `scenarioSwitch` the scenarios that follow it, each in its look. Each part prints its value, the names stand at the right and the total above.
+- The first other scenario is the reference. Its total is a column behind the total column.
+- Each variance row gets the variance of the totals, at the scale of the row. So the tiers of the total line up with the tiers of the periods. It is the sum of the series minus the sum of the reference, over the periods where both have a value.
+- With `scalingIndicator` the column has its own band at its own scale, and a line links it to the band of the periods.
+- An [`Annotation`](/reference/annotation/) points at the column with `row: total` in place of a `date`: `point: { row: total, scenario: dac1_pp1_pos, part: label }` is the label of the total variance.
+- It works for plain columns: not with `stack` and not in line mode.
 
 ## Variance only chart
 
@@ -439,6 +471,10 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                          | Number of decimal digits of the percent labels of relative variances. Minimum: 0. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatPercentSign` | boolean | no | `true` | `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. The title of the row (`ΔPY%`) still names the unit. Needs engine v1.0.0-next.60. | `dataFormatPercentSign: false` |
 | `spec.scalingIndicator` | number | no | - | Value of the scaling indicator: a light band behind the columns up to this value, with the value at its right end. Greater than 0. Needs engine v1.0.0-next.60. | `scalingIndicator: 100` |
+| `spec.totalColumn` | object | no | - | A column for the total of all periods, right of the last period. See [Total column](#total-column). Needs engine v1.0.0-next.61. | see below |
+| `spec.totalColumn.unitScaling` | number | yes (within `totalColumn`) | - | Data units per em of column height for the total column. Greater than 0. | `unitScaling: 280` |
+| `spec.totalColumn.label` | string | no | `""` | Text under the column. | `label: "2025"` |
+| `spec.totalColumn.width` | number | no | `1` | Width of the column in widths of a period column. | `width: 1.6` |
 | `spec.scenarioSwitch`    | boolean                  | no                   | `false`                      | Draw a scenario that only has values where the first scenario has none in its place. See [Scenario switch](#scenario-switch). Needs engine v1.0.0-next.46. |
 | `spec.dateInterval`      | string                   | no                   | auto-detect                  | Time granularity. Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `auto`.                                                                                                                                                | `dateInterval: month`             |
 | `spec.filter`            | string                   | no                   | `""`                         | AlaSQL WHERE clause fragment to filter rows.                                                                                                                                                                                                                           | `filter: "region_group = 'EMEA'"` |

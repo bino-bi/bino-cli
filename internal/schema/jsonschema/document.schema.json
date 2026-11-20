@@ -2478,7 +2478,7 @@
         "row": {
           "type": "string",
           "enum": ["subtotal", "total"],
-          "description": "A subtotal or total row of a table, with the values of its parent."
+          "description": "A subtotal or total row of a table, with the values of its parent. On a ChartTime with a totalColumn, total is that column."
         },
         "part": {
           "type": "string",
@@ -4445,6 +4445,26 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "Scaling indicator: a light band behind the columns from the axis up to this value, with the value at its right end. Use the same value on charts with different scales. Bar mode only. Needs template engine v1.0.0-next.60."
+        },
+        "totalColumn": {
+          "type": "object",
+          "description": "A column right of the last period for the total of all periods, at its own scale. It stacks one part per scenario of the series (with scenarioSwitch: the first scenario and the ones that follow it), with the first other scenario as the reference behind. Each variance row gets the variance of the totals. With scalingIndicator the column has its own band, and a line links the two bands. Plain columns only: not with stack, not in line mode. Needs template engine v1.0.0-next.61.",
+          "additionalProperties": false,
+          "required": ["unitScaling"],
+          "properties": {
+            "unitScaling": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Data units per em of column height for the total column, like unitScaling of the chart."
+            },
+            "label": { "type": "string", "description": "Text under the column." },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1,
+              "description": "Width of the column in widths of a period column."
+            }
+          }
         },
         "dataFormatPercentSign": {
           "type": "boolean",
