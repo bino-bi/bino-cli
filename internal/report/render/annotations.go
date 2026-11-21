@@ -312,6 +312,12 @@ func (rc *renderCtx) panelAnnotationTarget(name, baseKind, by string, p panel, c
 	return id
 }
 
+// smallMultiplePanelsKey is the key of a SmallMultiple in the panels an
+// annotation page wants.
+func smallMultiplePanelsKey(name string) string {
+	return annotation.Key(schema.KindSmallMultiple, name)
+}
+
 // warnPanelTargets reports the panels annotations name that the SmallMultiple
 // does not have, or has more than once. The values of panels.by are only known
 // with the data, so lint cannot always tell.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -296,5 +297,59 @@ func TestGridSpanProblems(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSmallMultiple_AxisTitlesSharedIsOneChartWithFacet(t *testing.T) {
+	res, _, err := renderSmallMultipleWith(`{"dataset": "profit", "axisTitles": "shared", "columns": 3, "filter": "ac1 > 0", "chartTitle": "All sites",
+		"selectedStyle": "sm-style",
+		"base": {"kind": "ChartBubble", "spec": {"filter": "ac2 > 1", "x": {"measure": "ac1"}, "y": {"measure": "ac2"}, "size": {"measure": "ac3"}}},
+		"panels": {"by": "rowGroup"}}`, spanEngine)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(res.HTML)
+	if strings.Contains(html, "<bn-grid") || strings.Count(html, "<bn-chart-bubble") != 1 {
+		t.Fatalf("want one chart and no grid:\n%s", html)
+	}
+	chart := openTag(t, html, "bn-chart-bubble")
+	for _, want := range []string{`&#34;level&#34;:&#34;rowgroup&#34;`, `&#34;columns&#34;:3`, `datasets='profit'`, `selected-style='sm-style'`, `ac1 &gt; 0`, `ac2 &gt; 1`, `chart-title='All sites'`} {
+		if !strings.Contains(chart, want) {
+			t.Errorf("no %s in %s", want, chart)
+		}
+	}
+}
+
+func TestSmallMultiple_AxisTitlesSharedSaysWhatDoesNotFit(t *testing.T) {
+	for spec, want := range map[string]string{
+		`"base": {"kind": "ChartTime", "spec": {}}, "panels": {"by": "rowGroup"}`:                                         "needs a ChartScatter or ChartBubble base, not ChartTime",
+		`"base": {"kind": "ChartScatter", "spec": {}}, "panels": {"by": "date"}`:                                          "panels.by must be rowGroup or category",
+		`"base": {"kind": "ChartScatter", "spec": {}}, "panels": {"by": "rowGroup", "limit": 2}`:                          "panels.order and panels.limit are not possible",
+		`"base": {"kind": "ChartScatter", "spec": {}}, "panels": {"by": "rowGroup"}, "card": {"titleMeasures": []}`:       "card is not possible",
+		`"base": {"kind": "ChartScatter", "spec": {"facet": {"level": "category"}}}, "panels": {"by": "rowGroup"}`:        "the base sets facet itself",
+		`"base": {"kind": "ChartScatter", "spec": {"chartTitle": "Profit ${panel.label}"}}, "panels": {"by": "rowGroup"}`: "placeholder",
+		`"base": {"kind": "ChartScatter", "spec": {}}, "panels": {"by": "rowGroup"}, "caption": "x"`:                      "caption is not possible",
+	} {
+		_, _, err := renderSmallMultipleWith(`{"dataset": "profit", "axisTitles": "shared", `+spec+`}`, spanEngine)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", spec, err, want)
+		}
+	}
+}
+
+func TestSmallMultiple_AxisTitlesSharedHasTheColumnsOfTheGrid(t *testing.T) {
+	base := `"base": {"kind": "ChartScatter", "spec": {"x": {"measure": "ac1"}, "y": {"measure": "ac2"}}}, "panels": {"by": "rowGroup"}`
+	res, _, err := renderSmallMultipleWith(`{"dataset": "profit", "axisTitles": "shared", `+base+`}`, spanEngine)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	grid, _, err := renderSmallMultipleWith(`{"dataset": "profit", "scale": "0.5", `+base+`}`, spanEngine)
+	if err != nil {
+		t.Fatalf("render grid: %v", err)
+	}
+	columns := strings.Count(attrsOf(openTag(t, string(grid.HTML), "bn-grid"))["column-headers"], "c")
+	chart := openTag(t, string(res.HTML), "bn-chart-scatter")
+	if columns < 1 || !strings.Contains(chart, `&#34;columns&#34;:`+strconv.Itoa(columns)) {
+		t.Fatalf("grid has %d column(s), chart: %s", columns, chart)
 	}
 }

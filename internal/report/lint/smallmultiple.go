@@ -35,6 +35,7 @@ type smallMultipleLintSpec struct {
 		By    string `json:"by"`
 		Order string `json:"order"`
 		Limit int    `json:"limit"`
+		Param string `json:"param"`
 		Items []struct {
 			Label      string          `json:"label"`
 			Dataset    string          `json:"dataset"`
@@ -154,6 +155,9 @@ var smallMultipleScale = Rule{
 		var findings []Finding
 		for _, site := range smallMultipleSites(docs, true) {
 			s := site.spec
+			if s.AxisTitles == "shared" {
+				continue // one chart: nothing to keep in step
+			}
 			problems := render.SmallMultipleScaleProblems(s.Base.Kind, s.UnitScaling, s.PercentageScaling, s.Scale)
 			if len(problems) == 0 {
 				continue
@@ -349,12 +353,12 @@ var smallMultipleXYFacet = Rule{
 				continue
 			}
 			hasCard := len(s.Card) > 0 && string(s.Card) != "null"
-			if hasCard || len(s.Panels.Items) > 0 {
+			if hasCard || len(s.Panels.Items) > 0 || s.AxisTitles == "shared" {
 				continue
 			}
 			findings = append(findings, Finding{
 				RuleID:   "small-multiple-xy-facet",
-				Message:  fmt.Sprintf("every panel draws its own tick labels, axis titles and legend; facet: { level: %s } on the %s draws the panels in one chart and shares them", strings.ToLower(s.Panels.By), s.Base.Kind),
+				Message:  fmt.Sprintf("every panel draws its own tick labels, axis titles and legend; axisTitles: shared draws the panels as one chart and shares them, like facet: { level: %s } on the %s", strings.ToLower(s.Panels.By), s.Base.Kind),
 				File:     site.doc.File,
 				DocIdx:   site.doc.Position,
 				Path:     joinLintPath(site.path, "base.kind"),
@@ -370,10 +374,37 @@ var smallMultipleXYFacet = Rule{
 var smallMultipleAxisTitles = Rule{
 	ID:          "small-multiple-axis-titles",
 	Name:        "Small Multiple Axis Titles",
-	Description: "axisTitles: rowEnd needs a ChartTime base.",
+	Description: "axisTitles: rowEnd needs a ChartTime base. axisTitles: shared needs a ChartScatter or ChartBubble base with panels.by rowGroup or category, and no card, items, overrides, order or limit.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		var findings []Finding
 		for _, site := range smallMultipleSites(docs, true) {
+			if s := site.spec; s.AxisTitles == "shared" && s.Base.Kind != "" && !s.baseUnknown {
+				baseSpec := s.Base.Spec
+				if s.Base.Ref != "" {
+					for _, doc := range docs {
+						if doc.Kind == s.Base.Kind && doc.Name == s.Base.Ref {
+							baseSpec = mergedSpec(doc, s.Base.Spec)
+						}
+					}
+				}
+				problems := render.SmallMultipleSharedProblems(render.SharedSmallMultiple{
+					BaseKind: s.Base.Kind, By: s.Panels.By, BaseSpec: baseSpec,
+					HasItems: len(s.Panels.Items) > 0, HasCard: len(s.Card) > 0 && string(s.Card) != "null",
+					HasOverrides: len(s.Panels.Overrides) > 0, HasOrderOrLimit: s.Panels.Order != "" || s.Panels.Limit > 0,
+					HasParam: s.Panels.Param != "", HasCaption: s.Caption != nil && *s.Caption != "",
+				})
+				if len(problems) > 0 {
+					findings = append(findings, Finding{
+						RuleID:   "small-multiple-axis-titles",
+						Message:  "axisTitles: shared: " + strings.Join(problems, "; "),
+						File:     site.doc.File,
+						DocIdx:   site.doc.Position,
+						Path:     joinLintPath(site.path, "axisTitles"),
+						Severity: "error",
+					})
+				}
+				continue
+			}
 			if site.spec.AxisTitles != "rowEnd" || site.spec.Base.Kind == "ChartTime" || site.spec.Base.Kind == "" {
 				continue
 			}

@@ -68,7 +68,7 @@ The last five rules only run on a **predef project** - a project whose `bino.tom
 | `small-multiple-card` | Small Multiple Card | Warning / Error | A caption next to a `card` names each panel twice (warning). `panels.items[].card` without `card` (error). |
 | `small-multiple-span` | Small Multiple Span | Error | A `columnSpan` of a SmallMultiple panel must not be larger than `columns`. |
 | `small-multiple-override-duplicate` | Small Multiple Override Duplicate | Error | A value may have only one entry in `panels.overrides` of a SmallMultiple. |
-| `small-multiple-axis-titles` | Small Multiple Axis Titles | Error | `axisTitles: rowEnd` of a SmallMultiple needs a `ChartTime` base. |
+| `small-multiple-axis-titles` | Small Multiple Axis Titles | Error | `axisTitles: rowEnd` of a SmallMultiple needs a `ChartTime` base. `axisTitles: shared` needs a `ChartScatter` or `ChartBubble` base by `rowGroup` or `category`, without card, items, overrides, order or limit. |
 | `small-multiple-xy-facet` | Small Multiple XY Facet | Info | A SmallMultiple of `ChartScatter` or `ChartBubble` by `rowGroup` or `category` repeats axes and legend in every panel. `facet` on the chart shares them. |
 | `small-multiple-override-unmatched` | Small Multiple Override Unmatched | Warning | A `panels.overrides` value of a SmallMultiple must be a value of the `by` column. Needs the data: `--execute-queries`, build and preview. |
 | `grid-cell-span` | Grid Cell Span | Error | A `rowSpan` or `columnSpan` of a Grid child must end inside the grid, and no child may sit in a position that a span covers. |
@@ -1144,13 +1144,17 @@ Two entries of `panels.overrides` have the same `value`, so they name the same p
 
 **Fix:** remove `axisTitles`, or use a `ChartTime` base.
 
+`axisTitles: shared` draws the panels of a `ChartScatter` or `ChartBubble` as one chart with facets. It needs `panels.by: rowGroup` or `category`, and it cannot have a `card`, a `caption`, `panels.items`, `panels.overrides`, `panels.order`, `panels.limit` or `panels.param`. The base must not set `facet` itself and must not use a `${panel...}` placeholder. The message lists what does not fit.
+
+**Fix:** remove what the message names, or use `axisTitles: each`.
+
 ### small-multiple-xy-facet
 
 A `SmallMultiple` with a `ChartScatter` or `ChartBubble` base draws one chart per panel. Each chart has its own tick labels, axis titles and legend, and picks its own number format. The `facet` field of the chart gives the same panels in one chart: tick labels at the outer panels only, each axis title and the legend once, and one number format.
 
 The rule says nothing when the SmallMultiple has a `card` or `panels.items`, as `facet` has neither.
 
-**Fix:** use the chart with `facet`, and keep the SmallMultiple for panels that need a card, an extra panel or a span.
+**Fix:** set `axisTitles: shared` on the SmallMultiple, or use the chart with `facet`. Keep the plain SmallMultiple for panels that need a card, an extra panel or a span.
 
 ```yaml
 kind: ChartBubble

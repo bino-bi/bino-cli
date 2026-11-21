@@ -141,8 +141,11 @@ func scalarText(raw json.RawMessage) string {
 // renderSmallMultipleComponent expands a SmallMultiple into a grid with one
 // cell per panel and renders it like a Grid.
 func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCtx) (string, error) {
-	if problems := SmallMultipleScaleProblems(s.Base.Kind, s.UnitScaling, s.PercentageScaling, s.Scale); len(problems) > 0 {
-		return "", fmt.Errorf("SmallMultiple %q: all panels must share one scale: %s", name, strings.Join(problems, "; "))
+	shared := s.AxisTitles == "shared"
+	if !shared {
+		if problems := SmallMultipleScaleProblems(s.Base.Kind, s.UnitScaling, s.PercentageScaling, s.Scale); len(problems) > 0 {
+			return "", fmt.Errorf("SmallMultiple %q: all panels must share one scale: %s", name, strings.Join(problems, "; "))
+		}
 	}
 	if s.Panels.Param != "" && s.Base.Ref == "" {
 		return "", fmt.Errorf("SmallMultiple %q: panels.param needs base.ref", name)
@@ -165,6 +168,17 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 	if skipped {
 		return "", nil
 	}
+	if shared {
+		problems := SmallMultipleSharedProblems(SharedSmallMultiple{
+			BaseKind: s.Base.Kind, By: s.Panels.By, BaseSpec: baseSpec,
+			HasItems: len(s.Panels.Items) > 0, HasCard: isSet(s.Card), HasOverrides: len(s.Panels.Overrides) > 0,
+			HasOrderOrLimit: s.Panels.Order != "" || s.Panels.Limit > 0, HasParam: s.Panels.Param != "",
+			HasCaption: s.Caption != nil && *s.Caption != "",
+		})
+		if len(problems) > 0 {
+			return "", fmt.Errorf("SmallMultiple %q: axisTitles shared: %s", name, strings.Join(problems, "; "))
+		}
+	}
 	panels, err := smallMultiplePanels(s, name, primary, specHasFilter(baseSpec), rc)
 	if err != nil {
 		return "", err
@@ -172,6 +186,10 @@ func renderSmallMultipleComponent(s smallMultipleSpec, name string, rc *renderCt
 	if len(panels) == 0 {
 		rc.warn(fmt.Sprintf("SmallMultiple %q: no panels", name))
 		return "", nil
+	}
+	if shared {
+		// the same number of panels per row as the grid would have
+		return renderSharedSmallMultiple(s, name, baseSpec, smallMultipleColumns(s.Columns, panels), rc)
 	}
 	warned := map[string]bool{}
 	for _, p := range panels {
@@ -817,4 +835,123 @@ func replacePanelPlaceholders(text string, p panel, i int, escape func(string) s
 		"${panel.value}", escape(p.label),
 		"${panel.index}", strconv.Itoa(i+1),
 	).Replace(text)
+}
+
+// SharedSmallMultiple is what the check of axisTitles: shared looks at.
+type SharedSmallMultiple struct {
+	BaseKind string
+	By       string
+	// BaseSpec is the spec of the base, with a referenced document merged in.
+	BaseSpec                                                               json.RawMessage
+	HasItems, HasCard, HasOverrides, HasOrderOrLimit, HasParam, HasCaption bool
+}
+
+// SmallMultipleSharedProblems lists why a SmallMultiple cannot draw its panels
+// as one chart with shared axes. Lint and render share it.
+func SmallMultipleSharedProblems(sm SharedSmallMultiple) []string {
+	var out []string
+	if sm.BaseKind != "ChartScatter" && sm.BaseKind != "ChartBubble" {
+		out = append(out, "it needs a ChartScatter or ChartBubble base, not "+sm.BaseKind)
+	}
+	if sm.HasItems {
+		out = append(out, "it needs panels.by, not panels.items")
+	} else if level := strings.ToLower(sm.By); level != "rowgroup" && level != "category" {
+		out = append(out, "panels.by must be rowGroup or category")
+	}
+	if sm.HasCard {
+		out = append(out, "card is not possible: the panels are one chart")
+	}
+	if sm.HasCaption {
+		out = append(out, "caption is not possible: the chart prints the name of a panel inside its plot")
+	}
+	if sm.HasOverrides {
+		out = append(out, "panels.overrides is not possible: all panels have one size")
+	}
+	if sm.HasOrderOrLimit {
+		out = append(out, "panels.order and panels.limit are not possible: the chart draws the panels in the order of the data")
+	}
+	if sm.HasParam {
+		out = append(out, "panels.param is not possible")
+	}
+	var base map[string]json.RawMessage
+	if len(sm.BaseSpec) > 0 && json.Unmarshal(sm.BaseSpec, &base) == nil {
+		if _, ok := base["facet"]; ok {
+			out = append(out, "the base sets facet itself")
+		}
+	}
+	if bytes.Contains(sm.BaseSpec, []byte("${panel.")) {
+		out = append(out, "the base uses a ${panel...} placeholder: there is one chart for all panels")
+	}
+	return out
+}
+
+// renderSharedSmallMultiple draws the panels of a SmallMultiple of scatter or
+// bubble charts as one chart with facet: one axis title per axis, tick labels
+// at the outer panels and one legend. columns is the number of panels per row.
+func renderSharedSmallMultiple(s smallMultipleSpec, name string, baseSpec json.RawMessage, columns int, rc *renderCtx) (string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(baseSpec, &fields); err != nil {
+		return "", fmt.Errorf("SmallMultiple %q: base spec is not an object: %w", name, err)
+	}
+	// a panel is no slot of its own here
+	if page := rc.panelPage; page != nil {
+		for _, label := range page.panels[smallMultiplePanelsKey(name)] {
+			rc.warn(fmt.Sprintf("annotation-target-missing: SmallMultiple %q draws its panels as one chart (axisTitles: shared): the panel %q cannot be a target", name, label))
+		}
+	}
+
+	facetJSON, err := json.Marshal(map[string]any{"level": strings.ToLower(s.Panels.By), "columns": columns})
+	if err != nil {
+		return "", err
+	}
+	fields["facet"] = facetJSON
+	if len(s.Dataset) > 0 {
+		fields["dataset"] = s.Dataset
+	}
+	if len(s.Scale) > 0 {
+		fields["scale"] = s.Scale
+	}
+	if s.ChartTitle != "" {
+		fields["chartTitle"] = jsonString(s.ChartTitle)
+	}
+	if s.Filter != "" {
+		baseFilter := ""
+		if raw, ok := fields["filter"]; ok {
+			if err := json.Unmarshal(raw, &baseFilter); err != nil {
+				return "", fmt.Errorf("SmallMultiple %q: base filter: %w", name, err)
+			}
+		}
+		fields["filter"] = jsonString(joinFilters(s.Filter, baseFilter))
+	}
+	if _, ok := fields["i18nNamespace"]; !ok && s.I18nNamespace != "" {
+		fields["i18nNamespace"] = jsonString(s.I18nNamespace)
+	}
+	merged, err := json.Marshal(fields)
+	if err != nil {
+		return "", err
+	}
+	style := s.SelectedStyle
+	if style == "" {
+		style = rc.inheritedStyle
+	}
+	if merged, err = applyInheritedStyle(merged, style); err != nil {
+		return "", fmt.Errorf("SmallMultiple %q: %w", name, err)
+	}
+	if merged, err = applyDatasetDefaults(merged, s.Base.Kind, name, rc); err != nil {
+		return "", fmt.Errorf("SmallMultiple %q: %w", name, err)
+	}
+	rc.recordDataRefs(merged)
+
+	if s.Base.Kind == "ChartBubble" {
+		var chart chartBubbleSpec
+		if err := json.Unmarshal(merged, &chart); err != nil {
+			return "", fmt.Errorf("SmallMultiple %q: chart spec: %w", name, err)
+		}
+		return renderChartBubbleComponent(chart), nil
+	}
+	var chart chartScatterSpec
+	if err := json.Unmarshal(merged, &chart); err != nil {
+		return "", fmt.Errorf("SmallMultiple %q: chart spec: %w", name, err)
+	}
+	return renderChartScatterComponent(chart), nil
 }
