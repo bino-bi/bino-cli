@@ -20,7 +20,8 @@ import (
 // information about a PDF that has already rendered.
 type layoutStateCapture struct {
 	// SnapshotPath is where the raw capture is written. Empty: no file, and
-	// only content that is cut off is reported. This is a build without
+	// only content that is lost is reported: what is cut off, and a component
+	// that reports an error and so is not drawn. This is a build without
 	// --layout-state: lost content must not be silent, the rest is detail.
 	SnapshotPath string
 	Logger       logx.Logger
@@ -57,20 +58,20 @@ func (c *layoutStateCapture) Handle(snapshot []byte) {
 	}
 }
 
-// overflowOnly keeps the findings about content that is cut off, one per
-// component: a small multiple reports every panel, and a build log is no place
+// overflowOnly keeps the findings about content that is lost (cut off, or not
+// drawn because of an error), one per rule and component: a small multiple reports every panel, and a build log is no place
 // for forty lines about one chart.
 func overflowOnly(findings []layoutstate.Finding) []layoutstate.Finding {
 	var out []layoutstate.Finding
 	first := map[string]int{}
 	more := map[string]int{}
 	for _, f := range findings {
-		if f.Rule != layoutstate.RuleOverflow {
+		if f.Rule != layoutstate.RuleOverflow && f.Rule != layoutstate.RuleError {
 			continue
 		}
-		key := f.Kind + "\x00" + f.Name
+		key := f.Rule + "\x00" + f.Kind + "\x00" + f.Name
 		if f.Name == "" {
-			key = f.ComponentID
+			key = f.Rule + "\x00" + f.ComponentID
 		}
 		if _, seen := first[key]; seen {
 			more[key]++

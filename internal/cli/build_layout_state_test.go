@@ -136,10 +136,14 @@ func TestOverflowOnly(t *testing.T) {
 		{Rule: layoutstate.RuleOverflow, Kind: "SmallMultiple", Name: "sm", Message: "Chart exceeds available width."},
 		{Rule: layoutstate.RuleOverflow, Kind: "SmallMultiple", Name: "sm", Message: "other"},
 		{Rule: layoutstate.RuleOverflow, Kind: "Tree", Name: "t", Message: "Tree exceeds."},
+		{Rule: layoutstate.RuleError, Kind: "Tree", Name: "t", Message: "edges are invalid"},
 	}
 	got := overflowOnly(findings)
-	if len(got) != 2 {
-		t.Fatalf("got %d findings, want 2: %v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("got %d findings, want 3: %v", len(got), got)
+	}
+	if got[2].Rule != layoutstate.RuleError || got[2].Message != "edges are invalid" {
+		t.Errorf("finding = %+v", got[2])
 	}
 	if got[0].Message != "Chart exceeds available width, and 2 more of this component" {
 		t.Errorf("message = %q", got[0].Message)

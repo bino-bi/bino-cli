@@ -650,3 +650,23 @@ func TestCheckWarnings(t *testing.T) {
 		t.Errorf("finding = %+v, want a message for a warning without one", got[1])
 	}
 }
+
+func TestCheckErrors(t *testing.T) {
+	c := Component{ID: "bn-chart-scatter[0]", Diagnostics: []Diagnostic{
+		{ID: "ERR_xy_level_order", Type: "error", Message: "Facet, series, and point levels must strictly descend."},
+		{ID: "ERR_overflow", Type: "error", Message: "too wide"},
+		{ID: "WARN_xy_label_unknown", Type: "warning", Message: "no such point"},
+		{ID: "ERR_sql", Type: "error"},
+	}}
+
+	got := checkErrors(c, Source{})
+	if len(got) != 2 {
+		t.Fatalf("got %d findings, want 2: %v", len(got), got)
+	}
+	if got[0].Rule != RuleError || got[0].Severity != SeverityError || got[0].Hint != "ERR_xy_level_order" {
+		t.Errorf("finding = %+v", got[0])
+	}
+	if got[1].Message == "" || got[1].Hint != "ERR_sql" {
+		t.Errorf("finding = %+v, want a message for an error without one", got[1])
+	}
+}
