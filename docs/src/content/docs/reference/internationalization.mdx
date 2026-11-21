@@ -94,7 +94,9 @@ labels, wrapped in `==` markers; update or delete those keys. The
 | `global.ibcssymbol_delta_ac_relative`      | `Δ{%}%`   | Relative variance symbol (e.g. ΔPY%) |
 | `global.ibcssymbol_delta_generic_relative` | `Δ({%})%` | Relative variance, generic form      |
 
-The `{%}` token is replaced at render time with the comparison scenario's abbreviation.
+The `{%}` token is replaced at render time with the comparison scenario's abbreviation. In the generic form it is both names, for example `FC - PY`.
+
+Two more tokens are replaced in these keys: `{ref}` with the name of the reference alone and `{base}` with the name of the minuend. IBCS names a variance by its reference when the minuend is clear from the page, so `global.ibcssymbol_delta_generic: "Δ{ref}"` labels a variance of a forecast or a plan against PY `ΔPY`. Needs template engine v1.0.0-next.82 or newer.
 
 ### Table labels (`bn-table.` prefix)
 

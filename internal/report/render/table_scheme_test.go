@@ -148,3 +148,39 @@ func TestTableCalculationScheme_EngineGateUnresolvedDataset(t *testing.T) {
 		}
 	}
 }
+
+func TestTableIBCSScheme_RenderedAttributes(t *testing.T) {
+	html := renderTablePage(t, `{
+		"dataset": "test",
+		"type": "optnototal",
+		"waterfallScaling": "unit",
+		"sumBars": true,
+		"barColumnParts": {"fc1": "ac1"},
+		"ratios": [{"name": "Gross margin", "numerator": "Operating result", "denominator": "Sales revenue"}],
+		"fillHeight": true,
+		"dataFormatPercentSign": false
+	}`)
+
+	for _, want := range []string{
+		`waterfall-scaling='unit'`,
+		`sum-bars='true'`,
+		`bar-column-parts='{&#34;fc1&#34;:&#34;ac1&#34;}'`,
+		`ratios='[{&#34;name&#34;:&#34;Gross margin&#34;,&#34;numerator&#34;:&#34;Operating result&#34;,&#34;denominator&#34;:&#34;Sales revenue&#34;}]'`,
+		`fill-height='true'`,
+		`data-format-percent-sign='false'`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected %s in HTML, got:\n%s", want, html)
+		}
+	}
+}
+
+func TestTableIBCSScheme_AbsentByDefault(t *testing.T) {
+	html := renderTablePage(t, `{"dataset": "test", "type": "optnototal"}`)
+
+	for _, attr := range []string{"waterfall-scaling=", "sum-bars=", "bar-column-parts=", "ratios=", "fill-height=", "data-format-percent-sign="} {
+		if strings.Contains(html, attr) {
+			t.Fatalf("expected no %s attribute in HTML, got:\n%s", attr, html)
+		}
+	}
+}

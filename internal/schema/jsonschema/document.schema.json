@@ -2588,7 +2588,8 @@
         "bn-tree": { "$ref": "#/$defs/treeStyle" },
         "bn-grid": { "$ref": "#/$defs/gridStyle" },
         "bn-layout-card": { "$ref": "#/$defs/layoutCardStyle" },
-        "bn-annotation": { "$ref": "#/$defs/annotationStyle" }
+        "bn-annotation": { "$ref": "#/$defs/annotationStyle" },
+        "bn-table": { "$ref": "#/$defs/tableStyle" }
       },
       "additionalProperties": true
     },
@@ -3020,6 +3021,17 @@
       },
       "additionalProperties": true
     },
+    "tableStyle": {
+      "type": "object",
+      "description": "Style settings for bn-table (Table).",
+      "properties": {
+        "relativeItalic": {
+          "type": "boolean",
+          "description": "False prints the relative variances upright: the number cells and the labels of the pins. Default true (italic). Needs template engine v1.0.0-next.82 or newer."
+        }
+      },
+      "additionalProperties": true
+    },
     "scaleFactorsXYChart": {
       "type": "object",
       "description": "Scale factors for scatter and bubble chart element sizing (multiplied by global.fontSizePx).",
@@ -3198,7 +3210,15 @@
         },
         "negativeFill": {
           "type": "string",
-          "description": "barStyles of time and structure charts: fill of a column or bar with a value below 0 (CSS color). It also replaces the stroke where the stroke has the color of the fill. Needs template engine v1.0.0-next.79."
+          "description": "barStyles of time and structure charts: fill of a column or bar with a value below 0 (CSS color). It also replaces the stroke where the stroke has the color of the fill. Tables read it for scenario bars below 0 and for waterfall steps that go down (template engine v1.0.0-next.82). Needs template engine v1.0.0-next.79."
+        },
+        "outlineFill": {
+          "type": "string",
+          "description": "varianceStyles of time charts and tables: fill of an outlined variance, the variance of a plan (CSS color). Not set: the background in a time chart, no fill in a table. Needs template engine v1.0.0-next.82."
+        },
+        "outlineStroke": {
+          "type": "string",
+          "description": "varianceStyles of time charts and tables: edge of an outlined variance (CSS color). Not set: the color of the variance. Needs template engine v1.0.0-next.82."
         }
       },
       "additionalProperties": true
@@ -6185,7 +6205,48 @@
         "varianceWaterfall": {
           "type": "boolean",
           "default": false,
-          "description": "Draws the absolute variance columns of 'barColumns' as a waterfall down the rows: each bar starts where the previous one ended, sum rows are bars from the axis. In 'opt' and 'optnototal' tables a '-' row with a positive variance moves left. With 'runningSum' the walk continues across the result rows, else every group restarts. Not with 'interval' or 'columnthereof' (plain bars then). The bars fit the column, 'unitScaling' does not apply. Needs template engine v1.0.0-next.40 or newer."
+          "description": "Draws the absolute variance columns of 'barColumns' as a waterfall down the rows: each bar starts where the previous one ended, sum rows are bars from the axis. In 'opt' and 'optnototal' tables a '-' row with a positive variance moves left. With 'runningSum' the walk continues across the result rows, else every group restarts. Not with 'interval' or 'columnthereof' (plain bars then). The bars fit the column, unless 'waterfallScaling' is 'unit'. Needs template engine v1.0.0-next.40 or newer."
+        },
+        "waterfallScaling": {
+          "type": "string",
+          "enum": ["column", "unit"],
+          "default": "column",
+          "description": "'column' (default): each waterfall fits its column. 'unit': all waterfalls and absolute variance bars share the scale of 'unitScaling'; a scale at which a walk does not fit is made coarser, with a warning. Needs engine v1.0.0-next.82."
+        },
+        "barColumnParts": {
+          "type": "object",
+          "description": "Waterfall column to a scenario drawn inside its bars from their start, e.g. {fc1: ac1}: the year to date inside the year forecast. A part differs from its column. Needs engine v1.0.0-next.82.",
+          "propertyNames": { "pattern": "^(ac|pp|fc|pl)[1-4]$" },
+          "additionalProperties": { "type": "string", "pattern": "^(ac|pp|fc|pl)[1-4]$" }
+        },
+        "ratios": {
+          "type": "array",
+          "description": "Rows numerator / denominator in percent after the numerator's result, e.g. a gross margin. Both name the rowGroup of a sum row. Needs engine v1.0.0-next.82.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "description": "Text of the row." },
+              "numerator": { "type": "string", "minLength": 1, "description": "rowGroup of the result above." },
+              "denominator": { "type": "string", "minLength": 1, "description": "rowGroup it is divided by." }
+            },
+            "required": ["name", "numerator", "denominator"],
+            "additionalProperties": false
+          }
+        },
+        "fillHeight": {
+          "type": "boolean",
+          "default": false,
+          "description": "Spreads the rows over the height of the cell, at most 1 em between two rows. Needs engine v1.0.0-next.82."
+        },
+        "sumBars": {
+          "type": "boolean",
+          "default": false,
+          "description": "Variance bars and pins on the sum rows too. Needs engine v1.0.0-next.82."
+        },
+        "dataFormatPercentSign": {
+          "type": "boolean",
+          "default": true,
+          "description": "False prints the pin labels without % (+26). Needs engine v1.0.0-next.82."
         },
         "attributes": {
           "description": "Computed attribute columns rendered between the category and scenario columns, in list order. Maps a column header label to an aggregate expression over the rows behind each table row. Functions: set, first, last, min, max, avg, sum (dataset field or custom '_'-prefixed field) and lit (constant). Use the ordered array form, or a JSON object string whose key order defines column order. Example: [{\"label\": \"Verkaufsleiter\", \"expression\": \"set(_leiter)\"}]",

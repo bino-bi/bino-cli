@@ -65,6 +65,12 @@ repeated here (see [Inherited props](#inherited-props)).
 - `runningSum` - with `grouped`, each group sum row holds the running result of all rows from the first group through its own group. No effect with `columnthereof`. See [Calculation schemes](#calculation-schemes).
 - `thereofPosition` - where the `thereof` rows print: `below` (default) or `above` their parent. See [Calculation schemes](#calculation-schemes).
 - `varianceWaterfall` - draws the absolute variance columns of `barColumns` as a waterfall down the rows. See [Variance waterfall](#variance-waterfall).
+- `waterfallScaling` - `column` (default) or `unit`: one scale for all waterfalls and variance bars. See [One scale for the table](#one-scale-for-the-table).
+- `sumBars` - draws the variance bars and pins on the sum rows too. See [Bars on the result rows](#bars-on-the-result-rows).
+- `barColumnParts` - draws a second scenario inside the bars of a waterfall column, for example the actual year to date in the year forecast. See [Part of a bar](#part-of-a-bar).
+- `ratios` - rows with the ratio of two results, for example a gross margin. See [Ratio rows](#ratio-rows).
+- `fillHeight` - spreads the rows over the height of the layout cell. See [Scaling](#scaling).
+- `dataFormatPercentSign` - `false` prints the labels of the relative variance pins without `%`.
 - `attributes` - computed attribute columns rendered between the category and scenario columns; ordered list of `{label, expression}` pairs. See [Computed attribute columns](#computed-attribute-columns).
 - `i18nNamespace` - optional namespace consulted for this component's labels; missing keys fall back to `_system`. When unset, it is resolved from the nearest ancestor carrying one.
 - `selectedStyle` - optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
@@ -304,8 +310,14 @@ spec:
 
 Notes:
 
-- Waterfall columns auto-scale to fit `barColumnWidth`; `unitScaling` does not
-  apply to them (it only affects `d_`-prefixed absolute variance bars).
+- Thin lines join the bars: from the end of a bar to the start of the next one,
+  also beside the thereof rows.
+- By default each waterfall column fits its walk to `barColumnWidth`, and
+  `unitScaling` only affects the `d_`-prefixed absolute variance bars. With
+  `waterfallScaling: unit` all of them share one scale, see
+  [One scale for the table](#one-scale-for-the-table).
+- `negativeFill` in `barStyles` of a [`ComponentStyle`](/reference/component-style/)
+  fills the steps that go down, for example the costs.
 - Not supported in combination with `interval` or `columnthereof` - scenario
   columns on tables using either of those fall back to plain grayscale bars.
 
@@ -529,13 +541,73 @@ group, -560.0.
 Notes:
 
 - Relative variance columns (`dr` prefix) stay pins.
-- The waterfall bars fit the bar column. `unitScaling` does not apply to them.
+- The waterfall bars fit the bar column, unless `waterfallScaling: unit` puts the
+  table on one scale.
 - Not available with `interval` or `columnthereof`. The table draws plain
   variance bars then.
 - `barColumns` must list an absolute variance. Without one Bino reports
   [`table-variance-waterfall-unused`](/appendix/lint-rules/#table-variance-waterfall-unused).
 - `thereofPosition: above` without a `thereof` list is reported as
   [`table-thereof-position-unused`](/appendix/lint-rules/#table-thereof-position-unused).
+
+### One scale for the table
+
+IBCS draws values of the same unit at the same scale. With `waterfallScaling: unit`
+the scenario waterfalls and the absolute variance bars of a table share one scale,
+the one of `unitScaling`:
+
+- `unitScaling: auto` takes the largest scale at which every walk fits its column
+  and every variance bar fits its cut. So a PY total of 813 is shorter than an AC
+  total of 1 061, and a variance of +248 is as long as 248 units of the walks.
+- A fixed `unitScaling` or a [`ScalingGroup`](/reference/scaling-group/) holds as
+  long as every walk fits. A walk cannot be cut like a single bar, so when one does
+  not fit, all bars of the table take the coarser scale at which it fits, and the
+  table reports `WARN_waterfallScaling`.
+
+The default `column` keeps the former look: each waterfall fits its own column.
+
+### Bars on the result rows
+
+Without `sumBars` a sum row prints the absolute and the relative variance as a
+number. `sumBars: true` draws the bar and the pin there too, with a bold label, and
+counts the sum rows for the scale of the bars and pins. A variance column drawn as a
+`varianceWaterfall` draws its sum rows anyway.
+
+### Part of a bar
+
+`barColumnParts` maps a scenario waterfall column to a second scenario that is drawn
+inside its bars, from the start of each bar, in its own look and with its value
+inside when it fits. The header names the part over the start of the column and the
+column over its end. The part is read from the dataset like a scenario, but gets no
+column of its own. A part longer than its bar ends at the end of the bar.
+
+```yaml
+spec:
+  scenarios: [pp1, fc1, dfc1_pp1_op, drfc1_pp1_op]
+  barColumns: [pp1, fc1, dfc1_pp1_op, drfc1_pp1_op]
+  barColumnParts: { fc1: ac1 }   # FC is the whole year, AC the year to date in it
+```
+
+Only waterfall columns draw parts.
+
+### Ratio rows
+
+`ratios` adds a row after the result of its `numerator`. It shows, per scenario
+column, that result divided by the result of its `denominator`, in percent and in
+italics. Its variance cells stay empty. `numerator` and `denominator` name the
+`rowGroup` of a sum row, so the table needs `grouped` and a type with group sums.
+
+```yaml
+spec:
+  ratios:
+    - { name: Gross margin, numerator: Operating result, denominator: Sales revenue }
+```
+
+In a waterfall column the value stands left of the line of the walk, which runs
+through the row.
+
+`waterfallScaling`, `sumBars`, `barColumnParts`, `ratios`, `fillHeight` and
+`dataFormatPercentSign` need template engine **v1.0.0-next.82** or newer.
 
 `runningSum: true`, `thereofPosition: above` and `varianceWaterfall: true` need template engine **v1.0.0-next.40** or newer. Older engines ignore them and render the plain table, without an error. So with an older engine `bino build` and `bino lint` stop with [`table-calculation-scheme-engine-version`](/appendix/lint-rules/#table-calculation-scheme-engine-version), and `bino preview` shows that error.
 
@@ -544,6 +616,11 @@ Notes:
 Use `scale` to shrink or grow the entire table proportionally.
 Font size, em-based padding, border widths, SVG bar charts, pin lengths,
 dot radii, and hatch patterns all scale together.
+
+`scale` fits the width. `fillHeight: true` also uses the height of the layout
+cell: the space the table does not need goes between the rows, at most 1 em per
+row, and the lines of the bar and pin columns run through it. A table that is too
+high is not made smaller by it.
 
 ```yaml
 ---
@@ -664,6 +741,12 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.runningSum`                | boolean                  | no              | `false`                 | With `grouped`, each group sum row holds the running result from the first group through its own. Use with `type: optnototal`. No effect with `columnthereof`. See [Calculation schemes](#calculation-schemes).                                                                                                                                       |
 | `spec.thereofPosition`           | string                   | no              | `below`                 | Where the `thereof` rows print. Values: `below`, `above`. With `above` they print before their parent, indented and without the prefix.                                                                                                                                                                               |
 | `spec.varianceWaterfall`         | boolean                  | no              | `false`                 | Draws the absolute variance columns of `barColumns` as a waterfall down the rows. Not with `interval` or `columnthereof`. See [Variance waterfall](#variance-waterfall).                                                                                                                                              |
+| `spec.waterfallScaling` | string | no | `column` | `column`: each waterfall fits its column. `unit`: all waterfalls and absolute variance bars share the scale of `unitScaling`. See [One scale for the table](#one-scale-for-the-table). |
+| `spec.sumBars` | boolean | no | `false` | Variance bars and pins on the sum rows too. See [Bars on the result rows](#bars-on-the-result-rows). |
+| `spec.barColumnParts` | map | no | - | Waterfall column to a scenario drawn inside its bars, for example `{ fc1: ac1 }`. See [Part of a bar](#part-of-a-bar). |
+| `spec.ratios` | array | no | - | Rows with `name`, `numerator` and `denominator` (rowGroups of sum rows). See [Ratio rows](#ratio-rows). |
+| `spec.fillHeight` | boolean | no | `false` | Spreads the rows over the height of the layout cell. See [Scaling](#scaling). |
+| `spec.dataFormatPercentSign` | boolean | no | `true` | `false` prints the labels of the relative variance pins without `%`. |
 | `spec.attributes`                | string or array          | no              | -                       | Computed attribute columns (header label → aggregate expression), in list order; also accepts a JSON object string whose key order defines the column order. See [Computed attribute columns](#computed-attribute-columns).                                                                                           | see below                          |
 | `spec.attributes[].label`        | string                   | yes (per entry) | -                       | Column header label.                                                                                                                                                                                                                                                                                                  | `label: "Verkaufsleiter"`          |
 | `spec.attributes[].expression`   | string                   | yes (per entry) | -                       | Aggregate expression: `set`, `first`, `last`, `min`, `max`, `avg`, `sum` over a dataset field or a custom `_`-prefixed field, or `lit(constant)`.                                                                                                                                                                     | `expression: "sum(ac1)"`           |
