@@ -621,8 +621,9 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
-	// The rendered layout is always read: content that is cut off is reported
-	// in every build. With --layout-state the snapshot is also written next to
+	// The rendered layout is always read: content that is cut off, and a
+	// component that is not drawn because of an error, is reported in every
+	// build. With --layout-state the snapshot is also written next to
 	// the PDF and all render checks are reported.
 	capture := &layoutStateCapture{Logger: logger}
 	if cfg.CaptureLayoutState {

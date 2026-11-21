@@ -53,7 +53,8 @@ func (h *handlers) registerLayoutTool(srv *mcpsdk.Server) {
 		Name: "get_layout_state",
 		Description: "Inspect what a report ACTUALLY rendered, by building it with a layout capture (runs headless Chrome - slow, writes files). " +
 			"Reports per component the box, row/bar counts, resolved scaling and diagnostics, plus findings: components that rendered empty, " +
-			"content that overflows, fonts auto-fitted down, and charts of the same measure left on diverging scales. " +
+			"content that overflows, fonts auto-fitted down, charts of the same measure left on diverging scales, " +
+			"and the warnings and errors a component reports itself. " +
 			"Use it to verify a report after build - validate_project only checks the manifests, not the rendered result. " +
 			"Requires template engine v1.0.0-next.24 or newer.",
 	}, h.runLayoutState)

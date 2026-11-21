@@ -16,6 +16,7 @@ const (
 	RuleOverflow       = "layout-overflow"
 	RuleFontShrunk     = "layout-font-shrunk"
 	RuleWarning        = "layout-component-warning"
+	RuleError          = "layout-component-error"
 )
 
 // Severity of a finding, matching the engine's diagnostic vocabulary.
@@ -89,6 +90,7 @@ func Analyze(snap Snapshot) []Finding {
 			findings = append(findings, f)
 		}
 		findings = append(findings, checkWarnings(c, src)...)
+		findings = append(findings, checkErrors(c, src)...)
 	}
 	return append(findings, checkScaleMismatch(snap)...)
 }
@@ -107,6 +109,10 @@ func SupportedVersion(v int) bool { return v == Version }
 // that declare no count at all (bn-text, bn-image, layout containers) are
 // never flagged.
 func checkEmpty(c Component, src Source) (Finding, bool) {
+	// a component with an error is empty for that reason: the error says why
+	if len(checkErrors(c, src)) > 0 {
+		return Finding{}, false
+	}
 	reason := ""
 	switch {
 	case c.Metadata.HasNoData != nil && *c.Metadata.HasNoData:
@@ -236,6 +242,25 @@ func checkWarnings(c Component, src Source) []Finding {
 			msg = "the component reports a warning"
 		}
 		out = append(out, newFinding(c, src, RuleWarning, SeverityWarning, msg, d.ID))
+	}
+	return out
+}
+
+// checkErrors passes on the errors a component reports: it could not draw
+// itself, or not all of itself, for example a chart whose facet level is not
+// above its series level. Such a component is an empty box on the page, and
+// only the snapshot knew why. Overflow has its own rule with a magnitude.
+func checkErrors(c Component, src Source) []Finding {
+	var out []Finding
+	for _, d := range c.Diagnostics {
+		if !strings.EqualFold(d.Type, string(SeverityError)) || strings.Contains(strings.ToLower(d.ID), "overflow") {
+			continue
+		}
+		msg := d.Message
+		if msg == "" {
+			msg = "the component reports an error"
+		}
+		out = append(out, newFinding(c, src, RuleError, SeverityError, msg, d.ID))
 	}
 	return out
 }

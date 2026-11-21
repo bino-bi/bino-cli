@@ -49,7 +49,7 @@ Writes `dist/<artefact>.layout.json` next to each PDF and reports the same findi
 as build warnings - which also land in the [JSON build log](/cli/build-logs/), so
 CI can fail on them.
 
-Without the flag a build still reads the rendered layout and reports one kind of finding: `layout-overflow`, content that is cut off. It prints one line per component, also when many panels of it are cut, and writes no file. All other findings need `--layout-state`.
+Without the flag a build still reads the rendered layout and reports content that is lost: `layout-overflow`, content that is cut off, and `layout-component-error`, a component that is not drawn because of an error. It prints one line per rule and component, also when many panels are hit, and writes no file. All other findings need `--layout-state`.
 
 The file has no timestamp, so two builds of an unchanged bundle produce identical
 bytes and a snapshot can be committed as a golden file.
@@ -73,6 +73,7 @@ sees the manifests.
 | `layout-overflow`        | Content that does not fit its component, with the engine's measured magnitude. Tables report height overflow from engine v1.0.0-next.26 on; older engines stay silent about a clipped table.                                                |
 | `layout-font-shrunk`     | A font auto-fitted down to make content fit. The report still renders, so nothing else surfaces it - but type size then differs between pages.                                                                                              |
 | `layout-component-warning` | A warning the component itself reports about its data or its settings, with the message and the id of the engine (`WARN_...`): something was left out or changed and the page still renders. For example iso-lines of a scatter chart on an axis below 0, a label name that matches no point, or two rows for one point. |
+| `layout-component-error` | An error the component itself reports, with the message and the id of the engine (`ERR_...`): it could not draw itself, or not all of itself, and the page shows an empty box. For example a chart whose facet level is not above its series level, or a query that fails. |
 
 `layout-scale-mismatch` needs to know which components show the same measure, and
 groups by `measureUnit`. Components that declare no unit are skipped rather than

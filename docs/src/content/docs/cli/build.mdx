@@ -22,7 +22,7 @@ Common flags:
 - `--no-graph` - skip writing dependency graph files.
 - `--no-lint` - skip running lint rules (lint runs by default).
 - `--log-sql` - log executed SQL queries.
-- `--layout-state` - write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. Without it a build reports only content that is cut off (`layout-overflow`), one line per component. See [Layout State](/cli/layout-state/).
+- `--layout-state` - write `<artefact>.layout.json` describing the rendered report and report render issues (empty components, overflow, diverging scales) as build warnings. Without it a build reports only content that is lost: cut off (`layout-overflow`) or not drawn because of an error (`layout-component-error`), one line per component. See [Layout State](/cli/layout-state/).
 - `--data-validation` - data validation mode: `warn` (default), `fail`, or `off`. See [Data Validation](#data-validation).
 - `--warn-on-query-errors` - downgrade a failed dataset query to a warning and render the report with the remaining data. By default a failed query fails the build.
 
