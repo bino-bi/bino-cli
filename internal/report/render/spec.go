@@ -35,6 +35,8 @@ type layoutPageSpec struct {
 	PageNumber          string                   `json:"pageNumber"`
 	MessageText         string                   `json:"messageText"`
 	MessageImage        string                   `json:"messageImage"`
+	MessagePosition     string                   `json:"messagePosition"`
+	TitleID             string                   `json:"titleId"`
 	FooterText          string                   `json:"footerText"`
 	PageFitToContent    *bool                    `json:"pageFitToContent"`
 	FooterDisplayNumber *bool                    `json:"footerDisplayPageNumber"`
@@ -64,6 +66,8 @@ func (s layoutPageSpec) writeAttrs(b *strings.Builder, assetURLs map[string]stri
 	writeAttr(b, "page-number", s.PageNumber)
 	writeAttr(b, "message-text", renderInlineMarkdown(s.MessageText, assetURLs))
 	writeAttr(b, "message-image", s.MessageImage)
+	writeAttr(b, "message-position", s.MessagePosition)
+	writeAttr(b, "title-id", s.TitleID)
 	writeAttr(b, "footer-text", s.FooterText)
 	if s.PageFitToContent != nil {
 		writeAttr(b, "page-fit-to-content", fmt.Sprintf("%t", *s.PageFitToContent))

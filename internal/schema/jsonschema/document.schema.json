@@ -3759,6 +3759,17 @@
           "default": "",
           "description": "Message text displayed in the message row above the title. If empty, the message row is omitted. Supports inline Markdown (bold, italic, code, links, strikethrough) and inline HTML, converted to HTML at build time and sanitized before rendering. Use <br /> for an explicit line break. Block Markdown (headings, lists, tables) is not interpreted."
         },
+        "messagePosition": {
+          "type": "string",
+          "enum": ["top", "beside"],
+          "default": "top",
+          "description": "Where the message stands: 'top' in a row of its own above the title block, 'beside' right of the title block in one row with it. Needs template engine v1.0.0-next.81."
+        },
+        "titleId": {
+          "type": "string",
+          "default": "",
+          "description": "A short id of the page, printed large at the top right of the title block, for example the number of a report page. Needs template engine v1.0.0-next.81."
+        },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/layoutChild" }
