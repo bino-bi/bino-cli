@@ -50,6 +50,8 @@ func TestSmallMultipleAxisTitles(t *testing.T) {
 		{"shared on a bubble chart", `{"axisTitles":"shared","base":{"kind":"ChartBubble"},"panels":{"by":"rowGroup"}}`, false},
 		{"shared on a time chart", `{"axisTitles":"shared","base":{"kind":"ChartTime"},"panels":{"by":"rowGroup"}}`, true},
 		{"shared with a card", `{"axisTitles":"shared","base":{"kind":"ChartScatter"},"panels":{"by":"category"},"card":{}}`, true},
+		{"shared with panels.param", `{"axisTitles":"shared","base":{"kind":"ChartScatter"},"panels":{"by":"category","param":"region"}}`, true},
+		{"shared with a placeholder", `{"axisTitles":"shared","base":{"kind":"ChartScatter","spec":{"chartTitle":"${panel.label}"}},"panels":{"by":"category"}}`, true},
 		{"shared on a base with facet", `{"axisTitles":"shared","base":{"kind":"ChartScatter","spec":{"facet":{"level":"category"}}},"panels":{"by":"rowGroup"}}`, true},
 	}
 	for _, tt := range tests {

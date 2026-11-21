@@ -35,6 +35,7 @@ type smallMultipleLintSpec struct {
 		By    string `json:"by"`
 		Order string `json:"order"`
 		Limit int    `json:"limit"`
+		Param string `json:"param"`
 		Items []struct {
 			Label      string          `json:"label"`
 			Dataset    string          `json:"dataset"`
@@ -378,14 +379,20 @@ var smallMultipleAxisTitles = Rule{
 		var findings []Finding
 		for _, site := range smallMultipleSites(docs, true) {
 			if s := site.spec; s.AxisTitles == "shared" && s.Base.Kind != "" && !s.baseUnknown {
-				hasFacet := false
-				var base map[string]json.RawMessage
-				if len(s.Base.Spec) > 0 && json.Unmarshal(s.Base.Spec, &base) == nil {
-					_, hasFacet = base["facet"]
+				baseSpec := s.Base.Spec
+				if s.Base.Ref != "" {
+					for _, doc := range docs {
+						if doc.Kind == s.Base.Kind && doc.Name == s.Base.Ref {
+							baseSpec = mergedSpec(doc, s.Base.Spec)
+						}
+					}
 				}
-				hasCard := len(s.Card) > 0 && string(s.Card) != "null"
-				problems := render.SmallMultipleSharedProblems(s.Base.Kind, s.Panels.By, len(s.Panels.Items) > 0, hasCard,
-					len(s.Panels.Overrides) > 0, s.Panels.Order != "" || s.Panels.Limit > 0, false, hasFacet)
+				problems := render.SmallMultipleSharedProblems(render.SharedSmallMultiple{
+					BaseKind: s.Base.Kind, By: s.Panels.By, BaseSpec: baseSpec,
+					HasItems: len(s.Panels.Items) > 0, HasCard: len(s.Card) > 0 && string(s.Card) != "null",
+					HasOverrides: len(s.Panels.Overrides) > 0, HasOrderOrLimit: s.Panels.Order != "" || s.Panels.Limit > 0,
+					HasParam: s.Panels.Param != "", HasCaption: s.Caption != nil && *s.Caption != "",
+				})
 				if len(problems) > 0 {
 					findings = append(findings, Finding{
 						RuleID:   "small-multiple-axis-titles",

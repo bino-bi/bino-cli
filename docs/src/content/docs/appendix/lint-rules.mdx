@@ -1144,7 +1144,7 @@ Two entries of `panels.overrides` have the same `value`, so they name the same p
 
 **Fix:** remove `axisTitles`, or use a `ChartTime` base.
 
-`axisTitles: shared` draws the panels of a `ChartScatter` or `ChartBubble` as one chart with facets. It needs `panels.by: rowGroup` or `category`, and it cannot have a `card`, `panels.items`, `panels.overrides`, `panels.order` or `panels.limit`. The base must not set `facet` itself. The message lists what does not fit.
+`axisTitles: shared` draws the panels of a `ChartScatter` or `ChartBubble` as one chart with facets. It needs `panels.by: rowGroup` or `category`, and it cannot have a `card`, a `caption`, `panels.items`, `panels.overrides`, `panels.order`, `panels.limit` or `panels.param`. The base must not set `facet` itself and must not use a `${panel...}` placeholder. The message lists what does not fit.
 
 **Fix:** remove what the message names, or use `axisTitles: each`.
 
