@@ -108,6 +108,11 @@ func TestAnnotationTargetMissing(t *testing.T) {
 		findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", tree))
 		wantFindings(t, findings, "", 0, "")
 	})
+	t.Run("tree node in a grid cell is a target", func(t *testing.T) {
+		grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[{"row":"a","column":"b","kind":"Tree","metadata":{"name":"tr"},"spec":{"nodes":[{"id":"n","kind":"Table","ref":"t"}]}}]}}`
+		findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", grid))
+		wantFindings(t, findings, "", 0, "")
+	})
 	t.Run("grid itself is a target", func(t *testing.T) {
 		grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[]}}`
 		wantFindings(t, runAnnotationRule(annotationTargetMissing, annotationOn(t, "Grid", "g"), pageWith(t, "p", grid)), "", 0, "")

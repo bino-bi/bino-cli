@@ -792,6 +792,9 @@ func (p *annotationPageView) addGridChildren(raw json.RawMessage, ctx *spec.Cons
 		if child.Kind == schema.KindGrid {
 			p.addGridChildren(effective, ctx, refs)
 		}
+		if child.Kind == schema.KindTree {
+			p.addTreeNodes(effective, refs)
+		}
 	}
 }
 
