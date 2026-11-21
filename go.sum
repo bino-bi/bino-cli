@@ -75,8 +75,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/digitorus/pdf v0.3.0 h1:v3Pj6u/suIiPprrVQTnx2zkKobyhX0lqbcS4jR0SN/o=
 github.com/digitorus/pdf v0.3.0/go.mod h1:hAVtI9P/OwJ4Hk+xoxxpLfBL3KHFpEFfcKMAnv02F80=
-github.com/digitorus/pdfsign v1.0.0-rc3 h1:Cthc62nd4LZ4pCoC99A7XfjZX3kcZbUKTNQVAdu4jWA=
-github.com/digitorus/pdfsign v1.0.0-rc3/go.mod h1:yQ4twomZgXnv5UuAnKbB094caBrukdvrDg+eBAVUYh8=
+github.com/digitorus/pdfsign v1.0.0 h1:OVfWZbflkFZa0UoKOio6XMmKcB5F7oWV/VIQKiXg+Eo=
+github.com/digitorus/pdfsign v1.0.0/go.mod h1:yQ4twomZgXnv5UuAnKbB094caBrukdvrDg+eBAVUYh8=
 github.com/digitorus/pkcs7 v0.0.0-20230713084857-e76b763bdc49/go.mod h1:SKVExuS+vpu2l9IoOc0RwqE7NYnb0JlcFHFnEJkVDzc=
 github.com/digitorus/pkcs7 v0.0.0-20260914070511-d678ea5ea03f h1:LBDTasGDT7gkpSl3tIq+V4Yy0nr+l+ZmI6VN9MY9FU0=
 github.com/digitorus/pkcs7 v0.0.0-20260914070511-d678ea5ea03f/go.mod h1:OQvyvldkvDCxGsUPLSibXqM4B/Pz5RaXQP4CPo5LXs4=
