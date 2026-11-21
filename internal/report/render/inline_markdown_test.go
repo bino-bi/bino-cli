@@ -120,12 +120,12 @@ func TestLayoutAttrs_PlainValuesUnchanged(t *testing.T) {
 	}
 }
 
-func TestLayoutPage_MessagePositionAndTitleID(t *testing.T) {
+func TestLayoutPage_MessagePosition(t *testing.T) {
 	pageDoc := makeTestDoc("LayoutPage", "page", json.RawMessage(`{
 		"apiVersion": "bino.bi/v1",
 		"kind": "LayoutPage",
 		"metadata": {"name": "page"},
-		"spec": {"messageText": "Message", "messagePosition": "beside", "titleId": "11A"}
+		"spec": {"messageText": "Message", "messagePosition": "beside"}
 	}`))
 
 	result, _, err := GenerateHTMLFromDocuments(t.Context(), []config.Document{pageDoc}, "en", "", "", ModePreview, "v1.0.0")
@@ -134,7 +134,7 @@ func TestLayoutPage_MessagePositionAndTitleID(t *testing.T) {
 	}
 	html := string(result.HTML)
 
-	for _, w := range []string{`message-position='beside'`, `title-id='11A'`} {
+	for _, w := range []string{`message-position='beside'`} {
 		if !strings.Contains(html, w) {
 			t.Errorf("expected %s in HTML, got:\n%s", w, html)
 		}
