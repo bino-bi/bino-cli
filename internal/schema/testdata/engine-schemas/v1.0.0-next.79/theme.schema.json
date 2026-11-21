@@ -232,6 +232,10 @@
         },
         "fillpattern": {
           "$ref": "#/definitions/FillPattern"
+        },
+        "negativeFill": {
+          "type": "string",
+          "description": "Fill of a column or bar with a value below 0."
         }
       },
       "additionalProperties": false

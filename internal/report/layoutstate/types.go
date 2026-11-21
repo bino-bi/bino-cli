@@ -122,6 +122,10 @@ type Em struct {
 	// AppliedScaleFactor is the font auto-fit factor: 1 when the component
 	// was not shrunk to fit.
 	AppliedScaleFactor float64 `json:"appliedScaleFactor"`
+	// ScaleMode is "fixed" when the factor is the scale the author set, and
+	// "auto" when the component fitted itself. Empty with an engine before
+	// v1.0.0-next.79.
+	ScaleMode string `json:"scaleMode,omitempty"`
 }
 
 // Region is a named sub-area: canvas:<segment> for charts, header/body for

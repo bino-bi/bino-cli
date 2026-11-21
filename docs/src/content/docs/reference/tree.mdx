@@ -89,6 +89,30 @@ Style of connection lines between nodes:
 
 Whether to display operator symbols between sibling nodes. Default: `true`.
 
+### scale
+
+Scale of the whole tree: the node components that set no `scale` of their own, the spacings and the operators.
+
+- a positive number - a fixed factor, `0.6` draws everything at 60 %
+- `auto` - starts at 1 and gets smaller until the tree fits its container
+- not set (default) - every node keeps its own scaling. A chart in a node is then drawn at full size, and a tree that is larger than its container is cut off.
+
+A node that sets its own `scale` keeps it. The title of a `LayoutCard` node does not scale. Needs template engine v1.0.0-next.79.
+
+```yaml
+spec:
+  scale: auto
+  edges:
+    - { from: roi, to: ros, operator: x }
+    - { from: roi, to: turnover }
+  nodes:
+    - { id: roi, kind: ChartTime, ref: roi_chart }
+    - { id: ros, kind: ChartTime, ref: ros_chart }
+    - { id: turnover, kind: ChartTime, ref: turnover_chart }
+```
+
+Two parents that share a child are moved apart when they would touch, so the `nodeSpacing` stays between them (template engine v1.0.0-next.79, trees from left to right or right to left).
+
 ### selectedStyle
 
 Optional name of a [`ComponentStyle`](/reference/component-style/) to apply; merged over the `_system` and `_default` styles.
@@ -109,6 +133,10 @@ Array of node definitions. Each node specifies what component to render at that 
 - `params` - parameter values (string map) passed to the referenced document; only valid together with `ref` (see [LayoutPage parameters](/guides/layoutpage-params/#parameters-on-referenced-components))
 - `optional` - when `true` and the referenced document is missing, the node is skipped instead of failing the build (default `false`)
 - `spec` - inline component specification (required if no ref)
+
+## Annotations
+
+A node that renders a document by `ref` can be the target of an [`Annotation`](/reference/annotation/), with a `point` like the same component outside a tree. An inline node has no name, so it cannot be one. A `LayoutCard` node and what sits in it cannot be one either.
 
 ## Node kinds
 
@@ -453,6 +481,7 @@ spec:
 | `spec.nodeSpacing`   | number          | no       | `20`         | Spacing between sibling nodes in pixels. Minimum: 0.                                                                                                                                                                                                                   | `nodeSpacing: 30`                |
 | `spec.edgeStyle`     | string          | no       | `orthogonal` | Style of connection lines. Values: `straight`, `orthogonal`, `curved`.                                                                                                                                                                                                 | `edgeStyle: curved`              |
 | `spec.showOperators` | boolean         | no       | `true`       | Display operator symbols between sibling nodes.                                                                                                                                                                                                                        | `showOperators: true`            |
+| `spec.scale`         | number or string | no      | -            | Scale of the node components without a `scale` of their own, the spacings and the operators. A positive number or `auto` (shrinks until the tree fits). Needs engine v1.0.0-next.79. | `scale: auto` |
 | `spec.selectedStyle` | string          | no       | -            | Name of a [`ComponentStyle`](/reference/component-style/) manifest to apply. Merged over the `_system` and `_default` styles. Maps to the `selected-style` HTML attribute.                                                                                             | `selectedStyle: corporate-style` |
 | `spec.i18nNamespace` | string          | no       | inherited    | [I18n](/reference/internationalization/#scoped-overrides-with-i18nnamespace) namespace inherited by the node components; their own `i18nNamespace` wins. Resolved from the enclosing artefact, page or card when not set. Maps to the `i18n-namespace` HTML attribute. | `i18nNamespace: finance`         |
 | `spec.nodes`         | array           | no       | -            | Node definitions specifying what component to render at each position.                                                                                                                                                                                                 | see below                        |

@@ -321,7 +321,7 @@ The check does not look at the `filter` of a component, it skips a component tha
 
 ## Limits
 
-- A direct child of a `Grid` can be a target. A child of a `Tree`, and a component in a card that sits in a `Grid`, cannot. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one. A panel of a `SmallMultiple` can be a target, see [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple).
+- A direct child of a `Grid` can be a target, and so can a node of a `Tree` that renders a document by `ref`. A component in a card that sits in a `Grid` or a `Tree`, and an inline node of a `Tree`, cannot. The rule [`annotation-target-missing`](/appendix/lint-rules/#annotation-target-missing) says so. The `Grid` or the `Tree` as a whole can be one. A panel of a `SmallMultiple` can be a target, see [One panel of a SmallMultiple](#one-panel-of-a-smallmultiple).
 - A `ScreenshotArtefact` of a single component does not show the marks: they are drawn over the page and not in the component.
 - A component embedded in the Markdown of a `DocumentArtefact` has no marks.
 - The presentation view shows annotations like `bino preview`.

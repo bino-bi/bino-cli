@@ -888,7 +888,7 @@ spec:
 
 The `target` or `to` of an [`Annotation`](/reference/annotation/) resolves to no rendered component: no page has a child of that kind whose `ref` or inline `metadata.name` is that name, in any `ReportArtefact` that includes the annotation.
 
-A direct child of a `Grid` can be a target. A child of a `Tree`, and a component in a card that sits in a `Grid`, has no slot of its own and cannot. The message says so.
+A direct child of a `Grid` can be a target, and so can a node of a `Tree` that renders a document by `ref`. A component in a card that sits in a `Grid` or a `Tree`, and an inline node of a `Tree`, has no slot of its own and cannot. The message says so.
 
 A target with `panel` names one panel of a `SmallMultiple`. The rule also reports a `panel` that the SmallMultiple does not have. The labels of `panels.items` are checked always. The values of `panels.by` come from the data, so they are checked with `--execute-queries` only, and `bino build` writes a warning to its log. The panels are built as in the build, with `panels.order` and `panels.limit`: a panel that `limit` drops is missing.
 

@@ -191,6 +191,11 @@ const autoScaleDiagnosticID = "auto_scale"
 func checkFontShrunk(c Component, src Source) (Finding, bool) {
 	hint := "give the component more space to keep type sizes consistent across pages"
 
+	// a scale the author set is no fit
+	if c.Em.ScaleMode == "fixed" {
+		return Finding{}, false
+	}
+
 	factor := c.Em.AppliedScaleFactor
 	if factor > 0 && factor < 1-fontScaleEpsilon {
 		pct := strconv.FormatFloat(factor*100, 'f', 0, 64)

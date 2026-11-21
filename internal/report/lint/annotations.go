@@ -20,7 +20,7 @@ import (
 var annotationTargetMissing = Rule{
 	ID:          "annotation-target-missing",
 	Name:        "Annotation Target Missing",
-	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A direct child of a Grid can be a target. A child of a Tree and a component in a card of a Grid cannot. A panel must be a panel of the SmallMultiple.",
+	Description: "The target or to of an Annotation must be a component with a slot on a rendered page. A direct child of a Grid and a node of a Tree with a ref can be a target. A component in a card of a Grid or a Tree and an inline node of a Tree cannot. A panel must be a panel of the SmallMultiple.",
 	Check: func(_ context.Context, docs []Document) []Finding {
 		views := annotationViews(docs)
 		var findings []Finding
@@ -58,7 +58,7 @@ var annotationTargetMissing = Rule{
 				}
 				message := fmt.Sprintf("%s %q is not on any rendered page", end.target.Kind, end.target.Name)
 				if nested {
-					message = fmt.Sprintf("%s %q sits inside a Tree or inside a card of a Grid: only a direct child of a Grid can be a target there", end.target.Kind, end.target.Name)
+					message = fmt.Sprintf("%s %q sits inside a card of a Grid or a Tree, or is an inline node of a Tree: only a direct child of a Grid and a node of a Tree with a ref can be a target there", end.target.Kind, end.target.Name)
 				}
 				findings = append(findings, Finding{
 					RuleID:   "annotation-target-missing",
@@ -697,6 +697,9 @@ func (p *annotationPageView) walk(children []layoutChildSpec, owner Document, ba
 		if child.Kind == schema.KindGrid {
 			p.addGridChildren(effective, ctx, refs)
 		}
+		if child.Kind == schema.KindTree {
+			p.addTreeNodes(effective, refs)
+		}
 	}
 }
 
@@ -789,6 +792,39 @@ func (p *annotationPageView) addGridChildren(raw json.RawMessage, ctx *spec.Cons
 		if child.Kind == schema.KindGrid {
 			p.addGridChildren(effective, ctx, refs)
 		}
+		if child.Kind == schema.KindTree {
+			p.addTreeNodes(effective, refs)
+		}
+	}
+}
+
+// addTreeNodes records the nodes of a Tree that render a document by ref:
+// each of them can be a target, like a direct child of a Grid. A card and
+// what sits in it cannot.
+func (p *annotationPageView) addTreeNodes(raw json.RawMessage, refs map[string]Document) {
+	var tree struct {
+		Nodes []struct {
+			Kind string          `json:"kind"`
+			Ref  string          `json:"ref"`
+			Spec json.RawMessage `json:"spec"`
+		} `json:"nodes"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &tree) != nil {
+		return
+	}
+	for _, node := range tree.Nodes {
+		if node.Ref == "" || node.Kind == schema.KindLayoutCard {
+			continue
+		}
+		key := annotation.Key(node.Kind, node.Ref)
+		referenced, ok := refs[key]
+		if !ok {
+			continue
+		}
+		effective := mergedSpec(referenced, node.Spec)
+		p.slots[key] = true
+		p.bindings[key] = append(p.bindings[key], annotation.Binding(effective))
+		p.specs[key] = append(p.specs[key], effective)
 	}
 }
 
