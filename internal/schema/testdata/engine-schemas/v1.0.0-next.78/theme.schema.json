@@ -406,6 +406,13 @@
           "additionalProperties": false,
           "description": "The outline of a filled dot or bubble, and the opacity (0 to 1) of its fill."
         },
+        "seriesNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of the series the entries of `seriesColors`, `seriesFills` and `shareColors` are for. A named series keeps its entry in every chart, also when the data of a chart misses some series. Other series follow after the named ones."
+        },
         "seriesFills": {
           "type": "array",
           "items": {

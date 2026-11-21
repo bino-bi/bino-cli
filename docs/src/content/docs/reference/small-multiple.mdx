@@ -32,7 +32,7 @@ This gives one `ChartTime` per distinct `rowGroup` value, each filtered to `[row
 
 - Use `SmallMultiple` when every panel is the same chart or table on a slice of one dataset, and the panels must be comparable: same scale, same size, axes on one line.
 - Use a [`Grid`](/reference/grid/) when the cells show different things.
-- For a scatter or bubble chart split by `rowGroup` or `category`, the `facet` field of [`ChartScatter`](/reference/chart-scatter/) and [`ChartBubble`](/reference/chart-bubble/) is the better fit: it draws all panels in one chart with shared axes.
+- For a scatter or bubble chart split by `rowGroup` or `category`, the `facet` field of [`ChartScatter`](/reference/chart-scatter/) and [`ChartBubble`](/reference/chart-bubble/) is the better fit: it draws all panels in one chart with shared axes. Lint says so ([`small-multiple-xy-facet`](/appendix/lint-rules/#small-multiple-xy-facet)). When you need the SmallMultiple for them, set `seriesNames` in the [`ComponentStyle`](/reference/component-style/) so that a series has the same color in every panel.
 
 ## The panels
 

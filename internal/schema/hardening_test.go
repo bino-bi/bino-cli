@@ -825,6 +825,52 @@ spec:
 			wantErr: false,
 		},
 		{
+			name: "bubble slice value, values always, legend inside, side per panel and series names",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  size: ac3
+  share: { measure: ac4, labels: [Total] }
+  facet: { level: rowgroup }
+  legend: { position: inside }
+  labels:
+    values: always
+    points: [IT, { name: IT, side: s, panel: India }]
+---
+apiVersion: bino.bi/v1alpha1
+kind: ComponentStyle
+metadata:
+  name: segments
+spec:
+  content:
+    bn-chart-bubble:
+      seriesNames: [IT, Total]
+`,
+			wantErr: false,
+		},
+		{
+			name: "bubble values sometimes rejected",
+			yaml: `
+apiVersion: bino.bi/v1alpha1
+kind: ChartBubble
+metadata:
+  name: portfolio
+spec:
+  dataset: product_data
+  x: ac1
+  y: ac2
+  size: ac3
+  labels: { values: sometimes }
+`,
+			wantErr: true,
+		},
+		{
 			name: "bubble decimals below 0 rejected",
 			yaml: `
 apiVersion: bino.bi/v1alpha1
