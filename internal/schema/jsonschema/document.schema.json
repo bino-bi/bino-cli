@@ -5670,9 +5670,9 @@
         },
         "axisTitles": {
           "type": "string",
-          "enum": ["each", "rowEnd"],
+          "enum": ["each", "rowEnd", "shared"],
           "default": "each",
-          "description": "Where the axis titles of the panels stand, for example the names of the variances. 'each' (default): every panel has its own. 'rowEnd': only the last panel of each row has them, at its right. ChartTime base only: it sets axisTitlePosition of the panels, and a panels.items[].spec that sets axisTitlePosition wins. Needs template engine v1.0.0-next.46 or newer."
+          "description": "Where the axis titles of the panels stand, for example the names of the variances. 'each' (default): every panel has its own. 'rowEnd': only the last panel of each row has them, at its right. ChartTime base only: it sets axisTitlePosition of the panels, and a panels.items[].spec that sets axisTitlePosition wins. Needs template engine v1.0.0-next.46 or newer. 'shared': ChartScatter or ChartBubble base with panels.by rowGroup or category only. The panels are drawn as one chart with facet: one title per axis, tick labels at the outer panels, one legend, the name of a panel inside its plot. Not with card, panels.items, panels.overrides, panels.order, panels.limit or panels.param; scale and unitScaling do not need a fixed value."
         }
       }
     },
