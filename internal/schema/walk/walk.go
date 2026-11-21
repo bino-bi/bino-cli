@@ -283,10 +283,10 @@ func (m *Model) enrichProp(p *PropInfo, raw any) {
 		if p.Description == "" {
 			p.Description, _ = v["description"].(string)
 		}
-		if p.Type == "" {
-			p.Type, _ = v["type"].(string)
-		}
-		if t, _ := v["type"].(string); t != "" {
+		for _, t := range typesOf(v["type"]) {
+			if p.Type == "" {
+				p.Type = t
+			}
 			p.Types = appendUniqueStrings(p.Types, []string{t})
 		}
 		if p.Default == nil {
@@ -487,4 +487,23 @@ func toStrings(raw []any) []string {
 		}
 	}
 	return out
+}
+
+// typesOf reads the type keyword: one name, or a list of names.
+func typesOf(raw any) []string {
+	switch t := raw.(type) {
+	case string:
+		if t != "" {
+			return []string{t}
+		}
+	case []any:
+		var out []string
+		for _, e := range t {
+			if name, _ := e.(string); name != "" {
+				out = append(out, name)
+			}
+		}
+		return out
+	}
+	return nil
 }

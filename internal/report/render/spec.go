@@ -221,7 +221,8 @@ func labelsHideAttr(entries []any) string {
 	for _, entry := range entries {
 		switch v := entry.(type) {
 		case string:
-			parts = append(parts, strings.TrimSpace(v))
+			// a date written without quotes is a timestamp in YAML
+			parts = append(parts, strings.TrimSuffix(strings.TrimSpace(v), "T00:00:00Z"))
 		case float64:
 			parts = append(parts, strconv.FormatFloat(v, 'f', -1, 64))
 		}
