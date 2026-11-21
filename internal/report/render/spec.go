@@ -587,6 +587,7 @@ type tableSpec struct {
 	WaterfallScaling         string                       `json:"waterfallScaling"`
 	SumBars                  *bool                        `json:"sumBars"`
 	BarColumnParts           map[string]string            `json:"barColumnParts"`
+	BarColumnWidths          map[string]string            `json:"barColumnWidths"`
 	Ratios                   []tableRatio                 `json:"ratios"`
 	FillHeight               *bool                        `json:"fillHeight"`
 	DataFormatPercentSign    *bool                        `json:"dataFormatPercentSign"`
@@ -639,6 +640,11 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
 	writeAttr(b, "waterfall-scaling", s.WaterfallScaling)
 	writeBoolAttr(b, "sum-bars", s.SumBars)
+	if len(s.BarColumnWidths) > 0 {
+		if data, err := json.Marshal(s.BarColumnWidths); err == nil {
+			writeAttr(b, "bar-column-widths", string(data))
+		}
+	}
 	if len(s.BarColumnParts) > 0 {
 		if data, err := json.Marshal(s.BarColumnParts); err == nil {
 			writeAttr(b, "bar-column-parts", string(data))

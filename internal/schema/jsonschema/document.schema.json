@@ -6099,6 +6099,11 @@
           "enum": ["w5", "w10", "w15", "w20", "w25", "w30", "w40", "w60", "w80", "w100"],
           "description": "Maximum width of inline bar/pin chart columns in em. Default: w10."
         },
+        "barColumnWidths": {
+          "type": "object",
+          "description": "Width of single bar columns, by column of 'barColumns', in the values of 'barColumnWidth', e.g. {fc1: w20}. Other columns take 'barColumnWidth'. Needs engine v1.0.0-next.84.",
+          "additionalProperties": { "type": "string", "enum": ["w5", "w10", "w15", "w20", "w25", "w30", "w40", "w60", "w80", "w100"] }
+        },
         "unitScaling": {
           "oneOf": [
             { "type": "string" },
