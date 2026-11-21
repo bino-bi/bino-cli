@@ -3785,11 +3785,6 @@
           "default": "top",
           "description": "Where the message stands: 'top' in a row of its own above the title block, 'beside' right of the title block in one row with it. Needs template engine v1.0.0-next.81."
         },
-        "titleId": {
-          "type": "string",
-          "default": "",
-          "description": "A short id of the page, printed large at the top right of the title block, for example the number of a report page. Needs template engine v1.0.0-next.81."
-        },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/layoutChild" }
