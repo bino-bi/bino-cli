@@ -352,6 +352,15 @@ func TestCheckFontShrunk(t *testing.T) {
 		},
 	}
 
+	t.Run("a scale the author set is no fit", func(t *testing.T) {
+		c := component(t, "bn-table[0]", "bn-table")
+		c.Em.AppliedScaleFactor = 0.6
+		c.Em.ScaleMode = "fixed"
+		if got := Analyze(snapshot([]Component{c}, nil)); len(got) != 0 {
+			t.Fatalf("Analyze() = %v, want no findings", rules(got))
+		}
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := component(t, "bn-table[0]", "bn-table")

@@ -231,6 +231,30 @@ func TestAnnotations_ACardInATreeHasNoTargets(t *testing.T) {
 	}
 }
 
+func TestAnnotations_ATreeNodeWithARefIsATarget(t *testing.T) {
+	tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"edges":[],"nodes":[{"id":"n","kind":"ChartTime","ref":"trend"},{"id":"m","kind":"ChartTime","spec":{"dataset":"sales"}}]}}`
+	out := renderAnnotations(t, ModeBuild, chartDoc, marker2024, annotationTestPage(tree))
+	if !regexp.MustCompile(`<div slot='n' data-bino-annotation-target='t1'>`).MatchString(out) {
+		t.Fatalf("no target on the tree node:\n%s", out)
+	}
+	if strings.Contains(out, "<div slot='m' data-bino-annotation-target") {
+		t.Fatalf("an inline node has no name and cannot be a target:\n%s", out)
+	}
+	if items := layerItems(t, out); len(items) != 1 || items[0].Target != "t1" {
+		t.Fatalf("layer = %+v", items)
+	}
+}
+
+func TestTreeScale(t *testing.T) {
+	for scale, want := range map[string]string{`"auto"`: `scale='auto'`, `0.6`: `scale='0.6'`} {
+		tree := `{"kind":"Tree","metadata":{"name":"tr"},"spec":{"edges":[],"scale":` + scale + `,"nodes":[]}}`
+		out := renderAnnotations(t, ModeBuild, annotationTestPage(tree))
+		if !strings.Contains(openTag(t, out, "bn-tree"), want) {
+			t.Fatalf("scale %s: no %s on <bn-tree>:\n%s", scale, want, out)
+		}
+	}
+}
+
 func TestAnnotations_GridItselfIsATarget(t *testing.T) {
 	grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"rowHeaders":[],"columnHeaders":[],"children":[]}}`
 	note := annotationDocument("on_grid", `{"target":{"kind":"Grid","name":"g"},"title":"Whole"}`)

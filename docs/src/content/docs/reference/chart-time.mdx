@@ -47,7 +47,7 @@ stacked columns or a stacked area with the `stack` block (see
 - `axisLabelsStep` - print only every n-th category label, starting with the first period. `2` labels every second period. Default: `1`. In line mode it works since template engine v1.0.0-next.73. An older engine ignores it there.
 - `periodLines` - for a stacked area: a thin line at every n-th period, from the axis to the top of the stack. `1` draws one at every period. With it the dashed line at the change of the year is not drawn. Needs template engine v1.0.0-next.73.
 - `pointPosition` - for a stacked area: where the point of a period stands. `center` (default) is the middle of the period, above its label. `end` is the right border of the period, for values at the end of a period such as a stock. Needs template engine v1.0.0-next.73.
-- `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right` or `none`.
+- `axisTitlePosition` - where the axis title stands: the chart title, or the name of a variance. `left` (default), `right`, `top` or `none`. `top` prints the chart title in bold in a line above the chart, with the unit behind it when `showMeasureScale` is set: **Net sales** in kEUR. Rows of variances keep their name at the axis. `top` needs template engine v1.0.0-next.79.
 - `dataFormatDigitsDecimal` - number of decimal digits of the value labels. Default: `1`. Same meaning as on a [`Table`](/reference/table/).
 - `dataFormatDigitsPercent` - number of decimal digits of the percent labels of relative variances. Default: `2`. Same meaning as on a `Table`.
 - `dataFormatPercentSign` - `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. Default: `true`. Needs template engine v1.0.0-next.60.
@@ -223,7 +223,7 @@ A plan often continues the actual values: AC up to this year, PL after it. In th
 With `scenarioSwitch: true` the chart draws one series:
 
 - A scenario that only has values in periods where the first scenario has none is drawn in its place, as a full column with value labels.
-- A vertical line marks the change, and the scenario names stand under the axis.
+- A vertical line marks the change, and the scenario names stand under the axis: each under the middle of its periods, or with `axisLabelsMode: two-row` under its first period. In a chart with columns below the axis the names stand below the lowest value. With template engine v1.0.0-next.79 they stand directly under the date labels when no column or value is in their way there.
 - Variances of one type over the same reference share one row: `dac1_pp1_pos` and `dpl1_pp1_pos` are one row of variances from `pp1`. The plan variances are outlined. With template engine v1.0.0-next.60 the forecast variances are hatched, also the head of a forecast pin, and the row is named by the reference only (`ΔPY`).
 - If two of them have a value in the same period, the first one wins and the chart warns.
 
@@ -597,7 +597,7 @@ See the [ChartStructure inherited props](/reference/chart-structure/#inherited-p
 | `spec.axisLabelsStep`    | integer                  | no                   | `1`                          | Print only every n-th category label, starting with the first period. In line mode it works since engine v1.0.0-next.73. Minimum: 1. Needs engine v1.0.0-next.46. |
 | `spec.periodLines` | integer | no | - | Stacked area: a thin line at every n-th period, from the axis to the top of the stack. Replaces the dashed line at the change of the year. Minimum: 1. Needs engine v1.0.0-next.73. | `periodLines: 1` |
 | `spec.pointPosition` | string | no | `center` | Stacked area: where the point of a period stands. Values: `center`, `end` (the right border of the period). Needs engine v1.0.0-next.73. | `pointPosition: end` |
-| `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `none`. Needs engine v1.0.0-next.46. |
+| `spec.axisTitlePosition` | string                   | no                   | `left`                       | Where the axis title stands (the chart title, or the name of a variance). Values: `left`, `right`, `top` (bold title above the chart, with the unit when `showMeasureScale` is set; needs engine v1.0.0-next.79), `none`. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatDigitsDecimal` | integer            | no                   | `1`                          | Number of decimal digits of the value labels. Minimum: 0. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatDigitsPercent` | integer            | no                   | `2`                          | Number of decimal digits of the percent labels of relative variances. Minimum: 0. Needs engine v1.0.0-next.46. |
 | `spec.dataFormatPercentSign` | boolean | no | `true` | `false` prints the labels of relative variances without the percent sign: `+11.6` in place of `+11.6%`. The title of the row (`ΔPY%`) still names the unit. Needs engine v1.0.0-next.60. | `dataFormatPercentSign: false` |

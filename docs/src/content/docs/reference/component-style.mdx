@@ -346,6 +346,7 @@ Individual SVG style properties:
 | `width`       | number | Stroke width in pixels                                             |
 | `dasharray`   | string | SVG stroke-dasharray pattern (e.g., `"10 5 5 5"` for dashed lines) |
 | `fillpattern` | string | Fill pattern: `solid`, `hatched` or `outlined`                     |
+| `negativeFill` | string | `barStyles` only: fill of a column or bar with a value below 0 (CSS color). It also replaces the stroke where the stroke has the color of the fill. Needs template engine v1.0.0-next.79 |
 
 `fc` is the deprecated name of `hatched`. It still works with template engine 1.x; `bino lint` reports it with [`style-fillpattern-deprecated`](/appendix/lint-rules/#style-fillpattern-deprecated). Template engines before **v1.0.0-next.28** know only `fc` in time and structure charts, so keep `fc` in a project that is pinned to such an engine.
 

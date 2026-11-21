@@ -3195,6 +3195,10 @@
           "type": "string",
           "enum": ["solid", "hatched", "outlined", "fc"],
           "description": "Fill pattern: 'solid', 'hatched' or 'outlined'. 'fc' is the deprecated name of 'hatched'; in time and structure charts, template engines before v1.0.0-next.28 know only 'fc'."
+        },
+        "negativeFill": {
+          "type": "string",
+          "description": "barStyles of time and structure charts: fill of a column or bar with a value below 0 (CSS color). It also replaces the stroke where the stroke has the color of the fill. Needs template engine v1.0.0-next.79."
         }
       },
       "additionalProperties": true
@@ -4594,9 +4598,9 @@
         },
         "axisTitlePosition": {
           "type": "string",
-          "enum": ["left", "right", "none"],
+          "enum": ["left", "right", "top", "none"],
           "default": "left",
-          "description": "Where the axis title stands: the chart title, or the name of a variance."
+          "description": "Where the axis title stands: the chart title, or the name of a variance. 'top' prints the chart title in bold above the chart, with the unit behind it when showMeasureScale is set; rows of variances keep their name at the axis. 'top' needs template engine v1.0.0-next.79."
         },
         "scenarios": {
           "description": "List of scenarios. Up to 4 different scenarios supported. Can be a YAML array or a JSON/CSV string. Values: ac1-4, fc1-4, pp1-4, pl1-4. An empty list ([]) draws no scenarios: the chart shows only its variances. Set to 'inherited-closest' to inherit from the nearest ancestor LayoutCard or LayoutPage, or 'inherited-page' to inherit from the LayoutPage only.",
@@ -5308,6 +5312,13 @@
           "type": "boolean",
           "default": true,
           "description": "Show operator symbols between sibling nodes."
+        },
+        "scale": {
+          "description": "Scale of the whole tree: the node components that set no scale of their own, the spacings and the operators. A positive number is a fixed factor. 'auto' starts at 1 and gets smaller until the tree fits its container. Not set: every node keeps its own scaling. Needs template engine v1.0.0-next.79.",
+          "oneOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "string", "pattern": "^(auto|[0-9]*\\.?[0-9]+)$" }
+          ]
         },
         "nodes": {
           "type": "array",

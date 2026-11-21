@@ -179,9 +179,8 @@ func (rc *renderCtx) withAnnotationPage() *renderCtx {
 	return &c
 }
 
-// withoutAnnotationPage ends the mark collection below a Tree. Its children
-// cannot be targets, and a card inside one must not make its own an
-// exception: lint reports them all alike.
+// withoutAnnotationPage ends the mark collection below a card in a Tree. Its
+// children cannot be targets: lint reports them all alike.
 func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
 	if rc.annotationPage == nil && rc.gridPage == nil {
 		return rc
@@ -193,8 +192,8 @@ func (rc *renderCtx) withoutAnnotationPage() *renderCtx {
 }
 
 // forGrid ends the mark collection for what sits deeper, but keeps the page
-// for the direct children of the Grid: each of them can be a target. A card
-// in a cell stays without targets.
+// for the direct children of the Grid or the nodes of the Tree: each of them
+// can be a target. A card in a cell or a node stays without targets.
 func (rc *renderCtx) forGrid() *renderCtx {
 	if rc.annotationPage == nil {
 		return rc
@@ -235,6 +234,40 @@ func (rc *renderCtx) gridAnnotationTarget(child gridChild) string {
 	}
 	key := gridChildKey(child)
 	if !page.wanted[key] {
+		return ""
+	}
+	page.nextID++
+	id := fmt.Sprintf("t%d", page.nextID)
+	page.targets[key] = append(page.targets[key], id)
+	return id
+}
+
+// treeNodeTargetKey is the component a Tree node renders by ref. A node has
+// no name of its own, so an inline node and a card cannot be targets.
+func treeNodeTargetKey(node treeNode) string {
+	if node.Ref == "" || node.Kind == schema.KindLayoutCard {
+		return ""
+	}
+	return annotation.Key(node.Kind, node.Ref)
+}
+
+// noteTreeAnnotationSpec keeps the effective spec of a Tree node an
+// annotation points at, for the point check.
+func (rc *renderCtx) noteTreeAnnotationSpec(node treeNode, effectiveSpec json.RawMessage) {
+	page := rc.gridPage
+	key := treeNodeTargetKey(node)
+	if page == nil || key == "" || !page.wanted[key] {
+		return
+	}
+	page.places[key] = append(page.places[key], annotationPlace{kind: node.Kind, spec: effectiveSpec})
+}
+
+// treeAnnotationTarget gives a Tree node that an annotation points at a
+// target id that is unique on the page. It is "" for a node without one.
+func (rc *renderCtx) treeAnnotationTarget(node treeNode) string {
+	page := rc.gridPage
+	key := treeNodeTargetKey(node)
+	if page == nil || key == "" || !page.wanted[key] {
 		return ""
 	}
 	page.nextID++

@@ -1143,7 +1143,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
-		htmlOut, err := renderTreeComponent(s, rc.withoutAnnotationPage())
+		htmlOut, err := renderTreeComponent(s, rc.forGrid())
 		if err != nil {
 			return "", false, fmt.Errorf("render tree child: %w", err)
 		}
@@ -1409,7 +1409,9 @@ func renderTreeComponent(s treeSpec, rc *renderCtx) (string, error) {
 		}
 		b.WriteString("\n  <div slot='")
 		b.WriteString(html.EscapeString(node.ID))
-		b.WriteString("'>")
+		b.WriteString("'")
+		writeAttr(&b, "data-bino-annotation-target", rc.treeAnnotationTarget(node))
+		b.WriteString(">")
 		b.WriteString(nodeContent)
 		b.WriteString("</div>")
 	}
@@ -1445,6 +1447,7 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 		return "", fmt.Errorf("apply dataset defaults to %s node: %w", node.Kind, err)
 	}
 	rc.recordDataRefs(effectiveSpec)
+	rc.noteTreeAnnotationSpec(node, effectiveSpec)
 
 	switch node.Kind {
 	case "Label":
@@ -1501,7 +1504,7 @@ func renderTreeNode(node treeNode, rc *renderCtx) (string, error) {
 		if err := json.Unmarshal(effectiveSpec, &s); err != nil {
 			return "", fmt.Errorf("unmarshal layout card spec: %w", err)
 		}
-		return renderLayoutCardContainer(s, rc)
+		return renderLayoutCardContainer(s, rc.withoutAnnotationPage())
 	default:
 		// Tree nodes have no metadata; the id is a slot id, not a name.
 		return rc.renderPluginComponent(node.Kind, node.Ref, effectiveSpec, "tree node")

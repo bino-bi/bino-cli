@@ -476,15 +476,16 @@ func (s chartBulletSpec) writeAttrs(b *strings.Builder) {
 // Trees display hierarchical structures with nodes connected by edges,
 // commonly used for driver trees and decomposition diagrams.
 type treeSpec struct {
-	Edges         json.RawMessage `json:"edges"`
-	Direction     string          `json:"direction"`
-	LevelSpacing  *float64        `json:"levelSpacing"`
-	NodeSpacing   *float64        `json:"nodeSpacing"`
-	EdgeStyle     string          `json:"edgeStyle"`
-	ShowOperators *bool           `json:"showOperators"`
-	I18nNamespace string          `json:"i18nNamespace"`
-	SelectedStyle string          `json:"selectedStyle"`
-	Nodes         []treeNode      `json:"nodes"`
+	Edges         json.RawMessage          `json:"edges"`
+	Direction     string                   `json:"direction"`
+	LevelSpacing  *float64                 `json:"levelSpacing"`
+	NodeSpacing   *float64                 `json:"nodeSpacing"`
+	EdgeStyle     string                   `json:"edgeStyle"`
+	ShowOperators *bool                    `json:"showOperators"`
+	Scale         reportspec.StringOrFloat `json:"scale,omitempty"`
+	I18nNamespace string                   `json:"i18nNamespace"`
+	SelectedStyle string                   `json:"selectedStyle"`
+	Nodes         []treeNode               `json:"nodes"`
 }
 
 // treeNode defines a node in a tree.
@@ -521,6 +522,7 @@ func (s treeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "node-spacing", s.NodeSpacing)
 	writeAttr(b, "edge-style", s.EdgeStyle)
 	writeBoolAttr(b, "show-operators", s.ShowOperators)
+	writeAttr(b, "scale", s.Scale.String())
 	writeAttr(b, "i18n-namespace", s.I18nNamespace)
 	writeAttr(b, "selected-style", s.SelectedStyle)
 }

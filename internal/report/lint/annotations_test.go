@@ -93,7 +93,7 @@ func TestAnnotationTargetMissing(t *testing.T) {
 	})
 	for name, parent := range map[string]string{
 		"child of a card in a grid": `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[{"row":"a","column":"b","kind":"LayoutCard","spec":{"children":[{"kind":"Table","ref":"t"}]}}]}}`,
-		"tree child":                `{"kind":"Tree","metadata":{"name":"g"},"spec":{"nodes":[{"id":"n","kind":"Table","ref":"t"}]}}`,
+		"child of a card in a tree": `{"kind":"Tree","metadata":{"name":"g"},"spec":{"nodes":[{"id":"n","kind":"LayoutCard","spec":{"children":[{"kind":"Table","ref":"t"}]}}]}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", parent))
@@ -103,6 +103,11 @@ func TestAnnotationTargetMissing(t *testing.T) {
 			}
 		})
 	}
+	t.Run("tree node with a ref is a target", func(t *testing.T) {
+		tree := `{"kind":"Tree","metadata":{"name":"g"},"spec":{"nodes":[{"id":"n","kind":"Table","ref":"t"}]}}`
+		findings := runAnnotationRule(annotationTargetMissing, lintDoc(t, "Table", "t", `{"dataset":"sales"}`), annotationOn(t, "Table", "t"), pageWith(t, "p", tree))
+		wantFindings(t, findings, "", 0, "")
+	})
 	t.Run("grid itself is a target", func(t *testing.T) {
 		grid := `{"kind":"Grid","metadata":{"name":"g"},"spec":{"children":[]}}`
 		wantFindings(t, runAnnotationRule(annotationTargetMissing, annotationOn(t, "Grid", "g"), pageWith(t, "p", grid)), "", 0, "")
