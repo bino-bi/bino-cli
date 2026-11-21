@@ -19,7 +19,9 @@ import (
 // inspector is clean in CI. Nothing here can fail a build - a capture is extra
 // information about a PDF that has already rendered.
 type layoutStateCapture struct {
-	// SnapshotPath is where the raw capture is written.
+	// SnapshotPath is where the raw capture is written. Empty: no file, and
+	// only content that is cut off is reported. This is a build without
+	// --layout-state: lost content must not be silent, the rest is detail.
 	SnapshotPath string
 	Logger       logx.Logger
 
@@ -29,20 +31,59 @@ type layoutStateCapture struct {
 
 // Handle is the chrome.PDFOptions.OnLayoutState callback.
 func (c *layoutStateCapture) Handle(snapshot []byte) {
-	if err := c.write(snapshot); err != nil {
-		c.Logger.Warnf("failed to write layout state: %v", err)
+	quiet := c.SnapshotPath == ""
+	if !quiet {
+		if err := c.write(snapshot); err != nil {
+			c.Logger.Warnf("failed to write layout state: %v", err)
+		}
 	}
 
 	var snap layoutstate.Snapshot
 	if err := json.Unmarshal(snapshot, &snap); err != nil {
-		c.Logger.Warnf("failed to read layout state: %v", err)
+		if !quiet {
+			c.Logger.Warnf("failed to read layout state: %v", err)
+		}
 		return
 	}
 	if !layoutstate.SupportedVersion(snap.State.Version) {
-		c.Logger.Warnf("layout state version %d is not supported by this CLI; skipping render checks", snap.State.Version)
+		if !quiet {
+			c.Logger.Warnf("layout state version %d is not supported by this CLI; skipping render checks", snap.State.Version)
+		}
 		return
 	}
 	c.Findings = layoutstate.Analyze(snap)
+	if quiet {
+		c.Findings = overflowOnly(c.Findings)
+	}
+}
+
+// overflowOnly keeps the findings about content that is cut off, one per
+// component: a small multiple reports every panel, and a build log is no place
+// for forty lines about one chart.
+func overflowOnly(findings []layoutstate.Finding) []layoutstate.Finding {
+	var out []layoutstate.Finding
+	first := map[string]int{}
+	more := map[string]int{}
+	for _, f := range findings {
+		if f.Rule != layoutstate.RuleOverflow {
+			continue
+		}
+		key := f.Kind + "\x00" + f.Name
+		if f.Name == "" {
+			key = f.ComponentID
+		}
+		if _, seen := first[key]; seen {
+			more[key]++
+			continue
+		}
+		first[key] = len(out)
+		out = append(out, f)
+	}
+	for key, n := range more {
+		f := &out[first[key]]
+		f.Message = strings.TrimSuffix(f.Message, ".") + fmt.Sprintf(", and %d more of this component", n)
+	}
+	return out
 }
 
 func (c *layoutStateCapture) write(snapshot []byte) error {

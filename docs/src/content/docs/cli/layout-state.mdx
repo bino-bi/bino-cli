@@ -49,6 +49,8 @@ Writes `dist/<artefact>.layout.json` next to each PDF and reports the same findi
 as build warnings - which also land in the [JSON build log](/cli/build-logs/), so
 CI can fail on them.
 
+Without the flag a build still reads the rendered layout and reports one kind of finding: `layout-overflow`, content that is cut off. It prints one line per component, also when many panels of it are cut, and writes no file. All other findings need `--layout-state`.
+
 The file has no timestamp, so two builds of an unchanged bundle produce identical
 bytes and a snapshot can be committed as a golden file.
 

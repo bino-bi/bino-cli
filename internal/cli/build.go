@@ -621,13 +621,14 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 	}
 	logger.Debugf("Generating PDF at %s", pdfPath)
 
-	// Capture the rendered layout alongside the PDF when asked to.
-	var capture *layoutStateCapture
-	var onLayoutState func([]byte)
+	// The rendered layout is always read: content that is cut off is reported
+	// in every build. With --layout-state the snapshot is also written next to
+	// the PDF and all render checks are reported.
+	capture := &layoutStateCapture{Logger: logger}
 	if cfg.CaptureLayoutState {
-		capture = &layoutStateCapture{SnapshotPath: layoutStatePath(pdfPath), Logger: logger}
-		onLayoutState = capture.Handle
+		capture.SnapshotPath = layoutStatePath(pdfPath)
 	}
+	onLayoutState := capture.Handle
 
 	if err := renderReportPDF(ctx, cfg, renderResult, pdfPath, onLayoutState); err != nil {
 		if spinner != nil {
@@ -689,12 +690,10 @@ func buildArtefact(ctx context.Context, cfg buildArtefactConfig) (artefactResult
 		spinner.Stop()
 	}
 	result := artefactResult{Name: artefactName, PDFPath: pdfPath, GraphPath: graphPath, RenderWarnings: renderResult.Warnings}
-	if capture != nil {
-		result.LayoutStatePath = capture.SnapshotPath
-		result.LayoutWarnings = capture.Warnings(artefactName)
-		for _, f := range capture.Findings {
-			logger.Warnf("%s", f)
-		}
+	result.LayoutStatePath = capture.SnapshotPath
+	result.LayoutWarnings = capture.Warnings(artefactName)
+	for _, f := range capture.Findings {
+		logger.Warnf("%s", f)
 	}
 	return result, nil
 }

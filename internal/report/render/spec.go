@@ -214,6 +214,22 @@ type chartStructureSpec struct {
 // scenariosAttr is the scenarios attribute of a chart. An explicit empty list
 // means "draw no scenarios", which the engine spells none. A missing field
 // stays empty, so the engine detects the scenarios itself.
+// labelsHideAttr joins the periods without a category label. A year written
+// without quotes is a number in YAML.
+func labelsHideAttr(entries []any) string {
+	parts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		switch v := entry.(type) {
+		case string:
+			// a date written without quotes is a timestamp in YAML
+			parts = append(parts, strings.TrimSuffix(strings.TrimSpace(v), "T00:00:00Z"))
+		case float64:
+			parts = append(parts, strconv.FormatFloat(v, 'f', -1, 64))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 func scenariosAttr(scenarios reportspec.StringOrSlice) string {
 	if scenarios != nil && len(scenarios) == 0 {
 		return "none"
@@ -297,6 +313,7 @@ type chartTimeSpec struct {
 	ScalingIndicator        *float64        `json:"scalingIndicator"`
 	Totals                  json.RawMessage `json:"totals"`
 	AxisLabelsStep          *int            `json:"axisLabelsStep"`
+	AxisLabelsHide          []any           `json:"axisLabelsHide"`
 	PeriodLines             *int            `json:"periodLines"`
 	PointPosition           string          `json:"pointPosition"`
 	ScenarioSwitch          *bool           `json:"scenarioSwitch"`
@@ -337,6 +354,7 @@ func (s chartTimeSpec) writeAttrs(b *strings.Builder) {
 	writeFloatAttr(b, "scaling-indicator", s.ScalingIndicator)
 	writeJSONObjAttr(b, "totals", s.Totals)
 	writeIntAttr(b, "axis-labels-step", s.AxisLabelsStep)
+	writeAttr(b, "axis-labels-hide", labelsHideAttr(s.AxisLabelsHide))
 	writeIntAttr(b, "period-lines", s.PeriodLines)
 	writeAttr(b, "point-position", s.PointPosition)
 	writeBoolAttr(b, "scenario-switch", s.ScenarioSwitch)

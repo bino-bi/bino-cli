@@ -396,3 +396,15 @@ func TestAnnotationScaffoldHasNoArrowEnd(t *testing.T) {
 		t.Fatalf("to is only for an arrow:\n%s", body)
 	}
 }
+
+func TestTypesOf(t *testing.T) {
+	if got := typesOf("string"); len(got) != 1 || got[0] != "string" {
+		t.Fatalf("got %v", got)
+	}
+	if got := typesOf([]any{"string", "array"}); len(got) != 2 || got[1] != "array" {
+		t.Fatalf("got %v", got)
+	}
+	if got := typesOf(nil); got != nil {
+		t.Fatalf("got %v", got)
+	}
+}

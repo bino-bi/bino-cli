@@ -128,3 +128,31 @@ func TestLayoutStateCaptureIsValidJSON(t *testing.T) {
 		t.Errorf("fixture version = %d, want %d", snap.State.Version, layoutstate.Version)
 	}
 }
+
+func TestOverflowOnly(t *testing.T) {
+	findings := []layoutstate.Finding{
+		{Rule: layoutstate.RuleFontShrunk, Kind: "Tree", Name: "t", Message: "font"},
+		{Rule: layoutstate.RuleOverflow, Kind: "SmallMultiple", Name: "sm", Message: "Chart exceeds available width."},
+		{Rule: layoutstate.RuleOverflow, Kind: "SmallMultiple", Name: "sm", Message: "Chart exceeds available width."},
+		{Rule: layoutstate.RuleOverflow, Kind: "SmallMultiple", Name: "sm", Message: "other"},
+		{Rule: layoutstate.RuleOverflow, Kind: "Tree", Name: "t", Message: "Tree exceeds."},
+	}
+	got := overflowOnly(findings)
+	if len(got) != 2 {
+		t.Fatalf("got %d findings, want 2: %v", len(got), got)
+	}
+	if got[0].Message != "Chart exceeds available width, and 2 more of this component" {
+		t.Errorf("message = %q", got[0].Message)
+	}
+	if got[1].Message != "Tree exceeds." {
+		t.Errorf("message = %q", got[1].Message)
+	}
+}
+
+func TestLayoutStateCaptureWithoutPathReportsOnlyOverflow(t *testing.T) {
+	capture := &layoutStateCapture{Logger: logx.Nop()}
+	capture.Handle([]byte("not json"))
+	if len(capture.Findings) != 0 {
+		t.Fatalf("findings = %v", capture.Findings)
+	}
+}
