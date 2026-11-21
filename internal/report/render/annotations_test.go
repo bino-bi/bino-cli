@@ -466,3 +466,12 @@ func TestAnnotations_DifferenceAndFrameText(t *testing.T) {
 		t.Errorf("an older engine must fail the render, got %v", err)
 	}
 }
+
+func TestLabelsHideAttr(t *testing.T) {
+	if got := labelsHideAttr([]any{float64(2022), " 2023-03 ", "2024-01-01", true}); got != "2022,2023-03,2024-01-01" {
+		t.Fatalf("got %q", got)
+	}
+	if got := labelsHideAttr(nil); got != "" {
+		t.Fatalf("got %q", got)
+	}
+}

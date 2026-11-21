@@ -3674,21 +3674,16 @@
         },
         "titleMeasures": {
           "description": "Array of measure objects with name and unit. If all units are the same, redundant units will be reduced and names concatenated. If unit is empty, the row is omitted. Can be a YAML array or a JSON string. Example: [{\"name\": \"Bruttoumsatz\", \"unit\": \"mEUR\"}]",
-          "oneOf": [
-            { "type": "string" },
-            {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["name", "unit"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "unit": { "type": "string" }
-                }
-              }
+          "type": ["string", "array"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "unit"],
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" }
             }
-          ]
+          }
         },
         "titleScenarios": {
           "description": "List of scenarios displayed in card header. Can be a YAML array or a comma-separated string. If empty, the scenarios are omitted. Values: ac1-ac4, fc1-fc4, pp1-pp4, pl1-pl4.",
@@ -3847,21 +3842,16 @@
         },
         "titleMeasures": {
           "description": "Array of measure objects with name and unit. Can be a YAML array or a JSON string. Example: [{\"name\": \"Bruttoumsatz\", \"unit\": \"mEUR\"}]",
-          "oneOf": [
-            { "type": "string" },
-            {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["name", "unit"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "unit": { "type": "string" }
-                }
-              }
+          "type": ["string", "array"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "unit"],
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" }
             }
-          ]
+          }
         },
         "titleDateStart": {
           "type": "string",
@@ -4569,6 +4559,16 @@
           "minimum": 1,
           "default": 1,
           "description": "Print only every n-th category label, starting with the first period. 2 labels every second period."
+        },
+        "axisLabelsHide": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "integer", "minimum": 1000, "maximum": 9999 },
+              { "type": "string", "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$" }
+            ]
+          },
+          "description": "Periods that get no category label. An entry is a date or the start of one: 2022 leaves out every period of that year, \"2022-03\" those of the month, \"2022-03-01\" the period that starts on that day. Needs template engine v1.0.0-next.80."
         },
         "periodLines": {
           "type": "integer",
