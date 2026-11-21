@@ -73,6 +73,9 @@ func overflowOnly(findings []layoutstate.Finding) []layoutstate.Finding {
 		if f.Name == "" {
 			key = f.Rule + "\x00" + f.ComponentID
 		}
+		if f.Rule == layoutstate.RuleError {
+			key += "\x00" + f.Hint // every error has its own cause
+		}
 		if _, seen := first[key]; seen {
 			more[key]++
 			continue

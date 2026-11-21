@@ -670,3 +670,15 @@ func TestCheckErrors(t *testing.T) {
 		t.Errorf("finding = %+v, want a message for an error without one", got[1])
 	}
 }
+
+func TestCheckEmptyLeavesAComponentWithAnErrorToTheErrorRule(t *testing.T) {
+	c := component(t, "bn-table[0]", "bn-table")
+	noData := true
+	c.Metadata.HasNoData = &noData
+	c.Diagnostics = []Diagnostic{{ID: "ERR_sql", Type: "error", Message: "Query failed"}}
+
+	got := Analyze(snapshot([]Component{c}, nil))
+	if len(got) != 1 || got[0].Rule != RuleError {
+		t.Fatalf("Analyze() = %v, want only %s", rules(got), RuleError)
+	}
+}

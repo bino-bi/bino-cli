@@ -109,6 +109,10 @@ func SupportedVersion(v int) bool { return v == Version }
 // that declare no count at all (bn-text, bn-image, layout containers) are
 // never flagged.
 func checkEmpty(c Component, src Source) (Finding, bool) {
+	// a component with an error is empty for that reason: the error says why
+	if len(checkErrors(c, src)) > 0 {
+		return Finding{}, false
+	}
 	reason := ""
 	switch {
 	case c.Metadata.HasNoData != nil && *c.Metadata.HasNoData:
