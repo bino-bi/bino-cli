@@ -584,9 +584,23 @@ type tableSpec struct {
 	RunningSum               *bool                        `json:"runningSum"`
 	ThereofPosition          string                       `json:"thereofPosition"`
 	VarianceWaterfall        *bool                        `json:"varianceWaterfall"`
+	WaterfallScaling         string                       `json:"waterfallScaling"`
+	SumBars                  *bool                        `json:"sumBars"`
+	BarColumnParts           map[string]string            `json:"barColumnParts"`
+	Ratios                   []tableRatio                 `json:"ratios"`
+	FillHeight               *bool                        `json:"fillHeight"`
+	DataFormatPercentSign    *bool                        `json:"dataFormatPercentSign"`
 	Attributes               reportspec.AttributesList    `json:"attributes"`
 	SelectedStyle            string                       `json:"selectedStyle"`
 	Ruleset                  string                       `json:"ruleset"`
+}
+
+// tableRatio is one row of a Table's 'ratios': numerator / denominator, both
+// rowGroups of a sum row.
+type tableRatio struct {
+	Name        string `json:"name"`
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
 }
 
 func (s tableSpec) writeAttrs(b *strings.Builder) {
@@ -623,6 +637,20 @@ func (s tableSpec) writeAttrs(b *strings.Builder) {
 	writeBoolAttr(b, "running-sum", s.RunningSum)
 	writeAttr(b, "thereof-position", s.ThereofPosition)
 	writeBoolAttr(b, "variance-waterfall", s.VarianceWaterfall)
+	writeAttr(b, "waterfall-scaling", s.WaterfallScaling)
+	writeBoolAttr(b, "sum-bars", s.SumBars)
+	if len(s.BarColumnParts) > 0 {
+		if data, err := json.Marshal(s.BarColumnParts); err == nil {
+			writeAttr(b, "bar-column-parts", string(data))
+		}
+	}
+	if len(s.Ratios) > 0 {
+		if data, err := json.Marshal(s.Ratios); err == nil {
+			writeAttr(b, "ratios", string(data))
+		}
+	}
+	writeBoolAttr(b, "data-format-percent-sign", s.DataFormatPercentSign)
+	writeBoolAttr(b, "fill-height", s.FillHeight)
 	writeAttr(b, "attributes", s.Attributes.String())
 	writeAttr(b, "selected-style", s.SelectedStyle)
 	writeAttr(b, "ruleset", s.Ruleset)

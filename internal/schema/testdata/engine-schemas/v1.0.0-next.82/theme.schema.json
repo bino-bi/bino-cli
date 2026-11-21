@@ -38,6 +38,9 @@
         },
         "bn-annotation": {
           "$ref": "#/definitions/AnnotationStyle"
+        },
+        "bn-table": {
+          "$ref": "#/definitions/TableStyle"
         }
       },
       "additionalProperties": false,
@@ -236,6 +239,14 @@
         "negativeFill": {
           "type": "string",
           "description": "Fill of a column or bar with a value below 0."
+        },
+        "outlineFill": {
+          "type": "string",
+          "description": "Variance styles: fill of an outlined variance (a variance of a plan). Not set: the background."
+        },
+        "outlineStroke": {
+          "type": "string",
+          "description": "Variance styles: edge of an outlined variance. Not set: the colour of the variance."
         }
       },
       "additionalProperties": false
@@ -681,6 +692,17 @@
       },
       "additionalProperties": false,
       "description": "Colours of the marks of `bn-annotation-layer` and the circles of `bn-annotation-list`."
+    },
+    "TableStyle": {
+      "type": "object",
+      "properties": {
+        "relativeItalic": {
+          "type": "boolean",
+          "description": "False prints the relative variances upright: the number cells and the labels of the pins. Default true (italic)."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional overrides for `bn-table`."
     }
   }
 }
