@@ -498,12 +498,12 @@ export class BinoPreviewManager {
     private registerLiveOverridePush(): void {
         const timers = new Map<string, ReturnType<typeof setTimeout>>();
         this.artefactFollowDisposables.push(
-            vscode.workspace.onDidChangeTextDocument(e => {
+            vscode.workspace.onDidChangeTextDocument(async e => {
                 const doc = e.document;
                 if (!this.isEmbeddedPreviewOpen() || doc.isUntitled || !doc.isDirty) {
                     return;
                 }
-                if (!this.isBinoManifest(doc)) {
+                if (!(await this.isBinoManifest(doc))) {
                     return;
                 }
                 const key = doc.uri.toString();
@@ -521,8 +521,8 @@ export class BinoPreviewManager {
             }),
             // On save the buffer equals disk; drop the override so the disk path
             // (with its embedding cache) serves again.
-            vscode.workspace.onDidSaveTextDocument(doc => {
-                if (!this.isEmbeddedPreviewOpen() || !this.isBinoManifest(doc)) {
+            vscode.workspace.onDidSaveTextDocument(async doc => {
+                if (!this.isEmbeddedPreviewOpen() || !(await this.isBinoManifest(doc))) {
                     return;
                 }
                 const existing = timers.get(doc.uri.toString());
@@ -535,13 +535,13 @@ export class BinoPreviewManager {
         );
     }
 
-    /** Whether a document is a Bino YAML manifest (.yaml/.yml with apiVersion: bino.bi). */
-    private isBinoManifest(doc: vscode.TextDocument): boolean {
+    /** Whether a document is a Bino YAML manifest (.yaml/.yml the language server accepts). */
+    private async isBinoManifest(doc: vscode.TextDocument): Promise<boolean> {
         const name = doc.fileName.toLowerCase();
         if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
             return false;
         }
-        return doc.getText().includes('apiVersion: bino.bi');
+        return (await this.indexer?.isBinoDocument(doc)) ?? false;
     }
 
     /** POST a buffer override and, on success, reload the embedded iframe. */
@@ -568,7 +568,7 @@ export class BinoPreviewManager {
     /** Push every currently-dirty Bino manifest as an override (no reload spam - caller reloads once). */
     private async pushAllDirtyOverrides(): Promise<void> {
         for (const doc of vscode.workspace.textDocuments) {
-            if (doc.isUntitled || !doc.isDirty || !this.isBinoManifest(doc)) {
+            if (doc.isUntitled || !doc.isDirty || !(await this.isBinoManifest(doc))) {
                 continue;
             }
             const ok = await this.postOverrideRequest({ file: doc.uri.fsPath, content: doc.getText() });

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.lsp.dev/jsonrpc2"
@@ -36,10 +37,14 @@ type Server struct {
 	// capability (written once during Initialize, before any completion).
 	// Snippet-format items (scaffolds, the variance builder) are gated on it.
 	snippetSupport bool
+	// indexNotifications records the client's opt-in to bino/indexChanged.
+	// Atomic: the project watcher reads it from its own goroutine.
+	indexNotifications atomic.Bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	client protocol.Client
+	conn   jsonrpc2.Conn
 
 	mu      sync.RWMutex
 	schema  *walk.Model
@@ -88,6 +93,7 @@ func (s *Server) Serve(ctx context.Context, stream jsonrpc2.Stream) error {
 	// store must be synchronized with publishDiagnostics' load.
 	s.mu.Lock()
 	s.client = client
+	s.conn = conn
 	s.mu.Unlock()
 	s.backend.OnProjectChange(s.onProjectChange)
 
@@ -252,6 +258,7 @@ func (s *Server) onProjectChange() {
 	s.nameIdx = nil
 	s.lock = nil
 	s.mu.Unlock()
+	s.notifyIndexChange()
 	go s.refreshProjectDiagnostics()
 	if s.analyzer == nil {
 		return
@@ -366,6 +373,7 @@ func (s *Server) Initialize(_ context.Context, params *protocol.InitializeParams
 	// (--work-dir), so the client-supplied root is not needed in v1.
 	if params != nil {
 		s.snippetSupport = clientSnippetSupport(params.Capabilities)
+		s.indexNotifications.Store(wantsIndexNotifications(params.InitializationOptions))
 	}
 	resolve := true
 	caps := protocol.ServerCapabilities{

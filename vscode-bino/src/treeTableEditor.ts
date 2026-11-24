@@ -59,7 +59,7 @@ export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
             vscode.workspace.onDidChangeTextDocument(e => {
                 if (session.suppressForwardSync || e.document.uri.toString() !== document.uri.toString()) { return; }
                 if (session.debounceTimer) { clearTimeout(session.debounceTimer); }
-                session.debounceTimer = setTimeout(() => this.forwardSync(session), 300);
+                session.debounceTimer = setTimeout(() => void this.forwardSync(session), 300);
             }),
         ];
         panel.onDidDispose(() => {
@@ -70,9 +70,14 @@ export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     /** Parse the document and post the new tree to the webview */
-    private forwardSync(session: TreeSession): void {
+    private async forwardSync(session: TreeSession): Promise<void> {
         const text = session.document.getText();
-        if (!text.includes('apiVersion: bino.bi')) {
+        const version = session.document.version;
+        const isBino = await this.indexer.isBinoDocument(session.document);
+        if (session.document.version !== version) {
+            return; // a newer sync follows
+        }
+        if (!isBino) {
             this.postTree(session, renderTreeMessage('This file is not a Bino manifest.', false));
             return;
         }
@@ -111,7 +116,7 @@ export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
     private async handleMessage(session: TreeSession, msg: any): Promise<void> {
         switch (msg.type) {
             case 'ready':
-                this.forwardSync(session);
+                void this.forwardSync(session);
                 break;
             case 'goToLine':
                 await this.handleGoToLine(session, msg.line);
@@ -204,7 +209,7 @@ export class TreeEditorProvider implements vscode.CustomTextEditorProvider {
             // re-sync to pick up any normalization by the engine.
             setTimeout(() => {
                 session.suppressForwardSync = false;
-                this.forwardSync(session);
+                void this.forwardSync(session);
             }, 100);
         }
     }

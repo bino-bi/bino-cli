@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WorkspaceIndexer, LSPDocument } from './indexer';
+import { BinoDocumentsResult, blockText, getBinoDocuments } from './binoDocuments';
 
 /** PRQL extension ID on the VS Code Marketplace */
 const PRQL_EXTENSION_ID = 'PRQL-lang.prql-vscode';
@@ -80,227 +80,47 @@ export async function promptInstallPrqlExtension(): Promise<boolean> {
     return false;
 }
 
-/**
- * Find PRQL block info at the current cursor position in a YAML document.
- * Returns undefined if the cursor is not in a DataSet spec.prql block.
- */
-export function findPrqlBlockAtCursor(
+/** PRQL blocks of a buffer's outline, as PrqlBlockInfo. */
+export function prqlBlocksOf(outline: BinoDocumentsResult, document: vscode.TextDocument): PrqlBlockInfo[] {
+    const text = document.getText();
+    const out: PrqlBlockInfo[] = [];
+    for (const doc of outline.documents) {
+        for (const block of doc.blocks) {
+            if (block.language !== 'prql') {
+                continue;
+            }
+            out.push({
+                datasetName: doc.name,
+                prqlText: blockText(text, block),
+                startLine: block.range.start.line,
+                startChar: block.range.start.character,
+                endLine: block.range.end.line,
+                filePath: document.uri.fsPath
+            });
+        }
+    }
+    return out;
+}
+
+/** The PRQL block whose lines contain the cursor, if any. */
+export function prqlBlockAt(
+    outline: BinoDocumentsResult,
     document: vscode.TextDocument,
     position: vscode.Position
 ): PrqlBlockInfo | undefined {
-    const text = document.getText();
-    const lines = text.split('\n');
-
-    // We need to find which YAML document the cursor is in,
-    // then check if it's a DataSet with a spec.prql field.
-
-    let currentDocStart = 0;
-    let currentDocKind = '';
-    let currentDocName = '';
-    let inPrqlBlock = false;
-    let prqlStartLine = -1;
-    let prqlStartChar = 0;
-    let prqlIndent = 0;
-    let prqlLines: string[] = [];
-
-    for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-        const line = lines[lineNum];
-        const trimmed = line.trim();
-
-        // Document separator
-        if (trimmed === '---') {
-            // If we were in a PRQL block and cursor was in it, return what we have
-            if (inPrqlBlock && position.line >= prqlStartLine && position.line < lineNum) {
-                return {
-                    datasetName: currentDocName,
-                    prqlText: prqlLines.join('\n'),
-                    startLine: prqlStartLine,
-                    startChar: prqlStartChar,
-                    endLine: lineNum - 1,
-                    filePath: document.uri.fsPath
-                };
-            }
-
-            // Reset for new document
-            currentDocStart = lineNum + 1;
-            currentDocKind = '';
-            currentDocName = '';
-            inPrqlBlock = false;
-            prqlLines = [];
-            continue;
-        }
-
-        // Track kind
-        const kindMatch = trimmed.match(/^kind:\s*(\w+)/);
-        if (kindMatch) {
-            currentDocKind = kindMatch[1];
-        }
-
-        // Track name
-        const nameMatch = trimmed.match(/^name:\s*(\w+)/);
-        if (nameMatch && currentDocName === '') {
-            currentDocName = nameMatch[1];
-        }
-
-        // Look for prql: field start
-        const prqlMatch = line.match(/^(\s*)prql:\s*\|?\s*$/);
-        if (prqlMatch && currentDocKind === 'DataSet') {
-            inPrqlBlock = true;
-            prqlStartLine = lineNum + 1; // PRQL content starts on next line
-            prqlIndent = prqlMatch[1].length + 2; // Expect content indented by 2 more spaces
-            prqlLines = [];
-            continue;
-        }
-
-        // Also check for inline prql with content on same line
-        const prqlInlineMatch = line.match(/^(\s*)prql:\s*(.+)$/);
-        if (prqlInlineMatch && currentDocKind === 'DataSet' && prqlInlineMatch[2].trim()) {
-            // Single-line PRQL
-            if (position.line === lineNum) {
-                return {
-                    datasetName: currentDocName,
-                    prqlText: prqlInlineMatch[2].trim(),
-                    startLine: lineNum,
-                    startChar: prqlInlineMatch[1].length + 'prql: '.length,
-                    endLine: lineNum,
-                    filePath: document.uri.fsPath
-                };
-            }
-        }
-
-        // Collect PRQL block lines
-        if (inPrqlBlock) {
-            // Check if this line is still part of the block (proper indentation)
-            const lineIndent = line.length - line.trimStart().length;
-
-            if (trimmed === '' || lineIndent >= prqlIndent) {
-                // Still in the block
-                // Remove the common indent
-                const content = lineIndent >= prqlIndent
-                    ? line.substring(prqlIndent)
-                    : '';
-                prqlLines.push(content);
-            } else {
-                // Block ended
-                if (position.line >= prqlStartLine && position.line < lineNum) {
-                    return {
-                        datasetName: currentDocName,
-                        prqlText: prqlLines.join('\n').trimEnd(),
-                        startLine: prqlStartLine,
-                        startChar: prqlIndent,
-                        endLine: lineNum - 1,
-                        filePath: document.uri.fsPath
-                    };
-                }
-                inPrqlBlock = false;
-                prqlLines = [];
-            }
-        }
-    }
-
-    // Check if cursor is in the last PRQL block
-    if (inPrqlBlock && position.line >= prqlStartLine) {
-        return {
-            datasetName: currentDocName,
-            prqlText: prqlLines.join('\n').trimEnd(),
-            startLine: prqlStartLine,
-            startChar: prqlIndent,
-            endLine: lines.length - 1,
-            filePath: document.uri.fsPath
-        };
-    }
-
-    return undefined;
+    return prqlBlocksOf(outline, document).find(b => position.line >= b.startLine && position.line <= b.endLine);
 }
 
 /**
- * Find any PRQL blocks in a DataSet document by dataset name.
+ * Find the DataSet spec.prql block at the cursor, located by the language
+ * server on the live buffer. Undefined when the cursor is in no PRQL block.
  */
-export function findPrqlBlockByDatasetName(
+export async function findPrqlBlockAtCursor(
     document: vscode.TextDocument,
-    datasetName: string
-): PrqlBlockInfo | undefined {
-    const text = document.getText();
-    const lines = text.split('\n');
-
-    let currentDocName = '';
-    let currentDocKind = '';
-    let inPrqlBlock = false;
-    let prqlStartLine = -1;
-    let prqlIndent = 0;
-    let prqlLines: string[] = [];
-
-    for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-        const line = lines[lineNum];
-        const trimmed = line.trim();
-
-        // Document separator
-        if (trimmed === '---') {
-            // Check if we found our dataset
-            if (currentDocName === datasetName && prqlLines.length > 0) {
-                return {
-                    datasetName,
-                    prqlText: prqlLines.join('\n').trimEnd(),
-                    startLine: prqlStartLine,
-                    startChar: prqlIndent,
-                    endLine: lineNum - 1,
-                    filePath: document.uri.fsPath
-                };
-            }
-            currentDocName = '';
-            currentDocKind = '';
-            inPrqlBlock = false;
-            prqlLines = [];
-            continue;
-        }
-
-        // Track kind
-        const kindMatch = trimmed.match(/^kind:\s*(\w+)/);
-        if (kindMatch) {
-            currentDocKind = kindMatch[1];
-        }
-
-        // Track name
-        const nameMatch = trimmed.match(/^name:\s*(\w+)/);
-        if (nameMatch && currentDocName === '') {
-            currentDocName = nameMatch[1];
-        }
-
-        // Look for prql: field
-        const prqlMatch = line.match(/^(\s*)prql:\s*\|?\s*$/);
-        if (prqlMatch && currentDocKind === 'DataSet') {
-            inPrqlBlock = true;
-            prqlStartLine = lineNum + 1;
-            prqlIndent = prqlMatch[1].length + 2;
-            prqlLines = [];
-            continue;
-        }
-
-        // Collect PRQL lines
-        if (inPrqlBlock) {
-            const lineIndent = line.length - line.trimStart().length;
-            if (trimmed === '' || lineIndent >= prqlIndent) {
-                const content = lineIndent >= prqlIndent ? line.substring(prqlIndent) : '';
-                prqlLines.push(content);
-            } else {
-                inPrqlBlock = false;
-            }
-        }
-    }
-
-    // Check last document
-    if (currentDocName === datasetName && prqlLines.length > 0) {
-        return {
-            datasetName,
-            prqlText: prqlLines.join('\n').trimEnd(),
-            startLine: prqlStartLine,
-            startChar: prqlIndent,
-            endLine: lines.length - 1,
-            filePath: document.uri.fsPath
-        };
-    }
-
-    return undefined;
+    position: vscode.Position
+): Promise<PrqlBlockInfo | undefined> {
+    const outline = await getBinoDocuments(document);
+    return outline ? prqlBlockAt(outline, document, position) : undefined;
 }
 
 /**
@@ -379,7 +199,7 @@ export async function openPrqlEditorForCurrentDataset(): Promise<void> {
         return;
     }
 
-    const prqlInfo = findPrqlBlockAtCursor(editor.document, editor.selection.active);
+    const prqlInfo = await findPrqlBlockAtCursor(editor.document, editor.selection.active);
     if (!prqlInfo) {
         vscode.window.showWarningMessage(
             'No PRQL block found at cursor. ' +
@@ -401,7 +221,7 @@ export async function openPrqlSqlPreviewForCurrentDataset(): Promise<void> {
         return;
     }
 
-    const prqlInfo = findPrqlBlockAtCursor(editor.document, editor.selection.active);
+    const prqlInfo = await findPrqlBlockAtCursor(editor.document, editor.selection.active);
     if (!prqlInfo) {
         vscode.window.showWarningMessage(
             'No PRQL block found at cursor. ' +
@@ -416,14 +236,18 @@ export async function openPrqlSqlPreviewForCurrentDataset(): Promise<void> {
 /**
  * Check if cursor is in a PRQL block and update context for menu visibility.
  */
-export function updatePrqlContext(editor: vscode.TextEditor | undefined): void {
+export async function updatePrqlContext(editor: vscode.TextEditor | undefined): Promise<void> {
     if (!editor || editor.document.languageId !== 'yaml') {
-        vscode.commands.executeCommand('setContext', 'bino.inPrqlBlock', false);
+        await vscode.commands.executeCommand('setContext', 'bino.inPrqlBlock', false);
         return;
     }
 
-    const prqlInfo = findPrqlBlockAtCursor(editor.document, editor.selection.active);
-    vscode.commands.executeCommand('setContext', 'bino.inPrqlBlock', prqlInfo !== undefined);
+    const prqlInfo = await findPrqlBlockAtCursor(editor.document, editor.selection.active);
+    // Skip a stale answer when the user moved on while the request ran.
+    if (vscode.window.activeTextEditor !== editor) {
+        return;
+    }
+    await vscode.commands.executeCommand('setContext', 'bino.inPrqlBlock', prqlInfo !== undefined);
 }
 
 /**
@@ -447,19 +271,19 @@ export function registerPrqlFeatures(context: vscode.ExtensionContext): void {
     // Update context when selection changes
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection((e) => {
-            updatePrqlContext(e.textEditor);
+            void updatePrqlContext(e.textEditor);
         })
     );
 
     // Update context when active editor changes
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor((editor) => {
-            updatePrqlContext(editor);
+            void updatePrqlContext(editor);
         })
     );
 
     // Initial context update
-    updatePrqlContext(vscode.window.activeTextEditor);
+    void updatePrqlContext(vscode.window.activeTextEditor);
 
     // Show a one-time hint about PRQL support if we detect PRQL usage
     checkAndPromptPrqlExtension(context);
