@@ -1,11 +1,13 @@
 import * as assert from 'assert';
+import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { daemonVersionMismatch, installedBinoVersion, parseBinoVersion, resolveBinPath } from '../bino';
-import { DaemonClient, reconnectDelay } from '../daemonClient';
+import { DaemonClient, pidAlive, reconnectDelay, waitForDaemonExit } from '../daemonClient';
+import { registerClientListeners } from '../languageClient';
 import { statusView, StatusState } from '../statusBar';
 
 suite('bino binary', () => {
@@ -178,5 +180,214 @@ suite('bino.binPath change', () => {
             }
             fs.rmSync(path.join(root, '.bino'), { recursive: true, force: true });
         }
+    });
+});
+
+/** A fake daemon: /health answers only with the token (none: always), /events with eventsStatus. */
+async function fakeDaemon(token: string | undefined, eventsStatus = 200): Promise<{ server: http.Server; port: number }> {
+    const server = http.createServer((req, res) => {
+        if (token !== undefined && req.headers.authorization !== `Bearer ${token}`) {
+            res.writeHead(401);
+            res.end('{"error":"unauthorized"}');
+        } else if (req.url === '/health') {
+            res.end(JSON.stringify({ status: 'ok', version: '9.9.9', capabilities: [] }));
+        } else if (req.url === '/events' && eventsStatus === 200) {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+            res.write(': hello\n\n');
+        } else {
+            res.writeHead(req.url === '/events' ? eventsStatus : 404);
+            res.end();
+        }
+    });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    return { server, port: (server.address() as { port: number }).port };
+}
+
+function closeServer(server: http.Server): void {
+    server.closeAllConnections();
+    server.close();
+}
+
+function projectRoot(): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-daemon-'));
+    fs.mkdirSync(path.join(root, '.bino'));
+    return root;
+}
+
+function writePortFile(root: string, pid: number, port: number, token?: string): void {
+    fs.writeFileSync(path.join(root, '.bino', 'daemon.json'),
+        JSON.stringify({ pid, port, startedAt: new Date().toISOString(), token }));
+}
+
+/** A fake `bino daemon` for the given roots: waits delayMs, writes the port file, stays alive. */
+function fakeBino(dir: string, roots: { root: string; port: number; delayMs: number }[]): string {
+    const cases = roots.map(r => `    '${r.root}') sleep ${r.delayMs / 1000}; port=${r.port} ;;`).join('\n');
+    const bin = path.join(dir, 'fake-bino');
+    fs.writeFileSync(bin, `#!/bin/sh
+[ "$1" = daemon ] || exit 1
+case "$3" in
+${cases}
+    *) exit 1 ;;
+esac
+printf '{"pid":%s,"port":%s,"token":"good","startedAt":"x"}' $$ $port > "$3/.bino/daemon.json"
+exec sleep 30
+`, { mode: 0o755 });
+    return bin;
+}
+
+function kill(pid: number | undefined): void {
+    if (pid) {
+        try { process.kill(pid); } catch { /* gone */ }
+    }
+}
+
+suite('daemon client lifecycle', () => {
+    const config = () => vscode.workspace.getConfiguration('bino');
+    let dirs: string[] = [];
+    let cleanups: (() => void)[] = [];
+
+    setup(function () {
+        if (process.platform === 'win32') {
+            this.skip();
+        }
+    });
+
+    teardown(async () => {
+        await config().update('binPath', undefined, vscode.ConfigurationTarget.Global);
+        cleanups.forEach(c => c());
+        // The client logs the exit of a killed daemon, so close its channel after that.
+        await new Promise(r => setTimeout(r, 300));
+        channels.forEach(c => c.dispose());
+        dirs.forEach(d => fs.rmSync(d, { recursive: true, force: true }));
+        dirs = [];
+        cleanups = [];
+        channels = [];
+    });
+
+    let channels: vscode.Disposable[] = [];
+    function client(): DaemonClient {
+        const channel = vscode.window.createOutputChannel('bino lifecycle test', { log: true });
+        const c = new DaemonClient(channel);
+        channels.push(channel);
+        cleanups.push(() => c.dispose());
+        return c;
+    }
+
+    test('waits for a slow daemon to remove its port file before restarting', async function () {
+        this.timeout(15000);
+        const rejecting = await fakeDaemon('other');
+        const fresh = await fakeDaemon('good');
+        cleanups.push(() => closeServer(rejecting.server), () => closeServer(fresh.server));
+        const root = projectRoot();
+        const bindir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-bin-'));
+        dirs.push(root, bindir);
+        const file = path.join(root, '.bino', 'daemon.json');
+        // Like `bino daemon`, it removes the port file only after a slow shutdown.
+        const old = cp.spawn('sh', ['-c', `trap 'sleep 0.8; rm -f "${file}"; exit 0' TERM; while :; do sleep 0.1; done`]);
+        cleanups.push(() => kill(old.pid));
+        writePortFile(root, old.pid!, rejecting.port, 'stale');
+        await config().update('binPath', fakeBino(bindir, [{ root, port: fresh.port, delayMs: 0 }]), vscode.ConfigurationTarget.Global);
+
+        const c = client();
+        assert.strictEqual(await c.connect(root), false, 'the daemon rejects the token');
+        assert.strictEqual(await c.restart(root), true);
+        cleanups.push(() => kill(c.pid));
+        assert.strictEqual(c.connection()?.port, fresh.port);
+        assert.notStrictEqual(c.pid, old.pid);
+    });
+
+    test('a project switch wins over a slow daemon spawn for the old project', async function () {
+        this.timeout(15000);
+        const slow = await fakeDaemon('good');
+        const other = await fakeDaemon('good');
+        cleanups.push(() => closeServer(slow.server), () => closeServer(other.server));
+        const a = projectRoot();
+        const b = projectRoot();
+        const bindir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-bin-'));
+        dirs.push(a, b, bindir);
+        cleanups.push(() => {
+            try { kill(JSON.parse(fs.readFileSync(path.join(a, '.bino', 'daemon.json'), 'utf8')).pid); } catch { /* none */ }
+        });
+        writePortFile(b, process.pid, other.port, 'good');
+        await config().update('binPath', fakeBino(bindir, [{ root: a, port: slow.port, delayMs: 1000 }]), vscode.ConfigurationTarget.Global);
+
+        const c = client();
+        const connectA = c.connect(a);
+        await new Promise(r => setTimeout(r, 300));
+        assert.strictEqual(await c.switchProject(b), true);
+        assert.strictEqual(await connectA, false);
+        // Give the slow daemon time to write its port file.
+        await new Promise(r => setTimeout(r, 1500));
+        assert.strictEqual(c.getProjectRoot(), b);
+        assert.strictEqual(c.getStatus(), 'connected');
+        assert.strictEqual(c.connection()?.port, other.port);
+    });
+
+    test('forgets the pid of a port file whose daemon does not answer', async function () {
+        this.timeout(15000);
+        const gone = await fakeDaemon(undefined);
+        closeServer(gone.server);
+        const root = projectRoot();
+        dirs.push(root);
+        const stranger = cp.spawn('sleep', ['30']);
+        cleanups.push(() => kill(stranger.pid));
+        writePortFile(root, stranger.pid!, gone.port);
+        await config().update('binPath', path.join(root, 'no-such-bino'), vscode.ConfigurationTarget.Global);
+
+        const c = client();
+        assert.strictEqual(await c.connect(root), false);
+        assert.strictEqual(c.pid, undefined, 'restart() would kill an unrelated process');
+    });
+
+    for (const [status, want] of [[503, 'disconnected'], [401, 'error']] as const) {
+        test(`leaves connected when /events answers ${status}`, async function () {
+            this.timeout(10000);
+            const daemon = await fakeDaemon(undefined, status);
+            cleanups.push(() => closeServer(daemon.server));
+            const root = projectRoot();
+            dirs.push(root);
+            writePortFile(root, process.pid, daemon.port);
+            const c = client();
+            const seen = new Promise<void>((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error(`still ${c.getStatus()}`)), 5000);
+                c.onStatusChange(s => {
+                    if (s === want) {
+                        clearTimeout(timer);
+                        resolve();
+                    }
+                });
+            });
+            assert.strictEqual(await c.connect(root), true);
+            await seen;
+            assert.strictEqual(c.connection(), undefined);
+        });
+    }
+
+    test('a process of another user is not our daemon', function () {
+        if (process.getuid?.() === 0) {
+            this.skip(); // root may signal pid 1
+        }
+        assert.strictEqual(pidAlive(process.pid), true);
+        assert.strictEqual(pidAlive(1), false);
+    });
+
+    test('removes the port file of a daemon that is already gone', async () => {
+        const root = projectRoot();
+        dirs.push(root);
+        const dead = cp.spawn('sh', ['-c', 'exit 0']);
+        await new Promise(r => dead.on('exit', r));
+        writePortFile(root, dead.pid!, 1);
+        await waitForDaemonExit(root, dead.pid);
+        assert.strictEqual(fs.existsSync(path.join(root, '.bino', 'daemon.json')), false);
+    });
+});
+
+suite('language client', () => {
+    test('registers its listeners once across restarts', () => {
+        const context = { subscriptions: [] as vscode.Disposable[] } as unknown as vscode.ExtensionContext;
+        registerClientListeners(context);
+        registerClientListeners(context);
+        assert.strictEqual(context.subscriptions.length, 2);
+        context.subscriptions.forEach(d => d.dispose());
     });
 });

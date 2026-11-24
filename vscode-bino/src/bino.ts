@@ -29,9 +29,12 @@ export function setManagedBinoPath(binary: string | undefined): void {
     managedBinoPath = binary;
 }
 
-/** Whether an executable named `name` is on PATH. */
+/**
+ * Whether an executable named `name` is on PATH. On Windows only `.exe` counts:
+ * bino runs without a shell, and that cannot start a `.cmd` or `.bat` file.
+ */
 export function isOnPath(name: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): boolean {
-    const exts = platform === 'win32' ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean) : [''];
+    const exts = platform === 'win32' ? ['.exe'] : [''];
     for (const dir of (env.PATH ?? env.Path ?? '').split(path.delimiter)) {
         if (!dir) {
             continue;

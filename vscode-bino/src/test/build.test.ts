@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { buildArgs, buildTaskDefinitions, formatRecord, parseLogLine, recordToDiagnostic, taskName } from '../tasks';
+import { buildArgs, buildTaskDefinitions, formatRecord, parseLogLine, projectRootForFolder, recordToDiagnostic, taskName } from '../tasks';
 import { assetName, checksumFor, findManagedBino, isOlderVersion, verifyChecksum } from '../binoDownload';
 import { isOnPath } from '../bino';
 
@@ -29,6 +29,17 @@ suite('build tasks', () => {
         assert.ok(bino, 'no bino task definition');
         assert.deepStrictEqual(bino.required, ['command']);
         assert.ok(bino.properties.artefact, 'no artefact property');
+    });
+
+    test('a folder task builds the project of its folder', () => {
+        const a = path.resolve('/ws/a');
+        const b = path.resolve('/ws/b/report');
+        const roots = [a, b];
+        assert.strictEqual(projectRootForFolder(path.resolve('/ws/b'), a, roots), b);
+        assert.strictEqual(projectRootForFolder(path.resolve('/ws/b'), b, roots), b);
+        // A folder opened inside a project belongs to that project.
+        assert.strictEqual(projectRootForFolder(path.resolve('/ws/a/sub'), b, roots), a);
+        assert.strictEqual(projectRootForFolder(path.resolve('/ws/c'), a, roots), undefined);
     });
 
     test('maps a JSON error with file and line to a Diagnostic', () => {
@@ -125,6 +136,18 @@ suite('bino download', () => {
             fs.writeFileSync(path.join(dir, 'bino'), '');
             assert.strictEqual(isOnPath('bino', { PATH: dir }, 'linux'), true);
             assert.strictEqual(isOnPath('bino', { PATH: '' }, 'linux'), false);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('ignores a bino.cmd on the Windows PATH', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bino-path-'));
+        try {
+            fs.writeFileSync(path.join(dir, 'bino.cmd'), '');
+            assert.strictEqual(isOnPath('bino', { PATH: dir, PATHEXT: '.EXE;.CMD' }, 'win32'), false);
+            fs.writeFileSync(path.join(dir, 'bino.exe'), '');
+            assert.strictEqual(isOnPath('bino', { PATH: dir }, 'win32'), true);
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
         }

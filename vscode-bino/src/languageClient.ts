@@ -89,6 +89,22 @@ export async function startLanguageClient(
 
     client = new LanguageClient('bino', 'bino Language Server', serverOptions, clientOptions);
     await client.start();
+    registerClientListeners(context);
+    outputChannel.appendLine('[LSP] bino language server started');
+    return true;
+}
+
+const registered = new WeakSet<vscode.ExtensionContext>();
+
+/**
+ * Register the stop disposer and the settings listener once per context. They
+ * act on the current client, and the client restarts on every project switch.
+ */
+export function registerClientListeners(context: vscode.ExtensionContext): void {
+    if (registered.has(context)) {
+        return;
+    }
+    registered.add(context);
     context.subscriptions.push({ dispose: () => void stopLanguageClient() });
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
         if (client && e.affectsConfiguration('bino.lsp.queryDiagnostics')) {
@@ -98,8 +114,6 @@ export async function startLanguageClient(
             });
         }
     }));
-    outputChannel.appendLine('[LSP] bino language server started');
-    return true;
 }
 
 function queryDiagnosticsSetting(): boolean {
