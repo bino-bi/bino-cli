@@ -1,0 +1,28 @@
+---
+apiVersion: bino.bi/v1alpha1
+kind: DataSource
+metadata:
+  name: sales
+spec:
+  type: csv
+  path: data/sales.csv
+
+
+---
+
+apiVersion: bino.bi/v1alpha1
+kind: Table
+metadata:
+  name: t
+spec:
+  dataset: sales
+  title: Old
+  subtitle: New
+
+---
+apiVersion: bino.bi/v1alpha1
+kind: Text
+metadata:
+  name: note
+spec:
+  value: keep
