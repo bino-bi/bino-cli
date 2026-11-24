@@ -709,3 +709,36 @@ func TestTextPlaceholderSurvivesLoad(t *testing.T) {
 		}
 	}
 }
+
+func TestValidationErrorLineSkipsEmptyDocuments(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	// The comment-only and "{}" documents do not count as positions, so the
+	// invalid manifest is document #2 and its error line must point into it.
+	content := "# datasets\n---\n{}\n---\n" + minimalManifest("first") + "---\n" +
+		minimalManifest("second") + "  bogusExtraField: true\n"
+	if err := os.WriteFile(filepath.Join(root, "multi.yaml"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write multi.yaml: %v", err)
+	}
+
+	var collected []error
+	if _, err := LoadDirWithOptions(ctx, root, LoadOptions{CollectErrors: &collected}); err != nil {
+		t.Fatalf("load dir: %v", err)
+	}
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 collected error, got %d: %v", len(collected), collected)
+	}
+	var schemaErr *spec.SchemaValidationError
+	if !errors.As(collected[0], &schemaErr) {
+		t.Fatalf("expected SchemaValidationError, got %T: %v", collected[0], collected[0])
+	}
+	if schemaErr.DocPosition != 2 || len(schemaErr.Errors) == 0 {
+		t.Fatalf("expected errors for document #2, got #%d with %d errors", schemaErr.DocPosition, len(schemaErr.Errors))
+	}
+	for _, e := range schemaErr.Errors {
+		if e.Line < 14 {
+			t.Errorf("error %q at line %d, want a line in document #2 (14 or later)", e.Field, e.Line)
+		}
+	}
+}

@@ -595,6 +595,19 @@ func ParseYAMLNodes(content string) ([]*yaml.Node, error) {
 	return nodes, nil
 }
 
+// ManifestNodes keeps only the non-empty mapping documents of nodes. The
+// loader skips empty, comment-only and "{}" documents when it numbers
+// Document.Position, so index the result with Position-1.
+func ManifestNodes(nodes []*yaml.Node) []*yaml.Node {
+	out := make([]*yaml.Node, 0, len(nodes))
+	for _, n := range nodes {
+		if n.Kind == yaml.MappingNode && len(n.Content) > 0 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // ResolvePathPosition walks a yaml.Node tree to resolve a dotted field path
 // (e.g., "spec.children") to its YAML source line and column.
 // Returns (line, col, true) on success, or (0, 0, false) if the path is not found.

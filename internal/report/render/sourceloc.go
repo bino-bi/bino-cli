@@ -32,6 +32,7 @@ func (s *sourceLines) docNode(file string, position int) *yaml.Node {
 		if err == nil {
 			// A parse error keeps the documents before it.
 			nodes, _ = spec.ParseYAMLNodes(string(content)) //nolint:errcheck // partial result is enough
+			nodes = spec.ManifestNodes(nodes)
 		}
 		s.nodes[file] = nodes
 	}

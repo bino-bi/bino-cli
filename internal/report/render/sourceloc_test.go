@@ -105,3 +105,29 @@ func TestPreviewSlotsCarrySourceLine(t *testing.T) {
 		t.Errorf("build output must not carry source locations")
 	}
 }
+
+// Comment-only and "{}" documents do not count as loader positions, so the
+// source line of a later document must skip them.
+func TestPreviewSourceLineSkipsEmptyDocuments(t *testing.T) {
+	dir := t.TempDir()
+	page := filepath.Join(dir, "page.yaml")
+	texts := filepath.Join(dir, "texts.yaml")
+	if err := os.WriteFile(page, []byte(sourceLocPage), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(texts, []byte("# --- texts ---\n---\n{}\n---\n"+sourceLocTexts), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := config.LoadDir(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	res, _, err := GenerateHTMLFromDocuments(context.Background(), docs, "en", "", "", ModePreview, "v1.0.0")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	attrs := slotAttrs(t, string(res.HTML), "data-bino-ref", "intro")
+	if got := attrs["data-bino-source-line"]; got != "12" {
+		t.Errorf("intro: source line = %q, want %q", got, "12")
+	}
+}
