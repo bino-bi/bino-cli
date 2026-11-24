@@ -4,6 +4,7 @@ import * as path from 'path';
 import { WorkspaceIndexer, LSPDocument } from './indexer';
 import { DaemonClient } from './daemonClient';
 import { getEmbeddableKinds } from './embeddable';
+import { getNonce } from './webviewNonce';
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -656,11 +657,12 @@ export class BinoPreviewManager {
     /** Generate the embedded webview HTML: chrome-free artefact iframe + SSE auto-reload. */
     private getEmbeddedWebviewContent(port: number, name: string, kind: string): string {
         const base = `http://localhost:${port}`;
+        const nonce = getNonce();
         const csp = [
             "default-src 'none'",
             "img-src http://localhost:* http://127.0.0.1:* data:",
             "style-src 'unsafe-inline'",
-            "script-src 'unsafe-inline'",
+            `script-src 'nonce-${nonce}'`,
             "frame-src http://localhost:* http://127.0.0.1:*",
             "connect-src http://localhost:* http://127.0.0.1:*"
         ].join('; ');
@@ -705,7 +707,7 @@ export class BinoPreviewManager {
 <body>
     <div id="bar"><span id="title"></span><span id="status"></span></div>
     <iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-    <script>
+    <script nonce="${nonce}">
         const base = ${JSON.stringify(base)};
         let currentName = ${JSON.stringify(name)};
         let currentKind = ${JSON.stringify(kind)};
