@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 	"gopkg.in/yaml.v3"
@@ -38,6 +39,8 @@ func (s *Server) PrepareRename(_ context.Context, params *protocol.PrepareRename
 
 // Rename renames a manifest and every reference to it across the project. Edits
 // are precise range replacements (preserving a $ shorthand on DataSource refs).
+// A DataSource or DataSet is also read by name in DataSet queries, so those
+// uses are rewritten too.
 func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	pc, ok := s.resolve(params.TextDocument.URI, params.Position)
 	if !ok {
@@ -48,11 +51,28 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 		return nil, nil
 	}
 	ni := s.getNameIndex(ctx)
+	def, found := ni.Definition(kind, name)
+	if found {
+		kind = def.Kind
+	}
+	if msg := invalidNameReason(kind, params.NewName); msg != "" {
+		return nil, jsonrpc2.NewError(jsonrpc2.InvalidParams, msg)
+	}
 	changes := make(map[uri.URI][]protocol.TextEdit)
 
-	if def, found := ni.Definition(kind, name); found {
+	if found {
 		u := uri.File(def.File)
 		changes[u] = append(changes[u], protocol.TextEdit{Range: s.rangeToProtocolFor(def.File, def.NameRange), NewText: params.NewName})
+	}
+	if kind == "DataSource" || kind == "DataSet" {
+		uses, err := ni.QueryRefs(name, s.fileContent)
+		if err != nil {
+			return nil, jsonrpc2.NewError(jsonrpc2.Code(protocol.LSPErrorCodesRequestFailed), "rename refused: "+err.Error())
+		}
+		for _, r := range uses {
+			u := uri.File(r.File)
+			changes[u] = append(changes[u], protocol.TextEdit{Range: s.rangeToProtocolFor(r.File, r.Range), NewText: params.NewName})
+		}
 	}
 	for _, r := range ni.References(kind, name) {
 		u := uri.File(r.File)
@@ -74,6 +94,9 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CommandOrCodeAction, error) {
 	var actions []protocol.CommandOrCodeAction
 	docURI := params.TextDocument.URI
+	if doc, ok := s.docs.Get(docURI); ok && !isBinoBuffer(doc.Text) {
+		return nil, nil
+	}
 	for i := range params.Context.Diagnostics {
 		d := params.Context.Diagnostics[i]
 		switch {

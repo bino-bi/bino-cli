@@ -32,9 +32,11 @@ type SymbolRef struct {
 // also covers unsaved edits) and carries per-name source ranges that
 // config.Document deliberately omits.
 type NameIndex struct {
-	defs   map[string]SymbolDef   // key: Kind + "\x00" + Name
-	byName map[string][]SymbolDef // key: Name
-	refs   []SymbolRef
+	defs    map[string]SymbolDef   // key: Kind + "\x00" + Name
+	byName  map[string][]SymbolDef // key: Name
+	refs    []SymbolRef
+	queries []queryBlock
+	files   map[string]string
 }
 
 // BuildNameIndex parses every file (path → raw content) and records each
@@ -44,6 +46,7 @@ func BuildNameIndex(files map[string]string) (*NameIndex, error) {
 	idx := &NameIndex{
 		defs:   make(map[string]SymbolDef),
 		byName: make(map[string][]SymbolDef),
+		files:  files,
 	}
 	for file, content := range files {
 		nodes, err := ParseYAMLNodes(content)
@@ -79,6 +82,9 @@ func (idx *NameIndex) indexDocument(file string, docIdx int, root *yaml.Node, en
 	}
 
 	if spec := mappingChild(root, "spec"); spec != nil {
+		if kind == "DataSet" {
+			idx.recordQueries(file, spec)
+		}
 		idx.walkRefs(file, docIdx, spec)
 	}
 }
@@ -95,6 +101,9 @@ func (idx *NameIndex) walkRefs(file string, docIdx int, node *yaml.Node) {
 			switch key {
 			case "dataset", "dependencies":
 				idx.recordScalarOrSeq(file, docIdx, key, val, "")
+				if key == "dataset" {
+					idx.recordInlineDatasetQueries(file, val)
+				}
 			case "source", "secret", "page", "signingProfile", "selectedStyle", "ruleset":
 				idx.recordScalarOrSeq(file, docIdx, key, val, refFieldKinds[key])
 			case "layoutPages":

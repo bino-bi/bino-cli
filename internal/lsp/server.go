@@ -272,7 +272,7 @@ func (s *Server) invalidateNav() {
 // resolve maps a document position to a PositionContext over the live buffer.
 func (s *Server) resolve(u uri.URI, pos protocol.Position) (reportspec.PositionContext, bool) {
 	doc, ok := s.docs.Get(u)
-	if !ok {
+	if !ok || !isBinoBuffer(doc.Text) {
 		return reportspec.PositionContext{}, false
 	}
 	line, col := doc.PositionToLineCol(pos)
@@ -298,7 +298,7 @@ func (s *Server) getNameIndex(ctx context.Context) *reportspec.NameIndex {
 		}
 	}
 	for _, doc := range s.docs.All() {
-		if doc.Path != "" {
+		if doc.Path != "" && isBinoBuffer(doc.Text) {
 			files[doc.Path] = doc.Text
 		}
 	}

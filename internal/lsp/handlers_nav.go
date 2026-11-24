@@ -61,7 +61,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 // DocumentSymbol returns the manifests declared in a file as a navigable outline.
 func (s *Server) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) (protocol.DocumentSymbolResult, error) {
 	doc, ok := s.docs.Get(params.TextDocument.URI)
-	if !ok {
+	if !ok || !isBinoBuffer(doc.Text) {
 		return nil, nil
 	}
 	defs := s.getNameIndex(ctx).DefsInFile(doc.Path)
