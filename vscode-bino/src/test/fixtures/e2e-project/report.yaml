@@ -1,0 +1,24 @@
+apiVersion: bino.bi/v1alpha1
+kind: ReportArtefact
+metadata:
+  name: e2e-report
+spec:
+  format: xga
+  orientation: portrait
+  language: en
+  filename: e2e-report.pdf
+  title: "E2E Report"
+  layoutPages:
+    - e2e-page
+---
+apiVersion: bino.bi/v1alpha1
+kind: LayoutPage
+metadata:
+  name: e2e-page
+spec:
+  children:
+    - kind: Text
+      metadata:
+        name: greeting
+      spec:
+        value: Hello from the e2e fixture
