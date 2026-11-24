@@ -50,7 +50,9 @@ func TestWatchIdleExitsAfterTimeout(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("watchIdle did not fire after the client left")
 	}
-	if waited := time.Since(detached); waited < 50*time.Millisecond {
+	// The idle clock starts at the last tick that saw a client, up to one
+	// interval before the test's own timestamp.
+	if waited := time.Since(detached); waited < 45*time.Millisecond {
 		t.Errorf("fired %v after the client left, before the 50ms timeout (started %v ago)", waited, time.Since(start))
 	}
 }
