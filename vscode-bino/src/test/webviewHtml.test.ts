@@ -14,7 +14,7 @@ function assertNonceCsp(html: string, nonce?: string): void {
     assert.ok(!scriptSrc.includes('unsafe-inline'), scriptSrc);
     const n = nonce ?? /'nonce-([^']+)'/.exec(scriptSrc)?.[1];
     assert.ok(n && scriptSrc.includes(`'nonce-${n}'`), scriptSrc);
-    const scripts = html.match(/<script[^>]*>/g) ?? [];
+    const scripts = html.match(/<script[^>]*>/gi) ?? [];
     assert.ok(scripts.length > 0, 'no script tag');
     for (const tag of scripts) {
         assert.ok(tag.includes(`nonce="${n}"`), `script without nonce: ${tag}`);
