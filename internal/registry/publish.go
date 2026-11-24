@@ -53,13 +53,15 @@ type PublishResult struct {
 
 // DryRunResult is what a dry run gets back. It is a different shape from
 // PublishResult on the wire - no package, no unchanged - because nothing was
-// minted.
+// minted. Visibility is the one the package has or would be created with;
+// registries without signature support leave it empty.
 type DryRunResult struct {
-	DryRun   bool        `json:"dryRun"`
-	Digest   string      `json:"digest"`
-	Version  string      `json:"version"`
-	Files    []FileEntry `json:"files"`
-	Warnings []Finding   `json:"warnings"`
+	DryRun     bool        `json:"dryRun"`
+	Digest     string      `json:"digest"`
+	Version    string      `json:"version"`
+	Visibility string      `json:"visibility"`
+	Files      []FileEntry `json:"files"`
+	Warnings   []Finding   `json:"warnings"`
 }
 
 // Finding is one diagnostic from the registry's validation gate. The fields
@@ -99,10 +101,11 @@ func (e *APIError) GateDetails() []GateDetail {
 
 // Publish uploads a package tree and mints a version. The manifest's DryRun
 // field selects validation-only mode, which answers with a different body -
-// use PublishDryRun for that.
-func (c *Client) Publish(ctx context.Context, m PublishManifest, files []PublishFile) (PublishResult, error) {
+// use PublishDryRun for that. attestation, when not nil, is a Sigstore bundle
+// signing the version and digest a dry run of the same request reported.
+func (c *Client) Publish(ctx context.Context, m PublishManifest, files []PublishFile, attestation []byte) (PublishResult, error) {
 	var out PublishResult
-	body, err := c.publish(ctx, m, files)
+	body, err := c.publish(ctx, m, files, attestation)
 	if err != nil {
 		return out, err
 	}
@@ -118,7 +121,7 @@ func (c *Client) Publish(ctx context.Context, m PublishManifest, files []Publish
 func (c *Client) PublishDryRun(ctx context.Context, m PublishManifest, files []PublishFile) (DryRunResult, error) {
 	m.DryRun = true
 	var out DryRunResult
-	body, err := c.publish(ctx, m, files)
+	body, err := c.publish(ctx, m, files, nil)
 	if err != nil {
 		return out, err
 	}
@@ -129,9 +132,10 @@ func (c *Client) PublishDryRun(ctx context.Context, m PublishManifest, files []P
 }
 
 // publish streams the multipart body: one "manifest" form value carrying the
-// JSON, then one file part per entry whose part NAME is the file's tree path.
-// The body is produced as it is written, so a large tree is never buffered.
-func (c *Client) publish(ctx context.Context, m PublishManifest, files []PublishFile) ([]byte, error) {
+// JSON, an optional "attestation" form value, then one file part per entry
+// whose part NAME is the file's tree path. The body is produced as it is
+// written, so a large tree is never buffered.
+func (c *Client) publish(ctx context.Context, m PublishManifest, files []PublishFile, attestation []byte) ([]byte, error) {
 	auth, err := c.bearer(ctx)
 	if err != nil {
 		return nil, err
@@ -151,7 +155,7 @@ func (c *Client) publish(ctx context.Context, m PublishManifest, files []Publish
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
-		pw.CloseWithError(writePublishBody(mw, manifestJSON, ordered)) //nolint:errcheck // CloseWithError never fails
+		pw.CloseWithError(writePublishBody(mw, manifestJSON, attestation, ordered)) //nolint:errcheck // CloseWithError never fails
 	}()
 	defer pr.Close() //nolint:errcheck // best-effort; the goroutine owns the write half
 
@@ -162,9 +166,14 @@ func (c *Client) publish(ctx context.Context, m PublishManifest, files []Publish
 // writePublishBody writes the whole multipart body and closes the writer. Any
 // error it returns is delivered to the reading half, so a file that vanishes
 // mid-upload aborts the request instead of truncating it silently.
-func writePublishBody(mw *multipart.Writer, manifestJSON []byte, files []PublishFile) error {
+func writePublishBody(mw *multipart.Writer, manifestJSON, attestation []byte, files []PublishFile) error {
 	if err := mw.WriteField("manifest", string(manifestJSON)); err != nil {
 		return err
+	}
+	if attestation != nil {
+		if err := mw.WriteField("attestation", string(attestation)); err != nil {
+			return err
+		}
 	}
 	for _, f := range files {
 		if err := writePublishFile(mw, f); err != nil {

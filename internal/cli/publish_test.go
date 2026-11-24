@@ -21,10 +21,11 @@ import (
 // publishCapture records what the fake registry received, so a test can assert
 // the multipart contract rather than just the happy path.
 type publishCapture struct {
-	manifest registry.PublishManifest
-	parts    map[string]string
-	auth     string
-	calls    int
+	manifest    registry.PublishManifest
+	parts       map[string]string
+	attestation string
+	auth        string
+	calls       int
 }
 
 // fakePublishServer serves POST /api/registry/v2/publish, answering with
@@ -40,10 +41,12 @@ func fakePublishServer(t *testing.T, status int, respond func(m registry.Publish
 			t.Errorf("ParseMultipartForm: %v", err)
 			return
 		}
+		capture.manifest = registry.PublishManifest{}
 		if err := json.Unmarshal([]byte(r.FormValue("manifest")), &capture.manifest); err != nil {
 			t.Errorf("manifest: %v", err)
 			return
 		}
+		capture.attestation = r.FormValue("attestation")
 		for name, headers := range r.MultipartForm.File {
 			capture.parts[name] = readPart(t, headers[0])
 		}

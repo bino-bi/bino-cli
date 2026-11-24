@@ -201,7 +201,7 @@ func TestPublishSendsTheContractedMultipartShape(t *testing.T) {
 		{Path: "resources/logo.png", Open: openString("png-bytes")},
 		{Path: "kit.yaml", Open: openString("kind: Table")},
 	}
-	res, err := c.Publish(context.Background(), m, files)
+	res, err := c.Publish(context.Background(), m, files, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestPublishDryRunDecodesTheOtherResponseShape(t *testing.T) {
 
 func TestPublishRefusesWithoutAToken(t *testing.T) {
 	c := NewClient(Config{URL: "http://example.invalid"})
-	if _, err := c.Publish(context.Background(), PublishManifest{Name: "@acme/kit"}, nil); err == nil {
+	if _, err := c.Publish(context.Background(), PublishManifest{Name: "@acme/kit"}, nil, nil); err == nil {
 		t.Fatal("an anonymous publish must be refused before any request")
 	}
 }
@@ -264,7 +264,7 @@ func TestGateDetailsDecodeFromASchemaInvalidError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := NewClient(Config{URL: srv.URL, Token: "jwt"})
 
-	_, err := c.Publish(context.Background(), PublishManifest{Name: "@acme/kit"}, nil)
+	_, err := c.Publish(context.Background(), PublishManifest{Name: "@acme/kit"}, nil, nil)
 	var apiErr *APIError
 	if !errorsAs(err, &apiErr) {
 		t.Fatalf("err = %v, want *APIError", err)

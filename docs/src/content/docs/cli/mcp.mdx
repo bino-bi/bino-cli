@@ -195,7 +195,7 @@ write a structurally invalid manifest. Writes are atomic (temp file + rename).
 | `registry_remove(packages)`                                         | Remove dependencies from `bino.toml` and delete every locked package no longer reachable (offline).                                                                                               |
 | `registry_install()`                                                | Re-materialize `.bino/registry/` exactly as pinned in `bino.lock`, without re-resolving.                                                                                                          |
 | `registry_publish_check(bump?)`                                     | Run `bino publish --dry-run --json`: the registry's validation gate for the project's `[package]`, without minting a version. With `bump` the result names the version a publish would mint.      |
-| `registry_publish(bump?, dry_run?, visibility?)`                    | Run `bino publish --json` for the project's `[package]`. Only registered when the server was started with the opt-in flag - see [Security](#security).                                            |
+| `registry_publish(bump?, dry_run?, visibility?, sign_key?, sign_cert_chain?, sign_keyless?)` | Run `bino publish --json` for the project's `[package]`, signed with `--sign` when a `sign_*` input is set (`sign_keyless` only works in CI). Only registered when the server was started with the opt-in flag - see [Security](#security). |
 
 ### Preview
 
