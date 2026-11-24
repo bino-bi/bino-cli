@@ -39,6 +39,12 @@
     }
   },
   "contributes": {
+    "tomlValidation": [
+      {
+        "fileMatch": "bino.toml",
+        "url": "https://raw.githubusercontent.com/bino-bi/bino-cli/main/internal/pathutil/bino-toml.schema.json"
+      }
+    ],
     "customEditors": [
       {
         "viewType": "bino.designer",

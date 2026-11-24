@@ -62,6 +62,10 @@ type ProjectConfig struct {
 	// If not specified, the latest locally installed version is used.
 	EngineVersion string `toml:"engine-version,omitempty"`
 
+	// Template records the template a scaffold came from (see
+	// StampTemplateProvenance). Nothing reads it back yet.
+	Template string `toml:"template,omitempty"`
+
 	// Plugins declares plugin binaries and their configuration.
 	Plugins map[string]PluginDeclaration `toml:"plugins,omitempty"`
 

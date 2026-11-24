@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/bino-bi/bino-cli/main/internal/pathutil/bino-toml.schema.json",
+  "title": "bino.toml",
+  "description": "Project configuration of a bino report project.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "report-id": {
+      "type": "string",
+      "description": "Unique identifier of this reporting project. 'bino init' sets a UUID."
+    },
+    "engine-version": {
+      "type": "string",
+      "description": "Template engine version to use, for example \"v1.2.3\". Without it the latest locally installed version is used."
+    },
+    "template": {
+      "type": "string",
+      "description": "The template this project was scaffolded from. Written by 'bino init'."
+    },
+    "plugins": {
+      "type": "object",
+      "description": "Plugin binaries this project loads, by plugin name.",
+      "additionalProperties": { "$ref": "#/definitions/plugin" }
+    },
+    "registry": {
+      "type": "object",
+      "description": "Package registry connection.",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL of the registry service. Defaults to the public bino registry."
+        },
+        "token": {
+          "type": "string",
+          "description": "Token for private packages: a literal value or a single \"${VAR}\" environment reference. Falls back to BINO_REGISTRY_TOKEN; empty means anonymous."
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Registry packages: \"@scope/name\" = exact version (\"1.2.3\", pinned) or a tag name (\"latest\", \"stable\", ...).",
+      "additionalProperties": { "type": "string" }
+    },
+    "package": {
+      "type": "object",
+      "description": "Marks this project as a predef project that authors a reusable registry package.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Package name, \"@scope/name\" with lowercase a-z0-9_- segments." },
+        "description": { "type": "string", "description": "Short description shown in the registry." },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "Search tags." },
+        "category": { "type": "string", "description": "Registry category." },
+        "visibility": { "type": "string", "enum": ["public", "private"], "description": "Package visibility. Default: private." },
+        "compat-engine": { "type": "string", "description": "Semver range of supported template engine versions." },
+        "compat-cli": { "type": "string", "description": "Semver range of supported bino CLI versions." },
+        "license": { "type": "string", "description": "SPDX expression, \"UNLICENSED\" or \"SEE LICENSE IN <file>\"." },
+        "include": { "type": "array", "items": { "type": "string" }, "description": "Project-relative directories and files to publish." },
+        "preview": { "type": "string", "description": "Preview of the package as \"path#definition-name\"." }
+      }
+    },
+    "lint": {
+      "type": "object",
+      "description": "Lint behavior.",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "array", "items": { "type": "string" }, "description": "Rule IDs to disable." },
+        "severity": {
+          "type": "object",
+          "description": "Severity override per rule ID.",
+          "additionalProperties": { "type": "string", "enum": ["error", "warning", "info", "hint"] }
+        }
+      }
+    },
+    "hooks": { "$ref": "#/definitions/hooks" },
+    "build": { "$ref": "#/definitions/command", "description": "Defaults for 'bino build'." },
+    "preview": { "$ref": "#/definitions/command", "description": "Defaults for 'bino preview'." },
+    "serve": { "$ref": "#/definitions/command", "description": "Defaults for 'bino serve'." }
+  },
+  "definitions": {
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "description": "Optional semver pin of the plugin." },
+        "path": { "type": "string", "description": "Optional explicit path to the plugin binary." },
+        "hook_timeout": { "type": "string", "description": "Timeout for plugin hooks, for example \"60s\"." },
+        "config": {
+          "type": "object",
+          "description": "Plugin-specific settings.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Shell commands to run at a checkpoint, in order.",
+      "additionalProperties": false,
+      "properties": {
+        "pre-build": { "$ref": "#/definitions/commands" },
+        "pre-datasource": { "$ref": "#/definitions/commands" },
+        "pre-render": { "$ref": "#/definitions/commands" },
+        "post-render": { "$ref": "#/definitions/commands" },
+        "post-build": { "$ref": "#/definitions/commands" },
+        "pre-preview": { "$ref": "#/definitions/commands" },
+        "pre-refresh": { "$ref": "#/definitions/commands" },
+        "pre-serve": { "$ref": "#/definitions/commands" },
+        "pre-request": { "$ref": "#/definitions/commands" }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "type": "object",
+          "description": "Default command-line flags, by flag name without the leading dashes. Explicit flags win."
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment for the command.",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "object",
+              "description": "Environment variables. Variables already set in the environment win.",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        },
+        "hooks": { "$ref": "#/definitions/hooks", "description": "Hooks for this command. They replace shared hooks of the same checkpoint." }
+      }
+    }
+  }
+}
