@@ -99,20 +99,20 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 	}
 	for i := range params.Context.Diagnostics {
 		d := params.Context.Diagnostics[i]
-		switch {
-		case diagCode(d.Code) == "missing-env-var":
+		switch diagCode(d.Code) {
+		case "missing-env-var":
 			if name := envVarName(diagMessage(d.Message)); name != "" {
 				if a := s.addEnvVarAction(name, d); a != nil {
 					actions = append(actions, a)
 				}
 			}
-		case diagCode(d.Code) == "dataset-dependency-undeclared":
+		case "dataset-dependency-undeclared":
 			if name := dependencyName(diagMessage(d.Message)); name != "" {
 				if a := s.addDependencyAction(docURI, d, name); a != nil {
 					actions = append(actions, a)
 				}
 			}
-		case len(d.Data) > 0:
+		case codeMissingProperty:
 			if a := s.insertFieldAction(docURI, d); a != nil {
 				actions = append(actions, a)
 			}

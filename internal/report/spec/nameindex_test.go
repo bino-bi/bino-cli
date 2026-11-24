@@ -1,6 +1,11 @@
 package spec
 
-import "testing"
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"testing"
+)
 
 func TestBuildNameIndex(t *testing.T) {
 	files := map[string]string{
@@ -156,5 +161,56 @@ spec:
 	}
 	if refs[0].TargetName != "sales_src" {
 		t.Errorf("TargetName = %q, want sales_src (stripped $)", refs[0].TargetName)
+	}
+}
+
+// canonical renders an index in a map-order independent form.
+func canonical(idx *NameIndex) string {
+	var lines []string
+	for k, d := range idx.defs {
+		lines = append(lines, fmt.Sprintf("def %q %+v", k, d))
+	}
+	for name, defs := range idx.byName {
+		for _, d := range defs {
+			lines = append(lines, fmt.Sprintf("byName %s %+v", name, d))
+		}
+	}
+	for _, r := range idx.refs {
+		lines = append(lines, fmt.Sprintf("ref %+v", r))
+	}
+	for _, q := range idx.queries {
+		lines = append(lines, fmt.Sprintf("query %s %s %d:%d", q.file, q.field, q.node.Line, q.node.Column))
+	}
+	for f, c := range idx.files {
+		lines = append(lines, fmt.Sprintf("file %s %q", f, c))
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
+}
+
+func TestNameIndexWithFileMatchesRebuild(t *testing.T) {
+	files := map[string]string{
+		"a.yaml": "kind: DataSet\nmetadata:\n  name: sales\nspec:\n  query: SELECT 1\n  dependencies: [src]\n",
+		"b.yaml": "kind: Table\nmetadata:\n  name: t\nspec:\n  dataset: sales\n",
+		"c.yaml": "kind: DataSource\nmetadata:\n  name: src\nspec:\n  type: csv\n",
+	}
+	full, _ := BuildNameIndex(files)
+	edited := "kind: DataSet\nmetadata:\n  name: revenue\nspec:\n  prql: from src\n---\nkind: Table\nmetadata:\n  name: t2\nspec:\n  dataset: revenue\n"
+	incremental := full.WithFile("a.yaml", edited, true)
+
+	next := map[string]string{"a.yaml": edited, "b.yaml": files["b.yaml"], "c.yaml": files["c.yaml"]}
+	rebuilt, _ := BuildNameIndex(next)
+	if got, want := canonical(incremental), canonical(rebuilt); got != want {
+		t.Fatalf("incremental index differs from a rebuild\n got:\n%s\nwant:\n%s", got, want)
+	}
+	if _, ok := full.Definition("DataSet", "sales"); !ok {
+		t.Error("WithFile must not change the receiver")
+	}
+
+	dropped := incremental.WithFile("c.yaml", "", false)
+	delete(next, "c.yaml")
+	rebuilt, _ = BuildNameIndex(next)
+	if got, want := canonical(dropped), canonical(rebuilt); got != want {
+		t.Fatalf("dropping a file differs from a rebuild\n got:\n%s\nwant:\n%s", got, want)
 	}
 }

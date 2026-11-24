@@ -78,6 +78,9 @@ export async function startLanguageClient(
         documentSelector: [
             { language: 'yaml', scheme: 'file' },
             { language: 'yaml', scheme: 'untitled' },
+            // Plain VS Code has no TOML language, so match bino.toml by name too.
+            { language: 'toml', pattern: '**/bino.toml' },
+            { scheme: 'file', pattern: '**/bino.toml' },
         ],
         outputChannel,
         // Opt in to bino/indexChanged, the push that keeps the project index current.

@@ -20,6 +20,9 @@ import (
 // introspection so the popup is never blocked.
 func (s *Server) Completion(ctx context.Context, params *protocol.CompletionParams) (protocol.CompletionResult, error) {
 	doc, ok := s.docs.Get(params.TextDocument.URI)
+	if ok && isBinoTOML(doc.Path) {
+		return protocol.CompletionItemSlice(tomlCompletion(doc, params.Position)), nil
+	}
 	if !ok || !isBinoBuffer(doc.Text) {
 		return nil, nil
 	}
