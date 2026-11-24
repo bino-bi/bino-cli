@@ -29,6 +29,15 @@
     "onView:binoGettingStarted"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Bino runs the SQL and YAML in the workspace, so the daemon, language server, preview and builds start only once the workspace is trusted.",
+      "restrictedConfigurations": [
+        "bino.binPath"
+      ]
+    }
+  },
   "contributes": {
     "customEditors": [
       {
@@ -97,7 +106,13 @@
     "viewsWelcome": [
       {
         "view": "binoGettingStarted",
-        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Check Setup](command:bino.checkSetup)\n[Open Folder](command:vscode.openFolder)"
+        "contents": "No Bino project detected.\n[Initialize Project](command:bino.initProject)\n[Check Setup](command:bino.checkSetup)\n[Open Folder](command:vscode.openFolder)",
+        "when": "isWorkspaceTrusted"
+      },
+      {
+        "view": "binoGettingStarted",
+        "contents": "Bino features need a trusted workspace.\n[Manage Workspace Trust](command:workbench.trust.manage)",
+        "when": "!isWorkspaceTrusted"
       }
     ],
     "commands": [

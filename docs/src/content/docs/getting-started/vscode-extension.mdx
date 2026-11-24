@@ -275,7 +275,7 @@ The extension integrates with the `bino preview` command via a **Preview Manager
 - Restart: **Bino: Restart Preview** (`bino.restartPreview`)
 - Open in browser: **Bino: Open Preview in Browser** (`bino.openPreviewInBrowser`)
 
-A status item in the VS Code status bar shows the preview state (stopped/starting/running/error).
+One **Bino** item in the VS Code status bar sums up the daemon, preview, index, and diagnostics state. Click it for a menu: preview actions, restart the daemon, refresh the index, show problems, open the log, check setup, and settings.
 
 ### 7.2 Preview Menu
 
@@ -410,6 +410,10 @@ All settings live under the **Bino Reports** section in VS Code Settings.
 | `bino.previewPort`           | number  | 45678   | Port number for the `bino preview` server.                                   |
 | `bino.daemon.enabled`        | boolean | true    | Enable the persistent background daemon for faster indexing/validation/data. |
 | `bino.wizard.sampleRowLimit` | number  | 100     | Max sample rows the DataSource wizard fetches when introspecting a source.   |
+
+Changes to `bino.binPath` and `bino.previewPort` apply at once: the language server and a running preview restart. A change to `bino.daemon.enabled` needs a window reload.
+
+In an untrusted workspace the extension does not run bino: the daemon, language server, preview and builds start once you trust the workspace. A `bino.binPath` from the workspace settings also counts only in a trusted workspace.
 
 Example configuration:
 

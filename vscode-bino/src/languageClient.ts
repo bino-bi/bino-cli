@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import { getBinoPath, INSTALL_DOCS_URL } from './bino';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -8,16 +9,16 @@ import {
 
 let client: LanguageClient | undefined;
 
-/** Resolve the bino executable path from configuration. */
-export function getBinoPath(): string {
-    const configured = vscode.workspace.getConfiguration('bino').get<string>('binPath');
-    return configured && configured.trim() ? configured : 'bino';
-}
-
-/** Probe whether the installed binary supports the `bino lsp` subcommand. */
-export function probeLspCapability(binPath: string): Promise<boolean> {
+/** Probe whether the binary exists and supports the `bino lsp` subcommand. */
+export function probeLspCapability(binPath: string): Promise<'ok' | 'missing' | 'unsupported'> {
     return new Promise(resolve => {
-        cp.execFile(binPath, ['lsp', '--help'], { timeout: 10000 }, err => resolve(!err));
+        cp.execFile(binPath, ['lsp', '--help'], { timeout: 10000 }, err => {
+            if (!err) {
+                resolve('ok');
+            } else {
+                resolve((err as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unsupported');
+            }
+        });
     });
 }
 
@@ -35,15 +36,32 @@ export async function startLanguageClient(
     projectRoot: string
 ): Promise<boolean> {
     const binPath = getBinoPath();
-    if (!(await probeLspCapability(binPath))) {
-        const action = await vscode.window.showWarningMessage(
+    const capability = await probeLspCapability(binPath);
+    if (capability === 'missing') {
+        // Not awaited: the caller must not wait for the user to click.
+        void vscode.window.showWarningMessage(
+            `bino was not found at '${binPath}'. Install bino or set "bino.binPath" to get completion, hover, navigation, and diagnostics.`,
+            'Install Instructions',
+            'Configure Path'
+        ).then(action => {
+            if (action === 'Install Instructions') {
+                void vscode.env.openExternal(vscode.Uri.parse(INSTALL_DOCS_URL));
+            } else if (action === 'Configure Path') {
+                void vscode.commands.executeCommand('workbench.action.openSettings', 'bino.binPath');
+            }
+        });
+        return false;
+    }
+    if (capability === 'unsupported') {
+        void vscode.window.showWarningMessage(
             'This bino binary does not support the language server (`bino lsp`). ' +
             'Update bino to get in-editor completion, hover, navigation, and diagnostics.',
             'Update Instructions'
-        );
-        if (action === 'Update Instructions') {
-            vscode.env.openExternal(vscode.Uri.parse('https://bino.bi/docs/getting-started'));
-        }
+        ).then(action => {
+            if (action === 'Update Instructions') {
+                void vscode.env.openExternal(vscode.Uri.parse('https://cli.bino.bi/cli/update/'));
+            }
+        });
         return false;
     }
 

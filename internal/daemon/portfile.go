@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"bino.bi/bino/internal/version"
@@ -83,14 +82,4 @@ func ReadPortFile(projectRoot string) (*PortFile, error) {
 // RemovePortFile removes the daemon port file.
 func RemovePortFile(projectRoot string) {
 	_ = os.Remove(PortFilePath(projectRoot))
-}
-
-// processAlive checks if a process with the given PID is still running.
-func processAlive(pid int) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	// Signal 0 checks process existence without affecting it
-	return proc.Signal(syscall.Signal(0)) == nil
 }
