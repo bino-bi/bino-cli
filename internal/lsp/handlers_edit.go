@@ -74,6 +74,9 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CommandOrCodeAction, error) {
 	var actions []protocol.CommandOrCodeAction
 	docURI := params.TextDocument.URI
+	if doc, ok := s.docs.Get(docURI); ok && !isBinoBuffer(doc.Text) {
+		return nil, nil
+	}
 	for i := range params.Context.Diagnostics {
 		d := params.Context.Diagnostics[i]
 		switch {

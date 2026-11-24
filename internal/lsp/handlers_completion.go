@@ -20,7 +20,7 @@ import (
 // introspection so the popup is never blocked.
 func (s *Server) Completion(ctx context.Context, params *protocol.CompletionParams) (protocol.CompletionResult, error) {
 	doc, ok := s.docs.Get(params.TextDocument.URI)
-	if !ok {
+	if !ok || !isBinoBuffer(doc.Text) {
 		return nil, nil
 	}
 	line, col := doc.PositionToLineCol(params.Position)
@@ -299,7 +299,7 @@ func (s *Server) scenarioColumns(ctx context.Context, datasets []string) map[str
 // referenced dataset's columns, or a field's schema description.
 func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	doc, ok := s.docs.Get(params.TextDocument.URI)
-	if !ok {
+	if !ok || !isBinoBuffer(doc.Text) {
 		return nil, nil
 	}
 	line, col := doc.PositionToLineCol(params.Position)
