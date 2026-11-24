@@ -355,14 +355,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(treeView);
 
     // Replace the bundled schema with the backend's merged one (plugin kinds included).
-    void daemonReady
-        .then(() => loadBackendSchema(backendSchemaSource(indexer?.getProjectRootForUri())))
+    const reloadSchema = () => loadBackendSchema(backendSchemaSource(indexer?.getProjectRootForUri()))
         .then(loaded => {
             outputChannel.appendLine(loaded ? 'Loaded the schema from bino' : 'Using the bundled schema: bino did not serve one');
             if (loaded) {
                 treeProvider.refresh();
             }
         });
+    void daemonReady.then(() => {
+        void reloadSchema();
+        // A new daemon connection (e.g. after a restart) may serve other plugin kinds.
+        if (daemonClient) {
+            context.subscriptions.push(daemonClient.onStatusChange(status => {
+                if (status === 'connected') {
+                    void reloadSchema();
+                }
+            }));
+        }
+    });
+    // Plugins are declared in bino.toml.
+    const schemaTomlWatcher = vscode.workspace.createFileSystemWatcher('**/bino.toml', false, false, true);
+    context.subscriptions.push(
+        schemaTomlWatcher,
+        schemaTomlWatcher.onDidCreate(() => void reloadSchema()),
+        schemaTomlWatcher.onDidChange(() => void reloadSchema()),
+    );
 
     // Register Preview & Build tree
     const previewTreeProvider = new PreviewTreeProvider(previewManager);
