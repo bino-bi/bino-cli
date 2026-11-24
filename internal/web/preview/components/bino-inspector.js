@@ -642,6 +642,11 @@ class BinoInspector extends LitElement {
       name: owner.getAttribute('data-bino-name') || '',
       ref: owner.getAttribute('data-bino-ref') || '',
     };
+    var line = parseInt(owner.getAttribute('data-bino-source-line') || '', 10);
+    if (line > 0) {
+      msg.sourceFile = owner.getAttribute('data-bino-source-file') || '';
+      msg.line = line;
+    }
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(msg, '*');
     }

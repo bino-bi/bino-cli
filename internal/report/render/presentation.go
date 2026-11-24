@@ -584,7 +584,7 @@ func renderPresentationSlide(doc config.Document, defaultFormat string, rc *rend
 	b.WriteString(">\n")
 
 	// Embed the full bn-layout-page as-is
-	containerHTML, err := renderLayoutContainer("bn-layout-page", payload.Spec, doc.Name, rc)
+	containerHTML, err := renderLayoutContainer("bn-layout-page", payload.Spec, doc.Name, rc.withSourceDoc(doc))
 	if err != nil {
 		return "", err
 	}

@@ -381,7 +381,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, targetOrientation, rc)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, targetOrientation, rc.withSourceDoc(doc))
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}
@@ -400,7 +400,7 @@ func GenerateHTMLFromDocumentsWithDatasets(ctx context.Context, docs []config.Do
 			if rootComponent == "" || doc.Name != rootComponent {
 				continue
 			}
-			htmlContent, err := renderStandaloneComponentDoc(doc, rc)
+			htmlContent, err := renderStandaloneComponentDoc(doc, rc.withSourceDoc(doc))
 			if err != nil {
 				return Result{}, diags, fmt.Errorf("render: component %s: %w", doc.Name, err)
 			}
@@ -550,7 +550,7 @@ func GenerateFrameAndContext(ctx context.Context, docs []config.Document, datase
 	for _, doc := range docs {
 		switch doc.Kind {
 		case "LayoutPage":
-			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, "", rc)
+			htmlContent, include, err := renderLayoutPage(doc.Raw, doc.Name, targetFormat, "", rc.withSourceDoc(doc))
 			if err != nil {
 				return FrameResult{}, diags, fmt.Errorf("render: layout page %s: %w", doc.Name, err)
 			}

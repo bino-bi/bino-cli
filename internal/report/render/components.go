@@ -130,6 +130,10 @@ type renderCtx struct {
 	pageTargets, gridTargets bool
 	// annotationData finds the rows behind a component for the point check.
 	annotationData *annotationData
+	// srcLines finds component source lines; nil outside the preview.
+	srcLines *sourceLines
+	// srcDoc is the document whose YAML holds the children being rendered.
+	srcDoc *config.Document
 }
 
 // newRenderCtx creates a render context with a doc index for ref resolution.
@@ -146,6 +150,9 @@ func newRenderCtx(ctx context.Context, docs []config.Document, constraintCtx *sp
 		assetURLs:      assetURLs,
 		pluginRenderer: pluginRenderer,
 		renderMode:     renderMode,
+	}
+	if renderMode == "preview" {
+		rc.srcLines = newSourceLines()
 	}
 	for _, doc := range docs {
 		if refIndexable(doc.Kind) {
@@ -954,6 +961,7 @@ func renderLayoutContainer(tag string, pageSpec layoutPageSpec, docName string, 
 		// Build slot div with source location attributes for click-to-source in preview
 		fmt.Fprintf(&b, "  <div slot='slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		writeSourceAttrs(&b, child)
+		childRC.writeSourceLocationAttrs(&b, child)
 		childRC.writeAnnotationTarget(&b, child)
 		b.WriteString(">\n")
 		b.WriteString(childHTML)
@@ -1003,6 +1011,7 @@ func renderLayoutCardContainer(cardSpec layoutCardSpec, rc *renderCtx) (string, 
 		fmt.Fprintf(&b, "  <div slot='card-slot-%d' style='flex: 1 1 0%%; height: 100%%;'", slotIdx)
 		if !panelCard {
 			writeSourceAttrs(&b, child)
+			childRC.writeSourceLocationAttrs(&b, child)
 			childRC.writeAnnotationTarget(&b, child)
 		} else {
 			writeAttr(&b, "data-bino-annotation-target", panelTarget)
@@ -1090,6 +1099,7 @@ func renderLayoutChild(child layoutChild, rc *renderCtx) (htmlOut string, skip b
 	}
 	rc.recordDataRefs(effectiveSpec)
 	rc.noteAnnotationSpec(child, effectiveSpec)
+	rc = rc.withRefSourceDoc(child)
 
 	var component string
 	switch child.Kind {
