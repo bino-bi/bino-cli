@@ -17,7 +17,7 @@ func TestTOMLDiagnostics(t *testing.T) {
 		msg              string
 	}{
 		{"unknown key", "report-id = \"x\"\n[lint]\ndisabel = [\"a\"]\n", "toml-unknown-key", protocol.DiagnosticSeverityWarning, [3]uint32{2, 0, 7}, "unknown key 'lint.disabel'"},
-		{"env var outside values", "[build.env]\nFOO = \"x\"\n", "toml-unknown-key", protocol.DiagnosticSeverityWarning, [3]uint32{1, 0, 3}, "[build.env.values]"},
+		{"env var must be a string", "[build.env]\nOK = \"x\"\nFOO = 1\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 0, 3}, "'build.env.FOO' must be a string"},
 		{"wrong type", "report-id = \"x\"\n[lint]\ndisable = \"a\" # one rule\n", "toml-type", protocol.DiagnosticSeverityError, [3]uint32{2, 10, 13}, "'lint.disable' must be an array, not a TOML string"},
 		{"syntax", "report-id = \n", "toml-syntax", protocol.DiagnosticSeverityError, [3]uint32{0, 12, 12}, "TOML syntax error"},
 	}
@@ -39,7 +39,7 @@ func TestTOMLDiagnostics(t *testing.T) {
 			}
 		})
 	}
-	if got := tomlDiagnostics(&Document{Text: "report-id = \"x\"\ntemplate = \"t\"\n[plugins.sci]\nversion = \"1\"\n"}); got == nil || len(got) != 0 {
+	if got := tomlDiagnostics(&Document{Text: "report-id = \"x\"\ntemplate = \"t\"\n[plugins.sci]\nversion = \"1\"\n[preview.env]\nA = \"1\"\n[preview.env.values]\nB = \"2\"\n"}); got == nil || len(got) != 0 {
 		t.Errorf("valid bino.toml must give an empty, non-nil list, got %+v", got)
 	}
 }

@@ -36,7 +36,7 @@ func hintsFor(t *testing.T, s *Server, u uri.URI) map[string]string {
 
 func TestInlayHint_EnvVarsAndMasking(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("report-id = \"x\"\n[build.env.values]\nFROM_TOML = \"toml-value\"\nREGION = \"from-toml\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "bino.toml"), []byte("report-id = \"x\"\n[build.env]\nFROM_TOML = \"toml-value\"\n[build.env.values]\nREGION = \"from-toml\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REGION", "EU")

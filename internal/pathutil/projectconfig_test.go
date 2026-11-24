@@ -474,3 +474,40 @@ func TestPackageConfigEffectiveVisibility(t *testing.T) {
 		})
 	}
 }
+
+func TestParseProjectConfig_EnvTableForms(t *testing.T) {
+	cfg, err := ParseProjectConfig([]byte(`
+[build.env]
+DIRECT = "d"
+BOTH = "from-env-table"
+
+[build.env.values]
+NESTED = "n"
+BOTH = "from-values"
+
+[serve.env]
+PORT_LABEL = "x"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"DIRECT": "d", "NESTED": "n", "BOTH": "from-values"}
+	if len(cfg.Build.Env.Values) != len(want) {
+		t.Fatalf("build env = %v, want %v", cfg.Build.Env.Values, want)
+	}
+	for k, v := range want {
+		if cfg.Build.Env.Values[k] != v {
+			t.Errorf("build env %s = %q, want %q", k, cfg.Build.Env.Values[k], v)
+		}
+	}
+	if cfg.Serve.Env.Values["PORT_LABEL"] != "x" {
+		t.Errorf("serve env = %v", cfg.Serve.Env.Values)
+	}
+	if cfg.Preview.Env.Values != nil {
+		t.Errorf("preview env = %v, want none", cfg.Preview.Env.Values)
+	}
+
+	if _, err := ParseProjectConfig([]byte("[build.env]\nN = 1\n")); err == nil || !strings.Contains(err.Error(), "[build.env] N must be a string") {
+		t.Errorf("non-string env value: err = %v", err)
+	}
+}

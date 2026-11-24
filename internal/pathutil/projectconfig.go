@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -406,13 +407,64 @@ func LoadProjectConfig(projectRoot string) (*ProjectConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", configPath, err)
 	}
 
-	var cfg ProjectConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+	cfg, err := ParseProjectConfig(data)
+	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", configPath, err)
 	}
 	cfg.Trust.Err = UnknownTrustKeys(data, false)
+	return cfg, nil
+}
 
+// ParseProjectConfig decodes bino.toml content.
+func ParseProjectConfig(data []byte) (*ProjectConfig, error) {
+	var cfg ProjectConfig
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	if err := mergeEnvTables(data, &cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+// EnvCommands are the bino.toml tables whose env section is a CommandEnv.
+var EnvCommands = []string{"build", "preview", "serve"}
+
+// mergeEnvTables adds the variables written directly under [<cmd>.env] to
+// that command's Values. Both forms are documented; on a duplicate name the
+// [<cmd>.env.values] entry wins.
+func mergeEnvTables(data []byte, cfg *ProjectConfig) error {
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	targets := map[string]*CommandEnv{"build": &cfg.Build.Env, "preview": &cfg.Preview.Env, "serve": &cfg.Serve.Env}
+	for _, cmd := range EnvCommands {
+		table, _ := raw[cmd].(map[string]any)
+		env, _ := table["env"].(map[string]any)
+		keys := make([]string, 0, len(env))
+		for k := range env {
+			if k != "values" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		target := targets[cmd]
+		for _, k := range keys {
+			v, ok := env[k].(string)
+			if !ok {
+				return fmt.Errorf("[%s.env] %s must be a string", cmd, k)
+			}
+			if _, exists := target.Values[k]; exists {
+				continue
+			}
+			if target.Values == nil {
+				target.Values = make(map[string]string)
+			}
+			target.Values[k] = v
+		}
+	}
+	return nil
 }
 
 // WriteProjectConfig writes a bino.toml file to the given directory.

@@ -79,6 +79,12 @@ func checkType(t *testing.T, root, s *schemaNode, typ reflect.Type, path string)
 	if want != "" && s.Type != want {
 		t.Errorf("%s: schema type %q, struct wants %q", path, s.Type, want)
 	}
+	if typ == reflect.TypeOf(pathutil.CommandEnv{}) {
+		// Variables may also sit directly under [<cmd>.env] (see ParseProjectConfig).
+		if v := s.valueSchema(t); v == nil || v.Type != "string" {
+			t.Errorf("%s: env needs string additionalProperties", path)
+		}
+	}
 	switch typ.Kind() {
 	case reflect.Struct:
 		seen := make(map[string]bool)
@@ -140,14 +146,18 @@ func checkHooks(t *testing.T, root, s *schemaNode, path string) {
 	}
 }
 
-// TestProjectConfigSchemaExtensionCopy keeps the VS Code extension's copy in
-// sync with the embedded schema.
-func TestProjectConfigSchemaExtensionCopy(t *testing.T) {
-	ext, err := os.ReadFile("../../vscode-bino/schema/bino-toml.schema.json")
-	if err != nil {
-		t.Fatalf("read extension copy: %v", err)
-	}
-	if !bytes.Equal(ext, pathutil.ProjectConfigSchema) {
-		t.Fatal("vscode-bino/schema/bino-toml.schema.json differs from internal/pathutil/bino-toml.schema.json: copy it over")
+// TestProjectConfigSchemaCopies keeps the copies shipped with the VS Code
+// extension and served on the docs site in sync with the embedded schema.
+func TestProjectConfigSchemaCopies(t *testing.T) {
+	for _, p := range []string{
+		"../../vscode-bino/schema/bino-toml.schema.json",
+	} {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		if !bytes.Equal(b, pathutil.ProjectConfigSchema) {
+			t.Errorf("%s differs from internal/pathutil/bino-toml.schema.json: copy it over", p)
+		}
 	}
 }

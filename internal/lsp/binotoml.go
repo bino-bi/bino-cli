@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -36,15 +37,22 @@ func tomlDiagnostics(doc *Document) []protocol.Diagnostic {
 	}
 	var strict *toml.StrictMissingError
 	if errors.As(err, &strict) {
+		var raw map[string]any
+		_ = toml.Unmarshal([]byte(doc.Text), &raw) //nolint:errcheck // the strict decode above already parsed it
 		for i := range strict.Errors {
 			e := &strict.Errors[i]
 			row, col := e.Position()
-			key := e.Key()
-			msg := fmt.Sprintf("unknown key '%s': bino ignores it", strings.Join(key, "."))
-			if len(key) == 3 && key[1] == "env" {
-				msg += fmt.Sprintf(". Environment variables go under [%s.env.values]", key[0])
+			key := strings.Join(e.Key(), ".")
+			if cmd, name, ok := envTableKey(e.Key()); ok {
+				// Variables may sit directly under [<cmd>.env] (ParseProjectConfig).
+				if _, isString := envValue(raw, cmd, name).(string); !isString {
+					out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityError, "toml-type",
+						fmt.Sprintf("'%s' must be a string", key)))
+				}
+				continue
 			}
-			out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityWarning, "toml-unknown-key", msg))
+			out = append(out, tomlDiag(keySpan(doc, row, col), protocol.DiagnosticSeverityWarning, "toml-unknown-key",
+				fmt.Sprintf("unknown key '%s': bino ignores it", key)))
 		}
 		return out
 	}
@@ -59,6 +67,20 @@ func tomlDiagnostics(doc *Document) []protocol.Diagnostic {
 			typeMessage(strings.Join(key, "."), msg)))
 	}
 	return append(out, tomlDiag(valueSpan(doc, row, col), protocol.DiagnosticSeverityError, "toml-syntax", "TOML syntax error: "+msg))
+}
+
+// envTableKey matches a key written directly under [<cmd>.env].
+func envTableKey(key []string) (cmd, name string, ok bool) {
+	if len(key) != 3 || key[1] != "env" || !slices.Contains(pathutil.EnvCommands, key[0]) {
+		return "", "", false
+	}
+	return key[0], key[2], true
+}
+
+func envValue(raw map[string]any, cmd, name string) any {
+	table, _ := raw[cmd].(map[string]any)
+	env, _ := table["env"].(map[string]any)
+	return env[name]
 }
 
 func tomlDiag(r protocol.Range, sev protocol.DiagnosticSeverity, code, msg string) protocol.Diagnostic {

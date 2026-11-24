@@ -124,12 +124,12 @@
         },
         "env": {
           "type": "object",
-          "description": "Environment for the command.",
-          "additionalProperties": false,
+          "description": "Environment variables for the command, as KEY = \"value\" here or under values. Variables already set in the environment win.",
+          "additionalProperties": { "type": "string" },
           "properties": {
             "values": {
               "type": "object",
-              "description": "Environment variables. Variables already set in the environment win.",
+              "description": "Environment variables. On a duplicate name these win over keys written directly under env.",
               "additionalProperties": { "type": "string" }
             }
           }

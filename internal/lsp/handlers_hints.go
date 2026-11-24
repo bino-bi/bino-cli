@@ -21,7 +21,7 @@ const maxHintValue = 40
 
 // InlayHint shows what each ${NAME} in range resolves to: the default of a
 // param the document declares, else the variable from the environment or
-// bino.toml [build.env.values], in the order the build looks them up. Unset
+// bino.toml [build.env], in the order the build looks them up. Unset
 // names get no hint (the missing-env-var diagnostic covers them), and values
 // of secret-looking names are masked.
 func (s *Server) InlayHint(_ context.Context, params *protocol.InlayHintParams) ([]protocol.InlayHint, error) {
@@ -70,7 +70,7 @@ type varSource struct {
 }
 
 // varLookup returns the build's variable sources after params: the process
-// environment, then bino.toml [build.env.values] (environment wins, see
+// environment, then bino.toml [build.env] (environment wins, see
 // CommandEnv.Apply). The environment is the language server's own.
 func (s *Server) varLookup() []varSource {
 	out := []varSource{{"the environment", config.EnvLookup()}}
@@ -78,7 +78,7 @@ func (s *Server) varLookup() []varSource {
 		return out
 	}
 	if cfg, err := pathutil.LoadProjectConfig(s.root); err == nil && len(cfg.Build.Env.Values) > 0 {
-		out = append(out, varSource{"bino.toml [build.env.values]", config.MapLookup(cfg.Build.Env.Values)})
+		out = append(out, varSource{"bino.toml [build.env]", config.MapLookup(cfg.Build.Env.Values)})
 	}
 	return out
 }
