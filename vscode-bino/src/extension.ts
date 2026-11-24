@@ -677,7 +677,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
 
     context.subscriptions.push(
         vscode.commands.registerCommand('bino.openPreviewInBrowser', () => {
-            previewManager?.openInBrowser();
+            void previewManager?.openInBrowser();
         })
     );
 

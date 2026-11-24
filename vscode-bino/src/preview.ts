@@ -6,6 +6,17 @@ import { DaemonClient } from './daemonClient';
 import { getEmbeddableKinds } from './embeddable';
 import { getNonce } from './webviewNonce';
 import { getBinoPath } from './bino';
+import { fullPreviewPath, previewBaseUrl, urlOrigin } from './previewUrl';
+
+/** A Cmd/Ctrl-click in the preview. sourceFile and line come from newer bino releases. */
+interface RevealSourceMessage {
+    kind?: string;
+    name?: string;
+    ref?: string;
+    file?: string;
+    sourceFile?: string;
+    line?: number;
+}
 
 export type PreviewStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -29,6 +40,10 @@ export class BinoPreviewManager {
     private previewProcess: cp.ChildProcess | undefined;
     private previewStatus: PreviewStatus = 'stopped';
     private previewPanel: vscode.WebviewPanel | undefined;
+    // Route the full preview shows ("/", "/<artefact>", "/doc/<artefact>").
+    private fullPreviewRoute = '/';
+    private fullPreviewBase: string | undefined;
+    private fullFollowDisposables: vscode.Disposable[] = [];
     private indexer: WorkspaceIndexer | undefined;
     private daemonClient: DaemonClient | undefined;
     private usingDaemonPreview = false;
@@ -52,6 +67,12 @@ export class BinoPreviewManager {
     constructor(outputChannel: vscode.OutputChannel, indexer?: WorkspaceIndexer) {
         this.outputChannel = outputChannel;
         this.indexer = indexer;
+        // A restarted preview may serve on another port or for another project.
+        this.onStatusChange(status => {
+            if (status === 'running' && this.previewPanel) {
+                void this.loadFullPreview();
+            }
+        });
     }
 
     /** Set the workspace indexer for source navigation */
@@ -287,10 +308,9 @@ export class BinoPreviewManager {
     }
 
     /** Open preview in browser */
-    openInBrowser(): void {
-        const port = this.getPreviewPort();
-        const url = `http://localhost:${port}`;
-        vscode.env.openExternal(vscode.Uri.parse(url));
+    async openInBrowser(): Promise<void> {
+        const base = await previewBaseUrl(this.getPreviewPort());
+        await vscode.env.openExternal(vscode.Uri.parse(base + '/'));
     }
 
     /** Open preview in a VS Code webview panel (side-by-side) */
@@ -301,14 +321,17 @@ export class BinoPreviewManager {
             await this.waitForRunning();
         }
 
-        const port = this.getPreviewPort();
-        const url = `http://localhost:${port}`;
+        const active = this.resolveActiveArtefact();
+        const route = active ? fullPreviewPath(active.kind, active.name) : undefined;
+        if (route) {
+            this.fullPreviewRoute = route;
+        }
 
         // Reuse existing panel if it exists
         if (this.previewPanel) {
             this.previewPanel.reveal(vscode.ViewColumn.Beside);
             // Update the content in case port changed
-            this.previewPanel.webview.html = this.getWebviewContent(url);
+            await this.loadFullPreview();
             return;
         }
 
@@ -323,8 +346,6 @@ export class BinoPreviewManager {
             }
         );
 
-        this.previewPanel.webview.html = this.getWebviewContent(url);
-
         // Handle messages from the webview (click-to-source)
         this.previewPanel.webview.onDidReceiveMessage(async (msg) => {
             if (msg.type === 'bino:revealSource') {
@@ -335,7 +356,31 @@ export class BinoPreviewManager {
         // Clear reference when panel is closed
         this.previewPanel.onDidDispose(() => {
             this.previewPanel = undefined;
+            this.fullFollowDisposables.forEach(d => d.dispose());
+            this.fullFollowDisposables = [];
         });
+
+        // Follow the active editor to the artefact it shows.
+        this.fullFollowDisposables = this.followActiveEditor(next => {
+            const nextRoute = fullPreviewPath(next.kind, next.name);
+            if (!nextRoute || nextRoute === this.fullPreviewRoute || !this.fullPreviewBase) {
+                return;
+            }
+            this.fullPreviewRoute = nextRoute;
+            void this.previewPanel?.webview.postMessage({ type: 'bino:navigate', url: this.fullPreviewBase + nextRoute });
+        });
+
+        await this.loadFullPreview();
+    }
+
+    /** (Re)load the full preview webview at the current route. */
+    private async loadFullPreview(): Promise<void> {
+        const base = await previewBaseUrl(this.getPreviewPort());
+        if (!this.previewPanel) {
+            return;
+        }
+        this.fullPreviewBase = base;
+        this.previewPanel.webview.html = this.getWebviewContent(base, this.fullPreviewRoute);
     }
 
     /**
@@ -387,8 +432,13 @@ export class BinoPreviewManager {
                 void this.clearAllOverrides();
             });
 
-            this.registerArtefactFollow();
+            this.artefactFollowDisposables.push(...this.followActiveEditor(next => this.switchArtefact(next.name, next.kind)));
             this.registerLiveOverridePush();
+            this.artefactPanel.webview.onDidReceiveMessage(async (msg) => {
+                if (msg.type === 'bino:revealSource') {
+                    await this.handleRevealSource(msg);
+                }
+            });
         }
 
         // Reflect any unsaved buffers before the first iframe load so opening
@@ -397,7 +447,11 @@ export class BinoPreviewManager {
 
         this.artefactPanel.reveal(vscode.ViewColumn.Beside);
         this.artefactPanel.title = `Embed: ${artefact.name}`;
-        this.artefactPanel.webview.html = this.getEmbeddedWebviewContent(this.getPreviewPort(), artefact.name, artefact.kind);
+        const base = await previewBaseUrl(this.getPreviewPort());
+        if (!this.artefactPanel) {
+            return; // closed while the port was forwarded
+        }
+        this.artefactPanel.webview.html = this.getEmbeddedWebviewContent(base, artefact.name, artefact.kind);
     }
 
     /** Whether the embedded artefact preview panel is currently open. */
@@ -463,13 +517,13 @@ export class BinoPreviewManager {
         return picked ? { name: picked.label, kind: picked.description! } : undefined;
     }
 
-    /** Follow the active editor while the embedded panel is open. */
-    private registerArtefactFollow(): void {
+    /** Call onChange with the artefact at the active editor's cursor as it moves. */
+    private followActiveEditor(onChange: (next: { name: string; kind: string }) => void): vscode.Disposable[] {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const followNow = () => {
             const next = this.resolveActiveArtefact();
             if (next) {
-                this.switchArtefact(next.name, next.kind);
+                onChange(next);
             }
             // next === undefined → editing a dependency/non-artefact → keep last
         };
@@ -479,10 +533,11 @@ export class BinoPreviewManager {
             }
             timer = setTimeout(followNow, 200);
         };
-        this.artefactFollowDisposables.push(
+        return [
             vscode.window.onDidChangeActiveTextEditor(() => followNow()),
-            vscode.window.onDidChangeTextEditorSelection(debounced)
-        );
+            vscode.window.onDidChangeTextEditorSelection(debounced),
+            { dispose: () => clearTimeout(timer) }
+        ];
     }
 
     /**
@@ -619,16 +674,16 @@ export class BinoPreviewManager {
     }
 
     /** Generate the embedded webview HTML: chrome-free artefact iframe + SSE auto-reload. */
-    private getEmbeddedWebviewContent(port: number, name: string, kind: string): string {
-        const base = `http://localhost:${port}`;
+    private getEmbeddedWebviewContent(base: string, name: string, kind: string): string {
         const nonce = getNonce();
+        const origin = urlOrigin(base);
         const csp = [
             "default-src 'none'",
-            "img-src http://localhost:* http://127.0.0.1:* data:",
+            `img-src http://localhost:* http://127.0.0.1:* ${origin} data:`,
             "style-src 'unsafe-inline'",
             `script-src 'nonce-${nonce}'`,
-            "frame-src http://localhost:* http://127.0.0.1:*",
-            "connect-src http://localhost:* http://127.0.0.1:*"
+            `frame-src http://localhost:* http://127.0.0.1:* ${origin}`,
+            `connect-src http://localhost:* http://127.0.0.1:* ${origin}`
         ].join('; ');
         return `<!DOCTYPE html>
 <html lang="en">
@@ -704,9 +759,16 @@ export class BinoPreviewManager {
         }
         connect();
 
-        // Messages from the extension.
+        const vscode = acquireVsCodeApi();
+        // Messages from the extension, and click-to-source from the iframe.
         window.addEventListener('message', (event) => {
             const msg = event.data;
+            if (event.source === frame.contentWindow) {
+                if (msg && msg.type === 'bino:revealSource') {
+                    vscode.postMessage(msg);
+                }
+                return;
+            }
             if (msg && msg.type === 'bino:setArtefact') {
                 currentName = msg.name;
                 currentKind = msg.kind;
@@ -723,7 +785,11 @@ export class BinoPreviewManager {
     }
 
     /** Handle reveal source message from preview webview */
-    private async handleRevealSource(msg: { kind?: string; name?: string; ref?: string; file?: string }): Promise<void> {
+    private async handleRevealSource(msg: RevealSourceMessage): Promise<void> {
+        if (msg.sourceFile && typeof msg.line === 'number' && msg.line > 0) {
+            await this.revealFileLine(msg.sourceFile, msg.line - 1);
+            return;
+        }
         // Markdown source sections carry a project-root-relative file path
         // (no manifest to index) - open the file directly.
         if (msg.file) {
@@ -782,6 +848,23 @@ export class BinoPreviewManager {
             await this.searchAndRevealInlineChild(msg.kind, msg.name);
         } else {
             this.outputChannel.appendLine(`[Preview] Document ${msg.kind}:${searchName} not found in index`);
+        }
+    }
+
+    /** Open a file (absolute, or relative to the project root) at a 0-based line. */
+    private async revealFileLine(file: string, line: number): Promise<void> {
+        const abs = path.isAbsolute(file) ? file : path.join(this.getWorkspaceRoot() ?? '', file);
+        try {
+            const document = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
+            const editor = await vscode.window.showTextDocument(document, {
+                viewColumn: vscode.ViewColumn.One,
+                preview: false
+            });
+            const position = new vscode.Position(Math.min(line, document.lineCount - 1), 0);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        } catch (err) {
+            this.outputChannel.appendLine(`[Preview] Failed to open source file ${file}: ${err}`);
         }
     }
 
@@ -873,11 +956,20 @@ export class BinoPreviewManager {
     }
 
     /** Generate HTML content for the webview with an iframe */
-    private getWebviewContent(url: string): string {
+    private getWebviewContent(base: string, route: string): string {
+        const nonce = getNonce();
+        const origin = urlOrigin(base);
+        const csp = [
+            "default-src 'none'",
+            "style-src 'unsafe-inline'",
+            `script-src 'nonce-${nonce}'`,
+            `frame-src http://localhost:* http://127.0.0.1:* ${origin}`
+        ].join('; ');
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bino Preview</title>
     <style>
@@ -892,14 +984,25 @@ export class BinoPreviewManager {
     </style>
 </head>
 <body>
-    <iframe src="${url}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-    <script>
-        // Forward messages from iframe to VS Code extension
+    <iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
+        const frame = document.getElementById('frame');
+        frame.src = ${JSON.stringify(base + route)};
         window.addEventListener('message', (event) => {
             const msg = event.data;
-            if (msg && msg.type === 'bino:revealSource') {
-                vscode.postMessage(msg);
+            if (!msg) {
+                return;
+            }
+            // Click-to-source from the iframe goes to the extension.
+            if (event.source === frame.contentWindow) {
+                if (msg.type === 'bino:revealSource') {
+                    vscode.postMessage(msg);
+                }
+                return;
+            }
+            if (msg.type === 'bino:navigate') {
+                frame.src = msg.url;
             }
         });
     </script>
@@ -948,7 +1051,7 @@ export class BinoPreviewManager {
         }
 
         if (selection.label.includes('Open in Browser')) {
-            this.openInBrowser();
+            await this.openInBrowser();
         } else if (selection.label.includes('Open in Webview')) {
             await this.openPreviewInWebview();
         } else if (selection.label.includes('Restart')) {
@@ -1003,6 +1106,7 @@ export class BinoPreviewManager {
         void this.stopPreview();
         this.previewPanel?.dispose();
         this.artefactPanel?.dispose();
+        this.fullFollowDisposables.forEach(d => d.dispose());
         this.disposeArtefactFollow();
         this._onStatusChange.dispose();
     }
