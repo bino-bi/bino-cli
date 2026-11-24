@@ -30,3 +30,24 @@ func (e *DocumentError) Error() string {
 }
 
 func (e *DocumentError) Unwrap() error { return e.Err }
+
+// SourceError ties a build-time failure (a query, a render) to the manifest
+// document it came from, so `--log-format json` can report file and line.
+// Error() is the cause's message unchanged.
+type SourceError struct {
+	File     string
+	Position int
+	Err      error
+}
+
+// WithSource wraps err with the location of doc. A nil err stays nil.
+func WithSource(doc Document, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &SourceError{File: doc.File, Position: doc.Position, Err: err}
+}
+
+func (e *SourceError) Error() string { return e.Err.Error() }
+
+func (e *SourceError) Unwrap() error { return e.Err }

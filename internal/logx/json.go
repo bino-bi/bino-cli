@@ -96,3 +96,34 @@ func (j *JSONLogger) write(out io.Writer, level, format string, args ...any) {
 	defer j.core.mu.Unlock()
 	fmt.Fprintf(out, "%s\n", line)
 }
+
+// Record writes one entry with extra fields next to msg, for output another
+// program reads (an editor puts file and line into its problems list). warn
+// and error go to stderr, everything else to stdout. Fields never replace
+// time, level, channel or msg.
+func (j *JSONLogger) Record(level, msg string, fields map[string]any) {
+	if j == nil || j.core == nil {
+		return
+	}
+	entry := make(map[string]any, len(fields)+4)
+	for k, v := range fields {
+		entry[k] = v
+	}
+	entry["time"] = time.Now().UTC().Format(time.RFC3339Nano)
+	entry["level"] = level
+	entry["msg"] = msg
+	if j.channel != "" {
+		entry["channel"] = j.channel
+	}
+	line, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	out := j.core.stdout
+	if level == "warn" || level == "error" {
+		out = j.core.stderr
+	}
+	j.core.mu.Lock()
+	defer j.core.mu.Unlock()
+	fmt.Fprintf(out, "%s\n", line)
+}

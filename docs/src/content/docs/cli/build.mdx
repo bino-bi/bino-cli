@@ -29,7 +29,7 @@ Common flags:
 Build log flags:
 
 - `--build-log-format` - build log file format: `text` (default) or `json`.
-- `--log-format` - terminal logging format: `text` (default) or `json` (one JSON object per line).
+- `--log-format` - terminal logging format: `text` (default) or `json` (one JSON object per line). With `json`, a failed build writes its error as a JSON line too, with `file`, `line` and `column` when the error comes from a manifest, and each built PDF is logged with its `artefact` name and `path`.
 - `--embed-data-csv` - embed CSV data previews in JSON log.
 - `--embed-data-max-rows` - maximum rows to embed per query (default: `10`).
 - `--embed-data-max-bytes` - maximum bytes per embedded CSV (default: `65536`).

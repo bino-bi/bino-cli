@@ -419,6 +419,9 @@ Use --artefact/--exclude-artefact to control which metadata.name entries produce
 
 			// Print results
 			printBuildSummary(ctx, out, env.ProjectRoot, results, screenshotResults, documentResults)
+			if jl, ok := logger.(*logx.JSONLogger); ok {
+				logGeneratedJSON(jl, results, documentResults)
+			}
 
 			// Print final success
 			out.Done("Build complete")
@@ -1205,6 +1208,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 			HookEnv:            artefactHookEnv,
 		})
 		if err != nil {
+			err = config.WithSource(artifact.Document, err)
 			policy := pipeline.ClassifyInvalidLayout(err, pipeline.RenderModeBuild)
 			if policy.IsInvalidRoot {
 				return nil, ConfigError(err)
@@ -1234,7 +1238,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				Spinner:    NewSpinner(spinnerCfg),
 			})
 			if err != nil {
-				return nil, RuntimeError(err)
+				return nil, RuntimeError(config.WithSource(ssArtefact.Document, err))
 			}
 			screenshotResults = append(screenshotResults, ssResults...)
 		}
@@ -1261,7 +1265,7 @@ func buildAllArtefacts(ctx context.Context, out *Output, manifests *buildManifes
 				Spinner:         NewSpinner(spinnerCfg),
 			})
 			if err != nil {
-				return nil, RuntimeError(err)
+				return nil, RuntimeError(config.WithSource(docArtefact.Document, err))
 			}
 			documentResults = append(documentResults, docResult)
 		}
