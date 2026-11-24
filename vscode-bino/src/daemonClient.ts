@@ -12,6 +12,15 @@ interface PortFile {
     startedAt: string;
     /** The bino version that started the daemon; missing in files from older daemons. */
     version?: string;
+    /** Sent as a Bearer token on every request; missing in files from older daemons. */
+    token?: string;
+}
+
+/** What a client needs to reach the connected daemon. */
+export interface DaemonConnection {
+    port: number;
+    token?: string;
+    version?: string;
 }
 
 /** Delay before reconnect attempt n (0-based): 1s, 2s, 4s, ... capped at 30s. */
@@ -91,6 +100,9 @@ export interface RegistrySearchResult {
  */
 export class DaemonClient {
     private port: number | undefined;
+    private token: string | undefined;
+    // Set when the daemon answered 401; cleared on the next good connection.
+    private rejected = false;
     private daemonPid: number | undefined; // PID for an explicit restart
     private projectRoot: string | undefined;
     private daemonProcess: cp.ChildProcess | undefined;
@@ -124,6 +136,14 @@ export class DaemonClient {
         return this.status === 'connected';
     }
 
+    /** Port and token of the connected daemon, undefined while not connected. */
+    connection(): DaemonConnection | undefined {
+        if (!this.isConnected || !this.port) {
+            return undefined;
+        }
+        return { port: this.port, token: this.token, version: this.version };
+    }
+
     /**
      * Connect to an existing daemon or spawn a new one.
      * Returns true if connected successfully.
@@ -139,17 +159,20 @@ export class DaemonClient {
         // Step 1: Try to discover existing daemon
         const portFile = this.readPortFile(projectRoot);
         if (portFile) {
-            this.port = portFile.port;
-            this.daemonPid = portFile.pid;
-            this.portFileVersion = portFile.version;
+            this.adopt(portFile);
             if (await this.healthCheck()) {
                 this.setStatus('connected');
                 this.startEventStream();
                 this.outputChannel.appendLine(`[Daemon] Connected to existing daemon on port ${this.port} (pid ${this.daemonPid})`);
                 return true;
             }
-            // Stale port file, continue to spawn
             this.port = undefined;
+            if (this.rejected) {
+                // The daemon is alive: spawning another would fail, so wait for a restart.
+                this.setStatus('error');
+                return false;
+            }
+            // Stale port file, continue to spawn
         }
 
         // Step 2: Spawn new daemon
@@ -199,7 +222,10 @@ export class DaemonClient {
             return undefined;
         }
         return new Promise<string | undefined>((resolve) => {
-            const req = http.get(`http://127.0.0.1:${this.port}/schema`, (res) => {
+            const req = http.get(`http://127.0.0.1:${this.port}/schema`, { headers: this.authHeaders() }, (res) => {
+                if (res.statusCode === 401) {
+                    this.unauthorized();
+                }
                 if (res.statusCode !== 200) {
                     resolve(undefined);
                     res.resume();
@@ -339,6 +365,7 @@ export class DaemonClient {
             }
         }
         this.port = undefined;
+        this.token = undefined;
         this.daemonPid = undefined;
         this.daemonProcess = undefined;
         this.capabilities = [];
@@ -355,6 +382,35 @@ export class DaemonClient {
     private setStatus(status: DaemonStatus): void {
         this.status = status;
         this._onStatusChange.fire(status);
+    }
+
+    private adopt(portFile: PortFile): void {
+        this.port = portFile.port;
+        this.token = portFile.token;
+        this.daemonPid = portFile.pid;
+        this.portFileVersion = portFile.version;
+    }
+
+    /** Request headers with the daemon token, when the port file has one. */
+    private authHeaders(): Record<string, string> {
+        return this.token ? { Authorization: `Bearer ${this.token}` } : {};
+    }
+
+    /** A 401 means this extension and the running daemon disagree on the token. */
+    private unauthorized(): void {
+        if (this.rejected) {
+            return;
+        }
+        this.rejected = true;
+        this.outputChannel.appendLine('[Daemon] The daemon rejected the request (401 Unauthorized)');
+        void vscode.window.showWarningMessage(
+            'The running bino daemon rejected this extension. It is probably newer than this extension. Restart the daemon to start one that matches.',
+            'Restart Daemon'
+        ).then(choice => {
+            if (choice === 'Restart Daemon') {
+                void vscode.commands.executeCommand('bino.restartDaemon');
+            }
+        });
     }
 
     private readPortFile(projectRoot: string): PortFile | undefined {
@@ -374,6 +430,7 @@ export class DaemonClient {
         try {
             const result = await this.fetchJSON('/health');
             if (result?.status === 'ok') {
+                this.rejected = false;
                 this.daemonVersion = typeof result.version === 'string' ? result.version : undefined;
                 this.capabilities = Array.isArray(result.capabilities) ? result.capabilities : [];
                 return true;
@@ -465,9 +522,7 @@ export class DaemonClient {
 
                     const portFile = this.readPortFile(projectRoot);
                     if (portFile) {
-                        this.port = portFile.port;
-                        this.daemonPid = portFile.pid;
-                        this.portFileVersion = portFile.version;
+                        this.adopt(portFile);
                         if (await this.healthCheck()) {
                             this.outputChannel.appendLine(`[Daemon] Started on port ${this.port} (pid ${this.daemonPid})`);
                             resolve(true);
@@ -500,8 +555,11 @@ export class DaemonClient {
         const url = `http://127.0.0.1:${this.port}/events`;
         this.outputChannel.appendLine(`[Daemon] Connecting SSE to ${url}`);
 
-        const req = http.get(url, { signal: controller.signal as any }, (res) => {
+        const req = http.get(url, { signal: controller.signal as any, headers: this.authHeaders() }, (res) => {
             if (res.statusCode !== 200) {
+                if (res.statusCode === 401) {
+                    this.unauthorized();
+                }
                 this.outputChannel.appendLine(`[Daemon] SSE returned status ${res.statusCode}`);
                 return;
             }
@@ -618,9 +676,7 @@ export class DaemonClient {
         }
         const portFile = this.readPortFile(root);
         if (portFile && pidAlive(portFile.pid)) {
-            this.port = portFile.port;
-            this.daemonPid = portFile.pid;
-            this.portFileVersion = portFile.version;
+            this.adopt(portFile);
             if (await this.healthCheck()) {
                 this.setStatus('connected');
                 this.startEventStream();
@@ -650,10 +706,16 @@ export class DaemonClient {
             const options: http.RequestOptions = {
                 method,
                 timeout: method === 'POST' ? 300000 : 30000, // 5 min for POST (builds)
-                headers: bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : undefined,
+                headers: {
+                    ...this.authHeaders(),
+                    ...(bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+                },
             };
 
             const req = http.request(url, options, (res) => {
+                if (res.statusCode === 401) {
+                    this.unauthorized();
+                }
                 let data = '';
                 res.setEncoding('utf8');
                 res.on('data', (chunk) => { data += chunk; });
@@ -691,6 +753,7 @@ export class DaemonClient {
             this.reconnectTimer = undefined;
         }
         this.port = undefined;
+        this.token = undefined;
         this.daemonPid = undefined;
         this.daemonProcess = undefined;
         this.setStatus('disconnected');
