@@ -205,3 +205,13 @@ func TestBuildPreviewGraphDataColumns(t *testing.T) {
 		t.Errorf("dataset node must omit columns: %s", payload)
 	}
 }
+
+func TestWithRevealSourceInjectsClickHandler(t *testing.T) {
+	got := string(withRevealSource([]byte("<html><head><title>x</title></head><body></body></html>")))
+	if !strings.Contains(got, "bino:revealSource") || !strings.Contains(got, "</script></head>") {
+		t.Fatalf("script not injected before </head>: %s", got)
+	}
+	if string(withRevealSource([]byte("<div></div>"))) != "<div></div>" {
+		t.Fatal("a body without </head> must stay unchanged")
+	}
+}
