@@ -31,14 +31,37 @@ export function reconnectDelay(attempt: number): number {
 /** Reconnect attempts before the client gives up and reports an error. */
 const MAX_RECONNECT_ATTEMPTS = 8;
 
-/** Whether a process with this pid exists (signal 0 also works on Windows in Node). */
-function pidAlive(pid: number): boolean {
+/**
+ * Whether a process with this pid exists and is ours (signal 0 also works on
+ * Windows in Node). EPERM counts as gone: a process of another user cannot be
+ * our daemon, so its pid was reused.
+ */
+export function pidAlive(pid: number): boolean {
     try {
         process.kill(pid, 0);
         return true;
-    } catch (err) {
-        // EPERM: it exists but belongs to another user.
-        return (err as NodeJS.ErrnoException).code === 'EPERM';
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Wait until a stopped daemon has removed its port file. The daemon removes it
+ * only after its shutdown, so the file can outlive the kill by seconds. A file
+ * whose process is gone (a hard kill on Windows) is removed here.
+ */
+export async function waitForDaemonExit(projectRoot: string, pid: number | undefined, timeoutMs = 10000): Promise<void> {
+    if (pid === undefined) {
+        return;
+    }
+    const file = path.join(projectRoot, '.bino', 'daemon.json');
+    const deadline = Date.now() + timeoutMs;
+    while (fs.existsSync(file) && Date.now() < deadline) {
+        if (!pidAlive(pid)) {
+            fs.rmSync(file, { force: true });
+            return;
+        }
+        await new Promise((r) => setTimeout(r, 100));
     }
 }
 
@@ -114,6 +137,9 @@ export class DaemonClient {
     private reconnectAttempt = 0;
     // Bumped whenever the SSE stream is replaced, so a stale stream's end is ignored.
     private streamGeneration = 0;
+    // Bumped by every connect, switch and restart, so a connect that was overtaken stops.
+    private connectGeneration = 0;
+    private connecting: { root: string; promise: Promise<boolean> } | undefined;
     private disposed = false;
     private daemonVersion: string | undefined;
     private portFileVersion: string | undefined;
@@ -152,7 +178,22 @@ export class DaemonClient {
         if (this.status === 'connected') {
             return true;
         }
+        if (this.connecting?.root === projectRoot) {
+            return this.connecting.promise;
+        }
+        const generation = ++this.connectGeneration;
+        const promise = this.doConnect(projectRoot, generation);
+        this.connecting = { root: projectRoot, promise };
+        try {
+            return await promise;
+        } finally {
+            if (this.connecting?.promise === promise) {
+                this.connecting = undefined;
+            }
+        }
+    }
 
+    private async doConnect(projectRoot: string, generation: number): Promise<boolean> {
         this.setStatus('connecting');
         this.projectRoot = projectRoot;
 
@@ -160,7 +201,11 @@ export class DaemonClient {
         const portFile = this.readPortFile(projectRoot);
         if (portFile) {
             this.adopt(portFile);
-            if (await this.healthCheck()) {
+            const healthy = await this.healthCheck();
+            if (generation !== this.connectGeneration) {
+                return false;
+            }
+            if (healthy) {
                 this.setStatus('connected');
                 this.startEventStream();
                 this.outputChannel.appendLine(`[Daemon] Connected to existing daemon on port ${this.port} (pid ${this.daemonPid})`);
@@ -172,11 +217,15 @@ export class DaemonClient {
                 this.setStatus('error');
                 return false;
             }
-            // Stale port file, continue to spawn
+            // Stale port file: its pid may belong to another process by now.
+            this.forgetPortFile();
         }
 
         // Step 2: Spawn new daemon
-        const spawned = await this.spawnDaemon(projectRoot);
+        const spawned = await this.spawnDaemon(projectRoot, generation);
+        if (generation !== this.connectGeneration) {
+            return false;
+        }
         if (!spawned) {
             this.setStatus('error');
             return false;
@@ -347,6 +396,7 @@ export class DaemonClient {
      */
     async restart(projectRoot: string): Promise<boolean> {
         const pid = this.daemonPid ?? this.daemonProcess?.pid;
+        this.cancelConnect();
         this.stopEventStream();
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
@@ -361,14 +411,15 @@ export class DaemonClient {
         }
         this.port = undefined;
         this.token = undefined;
+        this.rejected = false;
         this.daemonPid = undefined;
         this.daemonProcess = undefined;
         this.capabilities = [];
         this.daemonVersion = undefined;
         this.portFileVersion = undefined;
         this.setStatus('disconnected');
-        // Give the old daemon a moment to remove its port file before respawning.
-        await new Promise((r) => setTimeout(r, 400));
+        // A new daemon refuses to start while the old port file is still there.
+        await waitForDaemonExit(projectRoot, pid);
         return this.connect(projectRoot);
     }
 
@@ -380,6 +431,10 @@ export class DaemonClient {
         if (projectRoot === this.projectRoot && this.status === 'connected') {
             return true;
         }
+        if (this.connecting?.root === projectRoot) {
+            return this.connecting.promise;
+        }
+        this.cancelConnect();
         this.stopEventStream();
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
@@ -399,6 +454,19 @@ export class DaemonClient {
     }
 
     // --- Private methods ---
+
+    /** Make a running connect() stop at its next step, without adopting or setting a status. */
+    private cancelConnect(): void {
+        this.connectGeneration++;
+        this.connecting = undefined;
+    }
+
+    /** Drop what a port file said once its daemon did not answer. */
+    private forgetPortFile(): void {
+        this.token = undefined;
+        this.daemonPid = undefined;
+        this.portFileVersion = undefined;
+    }
 
     private setStatus(status: DaemonStatus): void {
         this.status = status;
@@ -448,8 +516,12 @@ export class DaemonClient {
         if (!this.port) {
             return false;
         }
+        const generation = this.connectGeneration;
         try {
             const result = await this.fetchJSON('/health');
+            if (generation !== this.connectGeneration) {
+                return false;
+            }
             if (result?.status === 'ok') {
                 this.rejected = false;
                 this.daemonVersion = typeof result.version === 'string' ? result.version : undefined;
@@ -486,7 +558,7 @@ export class DaemonClient {
         return this.capabilities.includes(name);
     }
 
-    private async spawnDaemon(projectRoot: string): Promise<boolean> {
+    private async spawnDaemon(projectRoot: string, generation: number): Promise<boolean> {
         const binPath = getBinoPath();
 
         this.outputChannel.appendLine(`[Daemon] Spawning: ${binPath} daemon --work-dir ${projectRoot}`);
@@ -530,6 +602,11 @@ export class DaemonClient {
                 const pollInterval = 200;
 
                 const poll = async () => {
+                    if (generation !== this.connectGeneration) {
+                        // Overtaken by another connect; the daemon exits once idle.
+                        resolve(false);
+                        return;
+                    }
                     if (Date.now() - startTime > maxWait) {
                         this.outputChannel.appendLine('[Daemon] Timeout waiting for daemon to start');
                         // Do not leave a half-started daemon behind.
@@ -578,12 +655,23 @@ export class DaemonClient {
 
         const req = http.get(url, { signal: controller.signal as any, headers: this.authHeaders() }, (res) => {
             if (res.statusCode !== 200) {
-                if (res.statusCode === 401) {
-                    this.unauthorized();
-                }
+                res.resume();
                 this.outputChannel.appendLine(`[Daemon] SSE returned status ${res.statusCode}`);
+                if (generation !== this.streamGeneration) {
+                    return;
+                }
+                if (res.statusCode === 401) {
+                    // A reconnect would get the same answer: stop until the daemon is restarted.
+                    this.unauthorized();
+                    this.stopEventStream();
+                    this.setStatus('error');
+                } else {
+                    this.connectionLost();
+                }
                 return;
             }
+            // Reset only here, so a daemon that keeps refusing the stream is given up on.
+            this.reconnectAttempt = 0;
 
             let buffer = '';
             let currentEvent = '';
@@ -660,7 +748,6 @@ export class DaemonClient {
         }
         this.stopEventStream();
         this.setStatus('disconnected');
-        this.reconnectAttempt = 0;
         this.scheduleReconnect();
     }
 
@@ -677,9 +764,7 @@ export class DaemonClient {
         this.outputChannel.appendLine(`[Daemon] Reconnecting in ${delay / 1000}s...`);
         this.reconnectTimer = setTimeout(async () => {
             this.reconnectTimer = undefined;
-            if (await this.reconnect()) {
-                this.reconnectAttempt = 0;
-            } else {
+            if (!(await this.reconnect())) {
                 this.scheduleReconnect();
             }
         }, delay);
@@ -695,16 +780,24 @@ export class DaemonClient {
         if (this.disposed || !root || this.status === 'connected') {
             return this.status === 'connected';
         }
+        const generation = this.connectGeneration;
         const portFile = this.readPortFile(root);
         if (portFile && pidAlive(portFile.pid)) {
             this.adopt(portFile);
-            if (await this.healthCheck()) {
+            const healthy = await this.healthCheck();
+            if (generation !== this.connectGeneration) {
+                return false;
+            }
+            if (healthy) {
                 this.setStatus('connected');
                 this.startEventStream();
                 this.outputChannel.appendLine(`[Daemon] Reconnected to daemon on port ${this.port} (pid ${this.daemonPid})`);
                 return true;
             }
             this.port = undefined;
+            if (!this.rejected) {
+                this.forgetPortFile();
+            }
             return false;
         }
         if (!vscode.workspace.getConfiguration('bino').get<boolean>('daemon.enabled', true)) {
@@ -768,6 +861,7 @@ export class DaemonClient {
 
     private cleanup(): void {
         this.disposed = true;
+        this.cancelConnect();
         this.stopEventStream();
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);

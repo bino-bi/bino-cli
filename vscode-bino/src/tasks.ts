@@ -56,6 +56,23 @@ export function buildArgs(def: BinoTaskDefinition): string[] {
     return args;
 }
 
+function within(dir: string, parent: string): boolean {
+    const rel = path.relative(parent, dir);
+    return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * The project a task of a workspace folder builds: the current project when it
+ * belongs to that folder, else the first project in or above the folder.
+ */
+export function projectRootForFolder(folder: string, current: string | undefined, roots: readonly string[]): string | undefined {
+    const related = (root: string) => within(root, folder) || within(folder, root);
+    if (current && related(current)) {
+        return current;
+    }
+    return roots.find(related);
+}
+
 /** Parse a JSON log line; any other line (the text summary, an old bino) is undefined. */
 export function parseLogLine(line: string): BuildLogRecord | undefined {
     const text = line.trim();
@@ -186,7 +203,8 @@ export class BinoTaskProvider implements vscode.TaskProvider, vscode.Disposable 
 
     constructor(
         private readonly indexer: WorkspaceIndexer,
-        private readonly outputChannel: vscode.LogOutputChannel
+        private readonly outputChannel: vscode.LogOutputChannel,
+        private readonly projectRoots: () => readonly string[]
     ) {}
 
     provideTasks(): vscode.Task[] {
@@ -196,7 +214,15 @@ export class BinoTaskProvider implements vscode.TaskProvider, vscode.Disposable 
 
     resolveTask(task: vscode.Task): vscode.Task | undefined {
         const def = task.definition as BinoTaskDefinition;
-        return def.type === BINO_TASK_TYPE && def.command === 'build' ? this.createTask(def) : undefined;
+        if (def.type !== BINO_TASK_TYPE || def.command !== 'build') {
+            return undefined;
+        }
+        // A task from a folder's tasks.json builds that folder's project, not the current one.
+        if (typeof task.scope === 'object') {
+            const root = projectRootForFolder(task.scope.uri.fsPath, this.indexer.getWorkspaceProjectRoot(), this.projectRoots());
+            return root ? this.createTask(def, root) : undefined;
+        }
+        return this.createTask(def);
     }
 
     /** Start a build as a task. */
@@ -207,11 +233,11 @@ export class BinoTaskProvider implements vscode.TaskProvider, vscode.Disposable 
         }
     }
 
-    private createTask(def: BinoTaskDefinition): vscode.Task | undefined {
+    private createTask(def: BinoTaskDefinition, root?: string): vscode.Task | undefined {
         if (!vscode.workspace.isTrusted) {
             return undefined;
         }
-        const cwd = this.indexer.getWorkspaceProjectRoot();
+        const cwd = root ?? this.indexer.getWorkspaceProjectRoot();
         if (!cwd) {
             return undefined;
         }

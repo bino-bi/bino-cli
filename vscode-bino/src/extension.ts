@@ -740,7 +740,7 @@ async function activateProject(context: vscode.ExtensionContext, outputChannel: 
     );
 
     // Builds run as `bino` tasks: terminal output, Problems entries and "Open PDF".
-    const taskProvider = new BinoTaskProvider(indexer, outputChannel);
+    const taskProvider = new BinoTaskProvider(indexer, outputChannel, () => project.all);
     context.subscriptions.push(
         taskProvider,
         vscode.tasks.registerTaskProvider('bino', taskProvider),
